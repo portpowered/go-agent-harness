@@ -66,7 +66,7 @@ func TestChatAudio_SingleUtterance(t *testing.T) {
 
 	fakeResponse := "Audio received!"
 	rec := &recordingInferencer{response: fakeResponse}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec)
+	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 
@@ -110,7 +110,7 @@ func TestChatAudio_MultipleUtterances(t *testing.T) {
 
 	src := audio.NewSliceSource(samples)
 	rec := &recordingInferencer{response: "ok"}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec)
+	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 
@@ -136,7 +136,7 @@ func TestChatAudio_MultipleUtterances(t *testing.T) {
 func TestChatAudio_SilenceOnlySourceExitsGracefully(t *testing.T) {
 	src := audio.NewSliceSource(makePCMSilence(5))
 	rec := &recordingInferencer{response: "should not happen"}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec)
+	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 
@@ -163,7 +163,7 @@ func TestChatAudio_ContextCancellationExitsGracefully(t *testing.T) {
 
 	src := audio.NewSliceSource(makePCMSilence(1))
 	rec := &recordingInferencer{response: "nope"}
-	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec)
+	executor := agent.NewExecutor(&mockToolExecutor{}, nil, rec, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 

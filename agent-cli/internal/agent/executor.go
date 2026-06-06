@@ -48,17 +48,21 @@ func (r *RunData) CloseLogger() {
 
 // Executor constructs and executes agent loops based on configuration.
 type Executor struct {
-	executor           messages.ToolExecutor
-	toolDefs           []messages.ToolDefinition
-	inferencerOverride messages.Inferencer
+	executor              messages.ToolExecutor
+	toolDefs              []messages.ToolDefinition
+	inferencerOverride    messages.Inferencer
+	relaxModelValidation  bool
 }
 
 // NewExecutor creates a new Executor with the given dependencies.
-func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer) *Executor {
+// When relaxModelValidation is true (mock CLI wiring), provider credential and model
+// capability checks are skipped so integration tests do not depend on ~/.agent-cli.
+func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation bool) *Executor {
 	return &Executor{
-		executor:           executor,
-		toolDefs:           toolDefs,
-		inferencerOverride: inferencerOverride,
+		executor:             executor,
+		toolDefs:             toolDefs,
+		inferencerOverride:   inferencerOverride,
+		relaxModelValidation: relaxModelValidation,
 	}
 }
 
@@ -81,8 +85,11 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
-	if err := loadedCfg.Validate(); err != nil {
-		return nil, err
+	// Mock CLI wiring uses injected inferencers without live provider credentials.
+	if !e.relaxModelValidation {
+		if err := loadedCfg.Validate(); err != nil {
+			return nil, err
+		}
 	}
 
 	return loadedCfg, nil
@@ -646,6 +653,9 @@ func (e *Executor) NewChatSessionID(cfg *Config) (string, error) {
 // validateOutputModality checks that the requested output modality is supported by the configured model.
 // Returns nil if modality is empty, "text", or supported by the model. Returns an error otherwise.
 func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
+	if e.relaxModelValidation {
+		return nil
+	}
 	modality := cfg.OutputModality
 	if modality == "" || modality == "text" {
 		return nil
@@ -677,7 +687,7 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 // configured model's supportedInputMimeTypes list. Follows the same resolution flow as
 // validateOutputModality: silently allows if config or model info is unavailable.
 func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInput agentloop.ExecuteInput) error {
-	if len(execInput.ContentParts) == 0 {
+	if e.relaxModelValidation || len(execInput.ContentParts) == 0 {
 		return nil
 	}
 	loadedCfg, err := e.loadConfig(cfg)

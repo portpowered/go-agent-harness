@@ -82,7 +82,7 @@ func TestChatModel_BasicInput(t *testing.T) {
 
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -138,7 +138,7 @@ func TestChatModel_MultiTurn(t *testing.T) {
 
 	inf := &mockInferencerSequence{responses: []string{resp1, resp2}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -180,7 +180,7 @@ func TestChatModel_ExitCommand(t *testing.T) {
 		t.Run(exitWord, func(t *testing.T) {
 			inf := &mockInferencer{response: "never reached"}
 			exec := &mockToolExecutor{}
-			agentExec := agent.NewExecutor(exec, nil, inf)
+			agentExec := agent.NewExecutor(exec, nil, inf, true)
 			globalFlags := flags.NewGlobalFlags()
 			askFlags := flags.NewAskFlags()
 			cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -211,7 +211,7 @@ func TestChatModel_ExitCommand(t *testing.T) {
 func TestChatModel_BackspaceEditing(t *testing.T) {
 	inf := &mockInferencer{response: "ok"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -243,7 +243,7 @@ func TestChatModel_BackspaceEditing(t *testing.T) {
 func TestChatModel_EmptyInput(t *testing.T) {
 	inf := &mockInferencer{response: "should not appear"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -273,7 +273,7 @@ func TestChatModel_EmptyInput(t *testing.T) {
 func TestChatModel_EmptyInputWhitespaceOnly(t *testing.T) {
 	inf := &mockInferencer{response: "should not appear"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -300,7 +300,7 @@ func TestChatModel_ErrorHandling(t *testing.T) {
 	const errMsg = "inference failed: rate limit"
 	inf := &mockInferencerError{err: errors.New(errMsg)}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -331,7 +331,7 @@ func TestChatModel_ErrorHandling(t *testing.T) {
 func TestChatModel_SessionPersistence(t *testing.T) {
 	inf := &mockInferencerSequence{responses: []string{"first", "second"}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -453,7 +453,7 @@ func TestChatModel_StreamingPartials(t *testing.T) {
 	chunks := []string{"One ", "two ", "three"}
 	inf := &mockChunkedInferencer{chunks: chunks}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -521,7 +521,7 @@ func TestChatModel_MarkdownRendering(t *testing.T) {
 	const mdResponse = "Here is **bold** and _italic_ text.\n\n- List item one\n- List item two"
 	inf := &mockInferencer{response: mdResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -558,7 +558,7 @@ func TestExecutor_ExecuteStreamingTurn_ReturnsStream(t *testing.T) {
 	const expected = "streamed response"
 	inf := &mockInferencer{response: expected}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
