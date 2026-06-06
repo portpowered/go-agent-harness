@@ -32,4 +32,8 @@ go.work.sum
 # .vscode/
 .claude/
 
+tasks/
 docs/internal
+
+prd.json
+progress.txt

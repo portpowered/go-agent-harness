@@ -14,14 +14,6 @@
     "bundledFiles": [
       {
         "content": {
-          "encoding": "utf-8",
-          "inline": ".PHONY: dev lint format typecheck test build ci validate-data linkcheck validate-pdf build-search-index\n\ndev:\n\tbun run dev\n\nlint:\n\tbun run lint\n\nformat:\n\tbun run format\n\ntypecheck:\n\tbun run typecheck\n\ntest:\n\tbun run test\n\nbuild:\n\tbun run build\n\tbun ./scripts/verify-phase-1-static-routes.ts\n\nci: lint typecheck test build validate-data\n\nvalidate-data:\n\tbun ./scripts/validate-registry.ts\n\nlinkcheck:\n\t@echo \"linkcheck: skipped (not yet implemented in scaffold)\"\n\t@exit 0\n\nvalidate-pdf:\n\t@echo \"validate-pdf: skipped (not yet implemented in scaffold)\"\n\t@exit 0\n\nbuild-search-index:\n\tbun run build:search-index\n"
-        },
-        "targetPath": "Makefile",
-        "type": "ROOT_HELPER"
-      },
-      {
-        "content": {
           "encoding": "utf-8"
         },
         "targetPath": "factory/docs/batch-input-example.json",
@@ -39,48 +31,6 @@
           "encoding": "utf-8"
         },
         "targetPath": "factory/docs/overview.md",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "targetPath": "factory/docs/phase-1-ci-hardening-batch-003.json",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "targetPath": "factory/docs/phase-1-completion-batch-002.json",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "targetPath": "factory/docs/phase-1-coverage-deployment-repair-batch-005.json",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "targetPath": "factory/docs/phase-1-final-repair-batch-004.json",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "targetPath": "factory/docs/phase-1-search-runtime-and-ops-repair-batch-006.json",
-        "type": "DOC"
-      },
-      {
-        "content": {
-          "encoding": "utf-8"
-        },
-        "targetPath": "factory/docs/phase-2-foundations-batch-001.json",
         "type": "DOC"
       },
       {
@@ -185,7 +135,7 @@
   "workers": [
     {
       "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "CURSOR",
+      "modelProvider": "CODEX",
       "name": "processor",
       "skipPermissions": true,
       "stopToken": "\u003cCOMPLETE\u003e",
