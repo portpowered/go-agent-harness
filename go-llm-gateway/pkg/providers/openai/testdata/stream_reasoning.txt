@@ -1,0 +1,7 @@
+data: {"id":"chatcmpl-stream3","object":"chat.completion.chunk","created":1700000000,"model":"o1-preview","choices":[{"index":0,"delta":{"role":"assistant","reasoning":"Let me analyze this carefully."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-stream3","object":"chat.completion.chunk","created":1700000000,"model":"o1-preview","choices":[{"index":0,"delta":{"content":"The answer is 42."},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-stream3","object":"chat.completion.chunk","created":1700000000,"model":"o1-preview","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":20,"total_tokens":32,"completion_tokens_details":{"reasoning_tokens":8}}}
+
+data: [DONE]

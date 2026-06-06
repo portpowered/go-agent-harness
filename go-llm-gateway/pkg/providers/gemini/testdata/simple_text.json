@@ -1,0 +1,20 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {"text": "Hello! I'm Gemini, a large language model created by Google."}
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 6,
+    "candidatesTokenCount": 14,
+    "totalTokenCount": 20
+  },
+  "modelVersion": "gemini-2.5-flash-001"
+}

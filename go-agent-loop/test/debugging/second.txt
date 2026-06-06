@@ -1,0 +1,94 @@
+[INFO] agentloop: execute called command=What's the weather in London?
+[INFO] agentloop: starting hot loop (streaming)
+[DEBUG] engine: model delta delta={TOOLCALL.START 0   0xc0000a4000}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.START 10   0xc0000a4000}
+[DEBUG] engine: model delta delta={TOOLCALL.DELTA 0   0xc0000a6000}
+[DEBUG] engine: model delta delta={TOOLCALL.END 0   0xc0000a8000}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.DELTA 11   0xc0000a6000}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.END 12   0xc0000a8000}
+[DEBUG] engine: model delta delta={MESSAGE.END 0   0xc0000a4030}
+[DEBUG] engine: model message message={assistant [] [{tc1 get_weather {"city":"London"}}]   <nil>}
+[INFO] Coordinator: model tool call output message message={assistant [] [{tc1 get_weather {"city":"London"}}]   <nil>}
+[DEBUG] CoordinatorDelta: model delta delta={MESSAGE.END 13   0xc0000a4030}
+[INFO] KernelRunner: dispatching inference result source=model
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 13   0xc0000a4030}
+[DEBUG] CoordinatorDelta: tool delta delta={MESSAGE.START 0 tool  0xc000206010}
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.START 1 tool tc1 0xc000206020}
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.DELTA 2 tool tc1 0xc00020e000}
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.END 3 tool tc1 0xc000206030}
+[INFO] KernelRunner: sending message start delta actor=tool
+[INFO] KernelRunner: sending text start delta actor=tool index=1
+[DEBUG] CoordinatorDelta: tool delta delta={MESSAGE.END 0 tool  0xc000210000}
+[INFO] KernelRunner: sending text delta delta=sunny, 22C actor=tool index=2
+[INFO] KernelRunner: sending text end delta actor=tool index=3
+[INFO] Coordinator: tool text output message curr.Inputs.ToolOutputMessage=[{tool [{sunny, 22C}] [] tc1  <nil>}]
+[DEBUG] engine: model delta delta={TEXT.START 0   0xc0000ac370}
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 0 tool  0xc000210000}
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.START 14   0xc0000ac370}
+[DEBUG] engine: model delta delta={TEXT.DELTA 0   0xc0000a62e0}
+[INFO] KernelRunner: dispatching inference result source=tool
+[DEBUG] engine: model message message={assistant [{The weather in London is sunny.}] []   <nil>}
+[INFO] KernelRunner: sending text start delta actor= index=14
+[DEBUG] engine: model delta (drained after response) delta={TEXT.END 0   0xc0000ac380}
+[DEBUG] engine: model delta (drained after response) delta={MESSAGE.END 0   0xc0000a4150}
+[INFO] Coordinator: model output message message={assistant [{The weather in London is sunny.}] []   <nil>}
+[INFO] Coordinator: terminating loop hasFinalResponse=true
+[INFO] KernelRunner: dispatching inference result source=model
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.DELTA 15   0xc0000a62e0}
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.END 16   0xc0000ac380}
+[DEBUG] CoordinatorDelta: model delta delta={MESSAGE.END 17   0xc0000a4150}
+[DEBUG] CoordinatorDelta: terminating loop terminateLoop=true
+[INFO] KernelRunner: sending text delta delta=The weather in London is sunny. actor= index=15
+[INFO] KernelRunner: sending text end delta actor= index=16
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 17   0xc0000a4150}
+[INFO] KernelRunner: loop end delta, closing stream pipes delta={LOOP.END 0   0xc0000ac6b0}
+[ERROR] engine: context cancelled error=context canceled
+[ERROR] engine: hot loop failed reading data buffer error=context canceled
+[ERROR] agentloop: hot loop exited with error (streaming) error=context canceled
+[INFO] agentloop: execute called command=What's the weather in Paris?
+[INFO] agentloop: starting hot loop (streaming)
+[DEBUG] engine: model delta delta={TOOLCALL.START 0   0xc0000a4180}
+[DEBUG] engine: model delta delta={TOOLCALL.DELTA 0   0xc0000a6600}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.START 23   0xc0000a4180}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.DELTA 24   0xc0000a6600}
+[DEBUG] engine: model delta delta={TOOLCALL.END 0   0xc0000a8040}
+[DEBUG] engine: model delta delta={MESSAGE.END 0   0xc0000a41b0}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.END 25   0xc0000a8040}
+[DEBUG] CoordinatorDelta: model delta delta={MESSAGE.END 26   0xc0000a41b0}
+[DEBUG] engine: model message message={assistant [] [{tc2 get_weather {"city":"Paris"}}]   <nil>}
+[INFO] Coordinator: model tool call output message message={assistant [] [{tc2 get_weather {"city":"Paris"}}]   <nil>}
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 26   0xc0000a41b0}
+[DEBUG] CoordinatorDelta: tool delta delta={MESSAGE.START 0 tool  0xc0002066d0}
+[INFO] KernelRunner: dispatching inference result source=model
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.START 1 tool tc2 0xc0002066e0}
+[INFO] KernelRunner: sending message start delta actor=tool
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.DELTA 2 tool tc2 0xc00020e480}
+[INFO] KernelRunner: sending text start delta actor=tool index=1
+[INFO] KernelRunner: sending text delta delta=sunny, 22C actor=tool index=2
+[INFO] Coordinator: tool text output message curr.Inputs.ToolOutputMessage=[{tool [{sunny, 22C}] [] tc2  <nil>}]
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.END 3 tool tc2 0xc0002066f0}
+[INFO] KernelRunner: dispatching inference result source=tool
+[INFO] KernelRunner: sending text end delta actor=tool index=3
+[DEBUG] engine: model delta delta={TEXT.START 0   0xc000206890}
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.START 27   0xc000206890}
+[DEBUG] CoordinatorDelta: tool delta delta={MESSAGE.END 0 tool  0xc0002101b0}
+[DEBUG] engine: model delta delta={TEXT.DELTA 0   0xc00020e5e0}
+[DEBUG] engine: model message message={assistant [{The weather in Paris is cloudy.}] []   <nil>}
+[INFO] KernelRunner: sending text start delta actor= index=27
+[DEBUG] engine: model delta (drained after response) delta={TEXT.END 0   0xc0002068a0}
+[DEBUG] engine: model delta (drained after response) delta={MESSAGE.END 0   0xc0002101e0}
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 0 tool  0xc0002101b0}
+[INFO] Coordinator: model output message message={assistant [{The weather in Paris is cloudy.}] []   <nil>}
+[INFO] Coordinator: terminating loop hasFinalResponse=true
+[INFO] KernelRunner: dispatching inference result source=model
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.DELTA 28   0xc00020e5e0}
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.END 29   0xc0002068a0}
+[DEBUG] CoordinatorDelta: model delta delta={MESSAGE.END 30   0xc0002101e0}
+[DEBUG] CoordinatorDelta: terminating loop terminateLoop=true
+[INFO] KernelRunner: sending text delta delta=The weather in Paris is cloudy. actor= index=28
+[INFO] KernelRunner: sending text end delta actor= index=29
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 30   0xc0002101e0}
+[INFO] KernelRunner: loop end delta, closing stream pipes delta={LOOP.END 0   0xc0002069e0}
+[ERROR] engine: context cancelled error=context canceled
+[ERROR] engine: hot loop failed reading data buffer error=context canceled
+[ERROR] agentloop: hot loop exited with error (streaming) error=context canceled

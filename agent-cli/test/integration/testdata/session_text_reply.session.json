@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-synthetic"
+  },
+  "session": {
+    "id": "sess_text_fixture",
+    "started_at_utc": "2026-04-11T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "SESSION.CREATED",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "SESSION.CREATED",
+        "value": {
+          "type": "session_created",
+          "session_id": "sess_text_fixture",
+          "model": "grok-synthetic"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "TEXT.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TEXT.DELTA",
+        "value": {
+          "type": "delta_text",
+          "content": "Hello from a sanitized fixture user."
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 20,
+      "type": "MESSAGE.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "MESSAGE.START",
+        "value": {
+          "type": "message_start"
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 30,
+      "type": "TEXT.START",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TEXT.START",
+        "value": {
+          "type": "text_start"
+        }
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 40,
+      "type": "TEXT.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TEXT.DELTA",
+        "value": {
+          "type": "delta_text",
+          "content": "Hello! How can I "
+        }
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 50,
+      "type": "TEXT.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TEXT.DELTA",
+        "value": {
+          "type": "delta_text",
+          "content": "help you today?"
+        }
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 60,
+      "type": "TEXT.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "TEXT.END",
+        "value": {
+          "type": "text_end"
+        }
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 70,
+      "type": "MESSAGE.END",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "MESSAGE.END",
+        "value": {
+          "type": "message_end"
+        }
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 80,
+      "type": "SESSION.CLOSE",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "SESSION.CLOSE",
+        "value": {
+          "type": "session_close",
+          "session_id": "sess_text_fixture",
+          "reason": "fixture_complete"
+        }
+      }
+    }
+  ]
+}

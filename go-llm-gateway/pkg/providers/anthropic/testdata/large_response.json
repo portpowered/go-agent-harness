@@ -1,0 +1,15 @@
+{
+  "id": "msg_05MNO345",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "The history of artificial intelligence is a fascinating journey that spans several decades. It began in the 1950s when pioneers like Alan Turing posed the fundamental question of whether machines could think. The famous Turing Test, proposed in 1950, set an early benchmark for machine intelligence. In 1956, the Dartmouth Conference brought together researchers who coined the term 'artificial intelligence' and established it as a formal field of study.\n\nThe early years saw significant optimism and progress in symbolic AI, with programs like the Logic Theorist and ELIZA demonstrating impressive capabilities. However, the field experienced periods of reduced funding and interest known as 'AI winters,' particularly in the 1970s and late 1980s.\n\nThe resurgence of AI came with the advent of machine learning and, later, deep learning. Neural networks, which had been theorized for decades, finally became practical with the availability of large datasets and powerful computing hardware. The breakthrough moment came in 2012 when AlexNet dramatically outperformed traditional computer vision methods in the ImageNet competition.\n\nSince then, AI has advanced at a remarkable pace. Natural language processing saw revolutionary changes with the introduction of transformer architectures in 2017, leading to models capable of understanding and generating human-like text. Computer vision, robotics, and reinforcement learning have all made substantial strides, enabling applications from self-driving cars to medical diagnosis."}
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 312
+  }
+}

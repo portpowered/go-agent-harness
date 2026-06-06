@@ -1,0 +1,15 @@
+{
+  "id": "msg_02DEF456",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "Your name is Alice! You told me that at the start of our conversation."}
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 28,
+    "output_tokens": 19
+  }
+}

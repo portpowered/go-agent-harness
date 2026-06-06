@@ -1,0 +1,20 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {"text": "You said your name is Alice. Nice to meet you, Alice! How can I help you today?"}
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 28,
+    "candidatesTokenCount": 19,
+    "totalTokenCount": 47
+  },
+  "modelVersion": "gemini-2.5-flash-001"
+}

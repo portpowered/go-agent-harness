@@ -1,0 +1,288 @@
+package grok
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+
+	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/models"
+)
+
+// wireEvent is the JSON shape sent/received over the Grok WebSocket.
+// The "type" field determines the event kind; remaining fields are
+// event-specific payload. This structure matches the OpenAI Realtime API
+// wire format that Grok follows.
+type wireEvent struct {
+	Type  string                     `json:"type"`
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+const (
+	grokSessionEventResponseAudioDelta           models.SessionEventType = "response.audio.delta"
+	grokSessionEventResponseAudioDone            models.SessionEventType = "response.audio.done"
+	grokSessionEventResponseAudioTranscriptDelta models.SessionEventType = "response.audio_transcript.delta"
+	grokSessionEventResponseAudioTranscriptDone  models.SessionEventType = "response.audio_transcript.done"
+	grokSessionEventResponseTextDelta            models.SessionEventType = "response.text.delta"
+	grokSessionEventResponseTextDone             models.SessionEventType = "response.text.done"
+)
+
+// MarshalJSON produces a flat JSON object with "type" plus any Extra fields.
+func (w wireEvent) MarshalJSON() ([]byte, error) {
+	m := make(map[string]json.RawMessage, len(w.Extra)+1)
+	for k, v := range w.Extra {
+		m[k] = v
+	}
+	typeBytes, _ := json.Marshal(w.Type)
+	m["type"] = typeBytes
+	return json.Marshal(m)
+}
+
+// parseServerEvent converts raw WebSocket JSON into a gateway SessionEvent.
+// The "type" field is extracted and the remaining payload is kept as Data.
+func parseServerEvent(raw []byte) (models.SessionEvent, error) {
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return models.SessionEvent{}, fmt.Errorf("unmarshal event type: %w", err)
+	}
+	if envelope.Type == "" {
+		return models.SessionEvent{}, fmt.Errorf("event missing type field")
+	}
+
+	eventType := models.SessionEventType(envelope.Type)
+
+	// Keep the full payload as Data (minus the type field is unnecessary
+	// to strip — consumers use the typed SessionEventType for dispatch).
+	return models.SessionEvent{
+		Type: eventType,
+		Data: raw,
+	}, nil
+}
+
+// translateInbound converts a server-sent SessionEvent into zero or more
+// agent loop StreamMessages. This is the canonical inbound translation for
+// the Grok provider — consumers only see generic StreamMessage types.
+func translateInbound(event models.SessionEvent) []messages.StreamMessage {
+	switch event.Type {
+	case models.SessionEventSessionCreated:
+		// session.created from the server signals the session is established.
+		// Emit SESSION.OPEN (agent loop signal) and SESSION.CREATED (carries server config).
+		sessionID := extractStringField(event.Data, "session_id")
+		model := extractStringField(event.Data, "model")
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(sessionID, "audio_inference")},
+			{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue(sessionID, model)},
+		}
+
+	case models.SessionEventSessionUpdated:
+		// session.updated confirms a session configuration update.
+		sessionID := extractStringField(event.Data, "session_id")
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue(sessionID)},
+		}
+
+	case models.SessionEventSessionClosed:
+		sessionID := extractStringField(event.Data, "session_id")
+		reason := extractStringField(event.Data, "reason")
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue(sessionID, reason)},
+		}
+
+	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
+		audioBytes := extractAudioBytes(event.Data)
+		if audioBytes == nil {
+			return nil
+		}
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(audioBytes)},
+		}
+
+	case models.SessionEventResponseOutputAudioDone, grokSessionEventResponseAudioDone:
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+		}
+
+	case models.SessionEventResponseOutputAudioTranscriptDelta, grokSessionEventResponseAudioTranscriptDelta:
+		text := extractStringField(event.Data, "delta")
+		if text == "" {
+			return nil
+		}
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue(text)},
+		}
+
+	case models.SessionEventResponseOutputAudioTranscriptDone, grokSessionEventResponseAudioTranscriptDone:
+		text := extractStringField(event.Data, "transcript")
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(text)},
+		}
+
+	case models.SessionEventResponseTextDelta, grokSessionEventResponseTextDelta:
+		text := extractStringField(event.Data, "delta")
+		if text == "" {
+			return nil
+		}
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)},
+		}
+
+	case models.SessionEventResponseTextDone, grokSessionEventResponseTextDone:
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue()},
+		}
+
+	case models.SessionEventResponseFunctionCallArgumentsDelta:
+		partial := extractStringField(event.Data, "delta")
+		if partial == "" {
+			return nil
+		}
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeToolCallDelta, Value: messages.NewToolCallDeltaValue(partial)},
+		}
+
+	case models.SessionEventResponseFunctionCallArgumentsDone:
+		callID := extractStringField(event.Data, "call_id")
+		name := extractStringField(event.Data, "name")
+		args := extractStringField(event.Data, "arguments")
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue(callID, name, args)},
+		}
+
+	case models.SessionEventResponseCreated:
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()},
+		}
+
+	case models.SessionEventResponseDone:
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		}
+
+	case models.SessionEventInputAudioBufferSpeechStarted:
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeVADSpeechStarted, Value: messages.NewVADSpeechStartedValue()},
+		}
+
+	case models.SessionEventInputAudioBufferSpeechStopped:
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeVADSpeechStopped, Value: messages.NewVADSpeechStoppedValue()},
+		}
+
+	case models.SessionEventError:
+		msg := extractStringField(event.Data, "message")
+		if msg == "" {
+			msg = "session error"
+		}
+		return []messages.StreamMessage{
+			{Type: messages.StreamTypeError, Value: messages.NewErrorValue(msg)},
+		}
+
+	default:
+		// Unknown or informational events (session.updated, etc.) are silently dropped.
+		return nil
+	}
+}
+
+// translateOutbound converts an agent loop StreamMessage into a SessionEvent
+// for transmission to the Grok server. Returns an empty SessionEvent and false
+// if the message type is not applicable for outbound transmission.
+func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
+	switch msg.Type {
+	case messages.StreamTypeAudioDelta:
+		v, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || v == nil {
+			return models.SessionEvent{}, false
+		}
+		encoded := base64.StdEncoding.EncodeToString(v.Content)
+		return models.NewAudioBufferAppendEvent(encoded), true
+
+	case messages.StreamTypeMessageEnd:
+		// Commit audio buffer at the end of an audio message.
+		return models.NewAudioBufferCommitEvent(), true
+
+	case messages.StreamTypeTextDelta:
+		// Text input: send as conversation.item.create with a user message.
+		v, ok := msg.Value.(*messages.TextDeltaValue)
+		if !ok || v == nil {
+			return models.SessionEvent{}, false
+		}
+		data, _ := json.Marshal(map[string]any{
+			"type": "conversation.item.create",
+			"item": map[string]any{
+				"type": "message",
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "input_text", "text": v.Content},
+				},
+			},
+		})
+		return models.SessionEvent{Type: "conversation.item.create", Data: data}, true
+
+	case messages.StreamTypeSessionUpdate:
+		// Outbound session update: send as session.update wire event.
+		v, ok := msg.Value.(*messages.SessionUpdateValue)
+		if !ok || v == nil {
+			return models.SessionEvent{}, false
+		}
+		data, _ := json.Marshal(map[string]any{
+			"session": map[string]any{
+				"instructions": v.Instructions,
+			},
+		})
+		return models.NewSessionUpdateEvent(data), true
+
+	case messages.StreamTypeToolCallEnd:
+		// Tool result: send as conversation.item.create with function_call_output.
+		v, ok := msg.Value.(*messages.ToolCallEndValue)
+		if !ok || v == nil {
+			return models.SessionEvent{}, false
+		}
+		data, _ := json.Marshal(map[string]any{
+			"type": "conversation.item.create",
+			"item": map[string]any{
+				"type":    "function_call_output",
+				"call_id": v.ToolCallID,
+				"output":  v.Arguments,
+			},
+		})
+		return models.SessionEvent{Type: "conversation.item.create", Data: data}, true
+
+	default:
+		return models.SessionEvent{}, false
+	}
+}
+
+// extractAudioBytes decodes a base64 "delta" field from a JSON payload.
+func extractAudioBytes(data json.RawMessage) []byte {
+	encoded := extractStringField(data, "delta")
+	if encoded == "" {
+		return nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil
+	}
+	return decoded
+}
+
+// extractStringField extracts a string field from a JSON object.
+func extractStringField(data json.RawMessage, field string) string {
+	if len(data) == 0 {
+		return ""
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		return ""
+	}
+	raw, ok := m[field]
+	if !ok {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	return s
+}

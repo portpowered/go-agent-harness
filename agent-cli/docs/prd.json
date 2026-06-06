@@ -1,0 +1,413 @@
+{
+  "project": "agent-cli",
+  "branchName": "ralph/agent-cli-improvements",
+  "description": "A collection of agent-cli improvements: local model support, error stream presentation, TODO subsystem for model continuation, refusal message parsing, media type handling with auto-conversion, skill loading commands, audio/image generation via completions API, and multi-session terminal visualization.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add `local` provider type to config struct",
+      "description": "As a developer running a local inference server, I want to configure a `local` provider with just a base URL and model name (no API key) so I can run agent-cli against local models without dummy credentials.",
+      "acceptanceCriteria": [
+        "Add `ProviderLocal = \"local\"` constant to `internal/config/interface.go` provider enum",
+        "Add `BaseURL string` field to the provider config struct so local endpoints can be specified",
+        "`apiKey` is optional (empty string valid) when provider is `local`",
+        "Config validation in `internal/config/loading.go` skips API key requirement for `local` providers",
+        "Existing `openai` and `openrouter` providers still require `apiKey` (no regression)",
+        "Unit test covers: local provider with no API key passes validation, openai provider with no API key fails validation",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Foundational config change required by US-002. Files: internal/config/interface.go, internal/config/loading.go"
+    },
+    {
+      "id": "US-002",
+      "title": "Build inferencer without auth for local providers",
+      "description": "As a developer, I want the OpenAI-compatible inferencer to omit the Authorization header when the provider is `local`, so local servers don't reject requests due to invalid auth tokens.",
+      "acceptanceCriteria": [
+        "In `internal/agent/executor.go` BuildLoop(), detect `provider=local` and construct inferencer with no auth header",
+        "The existing `oaiprovider` / `gateway` stack is reused — no new HTTP client written",
+        "When provider is `local` and `baseURL` is set, the outgoing request uses `baseURL` as the endpoint base",
+        "Integration test: start an in-process mock HTTP server, configure agent with `provider=local, baseURL=<mock URL>`, assert no `Authorization` header in the request and response is parsed correctly",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Depends on US-001. Files: internal/agent/executor.go, test/"
+    },
+    {
+      "id": "US-003",
+      "title": "Add `--base-url` CLI flag and `agent config add-local` command",
+      "description": "As a power user, I want to override the provider to `local` via CLI flags, and as a new user I want a command to register a local provider in config without hand-editing YAML.",
+      "acceptanceCriteria": [
+        "`--base-url <url>` flag added to `ask` and `chat` commands in `internal/cli/`",
+        "When `--provider local` and `--base-url` are both set, no API key is required and the request is routed to `<base-url>`",
+        "Error printed if `--provider local` is set without `--base-url`",
+        "New subcommand `agent config add-local --name <name> --base-url <url> --model <model>` writes a local provider entry to `~/.agent-cli/config.yaml`",
+        "If the URL is unreachable, a warning is printed but config is still saved",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Depends on US-001, US-002. Files: internal/cli/ask.go, internal/cli/chat.go, internal/cli/routes.go, internal/config/loading.go"
+    },
+    {
+      "id": "US-004",
+      "title": "Add ErrorCollector to RunData for centralized error routing",
+      "description": "As a developer, I want a centralized error collector in the agent's RunData so all subsystems (tools, inference, session) can route errors to a single place, enabling consistent presentation across ask and chat commands.",
+      "acceptanceCriteria": [
+        "Add `ErrorCollector` struct (or interface) to `internal/agent/` with `Add(source string, err error)` and `Errors() []CollectedError` methods",
+        "`CollectedError` has fields: `Source string` (e.g., `\"tool:exec\"`, `\"inference:openrouter\"`), `Message string`, `Time time.Time`",
+        "`ErrorCollector` is attached to `RunData` in `executor.go`",
+        "Tool registry errors in `internal/tools/registry.go` are routed to the collector instead of being returned inline",
+        "Inference errors in `ExecuteOneTurn()` are routed to the collector",
+        "Unit test: add 3 errors, assert `Errors()` returns all 3 with correct source tags",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Foundational for US-005 and US-006. Files: internal/agent/executor.go, internal/tools/registry.go"
+    },
+    {
+      "id": "US-005",
+      "title": "Route errors to stderr with [ERROR] prefix in ask command",
+      "description": "As a user running `agent ask`, I want errors to appear on stderr with a clear [ERROR] prefix so I can separate model output from error messages in scripts and pipelines.",
+      "acceptanceCriteria": [
+        "All errors from the `ErrorCollector` are written to `os.Stderr` (not stdout) in `ask` command flow",
+        "Each error is prefixed with `[ERROR]` in plain text mode",
+        "When stderr is a TTY, prefix and message are colored red using ANSI codes",
+        "No color codes emitted when stderr is not a TTY (detect via `golang.org/x/term` `IsTerminal`)",
+        "In non-streaming mode, if any errors occurred, a `\\n--- Session Errors ---\\n` summary block is appended to stderr after output completes; omitted if no errors",
+        "Stdout contains only model output — piping `agent ask \"...\" > out.txt` captures no error text",
+        "Existing tests that assert stdout output are not broken",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Depends on US-004. Files: internal/agent/executor.go, internal/cli/ask.go, internal/output/"
+    },
+    {
+      "id": "US-006",
+      "title": "Route errors to stderr in chat command",
+      "description": "As a user in an interactive chat session, I want errors (tool failures, inference errors) to appear on stderr with a clear [ERROR] prefix so they don't pollute the chat output.",
+      "acceptanceCriteria": [
+        "All errors from the `ErrorCollector` are written to `os.Stderr` in `chat` command flow (same pattern as US-005)",
+        "Errors are displayed immediately as they occur (not only at session end) so the user sees them in real time",
+        "Chat prompt is re-displayed after an error so the user can continue the conversation",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Depends on US-004. Files: internal/cli/chat.go, internal/agent/executor.go"
+    },
+    {
+      "id": "US-007",
+      "title": "Structured JSON error output in --output-json mode",
+      "description": "As a developer using `--output-json`, I want errors to be emitted as structured JSON objects on stderr so I can parse them programmatically.",
+      "acceptanceCriteria": [
+        "When `--output-json` is active, each collected error is emitted to stderr as: `{\"type\":\"error\",\"source\":\"<source>\",\"message\":\"<msg>\",\"timestamp\":\"<ISO8601>\"}`",
+        "Error JSON objects do NOT appear in the stdout NDJSON stream",
+        "Existing token/chunk JSON objects on stdout are unaffected",
+        "Integration test: run with `--output-json`, assert stdout parses cleanly as NDJSON and stderr contains valid error JSON",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Depends on US-004, US-005. Files: internal/output/, internal/agent/executor.go"
+    },
+    {
+      "id": "US-008",
+      "title": "Define TodoQueue struct in agent loop state",
+      "description": "As a developer, I want a TodoQueue struct stored in the agent loop's RunData so I can enqueue and dequeue todo items (operations to perform) during execution.",
+      "acceptanceCriteria": [
+        "New `TodoQueue` type defined in `internal/agent/` as a FIFO queue of `TodoItem` structs",
+        "`TodoItem` has fields: `ID string`, `Description string`, `Done bool`",
+        "`TodoQueue` has methods: `Enqueue(description string) string` (returns ID), `MarkDone(id string)`, `Remaining() []TodoItem`, `All() []TodoItem`",
+        "`TodoQueue` is attached to `RunData` in `executor.go`",
+        "Unit tests: Enqueue 3 items, MarkDone 1, assert Remaining() returns 2 items; empty queue Remaining() returns empty slice",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Foundational for US-009. Files: internal/agent/executor.go (or new internal/agent/todo.go)"
+    },
+    {
+      "id": "US-009",
+      "title": "Parse todo items from model output and track completion",
+      "description": "As the agent coordinator, I want to parse todo items from the model's output (lines starting with `- [ ]` or `TODO:`) and track their completion so I know whether the model has finished all its tasks.",
+      "acceptanceCriteria": [
+        "After each `ExecuteOneTurn()`, scan the model's output text for patterns: `- [ ] <task>` (incomplete) and `- [x] <task>` (complete)",
+        "Incomplete items are enqueued into the `TodoQueue` if not already present (matched by description)",
+        "Complete items (`- [x]`) are marked done in the `TodoQueue`",
+        "Unit test: model output with 3 incomplete and 1 complete todo → queue has 3 remaining, 1 done",
+        "Unit test: model output with no todos → queue unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Depends on US-008. Files: internal/agent/executor.go, internal/agent/todo.go"
+    },
+    {
+      "id": "US-010",
+      "title": "Coordinator nudges model when remaining todos exist",
+      "description": "As the agent coordinator, I want to re-invoke inference with a nudge message when the model completes its turn but the TodoQueue still has incomplete items, so tasks complete without manual intervention.",
+      "acceptanceCriteria": [
+        "After `ExecuteOneTurn()` and todo parsing, if `TodoQueue.Remaining()` is non-empty, append a system message: `\"You have <N> remaining todos: [<list>]. Please continue.\"` and re-invoke inference",
+        "Re-invocation loop continues until `Remaining()` is empty, stop-word is matched, or max nudge depth is reached",
+        "`maxNudgeDepth` is configurable in model config (default: 5); add the field to model config struct",
+        "If stop-word is matched, nudge is NOT triggered even if todos remain",
+        "Integration test: mock inferencer returns output with `- [ ] step1` on first call, `- [x] step1` on second; assert inference called exactly twice",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Depends on US-008, US-009. Files: internal/agent/executor.go, internal/config/interface.go"
+    },
+    {
+      "id": "US-011",
+      "title": "Add repetition penalty config field for small models",
+      "description": "As a developer, I want to set a repetition penalty on a per-model basis in config so small models don't loop on the same output.",
+      "acceptanceCriteria": [
+        "`repetitionPenalty float64` field added to model config struct in `internal/config/interface.go` (valid range 1.0–2.0, default 1.0 = disabled)",
+        "Field is passed through to the OpenAI-compatible inferencer request payload as `frequency_penalty` for OpenAI/OpenRouter providers",
+        "For `local` provider, field is passed as `repetition_penalty` in the request body",
+        "Config loading/saving handles the new field without breaking existing configs",
+        "Integration test: set `repetitionPenalty: 1.3`, assert the outgoing HTTP request body contains the correct penalty field",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Independent of todo queue. Files: internal/config/interface.go, internal/agent/executor.go"
+    },
+    {
+      "id": "US-012",
+      "title": "Parse `refusal` field from OpenAI API response",
+      "description": "As a developer, I want the message parser to extract the `refusal` field from OpenAI-compatible responses so the agent is aware when a model has refused a request.",
+      "acceptanceCriteria": [
+        "The assistant message struct includes a `Refusal string` field",
+        "The OpenAI response parser populates `Refusal` when the API response contains a non-empty `refusal` field",
+        "Refusal is treated as a distinct content type — not an error, not regular text content",
+        "In streaming mode, `delta.refusal` chunks are accumulated into the final `Refusal` field (parallel to content accumulation)",
+        "Unit test: parse mock API response with `\"refusal\": \"I cannot assist with that.\"` → assert `Refusal` field populated, `Content` empty",
+        "Unit test: stream mock response with refusal deltas → assert accumulated refusal text is correct",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Files: messages package in llm-gateway, internal/agent/executor.go"
+    },
+    {
+      "id": "US-013",
+      "title": "Display refusal messages with [REFUSAL] prefix and store in session",
+      "description": "As a user whose request was refused, I want to see a clear [REFUSAL] message so I know the model deliberately declined, and I want it stored in session history for later review.",
+      "acceptanceCriteria": [
+        "When a refusal is detected, it is written to stderr with `[REFUSAL]` prefix immediately",
+        "When stderr is a TTY, refusal text is displayed in yellow ANSI color",
+        "No 'empty response' or confusing error is shown when a refusal is the only response",
+        "Refusal is stored in session history as a distinct message type so `agent session show` displays it with `[REFUSAL]` prefix",
+        "Exit code is `0` (refusal is a valid response, not a failure)",
+        "In `--output-json` mode, refusal is emitted to stderr as: `{\"type\":\"refusal\",\"message\":\"<text>\",\"model\":\"<id>\",\"timestamp\":\"<ISO8601>\"}`",
+        "Integration test: mock inferencer returns refusal → assert stderr contains `[REFUSAL]`, stdout is empty, session JSON stores the refusal",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Depends on US-012. Files: internal/agent/executor.go, internal/output/, internal/session/storage.go"
+    },
+    {
+      "id": "US-014",
+      "title": "Add `supportedInputMimeTypes` to model config and populate registry",
+      "description": "As a developer configuring a model, I want to specify which MIME types the model accepts as file inputs so the CLI can validate and auto-convert files before uploading.",
+      "acceptanceCriteria": [
+        "`supportedInputMimeTypes []string` field added to model config struct in `internal/config/interface.go`",
+        "Field defaults to `nil` (meaning accept all) for backward compatibility",
+        "Default `models.yaml` registry updated with accurate MIME type lists for all pre-seeded models based on their API documentation (e.g., gpt-4o: image/png, image/jpeg, image/gif, image/webp)",
+        "Config loading/saving handles the new field without breaking existing configs",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Foundational for US-015, US-016. Files: internal/config/interface.go, internal/config/models.go"
+    },
+    {
+      "id": "US-015",
+      "title": "MIME type detection and validation before file upload",
+      "description": "As a user providing a file to the agent, I want to receive a clear error if the model doesn't support that file type so I know immediately rather than getting a silent failure from the API.",
+      "acceptanceCriteria": [
+        "Before adding a file to the conversation, detect the MIME type using both file extension (`mime` package) and magic byte sniffing (`net/http.DetectContentType`, first 512 bytes)",
+        "WebP detection: check RIFF header (bytes 0-3) and WEBP marker (bytes 8-11)",
+        "If the model's `supportedInputMimeTypes` is non-empty and file MIME type is not in the list, validation fails with: `\"Model '<model>' does not support input type '<mime>'. Supported types: <list>\"`",
+        "Validation occurs in the input-preparation step (before any inference call)",
+        "If `supportedInputMimeTypes` is nil/empty, all types are accepted (no change to current behavior)",
+        "Unit tests: supported type passes, unsupported type fails, nil list passes, WebP correctly detected",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Depends on US-014. Files: internal/input/, internal/agent/executor.go"
+    },
+    {
+      "id": "US-016",
+      "title": "Auto-convert unsupported image formats before upload",
+      "description": "As a user whose file format isn't supported by the model, I want the CLI to automatically convert it to a supported format (e.g., WebP → PNG) so I don't have to manually convert files.",
+      "acceptanceCriteria": [
+        "When a file fails MIME validation and a conversion path exists, attempt automatic conversion before returning an error",
+        "Conversion pairs supported: WebP → PNG, WebP → JPEG, TIFF → PNG, TIFF → JPEG",
+        "Use Go's `image` package + `golang.org/x/image` (WebP decoder) + `image/png` / `image/jpeg` for conversion",
+        "On successful conversion, use the converted file transparently and log to stderr: `\"[INFO] Converted <original> (image/webp) → <tmp>.png (image/png) for model compatibility\"`",
+        "On conversion failure, fall back to the original validation error message",
+        "Converted file is a temporary file (cleaned up after session ends)",
+        "Unit test: provide WebP bytes → assert PNG output bytes with correct PNG magic bytes `\\x89PNG`",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Depends on US-015. May need `golang.org/x/image` as a new dependency. Files: internal/input/"
+    },
+    {
+      "id": "US-017",
+      "title": "Add `--skills` flag to `ask` and `chat` commands",
+      "description": "As a CLI user, I want to specify one or more skills when invoking `agent ask` or `agent chat` so the agent starts with those skill instructions pre-loaded.",
+      "acceptanceCriteria": [
+        "`--skills <name1,name2,...>` flag added to both `ask` and `chat` commands",
+        "Skills are loaded via the existing `skills.Loader` and their instructions are injected into the system prompt at session start (after existing skill summary injection)",
+        "Multiple skills are concatenated in the order specified",
+        "If a named skill is not found, the command fails with: `\"Skill '<name>' not found. Available skills: <list>\"`",
+        "Flag accepts both comma-separated (`--skills a,b`) and repeated (`--skills a --skills b`) forms",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Files: internal/cli/ask.go, internal/cli/chat.go, internal/flags/, internal/agent/executor.go"
+    },
+    {
+      "id": "US-018",
+      "title": "Add `/load <skill>` command in chat with tab autocomplete",
+      "description": "As a user in an interactive chat session, I want to type `/load <skill-name>` to inject a skill's instructions into the current context so I can add capabilities mid-conversation.",
+      "acceptanceCriteria": [
+        "Chat input pre-processor recognizes `/load <name>` as a special command and does NOT forward it to the model",
+        "Skill is resolved via `skills.Loader`; instructions are appended to the active session context for the next inference call",
+        "If skill not found: `\"Skill '<name>' not found. Available: <list>\"` printed to stderr",
+        "Tab completion on `/load ` shows all available skill names from the loader",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Depends on US-017. Files: internal/cli/chat.go, internal/skills/loader.go"
+    },
+    {
+      "id": "US-019",
+      "title": "Add agent profiles to config and `agent load <profile>` command",
+      "description": "As a developer, I want to define named agent profiles (model + provider + default skills) in config and launch them with `agent load <profile>` so I don't repeat flags for common setups.",
+      "acceptanceCriteria": [
+        "New `agents` section in `~/.agent-cli/config.yaml` with array of profile objects: `{name, model, provider, skills: []}`",
+        "Config loading reads the `agents` section into a new `AgentProfile` struct slice in the config",
+        "`agent load <name>` new top-level command resolves the profile and starts an interactive chat with the specified model, provider, and skills pre-loaded",
+        "If profile not found: error message listing available profiles",
+        "Profile fields can be overridden by CLI flags (`--model`, `--provider`, `--skills`)",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Depends on US-017. Files: internal/config/interface.go, internal/config/loading.go, internal/cli/routes.go"
+    },
+    {
+      "id": "US-020",
+      "title": "Enhance `dispatch_agent` tool with skills, model, and provider params",
+      "description": "As a model running in agent-cli, I want to dispatch a sub-agent with a specific set of skills and model so I can delegate specialized tasks to purpose-built sub-agents.",
+      "acceptanceCriteria": [
+        "`dispatch_agent` tool JSON parameters schema extended with optional fields: `skills` (array of strings), `model` (string), `provider` (string)",
+        "When `skills` is provided, sub-agent process is launched with `--skills <names>` flag",
+        "When `model`/`provider` are provided, sub-agent process is launched with `--model`/`--provider` flags",
+        "Existing `dispatch_agent` calls without the new fields continue to work (backward compatible)",
+        "Tool schema in `internal/tools/tool_dispatch_agent.go` updated to reflect new parameters",
+        "Integration test: dispatch sub-agent with `skills=[\"translator\"]` and assert the child process receives `--skills translator`",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Depends on US-017. Files: internal/tools/tool_dispatch_agent.go"
+    },
+    {
+      "id": "US-021",
+      "title": "Add `--output-format` flag and binary stdout mode to `ask` command",
+      "description": "As a user, I want to pipe raw binary output (image/audio) from agent-cli directly to a file so I can generate media without extra scripting.",
+      "acceptanceCriteria": [
+        "`--output-format <mime>` flag added to `ask` command (e.g., `image/png`, `image/jpeg`, `audio/wav`, `audio/mp3`)",
+        "When `--output-format` is a binary MIME type, stdout emits raw binary bytes only (no text, no NDJSON, no spinner)",
+        "All log output, errors, and progress are routed to stderr when in binary output mode",
+        "Binary mode is activated only for non-text MIME types; text/* types use normal output mode",
+        "Piping produces a valid file: `agent ask \"generate image\" --output-format image/png > out.png` (verified by file magic bytes)",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Foundational for US-022, US-023. Files: internal/cli/ask.go, internal/agent/executor.go, internal/output/"
+    },
+    {
+      "id": "US-022",
+      "title": "Parse image content parts from chat completions response and emit as binary",
+      "description": "As a developer, I want agent-cli to extract image data from chat completion responses (base64 image content parts) and write the raw bytes to stdout when `--output-format image/*` is set.",
+      "acceptanceCriteria": [
+        "When `--output-format image/*` is set, after `ExecuteOneTurn()`, scan response content parts for image content (type=image, base64 data)",
+        "Decode the base64 image data and write raw bytes to stdout",
+        "If model config's `outputModalities` does not include `image`, fail with a clear error before the API call",
+        "If no image content part is found in the response, fail with: `\"Model returned no image data. Check that the model supports image generation.\"`",
+        "Integration test: mock completions endpoint returns a response with a base64-encoded 1x1 PNG image content part → assert stdout contains valid PNG bytes (magic bytes `\\x89PNG`)",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Depends on US-021. Uses chat completions API — NOT a separate images endpoint. Files: internal/agent/executor.go, internal/output/"
+    },
+    {
+      "id": "US-023",
+      "title": "Parse audio content parts from chat completions response and emit as binary",
+      "description": "As a developer, I want agent-cli to extract audio data from chat completion responses and write the raw bytes to stdout when `--output-format audio/*` is set.",
+      "acceptanceCriteria": [
+        "When `--output-format audio/*` is set, after `ExecuteOneTurn()`, scan response content parts for audio content (type=audio, base64 data)",
+        "Decode base64 audio data and write raw bytes to stdout",
+        "If model config's `outputModalities` does not include `audio`, fail with a clear error before the API call",
+        "If no audio content part found in the response, fail with: `\"Model returned no audio data. Check that the model supports audio generation.\"`",
+        "Integration test: mock completions endpoint returns response with base64 WAV audio content part → assert stdout is valid WAV (RIFF header check)",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Depends on US-021. Uses chat completions API — NOT a separate audio endpoint. Files: internal/agent/executor.go, internal/output/"
+    },
+    {
+      "id": "US-024",
+      "title": "Create OpenAI-compatible TTS server wrapping a local model",
+      "description": "As a developer, I want an OpenAI audio API compatible HTTP server that wraps a local TTS model (e.g., Qwen3-TTS) so agent-cli can use local TTS the same way it uses cloud providers.",
+      "acceptanceCriteria": [
+        "New binary or subcommand `agent tts-server` added under `cmd/agent/`",
+        "Implements `POST /v1/audio/speech` with OpenAI-compatible request schema: `{model, input, voice, speed, response_format}`",
+        "Response body is raw audio bytes (same as OpenAI TTS)",
+        "Server wraps a configurable local TTS model via its native inference API",
+        "Server is configurable via flags: `--port` (default 8080), `--model-path`, `--device` (cpu/cuda)",
+        "Manual test steps documented in `libraries/agent-cli/docs/manual-tests/tts-server.md`",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Independent of US-022/US-023. Files: cmd/agent/ (new subcommand), libraries/agent-cli/docs/manual-tests/"
+    },
+    {
+      "id": "US-025",
+      "title": "[Meta] Break down multi-session terminal visualization into implementable stories",
+      "description": "As a developer, I need a detailed breakdown of the multi-session visualization feature into focused, session-sized stories so each can be implemented and verified independently.",
+      "acceptanceCriteria": [
+        "Evaluate terminal UI library options (Bubble Tea vs raw ANSI vs tcell) and select one with rationale documented",
+        "Define session grouping strategy: how to associate related sessions (trace ID, parent session ID from dispatch_agent)",
+        "Define live output mechanism: how running sessions write partial output readable by the dashboard (e.g., `~/.agent-cli/sessions/<id>.live` side-channel file)",
+        "Produce follow-up stories covering: (1) live output tee in executor, (2) session list panel rendering, (3) per-session output panel, (4) keyboard navigation Ctrl+Left/Right, (5) session status indicators, (6) `agent session watch` command wiring",
+        "Each generated story has clear verifiable acceptance criteria and fits in one session",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Meta story — output is a set of new stories, not a code change. Files: libraries/agent-cli/docs/"
+    }
+  ]
+}

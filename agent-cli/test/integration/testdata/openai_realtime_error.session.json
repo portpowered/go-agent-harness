@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime"
+  },
+  "session": {
+    "id": "sess_openai_cli_error",
+    "started_at_utc": "2026-04-12T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "model": "gpt-realtime",
+          "type": "realtime"
+        },
+        "type": "session.update"
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session": {
+          "id": "sess_openai_cli_error",
+          "model": "gpt-realtime"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 2,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item": {
+          "content": [
+            {
+              "text": "trigger provider error",
+              "type": "input_text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        "type": "conversation.item.create"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 3,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "error",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "error",
+        "error": {
+          "type": "invalid_request_error",
+          "code": "bad_request",
+          "event_id": "evt_sanitized",
+          "message": "Realtime fixture rejected request"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-JKL012",
+  "object": "chat.completion",
+  "created": 1700000003,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The current weather in New York is 22°C and partly cloudy."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 45,
+    "completion_tokens": 18,
+    "total_tokens": 63
+  }
+}

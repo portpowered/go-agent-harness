@@ -1,0 +1,15 @@
+{
+  "id": "msg_04JKL012",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "The weather in New York is currently 22 degrees Celsius and partly cloudy. It's a pleasant day!"}
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 45,
+    "output_tokens": 23
+  }
+}

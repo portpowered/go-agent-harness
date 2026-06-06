@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"The"}],"role":"model"}}]}
+
+data: {"candidates":[{"content":{"parts":[{"text":" quick brown"}],"role":"model"}}]}
+
+data: {"candidates":[{"content":{"parts":[{"text":" fox jumps over the lazy dog."}],"role":"model"}}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":10,"totalTokenCount":18}}
+

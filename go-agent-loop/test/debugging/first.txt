@@ -1,0 +1,56 @@
+[INFO] agentloop: execute called command=What's the weather in London?
+[INFO] agentloop: starting hot loop (streaming)
+[DEBUG] engine: model delta delta={TOOLCALL.START 0   0xc0001a2000}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.START 10   0xc0001a2000}
+[DEBUG] engine: model delta delta={TOOLCALL.DELTA 0   0xc0001a4000}
+[DEBUG] engine: model message message={assistant [] [{tc1 get_weather {"city":"London"}}]   <nil>}
+[DEBUG] engine: model delta (drained after response) delta={TOOLCALL.END 0   0xc0001a6000}
+[DEBUG] engine: model delta (drained after response) delta={MESSAGE.END 0   0xc0001a2030}
+[INFO] Coordinator: model tool call output message message={assistant [] [{tc1 get_weather {"city":"London"}}]   <nil>}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.DELTA 11   0xc0001a4000}
+[DEBUG] CoordinatorDelta: model delta delta={TOOLCALL.END 12   0xc0001a6000}
+[DEBUG] CoordinatorDelta: model delta delta={MESSAGE.END 13   0xc0001a2030}
+[INFO] KernelRunner: dispatching inference result source=model
+[DEBUG] CoordinatorDelta: tool delta delta={MESSAGE.START 0 tool  0xc000024a10}
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 13   0xc0001a2030}
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.START 1 tool tc1 0xc000024a20}
+[INFO] KernelRunner: sending message start delta actor=tool
+[INFO] KernelRunner: sending text start delta actor=tool index=1
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.DELTA 2 tool tc1 0xc000076740}
+[DEBUG] CoordinatorDelta: tool delta delta={TEXT.END 3 tool tc1 0xc000024a30}
+[DEBUG] CoordinatorDelta: tool delta delta={MESSAGE.END 0 tool  0xc000107440}
+[INFO] KernelRunner: sending text delta delta=sunny, 22C actor=tool index=2
+[INFO] KernelRunner: sending text end delta actor=tool index=3
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 0 tool  0xc000107440}
+[INFO] Coordinator: tool text output message curr.Inputs.ToolOutputMessage=[{tool [{sunny, 22C}] [] tc1  <nil>}]
+[INFO] KernelRunner: dispatching inference result source=tool
+[DEBUG] engine: model delta delta={TEXT.START 0   0xc00009c150}
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.START 14   0xc00009c150}
+[DEBUG] engine: model delta delta={TEXT.DELTA 0   0xc000098100}
+[DEBUG] engine: model delta delta={TEXT.END 0   0xc00009c160}
+[INFO] KernelRunner: sending text start delta actor= index=14
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.DELTA 15   0xc000098100}
+[DEBUG] CoordinatorDelta: model delta delta={TEXT.END 16   0xc00009c160}
+[DEBUG] engine: model delta delta={MESSAGE.END 0   0xc0000b2030}
+[INFO] KernelRunner: sending text delta delta=The weather in London is sunny. actor= index=15
+[DEBUG] engine: model message message={assistant [{The weather in London is sunny.}] []   <nil>}
+[INFO] KernelRunner: sending text end delta actor= index=16
+[INFO] Coordinator: model output message message={assistant [{The weather in London is sunny.}] []   <nil>}
+[INFO] KernelRunner: dispatching inference result source=model
+[INFO] Coordinator: terminating loop hasFinalResponse=true
+[DEBUG] CoordinatorDelta: model delta delta={MESSAGE.END 17   0xc0000b2030}
+[DEBUG] CoordinatorDelta: terminating loop terminateLoop=true
+[INFO] KernelRunner: message end delta (stream pipes remain open) delta={MESSAGE.END 17   0xc0000b2030}
+[INFO] KernelRunner: loop end delta, closing stream pipes delta={LOOP.END 0   0xc00009c490}
+[INFO] agentloop: execute called command=What's the weather in Paris?
+[ERROR] engine: context cancelled error=context canceled
+[ERROR] engine: hot loop failed reading data buffer error=context canceled
+[INFO] agentloop: starting hot loop (streaming)
+[ERROR] agentloop: hot loop exited with error (streaming) error=context canceled
+[ERROR] engine: context cancelled error=context canceled
+[ERROR] engine: hot loop failed reading data buffer error=context canceled
+[ERROR] agentloop: hot loop exited with error (streaming) error=context canceled
+--- FAIL: TestExecute_MultiTurn (0.00s)
+    agent_loop_test.go:362: second turn: got "The weather in London is sunny.", want "The weather in Paris is cloudy."
+    agent_loop_test.go:365: second turn: expected 4 total inference calls, got 2
+    agent_loop_test.go:371: expected at least 3 captured message slices, got 2

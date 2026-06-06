@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-realtime"
+  },
+  "session": {
+    "id": "sess_sanitized",
+    "started_at_utc": "2026-04-11T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "input_audio": "base64-audio",
+          "authorization": "Bearer redacted"
+        }
+      }
+    }
+  ]
+}

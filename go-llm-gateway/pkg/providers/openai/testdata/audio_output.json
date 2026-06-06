@@ -1,0 +1,27 @@
+{
+  "id": "chatcmpl-AUD001",
+  "object": "chat.completion",
+  "created": 1700000005,
+  "model": "gpt-4o-audio-preview",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Here is the audio response.",
+        "audio": {
+          "id": "audio_001",
+          "expires_at": 1700100000,
+          "data": "SGVsbG8gV29ybGQ=",
+          "transcript": "Hello World"
+        }
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 15,
+    "completion_tokens": 25,
+    "total_tokens": 40
+  }
+}

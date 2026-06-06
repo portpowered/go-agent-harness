@@ -1,0 +1,194 @@
+package grok
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/models"
+)
+
+func TestConnectSession_HappyPath(t *testing.T) {
+	conn := newMockConn()
+	// Queue a session.created reply so the session receive buffer gets a SESSION.OPEN.
+	conn.addServerEvent("session.created", map[string]any{
+		"session_id": "test-abc",
+	})
+
+	dialer := &mockDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithBaseURL("wss://mock.example.com/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{
+		Model: "grok-3-mini",
+		Voice: "Eve",
+	})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer session.Close()
+
+	// Verify dial URL and auth header.
+	if dialer.capturedURL != "wss://mock.example.com/v1/realtime" {
+		t.Errorf("dial URL: got %q, want %q", dialer.capturedURL, "wss://mock.example.com/v1/realtime")
+	}
+	if dialer.capturedHeaders["Authorization"] != "Bearer test-key" {
+		t.Errorf("auth header: got %q, want %q", dialer.capturedHeaders["Authorization"], "Bearer test-key")
+	}
+
+	// Verify the provider sent a session.update as the first client message.
+	msgs := conn.getClientMessages()
+	if len(msgs) == 0 {
+		t.Fatal("expected at least one client message (session.update)")
+	}
+	var firstMsg map[string]json.RawMessage
+	if err := json.Unmarshal(msgs[0], &firstMsg); err != nil {
+		t.Fatalf("unmarshal first message: %v", err)
+	}
+	var msgType string
+	json.Unmarshal(firstMsg["type"], &msgType)
+	if msgType != "session.update" {
+		t.Errorf("first message type: got %q, want %q", msgType, "session.update")
+	}
+
+	// Verify session config fields in the session.update payload.
+	var sessionField json.RawMessage
+	json.Unmarshal(firstMsg["session"], &sessionField)
+	var sessionPayload map[string]any
+	json.Unmarshal(sessionField, &sessionPayload)
+	if sessionPayload["model"] != "grok-3-mini" {
+		t.Errorf("session.update model: got %v, want grok-3-mini", sessionPayload["model"])
+	}
+	if sessionPayload["voice"] != "Eve" {
+		t.Errorf("session.update voice: got %v, want Eve", sessionPayload["voice"])
+	}
+
+	// Verify we can receive the queued session.created → SESSION.OPEN event.
+	recvCtx, recvCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer recvCancel()
+	got, ok := session.Receive().ReadBlockingContext(recvCtx)
+	if !ok {
+		t.Fatal("timed out waiting for SESSION.OPEN event")
+	}
+	if got.Type != messages.StreamTypeSessionOpen {
+		t.Errorf("received event type: got %q, want %q", got.Type, messages.StreamTypeSessionOpen)
+	}
+}
+
+func TestConnectSession_DialError(t *testing.T) {
+	dialer := &mockDialer{
+		dialErr: errors.New("connection refused"),
+	}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithWebSocketDialer(dialer),
+	)
+
+	_, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "grok-3-mini"})
+	if err == nil {
+		t.Fatal("expected error from dial failure")
+	}
+	if !strings.Contains(err.Error(), "dial websocket") {
+		t.Errorf("error should mention dial: %v", err)
+	}
+}
+
+func TestConnectSession_CustomConfig(t *testing.T) {
+	conn := newMockConn()
+	dialer := &mockDialer{conn: conn}
+	provider := New(
+		WithAPIKey("key"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{
+		Model:             "grok-3-mini",
+		Voice:             "Rex",
+		Instructions:      "Be helpful",
+		InputAudioFormat:  models.AudioFormatPCM16,
+		OutputAudioFormat: models.AudioFormatG711Ulaw,
+		TurnDetection: &models.TurnDetectionConfig{
+			Type:              "server_vad",
+			Threshold:         0.5,
+			SilenceDurationMs: 300,
+		},
+	})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer session.Close()
+
+	// Parse the session.update message and verify all config fields.
+	msgs := conn.getClientMessages()
+	if len(msgs) == 0 {
+		t.Fatal("expected session.update message")
+	}
+
+	var flat map[string]json.RawMessage
+	json.Unmarshal(msgs[0], &flat)
+	var sessionPayload map[string]any
+	json.Unmarshal(flat["session"], &sessionPayload)
+
+	if sessionPayload["voice"] != "Rex" {
+		t.Errorf("voice: got %v, want Rex", sessionPayload["voice"])
+	}
+	if sessionPayload["instructions"] != "Be helpful" {
+		t.Errorf("instructions: got %v, want 'Be helpful'", sessionPayload["instructions"])
+	}
+	if sessionPayload["input_audio_format"] != "pcm16" {
+		t.Errorf("input_audio_format: got %v, want pcm16", sessionPayload["input_audio_format"])
+	}
+	if sessionPayload["output_audio_format"] != "g711_ulaw" {
+		t.Errorf("output_audio_format: got %v, want g711_ulaw", sessionPayload["output_audio_format"])
+	}
+
+	td, ok := sessionPayload["turn_detection"].(map[string]any)
+	if !ok {
+		t.Fatal("turn_detection missing or wrong type")
+	}
+	if td["type"] != "server_vad" {
+		t.Errorf("turn_detection.type: got %v, want server_vad", td["type"])
+	}
+}
+
+func TestProviderName(t *testing.T) {
+	p := New()
+	if p.Name() != "grok" {
+		t.Errorf("Name: got %q, want %q", p.Name(), "grok")
+	}
+}
+
+func TestConnectSession_DefaultBaseURL(t *testing.T) {
+	conn := newMockConn()
+	dialer := &mockDialer{conn: conn}
+	provider := New(
+		WithAPIKey("key"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "grok-3-mini"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer session.Close()
+
+	if dialer.capturedURL != "https://api.x.ai/v1/realtime" {
+		t.Errorf("default URL: got %q, want %q", dialer.capturedURL, "https://api.x.ai/v1/realtime")
+	}
+}

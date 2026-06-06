@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-IMG001",
+  "object": "chat.completion",
+  "created": 1700000004,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The image shows a sunset over the ocean with vibrant orange and purple colors."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 200,
+    "completion_tokens": 16,
+    "total_tokens": 216
+  }
+}

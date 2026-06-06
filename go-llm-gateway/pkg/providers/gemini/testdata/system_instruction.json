@@ -1,0 +1,20 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {"text": "Ahoy, matey! I be a pirate assistant, ready to help ye with whatever ye need! What be yer question?"}
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 18,
+    "candidatesTokenCount": 25,
+    "totalTokenCount": 43
+  },
+  "modelVersion": "gemini-2.5-flash-001"
+}

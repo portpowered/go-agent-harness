@@ -1,0 +1,15 @@
+{
+  "id": "msg_03GHI789",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "tool_use", "id": "toolu_01ABC123", "name": "get_weather", "input": {"city": "New York"}}
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 25,
+    "output_tokens": 15
+  }
+}

@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Let me look that up for you."}],"role":"model"}}]}
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"search_web","args":{"query":"weather in London"}}}],"role":"model"}}]}
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_forecast","args":{"city":"London","days":3}}}],"role":"model"}}],"usageMetadata":{"promptTokenCount":15,"candidatesTokenCount":22,"totalTokenCount":37}}
+
