@@ -62,13 +62,34 @@ Use this shape for every finding group:
 ### Checklist Convergence
 
 - `outcome`: `uncertain`
-- `checklist rows / commitments inspected`: pending story 002
-- `affected files / surfaces`: `docs/internal/checklist.md`,
+- `checklist rows / commitments inspected`: the Phase 2 inventory rows that the
+  PRD says live in `docs/internal/checklist.md`; the ownership-boundary slice
+  commitments that the PRD says live in
   `tasks/todo/phase-2-session-fixture-ownership-boundary.md`
-- `evidence`: story 001 defines the evidence model only; repository-state
-  inspection is deferred to the checklist convergence pass
-- `required repairs`: complete story
-  `phase-2-session-fixture-ownership-validator-002`
+- `affected files / surfaces`: missing `docs/internal/checklist.md`; missing
+  `tasks/todo/phase-2-session-fixture-ownership-boundary.md`; `prd.json`;
+  `progress.txt`; `docs/internal/phase-2-session-fixture-ownership-validator.md`;
+  `go-llm-gateway/pkg/testing/session-fixture-authoring.md`;
+  `agent-cli/docs/session-record-replay.md`
+- `evidence`: the repository checkout does not contain either authoritative
+  planning surface named by the PRD, so the validator cannot inspect the actual
+  checklist rows or the actual ownership-boundary task commitments from the
+  repository state under review. That missing evidence is itself observable
+  repository evidence against convergence because the validator contract depends
+  on those files being reviewer-verifiable inputs. The checkout does contain the
+  validator report scaffold plus fixture-related docs in
+  `go-llm-gateway/pkg/testing/session-fixture-authoring.md` and
+  `agent-cli/docs/session-record-replay.md`, which confirms that fixture
+  ownership and replay guidance exists, but those surfaces do not map back to
+  the specific Phase 2 checklist rows or slice commitments that reviewers were
+  instructed to validate. Because the authoritative inventory and slice-plan
+  surfaces are absent, no row-level or commitment-level convergence claim can be
+  marked `pass`, and no unmet commitment can be marked `fail` with the required
+  source-of-truth citation.
+- `required repairs`: restore or commit `docs/internal/checklist.md` and
+  `tasks/todo/phase-2-session-fixture-ownership-boundary.md` to the branch, or
+  replace them with clearly documented successor surfaces that the validator can
+  cite directly for row-by-row and commitment-by-commitment convergence review
 
 ### Ownership-Boundary Architecture Drift
 
@@ -95,8 +116,12 @@ Use this shape for every finding group:
 ## Convergence Verdict
 
 - `overall outcome`: `uncertain`
-- `summary`: story 001 establishes the validator scope and evidence model but
-  does not yet claim checklist, ownership-boundary, or fixture-consistency
-  convergence outcomes
-- `required repairs before next Phase 2 slice`: complete stories 002 through 005
-  and record reviewer-verifiable evidence for each finding group
+- `summary`: the validator now records a concrete checklist-convergence finding:
+  the required planning inputs named by the PRD are missing from the repository
+  state, so the ownership-boundary slice cannot yet be validated against the
+  promised Phase 2 inventory rows or slice commitments. Ownership-boundary and
+  fixture-consistency findings remain deferred.
+- `required repairs before next Phase 2 slice`: restore or replace the missing
+  authoritative planning surfaces for checklist validation, then complete
+  stories 003 through 005 and record reviewer-verifiable evidence for the
+  remaining finding groups
