@@ -258,23 +258,27 @@ baseline:
 - Workspace: repository root of the authoritative checkout
 - Result: passed on `2026-06-07T12:57:28Z`
 - Reproduction assumptions: no live provider credentials were required; the
-  deterministic root test/integration/regression fixtures supplied all needed
-  local state
-- Covered root stages: `fmt`, `vet`, `lint`, `staticcheck`, `test`,
-  `test-integration`, `test-regressions`, `build`, and `coverage`
+  restored root validation contract used deterministic replay fixtures and
+  injected test wiring for session/integration coverage
 
-## Final intentional divergence summary
+The successful `make ci` run covered the landed Phase 1 validation surface:
 
-The final authoritative workspace intentionally diverges from a plain file-for-file
-copy of `origin/main` only in the narrow supporting fixes required to keep the
-restored Phase 1 baseline working on top of the newer local code already
-present on this branch:
+- formatting, vet, lint, and staticcheck across all workspace modules
+- package tests for `agent-cli`, `go-agent-loop`, and `go-llm-gateway`
+- root integration and replay-regression targets
+- build and coverage targets from the restored root `Makefile`
 
-- deterministic `agent-cli` test/bootstrap wiring and the Darwin shell helper
-- small lint/staticcheck/test-alignment fixes needed so the canonical restored
-  root `make ci` contract passes on the reviewed branch head
+## Final intentional divergence from `origin/main`
 
-Those divergences were kept because replacing the newer local code wholesale
-with an older baseline snapshot would have discarded unrelated authoritative
-branch work, while the selected merge preserves current behavior and still
-lands the Phase 1 root workspace contract completely.
+The final authoritative workspace intentionally diverges from the landed
+`origin/main` snapshot only where the current branch needed narrow,
+reviewer-visible compatibility fixes to remain mergeable under the restored
+Phase 1 root contract:
+
+- deterministic `agent-cli` test/bootstrap wiring for the newer local CLI code
+- workspace-wide lint/test fixes that were necessary to make the reviewed head
+  pass the restored root `make ci` contract
+
+These differences were kept because they make the authoritative workspace
+reviewable and reproducibly green without discarding unrelated local progress or
+requiring live provider setup.

@@ -54,14 +54,18 @@ type Executor struct {
 }
 
 // NewExecutor creates a new Executor with the given dependencies.
-// When relaxModelValidation is true (mock CLI wiring), provider credential and model
-// capability checks are skipped so integration tests do not depend on ~/.agent-cli.
-func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation bool) *Executor {
+// When relaxModelValidation is true, config-backed provider credential checks are
+// skipped for injected-test paths that do not intend to use live model wiring.
+func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
+	relax := false
+	if len(relaxModelValidation) > 0 {
+		relax = relaxModelValidation[0]
+	}
 	return &Executor{
 		executor:             executor,
 		toolDefs:             toolDefs,
 		inferencerOverride:   inferencerOverride,
-		relaxModelValidation: relaxModelValidation,
+		relaxModelValidation: relax,
 	}
 }
 
@@ -84,8 +88,6 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
-	// Mock inferencer wiring should stay credential-free only when tests did not
-	// explicitly provide a config directory whose contents are meant to be validated.
 	shouldValidate := !e.relaxModelValidation
 	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		shouldValidate = false
