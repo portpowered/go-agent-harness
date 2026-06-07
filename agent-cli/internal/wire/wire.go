@@ -55,6 +55,8 @@ var CliSet = wire.NewSet(
 	cli.NewAskCommand,
 	cli.NewChatCommand,
 	cli.NewToolCommand,
+	cli.NewInteractionCommand,
+	cli.NewInteractionReplayCommand,
 	cli.NewSessionCommand,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,

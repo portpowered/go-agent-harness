@@ -30,9 +30,10 @@ type Engine struct {
 	ordering *GlobalOrdering
 
 	// Active participant runners
-	modelRunner  *participants.ModelRunner
-	userRunner   *participants.UserRunner
-	kernelRunner *participants.KernelRunner
+	modelRunner       *participants.ModelRunner
+	interactionRunner *participants.InteractionRunner
+	userRunner        *participants.UserRunner
+	kernelRunner      *participants.KernelRunner
 	// Active participant lifecycle
 	modelParticipant  *participants.ActiveParticipant
 	toolParticipant   *participants.ActiveParticipant
@@ -131,6 +132,15 @@ func (e *Engine) GetUserRunner() *participants.UserRunner {
 
 func (e *Engine) GetKernelRunner() *participants.KernelRunner {
 	return e.kernelRunner
+}
+
+func (e *Engine) SetInteractionRunner(r *participants.InteractionRunner) {
+	e.interactionRunner = r
+	e.ordering.SetInteractionRunner(r)
+}
+
+func (e *Engine) GetInteractionRunner() *participants.InteractionRunner {
+	return e.interactionRunner
 }
 
 // GetModelRunner returns the model runner for direct access by the agent loop and tests.

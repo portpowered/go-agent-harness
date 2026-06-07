@@ -39,6 +39,9 @@ agent chat
 # Tool testing - invoke a tool directly by name and key=value args (for debugging)
 agent tool <tool-id> "key=param" "key2=param2" ...
 
+# Provider-neutral interaction fixture replay
+agent interaction replay fixtures/demo.interaction.json
+
 # Session management (sessions are stored in workspace/sessions/)
 agent session --record capture.json --provider grok --model <session-model> --api-key <xai-api-key>
 agent session "hello" --record openai.session.json --provider openai --model gpt-realtime --api-key <openai-api-key>
@@ -50,7 +53,11 @@ agent session delete <session-id>
 
 CLI flags like `--api-key` and `--model` override values from the config file.
 
+Interaction replay reads a normalized PNIG fixture and prints one JSON object per event to stdout. It is credential-free and does not call live provider endpoints.
+
 Session replay reads a JSON capture file and does not make live provider network calls. Session record mode supports live Grok realtime captures and OpenAI Realtime captures with `--provider openai --model gpt-realtime`; it validates the provider, model, API key, and `.json` capture path before attempting the live provider path. OpenAI session mode uses the sessional inferencer path and does not call the normal `agent ask` or `agent chat` stateless OpenAI inference path.
+
+See [PNIG Interaction Replay](docs/interaction-replay.md) for the normalized interaction fixture workflow and NDJSON output contract.
 
 See [Agent Session Record and Replay](docs/session-record-replay.md) for the full workflow, capture format, replay divergence errors, and fixture sanitization guidance.
 

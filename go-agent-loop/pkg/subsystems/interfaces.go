@@ -26,6 +26,7 @@ const (
 	TickGroupPingPong TickGroup = 1
 
 	TickGroupCoordinator             TickGroup = 0
+	TickGroupInteractionEvents       TickGroup = 4
 	TickGroupCoordinatorDelta        TickGroup = 5
 	TickGroupConversationLoop        TickGroup = 10
 	TickGroupRecorder                TickGroup = 30

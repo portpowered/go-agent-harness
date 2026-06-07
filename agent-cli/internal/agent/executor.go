@@ -84,8 +84,13 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
-	// Mock CLI wiring uses injected inferencers without live provider credentials.
-	if !e.relaxModelValidation {
+	// Mock inferencer wiring should stay credential-free only when tests did not
+	// explicitly provide a config directory whose contents are meant to be validated.
+	shouldValidate := !e.relaxModelValidation
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		shouldValidate = false
+	}
+	if shouldValidate {
 		if err := loadedCfg.Validate(); err != nil {
 			return nil, err
 		}
@@ -665,6 +670,9 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 	if modality == "" || modality == "text" {
 		return nil
 	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		return nil
+	}
 
 	loadedCfg, err := e.loadConfig(cfg)
 	if err != nil {
@@ -695,6 +703,10 @@ func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInp
 	if e.relaxModelValidation || len(execInput.ContentParts) == 0 {
 		return nil
 	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		return nil
+	}
+
 	loadedCfg, err := e.loadConfig(cfg)
 	if err != nil {
 		return nil // skip validation if config can't be loaded
