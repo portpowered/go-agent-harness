@@ -4,7 +4,7 @@
 
 - Validator branch: `phase-1-authoritative-checkout-convergence-validator`
 - Repaired branch under review: `phase-1-authoritative-checkout-reconciliation`
-- Report scope completed in this iteration: checklist convergence
+- Report scope completed in this iteration: checklist convergence, architecture drift
 
 ## Checklist Convergence Findings
 
@@ -16,3 +16,16 @@
 ## Checklist Convergence Verdict
 
 Checklist convergence is not yet satisfied for the repaired branch. The validator can confirm that Phase 1 evidence surfaces exist, but the authoritative checklist inventory required for row-by-row validation is missing, so Phase 2 should remain blocked until that source document is restored and mapped.
+
+## Architecture Drift Findings
+
+| group | subject | outcome | evidence | affectedFilesOrSurfaces | requiredFollowUp |
+| --- | --- | --- | --- | --- | --- |
+| `architecture-drift` | Root workspace contract alignment across `README.md`, `go.work`, `Makefile`, and `docs/architecture/workspace.md` | `pass` | The repaired branch exposes one coherent root baseline for the three-module workspace. `README.md` names `agent-cli`, `go-agent-loop`, and `go-llm-gateway` as the consumer-facing modules and points contributors at the root validation commands. `go.work` uses those same three module directories. `Makefile` defines the same root validation surface (`make deps`, `fmt`, `typecheck`, `vet`, `lint`, `staticcheck`, `test`, `test-integration`, `test-regressions`, `build`, `coverage`, `ci`) that `README.md` documents. `docs/architecture/workspace.md` matches that contract by describing the committed `go.work`, the three workspace modules, and the rule that root automation should use module-qualified patterns or root `make` targets rather than bare `go list ./...`. | `README.md`, `go.work`, `Makefile`, `docs/architecture/workspace.md` | None. |
+| `architecture-drift` | CI entrypoint alignment with the documented root validation baseline | `pass` | `.github/workflows/ci.yml` installs the pinned Go, `golangci-lint`, and `staticcheck` toolchain versions and delegates validation to `make ci`. That matches the root `Makefile` contract and `docs/architecture/workspace.md`, which both describe GitHub Actions as a thin wrapper over the same root pipeline contributors run locally. No second CI-specific command inventory or conflicting module-selection rule is exposed on the repaired branch. | `.github/workflows/ci.yml`, `Makefile`, `docs/architecture/workspace.md`, `README.md` | None. |
+| `architecture-drift` | Dependency and contract-audit documents align with the repaired branch architecture | `pass` | `docs/architecture/dependencies.md` describes the current dependency direction as `agent-cli` depending on both libraries and `go-llm-gateway` depending on `go-agent-loop`, which matches the module roles and composition boundaries documented in the root and module READMEs. `docs/architecture/contract-gap-audit.md` records remaining Phase 2 hardening gaps as follow-up audit items rather than redefining the current Phase 1 baseline, so it is aligned with the repaired branch as a review aid rather than a competing architecture surface. | `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `README.md`, `agent-cli/README.md`, `go-agent-loop/README.md`, `go-llm-gateway/README.md` | None. |
+| `architecture-drift` | Agent CLI docs index path coherence within the README set | `fail` | `agent-cli/docs/README.md` still says the docs entrypoint lives under `libraries/agent-cli/docs/`, but the repaired branch root layout and root/module README set consistently describe the module at `agent-cli/` in a three-module root workspace. The referenced content files do exist under `agent-cli/docs/`, so this is a stale path description rather than a missing-docs failure, but it still leaves the README set describing two different repository layouts. | `agent-cli/docs/README.md`, `README.md`, `agent-cli/README.md` | Update `agent-cli/docs/README.md` so its introductory path description matches the current `agent-cli/docs/` location and the root workspace layout described elsewhere on the repaired branch. |
+
+## Architecture Drift Verdict
+
+The repaired branch mostly presents one coherent Phase 1 architecture surface: the root workspace contract, CI entrypoint, and dependency/audit documents all describe the same three-module baseline and root validation pipeline. The remaining architecture drift is narrow but real: `agent-cli/docs/README.md` still carries an obsolete `libraries/agent-cli/docs/` path reference, so the README set is not yet fully self-consistent.
