@@ -2,24 +2,23 @@ package agent
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/portpowered/agent-cli/internal/config"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-llm-gateway/pkg/testing"
 	"go.uber.org/zap"
 )
 
 // ProviderBuildContext holds the dependencies a provider builder needs.
 type ProviderBuildContext struct {
 	LoadedConfig *config.Config
-	ExecConfig   *Config
 	Logger       *zap.Logger
+	HTTPClient   *http.Client
 }
 
 // ProviderBuildResult holds the result of building a provider.
 type ProviderBuildResult struct {
 	Provider providers.Provider
-	Recorder *testing.RecordRoundTripper
 }
 
 // ProviderBuilderFunc is a function that constructs a provider from build context.

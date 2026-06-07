@@ -2,10 +2,8 @@ package agent
 
 import (
 	"fmt"
-	"net/http"
 
 	falprovider "github.com/portpowered/go-llm-gateway/pkg/providers/fal"
-	"github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
 // RegisterFalProvider registers the FAL provider builder under the given names.
@@ -30,21 +28,11 @@ func buildFalProviderFactory(ctx ProviderBuildContext) (ProviderBuildResult, err
 	if falCfg.BaseURL != "" {
 		opts = append(opts, falprovider.WithBaseURL(falCfg.BaseURL))
 	}
-
-	var recordRT *testing.RecordRoundTripper
-	if ctx.ExecConfig.ReplayCapturePath != "" {
-		replayRT, err := testing.NewReplayRoundTripper(ctx.ExecConfig.ReplayCapturePath)
-		if err != nil {
-			return ProviderBuildResult{}, fmt.Errorf("failed to load replay captures: %w", err)
-		}
-		opts = append(opts, falprovider.WithHTTPClient(&http.Client{Transport: replayRT}))
-	} else if ctx.ExecConfig.RecordCapturePath != "" {
-		recordRT = testing.NewRecordRoundTripper(http.DefaultTransport)
-		opts = append(opts, falprovider.WithHTTPClient(&http.Client{Transport: recordRT}))
+	if ctx.HTTPClient != nil {
+		opts = append(opts, falprovider.WithHTTPClient(ctx.HTTPClient))
 	}
 
 	return ProviderBuildResult{
 		Provider: falprovider.New(opts...),
-		Recorder: recordRT,
 	}, nil
 }
