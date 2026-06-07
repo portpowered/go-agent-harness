@@ -81,5 +81,5 @@ The root Makefile exposes these deterministic and opt-in test tiers:
 Repository CI lives in `.github/workflows/ci.yml`. It:
 
 - Triggers on pull requests and pushes to `main`.
-- Installs Go 1.24.2 plus the optional `golangci-lint` and `staticcheck` tools expected by the root Makefile.
+- Installs Go 1.24.2 plus pinned `golangci-lint` and `staticcheck` versions that match the root Makefile guidance, so the CI toolchain does not drift under the same commit.
 - Runs `make ci` as the single validation entrypoint instead of duplicating per-module build or test commands in workflow YAML.
