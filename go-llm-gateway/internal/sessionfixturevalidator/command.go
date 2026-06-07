@@ -30,10 +30,10 @@ func Run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("session-fixture-validator", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage: %s [files-or-directories...]\n\n", flags.Name())
-		fmt.Fprintln(flags.Output(), "Validates committed .session.json captures for fixture hygiene.")
-		fmt.Fprintln(flags.Output(), "Checks require session.fixture_provenance, reject unsafe raw audio or credential-like fields and values,")
-		fmt.Fprintln(flags.Output(), "and ensure provider wire events use payload_type \"websocket_message\" instead of generic \"stream_message\".")
+		_, _ = fmt.Fprintf(flags.Output(), "Usage: %s [files-or-directories...]\n\n", flags.Name())
+		_, _ = fmt.Fprintln(flags.Output(), "Validates committed .session.json captures for fixture hygiene.")
+		_, _ = fmt.Fprintln(flags.Output(), "Checks require session.fixture_provenance, reject unsafe raw audio or credential-like fields and values,")
+		_, _ = fmt.Fprintln(flags.Output(), "and ensure provider wire events use payload_type \"websocket_message\" instead of generic \"stream_message\".")
 	}
 
 	if err := flags.Parse(args); err != nil {
@@ -53,12 +53,12 @@ func Run(args []string, stdout, stderr io.Writer) error {
 
 	if len(result.Errors) > 0 {
 		for _, validationErr := range result.Errors {
-			fmt.Fprintln(stderr, validationErr.Error())
+			_, _ = fmt.Fprintln(stderr, validationErr.Error())
 		}
 		return ErrValidationFailed
 	}
 
-	fmt.Fprintf(stdout, "validated %d session fixture file(s): ok\n", result.FilesScanned)
+	_, _ = fmt.Fprintf(stdout, "validated %d session fixture file(s): ok\n", result.FilesScanned)
 	return nil
 }
 

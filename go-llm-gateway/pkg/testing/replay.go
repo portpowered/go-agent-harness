@@ -14,8 +14,6 @@ import (
 // pairs from a JSON file (as produced by RecordRoundTripper.FlushToFile).
 type ReplayRoundTripper struct {
 	captures   []CapturePair
-	counter    int
-	counterMu  sync.Mutex
 	capturesMu sync.RWMutex
 }
 

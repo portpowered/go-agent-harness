@@ -39,7 +39,7 @@ func TestLocalProvider_NoAuthHeader(t *testing.T) {
 
 		flusher, _ := w.(http.Flusher)
 		for _, event := range events {
-			w.Write([]byte(event + "\n\n"))
+			_, _ = w.Write([]byte(event + "\n\n"))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -113,7 +113,7 @@ func TestLocalProvider_ResponseParsedCorrectly_Streaming(t *testing.T) {
 
 		flusher, _ := w.(http.Flusher)
 		for _, event := range events {
-			w.Write([]byte(event + "\n\n"))
+			_, _ = w.Write([]byte(event + "\n\n"))
 			if flusher != nil {
 				flusher.Flush()
 			}

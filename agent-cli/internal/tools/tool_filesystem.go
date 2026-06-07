@@ -197,10 +197,10 @@ func audioToPCM16k(ctx context.Context, content []byte) ([]byte, error) {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmp.Write(content); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return nil, fmt.Errorf("write temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
@@ -456,12 +456,12 @@ func (h *hostFs) WriteFile(path string, data []byte) error {
 	// if the operation is interrupted, as the rename operation is atomic on Linux.
 	tmpPath := fmt.Sprintf("%s.%d.tmp", path, time.Now().UnixNano())
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		os.Remove(tmpPath) // Ensure cleanup of partial/empty temp file
+		_ = os.Remove(tmpPath) // Ensure cleanup of partial/empty temp file
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to replace original file: %w", err)
 	}
 	return nil
@@ -481,7 +481,7 @@ func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) 
 	if err != nil {
 		return fmt.Errorf("failed to open workspace: %w", err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 
 	relPath, err := getSafeRelPath(r.workspace, path)
 	if err != nil {
@@ -527,12 +527,12 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 		tmpRelPath := fmt.Sprintf("%s.%d.tmp", relPath, time.Now().UnixNano())
 
 		if err := os.WriteFile(tmpRelPath, data, 0o644); err != nil {
-			root.Remove(tmpRelPath) // Ensure cleanup of partial/empty temp file
+			_ = root.Remove(tmpRelPath) // Ensure cleanup of partial/empty temp file
 			return fmt.Errorf("failed to write to temp file: %w", err)
 		}
 
 		if err := os.Rename(tmpRelPath, relPath); err != nil {
-			root.Remove(tmpRelPath)
+			_ = root.Remove(tmpRelPath)
 			return fmt.Errorf("failed to rename temp file over target: %w", err)
 		}
 		return nil

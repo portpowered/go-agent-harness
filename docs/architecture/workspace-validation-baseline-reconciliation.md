@@ -178,3 +178,64 @@ were changed outside that narrow support set. In particular:
   `agent-cli` support fixes listed above
 - no opportunistic cleanup or broader refactor was added as part of this
   reconciliation
+
+## Story 005 deterministic root validation
+
+Story 005 closes the reconciliation by proving the restored root contract with
+the full root `make ci` pipeline and by documenting the last mergeability
+changes needed to make that contract pass on top of the stale `ef4787d`
+checkout.
+
+### Mergeability follow-up work
+
+Once stories 001-004 were complete, the remaining blocker was mergeability of
+the current reviewed head under the restored root `Makefile` contract. Running
+`make ci` exposed workspace-wide lint and test failures that were inherited
+from the stale checkout rather than from the restored baseline files. The final
+mergeability fixes stayed disciplined and only repaired issues required for the
+reviewed head to satisfy the root contract:
+
+- `agent-cli`: explicit writer/closer error handling, small staticcheck
+  cleanups, removal of unused helpers, and test expectation updates for the
+  lint-compliant Grok and MIME-type validation error strings
+- `go-agent-loop`: explicit session cleanup in tests/runners, nil-safe engine
+  output buffer initialization, append simplifications in ordering history, and
+  removal of dead helpers caught by lint
+- `go-llm-gateway`: explicit response/session cleanup, checked JSON unmarshal
+  paths in tests, removal of unused replay state, and small style fixes needed
+  for `golangci-lint`, `staticcheck`, and the root test suite
+
+These follow-up changes were made only because the restored root Phase 1
+validation surface now requires the whole workspace to pass one deterministic
+contract from the repository root.
+
+### Validation evidence
+
+Final validation was run from the repository root with:
+
+- `make ci`
+
+Final result:
+
+- `fmt`: passed
+- `vet`: passed
+- `lint`: passed across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`
+- `staticcheck`: passed across all workspace modules
+- `test`: passed across all workspace modules
+- `test-integration`: passed for `agent-cli` and `go-agent-loop`
+- `test-regressions`: passed for committed replay and session-fixture suites
+- `build`: passed for the `agent-cli` binary and both library modules
+- `coverage`: passed and wrote per-module coverage profiles under `coverage/`
+
+Validation timestamp:
+
+- `2026-06-07T15:42:32Z` command start context for the final successful
+  story-005 wrap-up
+
+Deterministic assumptions used by this validation:
+
+- no live provider credentials were required
+- provider-facing tests ran through replay fixtures, local mock servers, or
+  injected session/inference fakes
+- the root `ci` contract does not invoke `test-customer-sessions`, so no
+  private local session directory is required for reproducibility
