@@ -35,7 +35,7 @@ func TestValidateMimeType_EmptyList(t *testing.T) {
 func TestValidateMimeType_ErrorFormat(t *testing.T) {
 	err := ValidateMimeType("image/tiff", "claude-3-opus", []string{"image/png", "image/jpeg", "image/gif"})
 	require.Error(t, err)
-	expected := "model \"claude-3-opus\" does not support input type \"image/tiff\". Supported types: image/png, image/jpeg, image/gif Tip: Convert with: convert input.tiff output.png"
+	expected := "model \"claude-3-opus\" does not support input type \"image/tiff\". supported types: image/png, image/jpeg, image/gif Tip: Convert with: convert input.tiff output.png"
 	assert.Equal(t, expected, err.Error())
 }
 

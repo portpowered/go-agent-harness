@@ -1,310 +1,242 @@
-# Phase 1 authoritative workspace convergence reconciliation
+# Phase 1 authoritative checkout reconciliation
 
-## Starting point
+## Comparison inputs
 
-- Active branch: `phase-1-authoritative-workspace-convergence`
-- Active branch `HEAD`: `ef4787d6493c40691c6fe8546f1e48a0082bbe48`
-- Expected stale local-main baseline from the PRD: `ef4787d`
-- Landed Phase 1 comparison source: `origin/main`
+This reconciliation record starts from the three Phase 1 reference surfaces
+named in the PRD:
 
-This document records the initial comparison for the authoritative workspace
-convergence PRD. The current worktree starts from the stale local-main commit
-named in the PRD and does not yet contain the landed Phase 1 root workspace
-baseline that already exists on `origin/main`.
+- local `main` at `ef4787d`
+- `origin/main` at `38dd71b`
+- `origin/phase-1-authoritative-workspace-convergence` at `42ccd5f`
 
-## In-scope landed artifacts to reconcile
+The current worktree branch is
+`phase-1-authoritative-checkout-reconciliation`, and its `HEAD` currently
+matches the stale local-`main` baseline at `ef4787d`.
 
-The PRD defines these landed artifacts and directly required supporting fixes as
-the convergence scope:
+## In-scope artifacts
+
+The PRD limits Phase 1 reconciliation to the landed root baseline and the
+directly required supporting fixes needed to keep that baseline working
+together:
 
 - root `go.work`
 - root `go.work.sum`
 - root `Makefile`
 - `.github/workflows/ci.yml`
+- root `README.md` refreshes
 - `docs/architecture/workspace.md`
-- `docs/architecture/dependencies.md`
-- `docs/architecture/contract-gap-audit.md`
-- `docs/architecture/workspace-validation-baseline-reconciliation.md`
-- root `README.md` and related landed documentation updates
-- directly required supporting fixes needed to make the restored baseline work
+- related architecture and audit docs required by that baseline
+- directly required supporting fixes only
 
-Any final divergence from `origin/main` for those areas must be documented
-explicitly with the competing inputs, the chosen outcome, and the reason.
+Any final divergence from `origin/main` or
+`origin/phase-1-authoritative-workspace-convergence` must be documented with
+the competing inputs, the chosen result, and the reason for that choice.
 
-## Comparison summary against `origin/main`
+## Comparison summary
 
-| Artifact or area | Current `HEAD` (`ef4787d`) | `origin/main` | Initial reconciliation status |
-| --- | --- | --- | --- |
-| `go.work` | missing | present | missing locally, must be restored |
-| `go.work.sum` | missing | present | missing locally, must be restored |
-| `Makefile` | missing | present | missing locally, must be restored |
-| `.github/workflows/ci.yml` | missing | present | missing locally, must be restored |
-| `docs/architecture/workspace.md` | missing | present | missing locally, must be restored |
-| `docs/architecture/dependencies.md` | missing | present | missing locally, must be restored |
-| `docs/architecture/contract-gap-audit.md` | missing | present | missing locally, must be restored |
-| `docs/architecture/workspace-validation-baseline-reconciliation.md` | missing | present | created locally in this story to track the convergence work |
-| `README.md` | present, older minimal root readme | present, expanded Phase 1 workspace guide | conflicting, merge intentionally |
-| Supporting fixes in `agent-cli`, `go-agent-loop`, `go-llm-gateway` | current branch state differs from landed baseline | present on landed baseline | inspect surgically during later stories |
+| Artifact or area | local `main` / current `HEAD` (`ef4787d`) | `origin/main` (`38dd71b`) | `origin/phase-1-authoritative-workspace-convergence` (`42ccd5f`) | Initial status |
+| --- | --- | --- | --- | --- |
+| `go.work` | missing | present | present | missing locally, restore later |
+| `go.work.sum` | missing | present | present | missing locally, restore later |
+| `Makefile` | missing | present | present | missing locally, restore later |
+| `.github/workflows/ci.yml` | missing | present | present | missing locally, restore later |
+| `docs/architecture/workspace.md` | missing | present | present | missing locally, restore later |
+| related architecture/audit docs | missing | present | present | missing locally, restore later |
+| `docs/architecture/workspace-validation-baseline-reconciliation.md` | missing | present | present | restored in this story as the reviewer-facing comparison record |
+| root `README.md` | present, minimal pre-Phase-1 readme | present, expanded Phase 1 root guide | present, same in-scope surface as `origin/main` | conflicting, merge intentionally |
+| broader module code under `agent-cli`, `go-agent-loop`, `go-llm-gateway` | branch-specific local state | differs from stale local baseline | differs from stale local baseline | preserve unless directly required |
+
+For the in-scope artifact list above, `origin/main` and
+`origin/phase-1-authoritative-workspace-convergence` currently expose the same
+baseline surface. The active discrepancy is between that landed Phase 1
+surface and the stale local checkout at `ef4787d`.
 
 ## Missing artifacts
 
-These in-scope landed artifacts are absent from the stale authoritative
-workspace and need to be ported or merged in later stories:
+These in-scope artifacts are absent from the stale local checkout and must be
+restored or merged in later stories:
 
 - `go.work`
 - `go.work.sum`
 - `Makefile`
 - `.github/workflows/ci.yml`
 - `docs/architecture/workspace.md`
-- `docs/architecture/dependencies.md`
-- `docs/architecture/contract-gap-audit.md`
+- related architecture and audit docs required by the baseline
 
 ## Conflicting artifacts
 
-These scoped surfaces already exist locally but do not match the landed Phase 1
-baseline and therefore must be merged intentionally rather than overwritten:
+These in-scope surfaces exist locally but do not match the Phase 1 baseline
+that reviewers can inspect on repository surfaces:
 
-- `README.md`
-- supporting code and module metadata differences under `agent-cli`,
-  `go-agent-loop`, and `go-llm-gateway` that may be required to make the
-  restored root workspace contract actually work
+- root `README.md`
+- any directly required supporting code or module metadata changes needed to
+  make the restored root baseline work on top of the stale local checkout
 
 ## Already-matching artifacts
 
-There are no already-matching in-scope artifacts at this starting point. Every
-root baseline file named in the PRD is either missing locally or materially
-different from the landed Phase 1 state on `origin/main`.
+There are no already-matching in-scope root baseline artifacts at this
+starting point. Each scoped artifact is either missing locally or materially
+older than the Phase 1 baseline exposed on the repository remotes.
 
-## Unrelated local changes to preserve
+## Unrelated local work to preserve
 
-The convergence work must not treat all differences from `origin/main` as
-replaceable drift. The following local state is outside the narrow scope of this
-story and should be preserved unless a later convergence step proves it is
-directly required for mergeability:
+This reconciliation must preserve local changes outside the narrow Phase 1
+scope unless a later story proves they are directly required for mergeability:
 
-- broad module-level code differences outside the explicit Phase 1 baseline
+- non-baseline module code differences outside the root workspace/CI/docs
   artifact list
-- factory workflow content unrelated to the root workspace baseline
-- local workflow files used by this executor flow, including untracked
-  `prd.md` and the local progress log
+- factory workflow files not required by the restored root baseline
+- local executor-workflow files such as untracked `prd.md` and local
+  `progress.txt`
 
-## Reconciliation rule
+## Validation snapshot
 
-Intentional divergence from `origin/main` is allowed only when it is explicit.
-For each final divergence that remains after convergence, the record must state:
+Because this stale checkout does not yet contain a root `go.work` file, root
+`go test ./...` is not a valid typecheck surface for this story. Compile
+validation was run per module instead:
 
-- the competing inputs
-- the selected result in the authoritative workspace
-- the reason that result is safer or more correct than a blind copy from
-  `origin/main`
+- `cd agent-cli && go test -run '^$' ./...`
+- `cd go-agent-loop && go test -run '^$' ./...`
+- `cd go-llm-gateway && go test -run '^$' ./...`
 
-## Validation snapshot for this story
+Initial result:
 
-- Compile-only command: `go test -run '^$' ./...` run separately in
-  `agent-cli`, `go-agent-loop`, and `go-llm-gateway`
-- Purpose: prove the stale authoritative workspace still typechecks before the
-  file-restoration stories begin
-- Result: passed after two minimal supporting fixes required by the stale
-  branch itself:
-  - `agent-cli/go.mod` and `agent-cli/go.sum` needed the tidy delta for the
-    current test imports and replay/session transport dependency graph
-  - `agent-cli/internal/tools/shell_darwin.go` was missing even though
-    `tool_shell.go` already referenced the Darwin process helpers
-- Additional observation for later stories: full `agent-cli` integration tests
-  on this stale branch still expect deterministic config bootstrap that is not
-  yet present, so they fail at runtime by requiring a live OpenRouter API key
+- `go-agent-loop`: passed
+- `go-llm-gateway`: passed
+- `agent-cli`: requires a minimal `go mod tidy` metadata sync before the
+  compile-only test pass can succeed on this stale branch
 
-## Story 002 workspace baseline restoration
+Final result for story 001:
 
-The root workspace and CI baseline named in the PRD has now been restored into
-the authoritative checkout from `origin/main`:
-
-- restored root `go.work`
-- restored root `go.work.sum`
-- restored root `Makefile`
-- restored `.github/workflows/ci.yml`
-
-The restoration stayed inside the Phase 1 scope. No unrelated local files were
-overwritten. The only supporting code changes made alongside the root baseline
-were the minimum `agent-cli` test-wiring fixes required for the restored root
-targets to work on this stale branch:
-
-- added deterministic mock config/models bootstrap in
-  `agent-cli/internal/wire/test_defaults.go`
-- updated `agent-cli/internal/wire/{wire.go,wire_gen.go}` so mock CLI
-  initializers opt into that deterministic config and relaxed model validation
-- updated `agent-cli/internal/agent/executor.go` so injected-test executors can
-  skip provider/model capability validation while production wiring remains
-  strict
-
-## Story 002 validation
-
-The restored root entrypoints were exercised from the repository root:
-
-- `make fmt`
-- `make typecheck`
-- `make test`
-- `make test-integration`
-- `make test-regressions`
-
-Results:
-
-- all five commands passed in the authoritative workspace on
-  `2026-06-07T12:17:05Z`
-- the restored root `Makefile` contract now drives deterministic compile and
-  test validation across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`
-
-## Intentional divergence status after story 002
-
-There is no final intentional divergence for the restored root workspace files
-in this story. The authoritative checkout now carries the landed root baseline
-artifacts from `origin/main`, while the supporting `agent-cli` test-wiring
-fixes are branch-local compatibility changes needed to make that baseline pass
-on the stale starting point.
+- `agent-cli`: passed after syncing `go.mod`/`go.sum` and restoring the missing
+  Darwin shell termination helper used by `internal/tools/tool_shell.go`
+- compile-only validation now passes across `agent-cli`, `go-agent-loop`, and
+  `go-llm-gateway`
 
 ## Story 003 documentation restoration
 
-The landed Phase 1 documentation and README surface has now been restored into
-the authoritative checkout:
+The Phase 1 reviewer-facing documentation surface has now been restored from
+the landed baseline on `origin/main`:
 
-- restored `docs/architecture/workspace.md`
-- restored `docs/architecture/dependencies.md`
-- restored `docs/architecture/contract-gap-audit.md`
-- merged the landed root `README.md` workspace guide
-- merged the landed module README refreshes for `agent-cli`,
-  `go-agent-loop`, and `go-llm-gateway`
-- restored `agent-cli/docs/interaction-replay.md` and updated
-  `agent-cli/docs/README.md` so the CLI docs index matches the landed replay
-  surface
+- root `README.md`
+- `docs/architecture/workspace.md`
+- `docs/architecture/dependencies.md`
+- `docs/architecture/contract-gap-audit.md`
+- refreshed module READMEs for `agent-cli`, `go-agent-loop`, and
+  `go-llm-gateway`
+- `agent-cli/docs/interaction-replay.md`
+- `agent-cli/docs/README.md` so the CLI docs index names the replay guide
 
-## Story 003 documentation reconciliation result
+The current branch did not have competing newer versions of these in-scope
+documentation files. The reconciliation result for story 003 is therefore the
+landed Phase 1 documentation surface from `origin/main`, merged without
+overwriting unrelated local workflow files.
 
-This story did not require a broad rewrite of local documentation. The
-authoritative checkout had only stale or missing versions of these files, so
-the final merged outcome is the landed `origin/main` documentation surface for
-the scoped architecture and README files.
+## Story 003 divergence status
 
-Intentional divergence status after story 003:
+There is no intentional documentation divergence from `origin/main` or
+`origin/phase-1-authoritative-workspace-convergence` in this story. The only
+branch-local differences that remain are the directly required supporting fixes
+already recorded for story 002.
 
-- none for the restored documentation files in this story
-- the only remaining branch-local divergence continues to be the `agent-cli`
-  compatibility/test-wiring fixes already recorded under story 002
+## Story 004 supporting fixes and preserved scope
 
-## Story 004 supporting fixes and conflict resolution
+Story 004 verifies that the current reconciliation branch keeps every
+non-baseline change tightly constrained to the minimum support needed for the
+restored Phase 1 baseline to work on top of the stale `ef4787d` checkout.
 
-Story 004 reconciles the remaining merge-sensitive support work needed to keep
-the restored Phase 1 baseline authoritative on this branch without discarding
-current local code:
+### Branch-local supporting fixes
 
-- removed the stale root `.gitignore` entries for `go.work` and `go.work.sum`
-  so the committed workspace files restored in story 002 remain canonical and
-  reviewable without force-add exceptions
-- kept the branch-local `agent-cli` compatibility/test-wiring fixes because
-  they are the minimum changes required to preserve deterministic root
-  validation on top of the newer local CLI code
-- left unrelated module-level differences outside the Phase 1 baseline scope
-  untouched
+The final branch-local code and module deltas beyond the restored baseline from
+`origin/main` are limited to `agent-cli`, where the stale local checkout needed
+small corrections before the restored root `Makefile` and test contract could
+run deterministically:
 
-## Story 004 conflict resolutions
-
-| Area | Competing inputs | Chosen result | Reason |
+| File(s) | Competing inputs | Chosen result | Why this is directly required |
 | --- | --- | --- | --- |
-| Root `.gitignore` | The stale local branch ignored `go.work` and `go.work.sum`, while the landed Phase 1 baseline treats those files as committed root artifacts. | Removed the workspace-file ignore entries but kept the local workflow ignores for `tasks/`, `prd.json`, and `progress.txt`. | This preserves the executor-local workflow files while making the root workspace baseline reviewable and maintainable without special staging steps. |
-| Deterministic `agent-cli` validation wiring | `origin/main` supplies the landed root validation contract, but this branch also carries newer local CLI/test behavior that should not be overwritten wholesale. | Kept the current branch command structure and retained only the compatibility fixes already added in `agent-cli/internal/agent/executor.go`, `agent-cli/internal/wire/{test_defaults.go,wire.go,wire_gen.go}`, `agent-cli/internal/tools/shell_darwin.go`, and the tidy module metadata. | Replacing the newer local CLI surface with an older baseline snapshot would lose unrelated authoritative work; the selected merge keeps local behavior while preserving the deterministic Phase 1 validation contract. |
-| Root validation entrypoints | The stale local branch previously lacked a canonical repository-wide validation surface, while the landed baseline defines the root `Makefile` and `.github/workflows/ci.yml` contract. | Standardized on the restored root `Makefile` and `.github/workflows/ci.yml` as the only repository-wide validation entrypoints. | This removes ambiguity between ad hoc per-module commands and the reviewer-facing root contract. |
+| `agent-cli/internal/tools/shell_darwin.go` | missing in local `main`; helper expected by existing `tool_shell.go`; not needed on the already-landed remote baseline | add the Darwin process-tree termination helper | compile-only validation on the stale checkout failed without the OS-specific helper already implied by the Linux and Windows variants |
+| `agent-cli/go.mod`, `agent-cli/go.sum` | stale local module metadata lacked dependencies now required by the restored validation surface | sync module metadata only far enough to satisfy the restored test/build graph | root validation cannot complete deterministically if the stale module graph does not resolve the dependencies the current tests import |
+| `agent-cli/internal/wire/test_defaults.go`, `agent-cli/internal/wire/{wire.go,wire_gen.go}`, `agent-cli/internal/agent/executor.go` | stale local production-only config path required real provider validation even for injected mock inferencer tests | keep production validation strict, but inject deterministic temp config defaults and relaxed model validation only for mock/injected test wiring | the restored root `make test` contract must pass without live provider credentials; these changes isolate that behavior to test-only initialization paths rather than changing the production contract |
 
-## Duplicate-entrypoint check
+### Intentional divergence summary
 
-The repository now exposes one canonical root validation/documentation surface
-for the restored Phase 1 baseline:
+The current branch intentionally diverges from both `origin/main` and
+`origin/phase-1-authoritative-workspace-convergence` only in the supporting
+fixes above. Those remote branches already contain the landed Phase 1 root
+workspace, CI, and documentation baseline, but they do not need the same stale
+checkout repairs because they were not built on top of local `main` at
+`ef4787d`.
 
-- the root `Makefile` owns the repository-wide validation targets, including
-  `make ci`
-- `.github/workflows/ci.yml` delegates to `make ci` instead of duplicating
-  module-specific validation logic in workflow YAML
-- `docs/architecture/workspace.md` documents the root workspace contract and
-  contributor expectations
-- this reconciliation document records the explicit divergence decisions instead
-  of leaving them implicit in branch-only code
+No additional module code, workflow files, or alternate validation surfaces
+were changed outside that narrow support set. In particular:
 
-This leaves no second root workflow file or competing repository-wide
-validation/documentation entrypoint in scope for the same Phase 1 behavior.
+- the restored root baseline files (`go.work`, `go.work.sum`, `Makefile`,
+  `.github/workflows/ci.yml`, root/module README refreshes, and architecture
+  docs) were taken from the landed Phase 1 baseline without introducing a
+  second competing contract
+- unrelated local work remains preserved outside the in-scope root baseline and
+  `agent-cli` support fixes listed above
+- no opportunistic cleanup or broader refactor was added as part of this
+  reconciliation
 
-## Story 005 deterministic convergence proof
+## Story 005 deterministic root validation
 
-Story 005 completes the final authoritative-workspace convergence proof by
-running the restored root validation contract end to end and resolving the
-small mergeability blockers that the older branch state exposed under that
-contract.
+Story 005 closes the reconciliation by proving the restored root contract with
+the full root `make ci` pipeline and by documenting the last mergeability
+changes needed to make that contract pass on top of the stale `ef4787d`
+checkout.
 
-Mergeability follow-up that was required on top of the restored Phase 1
-baseline:
+### Mergeability follow-up work
 
-- workspace-wide lint/staticcheck cleanup in `agent-cli`, `go-agent-loop`, and
-  `go-llm-gateway` where the restored root `make ci` contract surfaced
-  pre-existing unchecked errors, dead helpers, and nil-constructor paths
-- test expectation updates in `agent-cli/internal/input/validate_test.go` and
-  `agent-cli/test/integration/session_command_test.go` so the assertions match
-  the current lower-case, quoted runtime error strings already emitted by the
-  branch-local CLI code
-- replay/session test cleanup in
-  `go-llm-gateway/pkg/providers/grok/session_test.go` and
-  `go-llm-gateway/pkg/providers/openai/session_test.go` so all session-close
-  and JSON decode paths satisfy the restored lint contract
+Once stories 001-004 were complete, the remaining blocker was mergeability of
+the current reviewed head under the restored root `Makefile` contract. Running
+`make ci` exposed workspace-wide lint and test failures that were inherited
+from the stale checkout rather than from the restored baseline files. The final
+mergeability fixes stayed disciplined and only repaired issues required for the
+reviewed head to satisfy the root contract:
 
-## Story 005 validation evidence
+- `agent-cli`: restored propagation of CLI/service/executor writer failures,
+  explicit closer error handling where required by the lint contract, small
+  staticcheck cleanups, removal of unused helpers, and test expectation updates
+  for the lint-compliant Grok and MIME-type validation error strings
+- `go-agent-loop`: explicit session cleanup in tests/runners, nil-safe engine
+  output buffer initialization, append simplifications in ordering history, and
+  removal of dead helpers caught by lint
+- `go-llm-gateway`: explicit response/session cleanup, checked JSON unmarshal
+  paths in tests, removal of unused replay state, and small style fixes needed
+  for `golangci-lint`, `staticcheck`, and the root test suite
 
-- Command: `make ci`
-- Workspace: repository root of the authoritative checkout
-- Result: passed on `2026-06-07T12:57:28Z`
-- Reproduction assumptions: no live provider credentials were required; the
-  restored root validation contract used deterministic replay fixtures and
-  injected test wiring for session/integration coverage
+These follow-up changes were made only because the restored root Phase 1
+validation surface now requires the whole workspace to pass one deterministic
+contract from the repository root.
 
-The successful `make ci` run covered the landed Phase 1 validation surface:
+### Validation evidence
 
-- formatting, vet, lint, and staticcheck across all workspace modules
-- package tests for `agent-cli`, `go-agent-loop`, and `go-llm-gateway`
-- root integration and replay-regression targets
-- build and coverage targets from the restored root `Makefile`
+Final validation was run from the repository root with:
 
-## Post-review mergeability follow-up
+- `make ci`
 
-After review flagged the PR as `mergeable: CONFLICTING` against the newer
-`main`, the branch was rebased onto current `origin/main` and the resulting
-head was revalidated instead of reapplying the older pre-rebase cleanup commit
-wholesale.
+Final result:
 
-The rebased head intentionally kept only the still-relevant branch-local
-compatibility behavior:
+- `fmt`: passed
+- `vet`: passed
+- `lint`: passed across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`
+- `staticcheck`: passed across all workspace modules
+- `test`: passed across all workspace modules
+- `test-integration`: passed for `agent-cli` and `go-agent-loop`
+- `test-regressions`: passed for committed replay and session-fixture suites
+- `build`: passed for the `agent-cli` binary and both library modules
+- `coverage`: passed and wrote per-module coverage profiles under `coverage/`
 
-- `agent-cli/internal/agent/executor.go` continues to allow injected-test
-  inferencer paths to relax model validation without changing production
-  validation defaults
-- `agent-cli/internal/wire/test_defaults.go` keeps the deterministic mock model
-  alias expected by the rebased integration coverage
-- current `origin/main` versions were retained for the README and architecture
-  files that story 003 had originally restored from the older landed baseline,
-  while this reconciliation record remains the branch-specific reviewer-facing
-  audit surface
+Validation timestamp:
 
-Current mergeability validation after the rebase:
+- `2026-06-07T15:42:32Z` command start context for the final successful
+  story-005 wrap-up
 
-- Command: `make ci`
-- Result: passed on `2026-06-07T14:59:13Z`
-- Base comparison: rebased onto `origin/main` at `38dd71b573a805b6a1ee3daf59497d2a866c0438`
+Deterministic assumptions used by this validation:
 
-## Final intentional divergence from `origin/main`
-
-The final authoritative workspace intentionally diverges from the landed
-`origin/main` snapshot only where the current branch needed narrow,
-reviewer-visible compatibility fixes to remain mergeable under the restored
-Phase 1 root contract:
-
-- deterministic `agent-cli` test/bootstrap wiring for the newer local CLI code
-- workspace-wide lint/test fixes that were necessary to make the reviewed head
-  pass the restored root `make ci` contract
-
-These differences were kept because they make the authoritative workspace
-reviewable and reproducibly green without discarding unrelated local progress or
-requiring live provider setup.
+- no live provider credentials were required
+- provider-facing tests ran through replay fixtures, local mock servers, or
+  injected session/inference fakes
+- the root `ci` contract does not invoke `test-customer-sessions`, so no
+  private local session directory is required for reproducibility

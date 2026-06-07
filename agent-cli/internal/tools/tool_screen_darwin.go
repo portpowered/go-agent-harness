@@ -38,9 +38,7 @@ func screenDisplayBounds(idx int) image.Rectangle {
 	}
 	path := f.Name()
 	_ = f.Close()
-	defer func() {
-		_ = os.Remove(path)
-	}()
+	defer func() { _ = os.Remove(path) }()
 
 	args := []string{"-x", path}
 	if idx > 0 {
@@ -66,9 +64,7 @@ func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
 	}
 	path := f.Name()
 	_ = f.Close()
-	defer func() {
-		_ = os.Remove(path)
-	}()
+	defer func() { _ = os.Remove(path) }()
 
 	region := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
 	out, err := exec.Command("screencapture", "-x", "-R", region, path).CombinedOutput()
@@ -85,9 +81,7 @@ func loadPNGasRGBA(path string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open screenshot: %w", err)
 	}
-	defer func() {
-		_ = f.Close()
-	}()
+	defer func() { _ = f.Close() }()
 
 	img, err := png.Decode(f)
 	if err != nil {

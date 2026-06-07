@@ -491,9 +491,7 @@ func (p *FalProvider) doJSON(ctx context.Context, modelID string, body any, resu
 	if err != nil {
 		return fmt.Errorf("fal: request: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("fal: %s %s: %d %s", req.Method, url, resp.StatusCode, string(body))

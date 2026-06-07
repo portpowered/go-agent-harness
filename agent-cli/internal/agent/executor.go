@@ -54,8 +54,6 @@ type Executor struct {
 }
 
 // NewExecutor creates a new Executor with the given dependencies.
-// When relaxModelValidation is true, config-backed provider credential checks are
-// skipped for injected-test paths that do not intend to use live model wiring.
 func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
 	relax := false
 	if len(relaxModelValidation) > 0 {

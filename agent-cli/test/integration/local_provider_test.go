@@ -39,10 +39,7 @@ func TestLocalProvider_NoAuthHeader(t *testing.T) {
 
 		flusher, _ := w.(http.Flusher)
 		for _, event := range events {
-			if _, err := w.Write([]byte(event + "\n\n")); err != nil {
-				t.Errorf("write mock SSE event: %v", err)
-				return
-			}
+			_, _ = w.Write([]byte(event + "\n\n"))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -116,10 +113,7 @@ func TestLocalProvider_ResponseParsedCorrectly_Streaming(t *testing.T) {
 
 		flusher, _ := w.(http.Flusher)
 		for _, event := range events {
-			if _, err := w.Write([]byte(event + "\n\n")); err != nil {
-				t.Errorf("write mock SSE event: %v", err)
-				return
-			}
+			_, _ = w.Write([]byte(event + "\n\n"))
 			if flusher != nil {
 				flusher.Flush()
 			}

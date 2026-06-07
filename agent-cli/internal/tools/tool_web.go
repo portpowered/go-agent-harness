@@ -48,9 +48,7 @@ func (p *BraveSearchProvider) Search(ctx context.Context, query string, count in
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -136,9 +134,7 @@ func (p *TavilySearchProvider) Search(ctx context.Context, query string, count i
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -203,9 +199,7 @@ func (p *DuckDuckGoSearchProvider) Search(ctx context.Context, query string, cou
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -325,9 +319,7 @@ func (p *PerplexitySearchProvider) Search(ctx context.Context, query string, cou
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -578,9 +570,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) ([]mess
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

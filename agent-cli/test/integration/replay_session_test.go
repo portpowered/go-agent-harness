@@ -103,9 +103,7 @@ func TestSessionReplayFixture_InboundBeforeOutbound_UnblocksLaterInbound(t *test
 	if err != nil {
 		t.Fatalf("NewSessionReplayer: %v", err)
 	}
-	defer func() {
-		_ = replayer.Close()
-	}()
+	defer func() { _ = replayer.Close() }()
 
 	first := readFixtureReplayMessage(t, replayer)
 	if first.Type != messages.StreamTypeSessionCreated {
@@ -139,9 +137,7 @@ func TestSessionReplayFixture_OutboundBeforeInbound_StartsReplayAfterClientEvent
 	if err != nil {
 		t.Fatalf("NewSessionReplayer: %v", err)
 	}
-	defer func() {
-		_ = replayer.Close()
-	}()
+	defer func() { _ = replayer.Close() }()
 
 	assertNoFixtureReplayMessage(t, replayer)
 

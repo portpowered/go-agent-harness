@@ -105,9 +105,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("session connect: %w", err)
 	}
-	defer func() {
-		_ = session.Close()
-	}()
+	defer func() { _ = session.Close() }()
 
 	audioStreaming := false // true between AUDIO.START and AUDIO.END from the model
 	sessionClosed := false

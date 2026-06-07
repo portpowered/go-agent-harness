@@ -284,9 +284,7 @@ func RunChatWithAudio(ctx context.Context, out, errOut io.Writer, executor *agen
 	if err != nil {
 		return fmt.Errorf("create chat session: %w", err)
 	}
-	defer func() {
-		_ = src.Close()
-	}()
+	defer func() { _ = src.Close() }()
 
 	vad := audio.NewVAD(audio.DefaultVADConfig)
 	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
