@@ -213,7 +213,7 @@ Step 2: Verify the thing.
 
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = tmpDir // Point to temp dir with skills
 	askFlags := flags.NewAskFlags()
@@ -267,7 +267,7 @@ Body of the skill.
 
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = tmpDir
 	askFlags := flags.NewAskFlags()
@@ -321,7 +321,7 @@ Test skill body.
 
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = tmpDir
 	askFlags := flags.NewAskFlags()

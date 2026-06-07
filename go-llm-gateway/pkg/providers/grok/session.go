@@ -92,7 +92,7 @@ func (s *grokSession) readLoop(ctx context.Context) {
 			default:
 			}
 			s.logger.Error("grok: websocket read error", logging.Field{Key: "error", Value: err})
-			s.Close()
+			_ = s.Close()
 			return
 		}
 
@@ -112,7 +112,7 @@ func (s *grokSession) readLoop(ctx context.Context) {
 				case <-s.done:
 					return
 				case <-ctx.Done():
-					s.Close()
+					_ = s.Close()
 					return
 				default:
 					// Buffer full — drop the message (onDrop callback can log if set).
@@ -127,7 +127,7 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.Close()
+			_ = s.Close()
 			return
 		case <-s.done:
 			return
@@ -137,7 +137,7 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 			}
 			if err := s.writeEvent(event); err != nil {
 				s.logger.Error("grok: websocket write error", logging.Field{Key: "error", Value: err})
-				s.Close()
+				_ = s.Close()
 				return
 			}
 		}

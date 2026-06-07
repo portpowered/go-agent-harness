@@ -26,7 +26,8 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	registryExecutor := tools.NewRegistryExecutor(toolRegistry)
 	v := services.DefaultToolDefs(toolRegistry)
 	inferencer := provideNilInferencer()
-	executor := agent.NewExecutor(registryExecutor, v, inferencer)
+	bool2 := provideStrictModelValidation()
+	executor := agent.NewExecutor(registryExecutor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(executor, askFlags, loopFlags, globalFlags)
@@ -53,7 +54,8 @@ func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
-	agentExecutor := agent.NewExecutor(executor, v, inferencer)
+	bool2 := provideRelaxedModelValidation()
+	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
@@ -80,7 +82,8 @@ func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor,
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
-	agentExecutor := agent.NewExecutor(executor, v, inferencer)
+	bool2 := provideRelaxedModelValidation()
+	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
@@ -107,7 +110,8 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
-	agentExecutor := agent.NewExecutor(executor, v, inferencer)
+	bool2 := provideStrictModelValidation()
+	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
@@ -139,8 +143,12 @@ func provideNilInferencer() messages.Inferencer { return nil }
 // provideNilSessionInferencer supplies no session inferencer override for production.
 func provideNilSessionInferencer() messages.SessionInferencer { return nil }
 
+func provideStrictModelValidation() bool { return false }
+
+func provideRelaxedModelValidation() bool { return true }
+
 // ExecutorSet provides the agent executor (config-backed inferencer, injected tool executor).
-var ExecutorSet = wire.NewSet(services.DefaultToolDefs, provideNilInferencer, agent.NewExecutor)
+var ExecutorSet = wire.NewSet(services.DefaultToolDefs, provideNilInferencer, provideStrictModelValidation, agent.NewExecutor)
 
 // FlagsSet provides global and command-specific CLI flags.
 var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)

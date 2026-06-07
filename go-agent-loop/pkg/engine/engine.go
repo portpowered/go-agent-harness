@@ -63,11 +63,18 @@ func NewEngine(
 	kernelRunner *participants.KernelRunner,
 	tools []messages.ToolDefinition,
 ) *Engine {
-	outputs := state.OutputBuffers{
-		ToolInbox:        *toolRunner.Inbox,
-		UserInbox:        *userRunner.Inbox,
-		ModelInbox:       *modelRunner.Inbox,
-		KernelDeltaInbox: *kernelRunner.DeltaInbox,
+	var outputs state.OutputBuffers
+	if toolRunner != nil && toolRunner.Inbox != nil {
+		outputs.ToolInbox = *toolRunner.Inbox
+	}
+	if userRunner != nil && userRunner.Inbox != nil {
+		outputs.UserInbox = *userRunner.Inbox
+	}
+	if modelRunner != nil && modelRunner.Inbox != nil {
+		outputs.ModelInbox = *modelRunner.Inbox
+	}
+	if kernelRunner != nil && kernelRunner.DeltaInbox != nil {
+		outputs.KernelDeltaInbox = *kernelRunner.DeltaInbox
 	}
 	e := &Engine{
 		subsystems:   orderedSubsystems(hlps),
@@ -110,12 +117,6 @@ func (e *Engine) SetTickRate(d time.Duration) {
 func (e *Engine) logError(msg string, err error) {
 	if e.logger != nil && err != nil {
 		e.logger.Error(msg, logging.Field{Key: "error", Value: err.Error()})
-	}
-}
-
-func (e *Engine) logInfo(msg string, fields ...logging.Field) {
-	if e.logger != nil {
-		e.logger.Debug(msg, fields...)
 	}
 }
 

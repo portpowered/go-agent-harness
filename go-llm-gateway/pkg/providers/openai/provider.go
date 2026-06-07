@@ -101,7 +101,9 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 	if err != nil {
 		return providers.InferenceResponse{}, fmt.Errorf("openai: do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
@@ -166,7 +168,9 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 		return nil, fmt.Errorf("openai: failed to open stream request: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		errBody, _ := io.ReadAll(resp.Body)
 		p.logger.Error("openai: api error", logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "error_body", Value: string(errBody)})
 		return nil, fmt.Errorf("openai: api error %d: %s", resp.StatusCode, string(errBody))
@@ -175,7 +179,9 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 	ch := make(chan messages.StreamMessage, 64)
 	go func() {
 		defer close(ch)
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		streamSSEToGateway(resp.Body, ch)
 	}()
 	return ch, nil

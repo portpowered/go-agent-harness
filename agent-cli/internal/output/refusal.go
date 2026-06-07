@@ -31,7 +31,7 @@ func WriteRefusal(w io.Writer, refusalText string) {
 		// Yellow: \033[33m ... \033[0m
 		msg = "\033[33m" + msg + "\033[0m"
 	}
-	fmt.Fprint(w, msg)
+	_, _ = fmt.Fprint(w, msg)
 }
 
 // WriteRefusalJSON writes a structured JSON refusal event to w.

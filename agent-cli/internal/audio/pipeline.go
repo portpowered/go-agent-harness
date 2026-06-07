@@ -77,7 +77,6 @@ func (p *Pipeline) ReadUtterance(ctx context.Context) ([]int16, error) {
 			totalFrames := len(accumulated) / FrameSize
 			if totalFrames >= p.cfg.MaxUtteranceFrames {
 				result := accumulated
-				accumulated = nil
 				p.vad.Reset()
 				return result, nil
 			}

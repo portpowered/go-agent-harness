@@ -303,15 +303,9 @@ func ReconstructToolMessagesFromDeltas(deltas []messages.StreamMessage) []messag
 // (which ensures no stale deltas linger past the current response end) cannot cut off
 // tool or user deltas that are appended in the same tick.
 func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
-	for _, msg := range ts.Inputs.ToolOutputMessage {
-		ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, msg)
-	}
-	for _, msg := range ts.Inputs.UserOutputMessage {
-		ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, msg)
-	}
-	for _, msg := range ts.Inputs.ModelOutputMessage {
-		ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, msg)
-	}
+	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ToolOutputMessage...)
+	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.UserOutputMessage...)
+	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ModelOutputMessage...)
 
 	// Model deltas: written at ModelDeltaStartIndex+CurrentModelDeltaCount.
 	// Truncation (removing stale entries past the current response boundary) is only
@@ -335,14 +329,10 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 
 	// Tool and user deltas are appended after model delta logic so they are never
 	// affected by the model delta truncation.
-	for _, msg := range ts.Inputs.ToolInputDelta {
-		ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
-	}
+	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.ToolInputDelta...)
 	ts.History.CurrentToolDeltaCount += len(ts.Inputs.ToolInputDelta)
 
-	for _, msg := range ts.Inputs.UserInputDelta {
-		ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
-	}
+	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.UserInputDelta...)
 }
 
 // FlushInputs clears all input slices and resets TerminateLoop for the next tick.

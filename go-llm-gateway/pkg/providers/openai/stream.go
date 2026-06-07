@@ -37,9 +37,9 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 	}
 
 	var (
-		curContentState contentState = contentStateNone
-		toolCalls                    = make(map[int]struct{ id, name, args string })
-		toolCallEnded                = make(map[int]bool)
+		curContentState = contentStateNone
+		toolCalls       = make(map[int]struct{ id, name, args string })
+		toolCallEnded   = make(map[int]bool)
 		lastUsage       messages.TokenUsage
 		messageEndSent  bool
 		refusalBuf      strings.Builder // accumulates delta.refusal chunks
