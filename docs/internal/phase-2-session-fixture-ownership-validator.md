@@ -209,10 +209,42 @@ Use this shape for every finding group:
   remains committed; keep the executable validator root list aligned with that
   published contract
 
+## Dead-End and Stale Documentation References
+
+- `dead-end planning references`: `prd.json` directs reviewers to
+  `docs/internal/checklist.md` and
+  `tasks/todo/phase-2-session-fixture-ownership-boundary.md`, but neither file
+  exists in this checkout. Those references are dead ends for checklist
+  convergence review because the validator cannot cite row-level or
+  commitment-level source material from the repository under review.
+- `contradictory fixture-root guidance`: `go-llm-gateway/pkg/testing/README.md`
+  and `go-llm-gateway/pkg/testing/session-fixture-authoring.md` present
+  `./pkg/testing` as the validator target surface, while
+  `agent-cli/docs/session-record-replay.md` presents
+  `agent-cli/test/integration/testdata` as a committed fixture home and tells
+  contributors to validate that external path from `go-llm-gateway`. Reviewers
+  therefore encounter two different documentation answers for the same
+  ownership question.
+- `undocumented committed root`: the executable validator evidence in
+  `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`
+  treats `go-llm-gateway/pkg/providers/openai/testdata` as a committed session
+  fixture root, but neither contributor-facing fixture guide names that root.
+  That leaves a hidden contract between the validator implementation and the
+  repository layout.
+
+## Required Repairs Before Next Phase 2 Slice
+
+| Repair | Triggering evidence | Affected files / surfaces | Blocks |
+|--------|---------------------|---------------------------|--------|
+| Restore the authoritative checklist inventory and ownership-boundary slice plan, or publish explicit successor surfaces. | Checklist convergence is `uncertain` because the PRD-named planning inputs are absent from the repository state. | Missing `docs/internal/checklist.md`; missing `tasks/todo/phase-2-session-fixture-ownership-boundary.md`; `prd.json` | Checklist convergence acceptance criteria and reviewer-verifiable row mapping |
+| Define one authoritative committed fixture owner, or publish one stable ownership map that removes relative cross-module discovery. | Ownership-boundary architecture is `fail` because committed fixtures remain split across gateway, provider, and Agent CLI roots and the validator still relies on `../../../agent-cli/...` path knowledge. | `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`; `go-llm-gateway/pkg/testing/session_fixture_validator.go`; `agent-cli/test/integration/testdata`; `go-llm-gateway/pkg/providers/openai/testdata` | Ownership-boundary acceptance criteria and the next Phase 2 slice baseline |
+| Align every fixture-facing doc and validator target list on the same committed root set, including the provider-session fixture root if it remains committed. | Replay/validation consistency is `fail` because docs and executable discovery disagree about which repository roots define the committed session-fixture contract. | `go-llm-gateway/pkg/testing/README.md`; `go-llm-gateway/pkg/testing/session-fixture-authoring.md`; `agent-cli/docs/session-record-replay.md`; `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go` | Replay/session-validation consistency acceptance criteria and reviewer understanding |
+
 ## Convergence Verdict
 
 - `overall outcome`: `uncertain`
-- `summary`: the validator now records two concrete findings. Checklist
+- `summary`: the validator now records one `uncertain` finding and two `fail`
+  findings. Checklist
   convergence remains `uncertain` because the required planning inputs named by
   the PRD are missing from the repository state. Ownership-boundary architecture
   drift is `fail`: shared replay and validation behavior does route through
@@ -222,11 +254,13 @@ Use this shape for every finding group:
   Replay/session-validation consistency is also `fail`: the committed fixture
   data remains replayable and hygiene-validated, but contributor-facing docs and
   validator target roots still disagree about which repository surfaces define
-  the committed session-fixture contract.
+  the committed session-fixture contract. The dead-end planning references,
+  contradictory fixture-root guidance, and undocumented provider fixture root
+  are now called out explicitly so reviewers can verify every remaining repair
+  without reconstructing prior batch history.
 - `required repairs before next Phase 2 slice`: restore or replace the missing
   authoritative planning surfaces for checklist validation; converge on one
   authoritative committed fixture owner or explicitly documented ownership map
   that removes hidden relative-path coupling; align the gateway fixture
   authoring guide, Agent CLI replay doc, and validator root list on one
-  reviewer-verifiable committed session-fixture contract; then complete story
-  005 and record the final reviewer-facing repair summary
+  reviewer-verifiable committed session-fixture contract
