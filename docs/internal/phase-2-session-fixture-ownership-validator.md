@@ -132,17 +132,17 @@ Use this shape for every finding group:
   `go-llm-gateway/pkg/testing/session_replay_test.go`;
   root `Makefile`
 - `evidence`: the contributor-facing fixture docs now align on the same shared
-  ownership model: `go-llm-gateway/pkg/testing` owns the repository-wide shared
-  replay fixture contract, while Agent CLI keeps only module-private fixtures in
-  its own `testdata`. The validator test still enforces committed fixture
-  hygiene, but it no longer scans the repository to prove topology. Instead, it
-  asserts the shared committed roots remain within gateway-owned boundaries.
-  Deterministic replay proof remains in `go-llm-gateway/pkg/testing/session_replay_test.go`
-  and the root validation pipeline now provides a mergeable workspace-level
-  `make test` surface for the branch. Together those surfaces show that the
-  shared fixtures, replay consumers, and hygiene validator remain aligned after
-  the ownership move without drifting back into duplicate repository-inventory
-  checks.
+  ownership model and use current repository paths: `go-llm-gateway/pkg/testing`
+  owns the repository-wide shared replay fixture contract, while Agent CLI
+  keeps only module-private fixtures in its own `testdata`. The validator test
+  still enforces committed fixture hygiene, but it no longer scans the
+  repository to prove topology. Instead, it asserts the shared committed roots
+  remain within gateway-owned boundaries. Deterministic replay proof remains in
+  `go-llm-gateway/pkg/testing/session_replay_test.go` and the root validation
+  pipeline now provides a mergeable workspace-level `make test` surface for the
+  branch. Together those surfaces show that the shared fixtures, replay
+  consumers, and hygiene validator remain aligned after the ownership move
+  without drifting back into duplicate repository-inventory checks.
 - `required repairs`: none
 
 ## Dead-End and Stale Documentation References

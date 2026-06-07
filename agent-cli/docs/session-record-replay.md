@@ -126,9 +126,9 @@ Before promoting a local recording into a test fixture:
 5. Set `session.fixture_provenance` to the canonical value `synthetic` or `provider_recorded`.
 6. Run the session fixture validator and replay tests against the sanitized file before committing it.
 
-`go-llm-gateway/pkg/testing` is the authoritative owner for committed shared `.session.json` replay fixtures because it owns the replay format, replay helpers, and fixture hygiene validator. Promote sanitized shared fixtures into `libraries/go-llm-gateway/pkg/testing/testdata/session-fixtures/`.
+`go-llm-gateway/pkg/testing` is the authoritative owner for committed shared `.session.json` replay fixtures because it owns the replay format, replay helpers, and fixture hygiene validator. Promote sanitized shared fixtures into `go-llm-gateway/pkg/testing/testdata/session-fixtures/`.
 
-Keep `libraries/agent-cli/test/integration/testdata/` only for CLI-private integration fixtures that are not the shared repository contract. If a CLI fixture becomes the canonical replay proof for multiple modules, copy or re-home the sanitized fixture into the gateway-owned shared root instead of asking sibling modules to read Agent CLI private `testdata`.
+Keep `agent-cli/test/integration/testdata/` only for CLI-private integration fixtures that are not the shared repository contract. If a CLI fixture becomes the canonical replay proof for multiple modules, copy or re-home the sanitized fixture into the gateway-owned shared root instead of asking sibling modules to read Agent CLI private `testdata`.
 
 ```bash
 cd ../go-llm-gateway
@@ -184,5 +184,5 @@ For tests that only render a transcript and do not exercise client sends, disabl
 
 ## Related Documentation
 
-- `libraries/go-llm-gateway/pkg/testing/README.md` describes the lower-level recorder and replay dialer APIs.
-- `libraries/agent-cli/README.md` lists the public Agent CLI commands and configuration file shape.
+- `go-llm-gateway/pkg/testing/README.md` describes the lower-level recorder and replay dialer APIs.
+- `agent-cli/README.md` lists the public Agent CLI commands and configuration file shape.
