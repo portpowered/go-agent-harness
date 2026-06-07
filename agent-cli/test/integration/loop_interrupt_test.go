@@ -38,7 +38,7 @@ func createIterativeTestDir(t *testing.T) string {
 // newIterativeTestExecutor creates an Executor with the given inferencer override.
 // Both executor and toolDefs are nil — BuildLoop creates its own from config.
 func newIterativeTestExecutor(inf messages.Inferencer) *agent.Executor {
-	return agent.NewExecutor(nil, nil, inf)
+	return agent.NewExecutor(nil, nil, inf, true)
 }
 
 // blockingMockInferencer blocks in Infer until the context is cancelled.

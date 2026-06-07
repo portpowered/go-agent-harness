@@ -82,6 +82,10 @@ This leaves no second root workflow file or competing repository-wide validation
 
 ## Validation snapshot for this story
 
+- Behavioral evidence for the structural early stories is explicit on this branch rather than implicit:
+- Story `phase-1-land-workspace-validation-baseline-001` was only treated as complete after root `make vet` passed against the compared workspace, proving the documented landing plan still matched a typechecking active tree.
+- Story `phase-1-land-workspace-validation-baseline-002` was only treated as complete after root `make build` passed from the repository root with the restored `go.work`, `go.work.sum`, root `Makefile`, and CI entrypoints in place, proving the restored artifact set was an active workspace contract rather than a file-only snapshot.
+- Story `phase-1-land-workspace-validation-baseline-005` remains the final convergence proof via full root `make ci`.
 - Mergeability follow-up was required after the root baseline was restored: `make ci` initially exposed repo-wide `errcheck`, `staticcheck`, `ineffassign`, and unused-code failures across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`, plus test expectations that no longer matched the now-canonical lowercase error strings.
 - The reviewed branch fixed those blockers in place on the current PR head instead of treating them as inherited debt, because they were the concrete reason the restored root validation contract could not yet merge cleanly.
 - Final convergence evidence:

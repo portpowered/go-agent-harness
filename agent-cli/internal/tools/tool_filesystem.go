@@ -197,7 +197,9 @@ func audioToPCM16k(ctx context.Context, content []byte) ([]byte, error) {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
 
 	if _, err := tmp.Write(content); err != nil {
 		_ = tmp.Close()
@@ -481,7 +483,9 @@ func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) 
 	if err != nil {
 		return fmt.Errorf("failed to open workspace: %w", err)
 	}
-	defer func() { _ = root.Close() }()
+	defer func() {
+		_ = root.Close()
+	}()
 
 	relPath, err := getSafeRelPath(r.workspace, path)
 	if err != nil {

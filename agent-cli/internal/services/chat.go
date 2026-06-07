@@ -592,6 +592,7 @@ func wrapSingleLine(s string, width int) []string {
 		}
 		if line != "" {
 			out = append(out, line)
+			line = ""
 		}
 		// Word itself may be longer than width; break by runes
 		for _, r := range w {
@@ -1117,8 +1118,12 @@ func (s *ChatService) Run(ctx context.Context, in io.Reader, out, errOut io.Writ
 		return fmt.Errorf("create chat session: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(out, "Port OS Agent Chat (type 'exit' or 'quit' to end)")
-	_, _ = fmt.Fprintln(out, "---")
+	if _, err := fmt.Fprintln(out, "Port OS Agent Chat (type 'exit' or 'quit' to end)"); err != nil {
+		return fmt.Errorf("write chat banner: %w", err)
+	}
+	if _, err := fmt.Fprintln(out, "---"); err != nil {
+		return fmt.Errorf("write chat banner separator: %w", err)
+	}
 
 	model := NewChatModel(s.executor, sessionID, s.globalFlags, s.askFlags, ctx, out, errOut)
 	p := tea.NewProgram(model,

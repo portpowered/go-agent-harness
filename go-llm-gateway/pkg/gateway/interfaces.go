@@ -13,6 +13,7 @@ import (
 type Gateway interface {
 	Infer(ctx context.Context, req InferenceRequest) (InferenceResponse, error)
 	InferStream(ctx context.Context, req InferenceRequest) (<-chan messages.StreamMessage, error)
+	Interact(ctx context.Context, req InteractionRequest) (<-chan InteractionEvent, error)
 }
 
 // InferenceRequest is the input to the gateway.

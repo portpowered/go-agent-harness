@@ -24,7 +24,7 @@ func (stubInferencer) InferStream(context.Context, messages.InferenceRequest) (<
 func TestLoadConfig_WithInferencerOverrideSkipsCredentialValidation(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	exec := NewExecutor(nil, nil, stubInferencer{})
+	exec := NewExecutor(nil, nil, stubInferencer{}, true)
 
 	cfg, err := exec.loadConfig(&Config{})
 	if err != nil {

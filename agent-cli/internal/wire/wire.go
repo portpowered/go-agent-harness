@@ -28,10 +28,15 @@ func provideNilInferencer() messages.Inferencer { return nil }
 // provideNilSessionInferencer supplies no session inferencer override for production.
 func provideNilSessionInferencer() messages.SessionInferencer { return nil }
 
+func provideStrictModelValidation() bool { return false }
+
+func provideRelaxedModelValidation() bool { return true }
+
 // ExecutorSet provides the agent executor (config-backed inferencer, injected tool executor).
 var ExecutorSet = wire.NewSet(
 	services.DefaultToolDefs,
 	provideNilInferencer,
+	provideStrictModelValidation,
 	agent.NewExecutor,
 )
 
@@ -50,6 +55,8 @@ var CliSet = wire.NewSet(
 	cli.NewAskCommand,
 	cli.NewChatCommand,
 	cli.NewToolCommand,
+	cli.NewInteractionCommand,
+	cli.NewInteractionReplayCommand,
 	cli.NewSessionCommand,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,
@@ -65,6 +72,7 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	wire.Build(
 		ToolExecutorSet,
 		ExecutorSet,
+		provideStrictModelValidation,
 		provideNilSessionInferencer,
 		CliSet,
 	)
@@ -77,6 +85,7 @@ func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.
 		tools.NewToolRegistry,
 		wire.NewSet(
 			services.DefaultToolDefs,
+			provideRelaxedModelValidation,
 			provideNilSessionInferencer,
 			agent.NewExecutor,
 			CliSet,
@@ -90,6 +99,7 @@ func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor,
 	wire.Build(
 		tools.NewToolRegistry,
 		services.DefaultToolDefs,
+		provideRelaxedModelValidation,
 		agent.NewExecutor,
 		CliSet,
 	)
@@ -102,6 +112,7 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 	wire.Build(
 		tools.NewToolRegistry,
 		services.DefaultToolDefs,
+		provideStrictModelValidation,
 		provideNilSessionInferencer,
 		agent.NewExecutor,
 		CliSet,

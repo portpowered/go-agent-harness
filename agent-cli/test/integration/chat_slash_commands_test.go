@@ -17,7 +17,7 @@ import (
 func TestSlashCommand_SystemShowsPrompt(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -47,7 +47,7 @@ func TestSlashCommand_SystemShowsPrompt(t *testing.T) {
 func TestSlashCommand_SystemDoesNotAddUserMessage(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -80,7 +80,7 @@ func TestSlashCommand_SystemDoesNotAddUserMessage(t *testing.T) {
 func TestSlashCommand_HelpShowsCommands(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -111,7 +111,7 @@ func TestSlashCommand_HelpShowsCommands(t *testing.T) {
 func TestSlashCommand_HelpDoesNotAddUserMessage(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -139,7 +139,7 @@ func TestSlashCommand_HelpDoesNotAddUserMessage(t *testing.T) {
 func TestSlashCommand_ClearResetsHistory(t *testing.T) {
 	inf := &mockInferencerSequence{responses: []string{"first response", "second response"}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -189,7 +189,7 @@ func TestSlashCommand_ClearResetsHistory(t *testing.T) {
 func TestSlashCommand_ClearNewSessionID(t *testing.T) {
 	inf := &mockInferencer{response: "ok"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -225,7 +225,7 @@ func TestSlashCommand_ClearNewSessionID(t *testing.T) {
 func TestSlashCommand_ClearModelStillFunctional(t *testing.T) {
 	inf := &mockInferencerSequence{responses: []string{"before clear", "after clear response"}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")

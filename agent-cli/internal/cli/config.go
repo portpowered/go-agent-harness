@@ -107,10 +107,18 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 		return fmt.Errorf("write config: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Local provider added to %s\n", configPath)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  provider: local\n")
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  base_url: %s\n", c.baseURL)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  model: %s\n", c.model)
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Local provider added to %s\n", configPath); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  provider: local\n"); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  base_url: %s\n", c.baseURL); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  model: %s\n", c.model); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
 	return nil
 }
 

@@ -132,7 +132,9 @@ func (c *ToolCommand) Generate() *cobra.Command {
 
 func (c *ToolCommand) listTools(w io.Writer, registry *tools.ToolRegistry) error {
 	for _, name := range registry.List() {
-		_, _ = fmt.Fprintln(w, name)
+		if _, err := fmt.Fprintln(w, name); err != nil {
+			return err
+		}
 	}
 	return nil
 }

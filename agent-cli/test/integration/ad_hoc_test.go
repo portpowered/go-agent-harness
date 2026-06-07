@@ -44,12 +44,12 @@ func TestAdHocAsk(t *testing.T) {
 	if replayPath != "" {
 		if os.Getenv("AGENT_MODEL__PROVIDER") == "" {
 			if err := os.Setenv("AGENT_MODEL__PROVIDER", "openrouter"); err != nil {
-				t.Fatalf("set AGENT_MODEL__PROVIDER: %v", err)
+				t.Fatalf("set provider env: %v", err)
 			}
 		}
 		if os.Getenv("AGENT_MODEL__OPENROUTER__API_KEY") == "" {
 			if err := os.Setenv("AGENT_MODEL__OPENROUTER__API_KEY", "replay-dummy"); err != nil {
-				t.Fatalf("set AGENT_MODEL__OPENROUTER__API_KEY: %v", err)
+				t.Fatalf("set replay api key env: %v", err)
 			}
 		}
 	}

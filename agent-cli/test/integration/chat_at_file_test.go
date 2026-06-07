@@ -30,7 +30,7 @@ func TestAtFile_TextFileIncludedInResponse(t *testing.T) {
 	const agentResponse = "I can see the file content."
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -84,7 +84,7 @@ func TestAtFile_ImageIncludesImagePart(t *testing.T) {
 	const agentResponse = "I see the image."
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -127,7 +127,7 @@ func TestAtFile_DirectoryListsContents(t *testing.T) {
 	const agentResponse = "I see the directory listing."
 	inf := &mockInferencer{response: agentResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -157,7 +157,7 @@ func TestAtFile_DirectoryListsContents(t *testing.T) {
 func TestAtFile_NonexistentDisplaysError(t *testing.T) {
 	inf := &mockInferencer{response: "should NOT be called"}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
