@@ -67,8 +67,20 @@ func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinit
 	}
 }
 
-// loadConfig loads the configuration from disk, applying CLI overrides.
+// loadConfig loads the configuration from disk, applying CLI overrides and
+// validating provider requirements for real executions.
 func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
+	return e.loadConfigWithOptions(cfg, true)
+}
+
+// loadConfigAllowingInferencerOverride loads config even when provider
+// credentials are intentionally absent because a test inferencer override will
+// satisfy execution.
+func (e *Executor) loadConfigAllowingInferencerOverride(cfg *Config) (*config.Config, error) {
+	return e.loadConfigWithOptions(cfg, e.inferencerOverride == nil)
+}
+
+func (e *Executor) loadConfigWithOptions(cfg *Config, validate bool) (*config.Config, error) {
 	configDir := cfg.ConfigDir
 	storage, err := config.NewDefaultConfigStorage(configDir)
 	if err != nil {
@@ -86,7 +98,7 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
-	shouldValidate := !e.relaxModelValidation
+	shouldValidate := validate && !e.relaxModelValidation
 	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		shouldValidate = false
 	}
@@ -197,7 +209,7 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 	// Prepend dynamic system info unless explicitly disabled.
 	if !cfg.NoSystemInformation {
 		var model, provider string
-		loadedCfg, err := e.loadConfig(cfg)
+		loadedCfg, err := e.loadConfigAllowingInferencerOverride(cfg)
 		if err == nil {
 			provider = loadedCfg.Model.Provider
 			if provider == "fal" && loadedCfg.Model.Fal != nil {
@@ -237,7 +249,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 		return nil, err
 	}
 
-	loadedCfg, err := e.loadConfig(cfg)
+	loadedCfg, err := e.loadConfigAllowingInferencerOverride(cfg)
 	if err != nil {
 		return nil, err
 	}

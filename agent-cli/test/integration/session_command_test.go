@@ -217,7 +217,7 @@ model:
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(testWriter.Stdout())
 	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"--config-dir", configDir, "session", "--replay", locateFixture(t, "session_text_reply.session.json")})
+	rootCmd.SetArgs([]string{"--config-dir", configDir, "session", "--replay", locateSharedSessionFixture(t, "session_text_reply.session.json")})
 
 	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("execute replay with incomplete Grok config should bypass live credentials: %v", err)
@@ -238,7 +238,7 @@ func TestSessionCommand_ReplayUsesCaptureAndPrintsTextDeltas(t *testing.T) {
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(testWriter.Stdout())
 	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"session", "--replay", locateFixture(t, "session_text_reply.session.json")})
+	rootCmd.SetArgs([]string{"session", "--replay", locateSharedSessionFixture(t, "session_text_reply.session.json")})
 
 	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("execute replay: %v", err)
@@ -288,7 +288,7 @@ func TestSessionCommand_OpenAIRealtimeReplayUsesFixtureWithoutLiveNetwork(t *tes
 	rootCmd.SetErr(testWriter.Stderr())
 	rootCmd.SetArgs([]string{
 		"session",
-		"--replay", locateFixture(t, "openai_realtime_text.session.json"),
+		"--replay", locateCLIFixture(t, "openai_realtime_text.session.json"),
 		"--provider", "openai",
 		"--model", "gpt-realtime",
 		"hello", "realtime",
@@ -315,7 +315,7 @@ func TestSessionCommand_OpenAIRealtimeReplayReportsProviderError(t *testing.T) {
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetArgs([]string{
 		"session",
-		"--replay", locateFixture(t, "openai_realtime_error.session.json"),
+		"--replay", locateCLIFixture(t, "openai_realtime_error.session.json"),
 		"--provider", "openai",
 		"--model", "gpt-realtime",
 		"trigger", "provider", "error",
@@ -345,7 +345,7 @@ func TestSessionCommand_OpenAIRealtimeReplay_EndToEndSmoke(t *testing.T) {
 	rootCmd.SetErr(testWriter.Stderr())
 	rootCmd.SetArgs([]string{
 		"session",
-		"--replay", locateFixture(t, "openai_realtime_smoke.session.json"),
+		"--replay", locateCLIFixture(t, "openai_realtime_smoke.session.json"),
 		"--provider", "openai",
 		"--model", "gpt-realtime",
 		"run", "the", "openai", "smoke", "replay",

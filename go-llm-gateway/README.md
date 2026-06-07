@@ -27,6 +27,30 @@ The current consumer-facing surfaces are:
 Most consumers start with `pkg/gateway`, one provider package, and `pkg/models`.
 Use `pkg/inference` only when you are wiring this module into `go-agent-loop`.
 
+## Shared Session Fixtures
+
+`pkg/testing` is the authoritative owner for committed shared `.session.json`
+replay fixtures in this repository. The canonical shared fixture root is
+`pkg/testing/testdata/session-fixtures`.
+
+Use that root for replay captures and fixture-hygiene validation that other
+modules may consume. Keep package-private fixtures in the module that owns the
+behavior under test, and do not treat sibling-module `testdata` directories as
+a shared fixture API.
+
+Cross-module consumers should resolve shared committed fixtures through
+`pkg/testing.SharedSessionFixturePath(...)`. Before review, validate committed
+fixtures with:
+
+```bash
+go run ./cmd/session-fixture-validator ./pkg/testing/testdata/session-fixtures
+```
+
+For the full authoring contract, provenance requirements, and sanitization
+rules, see
+[`pkg/testing/session-fixture-authoring.md`](pkg/testing/session-fixture-authoring.md)
+and [`pkg/testing/README.md`](pkg/testing/README.md).
+
 ## Install
 
 ```bash

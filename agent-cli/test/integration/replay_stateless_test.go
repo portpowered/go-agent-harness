@@ -3,7 +3,6 @@ package integration
 import (
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 
@@ -18,7 +17,7 @@ import (
 // and response reconstruction. The fixture file is checked into testdata/ for
 // CI reproducibility.
 func TestRecordReplayStateless(t *testing.T) {
-	fixturePath := locateFixture(t, "streaming_2_2.json")
+	fixturePath := locateCLIFixture(t, "streaming_2_2.json")
 
 	replayRT, err := gwtesting.NewReplayRoundTripper(fixturePath)
 	if err != nil {
@@ -57,20 +56,4 @@ func TestRecordReplayStateless(t *testing.T) {
 		}
 		t.Errorf("expected response body to contain '4'; got:\n%s", bodyPreview)
 	}
-}
-
-// locateFixture finds a fixture file relative to the module root or test dir.
-func locateFixture(t *testing.T, name string) string {
-	t.Helper()
-	candidates := []string{
-		"test/integration/testdata/" + name,
-		"testdata/" + name,
-	}
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	t.Fatalf("fixture %q not found in any of: %v", name, candidates)
-	return ""
 }

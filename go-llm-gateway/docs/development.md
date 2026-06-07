@@ -13,6 +13,7 @@ This guide is the package-local contributor guide for `libraries/go-llm-gateway`
 - `pkg/inference/` adapts gateway implementations into `go-agent-loop` inferencers.
 - `pkg/providers/` owns provider interfaces and implementations for Anthropic, OpenAI, Gemini, Grok, and fal.ai.
 - `pkg/testing/` contains deterministic HTTP record/replay utilities for provider tests.
+- `pkg/testing/testdata/session-fixtures/` is the authoritative repository root for committed shared `.session.json` replay fixtures used across modules.
 
 ## Development Commands
 
@@ -46,6 +47,7 @@ make deps-tidy
 - OpenAI Realtime `session.closed` provider events should normalize to shared `SESSION.CLOSE` so replay and Agent CLI consumers can verify graceful shutdown without provider-specific EOF handling.
 - Streaming normalization should preserve the shared `messages.StreamMessage` contract expected by `go-agent-loop`.
 - Provider tests should avoid live API calls in CI by using recorded HTTP fixtures.
+- This package owns the committed shared session fixture contract for Phase 2 boundary cleanup. Agent CLI and other modules may consume shared fixtures from `pkg/testing/testdata/session-fixtures`, but package-private `testdata` directories are not a cross-module API.
 
 ## Related Docs
 

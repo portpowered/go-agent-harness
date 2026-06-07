@@ -11,6 +11,63 @@ import (
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 )
 
+func TestSharedCommittedSessionFixtureReplaysDeterministically(t *testing.T) {
+	replayer := mustNewSessionReplayer(t, SharedSessionFixturePath("session_text_reply.session.json"), WithReplayOutboundValidation(false))
+
+	var received []messages.StreamMessage
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case <-replayer.Done():
+			goto drain
+		case msg := <-replayer.Receive().Chan():
+			received = append(received, msg)
+		case <-timeout:
+			t.Fatal("timed out waiting for shared session fixture replay")
+		}
+	}
+
+drain:
+	for {
+		msg, ok := replayer.Receive().Read()
+		if !ok {
+			break
+		}
+		received = append(received, msg)
+	}
+
+	expectedTypes := []messages.StreamMessageType{
+		messages.StreamTypeSessionCreated,
+		messages.StreamTypeMessageStart,
+		messages.StreamTypeTextStart,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeMessageEnd,
+		messages.StreamTypeSessionClose,
+	}
+	if len(received) != len(expectedTypes) {
+		t.Fatalf("received %d events, want %d", len(received), len(expectedTypes))
+	}
+	for i, want := range expectedTypes {
+		if got := received[i].Type; got != want {
+			t.Fatalf("event[%d] type = %q, want %q", i, got, want)
+		}
+	}
+
+	firstDelta, ok := received[3].Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("event[3] value type = %T, want *messages.TextDeltaValue", received[3].Value)
+	}
+	secondDelta, ok := received[4].Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("event[4] value type = %T, want *messages.TextDeltaValue", received[4].Value)
+	}
+	if got := firstDelta.Content + secondDelta.Content; got != "Hello! How can I help you today?" {
+		t.Fatalf("replayed text = %q", got)
+	}
+}
+
 func TestSessionReplayer_ProducesServerToClientEvents(t *testing.T) {
 	// Build a capture with both client-to-server and server-to-client events.
 	events := []CapturedSessionEvent{
@@ -24,10 +81,7 @@ func TestSessionReplayer_ProducesServerToClientEvents(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	var received []messages.StreamMessage
 	received = append(received, readReplayMessage(t, replayer))
@@ -94,10 +148,7 @@ func TestSessionReplayer_SendMatchesExpectedOutboundEvent(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	first := readReplayMessage(t, replayer)
 	if first.Type != messages.StreamTypeSessionCreated {
@@ -138,10 +189,7 @@ func TestSessionReplayer_BlocksLaterInboundUntilExpectedOutbound(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	_ = readReplayMessage(t, replayer)
 	select {
@@ -176,10 +224,7 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	ok := replayer.Send(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
@@ -229,10 +274,7 @@ func TestSessionReplayer_SkipTimingDefault(t *testing.T) {
 	writeCapture(t, path, events)
 
 	start := time.Now()
-	replayer, err := NewSessionReplayer(path) // no WithReplayTiming
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path) // no WithReplayTiming
 
 	<-replayer.Done()
 	elapsed := time.Since(start)
@@ -254,10 +296,7 @@ func TestSessionReplayer_AcceptsLegacyEventArray(t *testing.T) {
 		t.Fatalf("marshal events: %v", err)
 	}
 
-	replayer, err := NewSessionReplayerFromBytes(data)
-	if err != nil {
-		t.Fatalf("NewSessionReplayerFromBytes: %v", err)
-	}
+	replayer := mustNewSessionReplayerFromBytes(t, data)
 	<-replayer.Done()
 
 	msg, ok := replayer.Receive().Read()
@@ -317,4 +356,34 @@ func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamM
 		t.Fatal("timed out waiting for replay message")
 	}
 	return messages.StreamMessage{}
+}
+
+func mustNewSessionReplayer(t *testing.T, path string, opts ...SessionReplayerOption) *SessionReplayer {
+	t.Helper()
+
+	replayer, err := NewSessionReplayer(path, opts...)
+	if err != nil {
+		t.Fatalf("NewSessionReplayer: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := replayer.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+	return replayer
+}
+
+func mustNewSessionReplayerFromBytes(t *testing.T, data []byte, opts ...SessionReplayerOption) *SessionReplayer {
+	t.Helper()
+
+	replayer, err := NewSessionReplayerFromBytes(data, opts...)
+	if err != nil {
+		t.Fatalf("NewSessionReplayerFromBytes: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := replayer.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+	return replayer
 }
