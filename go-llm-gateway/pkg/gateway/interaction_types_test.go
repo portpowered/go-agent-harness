@@ -11,10 +11,11 @@ func TestInteractionRequestJSONRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	req := InteractionRequest{
-		InteractionID:      "interaction-123",
-		Provider:           "test-provider",
-		Model:              "test-model",
-		SystemInstructions: []string{"Be concise.", "Use tools when needed."},
+		InteractionID:        "interaction-123",
+		ContinueFromSequence: 3,
+		Provider:             "test-provider",
+		Model:                "test-model",
+		SystemInstructions:   []string{"Be concise.", "Use tools when needed."},
 		Messages: []InteractionMessage{
 			{
 				Role: InteractionRoleUser,
@@ -43,6 +44,9 @@ func TestInteractionRequestJSONRoundTrip(t *testing.T) {
 					"owner": json.RawMessage(`"forecast-system"`),
 				},
 			},
+		},
+		ToolResults: []InteractionToolResult{
+			{ToolCallID: "call-weather", Name: "weather", Payload: json.RawMessage(`{"temperature":72}`)},
 		},
 		Metadata: map[string]json.RawMessage{
 			"traceId": json.RawMessage(`"trace-123"`),

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
@@ -25,9 +26,29 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 	go func() {
 		defer close(out)
 
-		emitter := newInteractionEventEmitter(out, interactionID, g.provider.Name(), req.Model)
+		emitter := newInteractionEventEmitter(out, interactionID, g.provider.Name(), req.Model, req.ContinueFromSequence)
 		if !emitter.emit(ctx, InteractionEvent{Type: InteractionEventStart}) {
 			return
+		}
+
+		if err := validateInteractionToolResults(req); err != nil {
+			_ = emitter.emit(ctx, InteractionEvent{
+				Type:  InteractionEventError,
+				Error: &InteractionError{Code: "tool_result_validation_error", Message: err.Error()},
+			})
+			_ = emitter.emit(ctx, InteractionEvent{Type: InteractionEventEnd})
+			return
+		}
+
+		for _, result := range req.ToolResults {
+			result := result
+			if !emitter.emit(ctx, InteractionEvent{
+				Type:        InteractionEventToolResultAccepted,
+				Correlation: InteractionCorrelation{ToolCallID: result.ToolCallID},
+				ToolResult:  &result,
+			}) {
+				return
+			}
 		}
 
 		resp, err := g.provider.Infer(ctx, interactionProviderRequest(req))
@@ -48,6 +69,30 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 			}) {
 				return
 			}
+		}
+
+		toolCalls := normalizedInteractionToolCallsFromModel(resp.Message.ToolCalls)
+		if len(toolCalls) > 0 {
+			for _, call := range toolCalls {
+				call := call
+				if !emitter.emit(ctx, InteractionEvent{
+					Type:        InteractionEventToolCallRequest,
+					Correlation: InteractionCorrelation{ToolCallID: call.ID},
+					ToolCall:    &call,
+				}) {
+					return
+				}
+			}
+			if usage, ok := interactionUsageFromModel(resp.Usage); ok {
+				if !emitter.emit(ctx, InteractionEvent{
+					Type:  InteractionEventUsage,
+					Usage: &usage,
+				}) {
+					return
+				}
+			}
+			_ = emitter.emit(ctx, InteractionEvent{Type: InteractionEventEnd})
+			return
 		}
 
 		if !emitter.emit(ctx, InteractionEvent{
@@ -80,12 +125,13 @@ type interactionEventEmitter struct {
 	sequence      int64
 }
 
-func newInteractionEventEmitter(out chan<- InteractionEvent, interactionID, provider, model string) *interactionEventEmitter {
+func newInteractionEventEmitter(out chan<- InteractionEvent, interactionID, provider, model string, sequence int64) *interactionEventEmitter {
 	return &interactionEventEmitter{
 		out:           out,
 		interactionID: interactionID,
 		provider:      provider,
 		model:         model,
+		sequence:      sequence,
 	}
 }
 
@@ -116,12 +162,15 @@ func interactionProviderRequest(req InteractionRequest) providers.InferenceReque
 }
 
 func interactionMessagesToModel(req InteractionRequest) []models.Message {
-	msgs := make([]models.Message, 0, len(req.SystemInstructions)+len(req.Messages))
+	msgs := make([]models.Message, 0, len(req.SystemInstructions)+len(req.Messages)+len(req.ToolResults))
 	for _, instruction := range req.SystemInstructions {
 		msgs = append(msgs, models.NewTextMessage(models.RoleSystem, instruction))
 	}
 	for _, msg := range req.Messages {
 		msgs = append(msgs, interactionMessageToModel(msg))
+	}
+	for _, result := range req.ToolResults {
+		msgs = append(msgs, interactionToolResultToModel(result))
 	}
 	return msgs
 }
@@ -140,10 +189,29 @@ func interactionMessageFromModel(msg models.Message) *InteractionMessage {
 	return &InteractionMessage{
 		Role:         interactionRoleFromModel(msg.Role),
 		ContentParts: interactionContentFromModel(msg.ContentParts),
-		ToolCalls:    interactionToolCallsFromModel(msg.ToolCalls),
+		ToolCalls:    normalizedInteractionToolCallsFromModel(msg.ToolCalls),
 		ToolCallID:   msg.ToolCallID,
 		Name:         msg.Name,
 	}
+}
+
+func interactionToolResultToModel(result InteractionToolResult) models.Message {
+	return models.Message{
+		Role:         models.RoleTool,
+		ToolCallID:   result.ToolCallID,
+		Name:         result.Name,
+		ContentParts: []models.ContentPart{models.TextPart{Text: interactionToolResultContent(result)}},
+	}
+}
+
+func interactionToolResultContent(result InteractionToolResult) string {
+	if len(result.Payload) > 0 {
+		return string(result.Payload)
+	}
+	if result.Error != "" {
+		return result.Error
+	}
+	return result.Content
 }
 
 func interactionContentToModel(parts []InteractionContent) []models.ContentPart {
@@ -227,6 +295,68 @@ func interactionToolCallsFromModel(calls []models.ToolCall) []InteractionToolCal
 		})
 	}
 	return out
+}
+
+func normalizedInteractionToolCallsFromModel(calls []models.ToolCall) []InteractionToolCall {
+	out := make([]InteractionToolCall, 0, len(calls))
+	for i, call := range calls {
+		id := call.ID
+		if id == "" {
+			id = "tool-call-" + strconv.Itoa(i+1)
+		}
+		out = append(out, InteractionToolCall{
+			ID:        id,
+			Name:      call.Name,
+			Arguments: json.RawMessage(call.Arguments),
+		})
+	}
+	return out
+}
+
+func validateInteractionToolResults(req InteractionRequest) error {
+	if len(req.ToolResults) == 0 {
+		return nil
+	}
+
+	pending := latestInteractionToolCalls(req.Messages)
+	if len(pending) == 0 {
+		return fmt.Errorf("unknown tool result %q: no pending tool calls", req.ToolResults[0].ToolCallID)
+	}
+
+	pendingByID := make(map[string]InteractionToolCall, len(pending))
+	for _, call := range pending {
+		pendingByID[call.ID] = call
+	}
+
+	seen := make(map[string]struct{}, len(req.ToolResults))
+	for _, result := range req.ToolResults {
+		if result.ToolCallID == "" {
+			return fmt.Errorf("tool result is missing toolCallId")
+		}
+		if _, ok := seen[result.ToolCallID]; ok {
+			return fmt.Errorf("duplicate tool result for tool call %q", result.ToolCallID)
+		}
+		seen[result.ToolCallID] = struct{}{}
+		if _, ok := pendingByID[result.ToolCallID]; !ok {
+			return fmt.Errorf("unknown tool result %q", result.ToolCallID)
+		}
+	}
+
+	for _, call := range pending {
+		if _, ok := seen[call.ID]; !ok {
+			return fmt.Errorf("missing tool result for tool call %q", call.ID)
+		}
+	}
+	return nil
+}
+
+func latestInteractionToolCalls(messages []InteractionMessage) []InteractionToolCall {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if len(messages[i].ToolCalls) > 0 {
+			return messages[i].ToolCalls
+		}
+	}
+	return nil
 }
 
 func interactionUsageFromModel(usage models.TokenUsage) (InteractionUsage, bool) {

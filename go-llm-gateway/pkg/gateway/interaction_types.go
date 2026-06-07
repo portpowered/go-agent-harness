@@ -9,14 +9,16 @@ import (
 // model interaction. Provider adapters translate this shape into their
 // provider-specific request bodies.
 type InteractionRequest struct {
-	InteractionID      string                     `json:"interactionId,omitempty"`
-	Provider           string                     `json:"provider,omitempty"`
-	Model              string                     `json:"model,omitempty"`
-	SystemInstructions []string                   `json:"systemInstructions,omitempty"`
-	Messages           []InteractionMessage       `json:"messages,omitempty"`
-	Tools              []InteractionTool          `json:"tools,omitempty"`
-	Metadata           map[string]json.RawMessage `json:"metadata,omitempty"`
-	Config             json.RawMessage            `json:"config,omitempty"`
+	InteractionID        string                     `json:"interactionId,omitempty"`
+	ContinueFromSequence int64                      `json:"continueFromSequence,omitempty"`
+	Provider             string                     `json:"provider,omitempty"`
+	Model                string                     `json:"model,omitempty"`
+	SystemInstructions   []string                   `json:"systemInstructions,omitempty"`
+	Messages             []InteractionMessage       `json:"messages,omitempty"`
+	Tools                []InteractionTool          `json:"tools,omitempty"`
+	ToolResults          []InteractionToolResult    `json:"toolResults,omitempty"`
+	Metadata             map[string]json.RawMessage `json:"metadata,omitempty"`
+	Config               json.RawMessage            `json:"config,omitempty"`
 }
 
 // InteractionMessage is a provider-neutral conversation item.
