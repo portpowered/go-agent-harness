@@ -18,7 +18,7 @@ GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/t
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage ci release release-dry-run clean
+.PHONY: help fmt fmt-fix vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage ci release release-dry-run clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -32,11 +32,24 @@ help: ## Show available targets.
 	@printf "  %-18s %s\n" "release" "Placeholder target for Phase 4 release automation (not implemented)."
 	@printf "  %-18s %s\n" "release-dry-run" "Placeholder target for Phase 4 release dry runs (not implemented)."
 
-fmt: ## Format all Go packages in workspace modules.
+fmt: ## Validate Go formatting across all workspace modules without rewriting files.
 	@set -euo pipefail; \
 	for module in $(MODULES); do \
 		echo "==> fmt $$module"; \
-		(cd "$$module" && $(GO) fmt ./...); \
+		output="$$(cd "$$module" && find . -name '*.go' -not -path './vendor/*' -exec gofmt -l {} + | sort)"; \
+		if [ -n "$$output" ]; then \
+			echo "gofmt drift detected in $$module:"; \
+			echo "$$output"; \
+			echo "Run 'make fmt-fix' to rewrite files before rerunning 'make ci'."; \
+			exit 1; \
+		fi; \
+	done
+
+fmt-fix: ## Rewrite Go files in workspace modules with gofmt.
+	@set -euo pipefail; \
+	for module in $(MODULES); do \
+		echo "==> fmt-fix $$module"; \
+		(cd "$$module" && find . -name '*.go' -not -path './vendor/*' -exec gofmt -w {} +); \
 	done
 
 vet: ## Run go vet across all workspace modules.

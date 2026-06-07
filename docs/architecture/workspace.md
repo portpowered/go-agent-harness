@@ -50,13 +50,16 @@ From the repository root:
 go work sync   # sync workspace sum file with module dependencies
 
 # List or build every package in all workspace modules. The repository root is
-# not itself a module, so use module-qualified ./... patterns from the root:
+# not itself a package-bearing module, so use module-qualified ./... patterns
+# from the root instead of a bare `go list ./...`:
 go list ./agent-cli/... ./go-agent-loop/... ./go-llm-gateway/...
 go build ./agent-cli/... ./go-agent-loop/... ./go-llm-gateway/...
 go test ./agent-cli/... ./go-agent-loop/... ./go-llm-gateway/...
 ```
 
 From a single module directory (for example `agent-cli/`), `go list ./...` and `go test ./...` apply to that module only. Go still loads the parent `go.work` automatically when present.
+
+A bare `go list ./...` from the repository root is not a valid cross-module workspace contract in this layout: the pattern is evaluated relative to the root directory, which is not one of the workspace modules. Root automation should either invoke per-module commands or use module-qualified patterns from the root, which is what the repository `Makefile` does.
 
 ## Test tiers and credentials
 
