@@ -59,8 +59,10 @@ func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
 	path := f.Name()
-	f.Close()
-	defer os.Remove(path)
+	_ = f.Close()
+	defer func() {
+		_ = os.Remove(path)
+	}()
 
 	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
 	out, err := exec.Command("scrot", "-a", area, path).CombinedOutput()
@@ -80,7 +82,9 @@ func loadPNGasRGBA(path string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open screenshot: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	img, err := png.Decode(f)
 	if err != nil {

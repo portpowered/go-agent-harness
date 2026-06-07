@@ -24,7 +24,7 @@ func TestScrollback_MultiTurnOrdering(t *testing.T) {
 
 	inf := &mockInferencerSequence{responses: []string{resp1, resp2, resp3}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -86,7 +86,7 @@ func TestScrollback_NoDuplication(t *testing.T) {
 
 	inf := &mockInferencerSequence{responses: []string{resp1, resp2}}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -137,7 +137,7 @@ func TestNewline_StreamedResponsePreservesNewlines(t *testing.T) {
 
 	inf := &mockInferencer{response: responseWithNewlines}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -194,7 +194,7 @@ func TestNewline_MarkdownCodeBlockPreservesNewlines(t *testing.T) {
 
 	inf := &mockInferencer{response: codeBlockResponse}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
@@ -248,7 +248,7 @@ func TestNewline_ChunkedStreamPreservesNewlines(t *testing.T) {
 
 	inf := &mockChunkedInferencer{chunks: chunks}
 	exec := &mockToolExecutor{}
-	agentExec := agent.NewExecutor(exec, nil, inf)
+	agentExec := agent.NewExecutor(exec, nil, inf, true)
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, "")
