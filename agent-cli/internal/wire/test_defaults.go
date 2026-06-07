@@ -50,6 +50,7 @@ func createDeterministicMockConfig() (string, error) {
 
 	modelsYAML := `models:
   - name: test-mock-model
+    aliases: [z-ai/glm-4.7]
     providers: [openrouter]
     input_modalities: [text, image, audio, video]
     output_modalities: [text, image, audio, video, embedding]
