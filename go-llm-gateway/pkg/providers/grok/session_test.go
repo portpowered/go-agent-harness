@@ -30,7 +30,7 @@ func TestSession_SendAudioBufferAppend(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// Send audio via Send() which translates StreamMessage → wire event.
 	audioData := []byte{0x01, 0x02, 0x03}
@@ -56,14 +56,18 @@ func TestSession_SendAudioBufferAppend(t *testing.T) {
 	}
 
 	var msgType string
-	json.Unmarshal(wire["type"], &msgType)
+	if err := json.Unmarshal(wire["type"], &msgType); err != nil {
+		t.Fatalf("unmarshal message type: %v", err)
+	}
 	if msgType != "input_audio_buffer.append" {
 		t.Errorf("type: got %q, want %q", msgType, "input_audio_buffer.append")
 	}
 
 	// Verify audio is base64 encoded.
 	var audio string
-	json.Unmarshal(wire["audio"], &audio)
+	if err := json.Unmarshal(wire["audio"], &audio); err != nil {
+		t.Fatalf("unmarshal audio: %v", err)
+	}
 	expected := base64.StdEncoding.EncodeToString(audioData)
 	if audio != expected {
 		t.Errorf("audio: got %q, want %q", audio, expected)
@@ -82,7 +86,7 @@ func TestSession_ReceiveAudioDelta(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeAudioDelta {
@@ -107,7 +111,7 @@ func TestSession_ReceiveTranscriptDelta(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeTranscriptDelta {
@@ -127,7 +131,7 @@ func TestSession_ReceiveFunctionCallDone(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeToolCallEnd {
@@ -141,7 +145,7 @@ func TestSession_SendTextCreatesConversationItem(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// Send text which should map to conversation.item.create outbound.
 	msg := messages.StreamMessage{
@@ -160,23 +164,33 @@ func TestSession_SendTextCreatesConversationItem(t *testing.T) {
 	}
 
 	var wire map[string]json.RawMessage
-	json.Unmarshal(clientMsgs[0], &wire)
+	if err := json.Unmarshal(clientMsgs[0], &wire); err != nil {
+		t.Fatalf("unmarshal client wire message: %v", err)
+	}
 	var msgType string
-	json.Unmarshal(wire["type"], &msgType)
+	if err := json.Unmarshal(wire["type"], &msgType); err != nil {
+		t.Fatalf("unmarshal client wire type: %v", err)
+	}
 	if msgType != "conversation.item.create" {
 		t.Errorf("type: got %q, want %q", msgType, "conversation.item.create")
 	}
 
 	// Verify item contains the user text.
 	var item map[string]json.RawMessage
-	json.Unmarshal(wire["item"], &item)
+	if err := json.Unmarshal(wire["item"], &item); err != nil {
+		t.Fatalf("unmarshal wire item: %v", err)
+	}
 	var content []map[string]json.RawMessage
-	json.Unmarshal(item["content"], &content)
+	if err := json.Unmarshal(item["content"], &content); err != nil {
+		t.Fatalf("unmarshal item content: %v", err)
+	}
 	if len(content) == 0 {
 		t.Fatal("expected content array in conversation item")
 	}
 	var text string
-	json.Unmarshal(content[0]["text"], &text)
+	if err := json.Unmarshal(content[0]["text"], &text); err != nil {
+		t.Fatalf("unmarshal content text: %v", err)
+	}
 	if text != "hello from user" {
 		t.Errorf("text: got %q, want %q", text, "hello from user")
 	}
@@ -207,7 +221,7 @@ func TestSession_CloseStopsDone(t *testing.T) {
 	defer cancel()
 	session.start(ctx)
 
-	session.Close()
+	_ = session.Close()
 
 	select {
 	case <-session.Done():
@@ -228,7 +242,7 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// The malformed event should be skipped; we should receive the valid one.
 	got := readFromSession(t, ctx, session)
@@ -267,7 +281,7 @@ func TestSession_SessionCreatedEmitsSessionOpen(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	got, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {
@@ -291,7 +305,7 @@ func TestSession_SessionCreatedEmitsSessionCreated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// First event should be SESSION.OPEN.
 	first, ok := session.Receive().ReadBlockingContext(ctx)
@@ -334,7 +348,7 @@ func TestSession_SessionUpdatedEmitsSessionUpdated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	got, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {

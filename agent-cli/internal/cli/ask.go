@@ -80,7 +80,7 @@ func (c *AskCommand) Generate() *cobra.Command {
 				if loopErr != nil {
 					return fmt.Errorf("loop execution failed: %w", loopErr)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "\n[Loop complete: %d iteration(s), completed: %v, trace: %s]\n",
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\n[Loop complete: %d iteration(s), completed: %v, trace: %s]\n",
 					len(result.Iterations), result.Completed, result.TraceID)
 				return nil
 			}

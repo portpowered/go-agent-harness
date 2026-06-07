@@ -171,10 +171,10 @@ func (c Config) ValidateGrokSession() error {
 		return err
 	}
 	if active.APIKey == "" {
-		return fmt.Errorf("Grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in %s)", ConfigFileName)
+		return fmt.Errorf("grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in %s)", ConfigFileName)
 	}
 	if active.Model == "" {
-		return fmt.Errorf("Grok session model is required for live session record mode (set AGENT_MODEL__GROK__MODEL, pass --model, or configure model.grok.model in %s)", ConfigFileName)
+		return fmt.Errorf("grok session model is required for live session record mode (set AGENT_MODEL__GROK__MODEL, pass --model, or configure model.grok.model in %s)", ConfigFileName)
 	}
 	return nil
 }

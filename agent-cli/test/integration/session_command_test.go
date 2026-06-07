@@ -119,7 +119,7 @@ model:
 	if err == nil {
 		t.Fatal("expected missing Grok credential error")
 	}
-	if !strings.Contains(err.Error(), "Grok API key is required") {
+	if !strings.Contains(err.Error(), "grok API key is required") {
 		t.Fatalf("record error should validate configured Grok credentials, got: %v", err)
 	}
 	if strings.Contains(err.Error(), "--provider grok") {

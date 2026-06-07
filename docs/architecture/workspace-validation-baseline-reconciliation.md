@@ -82,6 +82,11 @@ This leaves no second root workflow file or competing repository-wide validation
 
 ## Validation snapshot for this story
 
-- `make vet` is the root typecheck-oriented validation gate for this story
-- `make test` is the root behavioral regression gate for this story
-- Story `005` remains responsible for the full `make ci` convergence proof
+- Mergeability follow-up was required after the root baseline was restored: `make ci` initially exposed repo-wide `errcheck`, `staticcheck`, `ineffassign`, and unused-code failures across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`, plus test expectations that no longer matched the now-canonical lowercase error strings.
+- The reviewed branch fixed those blockers in place on the current PR head instead of treating them as inherited debt, because they were the concrete reason the restored root validation contract could not yet merge cleanly.
+- Final convergence evidence:
+  - Command: `make ci`
+  - When: `2026-06-07T09:18:33Z` UTC
+  - Result: success from the repository root
+  - Included root stages: `fmt`, `vet`, `lint`, `staticcheck`, `test`, `test-integration`, `test-regressions`, `build`, and `coverage`
+  - Documented skips: none inside `make ci`; the opt-in `test-customer-sessions` target remains outside the deterministic CI contract

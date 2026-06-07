@@ -31,7 +31,7 @@ func TestNewGrokSessionInferencer_BuildsSessionCapableProviderPath(t *testing.T)
 		t.Fatal("NewGrokSessionInferencer returned nil")
 	}
 
-	var _ messages.SessionInferencer = inf
+	var _ = messages.SessionInferencer(inf)
 }
 
 func TestNewOpenAIRealtimeSessionInferencer_BuildsSessionCapableProviderPath(t *testing.T) {
@@ -46,7 +46,7 @@ func TestNewOpenAIRealtimeSessionInferencer_BuildsSessionCapableProviderPath(t *
 		t.Fatal("NewOpenAIRealtimeSessionInferencer returned nil")
 	}
 
-	var _ messages.SessionInferencer = inf
+	var _ = messages.SessionInferencer(inf)
 }
 
 func TestOpenAIRealtimeURL_AddsModelQuery(t *testing.T) {

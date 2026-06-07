@@ -4,9 +4,6 @@ import (
 	"testing"
 )
 
-// streamingReplayFixture is path to the recorded "what is 2 + 2?" response (relative to module root).
-const streamingReplayFixture = "test/integration/testdata/streaming_2_2.json"
-
 // TestReplayStreaming_2_2 runs the ask command with --replay using the fixed fixture
 // testdata/streaming_2_2.json (recorded "what is 2 + 2?" response) and asserts that the
 // CLI output stream contains the expected answer.
