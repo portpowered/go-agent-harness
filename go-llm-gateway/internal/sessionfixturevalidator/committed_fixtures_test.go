@@ -1,16 +1,15 @@
 package sessionfixturevalidator
 
 import (
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
-var committedSessionFixtureRoots = []string{
-	"../../pkg/providers/openai/testdata",
-	"../../pkg/testing/testdata/session-fixtures",
-}
+var committedSessionFixtureRoots = committedFixtureRoots()
 
 func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 	result, err := ValidatePaths(committedSessionFixtureRoots)
@@ -35,6 +34,20 @@ func TestCommittedSessionFixturesSmokeCheckReportsInvalidFixtureHygiene(t *testi
 	requireSmokeValidationError(t, result, "unsafe-synthetic.session.json", "records[0].payload.value.input_audio", "raw audio")
 	requireSmokeValidationError(t, result, "unsafe-synthetic.session.json", "records[0].payload.value.authorization", "credential-like")
 	requireSmokeValidationError(t, result, "provider-wire-misuse.session.json", "records[0].payload_type", "websocket_message")
+}
+
+func TestCommittedSessionFixtureRootsStayWithinGatewayOwnedBoundaries(t *testing.T) {
+	for _, root := range committedSessionFixtureRoots {
+		normalized := filepath.ToSlash(root)
+		if strings.Contains(normalized, "/agent-cli/") || strings.Contains(normalized, "agent-cli/test/integration/testdata") {
+			t.Fatalf("committed session fixture root %q must not reach into agent-cli private testdata", normalized)
+		}
+	}
+
+	sharedRoot := filepath.ToSlash(filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")))
+	if sharedRoot != filepath.ToSlash(committedSessionFixtureRoots[1]) {
+		t.Fatalf("shared committed fixture root = %q, want %q", committedSessionFixtureRoots[1], sharedRoot)
+	}
 }
 
 func requireSmokeValidationError(t *testing.T, result Result, fileName, fieldPath, reason string) {
@@ -64,4 +77,19 @@ func formatValidationErrors(errs []gatewaytesting.SessionFixtureValidationError)
 		lines = append(lines, err.Error())
 	}
 	return strings.Join(lines, "\n")
+}
+
+func committedFixtureRoots() []string {
+	return []string{
+		repoPathFromHere("../../pkg/providers/openai/testdata"),
+		filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")),
+	}
+}
+
+func repoPathFromHere(rel string) string {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return rel
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), rel))
 }

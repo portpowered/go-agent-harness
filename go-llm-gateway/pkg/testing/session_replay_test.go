@@ -11,6 +11,67 @@ import (
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 )
 
+func TestSharedCommittedSessionFixtureReplaysDeterministically(t *testing.T) {
+	replayer, err := NewSessionReplayer(SharedSessionFixturePath("session_text_reply.session.json"), WithReplayOutboundValidation(false))
+	if err != nil {
+		t.Fatalf("NewSessionReplayer: %v", err)
+	}
+	defer replayer.Close()
+
+	var received []messages.StreamMessage
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case <-replayer.Done():
+			goto drain
+		case msg := <-replayer.Receive().Chan():
+			received = append(received, msg)
+		case <-timeout:
+			t.Fatal("timed out waiting for shared session fixture replay")
+		}
+	}
+
+drain:
+	for {
+		msg, ok := replayer.Receive().Read()
+		if !ok {
+			break
+		}
+		received = append(received, msg)
+	}
+
+	expectedTypes := []messages.StreamMessageType{
+		messages.StreamTypeSessionCreated,
+		messages.StreamTypeMessageStart,
+		messages.StreamTypeTextStart,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeMessageEnd,
+		messages.StreamTypeSessionClose,
+	}
+	if len(received) != len(expectedTypes) {
+		t.Fatalf("received %d events, want %d", len(received), len(expectedTypes))
+	}
+	for i, want := range expectedTypes {
+		if got := received[i].Type; got != want {
+			t.Fatalf("event[%d] type = %q, want %q", i, got, want)
+		}
+	}
+
+	firstDelta, ok := received[3].Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("event[3] value type = %T, want *messages.TextDeltaValue", received[3].Value)
+	}
+	secondDelta, ok := received[4].Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("event[4] value type = %T, want *messages.TextDeltaValue", received[4].Value)
+	}
+	if got := firstDelta.Content + secondDelta.Content; got != "Hello! How can I help you today?" {
+		t.Fatalf("replayed text = %q", got)
+	}
+}
+
 func TestSessionReplayer_ProducesServerToClientEvents(t *testing.T) {
 	// Build a capture with both client-to-server and server-to-client events.
 	events := []CapturedSessionEvent{
