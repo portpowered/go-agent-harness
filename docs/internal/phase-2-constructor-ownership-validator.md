@@ -269,3 +269,65 @@ The final convergence report must:
   API-hardening slice may begin
 - remain reviewer-verifiable from current repository state without requiring
   broad source archaeology or reconstruction of prior batch history
+
+## Dead-End and Stale Documentation References
+
+- `planning references`: `tasks/todo/phase-2-constructor-ownership-boundaries.md`
+  is still missing from the reviewed branch, so the validator cannot map the
+  original slice commitments to current repository state through the committed
+  planning surface it cites. That missing file is a live reviewer-facing gap,
+  not implied intent.
+- `architecture audit guidance`: `docs/architecture/contract-gap-audit.md`
+  still contains present-tense DI-01 evidence that says
+  `agentloop.New(...)` injects a default tool executor even though the same
+  audit entry later marks the gap as completed and the current code now rejects
+  configured tools unless the caller chooses `WithToolExecutor(...)` or
+  `WithToolExecutionDisabled()`. Reviewers should treat that earlier DI-01
+  evidence text as stale.
+- `runtime ownership guidance`: the stateless provider-runtime seam is now
+  centralized in `agent-cli/internal/agent/provider_runtime.go`, but current
+  docs still require reviewers to infer that session-mode record ownership has
+  not yet reached the same seam boundary because
+  `agent-cli/internal/services/session.go` and
+  `go-llm-gateway/pkg/providers/openai/provider.go` retain hidden live dialer
+  defaults.
+
+## Required Repairs Before Next Phase 2 Slice
+
+1. Restore or intentionally replace the missing committed slice-plan surface
+   `tasks/todo/phase-2-constructor-ownership-boundaries.md` so reviewers can
+   map constructor-ownership commitments to delivered repository state without
+   relying on inferred intent. This blocks a full pass for `P2-COB-05`.
+2. Move session-mode live dialer ownership behind one explicit CLI-owned
+   runtime seam for Grok and OpenAI record paths instead of silently creating
+   default dialers in `agent-cli/internal/services/session.go` and
+   `go-llm-gateway/pkg/providers/openai/provider.go`. This blocks a pass for
+   the hidden-live-dependency portions of `P2-COB-03` and `P2-COB-04`.
+3. Decide and document the intended cancellation contract for session
+   replay/record relays, then either preserve that contract explicitly or
+   thread owned caller context through
+   `go-llm-gateway/pkg/testing/session_record.go` and
+   `go-llm-gateway/pkg/testing/session_replay.go` instead of relaying buffer
+   writes through `context.Background()`. This blocks a clean runtime-consistency
+   pass for `P2-COB-04`.
+4. Rewrite the stale DI-01 evidence text in
+   `docs/architecture/contract-gap-audit.md` so the audit reflects the current
+   explicit tool-execution ownership contract rather than the pre-fix state.
+   This blocks reviewer-ready convergence guidance for `P2-COB-05`.
+
+## Convergence Verdict
+
+- `overall outcome`: `fail`
+- `summary`: the reviewed repository now provides direct `pass` evidence for
+  authoritative constructor-ownership checklist rows, explicit loop-side tool
+  capability ownership, and the centralized stateless provider HTTP runtime
+  seam. The branch still does not converge overall because checklist
+  convergence remains `uncertain` while the cited slice-plan file is missing,
+  constructor-ownership architecture drift remains `fail` due to hidden
+  session-mode live dialer creation and stale DI-01 audit guidance, and
+  record/replay runtime consistency remains `fail` because session record paths
+  and relay cancellation behavior still bypass one explicit owned runtime seam.
+- `required repairs before next Phase 2 slice`: restore the missing planning
+  surface, remove hidden session-mode live dependency creation, resolve the
+  relay cancellation ownership gap, and update the stale audit guidance before
+  advancing to the next Phase 2 API-hardening slice.
