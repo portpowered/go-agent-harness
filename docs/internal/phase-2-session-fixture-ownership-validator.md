@@ -153,14 +153,61 @@ Use this shape for every finding group:
 
 ### Replay and Session-Validation Fixture Consistency
 
-- `outcome`: `uncertain`
-- `checklist rows / commitments inspected`: pending story 004
-- `affected files / surfaces`: replay consumers, session-validation targets, and
-  fixture provenance docs
-- `evidence`: story 001 defines the evidence model only; fixture-consistency
-  inspection is deferred to the consistency validation pass
-- `required repairs`: complete story
-  `phase-2-session-fixture-ownership-validator-004`
+- `outcome`: `fail`
+- `checklist rows / commitments inspected`: the PRD acceptance commitment that
+  replay fixtures and session-validation targets remain consistent with the
+  authoritative ownership model after the ownership-boundary slice; the
+  commitment that fixture provenance, sanitization expectations, and
+  deterministic replay assumptions remain aligned without broadening into
+  duplicate CI review
+- `affected files / surfaces`: `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`;
+  `go-llm-gateway/internal/sessionfixturevalidator/command.go`;
+  `go-llm-gateway/pkg/testing/session_fixture_validator.go`;
+  `go-llm-gateway/pkg/testing/session-fixture-authoring.md`;
+  `go-llm-gateway/pkg/testing/README.md`;
+  `go-llm-gateway/pkg/providers/openai/testdata/realtime_text.session.json`;
+  `agent-cli/test/integration/testdata/openai_realtime_*.session.json`;
+  `agent-cli/test/integration/testdata/session_*.session.json`;
+  `agent-cli/docs/session-record-replay.md`;
+  `agent-cli/internal/services/session.go`;
+  `agent-cli/test/integration/replay_session_test.go`;
+  `agent-cli/test/integration/replay_stateless_test.go`;
+  `agent-cli/test/integration/session_command_test.go`
+- `evidence`: the committed session-fixture validator and replay helpers now
+  provide matching executable evidence for the currently checked-in
+  `.session.json` files. The smoke-check roots in
+  `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`
+  cover every replayable committed `.session.json` fixture in the repository
+  except the validator's own intentionally invalid negative fixtures. Those same
+  tests also prove that each committed session fixture still loads through the
+  replay surface implied by its payload shape: normalized `stream_message`
+  captures load through `gwtesting.NewSessionReplayer`, and raw provider
+  `websocket_message` captures load through
+  `gwtesting.NewReplayWebSocketDialer`. The checked-in fixture data is therefore
+  internally consistent with the current replay and hygiene validator
+  implementation, and the targeted replay tests in `agent-cli` continue to use
+  the same committed fixture files that the gateway validator scans.
+
+  The consistency finding still fails because the repository does not expose one
+  coherent documented fixture-root contract. `go-llm-gateway/pkg/testing/README.md`
+  and `go-llm-gateway/pkg/testing/session-fixture-authoring.md` both instruct
+  reviewers to validate fixtures from `./pkg/testing`, while
+  `agent-cli/docs/session-record-replay.md` separately declares
+  `agent-cli/test/integration/testdata` as the committed Agent CLI fixture home
+  and tells contributors to invoke the gateway validator against that external
+  path. The validator smoke test additionally treats
+  `go-llm-gateway/pkg/providers/openai/testdata/realtime_text.session.json` as a
+  committed session fixture root, but that root is not named in either fixture
+  authoring guide. Reviewers can verify that replay inputs and validation
+  targets currently agree on payload hygiene and replayability, but they cannot
+  derive one authoritative documented root set for those same committed session
+  fixtures.
+- `required repairs`: publish one reviewer-facing ownership map or one
+  authoritative committed fixture root for session captures; update the gateway
+  fixture authoring guide and Agent CLI replay doc so they point to the same
+  validator target set, including the OpenAI provider-session fixture root if it
+  remains committed; keep the executable validator root list aligned with that
+  published contract
 
 ## Convergence Verdict
 
@@ -172,9 +219,14 @@ Use this shape for every finding group:
   intentional `go-llm-gateway/pkg/testing` APIs, but committed `.session.json`
   fixtures still live under multiple roots and the gateway validator still uses
   relative cross-module path knowledge to discover `agent-cli` fixtures.
-  Replay/session-validation consistency remains deferred.
+  Replay/session-validation consistency is also `fail`: the committed fixture
+  data remains replayable and hygiene-validated, but contributor-facing docs and
+  validator target roots still disagree about which repository surfaces define
+  the committed session-fixture contract.
 - `required repairs before next Phase 2 slice`: restore or replace the missing
   authoritative planning surfaces for checklist validation; converge on one
   authoritative committed fixture owner or explicitly documented ownership map
-  that removes hidden relative-path coupling; then complete stories 004 and 005
-  and record reviewer-verifiable evidence for the remaining finding groups
+  that removes hidden relative-path coupling; align the gateway fixture
+  authoring guide, Agent CLI replay doc, and validator root list on one
+  reviewer-verifiable committed session-fixture contract; then complete story
+  005 and record the final reviewer-facing repair summary
