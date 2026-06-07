@@ -15,6 +15,7 @@ type AgentLoopConfig struct {
 	Inferencer        messages.Inferencer
 	SessionInferencer messages.SessionInferencer
 	ToolExecutor      messages.ToolExecutor
+	ToolExecution     ToolExecutionMode
 	Tools             []messages.ToolDefinition
 	Recorder          subsystems.StateRecorder
 	TokenCounter      subsystems.TokenCounter
@@ -47,6 +48,15 @@ type AgentLoopConfig struct {
 // Option is a functional option for configuring an AgentLoop.
 type Option func(*AgentLoopConfig)
 
+// ToolExecutionMode makes the constructor-side tool capability decision explicit.
+type ToolExecutionMode int
+
+const (
+	ToolExecutionAuto ToolExecutionMode = iota
+	ToolExecutionEnabled
+	ToolExecutionDisabled
+)
+
 func WithLogger(logger logging.Logger) Option {
 	return func(c *AgentLoopConfig) {
 		c.Logger = logger
@@ -77,14 +87,26 @@ func WithSessionInferencer(inf messages.SessionInferencer) Option {
 	}
 }
 
-// WithToolExecutor sets the tool executor.
+// WithToolExecutor sets the tool executor and explicitly enables tool execution.
 func WithToolExecutor(exec messages.ToolExecutor) Option {
 	return func(c *AgentLoopConfig) {
 		c.ToolExecutor = exec
+		c.ToolExecution = ToolExecutionEnabled
 	}
 }
 
-// WithTools sets the available tool definitions.
+// WithToolExecutionDisabled explicitly opts the loop into no-tools mode.
+// If tool definitions are also configured, the constructor drops them before
+// any inference request is sent so the loop does not advertise unavailable tools.
+func WithToolExecutionDisabled() Option {
+	return func(c *AgentLoopConfig) {
+		c.ToolExecutor = nil
+		c.ToolExecution = ToolExecutionDisabled
+	}
+}
+
+// WithTools sets the available tool definitions that may be exposed to the model
+// when tool execution is enabled.
 func WithTools(tools []messages.ToolDefinition) Option {
 	return func(c *AgentLoopConfig) {
 		c.Tools = tools

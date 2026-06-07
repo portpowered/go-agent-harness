@@ -52,6 +52,9 @@ func New(opts ...Option) (*AgentLoop, error) {
 	if cfg.Inferencer == nil && cfg.SessionInferencer == nil {
 		return nil, errors.New("inferencer or session inferencer is required")
 	}
+	if err := validateToolConfiguration(&cfg); err != nil {
+		return nil, err
+	}
 
 	// Resolve per-participant buffer capacities. Per-participant overrides
 	// take precedence over the global BufferCapacity default.
@@ -87,6 +90,10 @@ func New(opts ...Option) (*AgentLoop, error) {
 	if cfg.ToolExecutor != nil {
 		toolRunner = participants.NewToolRunner(cfg.ToolExecutor, toolCap)
 	} else {
+		// Keep an idle tool participant wired for internal loop plumbing even in
+		// explicit no-tools mode. validateToolConfiguration guarantees the loop
+		// never advertises tools without either an executor or an explicit
+		// no-tools decision, so this runner does not act as a public fallback.
 		toolRunner = participants.NewToolRunner(&messages.DefaultToolExecutor{}, toolCap)
 	}
 
@@ -188,6 +195,20 @@ func New(opts ...Option) (*AgentLoop, error) {
 		logger: cfg.Logger,
 		deltas: messages.NewTypedBuffer[messages.StreamMessage](kernelCap),
 	}, nil
+}
+
+func validateToolConfiguration(cfg *AgentLoopConfig) error {
+	if len(cfg.Tools) == 0 {
+		return nil
+	}
+	if cfg.ToolExecutor != nil {
+		return nil
+	}
+	if cfg.ToolExecution == ToolExecutionDisabled {
+		cfg.Tools = nil
+		return nil
+	}
+	return errors.New("tool definitions require WithToolExecutor or WithToolExecutionDisabled")
 }
 
 // logInfo emits an info-level log if a logger is configured.

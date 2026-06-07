@@ -270,20 +270,25 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	if e.inferencerOverride != nil {
 		inf = e.inferencerOverride
 	} else {
+		httpRuntime, err := buildProviderHTTPRuntime(cfg)
+		if err != nil {
+			return nil, err
+		}
+
 		factory := NewProviderFactory()
 		RegisterOpenAIProvider(factory, "openai", "openrouter", "local")
 		RegisterFalProvider(factory, "fal")
 
 		result, err := factory.Build(loadedCfg.Model.Provider, ProviderBuildContext{
 			LoadedConfig: loadedCfg,
-			ExecConfig:   cfg,
 			Logger:       zapLogger,
+			HTTPClient:   httpRuntime.Client,
 		})
 		if err != nil {
 			return nil, err
 		}
 		provider := result.Provider
-		recordRT = result.Recorder
+		recordRT = httpRuntime.Recorder
 
 		gw, err := gateway.NewGateway(gateway.WithProvider(provider))
 		if err != nil {

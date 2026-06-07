@@ -121,6 +121,46 @@ func TestExecute_HotLoopError(t *testing.T) {
 	}
 }
 
+func TestNew_WithToolsRequiresExplicitToolCapability(t *testing.T) {
+	inf := &mockInferencer{
+		responses: []messages.InferenceResult{
+			{Message: messages.NewTextMessage(messages.RoleAssistant, "ok")},
+		},
+	}
+
+	_, err := New(
+		WithInferencer(inf),
+		WithTools([]messages.ToolDefinition{{Name: "get_weather", Description: "Get weather"}}),
+	)
+	if err == nil {
+		t.Fatal("expected constructor error when tools are configured without an explicit tool capability")
+	}
+	if got, want := err.Error(), "tool definitions require WithToolExecutor or WithToolExecutionDisabled"; got != want {
+		t.Fatalf("constructor error = %q, want %q", got, want)
+	}
+}
+
+func TestNew_WithToolExecutionDisabledDropsConfiguredTools(t *testing.T) {
+	inf := &mockInferencer{
+		responses: []messages.InferenceResult{
+			{Message: messages.NewTextMessage(messages.RoleAssistant, "ok")},
+		},
+	}
+
+	loop, err := New(
+		WithInferencer(inf),
+		WithTools([]messages.ToolDefinition{{Name: "get_weather", Description: "Get weather"}}),
+		WithToolExecutionDisabled(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create loop: %v", err)
+	}
+
+	if got := loop.engine.State().LoopState.Tools; len(got) != 0 {
+		t.Fatalf("loop tools = %d, want 0 when tool execution is explicitly disabled", len(got))
+	}
+}
+
 func TestExecuteStreaming_HotLoopErrorInStream(t *testing.T) {
 	wantErr := "inference failed"
 	inf := &failingInferencer{message: wantErr}

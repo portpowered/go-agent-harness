@@ -1,12 +1,8 @@
 package agent
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/portpowered/agent-cli/internal/logger"
 	oaiprovider "github.com/portpowered/go-llm-gateway/pkg/providers/openai"
-	"github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
 // RegisterOpenAIProvider registers the OpenAI-compatible provider builder
@@ -40,21 +36,11 @@ func buildOpenAIProviderFactory(ctx ProviderBuildContext) (ProviderBuildResult, 
 	if active.BaseURL != "" {
 		providerOpts = append(providerOpts, oaiprovider.WithBaseURL(active.BaseURL))
 	}
-
-	var recordRT *testing.RecordRoundTripper
-	if ctx.ExecConfig.ReplayCapturePath != "" {
-		replayRT, err := testing.NewReplayRoundTripper(ctx.ExecConfig.ReplayCapturePath)
-		if err != nil {
-			return ProviderBuildResult{}, fmt.Errorf("failed to load replay captures: %w", err)
-		}
-		providerOpts = append(providerOpts, oaiprovider.WithHTTPClient(&http.Client{Transport: replayRT}))
-	} else if ctx.ExecConfig.RecordCapturePath != "" {
-		recordRT = testing.NewRecordRoundTripper(http.DefaultTransport)
-		providerOpts = append(providerOpts, oaiprovider.WithHTTPClient(&http.Client{Transport: recordRT}))
+	if ctx.HTTPClient != nil {
+		providerOpts = append(providerOpts, oaiprovider.WithHTTPClient(ctx.HTTPClient))
 	}
 
 	return ProviderBuildResult{
 		Provider: oaiprovider.New(providerOpts...),
-		Recorder: recordRT,
 	}, nil
 }
