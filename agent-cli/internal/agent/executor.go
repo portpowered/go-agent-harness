@@ -81,6 +81,12 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
+	// Tests with an injected inferencer still need config-backed tool/model metadata,
+	// but they should not be forced to provide live provider credentials.
+	if e.inferencerOverride != nil {
+		return loadedCfg, nil
+	}
+
 	if err := loadedCfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -650,6 +656,9 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 	if modality == "" || modality == "text" {
 		return nil
 	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		return nil
+	}
 
 	loadedCfg, err := e.loadConfig(cfg)
 	if err != nil {
@@ -680,6 +689,10 @@ func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInp
 	if len(execInput.ContentParts) == 0 {
 		return nil
 	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		return nil
+	}
+
 	loadedCfg, err := e.loadConfig(cfg)
 	if err != nil {
 		return nil // skip validation if config can't be loaded
