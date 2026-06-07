@@ -127,3 +127,9 @@ with:
 - `go-llm-gateway/pkg/testing/session-fixture-authoring.md`
 - `go-llm-gateway/pkg/testing/README.md`
 - `agent-cli/docs/session-record-replay.md`
+
+## Workspace Checks
+
+Run `make test` from the repository root to execute the shared workspace test
+entrypoint. That delegates to the module-level `test` targets in `agent-cli`,
+`go-agent-loop`, and `go-llm-gateway`.
