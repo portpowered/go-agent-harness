@@ -130,6 +130,111 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - introduce a session runtime dependency bundle for config loading, dialer selection, and provider-specific inferencer construction
   - keep `RunSession` responsible for command semantics, not for discovering defaults from disk and transport packages
 
+## Context Contract Findings
+
+### CTX-01: session configuration is split between constructor-time options and call-time context
+
+- Affected boundary: `go-agent-loop/pkg/messages.SessionInferencer` -> `go-llm-gateway/pkg/inference.SessionGatewayInferencer` -> `agent-cli/internal/services/session.go`
+- Evidence:
+  - `go-agent-loop/pkg/messages/session.go` defines `ConnectSession(ctx context.Context) (Session, error)` with no per-call request object
+  - `go-llm-gateway/pkg/inference/session_inferencer.go` bakes only model, voice, and instructions into constructor options before converting them into `models.SessionConfig`
+  - `agent-cli/internal/services/session.go` resolves provider config, replay mode, record mode, and prompt behavior outside the session inferencer contract
+- Observable impact:
+  - cancellation and deadline flow are explicit, but session-shaping inputs are not: callers can cancel a connection attempt, yet they cannot supply one complete per-session contract at call time
+  - richer session settings already exist in `models.SessionConfig`, but loop-facing code cannot express them without constructing provider-specific adapters or CLI-only helper paths first
+  - review of new session behavior becomes ambiguous because some runtime choices belong to context-aware command flow and others are hidden in constructor-time option state
+- Why this is a context-contract gap:
+  - the contract uses `context.Context` only for cancellation/lifetime, while the rest of the per-session execution context is spread across constructor options and CLI helper logic
+- Recommended Phase 2 hardening:
+  - define one explicit loop-facing session request/config contract that separates cancellation from session shape
+  - keep provider translation in `go-llm-gateway`, but stop requiring the CLI to reconstruct missing per-session context from config and provider branches
+
+### CTX-02: session replay and recording helpers drop back to `context.Background()` in relay paths
+
+- Affected boundary: `go-llm-gateway/pkg/testing.SessionRecorder` and `go-llm-gateway/pkg/testing.SessionReplayer`
+- Evidence:
+  - `go-llm-gateway/pkg/testing/session_record.go` relays inbound session events with `relay.Write(context.Background(), msg)`
+  - `go-llm-gateway/pkg/testing/session_replay.go` writes replayed outbound events with `r.outbound.Write(context.Background(), msg)`
+- Observable impact:
+  - replay/record infrastructure can continue draining or enqueueing messages even after the original caller context has been cancelled
+  - timing-sensitive tests and future embedded runtimes cannot tell from the contract whether cancellation stops only provider IO or also the replay/record relay layer
+  - the repo has inconsistent expectations for what "context cancellation" means once a session has been wrapped for testing or capture
+- Why this is a context-contract gap:
+  - helper layers that sit directly on the session contract do not preserve the same cancellation semantics as the live session path
+- Recommended Phase 2 hardening:
+  - document whether capture/replay buffers are intentionally best-effort after cancellation
+  - if not, thread an explicit lifecycle context through relay goroutines so test and live session wrappers stop under the same cancellation contract
+
+## Typed-Error Findings
+
+### ERR-01: the shared stream error contract is still mostly stringly typed
+
+- Affected boundary: `go-agent-loop/pkg/messages.ErrorValue` consumed by loop, gateway, and CLI layers
+- Evidence:
+  - `go-agent-loop/pkg/messages/agent_messages.go` defines `ErrorValue` with optional `ErrorType`, `Code`, `Param`, and `EventID`
+  - `go-agent-loop/pkg/participants/model_runner.go`, `go-agent-loop/pkg/participants/tool_runner.go`, and multiple provider stream adapters frequently emit `messages.NewErrorValue(err.Error())`, dropping category and structured details
+- Observable impact:
+  - callers can detect that an error occurred, but they usually cannot distinguish retryable provider failures, invalid user input, transport shutdown, replay divergence, or tool runtime errors from the shared contract alone
+  - review of downstream compatibility is harder because error handling currently depends on matching free-form message text rather than named failure classes
+  - Phase 2 changes to error wording could accidentally break callers or tests that only have the string payload to reason about
+- Why this is a typed-error gap:
+  - the contract has fields for structured classification, but most of the code path still collapses failures into a plain message string before crossing module boundaries
+- Recommended Phase 2 hardening:
+  - define a small set of caller-actionable error classes at the shared contract layer
+  - require adapters to preserve provider/runtime classification when turning internal failures into `ERROR` stream messages
+
+### ERR-02: session command failures mix transport, replay, and loop phases into wrapped text instead of one caller-actionable taxonomy
+
+- Affected boundary: `agent-cli/internal/services/session.go` user-facing command errors
+- Evidence:
+  - `runLiveSessionRecord` and `runOpenAIRealtimeSessionRecord` return `errors.Join(...)` wrapped by `record session capture %s: %w`
+  - replay paths return strings such as `replay session capture %s: %w` while runtime output paths also surface `session error: ...`
+  - `wrapSessionPhaseError` only prefixes a phase string and does not attach a typed failure kind
+- Observable impact:
+  - a caller or future automation layer cannot reliably separate validation failure, replay divergence, provider rejection, session-close reason, and capture-flush failure without parsing message text
+  - the CLI can explain roughly where a failure happened, but not in a way that downstream contract hardening or machine classification can depend on
+  - some failures are emitted in-band as `ERROR` stream messages, while others escape as Go errors, with no unified documented mapping between the two
+- Why this is a typed-error gap:
+  - the command surface preserves human-readable context, but it does not yet expose stable error kinds that higher layers can branch on safely
+- Recommended Phase 2 hardening:
+  - define typed CLI/session failure categories for validation, provider-connect, replay-divergence, provider-runtime, and capture-persist paths
+  - document which failures should remain in-band stream events versus returned command errors
+
+## Stream And Session Lifecycle Findings
+
+### LIFECYCLE-01: session-open, response completion, provider close, and command stop are separate boundaries with only partial shared ownership rules
+
+- Affected boundary: `go-agent-loop/pkg/participants.ModelRunner` -> `agent-cli/internal/services/session.go`
+- Evidence:
+  - `go-agent-loop/pkg/participants/model_runner.go` sends `SESSION.UPDATE` after `SESSION.CREATED`, emits a synthetic `SESSION.CLOSE` with reason `provider_closed` when `session.Done()` fires before a close event, and treats audio barge-in as `RESPONSE.CANCEL`
+  - `agent-cli/internal/services/session.go` stops the command on different events depending on mode: `MESSAGE.END`, `TEXT.END`, `SESSION.CLOSE`, timeout, injected `Done`, or explicit `sendSessionClose`
+  - `shouldStopSessionLoop` changes command termination semantics based on `CloseAfterOpen` and `WaitForClose`
+- Observable impact:
+  - the codebase has at least four different lifecycle milestones that matter to callers, but the contract does not define which one owns "the session is complete" for each mode
+  - replay and live modes can terminate on different boundaries even when they represent the same user-facing command
+  - maintainers have to read both loop and CLI service code to know whether a provider close, message end, or caller close actually ends the session command
+- Why this is a lifecycle-contract gap:
+  - the shared session contract exposes `Done`, `Receive`, and `Close`, but ownership of command completion versus provider completion remains distributed across layers
+- Recommended Phase 2 hardening:
+  - document one canonical lifecycle state machine for session mode, including session-open, first-response-complete, client-requested-close, provider-close, and replay-complete
+  - align loop and CLI stop conditions to that shared lifecycle rather than mode-specific helper heuristics
+
+### LIFECYCLE-02: streaming inference completion rules differ between provider streams and loop-synthesized fallbacks
+
+- Affected boundary: `go-agent-loop/pkg/participants.ModelRunner` and provider/gateway streaming adapters
+- Evidence:
+  - `go-agent-loop/pkg/participants/model_runner.go` treats `MESSAGE.END` or `ERROR` as streaming completion, but if the provider channel closes without `MESSAGE.END`, it emits a synthetic `MESSAGE.END`
+  - the same runner falls back from `InferStream` to `Infer`, then synthesizes a full delta sequence for non-streaming results
+- Observable impact:
+  - downstream consumers see one normalized stream shape, but the contract does not make clear which completion boundaries are provider-authored versus loop-synthesized
+  - interruption, replay, and compatibility review become harder because a missing upstream end event can still look like a clean stream to consumers
+  - providers can differ in how faithfully they emit end-of-stream markers without that difference being visible in the public contract
+- Why this is a lifecycle-contract gap:
+  - the normalization is useful, but the observable contract does not currently distinguish "provider finished cleanly" from "loop closed the boundary for reconstruction"
+- Recommended Phase 2 hardening:
+  - document which stream boundaries may be synthesized by the loop and when that is acceptable
+  - consider adding an explicit end/cancellation provenance signal if callers need to reason about provider completion versus normalization
+
 ## Phase 2 Entry Point After This Story
 
 The most bounded enabling work from the findings above is:
@@ -137,5 +242,7 @@ The most bounded enabling work from the findings above is:
 1. remove testdata path coupling by giving session fixtures one explicit owner
 2. make constructor ownership explicit for tool execution and transport/dialer dependencies
 3. centralize CLI session provider selection behind one factory boundary
+4. define one loop-facing session request/lifecycle contract so context propagation and stop semantics no longer depend on CLI helper branches
+5. introduce shared caller-actionable error categories before changing provider/session behavior more broadly
 
-Those changes reduce accidental cross-module knowledge before Phase 2 starts tightening context, error, lifecycle, and compatibility contracts.
+Those changes reduce accidental cross-module knowledge before Phase 2 starts tightening compatibility-sensitive context, error, and lifecycle contracts.
