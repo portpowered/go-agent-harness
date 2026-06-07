@@ -81,8 +81,10 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
-	if err := loadedCfg.Validate(); err != nil {
-		return nil, err
+	if e.inferencerOverride == nil {
+		if err := loadedCfg.Validate(); err != nil {
+			return nil, err
+		}
 	}
 
 	return loadedCfg, nil

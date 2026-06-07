@@ -74,7 +74,7 @@ func (r *Router) BuildRoot() *cobra.Command {
 
 	cmd := root.CreateCommand()
 	cmd.PersistentFlags().CountVarP(&r.Flags.VerboseMode, "verbose", "v", "Enable verbose output (use -v for info, -vv for debug)")
-	cmd.PersistentFlags().StringVarP(&r.Flags.ConfigDirPath, "config-dir", "C", "", "Directory for agent CLI config (default: ~/.agent-cli)")
+	cmd.PersistentFlags().StringVarP(&r.Flags.ConfigDirPath, "config-dir", "C", r.Flags.ConfigDirPath, "Directory for agent CLI config (default: ~/.agent-cli)")
 	cmd.PersistentFlags().BoolVar(&r.Flags.LogToStdout, "log-to-stdout", false, "Log to stdout/stderr instead of file (default: logs to file in config directory)")
 
 	return cmd

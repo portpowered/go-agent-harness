@@ -48,6 +48,9 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 // InitializeMockAgentCLI builds the agent CLI with injected executor and inferencer for testing.
 func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
+	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
+		return nil, err
+	}
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
@@ -73,6 +76,9 @@ func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.
 // InitializeMockAgentCLIWithSessionInferencer builds the agent CLI with injected one-shot and session inferencers for testing.
 func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
+	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
+		return nil, err
+	}
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
@@ -98,6 +104,9 @@ func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor,
 // Use for tests that need real ask path (config dir, AGENTS.md) but capture inference requests.
 func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
+	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
+		return nil, err
+	}
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
