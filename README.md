@@ -103,3 +103,27 @@ worktree:
 The root workspace now uses a checked-in `go.work` file to coordinate the three
 active modules. For consumer guidance, prefer the root `make` targets for
 cross-module validation and the package README for module-specific setup.
+
+## Shared Session Fixture Contract
+
+Committed shared `.session.json` replay fixtures are owned by
+`go-llm-gateway/pkg/testing`. The canonical repository root for those shared
+fixtures is `go-llm-gateway/pkg/testing/testdata/session-fixtures`.
+
+Use that shared root only for repository-level replay and fixture-hygiene
+behavior that multiple modules need to consume. Keep package-private fixtures
+under the owning module's local `testdata`, such as
+`agent-cli/test/integration/testdata` for CLI-only scenarios. Cross-module
+consumers should resolve shared fixtures through
+`go-llm-gateway/pkg/testing.SharedSessionFixturePath(...)` instead of
+traversing into a sibling module's private `testdata`.
+
+This ownership boundary satisfies the Phase 2 enabling step for session
+fixture ownership and boundary cleanup before broader API hardening.
+
+For the full authoring, sanitization, validation, and replay workflow, start
+with:
+
+- `go-llm-gateway/pkg/testing/session-fixture-authoring.md`
+- `go-llm-gateway/pkg/testing/README.md`
+- `agent-cli/docs/session-record-replay.md`
