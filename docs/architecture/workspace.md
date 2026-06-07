@@ -59,4 +59,15 @@ From a single module directory (for example `agent-cli/`), `go list ./...` and `
 
 ## Test tiers and credentials
 
-Default `go test ./...` and root `make test` / `make ci` targets are intended to run **without live provider API keys**. Tests that need real inference credentials or customer session data are opt-in and documented in later Phase 1 stories; see `make help` once the root Makefile is in place.
+Default `go test ./...` and root `make test` / `make ci` targets are intended to run **without live provider API keys**.
+
+The root Makefile exposes these deterministic and opt-in test tiers:
+
+| Target | Deterministic | What it runs |
+|--------|---------------|--------------|
+| `make test` | yes | Per-module `go test ./...` across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`. |
+| `make test-integration` | yes | Deterministic integration packages: `agent-cli/test/integration` and `go-agent-loop/test/functional`. |
+| `make test-regressions` | yes | Committed replay and fixture regression tests, including Agent CLI replay cases and `go-llm-gateway` replay/fixture packages. |
+| `make test-customer-sessions` | no | Local-only placeholder for future private session sweeps. It skips unless you explicitly set `RUN_CUSTOMER_SESSIONS=1`, and it is not part of `make ci`. |
+
+`make test-integration` and `make test-regressions` must complete without live provider credentials. Tests that eventually need real inference credentials or private customer session data stay opt-in and out of the default CI path.
