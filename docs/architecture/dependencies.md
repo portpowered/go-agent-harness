@@ -50,6 +50,78 @@ Reviewer rule of thumb:
 - `internal/services/session.go` assembles session-mode runtime behavior by combining `agentloop`, gateway session inferencers, replay helpers, and CLI output handling.
 - `internal/tools`, `internal/session`, `internal/config`, and `internal/workspace` are application concerns that should stay above the reusable libraries.
 
+## Public API Surfaces and Candidate Contracts
+
+The repository exports more names than it has stable contracts. For Phase 2 review, use the following distinction.
+
+### `go-agent-loop`
+
+Primary consumer-facing entrypoints:
+
+- `pkg/agentloop.AgenticLoop` is the main runtime contract for turn execution, streaming execution, continuous run control, and interrupt/resume-style message injection.
+- `pkg/agentloop.New(...)` is the construction seam because callers supply loop mode and the inferencer/session-inferencer adapters there.
+- `pkg/messages` is the cross-module data contract: `Message`, `StreamMessage`, `InferenceRequest`, `InferenceResult`, `Session`, `Inferencer`, and `SessionInferencer`.
+
+Candidate stable contracts:
+
+- `pkg/messages` should be treated as intentionally public because both `go-llm-gateway` and `agent-cli` depend on those types as the shared runtime vocabulary.
+- `pkg/agentloop.AgenticLoop` should be treated as intentionally public because it is the loop porcelain surface that downstream composition code uses directly.
+
+Exports that currently look incidental or at least not yet hardened:
+
+- `AgenticLoop` currently combines distinct concerns such as turn execution, long-running control, IO source/sink reconfiguration, and TODO queue mutation on one interface. That shape is exported today, but it is not obviously the final stable contract boundary.
+- Concrete option and state helpers under `pkg/agentloop` and lower-level engine/subsystem packages are public in Go visibility terms, but the architecture does not currently claim them as downstream compatibility promises.
+
+Concrete Phase 2 API gap for this module:
+
+- The exported `AgenticLoop` interface does not clearly separate the minimal contract a library caller needs (`Execute`, `ExecuteStreaming`, `Run`, `Send`, `Pause`) from operational helpers (`SetInputs`, `SetOutputs`, TODO queue methods). That ambiguity makes breaking-change review difficult because maintainers cannot tell which methods are essential contract and which are implementation convenience.
+
+### `go-llm-gateway`
+
+Primary consumer-facing entrypoints:
+
+- `pkg/gateway.Gateway` and `pkg/gateway.DefaultGateway` are the normalized request/response seam for stateless inference.
+- `pkg/gateway.DefaultSessionGateway` and `pkg/inference.SessionGatewayInferencer` are the current session-mode bridge into `go-agent-loop`.
+- `pkg/inference.GatewayInferencer` is the main adapter from gateway requests into `messages.Inferencer`.
+- `pkg/providers.Provider` and `pkg/providers.SessionProvider` are the provider-facing construction seams used by the CLI composition layer.
+
+Candidate stable contracts:
+
+- `pkg/gateway` is the most plausible downstream-stable package because it hides provider-specific request shaping behind normalized request types.
+- `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are intentionally public adapter types because they are the expected bridge into loop-owned interfaces.
+- `pkg/providers.Provider` and `pkg/providers.SessionProvider` are candidate stable construction contracts for adding providers without changing loop code.
+
+Exports that currently look incidental or not yet independent:
+
+- `pkg/models` currently mirrors and re-exports loop-owned message concepts. Consumers can import it, but the package is not yet an independent contract vocabulary because it still tracks `go-agent-loop` naming closely.
+- Concrete provider packages such as `pkg/providers/openai`, `pkg/providers/grok`, `pkg/providers/anthropic`, and `pkg/providers/gemini` are intentionally public for the CLI's composition needs, but they should not be mistaken for the cross-provider contract surface.
+
+Concrete Phase 2 API gap for this module:
+
+- `SessionGatewayInferencer` only exposes `WithSessionModel`, `WithSessionVoice`, and `WithSessionInstructions`, while `models.SessionConfig` already carries modalities, audio formats, tools, turn detection, and provider-specific config. That means the exported session adapter surface is narrower than the gateway session contract and forces callers toward provider-specific wiring when they need richer session configuration.
+
+### `agent-cli`
+
+Primary consumer-facing entrypoints:
+
+- The actual supported external contract is the CLI command tree built from `internal/cli.RootCommand`, `internal/cli.Router`, and the generated Cobra commands.
+- `internal/agent.Executor` and `internal/services/*` are the application composition seams that tests and command handlers use to assemble loop, provider, replay, and storage behavior.
+- `internal/agent.ProviderFactory` is the registry used to map configured provider names to concrete `go-llm-gateway` providers.
+
+Candidate stable contracts:
+
+- The command-line behavior, flags, replay/record file shapes, and emitted session/output behavior are the intended user-facing contracts.
+- The internal wiring packages are intentionally reusable inside the application, but because they live under `internal/`, they are not promised as reusable downstream library APIs.
+
+Exports that currently look incidental or application-internal:
+
+- Exported names inside `internal/agent`, `internal/cli`, and `internal/services` are visible to sibling packages for implementation reasons, not because `agent-cli` is offering a general-purpose embedding SDK.
+- Direct imports of concrete provider packages in application services are valid composition details, but they are not the compatibility surface reviewers should preserve for external consumers.
+
+Concrete Phase 2 API gap for this module:
+
+- The repository does not currently document one canonical integration boundary for "programmatic CLI embedding" versus "CLI-only behavior". As a result, exported `internal/*` types such as `Executor`, `ProviderFactory`, and command builders can appear stable to maintainers even though the supported contract is really the executable behavior and config/flag surface.
+
 ## Intended Adapter Seams
 
 The intended seams reviewers should preserve are:
