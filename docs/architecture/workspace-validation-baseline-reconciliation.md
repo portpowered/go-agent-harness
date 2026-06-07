@@ -195,9 +195,10 @@ from the stale checkout rather than from the restored baseline files. The final
 mergeability fixes stayed disciplined and only repaired issues required for the
 reviewed head to satisfy the root contract:
 
-- `agent-cli`: explicit writer/closer error handling, small staticcheck
-  cleanups, removal of unused helpers, and test expectation updates for the
-  lint-compliant Grok and MIME-type validation error strings
+- `agent-cli`: restored propagation of CLI/executor writer failures, explicit
+  closer error handling where required by the lint contract, small
+  staticcheck cleanups, removal of unused helpers, and test expectation updates
+  for the lint-compliant Grok and MIME-type validation error strings
 - `go-agent-loop`: explicit session cleanup in tests/runners, nil-safe engine
   output buffer initialization, append simplifications in ordering history, and
   removal of dead helpers caught by lint
