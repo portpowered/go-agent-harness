@@ -20,6 +20,8 @@ type LoopState struct {
 	Inputs  Buffers
 	Outputs OutputBuffers
 	History History
+	// Interaction tracks normalized gateway event state for PNIG-driven turns.
+	Interaction messages.InteractionState
 	// Mode is the execution mode set by the engine. Subsystems use this to
 	// adjust behaviour (e.g. Coordinator skips auto-termination in DuplexSession).
 	Mode ExecutionMode
@@ -75,6 +77,10 @@ type Buffers struct {
 	ModelOutputMessage       []messages.Message
 	ModelInputDelta          []messages.StreamMessage
 	ModelControlPlaneMessage []messages.Message // The control plane is messages from the model to declare such things as error/failure.
+
+	// InteractionEvents are normalized gateway events waiting to be mapped into
+	// agent-loop state and outputs during the current tick.
+	InteractionEvents []messages.InteractionEvent
 }
 
 type History struct {
