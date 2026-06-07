@@ -268,6 +268,32 @@ The successful `make ci` run covered the landed Phase 1 validation surface:
 - root integration and replay-regression targets
 - build and coverage targets from the restored root `Makefile`
 
+## Post-review mergeability follow-up
+
+After review flagged the PR as `mergeable: CONFLICTING` against the newer
+`main`, the branch was rebased onto current `origin/main` and the resulting
+head was revalidated instead of reapplying the older pre-rebase cleanup commit
+wholesale.
+
+The rebased head intentionally kept only the still-relevant branch-local
+compatibility behavior:
+
+- `agent-cli/internal/agent/executor.go` continues to allow injected-test
+  inferencer paths to relax model validation without changing production
+  validation defaults
+- `agent-cli/internal/wire/test_defaults.go` keeps the deterministic mock model
+  alias expected by the rebased integration coverage
+- current `origin/main` versions were retained for the README and architecture
+  files that story 003 had originally restored from the older landed baseline,
+  while this reconciliation record remains the branch-specific reviewer-facing
+  audit surface
+
+Current mergeability validation after the rebase:
+
+- Command: `make ci`
+- Result: passed on `2026-06-07T14:59:13Z`
+- Base comparison: rebased onto `origin/main` at `38dd71b573a805b6a1ee3daf59497d2a866c0438`
+
 ## Final intentional divergence from `origin/main`
 
 The final authoritative workspace intentionally diverges from the landed
