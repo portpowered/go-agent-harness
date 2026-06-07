@@ -95,6 +95,15 @@ That example uses the main request/response path:
 
 For streaming text or reasoning deltas, use `ExecuteStreaming(...)` instead.
 
+Tool execution is now an explicit constructor contract:
+
+- if you configure tool definitions with `WithTools(...)`, also provide
+  `WithToolExecutor(...)` to enable tool execution
+- if your embedding wants an intentional no-tools path even when tool
+  definitions are otherwise available, add `WithToolExecutionDisabled()`
+- `agentloop.New(...)` fails fast when tools are configured without either of
+  those explicit capability decisions
+
 ## Runtime Model
 
 The loop is tick-driven:
@@ -119,7 +128,8 @@ Use this package first for:
 
 - creating loops with `New(...)`
 - configuring runtime behavior with options such as `WithInferencer`,
-  `WithSessionInferencer`, `WithToolExecutor`, `WithTools`,
+  `WithSessionInferencer`, `WithToolExecutor`,
+  `WithToolExecutionDisabled`, `WithTools`,
   `WithSystemPrompt`, and `WithBufferCapacity`
 - running a single turn with `Execute(...)` or `ExecuteStreaming(...)`
 - running a continuous or duplex loop with `Run(...)` and `Send(...)`
