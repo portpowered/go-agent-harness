@@ -45,7 +45,7 @@ agent config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1
 agent ask "summarize the workspace"
 ```
 
-## Command Map
+## Supported CLI Surface
 
 These are the supported consumer-facing command groups:
 
@@ -105,7 +105,7 @@ saved `.json` capture without contacting the provider.
 
 ## Validation
 
-Use the module `Makefile` for deterministic package-local validation:
+Package-local validation:
 
 ```bash
 make deps
@@ -114,7 +114,7 @@ make vet
 make test
 ```
 
-From the repository root, the shared workspace validation entrypoints are:
+Workspace validation from the repository root:
 
 ```bash
 make typecheck

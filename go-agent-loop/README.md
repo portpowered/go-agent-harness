@@ -7,7 +7,7 @@ participant/subsystem seams that provider adapters and tool executors plug into.
 Start here when you want to build your own Go agent runtime instead of using the
 top-level `agent-cli` binary.
 
-## Module Role
+## Supported Package Surface
 
 - `pkg/agentloop`: primary consumer entrypoint for creating and running loops
 - `pkg/messages`: shared message, tool, inference, and session contracts
@@ -162,7 +162,7 @@ workspace composition is still coupled in practice through the adapter layer:
 
 ## Validation Commands
 
-Package-local deterministic validation:
+Package-local validation:
 
 ```bash
 cd go-agent-loop
@@ -172,7 +172,7 @@ make vet
 make test
 ```
 
-Workspace-level validation from the repository root:
+Workspace validation from the repository root:
 
 ```bash
 make typecheck

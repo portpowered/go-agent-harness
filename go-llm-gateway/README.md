@@ -8,7 +8,7 @@ realtime providers, and adapters that plug those capabilities into
 Start here when you want provider access from Go code. If you want a ready-made
 CLI instead, start with [`agent-cli`](../agent-cli/README.md).
 
-## Module Role
+## Supported Package Surface
 
 The current consumer-facing surfaces are:
 
@@ -216,7 +216,7 @@ make vet
 make test
 ```
 
-Workspace-level validation from the repository root:
+Workspace validation from the repository root:
 
 ```bash
 make typecheck

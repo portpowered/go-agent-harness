@@ -40,6 +40,11 @@ workspace layout:
 That means the workspace should be described as a composed multi-module repo,
 not as three completely isolated packages.
 
+Each module README below focuses on its current supported consumer-facing
+surface. Internal directories may exist for implementation, but they should not
+be treated as public contracts unless the package README calls them out
+explicitly.
+
 ## Root Validation Commands
 
 The root `Makefile` provides deterministic entrypoints that delegate to the
