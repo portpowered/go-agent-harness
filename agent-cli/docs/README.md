@@ -1,6 +1,6 @@
 # Agent CLI Docs
 
-This is the local entrypoint for Agent CLI guides, fixture notes, prompt references, and contributor planning material under `libraries/agent-cli/docs/`.
+This is the local entrypoint for Agent CLI guides, fixture notes, prompt references, and contributor planning material under `agent-cli/docs/`.
 
 ## CLI Users
 
