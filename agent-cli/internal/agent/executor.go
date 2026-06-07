@@ -81,6 +81,10 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		return loadedCfg, nil
+	}
+
 	if err := loadedCfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -650,6 +654,9 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 	if modality == "" || modality == "text" {
 		return nil
 	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		return nil
+	}
 
 	loadedCfg, err := e.loadConfig(cfg)
 	if err != nil {
@@ -678,6 +685,9 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 // validateOutputModality: silently allows if config or model info is unavailable.
 func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInput agentloop.ExecuteInput) error {
 	if len(execInput.ContentParts) == 0 {
+		return nil
+	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		return nil
 	}
 	loadedCfg, err := e.loadConfig(cfg)
