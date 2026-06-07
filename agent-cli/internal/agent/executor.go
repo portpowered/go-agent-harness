@@ -706,7 +706,6 @@ func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInp
 	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		return nil
 	}
-
 	loadedCfg, err := e.loadConfig(cfg)
 	if err != nil {
 		return nil // skip validation if config can't be loaded

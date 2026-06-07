@@ -20,7 +20,7 @@ GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/t
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt fmt-fix vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage ci release release-dry-run clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage validate ci release release-dry-run clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -33,6 +33,15 @@ help: ## Show available targets.
 	@printf "\nRelease placeholders:\n"
 	@printf "  %-18s %s\n" "release" "Placeholder target for Phase 4 release automation (not implemented)."
 	@printf "  %-18s %s\n" "release-dry-run" "Placeholder target for Phase 4 release dry runs (not implemented)."
+
+deps: ## Sync the workspace and download module dependencies for all modules.
+	@set -euo pipefail; \
+	echo "==> deps go.work sync"; \
+	$(GO) work sync; \
+	for module in $(MODULES); do \
+		echo "==> deps $$module"; \
+		(cd "$$module" && $(GO) mod download); \
+	done
 
 fmt: ## Validate Go formatting across all workspace modules without rewriting files.
 	@set -euo pipefail; \
@@ -142,6 +151,8 @@ build: ## Build the agent-cli binary and compile library packages.
 	echo "==> build go-llm-gateway packages"; \
 	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...)
 
+typecheck: build ## Backward-compatible alias for root compile validation.
+
 coverage: ## Write per-module coverage profiles under coverage/.
 	@set -euo pipefail; \
 	mkdir -p "$(COVERAGE_DIR)"; \
@@ -157,6 +168,8 @@ ci: ## Run the full deterministic validation pipeline used by contributors and C
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
 	done
+
+validate: ci ## Backward-compatible alias for the full deterministic root validation pipeline.
 
 release: ## Placeholder for Phase 4 release automation; prints guidance and exits non-zero.
 	@echo "make release is reserved for Phase 4 release automation and is not implemented in Phase 1."
