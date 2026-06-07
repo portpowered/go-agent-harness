@@ -63,6 +63,7 @@ func TestRecordReplayStateless(t *testing.T) {
 func locateFixture(t *testing.T, name string) string {
 	t.Helper()
 	candidates := []string{
+		gwtesting.SharedSessionFixturePath(name),
 		"test/integration/testdata/" + name,
 		"testdata/" + name,
 	}

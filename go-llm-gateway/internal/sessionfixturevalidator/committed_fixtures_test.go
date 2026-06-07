@@ -10,7 +10,6 @@ import (
 var committedSessionFixtureRoots = []string{
 	"../../pkg/providers/openai/testdata",
 	"../../pkg/testing/testdata/session-fixtures",
-	"../../../agent-cli/test/integration/testdata",
 }
 
 func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
