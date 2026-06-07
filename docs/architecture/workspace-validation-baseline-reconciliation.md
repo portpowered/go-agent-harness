@@ -138,3 +138,43 @@ There is no intentional documentation divergence from `origin/main` or
 `origin/phase-1-authoritative-workspace-convergence` in this story. The only
 branch-local differences that remain are the directly required supporting fixes
 already recorded for story 002.
+
+## Story 004 supporting fixes and preserved scope
+
+Story 004 verifies that the current reconciliation branch keeps every
+non-baseline change tightly constrained to the minimum support needed for the
+restored Phase 1 baseline to work on top of the stale `ef4787d` checkout.
+
+### Branch-local supporting fixes
+
+The final branch-local code and module deltas beyond the restored baseline from
+`origin/main` are limited to `agent-cli`, where the stale local checkout needed
+small corrections before the restored root `Makefile` and test contract could
+run deterministically:
+
+| File(s) | Competing inputs | Chosen result | Why this is directly required |
+| --- | --- | --- | --- |
+| `agent-cli/internal/tools/shell_darwin.go` | missing in local `main`; helper expected by existing `tool_shell.go`; not needed on the already-landed remote baseline | add the Darwin process-tree termination helper | compile-only validation on the stale checkout failed without the OS-specific helper already implied by the Linux and Windows variants |
+| `agent-cli/go.mod`, `agent-cli/go.sum` | stale local module metadata lacked dependencies now required by the restored validation surface | sync module metadata only far enough to satisfy the restored test/build graph | root validation cannot complete deterministically if the stale module graph does not resolve the dependencies the current tests import |
+| `agent-cli/internal/wire/test_defaults.go`, `agent-cli/internal/wire/{wire.go,wire_gen.go}`, `agent-cli/internal/agent/executor.go` | stale local production-only config path required real provider validation even for injected mock inferencer tests | keep production validation strict, but inject deterministic temp config defaults and relaxed model validation only for mock/injected test wiring | the restored root `make test` contract must pass without live provider credentials; these changes isolate that behavior to test-only initialization paths rather than changing the production contract |
+
+### Intentional divergence summary
+
+The current branch intentionally diverges from both `origin/main` and
+`origin/phase-1-authoritative-workspace-convergence` only in the supporting
+fixes above. Those remote branches already contain the landed Phase 1 root
+workspace, CI, and documentation baseline, but they do not need the same stale
+checkout repairs because they were not built on top of local `main` at
+`ef4787d`.
+
+No additional module code, workflow files, or alternate validation surfaces
+were changed outside that narrow support set. In particular:
+
+- the restored root baseline files (`go.work`, `go.work.sum`, `Makefile`,
+  `.github/workflows/ci.yml`, root/module README refreshes, and architecture
+  docs) were taken from the landed Phase 1 baseline without introducing a
+  second competing contract
+- unrelated local work remains preserved outside the in-scope root baseline and
+  `agent-cli` support fixes listed above
+- no opportunistic cleanup or broader refactor was added as part of this
+  reconciliation
