@@ -112,3 +112,29 @@ Final result for story 001:
   Darwin shell termination helper used by `internal/tools/tool_shell.go`
 - compile-only validation now passes across `agent-cli`, `go-agent-loop`, and
   `go-llm-gateway`
+
+## Story 003 documentation restoration
+
+The Phase 1 reviewer-facing documentation surface has now been restored from
+the landed baseline on `origin/main`:
+
+- root `README.md`
+- `docs/architecture/workspace.md`
+- `docs/architecture/dependencies.md`
+- `docs/architecture/contract-gap-audit.md`
+- refreshed module READMEs for `agent-cli`, `go-agent-loop`, and
+  `go-llm-gateway`
+- `agent-cli/docs/interaction-replay.md`
+- `agent-cli/docs/README.md` so the CLI docs index names the replay guide
+
+The current branch did not have competing newer versions of these in-scope
+documentation files. The reconciliation result for story 003 is therefore the
+landed Phase 1 documentation surface from `origin/main`, merged without
+overwriting unrelated local workflow files.
+
+## Story 003 divergence status
+
+There is no intentional documentation divergence from `origin/main` or
+`origin/phase-1-authoritative-workspace-convergence` in this story. The only
+branch-local differences that remain are the directly required supporting fixes
+already recorded for story 002.
