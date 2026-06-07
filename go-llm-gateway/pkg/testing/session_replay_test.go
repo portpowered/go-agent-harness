@@ -12,11 +12,7 @@ import (
 )
 
 func TestSharedCommittedSessionFixtureReplaysDeterministically(t *testing.T) {
-	replayer, err := NewSessionReplayer(SharedSessionFixturePath("session_text_reply.session.json"), WithReplayOutboundValidation(false))
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
-	defer replayer.Close()
+	replayer := mustNewSessionReplayer(t, SharedSessionFixturePath("session_text_reply.session.json"), WithReplayOutboundValidation(false))
 
 	var received []messages.StreamMessage
 	timeout := time.After(5 * time.Second)
@@ -85,10 +81,7 @@ func TestSessionReplayer_ProducesServerToClientEvents(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	var received []messages.StreamMessage
 	received = append(received, readReplayMessage(t, replayer))
@@ -155,10 +148,7 @@ func TestSessionReplayer_SendMatchesExpectedOutboundEvent(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	first := readReplayMessage(t, replayer)
 	if first.Type != messages.StreamTypeSessionCreated {
@@ -199,10 +189,7 @@ func TestSessionReplayer_BlocksLaterInboundUntilExpectedOutbound(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	_ = readReplayMessage(t, replayer)
 	select {
@@ -237,10 +224,7 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path)
 
 	ok := replayer.Send(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
@@ -290,10 +274,7 @@ func TestSessionReplayer_SkipTimingDefault(t *testing.T) {
 	writeCapture(t, path, events)
 
 	start := time.Now()
-	replayer, err := NewSessionReplayer(path) // no WithReplayTiming
-	if err != nil {
-		t.Fatalf("NewSessionReplayer: %v", err)
-	}
+	replayer := mustNewSessionReplayer(t, path) // no WithReplayTiming
 
 	<-replayer.Done()
 	elapsed := time.Since(start)
@@ -315,10 +296,7 @@ func TestSessionReplayer_AcceptsLegacyEventArray(t *testing.T) {
 		t.Fatalf("marshal events: %v", err)
 	}
 
-	replayer, err := NewSessionReplayerFromBytes(data)
-	if err != nil {
-		t.Fatalf("NewSessionReplayerFromBytes: %v", err)
-	}
+	replayer := mustNewSessionReplayerFromBytes(t, data)
 	<-replayer.Done()
 
 	msg, ok := replayer.Receive().Read()
@@ -378,4 +356,34 @@ func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamM
 		t.Fatal("timed out waiting for replay message")
 	}
 	return messages.StreamMessage{}
+}
+
+func mustNewSessionReplayer(t *testing.T, path string, opts ...SessionReplayerOption) *SessionReplayer {
+	t.Helper()
+
+	replayer, err := NewSessionReplayer(path, opts...)
+	if err != nil {
+		t.Fatalf("NewSessionReplayer: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := replayer.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+	return replayer
+}
+
+func mustNewSessionReplayerFromBytes(t *testing.T, data []byte, opts ...SessionReplayerOption) *SessionReplayer {
+	t.Helper()
+
+	replayer, err := NewSessionReplayerFromBytes(data, opts...)
+	if err != nil {
+		t.Fatalf("NewSessionReplayerFromBytes: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := replayer.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+	return replayer
 }
