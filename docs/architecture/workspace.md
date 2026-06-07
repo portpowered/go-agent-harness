@@ -6,6 +6,7 @@ This repository is a multi-module Go workspace. A root `go.work` file is committ
 
 - **Local cross-module edits**: `agent-cli` depends on `go-agent-loop` and `go-llm-gateway`. A workspace lets those dependencies resolve to the sibling directories in this checkout.
 - **Single validation surface**: Root tooling (`make ci`, future CI) can run `go` commands from the repository root and see every module.
+- **One CI contract**: GitHub Actions delegates to the same root `make ci` pipeline contributors run locally, so workflow YAML does not drift from module validation behavior.
 - **Reproducible onboarding**: New contributors clone once, run `go work sync` if needed, and work from the root—no manual `replace` setup.
 
 `AGENTS.md` describes this layout; the committed `go.work` is the canonical expression of that decision.
@@ -71,3 +72,11 @@ The root Makefile exposes these deterministic and opt-in test tiers:
 | `make test-customer-sessions` | no | Local-only placeholder for future private session sweeps. It skips unless you explicitly set `RUN_CUSTOMER_SESSIONS=1`, and it is not part of `make ci`. |
 
 `make test-integration` and `make test-regressions` must complete without live provider credentials. Tests that eventually need real inference credentials or private customer session data stay opt-in and out of the default CI path.
+
+## GitHub Actions
+
+Repository CI lives in `.github/workflows/ci.yml`. It:
+
+- Triggers on pull requests and pushes to `main`.
+- Installs Go 1.24.2 plus the optional `golangci-lint` and `staticcheck` tools expected by the root Makefile.
+- Runs `make ci` as the single validation entrypoint instead of duplicating per-module build or test commands in workflow YAML.
