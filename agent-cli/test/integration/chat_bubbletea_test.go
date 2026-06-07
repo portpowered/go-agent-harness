@@ -575,7 +575,9 @@ func TestExecutor_ExecuteStreamingTurn_ReturnsStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteStreamingTurn: %v", err)
 	}
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 
 	var assembled string
 	for stream.HasNext() {

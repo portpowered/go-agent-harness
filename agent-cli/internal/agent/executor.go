@@ -23,7 +23,6 @@ import (
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
@@ -266,7 +265,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 		if err != nil {
 			return nil, err
 		}
-		var provider providers.Provider = result.Provider
+		provider := result.Provider
 		recordRT = result.Recorder
 
 		gw, err := gateway.NewGateway(gateway.WithProvider(provider))
@@ -424,7 +423,9 @@ func (e *Executor) ExecuteOneTurn(ctx context.Context, runData *RunData, execInp
 				return "", writeErr
 			}
 			if n == 0 {
-				fmt.Fprintf(cfg.Stderr(), "no %s content in response\n", cfg.OutputModality)
+				if _, err := fmt.Fprintf(cfg.Stderr(), "no %s content in response\n", cfg.OutputModality); err != nil {
+					return "", fmt.Errorf("write binary modality warning: %w", err)
+				}
 			}
 		} else if outputJSON {
 			for stream.HasNext() {
@@ -473,7 +474,9 @@ func (e *Executor) ExecuteOneTurn(ctx context.Context, runData *RunData, execInp
 			return "", writeErr
 		}
 		if n == 0 {
-			fmt.Fprintf(cfg.Stderr(), "no %s content in response\n", cfg.OutputModality)
+			if _, err := fmt.Fprintf(cfg.Stderr(), "no %s content in response\n", cfg.OutputModality); err != nil {
+				return "", fmt.Errorf("write binary modality warning: %w", err)
+			}
 		}
 		return "", nil
 	}
@@ -482,7 +485,9 @@ func (e *Executor) ExecuteOneTurn(ctx context.Context, runData *RunData, execInp
 	}
 	result = execResult.Text()
 	if out != nil {
-		fmt.Fprintln(out, result)
+		if _, err := fmt.Fprintln(out, result); err != nil {
+			return "", fmt.Errorf("write output: %w", err)
+		}
 	}
 	return result, nil
 }
@@ -851,7 +856,9 @@ func (e *Executor) RunIterativeLoop(
 				startIter = lastIter.Iteration + 1
 			}
 		}
-		fmt.Fprintf(out, "[Resuming trace %s from iteration %d/%d]\n", trace.TraceID, startIter, maxIter)
+		if _, err := fmt.Fprintf(out, "[Resuming trace %s from iteration %d/%d]\n", trace.TraceID, startIter, maxIter); err != nil {
+			return IterativeRunResult{}, fmt.Errorf("write resume trace banner: %w", err)
+		}
 	}
 
 	if trace.TraceID == "" {
@@ -870,7 +877,9 @@ func (e *Executor) RunIterativeLoop(
 	}
 	result.TraceID = trace.TraceID
 
-	fmt.Fprintf(out, "Trace ID: %s\n", trace.TraceID)
+	if _, err := fmt.Fprintf(out, "Trace ID: %s\n", trace.TraceID); err != nil {
+		return result, fmt.Errorf("write trace ID: %w", err)
+	}
 
 	// Set up SIGINT handling: cancel the loop context on Ctrl+C so the current
 	// iteration is gracefully stopped and the trace is saved as interrupted.
@@ -878,7 +887,9 @@ func (e *Executor) RunIterativeLoop(
 	defer sigCancel()
 
 	for i := startIter; i <= maxIter; i++ {
-		fmt.Fprintf(out, "\n--- Iteration %d/%d ---\n", i, maxIter)
+		if _, err := fmt.Fprintf(out, "\n--- Iteration %d/%d ---\n", i, maxIter); err != nil {
+			return result, fmt.Errorf("write iteration header: %w", err)
+		}
 
 		// Build iteration config: fresh session, iteration-specific annotation appended to system prompt.
 		iterCfg := *cfg
@@ -928,7 +939,9 @@ func (e *Executor) RunIterativeLoop(
 		if interrupted {
 			trace.Status = session.TraceStatusInterrupted
 			_ = sessionStorage.SaveTrace(trace)
-			fmt.Fprintf(out, "\n[Interrupted. Resume with: --loop --trace-id %s]\n", trace.TraceID)
+			if _, err := fmt.Fprintf(out, "\n[Interrupted. Resume with: --loop --trace-id %s]\n", trace.TraceID); err != nil {
+				return result, fmt.Errorf("write interrupted trace banner: %w", err)
+			}
 			result.Iterations = append(result.Iterations, IterationRunResult{
 				Iteration: i,
 				SessionID: sessionID,

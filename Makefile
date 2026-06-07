@@ -18,7 +18,7 @@ GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/t
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage clean
+.PHONY: help fmt vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage ci release release-dry-run clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -28,6 +28,9 @@ help: ## Show available targets.
 	@printf "\nOpt-in test env vars:\n"
 	@printf "  %-18s %s\n" "RUN_CUSTOMER_SESSIONS=1" "Acknowledge local-only private session sweep targets."
 	@printf "  %-18s %s\n" "CUSTOMER_SESSION_DIR=..." "Override the private session directory checked by test-customer-sessions."
+	@printf "\nRelease placeholders:\n"
+	@printf "  %-18s %s\n" "release" "Placeholder target for Phase 4 release automation (not implemented)."
+	@printf "  %-18s %s\n" "release-dry-run" "Placeholder target for Phase 4 release dry runs (not implemented)."
 
 fmt: ## Format all Go packages in workspace modules.
 	@set -euo pipefail; \
@@ -131,6 +134,22 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		echo "==> coverage $$module"; \
 		(cd "$$module" && $(GO) test ./... -timeout $(GO_TEST_TIMEOUT) -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
 	done
+
+ci: ## Run the full deterministic validation pipeline used by contributors and CI.
+	@set -euo pipefail; \
+	steps="fmt vet lint staticcheck test test-integration test-regressions build coverage"; \
+	for step in $$steps; do \
+		echo "==> ci $$step"; \
+		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
+	done
+
+release: ## Placeholder for Phase 4 release automation; prints guidance and exits non-zero.
+	@echo "make release is reserved for Phase 4 release automation and is not implemented in Phase 1."
+	@exit 1
+
+release-dry-run: ## Placeholder for Phase 4 release dry runs; prints guidance and exits non-zero.
+	@echo "make release-dry-run is reserved for Phase 4 release automation and is not implemented in Phase 1."
+	@exit 1
 
 clean: ## Remove root-generated build and coverage outputs.
 	rm -rf "$(COVERAGE_DIR)" "$(AGENT_CLI_OUTPUT)"

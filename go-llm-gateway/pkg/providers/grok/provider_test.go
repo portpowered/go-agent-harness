@@ -36,7 +36,9 @@ func TestConnectSession_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	// Verify dial URL and auth header.
 	if dialer.capturedURL != "wss://mock.example.com/v1/realtime" {
@@ -56,16 +58,22 @@ func TestConnectSession_HappyPath(t *testing.T) {
 		t.Fatalf("unmarshal first message: %v", err)
 	}
 	var msgType string
-	json.Unmarshal(firstMsg["type"], &msgType)
+	if err := json.Unmarshal(firstMsg["type"], &msgType); err != nil {
+		t.Fatalf("unmarshal message type: %v", err)
+	}
 	if msgType != "session.update" {
 		t.Errorf("first message type: got %q, want %q", msgType, "session.update")
 	}
 
 	// Verify session config fields in the session.update payload.
 	var sessionField json.RawMessage
-	json.Unmarshal(firstMsg["session"], &sessionField)
+	if err := json.Unmarshal(firstMsg["session"], &sessionField); err != nil {
+		t.Fatalf("unmarshal session field: %v", err)
+	}
 	var sessionPayload map[string]any
-	json.Unmarshal(sessionField, &sessionPayload)
+	if err := json.Unmarshal(sessionField, &sessionPayload); err != nil {
+		t.Fatalf("unmarshal session payload: %v", err)
+	}
 	if sessionPayload["model"] != "grok-3-mini" {
 		t.Errorf("session.update model: got %v, want grok-3-mini", sessionPayload["model"])
 	}
@@ -129,7 +137,9 @@ func TestConnectSession_CustomConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	// Parse the session.update message and verify all config fields.
 	msgs := conn.getClientMessages()
@@ -138,9 +148,13 @@ func TestConnectSession_CustomConfig(t *testing.T) {
 	}
 
 	var flat map[string]json.RawMessage
-	json.Unmarshal(msgs[0], &flat)
+	if err := json.Unmarshal(msgs[0], &flat); err != nil {
+		t.Fatalf("unmarshal flat session update: %v", err)
+	}
 	var sessionPayload map[string]any
-	json.Unmarshal(flat["session"], &sessionPayload)
+	if err := json.Unmarshal(flat["session"], &sessionPayload); err != nil {
+		t.Fatalf("unmarshal session payload: %v", err)
+	}
 
 	if sessionPayload["voice"] != "Rex" {
 		t.Errorf("voice: got %v, want Rex", sessionPayload["voice"])
@@ -186,7 +200,9 @@ func TestConnectSession_DefaultBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	if dialer.capturedURL != "https://api.x.ai/v1/realtime" {
 		t.Errorf("default URL: got %q, want %q", dialer.capturedURL, "https://api.x.ai/v1/realtime")
