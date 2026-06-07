@@ -111,10 +111,64 @@ Use this shape for every finding group:
 
 ### Constructor-Ownership Architecture Drift
 
-Validate whether loop construction makes tool capability ownership explicit,
-whether provider runtime wiring crosses one intentional live/record/replay seam,
-and whether any hidden live dependency creation remains in constructor or
-provider build paths.
+- `outcome`: `fail`
+- `checklist rows / commitments inspected`: `P2-COB-02`, `P2-COB-03`;
+  constructor-ownership commitments for explicit loop tool capability, one
+  intentional provider runtime seam, and removal of hidden live dependency
+  creation
+- `affected files / surfaces`: `go-agent-loop/pkg/agentloop/agent_loop.go`;
+  `go-agent-loop/pkg/agentloop/options.go`;
+  `go-agent-loop/pkg/agentloop/agent_loop_test.go`;
+  `agent-cli/internal/agent/executor.go`;
+  `agent-cli/internal/agent/provider_runtime.go`;
+  `agent-cli/internal/agent/provider_factory.go`;
+  `agent-cli/internal/agent/provider_openai.go`;
+  `agent-cli/internal/agent/provider_fal.go`;
+  `agent-cli/internal/agent/provider_runtime_test.go`;
+  `agent-cli/test/integration/provider_runtime_integration_test.go`;
+  `agent-cli/internal/services/session.go`;
+  `go-llm-gateway/pkg/providers/openai/provider.go`;
+  `docs/architecture/dependencies.md`;
+  `docs/architecture/contract-gap-audit.md`
+- `evidence`: Loop constructor ownership now passes the intended contract check.
+  `agentloop.New(...)` refuses tool definitions unless the caller supplies
+  `WithToolExecutor(...)` or intentionally selects
+  `WithToolExecutionDisabled()`, and `agent_loop_test.go` proves both the
+  constructor failure and explicit no-tools path. Stateless provider runtime
+  ownership also passes the intended seam check: `Executor.BuildLoop(...)`
+  computes one `ProviderHTTPRuntime` in `agent-cli/internal/agent/
+  provider_runtime.go`, then injects that runtime through
+  `ProviderBuildContext.HTTPClient` into the registered provider builders
+  instead of letting `provider_openai.go` or `provider_fal.go` choose
+  record/replay transport policy internally. Unit coverage in
+  `provider_runtime_test.go` and CLI integration coverage in
+  `provider_runtime_integration_test.go` show replay works without live
+  credentials and record mode flushes through the shared runtime seam.
+  The overall architecture-drift verdict still fails because hidden live
+  dependency creation remains outside that stateless seam. Session recording in
+  `agent-cli/internal/services/session.go` still creates a live default dialer
+  with `grok.NewDefaultWebSocketDialer()` when no dialer is injected, for both
+  Grok and OpenAI realtime record paths. In addition,
+  `go-llm-gateway/pkg/providers/openai/provider.go` still assigns
+  `NewDefaultWebSocketDialer()` inside the provider constructor when the caller
+  does not inject one. Those paths mean the repository has not yet reached the
+  broader "no hidden live dependency creation" state described by the validator
+  acceptance target, even though the scoped stateless HTTP runtime seam is now
+  explicit and centralized. Reviewer guidance is also partially stale:
+  `docs/architecture/contract-gap-audit.md` still cites
+  `go-agent-loop/pkg/agentloop/agent_loop.go` as present-tense evidence that
+  `agentloop.New` injects `&messages.DefaultToolExecutor{}` even though the
+  same audit entry later marks that gap as completed. That contradiction no
+  longer matches observable constructor behavior and should not be left for
+  reviewers to reconcile manually.
+- `required repairs`: keep the stateless HTTP seam as-is, but finish the
+  broader constructor-ownership cleanup by moving session-mode live dialer
+  selection behind one CLI-owned runtime seam instead of silent defaults in
+  `agent-cli/internal/services/session.go` and
+  `go-llm-gateway/pkg/providers/openai/provider.go`; rewrite the stale
+  DI-01 evidence text in `docs/architecture/contract-gap-audit.md` so the audit
+  reflects the current explicit-tool-capability contract rather than the
+  pre-fix state.
 
 ### Record/Replay Runtime Consistency
 
