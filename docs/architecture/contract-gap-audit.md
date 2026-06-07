@@ -235,14 +235,92 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - document which stream boundaries may be synthesized by the loop and when that is acceptable
   - consider adding an explicit end/cancellation provenance signal if callers need to reason about provider completion versus normalization
 
-## Phase 2 Entry Point After This Story
+## Naming And Doc-Comment Findings
 
-The most bounded enabling work from the findings above is:
+### DOC-01: package names and exported aliases overstate contract independence in `go-llm-gateway/pkg/models`
+
+- Affected boundary: `go-llm-gateway/pkg/models` -> downstream gateway consumers
+- Evidence:
+  - `go-llm-gateway/pkg/models/message.go` exports loop-owned message types under gateway-owned package naming
+  - neither the package docs nor exported type comments make it explicit that this package is currently an alias facade over `go-agent-loop/pkg/messages`
+- Observable impact:
+  - maintainers and downstream consumers can read `pkg/models` as a stable gateway-owned vocabulary even though compatibility still follows loop-owned types
+  - review discussions about renames or field moves have to rediscover whether the package is intended as a contract surface or only a convenience alias
+- Why this is a naming/doc-comment gap:
+  - the current package name suggests an independent data model, but the docs do not state the narrower intent of the package
+- Recommended Phase 2 hardening:
+  - add package-level documentation that states whether `pkg/models` is only a compatibility alias layer or a contract the gateway intends to own
+  - if the alias role remains temporary, mark it clearly so new exported names do not accumulate under a misleading contract boundary
+
+### DOC-02: exported `internal/*` composition helpers in `agent-cli` are not clearly documented as application wiring only
+
+- Affected boundary: `agent-cli/internal/agent`, `agent-cli/internal/cli`, and `agent-cli/internal/services`
+- Evidence:
+  - exported types such as `Executor`, `ProviderFactory`, and command/router builders are used across sibling packages
+  - the repository docs describe CLI features, but they do not currently name one canonical embedding boundary or state that these exported internal helpers are implementation seams rather than downstream APIs
+- Observable impact:
+  - future maintainers can treat exported `internal/*` types as compatibility-sensitive just because they are reused broadly inside the module
+  - Phase 2 review of constructor, naming, or signature changes in CLI wiring requires re-deriving whether the change affects a user-facing contract at all
+- Why this is a naming/doc-comment gap:
+  - Go visibility alone does not communicate the intended stability of these helpers, and the current docs leave that contract boundary implicit
+- Recommended Phase 2 hardening:
+  - add package comments or development-doc guidance that distinguishes executable/config behavior from internal application wiring seams
+  - prefer naming that reinforces composition ownership, such as runtime/factory terminology for internal orchestrators, when signatures are revised in Phase 2
+
+## Compatibility Risk Findings
+
+### COMPAT-01: changing shared message/session types will fan out across all three modules and recorded fixtures
+
+- Affected boundary: `go-agent-loop/pkg/messages` consumed by `go-llm-gateway`, `agent-cli`, and replay/record fixtures
+- Evidence:
+  - the loop owns `Message`, `StreamMessage`, session interfaces, and error envelopes used across both other modules
+  - gateway providers, CLI integration tests, and committed session fixtures all rely on those shapes
+- Observable impact:
+  - field renames, enum changes, or lifecycle event shape changes can break provider adapters, replay/record assertions, and CLI-visible output in one step
+  - compatibility-sensitive work may look local to the loop package while actually invalidating cross-module fixtures and session transcripts
+- Recommended Phase 2 hardening:
+  - treat `pkg/messages` changes as cross-workspace contract changes and update fixture validation plus CLI replay coverage in the same iteration
+  - prefer additive migrations or explicit translation shims before removing or repurposing existing fields/events
+
+### COMPAT-02: session contract hardening can change CLI stop behavior and persisted capture semantics
+
+- Affected boundary: `go-agent-loop/pkg/participants.ModelRunner` <-> `agent-cli/internal/services/session.go` <-> `go-llm-gateway/pkg/testing`
+- Evidence:
+  - current command completion depends on combinations of `MESSAGE.END`, `TEXT.END`, `SESSION.CLOSE`, timeout, and replay completion
+  - replay/record helpers and committed `.session.json` captures encode the current event ordering and close behavior
+- Observable impact:
+  - clarifying lifecycle ownership in Phase 2 can alter when the CLI exits, when captures flush, and how replay fixtures are interpreted even if provider behavior stays the same
+  - downstream scripts or tests that assume current command-exit timing may fail after apparently reasonable lifecycle cleanup
+- Recommended Phase 2 hardening:
+  - land lifecycle contract changes with explicit fixture updates and integration coverage for live, replay, and record paths
+  - document user-visible behavior changes at the CLI/session level whenever stop conditions or close ordering change
+
+### COMPAT-03: introducing typed error classes can break callers and tests that currently key off free-form text
+
+- Affected boundary: `go-agent-loop/pkg/messages.ErrorValue`, provider adapters, and `agent-cli` session command errors
+- Evidence:
+  - many current paths still emit `err.Error()` strings or phase-prefixed wrapped errors
+  - existing tests and operators can only infer meaning from message text because error type/code fields are sparsely populated
+- Observable impact:
+  - Phase 2 error normalization may require changing message text, adding codes, or moving some failures between returned Go errors and in-band stream errors
+  - downstream automation that scrapes CLI stderr or recorded session events by substring may break unless the migration is staged carefully
+- Recommended Phase 2 hardening:
+  - introduce typed classifications additively first, while preserving legacy text long enough to migrate tests and operators
+  - document the stable machine-readable fields that replace text matching before tightening or simplifying error wording
+
+## Prioritized Phase 2 Execution Order
+
+Bounded enabling steps that reduce accidental coupling before broader contract changes:
 
 1. remove testdata path coupling by giving session fixtures one explicit owner
 2. make constructor ownership explicit for tool execution and transport/dialer dependencies
 3. centralize CLI session provider selection behind one factory boundary
-4. define one loop-facing session request/lifecycle contract so context propagation and stop semantics no longer depend on CLI helper branches
-5. introduce shared caller-actionable error categories before changing provider/session behavior more broadly
+4. clarify naming and package-doc intent for alias layers and exported internal wiring seams before adding new Phase 2 APIs to those areas
 
-Those changes reduce accidental cross-module knowledge before Phase 2 starts tightening compatibility-sensitive context, error, and lifecycle contracts.
+Compatibility-sensitive contract changes that should follow after the enabling steps:
+
+5. define one loop-facing session request/lifecycle contract so context propagation and stop semantics no longer depend on CLI helper branches
+6. introduce shared caller-actionable error categories before changing provider/session behavior more broadly
+7. tighten shared message/session contracts only alongside fixture, replay, and CLI compatibility updates
+
+This order keeps the early work focused on ownership and naming clarity first, then moves into the higher-risk session, error, and shared-message changes that can affect downstream behavior and recorded artifacts.
