@@ -29,6 +29,12 @@ func (g *captureGateway) InferStream(_ context.Context, req gateway.InferenceReq
 	return ch, nil
 }
 
+func (g *captureGateway) Interact(_ context.Context, _ gateway.InteractionRequest) (<-chan gateway.InteractionEvent, error) {
+	ch := make(chan gateway.InteractionEvent)
+	close(ch)
+	return ch, nil
+}
+
 func intPtr(v int) *int             { return &v }
 func float64Ptr(v float64) *float64 { return &v }
 

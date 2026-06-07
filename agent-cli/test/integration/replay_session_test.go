@@ -18,7 +18,7 @@ import (
 // session close. Client-to-server events are filtered out for this read-only
 // fixture rendering check.
 func TestRecordReplaySession(t *testing.T) {
-	fixturePath := locateFixture(t, "session_text_reply.session.json")
+	fixturePath := locateSharedSessionFixture(t, "session_text_reply.session.json")
 	assertSanitizedSessionFixture(t, fixturePath)
 
 	replayer, err := gwtesting.NewSessionReplayer(fixturePath, gwtesting.WithReplayOutboundValidation(false))
@@ -96,14 +96,14 @@ drain:
 }
 
 func TestSessionReplayFixture_InboundBeforeOutbound_UnblocksLaterInbound(t *testing.T) {
-	fixturePath := locateFixture(t, "session_inbound_then_outbound.session.json")
+	fixturePath := locateSharedSessionFixture(t, "session_inbound_then_outbound.session.json")
 	assertSanitizedSessionFixture(t, fixturePath)
 
 	replayer, err := gwtesting.NewSessionReplayer(fixturePath)
 	if err != nil {
 		t.Fatalf("NewSessionReplayer: %v", err)
 	}
-	defer replayer.Close()
+	defer func() { _ = replayer.Close() }()
 
 	first := readFixtureReplayMessage(t, replayer)
 	if first.Type != messages.StreamTypeSessionCreated {
@@ -130,14 +130,14 @@ func TestSessionReplayFixture_InboundBeforeOutbound_UnblocksLaterInbound(t *test
 }
 
 func TestSessionReplayFixture_OutboundBeforeInbound_StartsReplayAfterClientEvent(t *testing.T) {
-	fixturePath := locateFixture(t, "session_outbound_then_inbound.session.json")
+	fixturePath := locateSharedSessionFixture(t, "session_outbound_then_inbound.session.json")
 	assertSanitizedSessionFixture(t, fixturePath)
 
 	replayer, err := gwtesting.NewSessionReplayer(fixturePath)
 	if err != nil {
 		t.Fatalf("NewSessionReplayer: %v", err)
 	}
-	defer replayer.Close()
+	defer func() { _ = replayer.Close() }()
 
 	assertNoFixtureReplayMessage(t, replayer)
 

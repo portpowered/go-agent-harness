@@ -82,6 +82,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 	}
 	userRunner := participants.NewUserRunner(userCap)
 	kernelRunner := participants.NewKernelRunner(cfg.Logger, kernelCap)
+	interactionRunner := participants.NewInteractionRunner(bufCap)
 	var toolRunner *participants.ToolRunner
 	if cfg.ToolExecutor != nil {
 		toolRunner = participants.NewToolRunner(cfg.ToolExecutor, toolCap)
@@ -134,6 +135,9 @@ func New(opts ...Option) (*AgentLoop, error) {
 	coord := subsystems.NewCoordinator(cfg.Logger)
 	hlps = append(hlps, coord)
 
+	interactionEvents := subsystems.NewInteractionEvents(cfg.Logger)
+	hlps = append(hlps, interactionEvents)
+
 	// PingPong is only useful in session mode where keepalive pings are expected.
 	if cfg.Mode == engine.DuplexSession {
 		pingPong := subsystems.NewPingPong(*kernelRunner.DeltaInbox, cfg.Logger)
@@ -158,6 +162,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 	}
 
 	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools)
+	eng.SetInteractionRunner(interactionRunner)
 	eng.State().LoopState.InferenceDefaults = cfg.InferenceDefaults
 	if cfg.TickRate > 0 {
 		eng.SetTickRate(cfg.TickRate)
@@ -375,7 +380,8 @@ func (al *AgentLoop) Pause(ctx context.Context) error {
 func (al *AgentLoop) GetState(ctx context.Context) (AgenticLoopState, error) {
 	rs := al.engine.State().GetRunState()
 	return AgenticLoopState{
-		RunState: RunState(rs),
+		RunState:    RunState(rs),
+		Interaction: messages.CloneInteractionState(al.engine.State().LoopState.Interaction),
 	}, nil
 }
 
@@ -416,6 +422,14 @@ func (al *AgentLoop) SetOutputs(ctx context.Context, outputs []Output) error {
 	defer al.mu.Unlock()
 	al.outputs = outputs
 	return nil
+}
+
+func (al *AgentLoop) SendInteractionEvents(ctx context.Context, events []messages.InteractionEvent) error {
+	runner := al.engine.GetInteractionRunner()
+	if runner == nil {
+		return errors.New("interaction runner is not configured")
+	}
+	return runner.WriteBatch(ctx, events)
 }
 
 // Send injects messages into the running loop. In turn-taking mode this resumes

@@ -1,229 +1,201 @@
-# Go Agent Loop
+# go-agent-loop
 
-The go agent loop is a library for running an AI agent. 
+`go-agent-loop` is the runtime library in `go-agent-harness`. It provides a
+tick-driven agent loop, the message contracts that flow through it, and the
+participant/subsystem seams that provider adapters and tool executors plug into.
 
-It is a portable small loop that is intended for use in various ways. 
+Start here when you want to build your own Go agent runtime instead of using the
+top-level `agent-cli` binary.
 
-## Quick start
+## Supported Package Surface
 
+- `pkg/agentloop`: primary consumer entrypoint for creating and running loops
+- `pkg/messages`: shared message, tool, inference, and session contracts
+- `pkg/subsystems`: subsystem interfaces plus reusable helpers such as recording,
+  interrupt handling, token counting, and context-pressure notification
 
+Most consumers should start with `pkg/agentloop` and `pkg/messages`. Lower-level
+packages such as `pkg/engine` and `pkg/participants` exist in this module, but
+they are not the first consumer-facing surface to build against.
+
+## Install
+
+```bash
+go get github.com/portpowered/go-agent-loop@latest
 ```
-cd your-project-directory
-go mod init your-project-name
-go get github.com/portpowered/go-agent-loop
 
-```
+Then import the package entrypoints you need:
 
-then use the go agent loop in your code:
-```
+```go
 import (
-	"github.com/portpowered/go-agent-loop"
+	"github.com/portpowered/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-loop/pkg/messages"
+)
+```
+
+## Getting Started
+
+The smallest integration is a stateless loop built with an implementation of
+`messages.Inferencer`. The loop owns that contract; provider adapters such as
+those in `go-llm-gateway` implement it.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/portpowered/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-loop/pkg/messages"
 )
 
+type staticInferencer struct{}
+
+func (staticInferencer) Infer(ctx context.Context, req messages.InferenceRequest) (messages.InferenceResult, error) {
+	return messages.InferenceResult{
+		Message: messages.NewTextMessage(messages.RoleAssistant, "2+2 = 4"),
+	}, nil
+}
+
+func (staticInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	ch := make(chan messages.StreamMessage, 4)
+	go func() {
+		defer close(ch)
+		ch <- messages.StreamMessage{Type: messages.StreamTypeTextStart, Value: messages.NewTextStartValue(), Role: messages.RoleAssistant}
+		ch <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("2+2 = 4"), Role: messages.RoleAssistant}
+		ch <- messages.StreamMessage{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue(), Role: messages.RoleAssistant}
+		ch <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant}
+	}()
+	return ch, nil
+}
+
 func main() {
-	loop := agentloop.New()
-	out := loop.Run("what is two plus two?")
-    fmt.Println(out.GetText())
-    // "2+2 = 4"
+	loop, err := agentloop.New(agentloop.WithInferencer(staticInferencer{}))
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := loop.Execute(context.Background(), agentloop.NewExecuteInput("what is two plus two?"))
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(result.Text())
 }
 ```
 
-# Other Examples
+That example uses the main request/response path:
 
+- `agentloop.New(...)` creates a loop with explicit options
+- `loop.Execute(...)` runs one user turn and returns the collected full messages
+- `result.Text()` returns the final assistant text for the turn
+- `loop.GetConversationHistory()` and `loop.GetConversationDeltas()` expose the
+  recorded full-message and delta history after execution
 
-## streaming delta 
+For streaming text or reasoning deltas, use `ExecuteStreaming(...)` instead.
 
-```go
-func main() {
-    loop := agentloop.New()
-    streamOut, _ := loop.StreamExecute(context.Background(), 
-        agentloop.NewExecuteInput(Message: "what is two plus two?"))
-    while delta := streamOut.ReadTextDelta(); delta != nil {
-        fmt.Print(delta.Text)
-    }
-}
+## Runtime Model
+
+The loop is tick-driven:
+
+- user, system, model, and tool events enter the loop as messages or deltas
+- the engine advances on ticks
+- subsystems run in a defined order on each tick
+- the loop updates conversation state, dispatches inference/tool work, and
+  forwards output back through typed message buffers
+
+In consumer terms, this gives you one runtime that can handle both:
+
+- stateless request/response turns through `Execute` or `ExecuteStreaming`
+- long-running session flows through `Run`, `Send`, `Pause`, and session-mode
+  inferencers
+
+## Public Surfaces To Start From
+
+### `pkg/agentloop`
+
+Use this package first for:
+
+- creating loops with `New(...)`
+- configuring runtime behavior with options such as `WithInferencer`,
+  `WithSessionInferencer`, `WithToolExecutor`, `WithTools`,
+  `WithSystemPrompt`, and `WithBufferCapacity`
+- running a single turn with `Execute(...)` or `ExecuteStreaming(...)`
+- running a continuous or duplex loop with `Run(...)` and `Send(...)`
+
+### `pkg/messages`
+
+Use this package when you need to:
+
+- implement `messages.Inferencer` for stateless model calls
+- implement `messages.SessionInferencer` for persistent bidirectional sessions
+- implement `messages.ToolExecutor` for tool execution
+- construct `messages.Message`, `messages.ToolDefinition`, and multimodal
+  `ContentPart` values that flow through the loop
+
+### `pkg/subsystems`
+
+Use this package when you need custom helpers that run on each tick. The
+subsystem interface is explicit:
+
+- each subsystem declares a `TickGroup()`
+- each subsystem runs `Execute(...)` against the current loop state
+
+This is the extension point for recorder-style helpers, token counting, and
+other loop-adjacent behaviors that should stay inside the tick lifecycle.
+
+## Session And Adapter Boundaries
+
+`go-agent-loop` owns the runtime contracts, not the provider transports.
+
+- for stateless inference, the loop depends on `messages.Inferencer`
+- for persistent realtime or duplex flows, the loop depends on
+  `messages.SessionInferencer`
+- provider adapters such as `go-llm-gateway` implement those contracts and plug
+  into the loop through options
+
+That means this module is reusable as a runtime library, but the current
+workspace composition is still coupled in practice through the adapter layer:
+`agent-cli` composes this module with `go-llm-gateway`, and
+`go-llm-gateway` develops against the checked-out loop contracts.
+
+## Validation Commands
+
+Package-local validation:
+
+```bash
+cd go-agent-loop
+make deps
+make build
+make vet
+make test
 ```
 
+Workspace validation from the repository root:
 
-## async
-```go
-func main() {
-    
-	loop := agentloop.New(withConsoleOut(stdout))
-    ctx, cancel := context.WithCancel(context.Background())
-    go loop.Run(ctx)
-    loop.Send(ctx, 
-        []messages.Message{
-            messages.NewText(messages.RoleUser, "what is two plus two?")})
-    // console out will print the response text from the model. 
-    loop.Send(ctx, 
-        []messages.Message{
-            messages.NewText(messages.RoleUser, "okay, now do that twenty times?")})
-    // console out will print the response text again
-}
-
+```bash
+make deps
+make fmt
+make typecheck
+make vet
+make lint
+make staticcheck
+make test
+make test-integration
+make test-regressions
+make build
+make coverage
+make validate
+make ci
 ```
 
-# Development documents
+Use the module-local commands when changing this package in isolation. Use the
+root commands when you want to verify the current cross-module workspace state.
 
-Start with the [Go Agent Loop Development Guide](docs/development.md) before changing the runtime, message model, streaming protocol, engine ordering, or tests. It covers local commands, downstream verification, and package-specific gotchas.
+## Development Notes
 
-## Messages
-
-The agent loop uses messages to communicate between its systems. 
-
-There are two variants of messages: full messages and delta messages. 
-Full messages are complete messages, intended for direct use.  (message: "Hi there" )
-Delta messages are incremental changes to a message, intended to be built up over time.  (messages: "Hi " -> "the" -> "re"). 
-
-
-When running a loop, the message stream would look like: 
-
-```
-[ MESSAGE ] [INDEX 0] [AGENT SYSTEM] 
-[ MESSAGE ] [INDEX 1] [AGENT USER] 
-[ MESSAGE ] [INDEX 2] [AGENT AGENT] 
-[ MESSAGE ] [INDEX 3] [AGENT TOOL] 
-[ MESSAGE ] [INDEX 4] [AGENT MODEL] 
-```
-
-
-
-The agent message delta stream would look like: 
-
-```
-[ LOOP.START ] [INDEX 0] [ ACTOR LOOP ] [TICK 0]
-[ MESSAGE.START] [INDEX 1] [ ACTOR SYSTEM ] [TICK 1 ]
-[ TEXT.START] [INDEX 2] [ ACTOR SYSTEM ] [TICK 2]
-[ TEXT.DELTA] [INDEX 3] [ ACTOR SYSTEM ] [TICK 3 ]
-[ TEXT.END] [INDEX 4] [ ACTOR SYSTEM ] [TICK 4 ]
-[ MESSAGE.END] [INDEX 5] [ACTOR SYSTEM ] [TICK 5 ]
-[ MESSAGE.START] [INDEX 6] [ ACTOR USER ] [TICK 6 ]
-[ TEXT.START] [INDEX 7] [ ACTOR USER ] [TICK 7 ]
-[ TEXT.DELTA] [INDEX 8] [ ACTOR USER ] [TICK 8 ]
-[ TEXT.END] [INDEX 9] [ ACTOR USER ] [TICK 9 ]
-[ MESSAGE.END ] [INDEX 10] [ ACTOR USER ] [TICK 10 ]
-[ MESSAGE.START] [INDEX 11] [ ACTOR AGENT ] [TICK 11 ]
-[ TEXT.START ] [INDEX 12] [ ACTOR AGENT ] [TICK 12 ]
-[ TEXT.DELTA ] [INDEX 13] [ ACTOR AGENT ] [TICK 13 ]
-[ TEXT.END ] [INDEX 14] [ ACTOR AGENT ] [TICK 14 ]
-[ TOOLCALL.START ] [INDEX 15] [ ACTOR AGENT ] [TICK 15 ]
-[ TOOLCALL.DELTA ] [INDEX 16] [ ACTOR AGENT ] [TICK 16 ]
-[ TOOLCALL.END ] [INDEX 17] [ ACTOR AGENT ] [TICK 17 ]
-[ MESSAGE.END ] [INDEX 18] [ ACTOR AGENT ] [TICK 18 ]
-[ MESSAGE.START ] [INDEX 19] [ ACTOR TOOL ] [TICK 19 ]
-[ TEXT.START ] [INDEX 20] [ ACTOR TOOL ] [TICK 20 ]
-[ TEXT.DELTA ] [INDEX 21] [ ACTOR TOOL ] [TICK 21 ]
-[ TEXT.END ] [INDEX 22] [ ACTOR TOOL ] [TICK 22 ]
-[ TOOLCALL.END ] [INDEX 23] [ ACTOR TOOL ] [TICK 23 ]
-[ MESSAGE.END ] [INDEX 24] [ ACTOR TOOL ] [TICK 24 ]
-[ MESSAGE.START ] [INDEX 25] [ ACTOR MODEL ] [TICK 25 ]
-[ TEXT.START ] [INDEX 25] [ ACTOR MODEL ] [TICK 25 ]
-[ TEXT.DELTA ] [INDEX 26] [ ACTOR MODEL ] [TICK 26 ]
-[ TEXT.END ] [INDEX 27] [ ACTOR MODEL ] [TICK 27 ]
-[ MESSAGE.END ] [INDEX 28] [ ACTOR MODEL ] [TICK 28 ]
-[ LOOP.END ] [INDEX 29] [ ACTOR LOOP ] [TICK 29 ]
-```
-
-### Message types
-
-Inside of each message could be a series of different content. 
-
-Some content types include: 
-- TEXT
-- TOOLCALL
-- AUDIO
-- IMAGE
-- VIDEO
-- FILE
-- EMBEDDING
-- REASONING
-
-The message types for deltas are like: 
-- MESSAGE.START: The start of a message.
-- MESSAGE.END: The end of a message.
-- MESSAGE.COMPLETE: A complete message, along with all its contents. 
-- TEXT.START: The start of text.
-- TEXT.DELTA: A delta of text.
-- TEXT.END: The end of text.
-- TOOLCALL.START: The start of a tool call.
-- TOOLCALL.DELTA: A delta of a tool call.
-- TOOLCALL.END: The end of a tool call.
-- AUDIO.START: The start of audio.
-- AUDIO.DELTA: A delta of audio.
-- AUDIO.END: The end of audio.
-- IMAGE.START: The start of an image.
-- IMAGE.DELTA: A delta of an image.
-- IMAGE.END: The end of an image.
-- VIDEO.START: The start of a video.
-- VIDEO.DELTA: A delta of a video.
-- VIDEO.END: The end of a video.
-- FILE.START: The start of a file.
-- FILE.DELTA: A delta of a file.
-- FILE.END: The end of a file.
-- EMBEDDING.START: The start of an embedding.  
-- EMBEDDING.DELTA: A delta of an embedding.
-- EMBEDDING.END: The end of an embedding.
-- REASONING.START: The start of reasoning.
-- REASONING.DELTA: A delta of reasoning.
-- REASONING.END: The end of reasoning.
-- LOOP.START: the start of the loop. 
-- LOOP.END: The end of the loop.
-- ERROR: An error occurred.
-
-### Interruptions
-
-Sometimes the user may want to interrupt the loop, for example if they want it to stop. 
-Users interrupt the loop by sending a message. 
-
-For example, maybe the user wants to say that the agent is going the wrong way. 
-Lets say the loop is at index 16.
-To do this: the user sends a message like [ MESSAGE.START ] [INDEX 13] [ACTOR USER]. 
-
-And the loop will wait until the actor submit [ MESSAGE.END ] [INDEX 14] [ACTOR USER]. 
-When the actor finishes submitting the message, the loop will continue from index 15. 
-
-The interrupt behavior is configurable by modifying the loop configuration. 
-i.e. if you set `NewLoop(withConcurrentUserAndAgent())`, then the loop will not stop parsing messages and the loops will be interleaved. 
-
-### Multimedia
-
-Parsing of the media contents is done specifically by the agent provider. Over the wire, 
-the agent loop only sends the media.
-
-#### Audio
-For the most part, the agent loop expects to receive audio in PCM 16khz format. 
-Other formats are not supported, and you should parse the media media type and convert it to PCM 16khz.
-
-#### Images
-Images are expected to be sent as PNGS. 
-
-#### Videos
-
-Videos are expectecd to be sent as straeming H.264. 
-
-#### Files
-
-Files can be any type of file, but the file message contains the file mime type at start.
-
-#### Embeddings
-
-sometimes, we want to pass in embeddings to the model. Embeddings are stored in a file called <>.safetensors. 
-
-## Architecture
-
-The agent loop thinks of the world as a loop. It runs on a ticker. 
-The agent loop runs on each tick a series of systems. 
-Some systems send messages, some systems record data, some systems process data. 
-
-The agent loop talks to actors. Each actor has a series of input and output buffers. 
-The agent loop talks to the actors via the buffers. The actors in turn talk to the agent loop via the same buffers. 
-
-At each loop tick, the agent loop reads the data from the buffers, runs the systems, and writes some data back to the buffers. 
-
-### Why? 
-
-Mostly, we the agent loop works of one idea that says AI agent harnesses are a simulation of inputs and outputs and how they work together. 
-
-If we try to model the agent loop around talking to an LLM alone, then the system looks wrong. The model would have for example tool calls and interrupts be off as sidesystems. Interrupts and concurrency would need to be modelled at small subcomponents rather than as a whole system. 
-
+Start with [docs/development.md](./docs/development.md) before changing the
+runtime, streaming behavior, ordering logic, or test harnesses. The functional
+tests under `test/functional` exercise the consumer-visible runtime behavior and
+are the best reference for current supported flows.

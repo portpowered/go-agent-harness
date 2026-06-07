@@ -114,7 +114,7 @@ func (m *MockSessionInferencer) SimulateDisconnect() {
 	sess := m.session
 	m.mu.Unlock()
 	if sess != nil {
-		sess.Close()
+		_ = sess.Close()
 	}
 }
 

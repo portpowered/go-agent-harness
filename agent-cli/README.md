@@ -1,43 +1,82 @@
-# GO AGENT CLI
+# Agent CLI
 
-The go agent cli allows you to run an LLM agent from the command line.
+`agent-cli` is the workspace's user-facing executable. It composes
+`go-agent-loop` for the runtime loop and `go-llm-gateway` for provider access;
+it is not a separate downstream Go library surface.
 
-Examples:
+Start here when you want a ready-to-run agent binary for one-shot prompts,
+interactive chat, direct tool debugging, or session capture and replay.
 
-`agent ask "what is 2 + 2?"`
+## Install
 
-`agent ask ./recording-stream.mp4 "is that a fish or a banana?" --model "google/gemini-3.1-pro-preview" --api-key "<api-key>" --provider "openrouter"`
-
-agent cli is a binary with tools for filesystem/shell/web access, multimodality, streaming, and reasoning.
-
-## Quickstart
+Build from the checked-out workspace:
 
 ```bash
-curl -L https://github.com/portpowered/go-agent-cli/releases/latest/download/agent-cli-linux-amd64 -o agent
-chmod +x agent
-cp agent /usr/local/bin/agent
+make build
+./agent-cli/bin/agent --help
+```
+
+Or install the command into your Go bin directory:
+
+```bash
+go install ./cmd/agent
+agent --help
+```
+
+Release binaries can also be downloaded from the repository releases page when
+you want a prebuilt executable instead of a local build.
+
+## First Run
+
+The CLI reads configuration from `~/.agent-cli/config.yaml` by default. Use
+`--config-dir` to point at a different workspace directory.
+
+If you already have a remote provider configuration, a minimal first command is:
+
+```bash
 agent ask "what is 2 + 2?"
 ```
 
-> **Note:** The quickstart uses the Linux amd64 binary. Check releases for other platforms (Windows, macOS, arm64). Replace placeholder values like `<api-key>` with your actual credentials.
-
-For more commands see `./agent --help`
-
-## Commands
+If you want to point the CLI at a local OpenAI-compatible server such as
+Ollama, llama.cpp, LM Studio, or vLLM, bootstrap the config with:
 
 ```bash
-# Ask command variants
-agent ask "describe this picture for me" ./file.jpg --stream
-agent ask "describe this picture for me" ./file.jpg --system-prompt ~/prompts/AWESOME_PICTURE_DESCRIBER_PROMPT.md
-agent ask "are you sure its not a banana though?" --continue-last-session
-agent ask "what about bananas though?" --session-id <session-id>
-agent ask "can you read the files in x directory and tell me?" --model <model-id> --provider <provider-id> --show-tool-use
+agent config add-local --base-url http://127.0.0.1:11434/v1 --model llama3.1
+agent ask "summarize the workspace"
+```
+
+## Supported CLI Surface
+
+These are the supported consumer-facing command groups:
+
+| Command | Use it for |
+| --- | --- |
+| `agent ask [prompt] [files...]` | One-shot prompts, optional file inputs, stdin piping, JSON output, and iterative `--loop` runs. |
+| `agent chat` | Interactive multi-turn chat, with optional audio input and iterative loop mode. |
+| `agent tool <tool-id> key=value...` | Direct tool invocation for debugging tool behavior outside a full model run. |
+| `agent session ...` | Live session capture, offline replay, and stored session inspection via `show`, `list`, and `delete`. |
+| `agent config add-local ...` | Write a local provider entry into the CLI config for OpenAI-compatible local inference servers. |
+
+Common starting flows:
+
+```bash
+# One-shot prompt
+agent ask "describe the current directory"
+
+# Prompt with files
+agent ask "describe this image" ./example.png
+
+# Continue the most recent saved session
+agent ask "continue from the previous answer" --continue-last-session
 
 # Interactive chat
 agent chat
 
-# Tool testing - invoke a tool directly by name and key=value args (for debugging)
-agent tool <tool-id> "key=param" "key2=param2" ...
+# Tool debugging
+agent tool read_file path=./README.md
+
+# Provider-neutral interaction fixture replay
+agent interaction replay fixtures/demo.interaction.json
 
 # Session management (sessions are stored in workspace/sessions/)
 agent session --record capture.json --provider grok --model <session-model> --api-key <xai-api-key>
@@ -48,109 +87,92 @@ agent session list
 agent session delete <session-id>
 ```
 
-CLI flags like `--api-key` and `--model` override values from the config file.
+Run `agent --help` or `agent <command> --help` for the full flag surface.
 
-Session replay reads a JSON capture file and does not make live provider network calls. Session record mode supports live Grok realtime captures and OpenAI Realtime captures with `--provider openai --model gpt-realtime`; it validates the provider, model, API key, and `.json` capture path before attempting the live provider path. OpenAI session mode uses the sessional inferencer path and does not call the normal `agent ask` or `agent chat` stateless OpenAI inference path.
+## Configuration And Workspace
 
-See [Agent Session Record and Replay](docs/session-record-replay.md) for the full workflow, capture format, replay divergence errors, and fixture sanitization guidance.
-
-## Documentation
-
-See the [Agent CLI docs index](docs/README.md) for local guides grouped by CLI users, fixture and test authors, and Agent CLI contributors.
-
-Contributors should start with the [Agent CLI Development Guide](docs/development.md). It covers the local package layout, build and test commands, Wire generation, session verification, and CLI-specific gotchas.
-
-## Configuration
-
-The agent cli is configured via a YAML file at `~/.agent-cli/config.yaml`.
-The config directory can be overridden with `--config-dir` (e.g. `./agent --config-dir /path/to/config-dir ask "what is 2 + 2"`).
-
-Format:
-
-```yaml
-model:
-  provider: openrouter
-  openai:
-    model: gpt-realtime
-    api_key: sk-...
-    base_url: wss://api.openai.com/v1/realtime
-  openrouter:
-    model: z-ai/glm5
-    api_key: sk-or-v1-...
-  grok:
-    model: <session-model>
-    api_key: xai-...
-    base_url: https://api.x.ai/v1/realtime
-tools:
-  web:
-    brave:
-      enabled: true
-      api_key: "your-brave-key"
-  exec:
-    enable_deny_patterns: true
-```
-
-Set `model.provider: openai` with `model.openai.model: gpt-realtime` for OpenAI Realtime `agent session --record` runs. Set `model.provider: grok` for Grok realtime recording. Replay mode reads the capture and does not require live provider credentials.
-
-API keys are stored on disk. Do not commit `config.yaml` or share it with your API keys. Prefer environment variables (e.g. `AGENT_MODEL__OPENROUTER__API_KEY`, `AGENT_MODEL__GROK__API_KEY`) for CI or shared machines.
-
-## Workspace
-
-The agent uses a workspace for agent context (AGENTS.md, skills, sessions). The default workspace is `~/.agent-cli/`.
-
-Layout:
-
-```
+```text
 ~/.agent-cli/
-    config.yaml     # main config (model, tools, etc.)
-    AGENTS.md   # instructions for the agent
-    sessions/   # conversation history (session-1.json, etc.)
+  config.yaml
+  AGENTS.md
+  sessions/
 ```
 
-## Why?
+- `config.yaml` selects the provider, model, credentials, and tool settings.
+- `AGENTS.md` holds the default workspace instructions that the runtime injects.
+- `sessions/` stores conversation history and loop trace records.
 
-Current tools don't support multimodality as necessary, are tied to a specific provider, or require TypeScript/Python bootstrap. We don't yet need the weight of most claw products (openclaw, nanoclaw, picoclaw) for exposing a server for message receiving.
+Interaction replay reads a normalized PNIG fixture and prints one JSON object
+per event to stdout. It is credential-free and does not call live provider
+endpoints.
 
-The intent of this CLI is not for code, it's for running a general-purpose agent.
+Session replay reads a JSON capture file and does not make live provider
+network calls. Session record mode supports live Grok realtime captures and
+OpenAI Realtime captures with `--provider openai --model gpt-realtime`; it
+validates the provider, model, API key, and `.json` capture path before
+attempting the live provider path. OpenAI session mode uses the sessional
+inferencer path and does not call the normal `agent ask` or `agent chat`
+stateless OpenAI inference path.
 
----
+See [PNIG Interaction Replay](docs/interaction-replay.md) for the normalized
+interaction fixture workflow and NDJSON output contract.
 
-## Reference
+See [Agent Session Record and Replay](docs/session-record-replay.md) for the
+full workflow, capture format, replay divergence errors, and fixture
+sanitization guidance.
 
-### Model reference (as of Feb 2026)
+CLI flags such as `--provider`, `--model`, `--api-key`, and `--config-dir`
+override config-file values for the current command.
 
-| Provider  | Model             | Input modalities            | Output modalities |
-|----------|-------------------|-----------------------------|-------------------|
-| OpenAI   | gpt-realtime      | text, audio                 | text, audio       |
-| OpenAI   | gpt-5.2           | text, image, file           | text              |
-| OpenAI   | gpt-audio         | text, audio                 | text, audio       |
-| anthropic| claude-4.6-sonnet | text, image                 | text              |
-| glm      | glm-5             | text,                       | text              |
-| google   | gemini-3.1-preview| audio, file, image, text, video | text          |
-| google   | nano-banana       | image, text                 | image, text       |
-| kimi     | kimi-2.5          | text, image                 | text              |
-| qwen     | qwen-3.5          | text, image, video          | text              |
-| minimax  | minimax-2.5       | text                        | text              |
+## Validation
 
-### Comparative tools
+Package-local validation:
 
-**Coding agent CLIs**
+```bash
+make deps
+make build
+make vet
+make test
+```
 
-- https://www.npmjs.com/package/@sourcegraph/amp
-- https://code.claude.com/docs/en/overview
-- https://github.com/openai/codex/tree/main
+Workspace validation from the repository root:
 
-**General-purpose agents with server access**
+```bash
+make deps
+make fmt
+make typecheck
+make vet
+make lint
+make staticcheck
+make test
+make test-integration
+make test-regressions
+make build
+make coverage
+make validate
+make ci
+```
 
-- https://github.com/openclaw/openclaw
-- https://github.com/sipeed/picoclaw
-- https://github.com/zeroclaw-labs/zeroclaw
+Use the root targets when you want to confirm `agent-cli` still composes cleanly
+with `go-agent-loop` and `go-llm-gateway` in the active workspace.
 
----
+## Composition Boundaries
 
-## Project structure (contributors)
+`agent-cli` is the executable layer of this repository:
 
-- `doc/` - documentation
-- `internal/` - internal Go packages
-- `test/` - test suite
-- `bin/` - command-line binary target
+- It depends on `go-agent-loop` for the core agent execution model.
+- It depends on `go-llm-gateway` for provider implementations and loop-facing
+  inferencer adapters.
+- Its supported surface is the `agent` command and the user documentation under
+  `docs/`, not the internal package layout under `internal/`.
+
+Consumers who need a library integration point should start with
+[`go-agent-loop`](../go-agent-loop/README.md) or
+[`go-llm-gateway`](../go-llm-gateway/README.md) instead of importing
+`agent-cli/internal/...`.
+
+## Further Reading
+
+- [Agent CLI docs index](docs/README.md)
+- [Agent session record and replay](docs/session-record-replay.md)
+- [Agent CLI development guide](docs/development.md)

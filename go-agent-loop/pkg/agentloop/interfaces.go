@@ -30,6 +30,9 @@ type AgenticLoop interface {
 	// The loop will then be interrupted at whatever is current context screen. If the message has an index that is lower than the current top message in the history, then we presume
 	// that the message is more correct, and you intend to override the current message in the history, and we run the loop based on a rewritten history.
 	Send(ctx context.Context, msg []messages.Message) error
+	// SendInteractionEvents injects normalized interaction events into the loop so
+	// subsystems can react to provider-neutral gateway progress on ticks.
+	SendInteractionEvents(ctx context.Context, events []messages.InteractionEvent) error
 
 	// Pause pauses the loop.
 	Pause(ctx context.Context) error
@@ -69,7 +72,8 @@ type AgenticLoop interface {
 
 // AgenticLoopState represents the current state of the loop.
 type AgenticLoopState struct {
-	RunState RunState
+	RunState    RunState
+	Interaction messages.InteractionState
 }
 
 // RunState represents the execution state of the loop.

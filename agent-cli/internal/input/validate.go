@@ -64,7 +64,7 @@ func ValidateMimeType(mimeType, modelName string, supportedTypes []string) error
 	}
 	hint := findConversionHint(mimeType, supportedTypes)
 	return fmt.Errorf(
-		"Model '%s' does not support input type '%s'. Supported types: %s%s",
+		"model %q does not support input type %q. supported types: %s%s",
 		modelName, mimeType, strings.Join(supportedTypes, ", "), hint,
 	)
 }

@@ -21,7 +21,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.27.1
 	golang.org/x/image v0.36.0
-	golang.org/x/term v0.32.0
+	golang.org/x/term v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -66,8 +66,8 @@ require (
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.3 // indirect
-	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
 

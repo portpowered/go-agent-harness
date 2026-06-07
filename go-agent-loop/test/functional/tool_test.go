@@ -27,24 +27,6 @@ func executeOrStream(t *testing.T, s *Scenario, mode string, message string) (fi
 	return result.Text(), result.Messages
 }
 
-// textFromTurnMessages returns the text of the last assistant message that
-// has text content and no tool calls (mirrors ExecuteResult.Text()).
-func textFromTurnMessages(msgs []messages.Message) string {
-	var final string
-	for _, m := range msgs {
-		if m.Role != messages.RoleAssistant {
-			continue
-		}
-		if len(m.ToolCalls) > 0 || m.HasOnlyReasoning() {
-			continue
-		}
-		if t := m.TextContent(); t != "" {
-			final = t
-		}
-	}
-	return final
-}
-
 // ---------------------------------------------------------------------------
 // Single tool use
 // ---------------------------------------------------------------------------

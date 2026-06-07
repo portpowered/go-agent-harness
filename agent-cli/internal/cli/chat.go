@@ -84,8 +84,12 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 	in := cmd.InOrStdin()
 	ctx := cmd.Context()
 
-	fmt.Fprintf(out, "Port OS Agent Loop Chat (up to %d iterations)\n", maxIter)
-	fmt.Fprintln(out, "---")
+	if _, err := fmt.Fprintf(out, "Port OS Agent Loop Chat (up to %d iterations)\n", maxIter); err != nil {
+		return fmt.Errorf("write chat header: %w", err)
+	}
+	if _, err := fmt.Fprintln(out, "---"); err != nil {
+		return fmt.Errorf("write chat header separator: %w", err)
+	}
 
 	cfg := services.BuildAgentConfigFromFlags(c.globalFlags, c.askFlags, nil, "")
 
@@ -128,10 +132,14 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 				startIter = lastIter.Iteration + 1
 			}
 		}
-		fmt.Fprintf(out, "[Resuming trace %s from iteration %d/%d]\n", trace.TraceID, startIter, maxIter)
+		if _, err := fmt.Fprintf(out, "[Resuming trace %s from iteration %d/%d]\n", trace.TraceID, startIter, maxIter); err != nil {
+			return fmt.Errorf("write resume trace banner: %w", err)
+		}
 	} else {
 		// Get initial task prompt from user.
-		fmt.Fprint(out, "Enter your task: ")
+		if _, err := fmt.Fprint(out, "Enter your task: "); err != nil {
+			return fmt.Errorf("write task prompt: %w", err)
+		}
 		if !scanner.Scan() {
 			return nil
 		}
@@ -153,10 +161,14 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 			return fmt.Errorf("save trace: %w", saveErr)
 		}
 	}
-	fmt.Fprintf(out, "Trace ID: %s\n", trace.TraceID)
+	if _, err := fmt.Fprintf(out, "Trace ID: %s\n", trace.TraceID); err != nil {
+		return fmt.Errorf("write trace ID: %w", err)
+	}
 
 	for i := startIter; i <= maxIter; i++ {
-		fmt.Fprintf(out, "\n--- Iteration %d/%d ---\n", i, maxIter)
+		if _, err := fmt.Fprintf(out, "\n--- Iteration %d/%d ---\n", i, maxIter); err != nil {
+			return fmt.Errorf("write iteration header: %w", err)
+		}
 
 		iterCfg := *cfg
 		iterCfg.SessionID = ""
@@ -191,7 +203,9 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 		if interrupted {
 			// Drop back to the interactive prompt so the user can steer the next iteration
 			// or exit and resume later.
-			fmt.Fprintf(out, "\n[Iteration %d interrupted. Enter steering for next iteration, or 'exit' to quit (resume later with --trace-id %s)]: ", i, trace.TraceID)
+			if _, err := fmt.Fprintf(out, "\n[Iteration %d interrupted. Enter steering for next iteration, or 'exit' to quit (resume later with --trace-id %s)]: ", i, trace.TraceID); err != nil {
+				return fmt.Errorf("write interrupted prompt: %w", err)
+			}
 			if !scanner.Scan() {
 				// EOF — mark trace interrupted and exit.
 				trace.Status = session.TraceStatusInterrupted
@@ -202,7 +216,9 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 			if strings.ToLower(input) == "exit" {
 				trace.Status = session.TraceStatusInterrupted
 				_ = sessionStorage.SaveTrace(trace)
-				fmt.Fprintf(out, "[Loop interrupted. Resume with: --loop --trace-id %s]\n", trace.TraceID)
+				if _, err := fmt.Fprintf(out, "[Loop interrupted. Resume with: --loop --trace-id %s]\n", trace.TraceID); err != nil {
+					return fmt.Errorf("write interrupted resume banner: %w", err)
+				}
 				return nil
 			}
 			if input != "" {
@@ -214,12 +230,16 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 		}
 
 		if runErr != nil {
-			fmt.Fprintf(out, "\n[Iteration %d error: %v]\n", i, runErr)
+			if _, err := fmt.Fprintf(out, "\n[Iteration %d error: %v]\n", i, runErr); err != nil {
+				return fmt.Errorf("write iteration error: %w", err)
+			}
 		}
 
 		// Check for stop word.
 		if runErr == nil && c.loopFlags.StopWord != "" && strings.Contains(text, c.loopFlags.StopWord) {
-			fmt.Fprintf(out, "\n[Completion detected in iteration %d]\n", i)
+			if _, err := fmt.Fprintf(out, "\n[Completion detected in iteration %d]\n", i); err != nil {
+				return fmt.Errorf("write completion banner: %w", err)
+			}
 			trace.Status = session.TraceStatusCompleted
 			_ = sessionStorage.SaveTrace(trace)
 			return nil
@@ -230,7 +250,9 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 		}
 
 		// Prompt user for steering input for the next iteration.
-		fmt.Fprintf(out, "\n[Iteration %d complete. Enter steering for iteration %d (or press Enter to continue with same task)]: ", i, i+1)
+		if _, err := fmt.Fprintf(out, "\n[Iteration %d complete. Enter steering for iteration %d (or press Enter to continue with same task)]: ", i, i+1); err != nil {
+			return fmt.Errorf("write steering prompt: %w", err)
+		}
 		if scanner.Scan() {
 			if steering := strings.TrimSpace(scanner.Text()); steering != "" {
 				currentPrompt = steering
@@ -241,7 +263,9 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 	trace.Status = session.TraceStatusCompleted
 	_ = sessionStorage.SaveTrace(trace)
 
-	fmt.Fprintf(out, "\n[Loop complete: %d iteration(s), trace: %s]\n", maxIter, trace.TraceID)
+	if _, err := fmt.Fprintf(out, "\n[Loop complete: %d iteration(s), trace: %s]\n", maxIter, trace.TraceID); err != nil {
+		return fmt.Errorf("write loop completion banner: %w", err)
+	}
 	return nil
 }
 
@@ -260,31 +284,39 @@ func RunChatWithAudio(ctx context.Context, out, errOut io.Writer, executor *agen
 	if err != nil {
 		return fmt.Errorf("create chat session: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	vad := audio.NewVAD(audio.DefaultVADConfig)
 	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
 
-	fmt.Fprintln(out, "Port OS Agent Chat - Audio Mode (Ctrl+C to exit)")
-	fmt.Fprintln(out, "---")
+	if _, err := fmt.Fprintln(out, "Port OS Agent Chat - Audio Mode (Ctrl+C to exit)"); err != nil {
+		return fmt.Errorf("write audio chat header: %w", err)
+	}
+	if _, err := fmt.Fprintln(out, "---"); err != nil {
+		return fmt.Errorf("write audio chat header separator: %w", err)
+	}
 
 	for {
-		fmt.Fprintln(out, "\nListening...")
+		if _, err := fmt.Fprintln(out, "\nListening..."); err != nil {
+			return fmt.Errorf("write listening status: %w", err)
+		}
 		samples, err := pipeline.ReadUtterance(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				fmt.Fprintln(out, "Goodbye!")
+				_, _ = fmt.Fprintln(out, "Goodbye!")
 				return nil
 			}
 			if errors.Is(err, io.EOF) {
-				fmt.Fprintln(out, "Goodbye!")
+				_, _ = fmt.Fprintln(out, "Goodbye!")
 				return nil
 			}
-			fmt.Fprintf(errOut, "Audio pipeline error: %v\n", err)
+			_, _ = fmt.Fprintf(errOut, "Audio pipeline error: %v\n", err)
 			continue
 		}
 
-		fmt.Fprintln(out, "(speech detected, processing...)")
+		if _, err := fmt.Fprintln(out, "(speech detected, processing...)"); err != nil {
+			return fmt.Errorf("write speech detected status: %w", err)
+		}
 
 		execInput := agentloop.NewExecuteInput("")
 		execInput.Audio = &agentloop.Audio{
@@ -295,7 +327,7 @@ func RunChatWithAudio(ctx context.Context, out, errOut io.Writer, executor *agen
 
 		cfg := services.BuildAgentConfigFromFlags(globalFlags, askFlags, nil, sessionID)
 		if _, err := executor.RunAskWithSession(ctx, sessionID, cfg, execInput, out); err != nil {
-			fmt.Fprintf(errOut, "Error: %v\n", err)
+			_, _ = fmt.Fprintf(errOut, "Error: %v\n", err)
 		}
 	}
 }

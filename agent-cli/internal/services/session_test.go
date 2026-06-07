@@ -13,11 +13,35 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/agent-cli/internal/agent"
 	"github.com/portpowered/agent-cli/internal/config"
+	"github.com/portpowered/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
+
+type failingWriter struct {
+	err error
+}
+
+func (w failingWriter) Write([]byte) (int, error) {
+	return 0, w.err
+}
+
+type stubInferencer struct{}
+
+func (stubInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
+	return messages.InferenceResult{
+		Message: messages.NewTextMessage(messages.RoleAssistant, "ok"),
+	}, nil
+}
+
+func (stubInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	ch := make(chan messages.StreamMessage)
+	close(ch)
+	return ch, nil
+}
 
 func TestNewGrokSessionInferencer_BuildsSessionCapableProviderPath(t *testing.T) {
 	inf, err := NewGrokSessionInferencer(config.GrokConfig{
@@ -31,7 +55,7 @@ func TestNewGrokSessionInferencer_BuildsSessionCapableProviderPath(t *testing.T)
 		t.Fatal("NewGrokSessionInferencer returned nil")
 	}
 
-	var _ messages.SessionInferencer = inf
+	var _ = messages.SessionInferencer(inf)
 }
 
 func TestNewOpenAIRealtimeSessionInferencer_BuildsSessionCapableProviderPath(t *testing.T) {
@@ -46,7 +70,7 @@ func TestNewOpenAIRealtimeSessionInferencer_BuildsSessionCapableProviderPath(t *
 		t.Fatal("NewOpenAIRealtimeSessionInferencer returned nil")
 	}
 
-	var _ messages.SessionInferencer = inf
+	var _ = messages.SessionInferencer(inf)
 }
 
 func TestOpenAIRealtimeURL_AddsModelQuery(t *testing.T) {
@@ -211,6 +235,26 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	}
 	assertCapturedDirectionAndType(t, capture.Records, gwtesting.DirectionClientToServer, "session.update")
 	assertCapturedDirectionAndType(t, capture.Records, gwtesting.DirectionServerToClient, "session.created")
+}
+
+func TestChatServiceRun_PropagatesBannerWriteError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	exec := agent.NewExecutor(nil, nil, stubInferencer{}, true)
+	service := NewChatService(exec, flags.NewGlobalFlags(), flags.NewAskFlags())
+
+	err := service.Run(
+		context.Background(),
+		strings.NewReader(""),
+		failingWriter{err: errors.New("stdout closed")},
+		io.Discard,
+	)
+	if err == nil {
+		t.Fatal("expected banner write error, got nil")
+	}
+	if !strings.Contains(err.Error(), "write chat banner") {
+		t.Fatalf("error = %v, want write chat banner context", err)
+	}
 }
 
 func TestRunAgentLoopSession_ReturnsOnCleanDoneSignal(t *testing.T) {

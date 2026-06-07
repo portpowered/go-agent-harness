@@ -1,4 +1,4 @@
-//go:build unix && !linux
+//go:build darwin
 
 package tools
 
@@ -24,9 +24,7 @@ func terminateProcessTree(cmd *exec.Cmd) error {
 		return nil
 	}
 
-	// Kill the entire process group spawned by the shell command.
 	_ = syscall.Kill(-pid, syscall.SIGKILL)
-	// Fallback kill on the shell process itself.
 	_ = cmd.Process.Kill()
 	return nil
 }

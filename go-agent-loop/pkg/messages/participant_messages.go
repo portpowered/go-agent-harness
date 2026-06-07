@@ -55,7 +55,7 @@ type DefaultToolExecutor struct {
 }
 
 func (e *DefaultToolExecutor) Execute(ctx context.Context, call ToolCall) (ToolCallResponse, error) {
-	return ToolCallResponse{}, fmt.Errorf("Default tool executor is not implemented")
+	return ToolCallResponse{}, fmt.Errorf("default tool executor is not implemented")
 }
 
 // ToolBatchRequest is sent to the ToolRunner's inbox to execute a batch of tool calls.

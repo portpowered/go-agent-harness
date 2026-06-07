@@ -107,10 +107,18 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 		return fmt.Errorf("write config: %w", err)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Local provider added to %s\n", configPath)
-	fmt.Fprintf(cmd.OutOrStdout(), "  provider: local\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "  base_url: %s\n", c.baseURL)
-	fmt.Fprintf(cmd.OutOrStdout(), "  model: %s\n", c.model)
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Local provider added to %s\n", configPath); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  provider: local\n"); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  base_url: %s\n", c.baseURL); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  model: %s\n", c.model); err != nil {
+		return fmt.Errorf("write config summary: %w", err)
+	}
 	return nil
 }
 
@@ -130,13 +138,13 @@ func (c *ConfigAddLocalCommand) probeServer(cmd *cobra.Command, baseURL string) 
 	for _, url := range urls {
 		resp, err := client.Get(url)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				fmt.Fprintf(cmd.OutOrStdout(), "Server reachable at %s\n", url)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Server reachable at %s\n", url)
 				return
 			}
 		}
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not reach server at %s (server may not be running yet)\n", baseURL)
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not reach server at %s (server may not be running yet)\n", baseURL)
 }

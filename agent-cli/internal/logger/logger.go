@@ -36,11 +36,12 @@ func (c *fileLoggerCloser) Close() error {
 func NewLoggerWithCloser(cfg LoggerConfig) (*zap.Logger, io.Closer, error) {
 	// Determine log level based on verbosity
 	var level zapcore.Level
-	if cfg.VerbosityLevel == 0 {
+	switch cfg.VerbosityLevel {
+	case 0:
 		level = zapcore.ErrorLevel // Only errors when not verbose
-	} else if cfg.VerbosityLevel == 1 {
+	case 1:
 		level = zapcore.InfoLevel
-	} else {
+	default:
 		level = zapcore.DebugLevel
 	}
 

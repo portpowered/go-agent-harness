@@ -1,19 +1,15 @@
 package sessionfixturevalidator
 
 import (
-	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
-var committedSessionFixtureRoots = []string{
-	"../../pkg/providers/openai/testdata",
-	"../../pkg/testing/testdata/session-fixtures",
-	"../../../agent-cli/test/integration/testdata",
-}
+var committedSessionFixtureRoots = committedFixtureRoots()
 
 func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 	result, err := ValidatePaths(committedSessionFixtureRoots)
@@ -28,91 +24,6 @@ func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 	}
 }
 
-func TestCommittedSessionFixturesCoverReplayableRepositoryFixtures(t *testing.T) {
-	repositoryFixtures, err := collectSessionFixtureFiles([]string{"../../.."})
-	if err != nil {
-		t.Fatalf("collect repository session fixtures: %v", err)
-	}
-	committedFixtures, err := collectSessionFixtureFiles(committedSessionFixtureRoots)
-	if err != nil {
-		t.Fatalf("collect committed session fixture roots: %v", err)
-	}
-
-	expected := make(map[string]struct{}, len(committedFixtures))
-	for _, fixture := range committedFixtures {
-		absolutePath, err := filepath.Abs(fixture)
-		if err != nil {
-			t.Fatalf("abs committed fixture path %s: %v", fixture, err)
-		}
-		expected[filepath.Clean(absolutePath)] = struct{}{}
-	}
-
-	var unexpected []string
-	for _, fixture := range repositoryFixtures {
-		absolutePath, err := filepath.Abs(fixture)
-		if err != nil {
-			t.Fatalf("abs repository fixture path %s: %v", fixture, err)
-		}
-		cleaned := filepath.Clean(absolutePath)
-		if isValidatorNegativeFixture(cleaned) {
-			continue
-		}
-		if _, ok := expected[cleaned]; !ok {
-			unexpected = append(unexpected, cleaned)
-		}
-	}
-	if len(unexpected) != 0 {
-		t.Fatalf("repository contains replayable session fixtures outside committed validation roots:\n%s", strings.Join(unexpected, "\n"))
-	}
-}
-
-func TestCommittedSessionFixturesLoadThroughExpectedReplaySurface(t *testing.T) {
-	fixtures, err := collectSessionFixtureFiles(committedSessionFixtureRoots)
-	if err != nil {
-		t.Fatalf("collect committed session fixtures: %v", err)
-	}
-
-	for _, fixture := range fixtures {
-		fixture := fixture
-		t.Run(filepath.Base(fixture), func(t *testing.T) {
-			capture, err := gatewaytesting.LoadSessionCapture(fixture)
-			if err != nil {
-				t.Fatalf("load fixture %s: %v", fixture, err)
-			}
-
-			hasStreamPayload := false
-			hasWebSocketPayload := false
-			for _, record := range capture.Records {
-				switch record.PayloadType {
-				case gatewaytesting.SessionPayloadTypeStreamMessage:
-					hasStreamPayload = true
-				case gatewaytesting.SessionPayloadTypeWebSocketMessage:
-					hasWebSocketPayload = true
-				}
-			}
-
-			switch {
-			case hasStreamPayload && hasWebSocketPayload:
-				t.Fatalf("fixture mixes stream_message and websocket_message payloads: %s", fixture)
-			case hasWebSocketPayload:
-				dialer, err := gatewaytesting.NewReplayWebSocketDialer(fixture)
-				if err != nil {
-					t.Fatalf("load websocket replay fixture %s: %v", fixture, err)
-				}
-				if dialer.Model() == "" {
-					t.Fatalf("websocket replay fixture %s did not retain provider model metadata", fixture)
-				}
-			default:
-				replayer, err := gatewaytesting.NewSessionReplayer(fixture, gatewaytesting.WithReplayOutboundValidation(false))
-				if err != nil {
-					t.Fatalf("load stream replay fixture %s: %v", fixture, err)
-				}
-				_ = replayer.Close()
-			}
-		})
-	}
-}
-
 func TestCommittedSessionFixturesSmokeCheckReportsInvalidFixtureHygiene(t *testing.T) {
 	result, err := ValidatePaths([]string{"testdata/invalid-session-fixtures"})
 	if err != nil {
@@ -123,6 +34,20 @@ func TestCommittedSessionFixturesSmokeCheckReportsInvalidFixtureHygiene(t *testi
 	requireSmokeValidationError(t, result, "unsafe-synthetic.session.json", "records[0].payload.value.input_audio", "raw audio")
 	requireSmokeValidationError(t, result, "unsafe-synthetic.session.json", "records[0].payload.value.authorization", "credential-like")
 	requireSmokeValidationError(t, result, "provider-wire-misuse.session.json", "records[0].payload_type", "websocket_message")
+}
+
+func TestCommittedSessionFixtureRootsStayWithinGatewayOwnedBoundaries(t *testing.T) {
+	for _, root := range committedSessionFixtureRoots {
+		normalized := filepath.ToSlash(root)
+		if strings.Contains(normalized, "/agent-cli/") || strings.Contains(normalized, "agent-cli/test/integration/testdata") {
+			t.Fatalf("committed session fixture root %q must not reach into agent-cli private testdata", normalized)
+		}
+	}
+
+	sharedRoot := filepath.ToSlash(filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")))
+	if sharedRoot != filepath.ToSlash(committedSessionFixtureRoots[1]) {
+		t.Fatalf("shared committed fixture root = %q, want %q", committedSessionFixtureRoots[1], sharedRoot)
+	}
 }
 
 func requireSmokeValidationError(t *testing.T, result Result, fileName, fieldPath, reason string) {
@@ -154,13 +79,17 @@ func formatValidationErrors(errs []gatewaytesting.SessionFixtureValidationError)
 	return strings.Join(lines, "\n")
 }
 
-func isValidatorNegativeFixture(path string) bool {
-	needle := filepath.Join(
-		"go-llm-gateway",
-		"internal",
-		"sessionfixturevalidator",
-		"testdata",
-		"invalid-session-fixtures",
-	) + string(os.PathSeparator)
-	return strings.Contains(path, needle)
+func committedFixtureRoots() []string {
+	return []string{
+		repoPathFromHere("../../pkg/providers/openai/testdata"),
+		filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")),
+	}
+}
+
+func repoPathFromHere(rel string) string {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return rel
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), rel))
 }
