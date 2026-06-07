@@ -13,7 +13,7 @@ Build from the checked-out workspace:
 
 ```bash
 make build
-./bin/agent --help
+./agent-cli/bin/agent --help
 ```
 
 Or install the command into your Go bin directory:
