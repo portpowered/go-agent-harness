@@ -112,9 +112,25 @@ record:
 * work submitted
 * new learnings
 
+### checklist.md
 `docs/internal/checklist.md` tracks customer asks and high-level project
 work. Only the meta-planner should update it. Subagents should not mutate it.
 
+The checklist should be a literal checklist. 
+
+The expectation is that after each batch is complete, you review the changes and confirm the shape of the world is conformant to your progress,. 
+
+An example
+```
+[] phase 1 is complete
+[] phase 1 - package X has 95% coverage in tests for this specific subpackage
+[] phase 1 - package Y has 95% coverage in tests for this specific subpackage
+[] phase 1 - the release is completed. 
+```
+
+## planning work
+
+### how to plan. 
 When creating or refreshing `docs/internal/checklist.md`, do not compress the
 architecture checklist or page roadmap into a small summary. Carry forwards all customers asks including each phase's page or
 work inventory, required outcomes, and manual review gate.
@@ -161,6 +177,53 @@ The planner then writes a convergence summary and chooses one of three next
 actions: submit a repair batch, submit a cleanup/reconciliation batch, or submit
 the next feature batch. Do not advance merely because factory work completed.
 
+### Work Batch Guidance
+
+Prefer batches that move forward in vertical slices:
+
+* app scaffold and build system
+* content loading and registry validation
+* docs route rendering
+* search and tag pages
+* graph rendering
+* PDF export when the active phase calls for PDF work
+* starter content pages
+
+Avoid issuing broad, vague ideas such as "build the website." Each idea should
+be concrete enough for the `plan` workstation to create an implementation-ready
+PRD with behavioral acceptance criteria.
+
+a good plan has in terms of components
+```
+[] well defined test plan/validation that a customer can check at
+[] appropriately sized to cover a small vertical
+[] releases customer functionality as fast as possible
+[] aligns with the shape of the overall architecture
+[] is explicit about which components need changing, what architecture is supposed to be,
+[] is explicit about data model, and API changes. 
+
+```
+attempt to have as much throuhgput going as possible, at the cost of some review churn due to conflict. we are okay to have conflict. 
+
+
+### item planning
+- you should try to plan work in a dependency ordered way otherwise the code will stomp on each other
+- for example when initiating the project, do one work item to setup the project, then do the others that depend on the initial subject. 
+- similarly, before creating all the model pages, you should start with one model default vertical and then use that to build the other model pages. 
+- you configure this planning by setting up inside the work submissions to be configured as a relationship between work nodes in the current submission. 
+- you want to maximize throughput, so you set up interfaces or seam points that allow you to move concurrently as much as possible. 
+
+### Loop Back
+
+You can be reinstated in two ways:
+
+1. a default cron trigger
+2. a `thoughts` work item that depends on the submitted ideas
+
+Use the second path for normal batches so the meta-planner reviews completed
+work and submits the next coherent batch.
+
+
 ## Submitting New Work
 
 Submit work using the batch-input format documented by `you docs batch-inputs`.
@@ -197,35 +260,3 @@ idea:to-complete + task:to-complete with the same name -> consume
 That means each idea becomes a PRD, then a task worktree, then executor work,
 then review, then completion.
 
-## Work Batch Guidance
-
-Prefer batches that move forward in vertical slices:
-
-* app scaffold and build system
-* content loading and registry validation
-* docs route rendering
-* search and tag pages
-* graph rendering
-* PDF export when the active phase calls for PDF work
-* starter content pages
-
-Avoid issuing broad, vague ideas such as "build the website." Each idea should
-be concrete enough for the `plan` workstation to create an implementation-ready
-PRD with behavioral acceptance criteria.
-
-## item planning
-- you should try to plan work in a dependency ordered way otherwise the code will stomp on each other
-- for example when initiating the project, do one work item to setup the project, then do the others that depend on the initial subject. 
-- similarly, before creating all the model pages, you should start with one model default vertical and then use that to build the other model pages. 
-- you configure this planning by setting up inside the work submissions to be configured as a relationship between work nodes in the current submission. 
-- in general however, you may want to make it so that when working, you may want to inspect the code results of the current progress to see if its moving in the right direction. so you may not want to create that relationships and wait to submit in next batch.
-
-## Loop Back
-
-You can be reinstated in two ways:
-
-1. a default cron trigger
-2. a `thoughts` work item that depends on the submitted ideas
-
-Use the second path for normal batches so the meta-planner reviews completed
-work and submits the next coherent batch.
