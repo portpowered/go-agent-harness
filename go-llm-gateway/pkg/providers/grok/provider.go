@@ -66,12 +66,12 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 	// Send initial session.update with config.
 	sessionUpdate, err := buildSessionUpdate(config)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("grok: build session update: %w", err)
 	}
 
 	if err := gs.writeEvent(sessionUpdate); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("grok: send session update: %w", err)
 	}
 

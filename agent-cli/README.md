@@ -75,15 +75,21 @@ agent chat
 # Tool debugging
 agent tool read_file path=./README.md
 
-# Replay a previously captured realtime session without live provider calls
-agent session --replay ./captures/demo.session.json
+# Provider-neutral interaction fixture replay
+agent interaction replay fixtures/demo.interaction.json
+
+# Session management (sessions are stored in workspace/sessions/)
+agent session --record capture.json --provider grok --model <session-model> --api-key <xai-api-key>
+agent session "hello" --record openai.session.json --provider openai --model gpt-realtime --api-key <openai-api-key>
+agent session --replay capture.json
+agent session show <session-id>
+agent session list
+agent session delete <session-id>
 ```
 
 Run `agent --help` or `agent <command> --help` for the full flag surface.
 
 ## Configuration And Workspace
-
-The default workspace lives under `~/.agent-cli/`:
 
 ```text
 ~/.agent-cli/
@@ -96,12 +102,27 @@ The default workspace lives under `~/.agent-cli/`:
 - `AGENTS.md` holds the default workspace instructions that the runtime injects.
 - `sessions/` stores conversation history and loop trace records.
 
+Interaction replay reads a normalized PNIG fixture and prints one JSON object
+per event to stdout. It is credential-free and does not call live provider
+endpoints.
+
+Session replay reads a JSON capture file and does not make live provider
+network calls. Session record mode supports live Grok realtime captures and
+OpenAI Realtime captures with `--provider openai --model gpt-realtime`; it
+validates the provider, model, API key, and `.json` capture path before
+attempting the live provider path. OpenAI session mode uses the sessional
+inferencer path and does not call the normal `agent ask` or `agent chat`
+stateless OpenAI inference path.
+
+See [PNIG Interaction Replay](docs/interaction-replay.md) for the normalized
+interaction fixture workflow and NDJSON output contract.
+
+See [Agent Session Record and Replay](docs/session-record-replay.md) for the
+full workflow, capture format, replay divergence errors, and fixture
+sanitization guidance.
+
 CLI flags such as `--provider`, `--model`, `--api-key`, and `--config-dir`
 override config-file values for the current command.
-
-For bidirectional session work, `agent session --record` currently supports live
-Grok and OpenAI Realtime capture flows, while `agent session --replay` replays a
-saved `.json` capture without contacting the provider.
 
 ## Validation
 
@@ -117,10 +138,19 @@ make test
 Workspace validation from the repository root:
 
 ```bash
+make deps
+make fmt
 make typecheck
+make vet
 make lint
+make staticcheck
 make test
+make test-integration
+make test-regressions
+make build
+make coverage
 make validate
+make ci
 ```
 
 Use the root targets when you want to confirm `agent-cli` still composes cleanly

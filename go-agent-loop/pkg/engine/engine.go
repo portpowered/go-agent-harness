@@ -30,9 +30,10 @@ type Engine struct {
 	ordering *GlobalOrdering
 
 	// Active participant runners
-	modelRunner  *participants.ModelRunner
-	userRunner   *participants.UserRunner
-	kernelRunner *participants.KernelRunner
+	modelRunner       *participants.ModelRunner
+	interactionRunner *participants.InteractionRunner
+	userRunner        *participants.UserRunner
+	kernelRunner      *participants.KernelRunner
 	// Active participant lifecycle
 	modelParticipant  *participants.ActiveParticipant
 	toolParticipant   *participants.ActiveParticipant
@@ -62,11 +63,18 @@ func NewEngine(
 	kernelRunner *participants.KernelRunner,
 	tools []messages.ToolDefinition,
 ) *Engine {
-	outputs := state.OutputBuffers{
-		ToolInbox:        *toolRunner.Inbox,
-		UserInbox:        *userRunner.Inbox,
-		ModelInbox:       *modelRunner.Inbox,
-		KernelDeltaInbox: *kernelRunner.DeltaInbox,
+	var outputs state.OutputBuffers
+	if toolRunner != nil && toolRunner.Inbox != nil {
+		outputs.ToolInbox = *toolRunner.Inbox
+	}
+	if userRunner != nil && userRunner.Inbox != nil {
+		outputs.UserInbox = *userRunner.Inbox
+	}
+	if modelRunner != nil && modelRunner.Inbox != nil {
+		outputs.ModelInbox = *modelRunner.Inbox
+	}
+	if kernelRunner != nil && kernelRunner.DeltaInbox != nil {
+		outputs.KernelDeltaInbox = *kernelRunner.DeltaInbox
 	}
 	e := &Engine{
 		subsystems:   orderedSubsystems(hlps),
@@ -112,12 +120,6 @@ func (e *Engine) logError(msg string, err error) {
 	}
 }
 
-func (e *Engine) logInfo(msg string, fields ...logging.Field) {
-	if e.logger != nil {
-		e.logger.Debug(msg, fields...)
-	}
-}
-
 // State returns the engine's shared state.
 func (e *Engine) State() *SharedState {
 	return e.state
@@ -130,6 +132,15 @@ func (e *Engine) GetUserRunner() *participants.UserRunner {
 
 func (e *Engine) GetKernelRunner() *participants.KernelRunner {
 	return e.kernelRunner
+}
+
+func (e *Engine) SetInteractionRunner(r *participants.InteractionRunner) {
+	e.interactionRunner = r
+	e.ordering.SetInteractionRunner(r)
+}
+
+func (e *Engine) GetInteractionRunner() *participants.InteractionRunner {
+	return e.interactionRunner
 }
 
 // GetModelRunner returns the model runner for direct access by the agent loop and tests.

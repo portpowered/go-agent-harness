@@ -47,25 +47,43 @@ explicitly.
 
 ## Root Validation Commands
 
-The root `Makefile` provides deterministic entrypoints that delegate to the
-module-level `Makefile`s:
+The root `Makefile` provides deterministic entrypoints for the checked-in
+workspace:
 
 ```bash
 make deps
+make fmt
 make typecheck
+make vet
 make lint
+make staticcheck
 make test
+make test-integration
+make test-regressions
+make build
+make coverage
 make validate
+make ci
 ```
 
-These targets are intended for repository-wide validation:
+Use them as follows:
 
-- `make deps`: download module dependencies for all three modules
-- `make typecheck`: build every module from the root to catch compile-time
-  breakage
-- `make lint`: run `go vet` in every module
+- `make deps`: sync `go.work` and download module dependencies
+- `make fmt`: check Go formatting drift without rewriting files
+- `make typecheck`: compile the CLI and both library modules from the root
+- `make vet`: run `go vet` across all modules
+- `make lint`: run `golangci-lint` across all modules
+- `make staticcheck`: run `staticcheck` across all modules
 - `make test`: run each module's package test suite
-- `make validate`: run `typecheck`, `lint`, and `test` in sequence
+- `make test-integration`: run the deterministic `agent-cli` and
+  `go-agent-loop` integration suites
+- `make test-regressions`: run the committed replay and fixture regression
+  suites
+- `make build`: build the root artifacts and compile library packages
+- `make coverage`: write per-module coverage profiles under `coverage/`
+- `make validate`: backward-compatible alias for the full root validation
+  pipeline
+- `make ci`: full deterministic validation pipeline used by contributors and CI
 
 If you are working inside a single module, its README also documents the
 package-local commands.
@@ -82,6 +100,6 @@ worktree:
 
 ## Development Notes
 
-The root workspace currently coordinates module-level builds rather than a
-single `go.work` file. For consumer guidance, prefer the root `make` targets for
+The root workspace now uses a checked-in `go.work` file to coordinate the three
+active modules. For consumer guidance, prefer the root `make` targets for
 cross-module validation and the package README for module-specific setup.

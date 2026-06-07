@@ -33,10 +33,11 @@ func hasControlPlanePart(m messages.Message) bool {
 // emits the assembled Message. Partial or interrupted streams can be reconstructed from deltas
 // up to the last received delta.
 type GlobalOrdering struct {
-	modelRunner *participants.ModelRunner
-	toolRunner  *participants.ToolRunner
-	userRunner  *participants.UserRunner
-	logger      logging.Logger
+	modelRunner       *participants.ModelRunner
+	toolRunner        *participants.ToolRunner
+	userRunner        *participants.UserRunner
+	interactionRunner *participants.InteractionRunner
+	logger            logging.Logger
 }
 
 // NewGlobalOrdering returns an ordering that consumes from the given runners. toolRunner
@@ -53,6 +54,10 @@ func NewGlobalOrdering(
 		userRunner:  userRunner,
 		logger:      logger,
 	}
+}
+
+func (o *GlobalOrdering) SetInteractionRunner(r *participants.InteractionRunner) {
+	o.interactionRunner = r
 }
 
 func (o *GlobalOrdering) assignStreamOrdering(ts *state.LoopState, d messages.StreamMessage, actor messages.ParticipantID) messages.StreamMessage {
@@ -87,6 +92,11 @@ func (o *GlobalOrdering) ReadTick(ctx context.Context, ts *state.LoopState) erro
 		userOut = o.userRunner.Outbox.Chan()
 	}
 
+	var interactionOut <-chan messages.InteractionEvent
+	if o.interactionRunner != nil {
+		interactionOut = o.interactionRunner.Outbox.Chan()
+	}
+
 	// Prefer deltas over full messages for ordering.
 	select {
 	case <-ctx.Done():
@@ -98,6 +108,9 @@ func (o *GlobalOrdering) ReadTick(ctx context.Context, ts *state.LoopState) erro
 		return o.consumeModelDelta(ts, delta)
 	case delta := <-toolDeltaOut:
 		return o.consumeToolDelta(ts, delta)
+	case event := <-interactionOut:
+		ts.Inputs.InteractionEvents = append(ts.Inputs.InteractionEvents, event)
+		return nil
 	default:
 	}
 
@@ -112,6 +125,9 @@ func (o *GlobalOrdering) ReadTick(ctx context.Context, ts *state.LoopState) erro
 		return o.consumeModelDelta(ts, delta)
 	case delta := <-toolDeltaOut:
 		return o.consumeToolDelta(ts, delta)
+	case event := <-interactionOut:
+		ts.Inputs.InteractionEvents = append(ts.Inputs.InteractionEvents, event)
+		return nil
 	case userResp := <-userOut:
 		if userResp.Error != nil {
 			return userResp.Error
@@ -287,15 +303,9 @@ func ReconstructToolMessagesFromDeltas(deltas []messages.StreamMessage) []messag
 // (which ensures no stale deltas linger past the current response end) cannot cut off
 // tool or user deltas that are appended in the same tick.
 func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
-	for _, msg := range ts.Inputs.ToolOutputMessage {
-		ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, msg)
-	}
-	for _, msg := range ts.Inputs.UserOutputMessage {
-		ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, msg)
-	}
-	for _, msg := range ts.Inputs.ModelOutputMessage {
-		ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, msg)
-	}
+	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ToolOutputMessage...)
+	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.UserOutputMessage...)
+	ts.History.ConversationBuffer = append(ts.History.ConversationBuffer, ts.Inputs.ModelOutputMessage...)
 
 	// Model deltas: written at ModelDeltaStartIndex+CurrentModelDeltaCount.
 	// Truncation (removing stale entries past the current response boundary) is only
@@ -319,14 +329,10 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 
 	// Tool and user deltas are appended after model delta logic so they are never
 	// affected by the model delta truncation.
-	for _, msg := range ts.Inputs.ToolInputDelta {
-		ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
-	}
+	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.ToolInputDelta...)
 	ts.History.CurrentToolDeltaCount += len(ts.Inputs.ToolInputDelta)
 
-	for _, msg := range ts.Inputs.UserInputDelta {
-		ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, msg)
-	}
+	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.UserInputDelta...)
 }
 
 // FlushInputs clears all input slices and resets TerminateLoop for the next tick.
@@ -340,5 +346,6 @@ func (o *GlobalOrdering) FlushInputs(ts *state.LoopState) {
 	ts.Inputs.ModelControlPlaneMessage = ts.Inputs.ModelControlPlaneMessage[:0]
 	ts.Inputs.ModelOutputMessage = ts.Inputs.ModelOutputMessage[:0]
 	ts.Inputs.ModelInputDelta = ts.Inputs.ModelInputDelta[:0]
+	ts.Inputs.InteractionEvents = ts.Inputs.InteractionEvents[:0]
 	ts.Inputs.TerminateLoop = false
 }
