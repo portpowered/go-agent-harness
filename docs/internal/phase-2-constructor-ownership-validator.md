@@ -91,13 +91,17 @@ Use this shape for every finding group:
   provider_runtime.go`, injected through `ProviderBuildContext.HTTPClient`, and
   exercised by both unit tests and the provider-runtime integration test rather
   than being rebuilt inside provider constructors. `P2-COB-04` is only
-  partially evidenced at the checklist-convergence layer: the repository has
-  observable record/replay seam tests, but this story does not yet complete the
-  dedicated runtime-consistency analysis required to determine whether every
-  constructor-ownership expectation around record/replay remains satisfied.
-  `P2-COB-05` is uncertain because the validator's cited slice-plan source,
-  `tasks/todo/phase-2-constructor-ownership-boundaries.md`, is missing from
-  the reviewed branch, so the repository does not expose one committed
+  partially satisfied rather than converged: stateless `ask --record` and
+  `ask --replay` behavior is observable through the injected runtime seam, and
+  session replay remains deterministic without live credentials, but session
+  record paths still silently create live WebSocket dialers when callers do not
+  inject one and the shared session recorder/replayer relay paths still write
+  through `context.Background()` rather than an owned caller context. Those
+  remaining runtime seams mean current repository state does not yet prove that
+  every record/replay path follows one explicit ownership model after the
+  cleanup. `P2-COB-05` is uncertain because the validator's cited slice-plan
+  source, `tasks/todo/phase-2-constructor-ownership-boundaries.md`, is missing
+  from the reviewed branch, so the repository does not expose one committed
   constructor-ownership planning surface that can be mapped directly to the
   delivered state. That missing source prevents a full pass for checklist
   convergence even though the implemented code and architecture docs provide
@@ -105,9 +109,9 @@ Use this shape for every finding group:
 - `required repairs`: restore or recreate the missing committed slice-plan file
   `tasks/todo/phase-2-constructor-ownership-boundaries.md` so reviewers can map
   constructor-ownership commitments to current repository state without relying
-  on inferred intent; complete the dedicated runtime-consistency finding needed
-  to turn `P2-COB-04` from partial checklist evidence into a final convergence
-  verdict.
+  on inferred intent; remove silent live dialer fallback and background-context
+  relay ownership from the remaining record/replay session paths so
+  `P2-COB-04` can converge on one explicit runtime ownership model.
 
 ### Constructor-Ownership Architecture Drift
 
@@ -176,6 +180,60 @@ Validate whether record and replay behavior still run through the intended
 injected runtime dependencies after the ownership cleanup, and whether the
 observable runtime and test surfaces remain aligned with the explicit ownership
 model without broadening into duplicate CI review.
+
+- `outcome`: `fail`
+- `checklist rows / commitments inspected`: `P2-COB-04`; constructor-ownership
+  commitments for explicit record/replay runtime ownership and deterministic
+  behavior through one reviewer-verifiable seam
+- `affected files / surfaces`: `agent-cli/internal/agent/provider_runtime.go`;
+  `agent-cli/internal/agent/provider_runtime_test.go`;
+  `agent-cli/test/integration/provider_runtime_integration_test.go`;
+  `agent-cli/internal/services/session.go`;
+  `agent-cli/test/integration/session_command_test.go`;
+  `go-llm-gateway/pkg/testing/session_record.go`;
+  `go-llm-gateway/pkg/testing/session_replay.go`;
+  `go-llm-gateway/pkg/testing/session_replay_test.go`;
+  `go-llm-gateway/pkg/testing/session_websocket_dialer_test.go`;
+  `go-llm-gateway/pkg/providers/openai/provider.go`;
+  `docs/architecture/dependencies.md`;
+  `docs/architecture/contract-gap-audit.md`
+- `evidence`: Stateless record/replay behavior passes the intended runtime-seam
+  check. `agent-cli/internal/agent/provider_runtime.go` assembles live, record,
+  and replay HTTP client policy once, `provider_runtime_test.go` proves replay
+  swaps in capture-backed transport and record mode owns the recorder instance,
+  and `provider_runtime_integration_test.go` proves `ask --replay` works with a
+  dummy config and no live credentials while `ask --record` flushes the capture
+  from the CLI-owned runtime seam. Session replay also preserves deterministic
+  ownership behavior on observable surfaces: `agent-cli/internal/services/
+  session.go` routes replay through either `gwtesting.NewReplaySessionInferencer`
+  or WebSocket-capture replay helpers, and `session_command_test.go`,
+  `session_replay_test.go`, and `session_websocket_dialer_test.go` prove those
+  replay flows can render transcripts and detect outbound divergence without
+  live provider network access. The overall runtime-consistency verdict still
+  fails because session record mode does not yet use one explicit injected live
+  runtime seam. Both `runLiveSessionRecord(...)` and
+  `runOpenAIRealtimeSessionRecord(...)` in `agent-cli/internal/services/
+  session.go` silently fall back to `grok.NewDefaultWebSocketDialer()` when the
+  caller does not inject a dialer, and `go-llm-gateway/pkg/providers/openai/
+  provider.go` still assigns `NewDefaultWebSocketDialer()` inside the provider
+  constructor. Those defaults mean record-mode ownership still depends on hidden
+  live dependency creation rather than one CLI-owned composition boundary.
+  Runtime consistency is also not fully aligned at the relay layer:
+  `go-llm-gateway/pkg/testing/session_record.go` and
+  `go-llm-gateway/pkg/testing/session_replay.go` forward replay/record buffer
+  traffic with `context.Background()`, so capture and replay relay ownership is
+  intentionally decoupled from caller cancellation even though the validator's
+  target ownership model is moving toward explicit runtime control. Existing
+  tests show deterministic replay behavior remains observable, but repository
+  state still exposes two ownership leaks that prevent a full pass.
+- `required repairs`: move session-mode live dialer selection behind one
+  explicit CLI-owned runtime seam for Grok and OpenAI record paths instead of
+  silent defaults in `agent-cli/internal/services/session.go` and
+  `go-llm-gateway/pkg/providers/openai/provider.go`; decide and document whether
+  session replay/record relay writes are intentionally best-effort after caller
+  cancellation, then either preserve that contract explicitly or thread owned
+  context through `session_record.go` and `session_replay.go` so runtime
+  ownership and cancellation behavior match the intended constructor model.
 
 ## Outcome Rules
 
