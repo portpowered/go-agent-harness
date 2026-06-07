@@ -23,7 +23,6 @@ import (
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
@@ -48,17 +47,23 @@ func (r *RunData) CloseLogger() {
 
 // Executor constructs and executes agent loops based on configuration.
 type Executor struct {
-	executor           messages.ToolExecutor
-	toolDefs           []messages.ToolDefinition
-	inferencerOverride messages.Inferencer
+	executor             messages.ToolExecutor
+	toolDefs             []messages.ToolDefinition
+	inferencerOverride   messages.Inferencer
+	relaxModelValidation bool
 }
 
 // NewExecutor creates a new Executor with the given dependencies.
-func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer) *Executor {
+func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
+	relax := false
+	if len(relaxModelValidation) > 0 {
+		relax = relaxModelValidation[0]
+	}
 	return &Executor{
-		executor:           executor,
-		toolDefs:           toolDefs,
-		inferencerOverride: inferencerOverride,
+		executor:             executor,
+		toolDefs:             toolDefs,
+		inferencerOverride:   inferencerOverride,
+		relaxModelValidation: relax,
 	}
 }
 
@@ -81,8 +86,14 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 		loadedCfg = &data
 	}
 
-	if err := loadedCfg.Validate(); err != nil {
-		return nil, err
+	shouldValidate := !e.relaxModelValidation
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
+		shouldValidate = false
+	}
+	if shouldValidate {
+		if err := loadedCfg.Validate(); err != nil {
+			return nil, err
+		}
 	}
 
 	return loadedCfg, nil
@@ -259,7 +270,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 		if err != nil {
 			return nil, err
 		}
-		var provider providers.Provider = result.Provider
+		provider := result.Provider
 		recordRT = result.Recorder
 
 		gw, err := gateway.NewGateway(gateway.WithProvider(provider))
@@ -646,8 +657,14 @@ func (e *Executor) NewChatSessionID(cfg *Config) (string, error) {
 // validateOutputModality checks that the requested output modality is supported by the configured model.
 // Returns nil if modality is empty, "text", or supported by the model. Returns an error otherwise.
 func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
+	if e.relaxModelValidation {
+		return nil
+	}
 	modality := cfg.OutputModality
 	if modality == "" || modality == "text" {
+		return nil
+	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		return nil
 	}
 
@@ -677,7 +694,10 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 // configured model's supportedInputMimeTypes list. Follows the same resolution flow as
 // validateOutputModality: silently allows if config or model info is unavailable.
 func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInput agentloop.ExecuteInput) error {
-	if len(execInput.ContentParts) == 0 {
+	if e.relaxModelValidation || len(execInput.ContentParts) == 0 {
+		return nil
+	}
+	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		return nil
 	}
 	loadedCfg, err := e.loadConfig(cfg)

@@ -26,7 +26,8 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	registryExecutor := tools.NewRegistryExecutor(toolRegistry)
 	v := services.DefaultToolDefs(toolRegistry)
 	inferencer := provideNilInferencer()
-	executor := agent.NewExecutor(registryExecutor, v, inferencer)
+	bool2 := provideStrictModelValidation()
+	executor := agent.NewExecutor(registryExecutor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(executor, askFlags, loopFlags, globalFlags)
@@ -48,10 +49,14 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 // InitializeMockAgentCLI builds the agent CLI with injected executor and inferencer for testing.
 func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
+	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
+		return nil, err
+	}
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
-	agentExecutor := agent.NewExecutor(executor, v, inferencer)
+	bool2 := provideRelaxedModelValidation()
+	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
@@ -73,10 +78,14 @@ func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.
 // InitializeMockAgentCLIWithSessionInferencer builds the agent CLI with injected one-shot and session inferencers for testing.
 func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
+	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
+		return nil, err
+	}
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
-	agentExecutor := agent.NewExecutor(executor, v, inferencer)
+	bool2 := provideRelaxedModelValidation()
+	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
@@ -98,10 +107,14 @@ func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor,
 // Use for tests that need real ask path (config dir, AGENTS.md) but capture inference requests.
 func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
+	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
+		return nil, err
+	}
 	rootCommand := cli.NewRootCommand(globalFlags)
 	toolRegistry := tools.NewToolRegistry()
 	v := services.DefaultToolDefs(toolRegistry)
-	agentExecutor := agent.NewExecutor(executor, v, inferencer)
+	bool2 := provideStrictModelValidation()
+	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
@@ -131,8 +144,12 @@ func provideNilInferencer() messages.Inferencer { return nil }
 // provideNilSessionInferencer supplies no session inferencer override for production.
 func provideNilSessionInferencer() messages.SessionInferencer { return nil }
 
+func provideStrictModelValidation() bool { return false }
+
+func provideRelaxedModelValidation() bool { return true }
+
 // ExecutorSet provides the agent executor (config-backed inferencer, injected tool executor).
-var ExecutorSet = wire.NewSet(services.DefaultToolDefs, provideNilInferencer, agent.NewExecutor)
+var ExecutorSet = wire.NewSet(services.DefaultToolDefs, provideNilInferencer, provideStrictModelValidation, agent.NewExecutor)
 
 // FlagsSet provides global and command-specific CLI flags.
 var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)
