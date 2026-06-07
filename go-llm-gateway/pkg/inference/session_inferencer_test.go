@@ -81,7 +81,9 @@ func TestSessionGatewayInferencer_ConnectSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	if gw.capturedConfig.Model != "grok-3-mini" {
 		t.Errorf("model: got %q, want %q", gw.capturedConfig.Model, "grok-3-mini")
@@ -116,7 +118,9 @@ func TestSessionGatewayInferencer_ReturnedSessionIsUsable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	// Inject an inbound StreamMessage via the mock's recvBuf.
 	msg := messages.StreamMessage{
@@ -147,7 +151,9 @@ func TestSessionGatewayInferencer_SendRouted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	// Send a StreamMessage via the session.
 	sent := messages.StreamMessage{

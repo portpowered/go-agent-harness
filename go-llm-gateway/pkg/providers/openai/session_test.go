@@ -143,7 +143,9 @@ func TestConnectSession_OpenAIRealtimeSessionCreatedThroughGateway(t *testing.T)
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	if dialer.capturedURL != "wss://mock.openai.test/v1/realtime?model=gpt-realtime" {
 		t.Errorf("dial URL: got %q", dialer.capturedURL)
@@ -223,7 +225,9 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	clientMessages := conn.getClientMessages()
 	if len(clientMessages) != 1 {
@@ -327,7 +331,9 @@ func TestConnectSession_SendsGARealtimeG711AudioFormatValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	clientMessages := conn.getClientMessages()
 	if len(clientMessages) == 0 {
@@ -385,7 +391,9 @@ func TestConnectSession_LegacyRealtimeSessionUpdateIsExplicit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	clientMessages := conn.getClientMessages()
 	if len(clientMessages) == 0 {
@@ -421,7 +429,9 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	if !session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
@@ -517,7 +527,9 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	wantTypes := []messages.StreamMessageType{
 		messages.StreamTypeMessageStart,
@@ -602,7 +614,9 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	got, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {
@@ -641,7 +655,9 @@ func TestConnectSession_ReplaysOpenAIRealtimeTextFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	openMsg, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {

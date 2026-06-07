@@ -43,10 +43,14 @@ func TestAdHocAsk(t *testing.T) {
 	// Replay requires a capture file produced by --record (streaming format must match).
 	if replayPath != "" {
 		if os.Getenv("AGENT_MODEL__PROVIDER") == "" {
-			os.Setenv("AGENT_MODEL__PROVIDER", "openrouter")
+			if err := os.Setenv("AGENT_MODEL__PROVIDER", "openrouter"); err != nil {
+				t.Fatalf("set provider env: %v", err)
+			}
 		}
 		if os.Getenv("AGENT_MODEL__OPENROUTER__API_KEY") == "" {
-			os.Setenv("AGENT_MODEL__OPENROUTER__API_KEY", "replay-dummy")
+			if err := os.Setenv("AGENT_MODEL__OPENROUTER__API_KEY", "replay-dummy"); err != nil {
+				t.Fatalf("set replay api key env: %v", err)
+			}
 		}
 	}
 

@@ -196,7 +196,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if rawInput == "exit" || rawInput == "quit" {
-				fmt.Fprintln(m.out, "Goodbye!")
+				_, _ = fmt.Fprintln(m.out, "Goodbye!")
 				m.quitting = true
 				return m, tea.Quit
 			}
@@ -236,7 +236,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamReadyMsg:
 		if msg.err != nil {
-			fmt.Fprintf(m.errOut, "Error: %v\n", msg.err)
+			_, _ = fmt.Fprintf(m.errOut, "Error: %v\n", msg.err)
 			return m, nil
 		}
 		m.stream = msg.stream
@@ -251,7 +251,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamEventMsg:
 		if msg.evt.Type == messages.StreamTypeError {
 			if v, ok := msg.evt.Value.(*messages.ErrorValue); ok {
-				fmt.Fprintf(m.errOut, "Error: %s\n", v.Message)
+				_, _ = fmt.Fprintf(m.errOut, "Error: %s\n", v.Message)
 			}
 		} else {
 			m.applyStreamEvent(msg.evt)
@@ -601,7 +601,6 @@ func wrapSingleLine(s string, width int) []string {
 			} else {
 				if line != "" {
 					out = append(out, line)
-					line = ""
 				}
 				line = string(r)
 			}
@@ -611,21 +610,6 @@ func wrapSingleLine(s string, width int) []string {
 		out = append(out, line)
 	}
 	return out
-}
-
-// wrapWithPrefix wraps (prefix+content) to width; continuation lines are indented with "  ".
-func wrapWithPrefix(prefix, content string, width int) []string {
-	full := prefix + content
-	lines := wrapToWidth(full, width)
-	for i := 1; i < len(lines); i++ {
-		lines[i] = "  " + strings.TrimLeft(lines[i], " \t")
-	}
-	return lines
-}
-
-// runAgent starts a streaming turn with a text-only prompt.
-func (m ChatModel) runAgent(input string) tea.Cmd {
-	return m.runAgentWithInput(agentloop.NewExecuteInput(input))
 }
 
 // runAgentWithInput starts a streaming turn: builds the loop, runs ExecuteStreamingTurn,
@@ -1134,8 +1118,12 @@ func (s *ChatService) Run(ctx context.Context, in io.Reader, out, errOut io.Writ
 		return fmt.Errorf("create chat session: %w", err)
 	}
 
-	fmt.Fprintln(out, "Port OS Agent Chat (type 'exit' or 'quit' to end)")
-	fmt.Fprintln(out, "---")
+	if _, err := fmt.Fprintln(out, "Port OS Agent Chat (type 'exit' or 'quit' to end)"); err != nil {
+		return fmt.Errorf("write chat banner: %w", err)
+	}
+	if _, err := fmt.Fprintln(out, "---"); err != nil {
+		return fmt.Errorf("write chat banner separator: %w", err)
+	}
 
 	model := NewChatModel(s.executor, sessionID, s.globalFlags, s.askFlags, ctx, out, errOut)
 	p := tea.NewProgram(model,
