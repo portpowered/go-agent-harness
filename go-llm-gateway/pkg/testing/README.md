@@ -8,10 +8,18 @@ For committed `.session.json` captures, follow the
 rules, and the distinction between normalized `stream_message` payloads and provider
 wire `websocket_message` payloads.
 
+`go-llm-gateway/pkg/testing` is the authoritative owner for committed shared
+`.session.json` replay fixtures. The canonical repository root for those shared
+fixtures is `go-llm-gateway/pkg/testing/testdata/session-fixtures`.
+
+Package-local fixtures may still exist elsewhere when they only prove
+module-private behavior, but sibling modules should not treat another package's
+private `testdata` directory as the shared fixture contract.
+
 Validate committed session fixtures before review:
 
 ```sh
-go run ./cmd/session-fixture-validator ./pkg/testing
+go run ./cmd/session-fixture-validator ./pkg/testing/testdata/session-fixtures
 ```
 
 ## Capture File Types

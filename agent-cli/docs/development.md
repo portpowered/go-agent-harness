@@ -96,6 +96,7 @@ Do not treat a longer timeout as the standard quality gate.
 - Live `agent session --record` for session providers must observe `messages.Session.Done()` separately from Agent Loop deltas so provider-side closes can cancel and join the command loop promptly.
 - Raw WebSocket `agent session --replay` fixtures route by capture provider metadata; keep `provider.name` accurate so OpenAI Realtime fixtures exercise the OpenAI session provider instead of the Grok replay path.
 - End-to-end session replay smoke fixtures should include a provider close event such as `session.closed` so the public command path proves model output and graceful shutdown, not just response completion.
+- `agent-cli/test/integration/testdata` is package-private fixture space. Shared committed `.session.json` replay fixtures belong under `go-llm-gateway/pkg/testing/testdata/session-fixtures`, which is the authoritative repository contract for cross-module replay behavior.
 - API keys may live in `~/.agent-cli/config.yaml`; do not commit config files or captured secrets.
 - Add new tools through the local `Tool` contract, register them in `internal/tools/`, and update Wire wiring when construction changes.
 

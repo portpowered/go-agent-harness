@@ -8,6 +8,19 @@ component: go-llm-gateway
 
 This guide defines the review contract for committed `.session.json` captures used by `go-llm-gateway/pkg/testing`. Use it before adding, regenerating, or reviewing session replay fixtures.
 
+`go-llm-gateway/pkg/testing` is the authoritative owner for committed shared `.session.json` replay fixtures in this repository. This guide and the validator under `go-llm-gateway` define the canonical contract because the gateway already owns the replay format, replay helpers, fixture provenance rules, and hygiene validation behavior.
+
+This ownership decision satisfies the Phase 2 enabling step for session fixture ownership and boundary cleanup before broader API hardening.
+
+## Ownership Boundary
+
+Use these two fixture classes deliberately:
+
+- Shared committed session fixtures live under `go-llm-gateway/pkg/testing/testdata/session-fixtures`. They are the canonical replay fixtures that other modules may consume when they need repository-shared `.session.json` behavior.
+- Module-local fixtures stay in the package that owns the behavior under test, such as `agent-cli/test/integration/testdata` for CLI-private command scenarios. Sibling modules must not treat another package's private `testdata` as the canonical shared fixture source.
+
+When a CLI fixture becomes broadly useful for replay or hygiene validation across packages, promote a sanitized copy into the gateway-owned shared fixture root instead of teaching other modules to reach into Agent CLI private `testdata`.
+
 ## Required Metadata
 
 Every committed `.session.json` capture must use the versioned `SessionCapture` envelope and include `session.fixture_provenance`.
@@ -33,7 +46,7 @@ Every committed `.session.json` capture must use the versioned `SessionCapture` 
 Run the validator before review from `libraries/go-llm-gateway`:
 
 ```sh
-go run ./cmd/session-fixture-validator ./pkg/testing
+go run ./cmd/session-fixture-validator ./pkg/testing/testdata/session-fixtures
 ```
 
 ## Provenance Categories
