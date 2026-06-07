@@ -93,14 +93,63 @@ Use this shape for every finding group:
 
 ### Ownership-Boundary Architecture Drift
 
-- `outcome`: `uncertain`
-- `checklist rows / commitments inspected`: pending story 003
-- `affected files / surfaces`: committed `.session.json` fixture roots,
-  ownership docs, replay and validation helper boundaries
-- `evidence`: story 001 defines the evidence model only; ownership-boundary
-  inspection is deferred to the architecture validation pass
-- `required repairs`: complete story
-  `phase-2-session-fixture-ownership-validator-003`
+- `outcome`: `fail`
+- `checklist rows / commitments inspected`: the PRD acceptance commitment that
+  one authoritative owner for committed shared `.session.json` fixtures now
+  exists; the commitment that replay, validation, and other changed consumers
+  use intentional helper or repository boundaries rather than sibling-module
+  private `testdata` traversal
+- `affected files / surfaces`: `go-llm-gateway/pkg/testing/session_fixture_validator.go`;
+  `go-llm-gateway/internal/sessionfixturevalidator/command.go`;
+  `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`;
+  `go-llm-gateway/pkg/testing/testdata/session-fixtures/synthetic-text.session.json`;
+  `go-llm-gateway/pkg/providers/openai/testdata/realtime_text.session.json`;
+  `agent-cli/test/integration/testdata/*.session.json`;
+  `agent-cli/internal/services/session.go`;
+  `agent-cli/test/integration/replay_session_test.go`;
+  `agent-cli/test/integration/replay_stateless_test.go`;
+  `go-llm-gateway/pkg/testing/README.md`;
+  `go-llm-gateway/pkg/testing/session-fixture-authoring.md`;
+  `agent-cli/docs/session-record-replay.md`
+- `evidence`: the repository does show one intentional consumer boundary for
+  replay and validation behavior: runtime and test consumers call shared
+  `go-llm-gateway/pkg/testing` helpers such as `ValidateSessionCaptureFile`,
+  `NewReplayWebSocketDialer`, and `NewSessionReplayer` instead of opening live
+  provider connections or reading sibling-module private fixture files directly.
+  `agent-cli/internal/services/session.go` routes replay through
+  `gwtesting.NewReplayWebSocketDialer`, and
+  `agent-cli/test/integration/replay_session_test.go` uses
+  `gwtesting.NewSessionReplayer`, which is evidence that behavior-level
+  consumers cross the module boundary through exported APIs rather than hidden
+  filesystem reach-through.
+
+  The ownership side does not converge to one authoritative committed fixture
+  owner, though. Committed `.session.json` fixtures remain split across at least
+  three roots: `go-llm-gateway/pkg/testing/testdata/session-fixtures`,
+  `go-llm-gateway/pkg/providers/openai/testdata`, and
+  `agent-cli/test/integration/testdata`. The authoritative hygiene smoke test in
+  `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`
+  hard-codes all three roots, including a relative traversal into
+  `../../../agent-cli/test/integration/testdata`. That makes the gateway
+  validator the de facto policy owner while still depending on cross-module path
+  knowledge to find committed fixtures. Reviewers can therefore verify that the
+  fixture contract is centralized, but not that the fixture files themselves now
+  live under one clear owner or one documented repository boundary.
+
+  The documentation surfaces reinforce that ambiguity. The gateway authoring
+  guide tells reviewers to run the validator from `go-llm-gateway` against
+  `./pkg/testing`, while `agent-cli/docs/session-record-replay.md` separately
+  instructs contributors to commit Agent CLI fixtures under
+  `agent-cli/test/integration/testdata` and invoke the gateway validator against
+  that external path. Those instructions show intentional cooperation, but they
+  also confirm that fixture ownership is still distributed by convention across
+  module-local roots instead of converged on one authoritative committed home.
+- `required repairs`: define and document one authoritative committed fixture
+  owner for shared session captures, or explicitly document a stable ownership
+  map with a non-relative discovery boundary; remove the validator's need to
+  reach into `agent-cli` through `../../../...` path knowledge; align fixture
+  docs so reviewers can identify one source of truth for where shared
+  `.session.json` fixtures belong and who owns them
 
 ### Replay and Session-Validation Fixture Consistency
 
@@ -116,12 +165,16 @@ Use this shape for every finding group:
 ## Convergence Verdict
 
 - `overall outcome`: `uncertain`
-- `summary`: the validator now records a concrete checklist-convergence finding:
-  the required planning inputs named by the PRD are missing from the repository
-  state, so the ownership-boundary slice cannot yet be validated against the
-  promised Phase 2 inventory rows or slice commitments. Ownership-boundary and
-  fixture-consistency findings remain deferred.
+- `summary`: the validator now records two concrete findings. Checklist
+  convergence remains `uncertain` because the required planning inputs named by
+  the PRD are missing from the repository state. Ownership-boundary architecture
+  drift is `fail`: shared replay and validation behavior does route through
+  intentional `go-llm-gateway/pkg/testing` APIs, but committed `.session.json`
+  fixtures still live under multiple roots and the gateway validator still uses
+  relative cross-module path knowledge to discover `agent-cli` fixtures.
+  Replay/session-validation consistency remains deferred.
 - `required repairs before next Phase 2 slice`: restore or replace the missing
-  authoritative planning surfaces for checklist validation, then complete
-  stories 003 through 005 and record reviewer-verifiable evidence for the
-  remaining finding groups
+  authoritative planning surfaces for checklist validation; converge on one
+  authoritative committed fixture owner or explicitly documented ownership map
+  that removes hidden relative-path coupling; then complete stories 004 and 005
+  and record reviewer-verifiable evidence for the remaining finding groups
