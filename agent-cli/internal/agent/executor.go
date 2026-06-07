@@ -86,10 +86,7 @@ func (e *Executor) loadConfig(cfg *Config) (*config.Config, error) {
 
 	// Mock inferencer wiring should stay credential-free only when tests did not
 	// explicitly provide a config directory whose contents are meant to be validated.
-	shouldValidate := true
-	if e.relaxModelValidation {
-		shouldValidate = false
-	}
+	shouldValidate := !e.relaxModelValidation
 	if e.inferencerOverride != nil && cfg.ConfigDir == "" {
 		shouldValidate = false
 	}

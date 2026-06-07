@@ -379,18 +379,6 @@ func interactionToolCallsToModel(calls []InteractionToolCall) []models.ToolCall 
 	return out
 }
 
-func interactionToolCallsFromModel(calls []models.ToolCall) []InteractionToolCall {
-	out := make([]InteractionToolCall, 0, len(calls))
-	for _, call := range calls {
-		out = append(out, InteractionToolCall{
-			ID:        call.ID,
-			Name:      call.Name,
-			Arguments: json.RawMessage(call.Arguments),
-		})
-	}
-	return out
-}
-
 func normalizedInteractionToolCallsFromModel(calls []models.ToolCall) []InteractionToolCall {
 	out := make([]InteractionToolCall, 0, len(calls))
 	for i, call := range calls {
