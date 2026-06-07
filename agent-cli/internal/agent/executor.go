@@ -48,10 +48,10 @@ func (r *RunData) CloseLogger() {
 
 // Executor constructs and executes agent loops based on configuration.
 type Executor struct {
-	executor              messages.ToolExecutor
-	toolDefs              []messages.ToolDefinition
-	inferencerOverride    messages.Inferencer
-	relaxModelValidation  bool
+	executor             messages.ToolExecutor
+	toolDefs             []messages.ToolDefinition
+	inferencerOverride   messages.Inferencer
+	relaxModelValidation bool
 }
 
 // NewExecutor creates a new Executor with the given dependencies.
