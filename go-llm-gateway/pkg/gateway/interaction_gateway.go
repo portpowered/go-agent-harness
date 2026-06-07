@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -27,46 +28,52 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 		defer close(out)
 
 		emitter := newInteractionEventEmitter(out, interactionID, g.provider.Name(), req.Model, req.ContinueFromSequence)
-		if !emitter.emit(ctx, InteractionEvent{Type: InteractionEventStart}) {
+		if err := ctx.Err(); err != nil {
+			emitter.emitTerminalForErr(err)
+			return
+		}
+		if err := emitter.emit(ctx, InteractionEvent{Type: InteractionEventStart}); err != nil {
+			emitter.emitTerminalForErr(err)
 			return
 		}
 
 		if err := validateInteractionToolResults(req); err != nil {
-			_ = emitter.emit(ctx, InteractionEvent{
+			_ = emitter.emitTerminal(ctx, InteractionEvent{
 				Type:  InteractionEventError,
 				Error: &InteractionError{Code: "tool_result_validation_error", Message: err.Error()},
 			})
-			_ = emitter.emit(ctx, InteractionEvent{Type: InteractionEventEnd})
 			return
 		}
 
 		for _, result := range req.ToolResults {
 			result := result
-			if !emitter.emit(ctx, InteractionEvent{
+			if err := emitter.emit(ctx, InteractionEvent{
 				Type:        InteractionEventToolResultAccepted,
 				Correlation: InteractionCorrelation{ToolCallID: result.ToolCallID},
 				ToolResult:  &result,
-			}) {
+			}); err != nil {
+				emitter.emitTerminalForErr(err)
 				return
 			}
 		}
 
 		resp, err := g.provider.Infer(ctx, interactionProviderRequest(req))
 		if err != nil {
-			_ = emitter.emit(ctx, InteractionEvent{
-				Type:  InteractionEventError,
-				Error: &InteractionError{Code: "provider_error", Message: err.Error()},
-			})
-			_ = emitter.emit(ctx, InteractionEvent{Type: InteractionEventEnd})
+			emitter.emitTerminalForErr(err)
 			return
 		}
 
 		text := resp.Message.TextContent()
 		if text != "" {
-			if !emitter.emit(ctx, InteractionEvent{
+			if err := emitter.emit(ctx, InteractionEvent{
 				Type:      InteractionEventTextDelta,
 				TextDelta: &TextDeltaEvent{Content: text},
-			}) {
+			}); err != nil {
+				emitter.emitTerminalForErr(err)
+				return
+			}
+			if err := ctx.Err(); err != nil {
+				emitter.emitTerminalForErr(err)
 				return
 			}
 		}
@@ -75,43 +82,63 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 		if len(toolCalls) > 0 {
 			for _, call := range toolCalls {
 				call := call
-				if !emitter.emit(ctx, InteractionEvent{
+				if err := emitter.emit(ctx, InteractionEvent{
 					Type:        InteractionEventToolCallRequest,
 					Correlation: InteractionCorrelation{ToolCallID: call.ID},
 					ToolCall:    &call,
-				}) {
+				}); err != nil {
+					emitter.emitTerminalForErr(err)
+					return
+				}
+				if err := ctx.Err(); err != nil {
+					emitter.emitTerminalForErr(err)
 					return
 				}
 			}
 			if usage, ok := interactionUsageFromModel(resp.Usage); ok {
-				if !emitter.emit(ctx, InteractionEvent{
+				if err := emitter.emit(ctx, InteractionEvent{
 					Type:  InteractionEventUsage,
 					Usage: &usage,
-				}) {
+				}); err != nil {
+					emitter.emitTerminalForErr(err)
+					return
+				}
+				if err := ctx.Err(); err != nil {
+					emitter.emitTerminalForErr(err)
 					return
 				}
 			}
-			_ = emitter.emit(ctx, InteractionEvent{Type: InteractionEventEnd})
+			_ = emitter.emitTerminal(ctx, InteractionEvent{Type: InteractionEventEnd})
 			return
 		}
 
-		if !emitter.emit(ctx, InteractionEvent{
+		if err := emitter.emit(ctx, InteractionEvent{
 			Type:         InteractionEventFinalMessage,
 			FinalMessage: interactionMessageFromModel(resp.Message),
-		}) {
+		}); err != nil {
+			emitter.emitTerminalForErr(err)
+			return
+		}
+		if err := ctx.Err(); err != nil {
+			emitter.emitTerminalForErr(err)
 			return
 		}
 
 		if usage, ok := interactionUsageFromModel(resp.Usage); ok {
-			if !emitter.emit(ctx, InteractionEvent{
+			if err := emitter.emit(ctx, InteractionEvent{
 				Type:  InteractionEventUsage,
 				Usage: &usage,
-			}) {
+			}); err != nil {
+				emitter.emitTerminalForErr(err)
+				return
+			}
+			if err := ctx.Err(); err != nil {
+				emitter.emitTerminalForErr(err)
 				return
 			}
 		}
 
-		_ = emitter.emit(ctx, InteractionEvent{Type: InteractionEventEnd})
+		_ = emitter.emitTerminal(ctx, InteractionEvent{Type: InteractionEventEnd})
 	}()
 
 	return out, nil
@@ -135,7 +162,7 @@ func newInteractionEventEmitter(out chan<- InteractionEvent, interactionID, prov
 	}
 }
 
-func (e *interactionEventEmitter) emit(ctx context.Context, event InteractionEvent) bool {
+func (e *interactionEventEmitter) emit(ctx context.Context, event InteractionEvent) error {
 	e.sequence++
 	now := time.Now().UTC()
 	event.InteractionID = e.interactionID
@@ -146,10 +173,77 @@ func (e *interactionEventEmitter) emit(ctx context.Context, event InteractionEve
 
 	select {
 	case <-ctx.Done():
-		return false
+		e.sequence--
+		return ctx.Err()
 	case e.out <- event:
-		return true
+		return nil
 	}
+}
+
+func (e *interactionEventEmitter) emitTerminal(ctx context.Context, event InteractionEvent) error {
+	if err := e.emit(ctx, event); err != nil {
+		return err
+	}
+	if event.Type == InteractionEventEnd {
+		return nil
+	}
+	return e.emitRaw(InteractionEvent{Type: InteractionEventEnd})
+}
+
+func (e *interactionEventEmitter) emitTerminalForErr(err error) {
+	if err == nil {
+		return
+	}
+	if errors.Is(err, context.Canceled) {
+		_ = e.emitTerminalRaw(InteractionEvent{
+			Type: InteractionEventCancellation,
+			Cancellation: &InteractionCancellation{
+				Reason:  "caller_cancelled",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		_ = e.emitTerminalRaw(InteractionEvent{
+			Type: InteractionEventError,
+			Error: &InteractionError{
+				Code:      "provider_timeout",
+				Message:   err.Error(),
+				Retryable: true,
+			},
+		})
+		return
+	}
+	_ = e.emitTerminalRaw(InteractionEvent{
+		Type: InteractionEventError,
+		Error: &InteractionError{
+			Code:    "provider_error",
+			Message: err.Error(),
+		},
+	})
+}
+
+func (e *interactionEventEmitter) emitTerminalRaw(event InteractionEvent) error {
+	if err := e.emitRaw(event); err != nil {
+		return err
+	}
+	if event.Type == InteractionEventEnd {
+		return nil
+	}
+	return e.emitRaw(InteractionEvent{Type: InteractionEventEnd})
+}
+
+func (e *interactionEventEmitter) emitRaw(event InteractionEvent) error {
+	e.sequence++
+	now := time.Now().UTC()
+	event.InteractionID = e.interactionID
+	event.Sequence = e.sequence
+	event.Provider = e.provider
+	event.Model = e.model
+	event.CreatedAt = &now
+	e.out <- event
+	return nil
 }
 
 func interactionProviderRequest(req InteractionRequest) providers.InferenceRequest {

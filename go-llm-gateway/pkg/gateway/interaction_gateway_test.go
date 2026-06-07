@@ -210,6 +210,140 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 	}
 }
 
+func TestInteract_EmitsCancellationWhenContextCancelledBeforeProviderReturns(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeInteractionProvider{
+		name: "fake-provider",
+		err:  context.Canceled,
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	events := collectInteractionEventsFromContext(t, ctx, gw, InteractionRequest{
+		InteractionID: "interaction-cancelled",
+		Model:         "model-cancelled",
+	})
+
+	wantTypes := []InteractionEventType{
+		InteractionEventCancellation,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if events[0].Cancellation == nil {
+		t.Fatal("cancellation payload is nil")
+	}
+	if events[0].Cancellation.Reason != "caller_cancelled" {
+		t.Fatalf("cancellation reason = %q", events[0].Cancellation.Reason)
+	}
+	if events[0].Cancellation.Message != context.Canceled.Error() {
+		t.Fatalf("cancellation message = %q", events[0].Cancellation.Message)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("provider calls = %d, want 0", provider.calls)
+	}
+}
+
+func TestInteract_PreservesPartialOutputBeforeCancellation(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeInteractionProvider{
+		name: "fake-provider",
+		response: providers.InferenceResponse{
+			Message: models.NewTextMessage(models.RoleAssistant, "partial output"),
+			Usage:   models.TokenUsage{PromptTokens: 4, CompletionTokens: 2, TotalTokens: 6},
+		},
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch, err := gw.Interact(ctx, InteractionRequest{
+		InteractionID: "interaction-partial-cancel",
+		Model:         "model-cancelled",
+	})
+	if err != nil {
+		t.Fatalf("Interact: %v", err)
+	}
+
+	var events []InteractionEvent
+	for event := range ch {
+		events = append(events, event)
+		if event.Type == InteractionEventTextDelta {
+			cancel()
+		}
+	}
+
+	wantTypes := []InteractionEventType{
+		InteractionEventStart,
+		InteractionEventTextDelta,
+		InteractionEventCancellation,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if events[1].TextDelta == nil || events[1].TextDelta.Content != "partial output" {
+		t.Fatalf("text delta = %#v", events[1].TextDelta)
+	}
+	if events[2].Cancellation == nil || events[2].Cancellation.Reason != "caller_cancelled" {
+		t.Fatalf("cancellation = %#v", events[2].Cancellation)
+	}
+	if events[3].Type != InteractionEventEnd {
+		t.Fatalf("terminal event = %#v", events[3])
+	}
+}
+
+func TestInteract_NormalizesDeadlineExceededAsTimeoutError(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeInteractionProvider{
+		name: "fake-provider",
+		err:  context.DeadlineExceeded,
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	events := collectInteractionEvents(t, gw, InteractionRequest{
+		InteractionID: "interaction-timeout",
+		Model:         "model-timeout",
+	})
+
+	wantTypes := []InteractionEventType{
+		InteractionEventStart,
+		InteractionEventError,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if events[1].Error == nil {
+		t.Fatal("error payload is nil")
+	}
+	if events[1].Error.Code != "provider_timeout" {
+		t.Fatalf("error code = %q", events[1].Error.Code)
+	}
+	if !events[1].Error.Retryable {
+		t.Fatalf("retryable = %v, want true", events[1].Error.Retryable)
+	}
+	if events[1].Error.Message != context.DeadlineExceeded.Error() {
+		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+}
+
 func TestInteract_EmitsToolCallRequestsAndPausesForHandoff(t *testing.T) {
 	t.Parallel()
 
@@ -441,7 +575,13 @@ func TestInteract_RejectsInvalidToolResultsBeforeProviderContinuation(t *testing
 func collectInteractionEvents(t *testing.T, gw *DefaultGateway, req InteractionRequest) []InteractionEvent {
 	t.Helper()
 
-	ch, err := gw.Interact(context.Background(), req)
+	return collectInteractionEventsFromContext(t, context.Background(), gw, req)
+}
+
+func collectInteractionEventsFromContext(t *testing.T, ctx context.Context, gw *DefaultGateway, req InteractionRequest) []InteractionEvent {
+	t.Helper()
+
+	ch, err := gw.Interact(ctx, req)
 	if err != nil {
 		t.Fatalf("Interact: %v", err)
 	}
