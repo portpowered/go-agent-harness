@@ -4,7 +4,7 @@
 
 - Validator branch: `phase-1-authoritative-checkout-convergence-validator`
 - Repaired branch under review: `phase-1-authoritative-checkout-reconciliation`
-- Report scope completed in this iteration: checklist convergence, architecture drift
+- Report scope completed in this iteration: checklist convergence, architecture drift, split-brain and mergeability readiness
 
 ## Checklist Convergence Findings
 
@@ -29,3 +29,14 @@ Checklist convergence is not yet satisfied for the repaired branch. The validato
 ## Architecture Drift Verdict
 
 The repaired branch mostly presents one coherent Phase 1 architecture surface: the root workspace contract, CI entrypoint, and dependency/audit documents all describe the same three-module baseline and root validation pipeline. The remaining architecture drift is narrow but real: `agent-cli/docs/README.md` still carries an obsolete `libraries/agent-cli/docs/` path reference, so the README set is not yet fully self-consistent.
+
+## Split-Brain and Mergeability Findings
+
+| group | subject | outcome | evidence | affectedFilesOrSurfaces | requiredFollowUp |
+| --- | --- | --- | --- | --- | --- |
+| `mergeability-reviewer-readiness` | Split-brain state across local `main`, `origin/main`, and the prior convergence branch | `uncertain` | The earlier divergence is only partially resolved. `origin/main` has already merged the repaired branch through merge commit `76957ee` (`Merge pull request #7 from portpowered/phase-1-authoritative-checkout-reconciliation`), and `git diff --name-status origin/main..phase-1-authoritative-checkout-reconciliation` is empty, so the remote baseline and repaired branch tree now agree. The prior convergence branch is also no longer a competing baseline: `git rev-list --left-right --count phase-1-authoritative-workspace-convergence...phase-1-authoritative-checkout-reconciliation` returns `0 9`, which shows the repaired branch is strictly ahead of that earlier branch. However, local `main` in this checkout still points to `ef4787d` while `origin/main` points to `76957ee`, and `git rev-list --left-right --count main...phase-1-authoritative-checkout-reconciliation` returns `0 47`, so a stale local baseline still exists in the operator environment. | local `main`, `origin/main`, `phase-1-authoritative-workspace-convergence`, `phase-1-authoritative-checkout-reconciliation`, branch topology | Fast-forward or otherwise resynchronize local `main` with `origin/main` before using this checkout as the authoritative Phase 1 baseline, and document that the remote authoritative baseline is `origin/main` until local refs are refreshed. |
+| `mergeability-reviewer-readiness` | Repaired branch reviewer readiness for Phase 2 handoff | `fail` | The repaired branch is merged into `origin/main`, but the convergence report still records unresolved Phase 1 baseline issues that block a clean Phase 2 handoff: the authoritative checklist source `docs/internal/checklist.md` is missing, so checklist commitments cannot be verified row by row, and `agent-cli/docs/README.md` still describes the obsolete `libraries/agent-cli/docs/` path. Those gaps mean the branch can be merged yet still not be reviewer-ready as one complete, self-describing Phase 1 baseline. | `docs/internal/checklist.md`, `agent-cli/docs/README.md`, `docs/internal/phase-1-authoritative-checkout-convergence-report.md` | Restore the authoritative checklist source, complete the checklist row mapping in this report, and fix the stale Agent CLI docs path so the repaired branch can be reviewed as one coherent Phase 1 baseline before Phase 2 starts. |
+
+## Split-Brain and Mergeability Verdict
+
+The repaired branch resolves the earlier branch competition at the remote authoritative baseline: `origin/main` and `phase-1-authoritative-checkout-reconciliation` now expose the same tree, and the prior convergence branch is a strict ancestor path rather than a competing baseline. The remaining split-brain issue is operational rather than architectural: this checkout's local `main` is stale and should not be treated as authoritative until it is synchronized. Reviewer readiness still fails because the repaired branch lacks the authoritative checklist file and still carries one stale README path, so Phase 2 should remain blocked pending those explicit repairs.
