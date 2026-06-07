@@ -56,15 +56,58 @@ Use this shape for every finding group:
 - `evidence`:
 - `required repairs`:
 
-## Finding Groups
+## Findings
 
 ### Checklist Convergence
 
-Validate the delivered constructor-ownership slice against the relevant Phase 2
-checklist rows and the slice commitments recorded for
-`phase-2-constructor-ownership-boundaries`. The finding must state whether the
-repository exposes enough evidence to verify each cited row or commitment from
-current repository state.
+- `outcome`: `uncertain`
+- `checklist rows / commitments inspected`: `P2-COB-01`, `P2-COB-02`,
+  `P2-COB-03`, `P2-COB-04`, `P2-COB-05`; planned slice commitments for
+  `phase-2-constructor-ownership-boundaries`
+- `affected files / surfaces`: `docs/internal/checklist.md`;
+  `docs/internal/phase-2-constructor-ownership-validator.md`;
+  `docs/architecture/dependencies.md`;
+  `docs/architecture/contract-gap-audit.md`;
+  `go-agent-loop/pkg/agentloop/agent_loop.go`;
+  `go-agent-loop/pkg/agentloop/options.go`;
+  `go-agent-loop/pkg/agentloop/agent_loop_test.go`;
+  `agent-cli/internal/agent/provider_runtime.go`;
+  `agent-cli/internal/agent/executor.go`;
+  `agent-cli/internal/agent/provider_factory.go`;
+  `agent-cli/internal/agent/provider_openai.go`;
+  `agent-cli/internal/agent/provider_fal.go`;
+  `agent-cli/internal/agent/provider_runtime_test.go`;
+  `agent-cli/test/integration/provider_runtime_integration_test.go`;
+  `tasks/todo/phase-2-constructor-ownership-boundaries.md` (missing)
+- `evidence`: `P2-COB-01` now passes because `docs/internal/checklist.md`
+  contains a dedicated constructor-ownership Phase 2 inventory that reviewers
+  can cite directly during convergence validation. `P2-COB-02` passes because
+  current repository state shows explicit loop-side tool capability ownership:
+  `agentloop.New(...)` rejects configured tools unless the caller chooses
+  `WithToolExecutor(...)` or `WithToolExecutionDisabled()`, and
+  `agent_loop_test.go` covers both the constructor failure and explicit
+  no-tools path. `P2-COB-03` passes because stateless live, record, and replay
+  HTTP runtime policy is composed once in `agent-cli/internal/agent/
+  provider_runtime.go`, injected through `ProviderBuildContext.HTTPClient`, and
+  exercised by both unit tests and the provider-runtime integration test rather
+  than being rebuilt inside provider constructors. `P2-COB-04` is only
+  partially evidenced at the checklist-convergence layer: the repository has
+  observable record/replay seam tests, but this story does not yet complete the
+  dedicated runtime-consistency analysis required to determine whether every
+  constructor-ownership expectation around record/replay remains satisfied.
+  `P2-COB-05` is uncertain because the validator's cited slice-plan source,
+  `tasks/todo/phase-2-constructor-ownership-boundaries.md`, is missing from
+  the reviewed branch, so the repository does not expose one committed
+  constructor-ownership planning surface that can be mapped directly to the
+  delivered state. That missing source prevents a full pass for checklist
+  convergence even though the implemented code and architecture docs provide
+  direct evidence for the main loop-constructor and provider-runtime rows.
+- `required repairs`: restore or recreate the missing committed slice-plan file
+  `tasks/todo/phase-2-constructor-ownership-boundaries.md` so reviewers can map
+  constructor-ownership commitments to current repository state without relying
+  on inferred intent; complete the dedicated runtime-consistency finding needed
+  to turn `P2-COB-04` from partial checklist evidence into a final convergence
+  verdict.
 
 ### Constructor-Ownership Architecture Drift
 
