@@ -40,3 +40,35 @@ The repaired branch mostly presents one coherent Phase 1 architecture surface: t
 ## Split-Brain and Mergeability Verdict
 
 The repaired branch resolves the earlier branch competition at the remote authoritative baseline: `origin/main` and `phase-1-authoritative-checkout-reconciliation` now expose the same tree, and the prior convergence branch is a strict ancestor path rather than a competing baseline. The remaining split-brain issue is operational rather than architectural: this checkout's local `main` is stale and should not be treated as authoritative until it is synchronized. Reviewer readiness still fails because the repaired branch lacks the authoritative checklist file and still carries one stale README path, so Phase 2 should remain blocked pending those explicit repairs.
+
+## Final Phase 1 Convergence Verdict
+
+Overall verdict for `phase-1-authoritative-checkout-reconciliation`: `fail`.
+
+The repaired branch now exposes a largely coherent Phase 1 baseline at the remote authoritative surface: the root workspace contract, CI entrypoint, dependency and contract-audit documents, and branch topology against `origin/main` all align closely enough to review. However, the convergence validator cannot clear Phase 2 because two blocking gaps remain in the repaired branch itself and one operator-environment gap remains in this checkout:
+
+| findingGroup | finalOutcome | supportingSummary |
+| --- | --- | --- |
+| `checklist-convergence` | `fail` | The authoritative checklist source `docs/internal/checklist.md` is missing from the repaired branch, so no row-by-row Phase 1 mapping can be verified directly from branch evidence. |
+| `architecture-drift` | `fail` | The README set is almost aligned, but `agent-cli/docs/README.md` still describes the obsolete `libraries/agent-cli/docs/` path instead of the current `agent-cli/docs/` workspace location. |
+| `mergeability-reviewer-readiness` | `fail` | The remote authoritative baseline is coherent because `origin/main` and the repaired branch tree match, but reviewer readiness still fails until the missing checklist source and stale Agent CLI docs path are repaired; local `main` also remains stale in this checkout and should not be treated as authoritative until refreshed. |
+
+This report is reviewer-verifiable from current repository state without replaying prior batch history: every blocking item above points to a concrete missing file, stale path string, or directly observable branch comparison already recorded in the findings tables.
+
+## Remaining Phase 1 Repair Work Before Phase 2
+
+1. Restore the authoritative Phase 1 checklist source at `docs/internal/checklist.md` on `phase-1-authoritative-checkout-reconciliation`.
+Affected files or surfaces: `docs/internal/checklist.md`, `phase-1-authoritative-checkout-reconciliation` tree.
+Triggered by: `checklist-convergence` `fail` for the missing checklist inventory source.
+
+2. Re-run the convergence report's checklist mapping against the restored checklist file and classify each relevant Phase 1 row or required outcome as `pass`, `fail`, or `uncertain`.
+Affected files or surfaces: `docs/internal/checklist.md`, `docs/internal/phase-1-authoritative-checkout-convergence-report.md`, the repaired-branch evidence surfaces already cited in the checklist findings.
+Triggered by: `checklist-convergence` `uncertain` for row-by-row mapping that cannot currently be verified.
+
+3. Update `agent-cli/docs/README.md` so its introductory path description matches the actual `agent-cli/docs/` location used by the repaired branch and the rest of the README set.
+Affected files or surfaces: `agent-cli/docs/README.md`, `README.md`, `agent-cli/README.md`.
+Triggered by: `architecture-drift` `fail` for the stale `libraries/agent-cli/docs/` path reference.
+
+4. Refresh local `main` to match `origin/main` before using this checkout as an operator baseline for any follow-up validation or Phase 2 start decision.
+Affected files or surfaces: local `main` ref in this checkout, `origin/main`, branch comparison evidence in this report.
+Triggered by: `mergeability-reviewer-readiness` `uncertain` finding for the stale local baseline reference.
