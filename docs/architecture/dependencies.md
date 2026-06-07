@@ -143,6 +143,8 @@ The repository also has coupling that should not be mistaken for the intended ar
 
 When reviewing future changes, treat those examples as current coupling to manage carefully, not as permission to add reverse imports or cross-module constructor ownership in reusable packages.
 
+For the concrete gap inventory behind those examples, see [`contract-gap-audit.md`](./contract-gap-audit.md).
+
 ## Decision Checklist For Future Changes
 
 Before approving a new dependency or exported constructor, check:
