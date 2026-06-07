@@ -81,6 +81,10 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - decide explicitly whether tool execution is optional
   - if optional, model the absence as a declared no-tools mode
   - if required when tools are configured, fail construction when tools are present but no executor is injected
+- Status after `phase-2-constructor-ownership-boundaries`:
+  - completed
+  - `agentloop.New(...)` now requires an explicit constructor-side capability decision when tool definitions are present
+  - callers use `WithToolExecutor(...)` to enable execution or `WithToolExecutionDisabled()` for an intentional no-tools path
 
 ### DI-02: provider builders own HTTP transport creation and capture wiring
 
@@ -98,6 +102,10 @@ The findings below are written so a reviewer can distinguish "this is the contra
 - Recommended Phase 2 hardening:
   - inject transport or HTTP client policy through `ProviderBuildContext`, or add a narrower shared factory helper for record/replay transport ownership
   - keep provider builders responsible for provider options, not generic transport assembly
+- Status after `phase-2-constructor-ownership-boundaries`:
+  - completed for stateless provider runtime wiring in scope
+  - `agent-cli/internal/agent.buildProviderHTTPRuntime(...)` now owns live, record, and replay HTTP client assembly once per execution path
+  - provider builders consume the injected `ProviderBuildContext.HTTPClient` instead of choosing record/replay wiring or `http.DefaultTransport` internally
 
 ### DI-03: `Executor.loadSystemPrompt` mixes prompt resolution with filesystem and workspace side effects
 
@@ -314,6 +322,7 @@ Bounded enabling steps that reduce accidental coupling before broader contract c
 
 1. remove testdata path coupling by giving session fixtures one explicit owner
 2. make constructor ownership explicit for tool execution and transport/dialer dependencies
+   - status: completed for the Phase 2 constructor ownership boundaries step landed by `phase-2-constructor-ownership-boundaries`
 3. centralize CLI session provider selection behind one factory boundary
 4. clarify naming and package-doc intent for alias layers and exported internal wiring seams before adding new Phase 2 APIs to those areas
 

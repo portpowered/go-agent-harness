@@ -42,11 +42,13 @@ Reviewer rule of thumb:
 
 - `pkg/gateway.Gateway` is the stateless inference boundary for normalized requests and responses.
 - `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are the intended adapters from gateway/provider code into loop-owned interfaces.
-- `pkg/providers` owns provider-specific transports and request shaping behind gateway-facing contracts.
+- `pkg/providers` owns provider-specific request shaping and provider option translation, but not generic live/record/replay transport policy.
 
 `agent-cli` owns application wiring:
 
 - `internal/agent.Executor` builds loops, loads config, and selects the active provider implementation.
+- `internal/agent.Executor` and `internal/agent.buildProviderHTTPRuntime(...)` own the shared stateless provider HTTP runtime decision for live, record, and replay modes before provider-specific builders run.
+- `internal/agent.ProviderBuildContext` is the constructor seam that passes that owned runtime dependency into concrete provider builders.
 - `internal/services/session.go` assembles session-mode runtime behavior by combining `agentloop`, gateway session inferencers, replay helpers, and CLI output handling.
 - `internal/tools`, `internal/session`, `internal/config`, and `internal/workspace` are application concerns that should stay above the reusable libraries.
 
@@ -66,6 +68,12 @@ Candidate stable contracts:
 
 - `pkg/messages` should be treated as intentionally public because both `go-llm-gateway` and `agent-cli` depend on those types as the shared runtime vocabulary.
 - `pkg/agentloop.AgenticLoop` should be treated as intentionally public because it is the loop porcelain surface that downstream composition code uses directly.
+
+Constructor ownership contract after this Phase 2 step:
+
+- Tool execution capability is a caller-owned decision at `agentloop.New(...)`.
+- `WithTools(...)` advertises tool definitions only when the caller also makes an explicit capability choice with `WithToolExecutor(...)` or `WithToolExecutionDisabled()`.
+- The reusable loop no longer silently creates a default tool executor behind the caller's back.
 
 Exports that currently look incidental or at least not yet hardened:
 
@@ -90,6 +98,12 @@ Candidate stable contracts:
 - `pkg/gateway` is the most plausible downstream-stable package because it hides provider-specific request shaping behind normalized request types.
 - `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are intentionally public adapter types because they are the expected bridge into loop-owned interfaces.
 - `pkg/providers.Provider` and `pkg/providers.SessionProvider` are candidate stable construction contracts for adding providers without changing loop code.
+
+Constructor ownership contract after this Phase 2 step:
+
+- Generic stateless HTTP runtime policy for live, record, and replay belongs to `agent-cli`, not to individual provider builders.
+- Provider builders consume injected runtime dependencies through `internal/agent.ProviderBuildContext` and remain focused on provider-specific option wiring.
+- Reviewers should treat implicit `http.DefaultTransport` selection or record/replay capture assembly inside provider builders as an architectural regression.
 
 Exports that currently look incidental or not yet independent:
 
@@ -144,6 +158,15 @@ The repository also has coupling that should not be mistaken for the intended ar
 When reviewing future changes, treat those examples as current coupling to manage carefully, not as permission to add reverse imports or cross-module constructor ownership in reusable packages.
 
 For the concrete gap inventory behind those examples, see [`contract-gap-audit.md`](./contract-gap-audit.md).
+
+## Phase 2 Constructor Ownership Boundary Status
+
+The constructor ownership enabling step from [`contract-gap-audit.md`](./contract-gap-audit.md) is now satisfied for the two scoped boundaries in this phase:
+
+- DI-01 tool execution ownership is explicit at `go-agent-loop/pkg/agentloop.New(...)`.
+- DI-02 stateless provider live/record/replay transport ownership is centralized in `agent-cli/internal/agent` and injected into provider builders.
+
+Future Phase 2 work should preserve those ownership boundaries instead of reintroducing constructor-side defaults in reusable packages.
 
 ## Decision Checklist For Future Changes
 

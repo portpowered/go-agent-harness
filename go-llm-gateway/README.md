@@ -27,6 +27,22 @@ The current consumer-facing surfaces are:
 Most consumers start with `pkg/gateway`, one provider package, and `pkg/models`.
 Use `pkg/inference` only when you are wiring this module into `go-agent-loop`.
 
+## Constructor Ownership Boundary
+
+`go-llm-gateway` provider builders consume runtime dependencies; they should
+not decide generic application transport policy.
+
+- Provider packages own provider-specific request shaping, option parsing, and
+  protocol translation.
+- The application composition layer, currently `agent-cli`, owns whether a
+  stateless provider runs live, record, or replay and builds the shared
+  `*http.Client` for that mode before provider construction.
+- In this repository, that injected seam is
+  `agent-cli/internal/agent.ProviderBuildContext.HTTPClient`.
+
+Treat hidden record/replay transport assembly or implicit `http.DefaultTransport`
+selection inside provider builders as a boundary violation.
+
 ## Shared Session Fixtures
 
 `pkg/testing` is the authoritative owner for committed shared `.session.json`

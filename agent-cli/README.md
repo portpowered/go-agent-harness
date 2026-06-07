@@ -163,6 +163,10 @@ with `go-agent-loop` and `go-llm-gateway` in the active workspace.
 - It depends on `go-agent-loop` for the core agent execution model.
 - It depends on `go-llm-gateway` for provider implementations and loop-facing
   inferencer adapters.
+- It owns constructor-time dependency choices that should not be hidden inside
+  the reusable libraries, including tool executor wiring for loop construction
+  and stateless provider HTTP runtime wiring for live, record, and replay
+  modes.
 - Its supported surface is the `agent` command and the user documentation under
   `docs/`, not the internal package layout under `internal/`.
 
@@ -170,6 +174,15 @@ Consumers who need a library integration point should start with
 [`go-agent-loop`](../go-agent-loop/README.md) or
 [`go-llm-gateway`](../go-llm-gateway/README.md) instead of importing
 `agent-cli/internal/...`.
+
+For the constructor ownership boundary specifically:
+
+- `go-agent-loop` callers explicitly choose tool capability with
+  `WithToolExecutor(...)` or `WithToolExecutionDisabled()`.
+- `agent-cli/internal/agent` computes one shared `*http.Client` runtime for
+  stateless providers before provider construction, then injects it through
+  `ProviderBuildContext` so provider builders do not assemble record/replay
+  transport policy themselves.
 
 ## Further Reading
 
