@@ -33,6 +33,8 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	chatFlags := flags.NewChatFlags()
 	chatCommand := cli.NewChatCommand(executor, askFlags, loopFlags, chatFlags, globalFlags)
 	toolCommand := cli.NewToolCommand(globalFlags)
+	interactionCommand := cli.NewInteractionCommand()
+	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	sessionInferencer := provideNilSessionInferencer()
 	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
@@ -40,7 +42,7 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -58,6 +60,8 @@ func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.
 	chatFlags := flags.NewChatFlags()
 	chatCommand := cli.NewChatCommand(agentExecutor, askFlags, loopFlags, chatFlags, globalFlags)
 	toolCommand := cli.NewToolCommand(globalFlags)
+	interactionCommand := cli.NewInteractionCommand()
+	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	sessionInferencer := provideNilSessionInferencer()
 	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
@@ -65,7 +69,7 @@ func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -83,13 +87,15 @@ func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor,
 	chatFlags := flags.NewChatFlags()
 	chatCommand := cli.NewChatCommand(agentExecutor, askFlags, loopFlags, chatFlags, globalFlags)
 	toolCommand := cli.NewToolCommand(globalFlags)
+	interactionCommand := cli.NewInteractionCommand()
+	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -108,6 +114,8 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 	chatFlags := flags.NewChatFlags()
 	chatCommand := cli.NewChatCommand(agentExecutor, askFlags, loopFlags, chatFlags, globalFlags)
 	toolCommand := cli.NewToolCommand(globalFlags)
+	interactionCommand := cli.NewInteractionCommand()
+	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	sessionInferencer := provideNilSessionInferencer()
 	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
@@ -115,7 +123,7 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -139,5 +147,5 @@ var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewCha
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewSessionCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewSessionCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )
