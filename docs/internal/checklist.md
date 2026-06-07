@@ -16,3 +16,17 @@ The convergence validator must cite these item IDs directly when it records
 | `P1-ARCH-04` | README set coherence | Module and docs index READMEs describe the current repository layout and entrypoint paths without stale directory references. | `README.md`, `agent-cli/README.md`, `agent-cli/docs/README.md`, `go-agent-loop/README.md`, `go-llm-gateway/README.md` |
 | `P1-MERGE-01` | Split-brain resolution | The authoritative Phase 1 baseline clearly identifies whether local `main`, `origin/main`, and the prior convergence branch still compete or whether any remaining divergence is only an explicitly documented stale ref. | local `main`, `origin/main`, `phase-1-authoritative-workspace-convergence`, `phase-1-authoritative-checkout-reconciliation` |
 | `P1-MERGE-02` | Reviewer readiness | The current head is mergeable, the convergence report records an overall verdict, and any remaining repair work is explicitly scoped from observable evidence. | `docs/internal/phase-1-authoritative-checkout-convergence-report.md`, PR mergeability state, root validation commands |
+
+## Phase 2 - Session Fixture Ownership Boundary
+
+This checklist is the authoritative Phase 2 inventory for the session fixture
+ownership-boundary slice. The Phase 2 validator must cite these item IDs
+directly when it records `pass`, `fail`, or `uncertain` evidence.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P2-SFO-01` | Ownership contract | The repository names one authoritative owner and canonical root for committed shared `.session.json` replay fixtures. | `go-llm-gateway/pkg/testing/session_fixture_contract.go`, `go-llm-gateway/pkg/testing/README.md`, `go-llm-gateway/pkg/testing/session-fixture-authoring.md` |
+| `P2-SFO-02` | Fixture root convergence | Shared committed replay fixtures that form the repository-wide contract live under the gateway-owned canonical root instead of Agent CLI private `testdata`. | `go-llm-gateway/pkg/testing/session_fixture_paths.go`, `go-llm-gateway/pkg/testing/testdata/session-fixtures/*.session.json`, `agent-cli/test/integration/testdata` |
+| `P2-SFO-03` | Intentional consumer boundaries | Replay and validation consumers use exported gateway-owned helper APIs or shared fixture path helpers rather than sibling-module filesystem reach-through. | `agent-cli/test/integration/fixture_paths_test.go`, `agent-cli/test/integration/replay_session_test.go`, `agent-cli/test/integration/replay_stateless_test.go`, `agent-cli/test/integration/session_command_test.go`, `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go` |
+| `P2-SFO-04` | Authoring guidance | Contributor-facing docs describe the same ownership boundary, fixture classes, and validator workflow without contradictory shared-root guidance. | `README.md`, `go-llm-gateway/README.md`, `agent-cli/docs/README.md`, `agent-cli/docs/session-record-replay.md`, `go-llm-gateway/pkg/testing/README.md`, `go-llm-gateway/pkg/testing/session-fixture-authoring.md` |
+| `P2-SFO-05` | Deterministic proof | The repository contains deterministic tests that prove shared fixtures still satisfy replay and hygiene expectations after the ownership move. | `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`, `go-llm-gateway/pkg/testing/session_replay_test.go`, root `Makefile` quality targets |

@@ -43,7 +43,7 @@ Every committed `.session.json` capture must use the versioned `SessionCapture` 
 
 `session.fixture_provenance` tells reviewers how the capture was produced and which safety checks apply.
 
-Run the validator before review from `libraries/go-llm-gateway`:
+Run the validator before review from `go-llm-gateway`:
 
 ```sh
 go run ./cmd/session-fixture-validator ./pkg/testing/testdata/session-fixtures
