@@ -123,3 +123,17 @@ records `pass`, `fail`, or `uncertain` evidence.
 | `P3-CORE-02` | Truthful gateway model boundary documentation | `go-llm-gateway/pkg/models` and related docs describe compatibility aliases versus gateway-owned surfaces truthfully and do not overstate independent shared-contract ownership. | `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/pkg/models/session.go`, `go-llm-gateway/README.md`, `go-llm-gateway/docs/development.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
 | `P3-CORE-05` | Explicit adapter composition boundaries | Cross-library composition remains in explicit adapter packages instead of hidden coupling through core packages or ambiguous package ownership. | `go-llm-gateway/pkg/inference/*.go`, `go-llm-gateway/pkg/gateway/*.go`, `go-agent-loop/pkg/messages/*.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
 | `P3-CORE-06` | Reviewer-verifiable dependency proof | The chosen import or architecture proof is automated, understandable during review, and catches reverse-direction drift without introducing forbidden reverse imports. | `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-agent-loop/test/functional/dependency_direction_test.go`, root validation commands, `docs/internal/phase-3-shared-contract-validator.md` |
+
+## Phase 3 - Library Independence Validator
+
+This checklist is the authoritative Phase 3 inventory for the library
+independence convergence pass. Reviewers should cite these item IDs directly
+when they validate whether the completed gateway decoupling and
+library-independence proof slices support closing the broader package-boundary
+realignment gate.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-03` | Loop consumer independence | `go-agent-loop` can be imported and exercised through a reviewer-runnable proof surface without importing `go-llm-gateway/pkg/providers/...` packages, requiring live credentials, or requiring network access. | `go-agent-loop` proof command, `go-agent-loop` proof files, `docs/internal/phase-3-library-independence-validator.md` |
+| `P3-CORE-04` | Gateway consumer independence | `go-llm-gateway` can be imported and exercised through a reviewer-runnable proof surface without non-contract `go-agent-loop` runtime packages, while allowing the deliberate shared message contract package. | `go-llm-gateway` proof command, `go-llm-gateway` proof files, `docs/internal/phase-3-library-independence-validator.md` |
+| `P3-GATE-01` | Broader boundary realignment gate | The repository contains truthful, deterministic, credential-free, network-free proof guidance and one convergence verdict that states whether the broader Phase 3 package-boundary work may close, must pause for repair, or remains blocked by uncertainty. | `docs/internal/phase-3-library-independence-validator.md`, `docs/internal/checklist.md`, proof commands, reviewer-facing proof documentation |
