@@ -607,6 +607,201 @@ rows and their `P4-GATE-01` impact as failed rows that must remain open; cites
 affected public declarations and reviewer commands; and scopes exact future
 repair work without implementing the repair inside this validator lane.
 
+## Dependency, Result, Context, And Lifecycle Contract Validation
+
+### Evidence Inputs
+
+- `go-agent-loop/pkg/messages/session.go`
+- `go-agent-loop/pkg/messages/buffers.go`
+- `go-agent-loop/pkg/messages/agent_messages.go`
+- `go-agent-loop/pkg/participants/model_runner.go`
+- `go-llm-gateway/pkg/gateway/gateway.go`
+- `go-llm-gateway/pkg/gateway/session_gateway.go`
+- `go-llm-gateway/pkg/inference/session_inferencer.go`
+- `go-llm-gateway/pkg/models/session.go`
+- `go-llm-gateway/pkg/testing/session_record.go`
+- `go-llm-gateway/pkg/testing/session_replay.go`
+- `agent-cli/internal/agent/provider_runtime.go`
+- `agent-cli/internal/services/session.go`
+- `agent-cli/internal/services/session_runtime.go`
+- `agent-cli/internal/agent/executor.go`
+- `docs/architecture/contract-gap-audit.md`
+- `docs/architecture/dependencies.md`
+- deterministic tests under `go-agent-loop/pkg/participants`,
+  `go-agent-loop/test/functional`, `go-llm-gateway/pkg/testing`,
+  `go-llm-gateway/pkg/inference`, and `agent-cli/test/integration`
+
+### `P4-API-01` - Blocking Context, Cancellation, And Timeout Ownership
+
+- `verdict`: `uncertain`
+- `closure decision`: `remains open`
+- `public evidence`: public gateway and session entrypoints accept caller-owned
+  `context.Context`: `DefaultGateway.Infer`, `DefaultGateway.InferStream`,
+  `DefaultSessionGateway.ConnectSession`, `messages.SessionInferencer`, and
+  `messages.Session.Send`. Session replay and recording helpers now accept
+  explicit relay lifecycle contexts, and deterministic tests prove selected
+  cancellation paths preserve `context.Canceled`. That is partial positive
+  evidence. The row still cannot close because `TypedBuffer.Write` returns only
+  `false` for both cancellation and full-buffer drop, `Session.Send` has the
+  same ambiguous bool surface, `SessionGatewayInferencer` still bakes session
+  shape into constructor options while `ConnectSession(ctx)` carries only
+  lifetime, and the audit keeps `CTX-01`, `LIFECYCLE-01`, and `COMPAT-02` open
+  for split session context and command-stop behavior.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.SessionInferencer`;
+  `go-agent-loop/pkg/messages.Session`; `go-agent-loop/pkg/messages.TypedBuffer`;
+  `go-agent-loop/pkg/participants.ModelRunner.runSession`;
+  `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`;
+  `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`;
+  `go-llm-gateway/pkg/gateway.DefaultSessionGateway.ConnectSession`;
+  `go-llm-gateway/pkg/inference.SessionGatewayInferencer.ConnectSession`;
+  `go-llm-gateway/pkg/testing.SessionRecorder`;
+  `go-llm-gateway/pkg/testing.SessionReplayer`;
+  `agent-cli/internal/services.RunSession`.
+- `docs, examples, tests, audit, and API alignment`: partially aligned for
+  replay/record relay cancellation after Phase 2, but not aligned for the full
+  public blocking-call contract. Docs and audit still require one explicit
+  session request/config and lifecycle contract before cancellation, timeout,
+  and stop semantics can close.
+- `reviewer commands`: `rg -n "ConnectSession\\(ctx|WithReplayContext|WithSessionRelayContext|TypedBuffer|Write\\(ctx|context\\.Canceled|CTX-01|LIFECYCLE-01|COMPAT-02"`
+  `go-agent-loop go-llm-gateway agent-cli docs`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: define a public session request and
+  lifecycle contract that separates cancellation/deadline ownership from
+  session shape, add explicit write/send outcomes for cancellation versus full
+  buffers or closed sessions, and add deterministic tests for gateway, session,
+  replay, record, and CLI timeout/cancellation paths without live credentials.
+
+### `P4-API-03` - Result, Buffer, Session, And Stream Outcome States
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: public stream messages expose `MESSAGE.END`, `ERROR`,
+  `SESSION.CLOSE`, and `RESPONSE.CANCEL`, and `InteractionEvent` includes a
+  `Completed` field for interaction output. Those surfaces do not form one
+  explicit outcome contract. `ModelRunner.drainStream` emits a synthetic
+  `MESSAGE.END` when a provider channel closes without an end event;
+  `emitSyntheticDeltas` maps non-streaming success into the same end event and
+  non-streaming failure into a string-only `ERROR`; `TypedBuffer.Read` returns
+  `(zero, false)` for empty buffers only; and `SessionReplayer.Err` returns
+  untyped replay divergence or incomplete-close errors out of band. Callers
+  cannot distinguish empty success, partial success before cancellation,
+  provider-authored completion, loop-synthesized completion, replay mismatch,
+  replay incomplete, closed/drained state, and terminal failure through one
+  documented public API.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.InferenceResult`;
+  `go-agent-loop/pkg/messages.StreamMessage`;
+  `go-agent-loop/pkg/messages.TypedBuffer`;
+  `go-agent-loop/pkg/messages.Session`;
+  `go-agent-loop/pkg/participants.ModelRunner.drainStream`;
+  `go-agent-loop/pkg/participants.ModelRunner.emitSyntheticDeltas`;
+  `go-llm-gateway/pkg/gateway.InferenceResponse`;
+  `go-llm-gateway/pkg/gateway.InteractionEvent`;
+  `go-llm-gateway/pkg/testing.SessionReplayer.Err`;
+  `agent-cli/internal/services.sessionOutput`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. Tests prove
+  several concrete behaviors, but docs, audit rows `LIFECYCLE-01`,
+  `LIFECYCLE-02`, `COMPAT-01`, and `COMPAT-02`, and exported declarations do
+  not describe the same public result-state vocabulary.
+- `reviewer commands`: `rg -n "type TypedBuffer|func \\(b \\*TypedBuffer|StreamTypeMessageEnd|StreamTypeError|StreamTypeSessionClose|Completed|provider_closed|session replay closed before|replay divergence"`
+  `go-agent-loop go-llm-gateway agent-cli docs`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: add an additive result/outcome
+  vocabulary covering empty success, cancellation, partial success,
+  closed/drained, provider-authored end, loop-synthesized end, replay
+  divergence, replay incomplete, and terminal failure. Wire the vocabulary into
+  buffer/session/stream result surfaces or document where a legacy bool/error
+  remains compatibility-staged, then add deterministic fake-provider, replay,
+  and CLI tests.
+
+### `P4-API-07` - Dependency Ownership And Side Effects
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: Phase 2 repaired important constructor ownership subsets:
+  tool execution ownership is explicit at `agentloop.New`, stateless provider
+  HTTP runtime policy is composed in `agent-cli/internal/agent`, and scoped
+  Grok/OpenAI session runtime wiring is centralized in
+  `agent-cli/internal/services/session_runtime.go`. The full Phase 4 row is
+  broader. The audit still records `DI-03` because
+  `Executor.loadSystemPrompt` mixes prompt assembly with filesystem reads,
+  `workspace.EnsureAgentsMD`, config loading, and skills metadata loading.
+  `SessionGatewayInferencer` exposes only model, voice, and instructions even
+  though `models.SessionConfig` has modalities, audio formats, tools, turn
+  detection, and provider-specific config. Session capture and fixture helpers
+  own filesystem and time side effects directly through `os.ReadFile`,
+  `os.WriteFile`, and `time.Now().UTC()`. `agent-cli` application wiring also
+  legitimately owns local filesystem, environment, process, terminal, storage,
+  network, and provider selection concerns, but the public docs do not yet map
+  every such surface to caller-owned, injected, side-effect free, or explicitly
+  open work.
+- `affected files / declarations`: `go-agent-loop/pkg/agentloop.New`;
+  `go-llm-gateway/pkg/inference.SessionGatewayInferencer`;
+  `go-llm-gateway/pkg/models.SessionConfig`;
+  `go-llm-gateway/pkg/testing.NewSessionRecorder`;
+  `go-llm-gateway/pkg/testing.NewSessionReplayer`;
+  `go-llm-gateway/pkg/testing.SessionRecorder.FlushToFile`;
+  `agent-cli/internal/agent.Executor.loadSystemPrompt`;
+  `agent-cli/internal/agent.buildProviderHTTPRuntime`;
+  `agent-cli/internal/services.sessionRuntimePlan`;
+  `docs/architecture/dependencies.md`;
+  `docs/architecture/contract-gap-audit.md`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. The docs and
+  audit accurately describe several repaired Phase 2 ownership seams, but they
+  also name still-open prompt resolution, session request/config, alias facade,
+  and internal wiring documentation gaps. There is no complete reviewer-facing
+  matrix for filesystem, environment, process, transport, network, time,
+  prompt, provider runtime, constructor, and session dependencies.
+- `reviewer commands`: `rg -n "DI-03|CTX-01|DOC-01|DOC-02|loadSystemPrompt|EnsureAgentsMD|SessionGatewayInferencer|SessionConfig|time\\.Now|os\\.ReadFile|os\\.WriteFile|buildProviderHTTPRuntime|sessionRuntimePlan"`
+  `docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: create an implementation lane that
+  splits prompt assembly into pure composition plus injected filesystem/config/
+  system-info/skills loaders, expands or supersedes the loop-facing session
+  request/config adapter, documents the `pkg/models` alias role and
+  `agent-cli/internal/*` wiring boundary, and records every remaining
+  filesystem, environment, process, transport, network, and time dependency as
+  caller-owned, injected, side-effect free, or explicitly open work.
+
+### `P4-GATE-01` - Dependency, Result, Context, And Lifecycle Gate Impact
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: docs, tests, public APIs, and audit rows align on some
+  repaired ownership subsets, especially constructor tool execution,
+  stateless provider HTTP runtime injection, and session relay cancellation.
+  They do not align on the broader Phase 4 contract because `P4-API-01`,
+  `P4-API-03`, and `P4-API-07` remain non-pass in this story, while earlier
+  validator sections also keep typed errors, stream semantics, provider
+  capabilities, and local unsupported-feature validation open.
+- `affected files / declarations`: every declaration cited by `P4-API-01`,
+  `P4-API-03`, and `P4-API-07`; `docs/architecture/contract-gap-audit.md`;
+  `docs/architecture/dependencies.md`;
+  `docs/internal/checklist.md`;
+  `docs/internal/phase-4-api-contract-repair-validator.md`.
+- `docs, examples, tests, audit, and API alignment`: not aligned for this
+  slice. The validator can document non-convergence, but the checklist row
+  itself cannot close until public APIs, docs, examples where present, audit
+  rows, deterministic tests, and reviewer commands describe the same current
+  dependency/result/context/lifecycle contract.
+- `reviewer commands`: `rg -n "P4-API-01|P4-API-03|P4-API-07|P4-GATE-01|CTX-01|DI-03|LIFECYCLE-|COMPAT-|DOC-"`
+  `docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: complete the dependency ownership,
+  session request/context, result-state, and lifecycle repair lane before
+  marking the Phase 4 hardening gate complete. Preserve the already repaired
+  Phase 2 ownership seams, but do not proceed to a new Phase 4 feature batch
+  from CI success alone.
+
+## Story 005 Closure
+
+The dependency, result, context, and lifecycle convergence story passes for
+validator purposes: the report verifies caller-owned cancellation evidence,
+public result/buffer/session/stream outcome surfaces, constructor and runtime
+ownership seams, prompt/filesystem/time side effects, docs, audit rows, and
+deterministic commands. It marks `P4-API-01` as uncertain and `P4-API-03`,
+`P4-API-07`, and the relevant `P4-GATE-01` slice as failed rows that must
+remain open, with exact future repair work scoped outside this validator lane.
+
 ## Story 002 Closure
 
 The audit and validator-015 reconciliation story passes for validator purposes:
@@ -617,11 +812,11 @@ checklist row may close from story 002 alone.
 
 ## Current Story Status
 
-Stories 001, 002, 003, and 004 are complete. The report now establishes the
+Stories 001, 002, 003, 004, and 005 are complete. The report now establishes the
 Phase 4 validator subject, checklist row coverage, evidence rules, required
 finding shape, audit/validator-015 reconciliation findings, typed-error/stream
 contract findings, and provider capability/local unsupported-feature validation
-findings. Dependency, result, context, lifecycle, and final planner decision
-findings remain deferred to later validator stories so each pass can compare
-the current public API, docs, examples where present, audit rows, tests, and
-deterministic command evidence at the correct depth.
+findings, plus dependency/result/context/lifecycle findings. Final checklist
+closure and the single next planner action remain deferred to the final
+validator story so that the report can summarize every requested row with one
+complete convergence decision.
