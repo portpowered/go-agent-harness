@@ -292,10 +292,11 @@ still cannot close a Phase 4 implementation checklist row by itself.
 - `outcome`: `uncertain`
 - `evidence`:
   - `P4-VALIDATION-01` maps unsupported request feature behavior to
-    `P4-API-06` and records that `DefaultGateway`, `Provider.Infer`,
-    `Provider.InferStream`, `GatewayInferencer.Infer`, and
-    `GatewayInferencer.InferStream` do not share a local validation step before
-    provider execution.
+    `P4-API-06`. Its audit finding is now stale for the gateway/session seam:
+    `DefaultGateway` validates stateless requests before provider dispatch,
+    `DefaultSessionGateway` validates sessions before provider connection, and
+    unsupported local rejections use the public `UnsupportedFeatureError`
+    contract.
   - `P4-VALIDATION-01` identifies inconsistent provider behavior: unsupported
     fields may be ignored, translated to provider-specific params, returned as
     formatted string errors, or represented by fal's immediately closed stream
@@ -304,10 +305,12 @@ still cannot close a Phase 4 implementation checklist row by itself.
     `P4-DI-02` records session pre-dial validation gaps for realtime
     modalities, audio formats, turn detection, tools, sample rates, and raw
     config.
-  - Runtime implementation evidence still fails this row: there is no shared
-    public local validation API or typed validation taxonomy that reports the
-    provider, requested feature or mode, and capability state before provider
-    dispatch.
+  - Runtime implementation evidence makes this row uncertain rather than failed:
+    gateway/session validation now reports provider, requested feature or mode,
+    and capability state before provider execution or connection, while closure
+    still depends on audit reconciliation, concrete provider coverage,
+    interaction/inferencer validation seam evidence, fal streaming behavior, and
+    docs/examples.
 - `affected files / declarations`:
   - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`
   - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
@@ -320,11 +323,16 @@ still cannot close a Phase 4 implementation checklist row by itself.
   - `go-llm-gateway/pkg/models.SessionConfig`
 - `closure decision`: `must remain open`
 - `exact repair work`:
-  - Implement the audit repair slice from `P4-VALIDATION-01`: add capability-
-    backed validation before stateless and session provider dispatch.
-  - Define typed validation failures such as unsupported capability,
-    unsupported model, and invalid request details that support `errors.Is` and
-    `errors.As`.
+  - Reconcile `P4-VALIDATION-01` with the implemented gateway/session
+    validation seam and `UnsupportedFeatureError` contract.
+  - Extend validation closure evidence through interaction gateways and
+    `GatewayInferencer`, or document why those seams intentionally rely on
+    `DefaultGateway` validation.
+  - Complete concrete provider capability reporting so unsupported behavior does
+    not silently degrade to unknown for providers whose unsupported features are
+    already known.
+  - Decide and document the fal streaming behavior against the public capability
+    contract.
   - Add public docs, examples, and credential-free tests proving unsupported
     features fail locally without HTTP, SDK, websocket, or live-provider side
     effects.
