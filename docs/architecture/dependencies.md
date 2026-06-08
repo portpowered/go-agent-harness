@@ -49,6 +49,7 @@ Reviewer rule of thumb:
 - `internal/agent.Executor` builds loops, loads config, and selects the active provider implementation.
 - `internal/agent.Executor` and `internal/agent.buildProviderHTTPRuntime(...)` own the shared stateless provider HTTP runtime decision for live, record, and replay modes before provider-specific builders run.
 - `internal/agent.ProviderBuildContext` is the constructor seam that passes that owned runtime dependency into concrete provider builders.
+- `internal/agent.WithProviderHTTPBaseTransport(...)` is the CLI-owned test and composition seam for choosing the base live transport; record mode wraps that same transport, and replay mode replaces it with the fixture replay transport.
 - `internal/services/session.go` assembles session-mode runtime behavior by combining `agentloop`, gateway session inferencers, replay helpers, and CLI output handling.
 - `internal/tools`, `internal/session`, `internal/config`, and `internal/workspace` are application concerns that should stay above the reusable libraries.
 
@@ -103,6 +104,7 @@ Constructor ownership contract after this Phase 2 step:
 
 - Generic stateless HTTP runtime policy for live, record, and replay belongs to `agent-cli`, not to individual provider builders.
 - Provider builders consume injected runtime dependencies through `internal/agent.ProviderBuildContext` and remain focused on provider-specific option wiring.
+- Live and record base transport selection is caller-owned at `agent-cli/internal/agent.WithProviderHTTPBaseTransport(...)`; provider constructors receive the resulting `*http.Client` rather than selecting transport policy themselves.
 - Reviewers should treat implicit `http.DefaultTransport` selection or record/replay capture assembly inside provider builders as an architectural regression.
 
 Exports that currently look incidental or not yet independent:
