@@ -162,3 +162,45 @@ from reviewer-runnable repository artifacts.
     test doubles.
   - `P3-CORE-03` is ready to close from the checked loop consumer evidence.
 - `required repairs`: none.
+
+### Gateway Consumer Independence
+
+- `outcome`: `pass`
+- `checklist rows inspected`: `P3-CORE-04`
+- `commands run or cited`:
+  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
+  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
+  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+- `affected files / commands / surfaces`:
+  - `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`
+  - `go-llm-gateway/pkg/gateway/interaction_fixture_test.go`
+  - `go-llm-gateway/pkg/inference/main_inferencer_test.go`
+  - `go-llm-gateway/pkg/gateway/gateway.go`
+  - `go-llm-gateway/pkg/gateway/interaction_gateway.go`
+  - `go-llm-gateway/pkg/inference/main_inferencer.go`
+  - `go-llm-gateway/pkg/models/message.go`
+  - `go-llm-gateway/go.mod`
+  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
+  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
+  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+- `evidence`:
+  - The gateway proof command passes and exercises observable gateway behavior
+    without live providers, credentials, or network access.
+    `TestInteract_NormalizesProviderTextResponse` constructs `gateway.NewGateway`
+    with an in-process fake provider, runs `Interact`, and verifies normalized
+    start, text delta, final message, usage, and end events plus translated
+    provider request fields. `TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents`
+    replays the same normalized fixture twice and verifies deterministic output.
+    `TestInfer_PassthroughMaxTokens` and `TestInferStream_PassthroughAllFields`
+    exercise the `pkg/inference` adapter with an in-process capture gateway and
+    verify deterministic request translation into gateway calls.
+  - The checked gateway consumer dependency path imports exactly one
+    `go-agent-loop` package: `github.com/portpowered/go-agent-loop/pkg/messages`.
+    This is the deliberate shared message contract package allowed by
+    `P3-CORE-04`.
+  - The forbidden dependency command exits with no matches for non-contract loop
+    runtime packages: `agentloop`, `engine`, `participants`, `state`,
+    `subsystems`, or `logging`. A non-zero `rg` exit is the expected passing
+    result for this exclusion proof.
+  - `P3-CORE-04` is ready to close from the checked gateway consumer evidence.
+- `required repairs`: none.
