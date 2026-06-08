@@ -63,6 +63,55 @@ class ValidateWorktreeHygieneConvergenceTests(unittest.TestCase):
 
         self.assertEqual(finding.outcome, "pass")
         self.assertIn("no manual `you work move` recovery is required", finding.required_follow_up)
+        self.assertIn(
+            "All repaired-slice `plan`, `task`, and `thoughts` items are terminal",
+            finding.evidence,
+        )
+
+    def test_evaluate_queue_recovery_is_uncertain_for_non_terminal_repaired_slice_items(self):
+        session_list_result = SCRIPT_MODULE.CommandResult(
+            args=["you", "session", "list"],
+            returncode=0,
+            stdout="ok",
+            stderr="",
+        )
+        work_list_result = SCRIPT_MODULE.CommandResult(
+            args=["you", "work", "list", "--session", "session-123"],
+            returncode=0,
+            stdout="\n".join(
+                [
+                    "WORK ID\tNAME\tWORK TYPE\tSTATE NAME\tSTATE TYPE\tRELATIONS",
+                    "repair-idea\tphase-2-factory-worktree-hygiene-repair\tidea\tcomplete\tTERMINAL\tnone",
+                    "repair-task\tphase-2-factory-worktree-hygiene-repair\ttask\tin-review\tPROCESSING\tnone",
+                    "repair-thoughts\tphase-2-factory-worktree-hygiene-repair\tthoughts\tinit\tINITIAL\tnone",
+                    "loopback\tideafy-loopback-phase-2-factory-worktree-hygiene-repair-batch-009\tthoughts\tinit\tINITIAL\tDEPENDS_ON: phase-2-factory-worktree-hygiene-repair [repair-idea] (requires complete)",
+                ]
+            ),
+            stderr="",
+        )
+
+        finding = SCRIPT_MODULE.evaluate_queue_recovery(
+            project_root=Path("/Users/example/go-agent-harness"),
+            session_list_result=session_list_result,
+            work_list_result=work_list_result,
+            session_id="session-123",
+        )
+
+        self.assertEqual(finding.outcome, "uncertain")
+        self.assertIn("repair-task` (task/in-review/PROCESSING)", finding.evidence)
+        self.assertIn("repair-thoughts` (thoughts/init/INITIAL)", finding.evidence)
+        self.assertIn(
+            "Related non-slice items that still reference the repaired slice were observed but not classified as repaired-slice queue damage",
+            finding.evidence,
+        )
+        self.assertIn(
+            "`repair-task`: if `repair-task` is idle and should re-enter executor processing, run `you work move --session session-123 repair-task init`",
+            finding.required_follow_up,
+        )
+        self.assertIn(
+            "`repair-thoughts`: `repair-thoughts` is already at `thoughts:init`; confirm it is not in an active dispatch before attempting any manual repair",
+            finding.required_follow_up,
+        )
 
     def test_render_report_includes_generated_command_and_verdict(self):
         findings = [

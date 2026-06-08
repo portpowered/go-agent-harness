@@ -47,6 +47,9 @@ class WorkItem:
     relations: str
 
 
+QUEUE_RELEVANT_WORK_TYPES = {"plan", "task", "thoughts"}
+
+
 def run_command(args: list[str], cwd: Path) -> CommandResult:
     result = subprocess.run(
         args,
@@ -121,6 +124,51 @@ def parse_work_items(output: str) -> list[WorkItem]:
         )
         for row in parse_tabular_output(output)
     ]
+
+
+def is_direct_repaired_slice_item(item: WorkItem) -> bool:
+    return item.name == REPAIRED_SLICE or item.work_id.endswith(f"-{REPAIRED_SLICE}")
+
+
+def is_related_repaired_slice_item(item: WorkItem) -> bool:
+    return REPAIRED_SLICE in item.relations and not is_direct_repaired_slice_item(item)
+
+
+def recommended_recovery_action(session_id: str, item: WorkItem) -> str:
+    if item.work_type == "thoughts":
+        return (
+            f"if `{item.work_id}` is idle and should rerun the ideafy loop, run "
+            f"`you work move --session {session_id} {item.work_id} init`"
+            if item.state_name != "init"
+            else (
+                f"`{item.work_id}` is already at `thoughts:init`; confirm it is not in an active dispatch before "
+                "attempting any manual repair"
+            )
+        )
+
+    if item.work_type == "plan":
+        return (
+            f"if `{item.work_id}` is idle and needs setup-workspace retried, run "
+            f"`you work move --session {session_id} {item.work_id} init`"
+            if item.state_name != "init"
+            else (
+                f"`{item.work_id}` is already at `plan:init`; confirm it is not in an active dispatch before "
+                "attempting any manual repair"
+            )
+        )
+
+    if item.work_type == "task":
+        if item.state_name in {"failed", "in-review", "to-complete"}:
+            return (
+                f"if `{item.work_id}` is idle and should re-enter executor processing, run "
+                f"`you work move --session {session_id} {item.work_id} init`"
+            )
+        return (
+            f"`{item.work_id}` is already at `task:init`; confirm it is not in an active dispatch before "
+            "attempting any manual repair"
+        )
+
+    return f"inspect `{item.work_id}` manually; no validator recovery rule exists for `{item.work_type}`"
 
 
 def collect_setup_runtime_evidence(root: Path) -> CommandResult:
@@ -314,20 +362,23 @@ def evaluate_queue_recovery(
         )
 
     work_items = parse_work_items(work_list_result.stdout)
-    repair_items = [
-        item
-        for item in work_items
-        if REPAIRED_SLICE in item.name or REPAIRED_SLICE in item.work_id or REPAIRED_SLICE in item.relations
+    direct_repair_items = [
+        item for item in work_items if is_direct_repaired_slice_item(item)
+    ]
+    related_repair_items = [
+        item for item in work_items if is_related_repaired_slice_item(item)
     ]
     terminal_repair_items = [
-        item for item in repair_items if item.work_type in {"idea", "plan", "task"} and item.state_type == "TERMINAL"
-    ]
-    stranded_repair_items = [
         item
-        for item in repair_items
-        if item.work_type in {"plan", "task", "thoughts"} and item.state_type == "FAILED"
+        for item in direct_repair_items
+        if item.work_type in {"idea", "plan", "task"} and item.state_type == "TERMINAL"
     ]
-    outcome = "pass" if terminal_repair_items and not stranded_repair_items else "uncertain"
+    non_terminal_repair_items = [
+        item
+        for item in direct_repair_items
+        if item.work_type in QUEUE_RELEVANT_WORK_TYPES and item.state_type != "TERMINAL"
+    ]
+    outcome = "pass" if terminal_repair_items and not non_terminal_repair_items else "uncertain"
 
     evidence_lines = [
         f"`you session list` matched project root `{project_root}` to session `{session_id}`.",
@@ -342,21 +393,36 @@ def evaluate_queue_recovery(
             )
             + "."
         )
-    if stranded_repair_items:
+    if related_repair_items:
         evidence_lines.append(
-            "Potentially stranded repaired-slice items: "
+            "Related non-slice items that still reference the repaired slice were observed but not classified as repaired-slice queue damage: "
             + "; ".join(
                 f"`{item.work_id}` ({item.work_type}/{item.state_name})"
-                for item in stranded_repair_items
+                for item in related_repair_items
+            )
+            + "."
+        )
+    if non_terminal_repair_items:
+        evidence_lines.append(
+            "Non-terminal repaired-slice queue items requiring operator review: "
+            + "; ".join(
+                f"`{item.work_id}` ({item.work_type}/{item.state_name}/{item.state_type})"
+                for item in non_terminal_repair_items
             )
             + "."
         )
     else:
         evidence_lines.append(
-            "No repaired-slice `plan`, `task`, or `thoughts` item is currently in a `FAILED` state."
+            "All repaired-slice `plan`, `task`, and `thoughts` items are terminal; no manual recovery remains."
         )
 
-    follow_up = "no manual `you work move` recovery is required for the repaired slice" if outcome == "pass" else "inspect the named non-terminal repair items and record exact `you work move` recovery if they are confirmed stranded"
+    if outcome == "pass":
+        follow_up = "no manual `you work move` recovery is required for the repaired slice"
+    else:
+        follow_up = "; ".join(
+            f"`{item.work_id}`: {recommended_recovery_action(session_id, item)}"
+            for item in non_terminal_repair_items
+        )
     return Finding(
         group="durable-queue-recovery",
         subject="Live durable queue inspection for stranded plan, task, or thoughts work",
