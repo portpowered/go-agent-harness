@@ -6,6 +6,8 @@
 // support and consumers must not treat it as supported.
 package capabilities
 
+import "fmt"
+
 // CapabilityState describes whether a provider can satisfy a feature locally.
 type CapabilityState string
 
@@ -94,6 +96,42 @@ type ProviderCapabilities struct {
 	Stateless StatelessCapabilities `json:"stateless"`
 	Session   SessionCapabilities   `json:"session"`
 	Metadata  map[string]string     `json:"metadata,omitempty"`
+}
+
+// Feature identifies a capability-gated provider behavior.
+type Feature string
+
+const (
+	FeatureTools                  Feature = "tools"
+	FeatureStreaming              Feature = "streaming"
+	FeatureImageInput             Feature = "image_input"
+	FeatureAudioInput             Feature = "audio_input"
+	FeatureAudioOutput            Feature = "audio_output"
+	FeatureVideoOutput            Feature = "video_output"
+	FeatureReasoning              Feature = "reasoning"
+	FeaturePromptCaching          Feature = "prompt_caching"
+	FeatureProviderSpecificConfig Feature = "provider_specific_config"
+)
+
+const (
+	RequestedModeStateless       = "stateless"
+	RequestedModeStatelessStream = "stateless_stream"
+)
+
+// UnsupportedFeatureError reports a deterministic local request/capability
+// mismatch before a provider call is attempted.
+type UnsupportedFeatureError struct {
+	Provider      string            `json:"provider"`
+	Feature       Feature           `json:"feature"`
+	RequestedMode string            `json:"requestedMode"`
+	Capability    FeatureCapability `json:"capability"`
+}
+
+func (e *UnsupportedFeatureError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("provider %q does not support %s for %s requests: capability state is %q", e.Provider, e.Feature, e.RequestedMode, e.Capability.State)
 }
 
 // UnknownProviderCapabilities returns the documented fallback for providers

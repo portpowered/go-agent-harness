@@ -36,10 +36,26 @@ type FeatureCapability = capabilities.FeatureCapability
 // CapabilityState re-exports the support-state enum from the public contract.
 type CapabilityState = capabilities.CapabilityState
 
+// Feature re-exports capability-gated feature identifiers.
+type Feature = capabilities.Feature
+
+// UnsupportedFeatureError re-exports deterministic local validation failures.
+type UnsupportedFeatureError = capabilities.UnsupportedFeatureError
+
 const (
 	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
 	CapabilityStateSupported   = capabilities.CapabilityStateSupported
 	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
+
+	FeatureTools                  = capabilities.FeatureTools
+	FeatureStreaming              = capabilities.FeatureStreaming
+	FeatureImageInput             = capabilities.FeatureImageInput
+	FeatureAudioInput             = capabilities.FeatureAudioInput
+	FeatureAudioOutput            = capabilities.FeatureAudioOutput
+	FeatureVideoOutput            = capabilities.FeatureVideoOutput
+	FeatureReasoning              = capabilities.FeatureReasoning
+	FeaturePromptCaching          = capabilities.FeaturePromptCaching
+	FeatureProviderSpecificConfig = capabilities.FeatureProviderSpecificConfig
 )
 
 // UnknownProviderCapabilities returns the documented fallback for providers
