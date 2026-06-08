@@ -527,6 +527,7 @@ type ErrorValue struct {
 	Code      string `json:"code,omitempty"`       // provider error code
 	Param     string `json:"param,omitempty"`      // provider parameter associated with the error
 	EventID   string `json:"event_id,omitempty"`   // related client event ID when provided
+	Err       error  `json:"-"`                    // typed in-process error for errors.Is/errors.As
 }
 
 func (*ErrorValue) streamMessageValue() {}
@@ -534,6 +535,15 @@ func (*ErrorValue) streamMessageValue() {}
 // NewErrorValue returns a value for ERROR.
 func NewErrorValue(message string) *ErrorValue {
 	return &ErrorValue{Type: "error", Message: message}
+}
+
+// NewErrorValueWithError returns an ERROR value that preserves the original
+// in-process error for callers that branch with errors.Is or errors.As.
+func NewErrorValueWithError(err error) *ErrorValue {
+	if err == nil {
+		return NewErrorValue("")
+	}
+	return &ErrorValue{Type: "error", Message: err.Error(), Err: err}
 }
 
 // NewErrorValueWithDetails returns an ERROR value with provider-supplied context.

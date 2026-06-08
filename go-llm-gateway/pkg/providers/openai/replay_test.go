@@ -708,6 +708,56 @@ func TestReplay_StreamError429_RateLimit(t *testing.T) {
 	if !strings.Contains(err.Error(), "429") {
 		t.Errorf("expected error to contain status code 429, got: %v", err)
 	}
+	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("expected stream error to match provider HTTP status classification")
+	}
+	if !errors.Is(err, gateway.ErrRateLimit) {
+		t.Fatal("expected stream error to match rate limit classification")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("provider HTTP status should not match transport classification")
+	}
+
+	var statusErr *gateway.ProviderHTTPStatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatal("expected typed provider HTTP status details")
+	}
+	if statusErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", statusErr.StatusCode, http.StatusTooManyRequests)
+	}
+}
+
+func TestReplay_InferStreamTransportErrorClassified(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, io.ErrUnexpectedEOF
+	})
+	p := newTestProvider(transport)
+
+	_, err := p.InferStream(context.Background(), providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("expected stream error to match transport classification")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatal("expected stream error to preserve transport cause")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("transport error should not match provider HTTP status classification")
+	}
+
+	var transportErr *gateway.TransportError
+	if !errors.As(err, &transportErr) {
+		t.Fatal("expected typed transport details")
+	}
+	if transportErr.Operation != "chat completions stream" {
+		t.Fatalf("operation = %q, want chat completions stream", transportErr.Operation)
+	}
 }
 
 // --- No-auth (local provider) tests ---
