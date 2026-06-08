@@ -16,7 +16,7 @@ The current consumer-facing surfaces are:
 | --- | --- |
 | `pkg/gateway` | Creating stateless gateways with `NewGateway(...)` and session gateways with `NewSessionGateway(...)` |
 | `pkg/inference` | Adapting gateways to `go-agent-loop` via `GatewayInferencer` and `SessionGatewayInferencer` |
-| `pkg/models` | Building messages and session config values that flow through the gateway |
+| `pkg/models` | Importing loop-owned message aliases plus gateway-owned session config and realtime event types |
 | `pkg/providers/anthropic` | Anthropic stateless inference provider |
 | `pkg/providers/openai` | OpenAI-compatible stateless inference plus OpenAI Realtime session provider |
 | `pkg/providers/gemini` | Gemini stateless inference provider |
@@ -25,7 +25,10 @@ The current consumer-facing surfaces are:
 | `pkg/testing` | HTTP and session record/replay helpers for deterministic tests |
 
 Most consumers start with `pkg/gateway`, one provider package, and `pkg/models`.
-Use `pkg/inference` only when you are wiring this module into `go-agent-loop`.
+Within `pkg/models`, message and tool types are compatibility aliases over
+`go-agent-loop/pkg/messages`, while session config and realtime event types are
+gateway-owned. Use `pkg/inference` only when you are wiring this module into
+`go-agent-loop`.
 
 ## Constructor Ownership Boundary
 
@@ -164,8 +167,10 @@ if err != nil {
 _ = session
 ```
 
-Use `pkg/models.SessionConfig` for session model, modality, audio, tool, and
-turn-detection settings.
+Use `pkg/models.SessionConfig` for gateway-owned session model, modality,
+audio, tool, and turn-detection settings. Message and tool payloads referenced
+from `SessionConfig` still follow the loop-owned shared contract re-exported
+through `pkg/models`.
 
 ## Provider Surface Map
 
