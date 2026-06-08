@@ -396,6 +396,91 @@ Provider-specific behavior lives behind those shared interfaces. Examples:
 - fal.ai streaming is unsupported in this wrapper; gateway and direct provider
   streaming calls return `providers.UnsupportedFeatureError` before HTTP work
 
+## Typed Errors And Event Classification
+
+Gateway, provider, replay, stream, session, and interaction failure paths expose
+machine-readable classification through public typed errors or structured event
+fields. Human-readable error text is still present for operators, but caller
+policy should not parse `err.Error()`, stream error text, or interaction event
+messages for the repaired representative classes.
+
+### Returned Go Errors
+
+Use `errors.Is` for policy decisions against the public taxonomy in
+`pkg/providers`:
+
+| Sentinel | Classification | Caller action |
+| --- | --- | --- |
+| `providers.ErrProviderRejected` | `provider_rejected` | Treat as an upstream provider rejection and inspect any narrower class before retrying. |
+| `providers.ErrAuthentication` | `authentication` | Refresh or replace credentials, authorization, or provider account configuration. |
+| `providers.ErrRateLimited` | `rate_limited` | Retry later using backoff or reduce request rate. |
+| `providers.ErrInvalidRequest` | `invalid_request` | Correct the request shape, model input, or provider-rejected parameter. |
+| `providers.ErrUnsupportedRequest` | `unsupported_request` | Choose a supported provider, model, feature, or mode. |
+| `providers.ErrTransport` | `transport` | Retry according to network and provider availability policy. |
+| `providers.ErrCancellation` | `cancellation` | Treat as caller-initiated shutdown or cancellation, not provider failure. |
+| `providers.ErrReplayMismatch` | `replay_mismatch` | Treat deterministic replay as divergent or incomplete and refresh the fixture or test expectation. |
+| `providers.ErrPartialOutput` | `partial_output` | Treat the operation as interrupted after caller-visible output was produced. |
+
+Use `errors.As` when you need structured details:
+
+- `*providers.ProviderError` exposes `Provider`, `StatusCode`, and `Detail` for
+  representative provider HTTP rejections.
+- `*providers.ValidationError` exposes `Provider`, `Feature`, `Requested`,
+  `Supported`, and `Detail` for representative local invalid or unsupported
+  request failures.
+
+Provider HTTP errors may match both `ErrProviderRejected` and a narrower class
+such as `ErrAuthentication`, `ErrRateLimited`, `ErrInvalidRequest`, or
+`ErrTransport`. Prefer checking the most specific class your policy handles
+first.
+
+### Direct Stream Errors
+
+Direct streaming failures can surface either as a returned setup error from
+`InferStream(...)` or as an `ERROR` stream message. Classify returned setup
+errors with `errors.Is` and `errors.As` as above. For stream messages, inspect
+`messages.ErrorValue.Classification`, which carries one of the public
+classification strings such as `authentication`, `rate_limited`, `transport`,
+or `unsupported_request`.
+
+`messages.ErrorValue.Message` remains the readable operator text. Existing
+provider detail fields such as `ErrorType`, `Code`, `Param`, and `EventID`
+remain provider context; they are not the public taxonomy.
+
+### Interaction And Session Events
+
+Normalized interaction errors expose the same taxonomy through structured event
+fields:
+
+- `gateway.InteractionError.Classification`
+- `gateway.InteractionCancellation.Classification`
+- `gateway.InteractionCancellation.OutputState`
+- `messages.InteractionError.Classification`
+- `messages.InteractionCancellation.Classification`
+- `messages.InteractionCancellation.OutputState`
+
+Use the `Classification` fields for event-level policy, including provider
+rejection, gateway/runtime transport failure, local invalid request,
+unsupported request, cancellation, replay mismatch, and partial output when that
+meaning is available. Use `OutputState` to distinguish interrupted partial
+output from clean completion or total failure; representative cancellation after
+text output is reported with a partial-output terminal state.
+
+Session connection errors are returned as Go errors and should be classified
+with `errors.Is` or `errors.As`. Replay helpers in `pkg/testing`, including
+session replayers and replay WebSocket dialers, preserve replay divergence and
+incomplete replay as `providers.ErrReplayMismatch`.
+
+### Current Representative Scope
+
+The repaired contract covers representative provider rejection, local
+validation, direct stream error, session connect error, normalized interaction
+error, cancellation, replay mismatch, and partial-output paths. Remaining
+follow-up scope is provider-wide parity for every adapter/status/parser shape,
+every replay entrypoint, and a broader shared final-status design if callers
+need one final accessor across all stream APIs. Those limits are tracked in the
+Phase 4 repair scope record under `docs/internal`.
+
 ## Using With go-agent-loop
 
 `go-llm-gateway` includes adapters for the loop contracts defined in

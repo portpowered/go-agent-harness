@@ -576,11 +576,21 @@ func TestReplay_Error400_BadRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "400") {
-		t.Errorf("expected error to contain status code 400, got: %v", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("expected ErrProviderRejected, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "invalid_request_error") {
-		t.Errorf("expected error to contain error type, got: %v", err)
+	if !errors.Is(err, providers.ErrInvalidRequest) {
+		t.Fatalf("expected ErrInvalidRequest, got: %v", err)
+	}
+	var providerErr *providers.ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("expected ProviderError, got %T: %v", err, err)
+	}
+	if providerErr.Provider != "openai" || providerErr.StatusCode != 400 {
+		t.Fatalf("ProviderError = %+v, want provider openai status 400", providerErr)
+	}
+	if !strings.Contains(providerErr.Detail, "invalid_request_error") {
+		t.Errorf("ProviderError.Detail = %q, want provider error type", providerErr.Detail)
 	}
 	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
 		t.Fatal("expected error to match provider HTTP status classification")
@@ -602,8 +612,11 @@ func TestReplay_Error401_Unauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "401") {
-		t.Errorf("expected error to contain status code 401, got: %v", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("expected ErrProviderRejected, got: %v", err)
+	}
+	if !errors.Is(err, providers.ErrAuthentication) {
+		t.Fatalf("expected ErrAuthentication, got: %v", err)
 	}
 	if !errors.Is(err, gateway.ErrAuthentication) {
 		t.Fatal("expected error to match authentication classification")
@@ -622,8 +635,11 @@ func TestReplay_Error429_RateLimit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "429") {
-		t.Errorf("expected error to contain status code 429, got: %v", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("expected ErrProviderRejected, got: %v", err)
+	}
+	if !errors.Is(err, providers.ErrRateLimited) {
+		t.Fatalf("expected ErrRateLimited, got: %v", err)
 	}
 	if !errors.Is(err, gateway.ErrRateLimit) {
 		t.Fatal("expected error to match rate limit classification")
@@ -642,8 +658,11 @@ func TestReplay_Error500_InternalServer(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "500") {
-		t.Errorf("expected error to contain status code 500, got: %v", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("expected ErrProviderRejected, got: %v", err)
+	}
+	if !errors.Is(err, providers.ErrTransport) {
+		t.Fatalf("expected ErrTransport, got: %v", err)
 	}
 	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
 		t.Fatal("expected error to match provider HTTP status classification")
@@ -740,8 +759,11 @@ func TestReplay_StreamError429_RateLimit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "429") {
-		t.Errorf("expected error to contain status code 429, got: %v", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("expected ErrProviderRejected, got: %v", err)
+	}
+	if !errors.Is(err, providers.ErrRateLimited) {
+		t.Fatalf("expected ErrRateLimited, got: %v", err)
 	}
 	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
 		t.Fatal("expected stream error to match provider HTTP status classification")

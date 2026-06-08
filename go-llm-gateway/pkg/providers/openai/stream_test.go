@@ -1,16 +1,48 @@
 package openai
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
+
+type streamErrReader struct {
+	body []byte
+	err  error
+}
+
+func (r *streamErrReader) Read(p []byte) (int, error) {
+	if len(r.body) > 0 {
+		n := copy(p, r.body)
+		r.body = r.body[n:]
+		return n, nil
+	}
+	return 0, r.err
+}
+
+type streamMockTransport struct {
+	statusCode int
+	body       string
+}
+
+func (t *streamMockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: t.statusCode,
+		Body:       io.NopCloser(strings.NewReader(t.body)),
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
+}
 
 // sseData builds an SSE body from a slice of JSON chunk strings.
 // Each chunk is written as "data: <json>\n\n"; the final line is "data: [DONE]\n".
@@ -30,6 +62,10 @@ func runStream(sse string) []messages.StreamMessage {
 	ch := make(chan messages.StreamMessage, 64)
 	streamSSEToGateway(strings.NewReader(sse), ch)
 	close(ch)
+	return collectOpenAIStream(ch)
+}
+
+func collectOpenAIStream(ch <-chan messages.StreamMessage) []messages.StreamMessage {
 	var out []messages.StreamMessage
 	for m := range ch {
 		out = append(out, m)
@@ -117,6 +153,63 @@ func TestStreamSSEToGateway_EmitsMessageStartAndTextEvents(t *testing.T) {
 		messages.StreamTypeTextEnd,
 		messages.StreamTypeMessageEnd,
 	})
+}
+
+func TestStreamSSEToGateway_ReaderErrorClassification(t *testing.T) {
+	readerErr := errors.New("reader failed")
+	reader := &streamErrReader{
+		body: []byte(`data: {"id":"c1","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":""}]}` + "\n\n"),
+		err:  readerErr,
+	}
+	ch := make(chan messages.StreamMessage, 64)
+	streamSSEToGateway(reader, ch)
+	close(ch)
+
+	msgs := collectOpenAIStream(ch)
+	for _, m := range msgs {
+		if m.Type != messages.StreamTypeError {
+			continue
+		}
+		v, ok := m.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("ERROR value = %T, want *messages.ErrorValue", m.Value)
+		}
+		if v.Message == "" {
+			t.Fatal("ERROR message should retain readable text")
+		}
+		if v.Classification != providers.ErrorClassTransport {
+			t.Fatalf("ERROR classification = %q, want %q", v.Classification, providers.ErrorClassTransport)
+		}
+		if !errors.Is(v.Err, gateway.ErrTransport) {
+			t.Fatal("ERROR typed error should match gateway transport classification")
+		}
+		if !errors.Is(v.Err, readerErr) {
+			t.Fatal("ERROR typed error should preserve reader cause")
+		}
+		return
+	}
+	t.Fatal("expected ERROR event")
+}
+
+func TestOpenAIProvider_InferStream_HTTPErrorClassification(t *testing.T) {
+	transport := &streamMockTransport{
+		statusCode: http.StatusUnauthorized,
+		body:       `{"error":{"message":"missing key"}}`,
+	}
+	p := New(WithBaseURL("https://mock.openai.test/v1"), WithHTTPClient(&http.Client{Transport: transport}))
+
+	_, err := p.InferStream(context.Background(), providers.InferenceRequest{
+		Messages: []models.Message{{Role: models.RoleUser, ContentParts: []models.ContentPart{models.TextPart{Text: "hi"}}}},
+	})
+	if err == nil {
+		t.Fatal("InferStream() expected error")
+	}
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("InferStream() error = %v, want ErrProviderRejected", err)
+	}
+	if !errors.Is(err, providers.ErrAuthentication) {
+		t.Fatalf("InferStream() error = %v, want ErrAuthentication", err)
+	}
 }
 
 func TestStreamSSEToGateway_EmitsToolCallEvents(t *testing.T) {

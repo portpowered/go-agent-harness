@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
 )
 
@@ -236,18 +235,18 @@ func (c *replayWebSocketConn) WriteMessage(_ int, payload []byte) error {
 		return io.ErrClosedPipe
 	}
 	if c.index >= len(c.events) {
-		return c.setErrLocked(gateway.NewReplayMismatchError("replay completed", websocketPayloadType(payload), fmt.Errorf("unexpected outbound event after replay completed")))
+		return c.setErrLocked(newReplayMismatchError("replay completed", websocketPayloadType(payload), fmt.Errorf("unexpected outbound event after replay completed")))
 	}
 	evt := c.events[c.index]
 	if evt.Direction != DirectionClientToServer {
-		return c.setErrLocked(gateway.NewReplayMismatchError(
+		return c.setErrLocked(newReplayMismatchError(
 			fmt.Sprintf("%s event %s at sequence %d", evt.Direction, evt.Type, evt.Sequence),
 			websocketPayloadType(payload),
 			fmt.Errorf("got outbound before expected capture event"),
 		))
 	}
 	if !rawJSONEqual(eventPayload(evt), payload) {
-		return c.setErrLocked(gateway.NewReplayMismatchError(
+		return c.setErrLocked(newReplayMismatchError(
 			fmt.Sprintf("outbound payload for %s at sequence %d", evt.Type, evt.Sequence),
 			websocketPayloadType(payload),
 			fmt.Errorf("expected outbound payload does not match actual outbound event"),
@@ -264,7 +263,7 @@ func (c *replayWebSocketConn) Close() error {
 
 	if c.err == nil && c.index < len(c.events) {
 		evt := c.events[c.index]
-		c.err = gateway.NewReplayMismatchError(
+		c.err = newReplayMismatchError(
 			fmt.Sprintf("%s event %s at sequence %d", evt.Direction, evt.Type, evt.Sequence),
 			"connection close",
 			fmt.Errorf("session replay incomplete"),

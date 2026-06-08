@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
 )
 
@@ -68,6 +69,9 @@ func TestReplayWebSocketDialer_FailsOnUnexpectedOutbound(t *testing.T) {
 	}
 	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
 		t.Fatal("replay mismatch should not match provider HTTP status classification")
+	}
+	if !errors.Is(err, providers.ErrReplayMismatch) {
+		t.Fatalf("error = %v, want ErrReplayMismatch", err)
 	}
 	select {
 	case <-dialer.Done():
@@ -194,6 +198,9 @@ func TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose(t *testi
 	err = dialer.Err()
 	if err == nil {
 		t.Fatalf("expected incomplete replay error, got %v", err)
+	}
+	if !errors.Is(dialer.Err(), providers.ErrReplayMismatch) {
+		t.Fatalf("dialer error = %v, want ErrReplayMismatch", dialer.Err())
 	}
 	if !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("incomplete replay should match replay mismatch classification, got %v", err)

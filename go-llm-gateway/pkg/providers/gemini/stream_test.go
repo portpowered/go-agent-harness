@@ -7,6 +7,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 // mockIter builds a streamIterator from a slice of responses and an optional final error.
@@ -247,6 +248,35 @@ func TestStreamGeminiToGateway_ErrorBeforeMessageEnd(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestStreamGeminiToGateway_ProviderErrorClassification(t *testing.T) {
+	providerErr := providers.NewProviderHTTPError("gemini", 429, "quota exhausted")
+	iter := mockIter([]*genai.GenerateContentResponse{
+		{Candidates: []*genai.Candidate{{Content: &genai.Content{Parts: []*genai.Part{{Text: "partial"}}}}}},
+	}, providerErr)
+
+	ch := make(chan messages.StreamMessage, 32)
+	streamGeminiToGateway(iter, ch)
+
+	msgs := collectStream(ch)
+	for _, m := range msgs {
+		if m.Type != messages.StreamTypeError {
+			continue
+		}
+		v, ok := m.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("ERROR value = %T, want *messages.ErrorValue", m.Value)
+		}
+		if v.Message != providerErr.Error() {
+			t.Fatalf("ERROR message = %q, want %q", v.Message, providerErr.Error())
+		}
+		if v.Classification != providers.ErrorClassRateLimited {
+			t.Fatalf("ERROR classification = %q, want %q", v.Classification, providers.ErrorClassRateLimited)
+		}
+		return
+	}
+	t.Fatal("expected ERROR event")
 }
 
 func TestStreamGeminiToGateway_EmptyStream(t *testing.T) {

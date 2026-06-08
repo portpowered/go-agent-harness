@@ -80,7 +80,7 @@ func (p *FalProvider) Capabilities() providers.ProviderCapabilities {
 func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest) (providers.InferenceResponse, error) {
 	model := req.Model
 	if model == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal provider requires Model to be set (e.g. %q, %q, or %q)", ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS)
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "model", fmt.Sprintf("fal provider requires Model to be set (e.g. %q, %q, or %q)", ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS))
 	}
 
 	config := req.Config
@@ -115,7 +115,8 @@ func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest)
 		case ModelQwenCloneVoice:
 			return p.inferQwenCloneVoice(ctx, audioURL, text, config)
 		default:
-			return providers.InferenceResponse{}, fmt.Errorf("fal provider: unsupported model %q (supported: %q, %q, %q, %q, %q)", model, ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS, ModelGrokImagineVideoImageToVideo, ModelKlingVideoV3ImageToVideo)
+			supported := []string{ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS, ModelGrokImagineVideoImageToVideo, ModelKlingVideoV3ImageToVideo}
+			return providers.InferenceResponse{}, providers.NewUnsupportedRequestError("fal", "model", model, supported, fmt.Sprintf("fal provider: unsupported model %q (supported: %q, %q, %q, %q, %q)", model, ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS, ModelGrokImagineVideoImageToVideo, ModelKlingVideoV3ImageToVideo))
 		}
 	}
 }
@@ -272,7 +273,7 @@ type ltxAudioToVideoResponse struct {
 
 func (p *FalProvider) inferLTXAudioToVideo(ctx context.Context, audioURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if audioURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal LTX audio-to-video: audio_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "audio_url", "fal LTX audio-to-video: audio_url is required")
 	}
 	if prompt == "" {
 		prompt = "A person speaks to the camera"
@@ -317,7 +318,7 @@ type grokImagineVideoResponse struct {
 
 func (p *FalProvider) inferGrokImagineVideo(ctx context.Context, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if imageURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal Grok Imagine Video: image_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal Grok Imagine Video: image_url is required")
 	}
 	body := grokImagineVideoRequest{ImageURL: imageURL, Prompt: prompt}
 	var resp grokImagineVideoResponse
@@ -359,7 +360,7 @@ type klingVideoV3Response struct {
 
 func (p *FalProvider) inferKlingVideoV3(ctx context.Context, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if imageURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal Kling Video v3: image_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal Kling Video v3: image_url is required")
 	}
 	body := klingVideoV3Request{ImageURL: imageURL, Prompt: prompt}
 	var resp klingVideoV3Response
@@ -401,7 +402,7 @@ type qwenCloneVoiceResponse struct {
 
 func (p *FalProvider) inferQwenCloneVoice(ctx context.Context, audioURL, referenceText string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if audioURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal Qwen clone-voice: audio_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "audio_url", "fal Qwen clone-voice: audio_url is required")
 	}
 	body := qwenCloneVoiceRequest{AudioURL: audioURL, ReferenceText: referenceText}
 	var resp qwenCloneVoiceResponse
@@ -523,7 +524,7 @@ func (p *FalProvider) doJSON(ctx context.Context, modelID string, body any, resu
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("fal: %s %s: %d %s", req.Method, url, resp.StatusCode, string(body))
+		return providers.NewProviderHTTPError("fal", resp.StatusCode, fmt.Sprintf("%s %s: %d %s", req.Method, url, resp.StatusCode, string(body)))
 	}
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
 		return fmt.Errorf("fal: decode response: %w", err)
