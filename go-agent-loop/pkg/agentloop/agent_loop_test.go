@@ -112,12 +112,19 @@ func TestExecute_HotLoopError(t *testing.T) {
 		t.Fatalf("failed to create loop: %v", err)
 	}
 
-	_, err = loop.Execute(context.Background(), NewExecuteInput("hi"))
+	result, err := loop.Execute(context.Background(), NewExecuteInput("hi"))
 	if err == nil {
 		t.Fatal("Execute expected an error when hot loop fails")
 	}
 	if err.Error() != wantErr {
 		t.Errorf("Execute error: got %q, want %q", err.Error(), wantErr)
+	}
+	if result.Err == nil || result.Err.Error() != wantErr {
+		t.Fatalf("ExecuteResult.Err = %v, want %q", result.Err, wantErr)
+	}
+	final := result.FinalText()
+	if final.Status != FinalTextFailed {
+		t.Fatalf("FinalText status = %q, want %q", final.Status, FinalTextFailed)
 	}
 }
 
@@ -217,6 +224,34 @@ func TestExecute_SimpleResponse(t *testing.T) {
 
 	if result.Text() != "Hello! How can I help?" {
 		t.Errorf("expected 'Hello! How can I help?', got %q", result.Text())
+	}
+}
+
+func TestExecute_EmptyFinalTextResult(t *testing.T) {
+	inf := &mockInferencer{
+		responses: []messages.InferenceResult{
+			{
+				Message: messages.NewTextMessage(messages.RoleAssistant, ""),
+			},
+		},
+	}
+
+	loop, err := New(WithInferencer(inf))
+	if err != nil {
+		t.Fatalf("failed to create loop: %v", err)
+	}
+
+	result, err := loop.Execute(context.Background(), NewExecuteInput("hi"))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	final := result.FinalText()
+	if final.Status != FinalTextEmptySuccess {
+		t.Fatalf("FinalText status = %q, want %q", final.Status, FinalTextEmptySuccess)
+	}
+	if final.Text != "" {
+		t.Fatalf("FinalText text = %q, want empty", final.Text)
 	}
 }
 

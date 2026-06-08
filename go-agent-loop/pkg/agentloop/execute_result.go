@@ -1,10 +1,45 @@
 package agentloop
 
 import (
+	"context"
+	"errors"
 	"sync"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 )
+
+// FinalTextStatus is the explicit terminal outcome reported by
+// [ExecuteResult.FinalText].
+type FinalTextStatus string
+
+const (
+	// FinalTextSuccess means the turn completed and produced non-empty final text.
+	FinalTextSuccess FinalTextStatus = "success"
+	// FinalTextEmptySuccess means the turn completed with an explicit empty final
+	// assistant text part.
+	FinalTextEmptySuccess FinalTextStatus = "empty_success"
+	// FinalTextNoFinalMessage means the turn completed but did not produce a
+	// final assistant text message.
+	FinalTextNoFinalMessage FinalTextStatus = "no_final_message"
+	// FinalTextCanceled means the turn ended with caller-owned cancellation or a
+	// deadline. Text may contain partial output when Partial is true.
+	FinalTextCanceled FinalTextStatus = "canceled"
+	// FinalTextFailed means the turn ended with a non-cancellation terminal
+	// error. Text may contain partial output when Partial is true.
+	FinalTextFailed FinalTextStatus = "failed"
+)
+
+// FinalTextResult is the explicit final text contract for [ExecuteResult].
+//
+// It distinguishes an explicit empty assistant answer from a missing final
+// message, cancellation, terminal failure, and partial output. Legacy callers can
+// keep using [ExecuteResult.Text], which returns only the final non-empty text.
+type FinalTextResult struct {
+	Text    string
+	Status  FinalTextStatus
+	Err     error
+	Partial bool
+}
 
 // ExecuteResult is the response returned by [AgenticLoop.Execute].
 // It contains all messages produced during the execution turn (model responses,
@@ -16,12 +51,55 @@ type ExecuteResult struct {
 	// in order: model responses (including intermediate tool-call messages) and
 	// tool results. The user's input message is not included.
 	Messages []messages.Message
+	// Err records the terminal execution error for callers that receive or retain
+	// an ExecuteResult alongside the error returned by Execute.
+	Err error
 }
 
 // Text returns the text of the last assistant message that contains text content
 // and carries no pending tool calls. This is the final "answer" of the turn.
+//
+// Text is retained for source compatibility. New integrations that need to
+// distinguish empty success, missing final text, cancellation, terminal failure,
+// or partial output should use [ExecuteResult.FinalText].
 func (r ExecuteResult) Text() string {
+	text, found := r.finalAssistantText()
+	if !found || text == "" {
+		return ""
+	}
+	return text
+}
+
+// FinalText returns the explicit final text outcome for this execution.
+func (r ExecuteResult) FinalText() FinalTextResult {
+	text, found := r.finalAssistantText()
+	if r.Err != nil {
+		status := FinalTextFailed
+		if errors.Is(r.Err, context.Canceled) || errors.Is(r.Err, context.DeadlineExceeded) {
+			status = FinalTextCanceled
+		}
+		if !found {
+			text, found = r.partialTextFromDeltas()
+		}
+		return FinalTextResult{
+			Text:    text,
+			Status:  status,
+			Err:     r.Err,
+			Partial: found,
+		}
+	}
+	if found {
+		if text == "" {
+			return FinalTextResult{Status: FinalTextEmptySuccess}
+		}
+		return FinalTextResult{Text: text, Status: FinalTextSuccess}
+	}
+	return FinalTextResult{Status: FinalTextNoFinalMessage}
+}
+
+func (r ExecuteResult) finalAssistantText() (string, bool) {
 	var finalText string
+	found := false
 	for _, m := range r.Messages {
 		if m.Role != messages.RoleAssistant {
 			continue
@@ -29,11 +107,27 @@ func (r ExecuteResult) Text() string {
 		if len(m.ToolCalls) > 0 || m.HasOnlyReasoning() {
 			continue
 		}
-		if t := m.TextContent(); t != "" {
-			finalText = t
+		if m.HasText() {
+			finalText = m.TextContent()
+			found = true
 		}
 	}
-	return finalText
+	return finalText, found
+}
+
+func (r ExecuteResult) partialTextFromDeltas() (string, bool) {
+	var partial string
+	found := false
+	for _, delta := range r.Deltas {
+		if delta.Type != messages.StreamTypeTextDelta {
+			continue
+		}
+		if v, ok := delta.Value.(*messages.TextDeltaValue); ok {
+			partial += v.Content
+			found = true
+		}
+	}
+	return partial, found
 }
 
 // Response is a single streaming event delivered by a [Stream].

@@ -227,7 +227,10 @@ func (al *AgentLoop) logError(msg string, fields ...logging.Field) {
 
 // Execute sends a command and returns an [ExecuteResult] containing all messages
 // produced during the agent's turn (model responses, tool-call messages, tool results).
-// Use [ExecuteResult.Text] for the final model text response.
+// Use [ExecuteResult.FinalText] when callers need an explicit final text status
+// for empty success, missing final text, cancellation, terminal failure, or
+// partial output. [ExecuteResult.Text] remains available for legacy text-only
+// callers.
 func (al *AgentLoop) Execute(ctx context.Context, input ExecuteInput) (ExecuteResult, error) {
 	al.logInfo("agentloop: execute called", logging.Field{Key: "command", Value: input.Message})
 
@@ -267,14 +270,17 @@ func (al *AgentLoop) Execute(ctx context.Context, input ExecuteInput) (ExecuteRe
 	// second turn to see an immediately-closed, empty event stream.
 	<-hotLoopDone
 	loopErr := <-hotLoopErrCh
-	// After we cancel(), the hot loop often exits with context.Canceled; treat that as success.
-	if errors.Is(loopErr, context.Canceled) {
+	// After the internal cleanup cancel, the hot loop often exits with
+	// context.Canceled. Treat only that internal cancellation as success; preserve
+	// caller-owned cancellation or deadline errors for ExecuteResult.FinalText.
+	if errors.Is(loopErr, context.Canceled) && ctx.Err() == nil {
 		loopErr = nil
 	}
 
 	return ExecuteResult{
 		Deltas:   resultCh,
 		Messages: al.engine.State().LoopState.History.ConversationBuffer,
+		Err:      loopErr,
 	}, loopErr
 }
 
