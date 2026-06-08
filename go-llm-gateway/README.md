@@ -133,6 +133,80 @@ func main() {
 For streaming-capable stateless providers, the same gateway exposes
 `InferStream(...)`.
 
+## Error Taxonomy
+
+`pkg/gateway` exposes a small typed error taxonomy for caller decisions. Branch
+on these classes with `errors.Is`; use `errors.As` when you need structured
+details such as provider status code or replay mismatch fields. Do not match
+error message text for control flow.
+
+| Error class | Caller action |
+| --- | --- |
+| `gateway.ErrAuthentication` | Refresh, replace, or configure provider credentials before retrying |
+| `gateway.ErrAuthorization` | Change account permissions, model access, region, or requested operation |
+| `gateway.ErrRateLimit` | Back off, retry later, or route work to another allowed provider |
+| `gateway.ErrInvalidRequest` | Fix the request payload, parameters, or tool/model inputs before retrying |
+| `gateway.ErrUnsupportedModel` | Select a model supported by the provider and requested capability |
+| `gateway.ErrProviderHTTPStatus` | Inspect `*gateway.ProviderHTTPStatusError` for provider, status, and body details |
+| `gateway.ErrTransport` | Treat as a provider transport failure before a usable provider response was available |
+| `gateway.ErrReplayMismatch` | Diagnose deterministic replay fixture or request divergence |
+| `gateway.ErrCancellation` | Handle caller cancellation or timeout separately from provider failures |
+
+Example:
+
+```go
+resp, err := gw.Infer(ctx, req)
+if err != nil {
+	var statusErr *gateway.ProviderHTTPStatusError
+	switch {
+	case errors.Is(err, gateway.ErrRateLimit):
+		// retry with backoff
+	case errors.Is(err, gateway.ErrAuthentication):
+		// refresh credentials
+	case errors.As(err, &statusErr):
+		// log statusErr.Provider, statusErr.StatusCode, and statusErr.Body
+	default:
+		// generic failure handling
+	}
+}
+_ = resp
+```
+
+Stateless streaming uses the same taxonomy for error events when classification
+is available. `messages.ErrorValue.Message` remains operator-readable text, and
+`messages.ErrorValue.Err` carries the in-process typed error for `errors.Is` and
+`errors.As` checks:
+
+```go
+for event := range stream {
+	if event.Type != messages.StreamTypeError {
+		continue
+	}
+	value, ok := event.Value.(*messages.ErrorValue)
+	if ok && errors.Is(value.Err, gateway.ErrTransport) {
+		// handle stream transport failure
+	}
+}
+```
+
+Current classification coverage is intentionally additive:
+
+- OpenAI-compatible stateless `Infer` classifies HTTP status failures, common
+  status-specific classes such as authentication and rate limit, transport
+  failures, and caller cancellation.
+- OpenAI-compatible stateless `InferStream` preserves typed stream-open
+  failures and stream runtime failures in `ERROR` event values when the error is
+  available in-process.
+- `pkg/testing` replay helpers classify replay divergence as
+  `gateway.ErrReplayMismatch`.
+- Anthropic, Gemini, fal.ai, and session provider surfaces may still return
+  provider-specific or generic errors where typed gateway classification has not
+  been wired yet. Treat those surfaces as best-effort until their adapters
+  explicitly preserve the public classes.
+- Serialized stream payloads include readable error fields, but the `Err` field
+  is not serialized. Consumers that need typed classification must inspect the
+  in-process stream value.
+
 ### Session-Based Inference
 
 Realtime sessions are a separate surface. Today they are provider-specific:
