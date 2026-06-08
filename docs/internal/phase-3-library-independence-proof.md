@@ -55,3 +55,25 @@ the deliberate shared message contract.
 
 Both proof commands use local stubs, require no live provider credentials, and
 make no provider network calls.
+
+## Final Gate Evidence
+
+Recorded at `2026-06-08 10:46 UTC` for the
+`phase-3-library-independence-proof` branch.
+
+| Evidence | Command | Outcome | Checklist row |
+| --- | --- | --- | --- |
+| Loop consumer independence proof | `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)` | Passed. The checked consumer package exercised the public loop API with a local inferencer and rejected `go-llm-gateway/pkg/providers/...` dependencies. | `P3-CORE-03` |
+| Gateway consumer independence proof | `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)` | Passed. The checked consumer package exercised gateway/provider entrypoints, allowed only `github.com/portpowered/go-agent-loop/pkg/messages`, and rejected non-contract loop runtime packages. | `P3-CORE-04` |
+| Formatting gate | `make fmt` | Passed. | `P3-GATE-01` |
+| Vet gate | `make vet` | Passed. | `P3-GATE-01` |
+| Lint gate | `make lint` | Passed with `golangci-lint`; no skip controls used. | `P3-GATE-01` |
+| Staticcheck gate | `make staticcheck` | Passed with `staticcheck`; no skip controls used. | `P3-GATE-01` |
+| Test gate | `make test` | Passed across workspace modules. | `P3-GATE-01` |
+| Build/typecheck gate | `make build` | Passed across the CLI binary and library packages. | `P3-GATE-01` |
+
+The final evidence is limited to observable consumer import/use behavior,
+dependency-boundary assertions, and the standard changed-workspace validation
+commands above. It does not require reviewers to inspect unrelated docs link
+topology, package inventories, route registries, generated assets, live
+credentials, or provider network behavior.
