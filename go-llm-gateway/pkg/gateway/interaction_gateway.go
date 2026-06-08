@@ -76,6 +76,7 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 				emitter.emitTerminalForErr(err)
 				return
 			}
+			emitter.markOutputEmitted()
 			if err := ctx.Err(); err != nil {
 				emitter.emitTerminalForErr(err)
 				return
@@ -154,6 +155,7 @@ type interactionEventEmitter struct {
 	provider      string
 	model         string
 	sequence      int64
+	outputEmitted bool
 }
 
 func newInteractionEventEmitter(out chan<- InteractionEvent, interactionID, provider, model string, sequence int64) *interactionEventEmitter {
@@ -202,8 +204,10 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		_ = e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventCancellation,
 			Cancellation: &InteractionCancellation{
-				Reason:  "caller_cancelled",
-				Message: err.Error(),
+				Reason:         "caller_cancelled",
+				Message:        err.Error(),
+				Classification: providers.ErrorClassification(err),
+				OutputState:    e.outputStateForTerminal(),
 			},
 		})
 		return
@@ -228,6 +232,17 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 			Classification: providers.ErrorClassification(err),
 		},
 	})
+}
+
+func (e *interactionEventEmitter) markOutputEmitted() {
+	e.outputEmitted = true
+}
+
+func (e *interactionEventEmitter) outputStateForTerminal() string {
+	if e.outputEmitted {
+		return providers.ErrorClassPartialOutput
+	}
+	return ""
 }
 
 func (e *interactionEventEmitter) emitTerminalRaw(event InteractionEvent) error {

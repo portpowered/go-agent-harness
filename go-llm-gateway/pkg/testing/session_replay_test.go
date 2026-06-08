@@ -3,12 +3,14 @@ package testing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 func TestSharedCommittedSessionFixtureReplaysDeterministically(t *testing.T) {
@@ -236,6 +238,17 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	if replayer.Err() == nil {
 		t.Fatal("expected replay divergence error")
 	}
+	if !errors.Is(replayer.Err(), providers.ErrReplayMismatch) {
+		t.Fatalf("replayer error = %v, want ErrReplayMismatch", replayer.Err())
+	}
+	if errors.Is(replayer.Err(), providers.ErrProviderRejected) ||
+		errors.Is(replayer.Err(), providers.ErrTransport) ||
+		errors.Is(replayer.Err(), providers.ErrInvalidRequest) {
+		t.Fatalf("replayer error should not match provider failure classes: %v", replayer.Err())
+	}
+	if got := providers.ErrorClassification(replayer.Err()); got != providers.ErrorClassReplayMismatch {
+		t.Fatalf("replayer error classification = %q, want %q", got, providers.ErrorClassReplayMismatch)
+	}
 }
 
 func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
@@ -259,6 +272,9 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	}
 	if replayer.Err() == nil {
 		t.Fatal("expected omitted outbound event error")
+	}
+	if !errors.Is(replayer.Err(), providers.ErrReplayMismatch) {
+		t.Fatalf("replayer error = %v, want ErrReplayMismatch", replayer.Err())
 	}
 }
 

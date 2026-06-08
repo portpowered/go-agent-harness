@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,6 +23,13 @@ var (
 	ErrUnsupportedRequest = errors.New("unsupported request")
 	// ErrTransport marks failures before a provider response was received.
 	ErrTransport = errors.New("transport failure")
+	// ErrCancellation marks caller-initiated cancellation.
+	ErrCancellation = errors.New("cancellation")
+	// ErrReplayMismatch marks deterministic replay divergence or incompletion.
+	ErrReplayMismatch = errors.New("replay mismatch")
+	// ErrPartialOutput marks an interrupted stream or event sequence that
+	// delivered caller-visible output before terminal failure or cancellation.
+	ErrPartialOutput = errors.New("partial output")
 )
 
 const (
@@ -31,6 +39,9 @@ const (
 	ErrorClassInvalidRequest     = "invalid_request"
 	ErrorClassUnsupportedRequest = "unsupported_request"
 	ErrorClassTransport          = "transport"
+	ErrorClassCancellation       = "cancellation"
+	ErrorClassReplayMismatch     = "replay_mismatch"
+	ErrorClassPartialOutput      = "partial_output"
 	ErrorClassUnknown            = "unknown"
 )
 
@@ -141,6 +152,12 @@ func ErrorClassification(err error) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.Is(err, context.Canceled), errors.Is(err, ErrCancellation):
+		return ErrorClassCancellation
+	case errors.Is(err, ErrReplayMismatch):
+		return ErrorClassReplayMismatch
+	case errors.Is(err, ErrPartialOutput):
+		return ErrorClassPartialOutput
 	case errors.Is(err, ErrAuthentication):
 		return ErrorClassAuthentication
 	case errors.Is(err, ErrRateLimited):

@@ -2,12 +2,14 @@ package testing
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
 )
 
@@ -60,6 +62,9 @@ func TestReplayWebSocketDialer_FailsOnUnexpectedOutbound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "replay divergence") {
 		t.Fatalf("error should explain replay divergence, got %v", err)
+	}
+	if !errors.Is(err, providers.ErrReplayMismatch) {
+		t.Fatalf("error = %v, want ErrReplayMismatch", err)
 	}
 	select {
 	case <-dialer.Done():
@@ -185,6 +190,9 @@ func TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose(t *testi
 	}
 	if err := dialer.Err(); err == nil || !strings.Contains(err.Error(), "session replay incomplete") {
 		t.Fatalf("expected incomplete replay error, got %v", err)
+	}
+	if !errors.Is(dialer.Err(), providers.ErrReplayMismatch) {
+		t.Fatalf("dialer error = %v, want ErrReplayMismatch", dialer.Err())
 	}
 }
 

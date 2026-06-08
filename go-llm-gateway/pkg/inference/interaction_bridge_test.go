@@ -60,8 +60,10 @@ func TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads(t *testing.
 			Retryable:      true,
 		},
 		Cancellation: &gateway.InteractionCancellation{
-			Reason:  "caller_cancelled",
-			Message: "stop requested",
+			Reason:         "caller_cancelled",
+			Message:        "stop requested",
+			Classification: providers.ErrorClassCancellation,
+			OutputState:    providers.ErrorClassPartialOutput,
 		},
 	}
 
@@ -78,5 +80,11 @@ func TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads(t *testing.
 	}
 	if got.Cancellation == nil || got.Cancellation.Reason != "caller_cancelled" {
 		t.Fatalf("cancellation = %#v", got.Cancellation)
+	}
+	if got.Cancellation.Classification != providers.ErrorClassCancellation {
+		t.Fatalf("cancellation classification = %q, want %q", got.Cancellation.Classification, providers.ErrorClassCancellation)
+	}
+	if got.Cancellation.OutputState != providers.ErrorClassPartialOutput {
+		t.Fatalf("cancellation output state = %q, want %q", got.Cancellation.OutputState, providers.ErrorClassPartialOutput)
 	}
 }

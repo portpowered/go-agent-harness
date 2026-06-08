@@ -248,6 +248,12 @@ func TestInteract_EmitsCancellationWhenContextCancelledBeforeProviderReturns(t *
 	if events[0].Cancellation.Message != context.Canceled.Error() {
 		t.Fatalf("cancellation message = %q", events[0].Cancellation.Message)
 	}
+	if events[0].Cancellation.Classification != providers.ErrorClassCancellation {
+		t.Fatalf("cancellation classification = %q, want %q", events[0].Cancellation.Classification, providers.ErrorClassCancellation)
+	}
+	if events[0].Cancellation.OutputState != "" {
+		t.Fatalf("cancellation output state = %q, want empty", events[0].Cancellation.OutputState)
+	}
 	if provider.calls != 0 {
 		t.Fatalf("provider calls = %d, want 0", provider.calls)
 	}
@@ -301,6 +307,12 @@ func TestInteract_PreservesPartialOutputBeforeCancellation(t *testing.T) {
 	}
 	if events[2].Cancellation == nil || events[2].Cancellation.Reason != "caller_cancelled" {
 		t.Fatalf("cancellation = %#v", events[2].Cancellation)
+	}
+	if events[2].Cancellation.Classification != providers.ErrorClassCancellation {
+		t.Fatalf("cancellation classification = %q, want %q", events[2].Cancellation.Classification, providers.ErrorClassCancellation)
+	}
+	if events[2].Cancellation.OutputState != providers.ErrorClassPartialOutput {
+		t.Fatalf("cancellation output state = %q, want %q", events[2].Cancellation.OutputState, providers.ErrorClassPartialOutput)
 	}
 	if events[3].Type != InteractionEventEnd {
 		t.Fatalf("terminal event = %#v", events[3])

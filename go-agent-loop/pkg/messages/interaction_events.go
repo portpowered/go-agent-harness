@@ -43,8 +43,10 @@ type InteractionError struct {
 
 // InteractionCancellation captures normalized cancellation details.
 type InteractionCancellation struct {
-	Reason  string
-	Message string
+	Reason         string
+	Message        string
+	Classification string
+	OutputState    string
 }
 
 // InteractionState tracks the loop's view of the current normalized interaction.

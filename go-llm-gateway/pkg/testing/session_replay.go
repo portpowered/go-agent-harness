@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 // SessionReplayerOption configures a SessionReplayer.
@@ -129,17 +130,17 @@ func (r *SessionReplayer) Send(ctx context.Context, msg messages.StreamMessage) 
 		return true
 	}
 	if r.index >= len(r.events) {
-		r.failLocked(fmt.Errorf("session replay divergence: unexpected outbound event %s after replay completed", msg.Type))
+		r.failLocked(newReplayMismatchError("session replay divergence: unexpected outbound event %s after replay completed", msg.Type))
 		return false
 	}
 
 	expected := r.events[r.index]
 	if expected.Direction != DirectionClientToServer {
-		r.failLocked(fmt.Errorf("session replay divergence at sequence %d: got outbound %s before expected %s event %s", expected.Sequence, msg.Type, expected.Direction, expected.Type))
+		r.failLocked(newReplayMismatchError("session replay divergence at sequence %d: got outbound %s before expected %s event %s", expected.Sequence, msg.Type, expected.Direction, expected.Type))
 		return false
 	}
 	if err := compareCapturedStreamMessage(expected, msg); err != nil {
-		r.failLocked(fmt.Errorf("session replay divergence at sequence %d: %w", expected.Sequence, err))
+		r.failLocked(newReplayMismatchError("session replay divergence at sequence %d: %v", expected.Sequence, err))
 		return false
 	}
 
@@ -164,7 +165,7 @@ func (r *SessionReplayer) Close() error {
 	r.mu.Lock()
 	if r.validateOutbound && !r.closed && r.err == nil && r.index < len(r.events) {
 		if evt, ok := r.nextExpectedOutboundLocked(); ok {
-			r.err = fmt.Errorf("session replay closed before expected outbound event at sequence %d (%s)", evt.Sequence, evt.Type)
+			r.err = newReplayMismatchError("session replay closed before expected outbound event at sequence %d (%s)", evt.Sequence, evt.Type)
 		}
 	}
 	r.mu.Unlock()
@@ -269,6 +270,22 @@ func (r *SessionReplayer) nextExpectedOutboundLocked() (CapturedSessionEvent, bo
 		}
 	}
 	return CapturedSessionEvent{}, false
+}
+
+type replayMismatchError struct {
+	message string
+}
+
+func (e *replayMismatchError) Error() string {
+	return e.message
+}
+
+func (e *replayMismatchError) Unwrap() error {
+	return providers.ErrReplayMismatch
+}
+
+func newReplayMismatchError(format string, args ...any) error {
+	return &replayMismatchError{message: fmt.Sprintf(format, args...)}
 }
 
 // deserializeStreamMessage converts a CapturedSessionEvent back into a

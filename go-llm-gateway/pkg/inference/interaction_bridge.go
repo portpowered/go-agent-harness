@@ -53,8 +53,10 @@ func LoopInteractionEventFromGateway(event gateway.InteractionEvent) messages.In
 	}
 	if event.Cancellation != nil {
 		out.Cancellation = &messages.InteractionCancellation{
-			Reason:  event.Cancellation.Reason,
-			Message: event.Cancellation.Message,
+			Reason:         event.Cancellation.Reason,
+			Message:        event.Cancellation.Message,
+			Classification: event.Cancellation.Classification,
+			OutputState:    event.Cancellation.OutputState,
 		}
 	}
 
