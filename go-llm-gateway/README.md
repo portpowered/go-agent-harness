@@ -40,6 +40,9 @@ not decide generic application transport policy.
 - The application composition layer, currently `agent-cli`, owns whether a
   stateless provider runs live, record, or replay and builds the shared
   `*http.Client` for that mode before provider construction.
+- When the application needs a non-default live transport, it injects that
+  transport before provider construction; record mode wraps the same owned base
+  transport instead of silently choosing a provider-local transport.
 - In this repository, that injected seam is
   `agent-cli/internal/agent.ProviderBuildContext.HTTPClient`.
 

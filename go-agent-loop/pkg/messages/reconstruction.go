@@ -33,6 +33,7 @@ type toolReconstructionState struct {
 func ReconstructModelMessageFromDeltas(deltas []StreamMessage) Message {
 	var (
 		textBuilder        strings.Builder
+		hasTextPart        bool
 		reasoningBuilder   strings.Builder
 		transcriptBuilder  strings.Builder
 		refusal            string
@@ -53,7 +54,10 @@ func ReconstructModelMessageFromDeltas(deltas []StreamMessage) Message {
 
 	for _, d := range deltas {
 		switch v := d.Value.(type) {
+		case *TextStartValue:
+			hasTextPart = true
 		case *TextDeltaValue:
+			hasTextPart = true
 			textBuilder.WriteString(v.Content)
 		case *ReasoningStartValue:
 			reasoningBuilder.WriteString("<thinking>\n")
@@ -125,7 +129,7 @@ func ReconstructModelMessageFromDeltas(deltas []StreamMessage) Message {
 
 	msg := Message{Role: RoleAssistant, Refusal: refusal, ToolCalls: toolCalls}
 	var parts []ContentPart
-	if t := textBuilder.String(); t != "" {
+	if t := textBuilder.String(); hasTextPart || t != "" {
 		parts = append(parts, NewTextPart(t))
 	}
 	if r := reasoningBuilder.String(); r != "" {

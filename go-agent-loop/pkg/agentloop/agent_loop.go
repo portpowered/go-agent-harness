@@ -227,7 +227,10 @@ func (al *AgentLoop) logError(msg string, fields ...logging.Field) {
 
 // Execute sends a command and returns an [ExecuteResult] containing all messages
 // produced during the agent's turn (model responses, tool-call messages, tool results).
-// Use [ExecuteResult.Text] for the final model text response.
+// Use [ExecuteResult.FinalText] when callers need an explicit final text status
+// for empty success, missing final text, cancellation, terminal failure, or
+// partial output. [ExecuteResult.Text] remains available for legacy text-only
+// callers.
 func (al *AgentLoop) Execute(ctx context.Context, input ExecuteInput) (ExecuteResult, error) {
 	al.logInfo("agentloop: execute called", logging.Field{Key: "command", Value: input.Message})
 
@@ -267,14 +270,17 @@ func (al *AgentLoop) Execute(ctx context.Context, input ExecuteInput) (ExecuteRe
 	// second turn to see an immediately-closed, empty event stream.
 	<-hotLoopDone
 	loopErr := <-hotLoopErrCh
-	// After we cancel(), the hot loop often exits with context.Canceled; treat that as success.
-	if errors.Is(loopErr, context.Canceled) {
+	// After the internal cleanup cancel, the hot loop often exits with
+	// context.Canceled. Treat only that internal cancellation as success; preserve
+	// caller-owned cancellation or deadline errors for ExecuteResult.FinalText.
+	if errors.Is(loopErr, context.Canceled) && ctx.Err() == nil {
 		loopErr = nil
 	}
 
 	return ExecuteResult{
 		Deltas:   resultCh,
 		Messages: al.engine.State().LoopState.History.ConversationBuffer,
+		Err:      loopErr,
 	}, loopErr
 }
 
@@ -312,17 +318,25 @@ func (al *AgentLoop) ExecuteStreaming(ctx context.Context, input ExecuteInput) (
 	// closes its channel (LOOP.END processed), so all deltas are delivered first.
 	// If the hot loop failed, send an ERROR stream message before closing so the
 	// error is delivered as part of the execution response stream.
-	resultCh := make(chan messages.StreamMessage, 256)
+	resultCh := make(chan streamEvent, 256)
 	go func() {
 		for evt := range kernelEventCh {
-			resultCh <- evt
+			resultCh <- streamEvent{event: evt}
 		}
 		cancel()
 		<-hotLoopDone
 		loopErr := <-hotLoopErrCh
-		// After we cancel(), the hot loop often exits with context.Canceled; don't send that as an ERROR event.
-		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
-			resultCh <- messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(loopErr.Error())}
+		// After the internal cleanup cancel, the hot loop often exits with
+		// context.Canceled. Suppress only that internal cancellation; caller-owned
+		// cancellation or deadlines remain observable through Stream.Outcome().
+		if errors.Is(loopErr, context.Canceled) && ctx.Err() == nil {
+			loopErr = nil
+		}
+		if loopErr != nil {
+			resultCh <- streamEvent{
+				event: messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(loopErr.Error())},
+				err:   loopErr,
+			}
 		}
 		close(resultCh)
 	}()

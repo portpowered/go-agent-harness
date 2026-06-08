@@ -45,6 +45,10 @@ surface. Internal directories may exist for implementation, but they should not
 be treated as public contracts unless the package README calls them out
 explicitly.
 
+For the current compatibility-staged cancellation, result, lifecycle, provider
+runtime, and prompt-resolution contracts, see
+[`docs/architecture/dependency-result-contracts.md`](./docs/architecture/dependency-result-contracts.md).
+
 ## Root Validation Commands
 
 The root `Makefile` provides deterministic entrypoints for the checked-in

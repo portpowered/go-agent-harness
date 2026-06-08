@@ -13,6 +13,23 @@ import (
 	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
+type staticRoundTripper struct {
+	statusCode int
+	body       string
+	calls      int
+}
+
+func (t *staticRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.calls++
+	return &http.Response{
+		StatusCode: t.statusCode,
+		Status:     http.StatusText(t.statusCode),
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(t.body)),
+		Request:    req,
+	}, nil
+}
+
 func TestBuildProviderHTTPRuntime_LiveModeUsesExplicitDefaultTransport(t *testing.T) {
 	runtime, err := buildProviderHTTPRuntime(&Config{})
 	if err != nil {
@@ -29,6 +46,42 @@ func TestBuildProviderHTTPRuntime_LiveModeUsesExplicitDefaultTransport(t *testin
 	}
 }
 
+func TestBuildProviderHTTPRuntime_LiveModeUsesInjectedBaseTransport(t *testing.T) {
+	transport := &staticRoundTripper{
+		statusCode: http.StatusAccepted,
+		body:       `{"runtime":"injected"}`,
+	}
+	runtime, err := buildProviderHTTPRuntime(&Config{}, WithProviderHTTPBaseTransport(transport))
+	if err != nil {
+		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
+	}
+	if runtime.Client == nil {
+		t.Fatal("expected HTTP client")
+	}
+	if runtime.Client.Transport != transport {
+		t.Fatalf("transport = %#v, want injected transport", runtime.Client.Transport)
+	}
+
+	resp, err := runtime.Client.Get("https://example.test/v1/chat/completions")
+	if err != nil {
+		t.Fatalf("runtime.Client.Get() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("io.ReadAll() error = %v", err)
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("resp.StatusCode = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	if string(body) != `{"runtime":"injected"}` {
+		t.Fatalf("response body = %q, want injected transport body", string(body))
+	}
+	if transport.calls != 1 {
+		t.Fatalf("transport calls = %d, want 1", transport.calls)
+	}
+}
+
 func TestBuildProviderHTTPRuntime_RecordModeReturnsRecorderBackedClient(t *testing.T) {
 	runtime, err := buildProviderHTTPRuntime(&Config{RecordCapturePath: filepath.Join(t.TempDir(), "capture.json")})
 	if err != nil {
@@ -42,6 +95,56 @@ func TestBuildProviderHTTPRuntime_RecordModeReturnsRecorderBackedClient(t *testi
 	}
 	if runtime.Client.Transport != runtime.Recorder {
 		t.Fatal("expected recorder transport to back the client")
+	}
+}
+
+func TestBuildProviderHTTPRuntime_RecordModeWrapsInjectedBaseTransport(t *testing.T) {
+	transport := &staticRoundTripper{
+		statusCode: http.StatusCreated,
+		body:       `{"recorded":"injected"}`,
+	}
+	runtime, err := buildProviderHTTPRuntime(
+		&Config{RecordCapturePath: filepath.Join(t.TempDir(), "capture.json")},
+		WithProviderHTTPBaseTransport(transport),
+	)
+	if err != nil {
+		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
+	}
+	if runtime.Client == nil {
+		t.Fatal("expected HTTP client")
+	}
+	if runtime.Recorder == nil {
+		t.Fatal("expected recorder in record mode")
+	}
+	if runtime.Client.Transport != runtime.Recorder {
+		t.Fatal("expected recorder transport to back the client")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://example.test/v1/chat/completions", strings.NewReader(`{"message":"hello"}`))
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+	resp, err := runtime.Client.Do(req)
+	if err != nil {
+		t.Fatalf("runtime.Client.Do() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("resp.StatusCode = %d, want %d", resp.StatusCode, http.StatusCreated)
+	}
+	if transport.calls != 1 {
+		t.Fatalf("transport calls = %d, want 1", transport.calls)
+	}
+
+	captures := runtime.Recorder.Captures()
+	if len(captures) != 1 {
+		t.Fatalf("len(captures) = %d, want 1", len(captures))
+	}
+	if captures[0].Response.StatusCode != http.StatusCreated {
+		t.Fatalf("recorded status = %d, want %d", captures[0].Response.StatusCode, http.StatusCreated)
+	}
+	if string(captures[0].Response.Body) != `{"recorded":"injected"}` {
+		t.Fatalf("recorded body = %q, want injected transport body", string(captures[0].Response.Body))
 	}
 }
 

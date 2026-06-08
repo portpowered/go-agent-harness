@@ -291,9 +291,11 @@ func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.I
 	})
 
 	// Emit text content.
-	if text := result.Message.TextContent(); text != "" {
+	if text := result.Message.TextContent(); result.Message.HasText() {
 		r.writeDelta(ctx, messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()})
-		r.writeDelta(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(text)})
+		if text != "" {
+			r.writeDelta(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(text)})
+		}
 		r.writeDelta(ctx, messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()})
 	}
 

@@ -13,9 +13,34 @@ type ProviderHTTPRuntime struct {
 	Recorder *testing.RecordRoundTripper
 }
 
-func buildProviderHTTPRuntime(cfg *Config) (ProviderHTTPRuntime, error) {
+type providerHTTPRuntimeOptions struct {
+	baseTransport http.RoundTripper
+}
+
+// ProviderHTTPRuntimeOption configures the CLI-owned HTTP runtime before it is
+// injected into provider builders.
+type ProviderHTTPRuntimeOption func(*providerHTTPRuntimeOptions)
+
+// WithProviderHTTPBaseTransport sets the live transport used directly in live
+// mode and wrapped by the recorder in record mode.
+func WithProviderHTTPBaseTransport(transport http.RoundTripper) ProviderHTTPRuntimeOption {
+	return func(opts *providerHTTPRuntimeOptions) {
+		opts.baseTransport = transport
+	}
+}
+
+func buildProviderHTTPRuntime(cfg *Config, opts ...ProviderHTTPRuntimeOption) (ProviderHTTPRuntime, error) {
 	if cfg == nil {
 		cfg = &Config{}
+	}
+	runtimeOpts := providerHTTPRuntimeOptions{
+		baseTransport: http.DefaultTransport,
+	}
+	for _, opt := range opts {
+		opt(&runtimeOpts)
+	}
+	if runtimeOpts.baseTransport == nil {
+		runtimeOpts.baseTransport = http.DefaultTransport
 	}
 
 	if cfg.ReplayCapturePath != "" {
@@ -29,7 +54,7 @@ func buildProviderHTTPRuntime(cfg *Config) (ProviderHTTPRuntime, error) {
 	}
 
 	if cfg.RecordCapturePath != "" {
-		recorder := testing.NewRecordRoundTripper(http.DefaultTransport)
+		recorder := testing.NewRecordRoundTripper(runtimeOpts.baseTransport)
 		return ProviderHTTPRuntime{
 			Client:   &http.Client{Transport: recorder},
 			Recorder: recorder,
@@ -37,6 +62,6 @@ func buildProviderHTTPRuntime(cfg *Config) (ProviderHTTPRuntime, error) {
 	}
 
 	return ProviderHTTPRuntime{
-		Client: &http.Client{Transport: http.DefaultTransport},
+		Client: &http.Client{Transport: runtimeOpts.baseTransport},
 	}, nil
 }
