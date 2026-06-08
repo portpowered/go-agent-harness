@@ -3,6 +3,7 @@ package fal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -47,14 +48,18 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 	p := New(WithHTTPClient(client))
 
 	tests := []struct {
-		name    string
-		req     providers.InferenceRequest
-		wantErr string
+		name      string
+		req       providers.InferenceRequest
+		wantErr   string
+		wantClass error
+		wantField string
 	}{
 		{
-			name:    "missing model",
-			req:     providers.InferenceRequest{Messages: []models.Message{models.NewTextMessage(models.RoleUser, "hi")}},
-			wantErr: "fal provider requires Model to be set",
+			name:      "missing model",
+			req:       providers.InferenceRequest{Messages: []models.Message{models.NewTextMessage(models.RoleUser, "hi")}},
+			wantErr:   "fal provider requires Model to be set",
+			wantClass: providers.ErrInvalidRequest,
+			wantField: "model",
 		},
 		{
 			name: "unsupported model",
@@ -68,7 +73,9 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 					},
 				}},
 			},
-			wantErr: "unsupported model",
+			wantErr:   "unsupported model",
+			wantClass: providers.ErrUnsupportedRequest,
+			wantField: "model",
 		},
 		{
 			name: "no user message",
@@ -95,7 +102,9 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 					ContentParts: []models.ContentPart{models.TextPart{Text: "A woman speaks"}},
 				}},
 			},
-			wantErr: "audio_url is required",
+			wantErr:   "audio_url is required",
+			wantClass: providers.ErrInvalidRequest,
+			wantField: "audio_url",
 		},
 		{
 			name: "Qwen with text only (no audio)",
@@ -106,7 +115,9 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 					ContentParts: []models.ContentPart{models.TextPart{Text: "reference"}},
 				}},
 			},
-			wantErr: "audio_url is required",
+			wantErr:   "audio_url is required",
+			wantClass: providers.ErrInvalidRequest,
+			wantField: "audio_url",
 		},
 	}
 	for _, tt := range tests {
@@ -117,6 +128,18 @@ func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("Infer() error = %v, want substring %q", err, tt.wantErr)
+			}
+			if tt.wantClass != nil && !errors.Is(err, tt.wantClass) {
+				t.Fatalf("Infer() error = %v, want class %v", err, tt.wantClass)
+			}
+			if tt.wantField != "" {
+				var validationErr *providers.ValidationError
+				if !errors.As(err, &validationErr) {
+					t.Fatalf("Infer() error = %T, want ValidationError", err)
+				}
+				if validationErr.Provider != "fal" || validationErr.Feature != tt.wantField {
+					t.Fatalf("ValidationError = %+v, want provider fal feature %q", validationErr, tt.wantField)
+				}
 			}
 		})
 	}
@@ -342,11 +365,21 @@ func TestFalProvider_Infer_HTTPError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Infer() expected error on 400, got nil")
 	}
-	if !strings.Contains(err.Error(), "400") {
-		t.Errorf("Infer() error = %v, want substring 400", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("Infer() error = %v, want ErrProviderRejected", err)
 	}
-	if !strings.Contains(err.Error(), "invalid audio_url") {
-		t.Errorf("Infer() error = %v, want response body in error", err)
+	if !errors.Is(err, providers.ErrInvalidRequest) {
+		t.Fatalf("Infer() error = %v, want ErrInvalidRequest", err)
+	}
+	var providerErr *providers.ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("Infer() error = %T, want ProviderError", err)
+	}
+	if providerErr.Provider != "fal" || providerErr.StatusCode != 400 {
+		t.Fatalf("ProviderError = %+v, want provider fal status 400", providerErr)
+	}
+	if !strings.Contains(providerErr.Detail, "invalid audio_url") {
+		t.Errorf("ProviderError.Detail = %q, want response body detail", providerErr.Detail)
 	}
 }
 
@@ -433,8 +466,11 @@ func TestFalProvider_Infer_QwenTTS_HTTPError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Infer() expected error on 422, got nil")
 	}
-	if !strings.Contains(err.Error(), "422") {
-		t.Errorf("Infer() error = %v, want substring 422", err)
+	if !errors.Is(err, providers.ErrProviderRejected) {
+		t.Fatalf("Infer() error = %v, want ErrProviderRejected", err)
+	}
+	if !errors.Is(err, providers.ErrInvalidRequest) {
+		t.Fatalf("Infer() error = %v, want ErrInvalidRequest", err)
 	}
 }
 

@@ -102,7 +102,7 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
-		return providers.InferenceResponse{}, fmt.Errorf("openai: api error %d: %s", resp.StatusCode, string(errBody))
+		return providers.InferenceResponse{}, providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody))
 	}
 
 	var chatResp chatResponse
@@ -166,7 +166,7 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 		defer func() { _ = resp.Body.Close() }()
 		errBody, _ := io.ReadAll(resp.Body)
 		p.logger.Error("openai: api error", logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "error_body", Value: string(errBody)})
-		return nil, fmt.Errorf("openai: api error %d: %s", resp.StatusCode, string(errBody))
+		return nil, providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody))
 	}
 
 	ch := make(chan messages.StreamMessage, 64)
