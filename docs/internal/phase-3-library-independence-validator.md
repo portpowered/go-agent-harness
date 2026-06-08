@@ -122,3 +122,43 @@ The final validator output must summarize the `P3-CORE-03`, `P3-CORE-04`, and
 
 The overall verdict may be `pass` only when all required finding groups pass
 from reviewer-runnable repository artifacts.
+
+## Findings
+
+### Loop Consumer Independence
+
+- `outcome`: `pass`
+- `checklist rows inspected`: `P3-CORE-03`
+- `commands run or cited`:
+  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
+  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
+- `affected files / commands / surfaces`:
+  - `go-agent-loop/pkg/agentloop/agent_loop_test.go`
+  - `go-agent-loop/pkg/participants/model_runner_test.go`
+  - `go-agent-loop/pkg/messages/participant_messages.go`
+  - `go-agent-loop/pkg/messages/session.go`
+  - `go-agent-loop/go.mod`
+  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
+  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
+- `evidence`:
+  - The loop proof command passes and exercises observable loop behavior through
+    local test doubles rather than a gateway provider. `TestExecute_SimpleResponse`
+    constructs `agentloop.New(WithInferencer(inf))`, runs `Execute`, and asserts
+    the assistant text returned by the local `mockInferencer`.
+    `TestExecute_WithToolCall` runs a tool-call loop with a local
+    `mockToolExecutor` and verifies two inference passes. `TestExecute_MultiTurn`
+    verifies multi-turn history carry-forward using a local
+    `capturingInferencer`. `TestExecuteStreaming_EndToEndDeltas` verifies
+    streaming deltas from a local `chunkInferencer`. `TestModelRunner_SimpleInference`
+    verifies participant-level model runner behavior with a local
+    `testInferencer`.
+  - The checked dependency command exits with no matches for
+    `go-llm-gateway/pkg/providers`, which is the expected result. The loop
+    consumer path relies on `go-agent-loop/pkg/messages.Inferencer` and
+    `go-agent-loop/pkg/messages.SessionInferencer` contracts, not gateway
+    provider packages.
+  - No live credentials or network access are required by the cited loop proof
+    command because all inferencer and tool behavior is supplied by in-process
+    test doubles.
+  - `P3-CORE-03` is ready to close from the checked loop consumer evidence.
+- `required repairs`: none.
