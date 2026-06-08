@@ -130,37 +130,37 @@ from reviewer-runnable repository artifacts.
 - `outcome`: `pass`
 - `checklist rows inspected`: `P3-CORE-03`
 - `commands run or cited`:
-  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
-  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
+  - `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
 - `affected files / commands / surfaces`:
-  - `go-agent-loop/pkg/agentloop/agent_loop_test.go`
-  - `go-agent-loop/pkg/participants/model_runner_test.go`
+  - `docs/internal/phase-3-library-independence-proof.md`
+  - `go-agent-loop/test/functional/consumer_independence_test.go`
+  - `go-agent-loop/pkg/agentloop`
   - `go-agent-loop/pkg/messages/participant_messages.go`
   - `go-agent-loop/pkg/messages/session.go`
   - `go-agent-loop/go.mod`
-  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
-  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
+  - `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
 - `evidence`:
-  - The loop proof command passes and exercises observable loop behavior through
-    local test doubles rather than a gateway provider. `TestExecute_SimpleResponse`
-    constructs `agentloop.New(WithInferencer(inf))`, runs `Execute`, and asserts
-    the assistant text returned by the local `mockInferencer`.
-    `TestExecute_WithToolCall` runs a tool-call loop with a local
-    `mockToolExecutor` and verifies two inference passes. `TestExecute_MultiTurn`
-    verifies multi-turn history carry-forward using a local
-    `capturingInferencer`. `TestExecuteStreaming_EndToEndDeltas` verifies
-    streaming deltas from a local `chunkInferencer`. `TestModelRunner_SimpleInference`
-    verifies participant-level model runner behavior with a local
-    `testInferencer`.
-  - The checked dependency command exits with no matches for
-    `go-llm-gateway/pkg/providers`, which is the expected result. The loop
-    consumer path relies on `go-agent-loop/pkg/messages.Inferencer` and
-    `go-agent-loop/pkg/messages.SessionInferencer` contracts, not gateway
-    provider packages.
-  - No live credentials or network access are required by the cited loop proof
-    command because all inferencer and tool behavior is supplied by in-process
-    test doubles.
-  - `P3-CORE-03` is ready to close from the checked loop consumer evidence.
+  - The delivered proof guide names
+    `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
+    as the loop consumer independence proof command. The validator reran that
+    exact command and it passed.
+  - `go-agent-loop/test/functional/consumer_independence_test.go` is the
+    downstream-style proof surface for this finding. It imports the public
+    `go-agent-loop/pkg/agentloop` API, supplies a local implementation of the
+    `go-agent-loop/pkg/messages` inferencer contract, executes one
+    deterministic user turn with `agentloop.New(...).Execute(...)`, and asserts
+    the assistant response and conversation history.
+  - The same functional proof rejects provider dependencies by running
+    `go list -test -deps .` inside the proof package and failing if any
+    dependency starts with
+    `github.com/portpowered/go-llm-gateway/pkg/providers/`.
+  - No live credentials or network access are required because all inferencer
+    behavior is supplied by the local proof type.
+  - Package-level loop tests remain useful supplemental behavioral coverage,
+    but the delivered functional proof command and file above are the primary
+    evidence for `P3-CORE-03`.
+  - `P3-CORE-03` is ready to close from the delivered loop consumer proof
+    surface.
 - `required repairs`: none.
 
 ### Gateway Consumer Independence
@@ -168,41 +168,41 @@ from reviewer-runnable repository artifacts.
 - `outcome`: `pass`
 - `checklist rows inspected`: `P3-CORE-04`
 - `commands run or cited`:
-  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+  - `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
 - `affected files / commands / surfaces`:
-  - `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`
-  - `go-llm-gateway/pkg/gateway/interaction_fixture_test.go`
-  - `go-llm-gateway/pkg/inference/main_inferencer_test.go`
+  - `docs/internal/phase-3-library-independence-proof.md`
+  - `go-llm-gateway/test/functional/gateway_independence_test.go`
   - `go-llm-gateway/pkg/gateway/gateway.go`
-  - `go-llm-gateway/pkg/gateway/interaction_gateway.go`
-  - `go-llm-gateway/pkg/inference/main_inferencer.go`
   - `go-llm-gateway/pkg/models/message.go`
+  - `go-llm-gateway/pkg/providers`
+  - `go-agent-loop/pkg/messages`
   - `go-llm-gateway/go.mod`
-  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+  - `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
 - `evidence`:
-  - The gateway proof command passes and exercises observable gateway behavior
-    without live providers, credentials, or network access.
-    `TestInteract_NormalizesProviderTextResponse` constructs `gateway.NewGateway`
-    with an in-process fake provider, runs `Interact`, and verifies normalized
-    start, text delta, final message, usage, and end events plus translated
-    provider request fields. `TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents`
-    replays the same normalized fixture twice and verifies deterministic output.
-    `TestInfer_PassthroughMaxTokens` and `TestInferStream_PassthroughAllFields`
-    exercise the `pkg/inference` adapter with an in-process capture gateway and
-    verify deterministic request translation into gateway calls.
-  - The checked gateway consumer dependency path imports exactly one
-    `go-agent-loop` package: `github.com/portpowered/go-agent-loop/pkg/messages`.
-    This is the deliberate shared message contract package allowed by
-    `P3-CORE-04`.
-  - The forbidden dependency command exits with no matches for non-contract loop
-    runtime packages: `agentloop`, `engine`, `participants`, `state`,
-    `subsystems`, or `logging`. A non-zero `rg` exit is the expected passing
-    result for this exclusion proof.
-  - `P3-CORE-04` is ready to close from the checked gateway consumer evidence.
+  - The delivered proof guide names
+    `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
+    as the gateway consumer independence proof command. The validator reran
+    that exact command and it passed.
+  - `go-llm-gateway/test/functional/gateway_independence_test.go` is the
+    downstream-style proof surface for this finding. It imports the public
+    `go-llm-gateway/pkg/gateway` API and `go-llm-gateway/pkg/providers`
+    contract, constructs `gateway.NewGateway(...)` with a local provider,
+    exercises deterministic non-streaming and streaming responses, and asserts
+    the returned text, token usage, captured request, text deltas, and message
+    end event.
+  - The same functional proof allows exactly one loop-owned package in its
+    dependency path:
+    `github.com/portpowered/go-agent-loop/pkg/messages`. It rejects every other
+    dependency under `github.com/portpowered/go-agent-loop/pkg/...`, which
+    covers non-contract runtime packages such as `agentloop`, `engine`,
+    `participants`, `state`, `subsystems`, and `logging`.
+  - No live credentials or network access are required because all gateway
+    behavior is supplied by the local proof provider.
+  - Package-level gateway and inference tests remain useful supplemental
+    behavioral coverage, but the delivered functional proof command and file
+    above are the primary evidence for `P3-CORE-04`.
+  - `P3-CORE-04` is ready to close from the delivered gateway consumer proof
+    surface.
 - `required repairs`: none.
 
 ### Proof-Surface Truthfulness and Reviewer Usability
@@ -210,38 +210,37 @@ from reviewer-runnable repository artifacts.
 - `outcome`: `pass`
 - `checklist rows inspected`: `P3-GATE-01`
 - `commands run or cited`:
-  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
-  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
-  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+  - `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
+  - `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
 - `affected files / commands / surfaces`:
+  - `docs/internal/phase-3-library-independence-proof.md`
   - `docs/internal/phase-3-library-independence-validator.md`
   - `docs/internal/checklist.md`
   - `docs/architecture/dependencies.md`
   - `README.md`
+  - `go-agent-loop/test/functional/consumer_independence_test.go`
+  - `go-llm-gateway/test/functional/gateway_independence_test.go`
   - the proof commands listed above
 - `evidence`:
-  - The validator report itself is the reviewer-facing proof guidance for this
-    convergence pass. It cites the exact loop proof command, gateway proof
-    command, allowed shared contract package
-    `github.com/portpowered/go-agent-loop/pkg/messages`, forbidden gateway-side
-    loop runtime packages, and forbidden loop-side provider package class
-    `go-llm-gateway/pkg/providers/...`.
-  - The cited loop and gateway test commands pass from the documented module
-    working directories. The tests use in-process fakes, capture gateways,
-    fixture replayers, and local inferencer doubles, so they are deterministic
-    and require no live provider credentials or network access.
-  - The loop dependency exclusion command returns no matches for
-    `go-llm-gateway/pkg/providers`, which truthfully proves that the checked
-    loop consumer path does not import gateway provider packages. The command's
-    non-zero `rg` exit is the expected successful exclusion result.
-  - The gateway dependency inclusion command returns exactly the deliberate
-    shared contract package, `github.com/portpowered/go-agent-loop/pkg/messages`,
-    for the bounded gateway consumer path. The forbidden runtime dependency
-    command returns no matches for `agentloop`, `engine`, `participants`,
-    `state`, `subsystems`, or `logging`; its non-zero `rg` exit is the expected
-    successful exclusion result.
+  - `docs/internal/phase-3-library-independence-proof.md` is the delivered
+    proof guide for the prerequisite library-independence proof slice. It cites
+    the exact downstream-style loop and gateway functional proof commands, the
+    checked proof packages, the allowed shared contract package
+    `github.com/portpowered/go-agent-loop/pkg/messages`, the forbidden
+    gateway-side non-contract loop runtime packages, and the forbidden
+    loop-side provider package class
+    `github.com/portpowered/go-llm-gateway/pkg/providers/...`.
+  - The validator report reconciles with that proof guide by using those two
+    documented functional proof commands and files as the primary evidence for
+    `P3-CORE-03`, `P3-CORE-04`, and `P3-GATE-01`.
+  - Both cited functional commands pass from the documented module working
+    directories. The tests use in-process local proof types, so they are
+    deterministic and require no live provider credentials or network access.
+  - Dependency-boundary assertions are part of the delivered proof tests
+    themselves: the loop proof rejects
+    `github.com/portpowered/go-llm-gateway/pkg/providers/...`, and the gateway
+    proof allows only `github.com/portpowered/go-agent-loop/pkg/messages` from
+    loop-owned packages while rejecting non-contract loop runtime packages.
   - The broader architecture docs still describe the repository as a composed
     multi-module workspace rather than claiming total package isolation. That
     wording is consistent with this proof surface because the validator only
@@ -257,26 +256,21 @@ from reviewer-runnable repository artifacts.
 - `phase 3 package-boundary status`: broader Phase 3 package-boundary work may
   close from the repository evidence cited in this report.
 - `commands required for reviewer verification`:
-  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
-  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
-  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
-  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+  - `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
+  - `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
 - `summary evidence`:
-  - `P3-CORE-03` passes because the loop proof command exercises agent-loop
-    execution, tool-call handling, multi-turn state, streaming deltas, and model
-    runner behavior with local inferencer and tool doubles. The checked loop
-    consumer dependency path has no `go-llm-gateway/pkg/providers/...` imports.
-  - `P3-CORE-04` passes because the gateway proof command exercises normalized
-    gateway interaction, deterministic fixture replay, and inference adapter
-    request translation with in-process fake or capture gateways. The checked
-    gateway consumer dependency path imports only the deliberate shared contract
-    package, `github.com/portpowered/go-agent-loop/pkg/messages`, and excludes
-    non-contract loop runtime packages.
+  - `P3-CORE-03` passes because the delivered loop functional proof imports and
+    exercises the public loop API with a local inferencer and rejects
+    `go-llm-gateway/pkg/providers/...` dependencies inside the proof package.
+  - `P3-CORE-04` passes because the delivered gateway functional proof imports
+    and exercises public gateway/provider entrypoints, allows only
+    `github.com/portpowered/go-agent-loop/pkg/messages` as the shared loop
+    contract, and rejects non-contract loop runtime packages inside the proof
+    package.
   - `P3-GATE-01` passes because the report cites exact deterministic,
-    credential-free, network-free proof commands from the correct module working
-    directories, explains the expected results of negative dependency checks,
-    and records no mismatches between documentation claims and observed proof
-    behavior.
+    credential-free, network-free proof commands from the delivered
+    `docs/internal/phase-3-library-independence-proof.md` guide, maps them to
+    the affected proof files, and records no mismatch between documentation
+    claims and observed proof behavior.
 - `non-pass repairs`: none. There are no fail or uncertain findings in this
   convergence pass.
