@@ -69,6 +69,24 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - `agent-cli/internal/services/session_runtime.go` now owns the provider-specific session runtime planning behind one CLI composition seam before provider construction begins
   - reviewers should treat new provider-specific branching outside that seam as a regression unless it is explicitly documented as broader than the current Phase 2 scope
 
+### HC-04: gateway provider logging depended on a loop-owned helper package outside the deliberate shared contract boundary
+
+- Affected boundary: `go-llm-gateway/pkg/providers/openai` and `go-llm-gateway/pkg/providers/grok` -> `go-agent-loop/pkg/logging`
+- Evidence before the repair:
+  - scoped provider and provider-test surfaces imported `go-agent-loop/pkg/logging` directly even though logging is a provider-local concern rather than a loop-owned runtime contract
+  - that import path made the gateway-independence story look broader in docs than it was in the actual import graph
+- Observable impact before the repair:
+  - gateway consumers inherited a loop-owned non-contract runtime helper dependency from provider construction paths
+  - reviewers had to reconstruct import details manually to tell whether `go-agent-loop/pkg/messages` was really the only shared runtime dependency
+  - the repository lacked one reviewer-facing place that named the replacement seam and its narrower independence claim explicitly
+- Why this was hidden coupling instead of an adapter:
+  - the intended shared boundary for this slice is `go-agent-loop/pkg/messages`, not loop-owned logging helpers
+  - provider logging does not implement a loop-owned interface; it is optional provider-local behavior and belongs behind a gateway-owned seam
+- Status after `phase-3-gateway-runtime-decoupling`:
+  - resolved for the scoped OpenAI and Grok provider plus provider-test surfaces
+  - `go-llm-gateway/pkg/logging` now owns the optional provider logging seam, and `go-agent-loop/pkg/messages` remains the only deliberate shared runtime contract boundary claimed for this slice
+  - reviewers should cite `docs/architecture/dependencies.md`, `go-llm-gateway/README.md`, and checklist rows `P3-CORE-04` plus `P3-DOC-01` as the boundary truth for this repair rather than inferring it from code archaeology alone
+
 ## Dependency-Injection Findings
 
 ### DI-01: `agentloop.New` creates a default tool executor when the caller omits one

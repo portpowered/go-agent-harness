@@ -23,6 +23,12 @@ Allowed dependency direction:
 - `go-llm-gateway` may depend on `go-agent-loop` because it implements loop-owned contracts such as `messages.Inferencer`, `messages.SessionInferencer`, `messages.Session`, and the shared `messages.StreamMessage` model.
 - `agent-cli` may depend on both libraries because it is the composition layer that chooses providers, builds loops, connects IO, and persists sessions.
 
+Phase 3 reviewer rule for the current gateway-runtime slice:
+
+- treat `go-agent-loop/pkg/messages` as the only deliberate shared runtime contract boundary that `go-llm-gateway` may depend on for this slice
+- treat loop-owned helper packages such as `go-agent-loop/pkg/logging` as out of bounds for gateway provider code and tests
+- treat `go-llm-gateway/pkg/logging` as the gateway-owned seam for optional provider logging so reviewers do not need to infer that replacement from imports alone
+
 Reviewer rule of thumb:
 
 - A new import from `go-agent-loop` into `go-llm-gateway` is expected when it consumes loop-owned contracts or shared message models.
@@ -42,6 +48,7 @@ Reviewer rule of thumb:
 
 - `pkg/gateway.Gateway` is the stateless inference boundary for normalized requests and responses.
 - `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are the intended adapters from gateway/provider code into loop-owned interfaces.
+- `pkg/logging` is the gateway-owned optional logging seam for provider code. It is not part of the shared cross-module runtime contract boundary.
 - `pkg/providers` owns provider-specific request shaping and provider option translation, but not generic live/record/replay transport policy.
 
 `agent-cli` owns application wiring:
@@ -113,6 +120,12 @@ Exports that currently look incidental or not yet independent:
 Concrete Phase 2 API gap for this module:
 
 - `SessionGatewayInferencer` only exposes `WithSessionModel`, `WithSessionVoice`, and `WithSessionInstructions`, while `models.SessionConfig` already carries modalities, audio formats, tools, turn detection, and provider-specific config. That means the exported session adapter surface is narrower than the gateway session contract and forces callers toward provider-specific wiring when they need richer session configuration.
+
+Phase 3 dependency-boundary status for this module:
+
+- `pkg/messages` remains the deliberate shared runtime contract boundary for the current gateway-independence slice.
+- Provider-local optional logging has moved behind `go-llm-gateway/pkg/logging`, so scoped OpenAI and Grok provider paths no longer need `go-agent-loop/pkg/logging`.
+- Reviewers should not treat that logging seam move as proof that every gateway package is loop-independent; the enforced claim for this slice is narrower and limited to removing loop-owned non-contract runtime helpers from the reviewed provider surfaces.
 
 ### `agent-cli`
 
