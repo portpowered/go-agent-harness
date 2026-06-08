@@ -142,9 +142,10 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - introduce a session runtime dependency bundle for config loading, dialer selection, and provider-specific inferencer construction
   - keep `RunSession` responsible for command semantics, not for discovering defaults from disk and transport packages
 - Status after `phase-2-session-runtime-ownership-repair`:
-  - resolved for the scoped session runtime seam
+  - narrowed, but not fully resolved, for the scoped session runtime seam
   - `RunSession` now delegates session-mode config loading, dialer selection, and provider-specific runtime construction to `agent-cli/internal/services/session_runtime.go`
-  - Grok and OpenAI session providers no longer create hidden live WebSocket dialers in the reviewed record/replay paths; missing owned dialers fail explicitly at the planner or provider session boundary
+  - Grok and OpenAI session providers no longer create hidden live WebSocket dialers inside provider session constructors; missing owned dialers fail explicitly at the provider boundary
+  - `agent-cli/internal/services/session_runtime.go` still creates a factory-owned live default through `newDefaultLiveDialer()` on record paths when the caller omits `SessionRunOptions.WebSocketDialer`, so the broader constructor-ownership row remains open until that fallback is removed
 
 ## Context Contract Findings
 
