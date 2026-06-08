@@ -133,3 +133,98 @@ residue that still blocks convergence.
 Use `uncertain` when current repository state does not provide enough evidence
 to verify the claim, including missing planning inputs, contradictory surfaces,
 or queue state that cannot be classified safely from the available data.
+
+## Findings
+
+### Checklist Convergence
+
+- `outcome`: `uncertain`
+- `checklist rows / commitments inspected`: `P2-COB-04`; `P2-COB-05`;
+  `P2-GATE-01`; `phase-2-session-runtime-ownership-repair-001`;
+  `phase-2-session-runtime-ownership-repair-002`;
+  `phase-2-session-runtime-ownership-repair-003`;
+  `phase-2-session-runtime-ownership-repair-004`;
+  `phase-2-session-runtime-ownership-repair-005`
+- `affected files / surfaces / work IDs`: `docs/internal/checklist.md`;
+  `tasks/todo/phase-2-session-runtime-ownership-repair.md`;
+  `agent-cli/internal/services/session.go`;
+  `agent-cli/internal/services/session_runtime.go`;
+  `agent-cli/internal/services/session_test.go`;
+  `go-llm-gateway/pkg/providers/grok/provider.go`;
+  `go-llm-gateway/pkg/providers/grok/provider_test.go`;
+  `go-llm-gateway/pkg/providers/openai/session.go`;
+  `go-llm-gateway/pkg/providers/openai/session_test.go`;
+  `go-llm-gateway/pkg/testing/session_record.go`;
+  `go-llm-gateway/pkg/testing/session_record_test.go`;
+  `go-llm-gateway/pkg/testing/session_replay.go`;
+  `go-llm-gateway/pkg/testing/session_replay_test.go`;
+  `docs/architecture/contract-gap-audit.md`;
+  `agent-cli/docs/session-record-replay.md`;
+  root `Makefile`; work IDs
+  `phase-2-session-runtime-ownership-repair-001` through
+  `phase-2-session-runtime-ownership-repair-005`
+- `evidence`:
+  - `P2-COB-04`: `fail`. The repository now exposes a dedicated session-mode
+    runtime planning seam in `agent-cli/internal/services/session_runtime.go`,
+    and the provider session surfaces reject a missing dialer at the provider
+    boundary (`go-llm-gateway/pkg/providers/grok/provider_test.go:
+    TestConnectSession_MissingDialerFailsBeforeDial` and
+    `go-llm-gateway/pkg/providers/openai/session.go`). The broader checklist row
+    still fails, though, because `planGrokRecordRuntime(...)` and
+    `planOpenAIRecordRuntime(...)` silently create a live default through
+    `factory.newDefaultLiveDialer()` when `SessionRunOptions.WebSocketDialer` is
+    unset. That default creation means session record behavior is still not
+    fully constrained to caller-owned runtime injection, which contradicts the
+    "do not require hidden live dependency creation" portion of
+    `docs/internal/checklist.md`.
+  - `P2-COB-05`: `uncertain`. This validator now has an explicit session-runtime
+    scope and a repository-backed checklist-convergence finding, but the
+    constructor-ownership planning surface named by the broader row,
+    `tasks/todo/phase-2-constructor-ownership-boundaries.md`, is still missing.
+    Because that authoritative planning input is absent from the repository
+    state, this branch cannot yet prove that reviewer guidance and repair
+    visibility for the whole constructor-ownership lane are complete.
+  - `P2-GATE-01`: `pass`. Deterministic proof exists on the cited repository
+    surfaces: `agent-cli/internal/services/session_test.go` exercises session
+    runtime planning, missing-dialer failures, replay routing, and cancellation;
+    `go-llm-gateway/pkg/testing/session_record_test.go` proves relay writes stop
+    once the owned context is canceled; and
+    `go-llm-gateway/pkg/testing/session_replay_test.go` proves replay delivery
+    stops once the owned replay context is canceled. The root `Makefile`
+    exposes `typecheck` as the compile-validation quality gate for this
+    workspace, and this validator story was checked with that command.
+  - `phase-2-session-runtime-ownership-repair-001`: `pass`. The repository now
+    routes session-mode config loading, replay-vs-record selection, and
+    provider-specific inferencer construction through
+    `agent-cli/internal/services/session_runtime.go` before provider
+    construction begins, which matches the committed CLI-owned seam.
+  - `phase-2-session-runtime-ownership-repair-002`: `fail`. The provider
+    session implementations now consume injected dialers and fail explicitly
+    when the provider receives none, but the CLI planner still creates a live
+    default dialer when the caller omits one. That leaves the branch short of
+    the stricter "owned dialer must already exist at the seam" commitment.
+  - `phase-2-session-runtime-ownership-repair-003`: `pass`. The record and
+    replay helpers now carry explicit relay lifecycle ownership through
+    `WithSessionRelayContext(...)`, `WithReplayContext(...)`, and the relay
+    tests that verify messages stop after cancellation instead of continuing on
+    `context.Background()`.
+  - `phase-2-session-runtime-ownership-repair-004`: `pass`. The repository
+    contains deterministic tests for the repaired seam and cancellation contract
+    on the exact surfaces named in the repair slice, and those tests do not
+    require live credentials or external network access.
+  - `phase-2-session-runtime-ownership-repair-005`: `uncertain`. The reviewer
+    docs and audit surfaces were updated to describe the intended ownership
+    model, but this validator branch has not yet completed the later finding
+    groups that must confirm those surfaces are fully aligned with delivered
+    behavior and residue state.
+- `required repairs / you work move actions`:
+  - Move session-mode live dialer ownership from
+    `session_runtime.go`'s default-dialer fallback to an explicit caller-owned
+    dependency if `P2-COB-04` and repair commitment `...-002` are meant to
+    converge as written.
+  - Restore or replace the missing
+    `tasks/todo/phase-2-constructor-ownership-boundaries.md` planning surface
+    before claiming full `P2-COB-05` convergence for the broader
+    constructor-ownership lane.
+  - Finish the remaining validator finding groups before treating the docs and
+    audit refresh commitment `...-005` as fully satisfied.
