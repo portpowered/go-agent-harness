@@ -286,6 +286,51 @@ func TestDefaultGatewayInteractRejectsUnsupportedStatelessFeaturesBeforeProvider
 	}
 }
 
+func TestDefaultGatewayInteractRejectsUnsupportedProviderOptionsBeforeProviderCall(t *testing.T) {
+	t.Parallel()
+
+	caps := supportedStatelessCapabilities()
+	caps.ProviderOptions = providers.Unsupported("raw config disabled")
+	provider := newFakeCapabilityProvider(caps)
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	events := collectInteractionEvents(t, gw, InteractionRequest{
+		InteractionID: "unsupported-provider-options",
+		Config:        json.RawMessage(`{"extra":true}`),
+		Messages: []InteractionMessage{{
+			Role:         InteractionRoleUser,
+			ContentParts: []InteractionContent{{Type: InteractionContentText, Text: "hello"}},
+		}},
+	})
+
+	if provider.inferCalls != 0 {
+		t.Fatalf("Infer calls = %d, want 0", provider.inferCalls)
+	}
+	wantTypes := []InteractionEventType{
+		InteractionEventStart,
+		InteractionEventError,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !equalInteractionEventTypes(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if events[1].Error == nil {
+		t.Fatal("error event payload is nil")
+	}
+	if events[1].Error.Code != "unsupported_feature" {
+		t.Fatalf("error code = %q, want unsupported_feature", events[1].Error.Code)
+	}
+	if string(events[1].Error.Details["feature"]) != `"providerOptions"` {
+		t.Fatalf("feature detail = %s, want providerOptions", events[1].Error.Details["feature"])
+	}
+	if string(events[1].Error.Details["mode"]) != `"stateless"` {
+		t.Fatalf("mode detail = %s, want stateless", events[1].Error.Details["mode"])
+	}
+}
+
 func TestDefaultSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderCall(t *testing.T) {
 	t.Parallel()
 
