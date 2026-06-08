@@ -199,6 +199,69 @@ Provider-specific behavior lives behind those shared interfaces. Examples:
 - fal.ai streaming is unsupported in this wrapper; gateway and direct provider
   streaming calls return `providers.UnsupportedFeatureError` before HTTP work
 
+## Capability Discovery And Validation
+
+Providers that implement `providers.CapabilityReporter` expose a static
+provider-family report through `Capabilities()`. The report uses
+`providers.ProviderCapabilities` and marks each public feature as
+`supported`, `unsupported`, or `unknown`.
+
+Use `unknown` as "not locally provable", not as success or failure. The gateway
+only rejects deterministic `unsupported` states before provider execution.
+Unknown and model-dependent behavior is allowed to reach the provider so the
+provider or model can make the runtime decision.
+
+```go
+provider := openai.New(openai.WithAPIKey("sk-..."))
+
+if reporter, ok := provider.(providers.CapabilityReporter); ok {
+	caps := reporter.Capabilities()
+	fmt.Println(caps.Provider, caps.Stateless.Streaming.State)
+}
+```
+
+`gateway.DefaultGateway`, `gateway.DefaultSessionGateway`, and the loop-facing
+inferencer adapters built on those gateways apply this local validation before
+provider HTTP, SDK, websocket, stream setup, or provider method work. Direct
+provider calls may also reject when the provider has its own deterministic
+unsupported seam, such as fal.ai streaming.
+
+Unsupported requests return `*providers.UnsupportedFeatureError` where possible.
+Interaction streams surface the same details in an `unsupported_feature`
+terminal event. Consumers can inspect the provider name, mode, feature, and
+capability state instead of parsing provider-specific text:
+
+```go
+stream, err := gw.InferStream(ctx, req)
+if err != nil {
+	var unsupported *providers.UnsupportedFeatureError
+	if errors.As(err, &unsupported) {
+		fmt.Println(unsupported.Provider)
+		fmt.Println(unsupported.Mode)
+		fmt.Println(unsupported.Feature)
+		fmt.Println(unsupported.Capability.State)
+		fmt.Println(unsupported.Capability.Rationale)
+	}
+	return
+}
+
+_ = stream
+```
+
+Current static provider-family capability states:
+
+| Provider family | Stateless summary | Session summary | Unknown rationale |
+| --- | --- | --- | --- |
+| Anthropic | Inference, streaming, tools, image input, reasoning, and prompt caching are supported. Native audio input, video input/output, and raw provider config are unsupported by this wrapper. | No session surface. | None currently reported. |
+| OpenAI-compatible | Inference, streaming, tools, image input, and audio input are supported. Video output, reasoning options, and raw provider config are unsupported by the chat-completions wrapper. | OpenAI Realtime sessions, tools, text/audio modalities, supported realtime audio formats, and turn detection are supported. Raw session config is unsupported. | Video input is endpoint/model dependent. Prompt caching may be automatic or endpoint-specific because the wrapper does not send explicit cache-control options. |
+| Gemini | Inference, streaming, tools, image input, and audio input are supported. Video input/output, reasoning options, prompt caching, and raw provider config are unsupported by this wrapper. | No session surface. | None currently reported. |
+| Grok | No stateless surface. | Realtime sessions, tools, text/audio modalities, supported realtime audio formats, and turn detection are supported. Raw session config is unsupported. | None currently reported. |
+| fal.ai | Sync stateless inference, image input, audio input, video output, and raw provider config are supported. Tools, streaming, video input, reasoning options, and prompt caching are unsupported by this wrapper. | No session surface. | None currently reported. |
+
+These states are local wrapper claims. They do not replace provider-side
+authorization, model availability, quota, content, or endpoint validation, and
+credential-free validation tests only prove deterministic local mismatches.
+
 ## Using With go-agent-loop
 
 `go-llm-gateway` includes adapters for the loop contracts defined in
