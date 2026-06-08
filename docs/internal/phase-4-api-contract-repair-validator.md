@@ -306,6 +306,158 @@ explicitly superseded by a reviewer-facing cleanup note.
   missing audit rows for provider capability discovery and local unsupported
   feature validation.
 
+## Typed Errors And Stream Contract Validation
+
+### Evidence Inputs
+
+- `go-agent-loop/pkg/messages/agent_messages.go`
+- `go-agent-loop/pkg/participants/model_runner.go`
+- `go-llm-gateway/pkg/gateway/gateway.go`
+- `go-llm-gateway/pkg/gateway/interaction_gateway.go`
+- `go-llm-gateway/pkg/gateway/interaction_types.go`
+- `go-llm-gateway/pkg/testing/session_websocket_dialer.go`
+- `go-llm-gateway/README.md`
+- `go-agent-loop/README.md`
+- `agent-cli/docs/session-record-replay.md`
+- `docs/architecture/contract-gap-audit.md`
+- deterministic tests under `go-llm-gateway/pkg/gateway`,
+  `go-llm-gateway/pkg/testing`, `go-llm-gateway/pkg/providers/*`,
+  `go-agent-loop/pkg/participants`, and `agent-cli/test/integration`
+
+### `P4-API-02` - Typed Gateway, Provider, Replay, And CLI Errors
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: `go-agent-loop/pkg/messages.ErrorValue` is exported and
+  has structured fields (`ErrorType`, `Code`, `Param`, and `EventID`), and
+  `go-llm-gateway/pkg/gateway.InteractionError` exposes `Code` and
+  `Retryable`. Those fields are only partial typed-error evidence. The shared
+  streaming path still commonly emits `messages.NewErrorValue(err.Error())`;
+  `go-agent-loop/pkg/participants.ModelRunner.emitSyntheticDeltas` collapses
+  non-streaming failures into a string-only `ERROR`; and
+  `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err()` returns ordinary
+  `fmt.Errorf(...)` replay divergence or incompletion errors with no exported
+  type, sentinel, or `errors.Is` / `errors.As` contract. Deterministic tests
+  prove some typed errors exist for interaction fixture validation through
+  `errors.As(err, &InteractionFixtureValidationError)`, and prove cancellation
+  preservation in selected loop/session paths through `errors.Is(err,
+  context.Canceled)`, but they do not prove one public taxonomy across gateway,
+  provider, CLI, replay, validation, and stream boundaries.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.ErrorValue`;
+  `go-agent-loop/pkg/messages.NewErrorValue`;
+  `go-agent-loop/pkg/messages.NewErrorValueWithDetails`;
+  `go-agent-loop/pkg/participants.ModelRunner.emitSyntheticDeltas`;
+  `go-llm-gateway/pkg/gateway.InteractionError`;
+  `go-llm-gateway/pkg/gateway.InteractionFixtureValidationError`;
+  `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`;
+  `go-llm-gateway/pkg/testing.replayWebSocketConn.setErrLocked`;
+  `agent-cli/internal/services/session_runtime.go`;
+  `agent-cli/internal/services/session.go`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. Public docs
+  document replay divergence by matching error text in
+  `agent-cli/docs/session-record-replay.md`, while the architecture audit
+  leaves `ERR-01`, `ERR-02`, and `COMPAT-03` open because stream and session
+  command failures still depend on free-form strings. Tests currently assert
+  some human-readable substrings such as "replay divergence" instead of a typed
+  replay error contract.
+- `reviewer commands`: `rg -n "type ErrorValue|NewErrorValue|InteractionError|InteractionFixtureValidationError|ReplayWebSocketDialer|replay divergence|errors\\.As|errors\\.Is"`
+  `go-agent-loop/pkg go-llm-gateway/pkg agent-cli`; `rg -n
+  "ERR-01|ERR-02|COMPAT-03|Replay Divergence Errors|typed error|errors\\.As|errors\\.Is"`
+  `docs go-agent-loop/README.md go-llm-gateway/README.md agent-cli/docs`;
+  `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: implement an additive typed-error
+  repair idea that introduces stable caller-actionable error kinds for
+  validation, unsupported feature, provider request/transport, provider stream,
+  replay divergence, replay incomplete, cancellation, timeout, session close,
+  and capture persistence. Preserve legacy messages during migration, but add
+  exported error types or sentinels that support `errors.Is` or `errors.As` and
+  deterministic tests that prove classification without substring matching.
+
+### `P4-API-05` - Stream Terminal Events And Error Preservation
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: public stream types include `MESSAGE.END`, `ERROR`,
+  `SESSION.CLOSE`, `RESPONSE.CANCEL`, and content start/delta/end events.
+  `go-agent-loop/pkg/participants.ModelRunner.drainStream` forwards provider
+  stream events unchanged until `MESSAGE.END` or `ERROR`, but if the provider
+  channel closes without `MESSAGE.END`, it emits a synthetic `MESSAGE.END`
+  without an observable provenance field. The non-streaming fallback path also
+  synthesizes `MESSAGE.START` through `MESSAGE.END`, and on error emits a
+  string-only `ERROR`. Session replay can preserve pre-cancellation partial
+  output in tests, and record/replay relay cancellation preserves
+  `context.Canceled` in selected CLI tests, but replay mismatch is returned as
+  an untyped Go error rather than an observable stream event with structured
+  error details.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.StreamMessage`;
+  `go-agent-loop/pkg/messages.StreamMessageType`;
+  `go-agent-loop/pkg/messages.MessageEndValue`;
+  `go-agent-loop/pkg/messages.ErrorValue`;
+  `go-agent-loop/pkg/participants.ModelRunner.drainStream`;
+  `go-agent-loop/pkg/participants.ModelRunner.emitSyntheticDeltas`;
+  `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`;
+  provider `InferStream` implementations; `go-llm-gateway/pkg/testing`
+  replay helpers; `agent-cli/internal/services/session.go`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. Public docs
+  show ordinary stream event shapes and session replay divergence text, but do
+  not define when terminal events are provider-authored versus loop-synthesized
+  or how cancellation, replay mismatch, partial output, and terminal failure
+  are preserved through one public stream surface. The audit keeps
+  `LIFECYCLE-02`, `ERR-01`, `ERR-02`, and compatibility rows open for the same
+  reason.
+- `reviewer commands`: `rg -n "StreamTypeMessageEnd|StreamTypeError|StreamTypeSessionClose|NewErrorValue|drainStream|emitSyntheticDeltas|InferStream|replay divergence|context\\.Canceled"`
+  `go-agent-loop/pkg go-llm-gateway/pkg agent-cli`; `rg -n
+  "LIFECYCLE-02|ERR-01|ERR-02|Replay Divergence Errors|MESSAGE\\.END|SESSION\\.CLOSE|cancellation semantics"`
+  `docs go-agent-loop/README.md go-llm-gateway/README.md agent-cli/docs`;
+  `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: define the public stream terminal
+  contract for provider-authored end, loop-synthesized end, cancellation, replay
+  mismatch, partial output, session close, and terminal failure. Add structured
+  error payload preservation for stream `ERROR` events, decide which failures
+  remain in-band versus returned Go errors, and add deterministic fake-provider,
+  replay, cancellation, and CLI tests proving each terminal path without live
+  credentials.
+
+### `P4-API-03` - Result Surface Impact From Typed Error And Stream Semantics
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: story 003 evidence directly affects result contracts
+  because stream completion and terminal failure currently collapse several
+  outcomes into either a synthetic `MESSAGE.END`, a string-only `ERROR`, or a
+  returned untyped replay/CLI error. The current public result and stream
+  surfaces do not let callers distinguish empty success, partial success before
+  cancellation, provider-authored completion, loop-synthesized completion, replay
+  mismatch, and terminal failure from one documented contract.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.InferenceResult`;
+  `go-agent-loop/pkg/messages.StreamMessage`;
+  `go-agent-loop/pkg/participants.ModelRunner`;
+  `go-llm-gateway/pkg/gateway.InferenceResponse`;
+  `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`;
+  `agent-cli/internal/services/session.go`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. Existing
+  tests prove selected behaviors, but docs and exported contracts do not expose
+  the result-state distinctions required by `P4-API-03`; `LIFECYCLE-01`,
+  `LIFECYCLE-02`, `COMPAT-01`, and `COMPAT-02` remain open in the audit.
+- `reviewer commands`: `rg -n "InferenceResult|InferenceResponse|MessageEndValue|ErrorValue|provider_closed|replay incomplete|replay divergence"`
+  `go-agent-loop/pkg go-llm-gateway/pkg agent-cli`; `rg -n
+  "P4-API-03|LIFECYCLE-01|LIFECYCLE-02|COMPAT-01|COMPAT-02"`
+  `docs/internal/checklist.md docs/architecture/contract-gap-audit.md`;
+  `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: include result-state work in the typed
+  stream repair: define explicit public outcome states for empty success,
+  partial success, cancellation, provider terminal failure, replay divergence,
+  replay incomplete, closed/drained state, and synthesized completion, then
+  update docs and deterministic tests to prove those states at the API boundary.
+
+## Story 003 Closure
+
+The typed errors and stream contract convergence story passes for validator
+purposes: the report verifies current public typed-error and stream evidence,
+marks `P4-API-02`, `P4-API-03`, and `P4-API-05` as failed rows that must remain
+open, cites affected public declarations and deterministic commands, and scopes
+future repair work without implementing the repair inside this validator lane.
+
 ## Story 002 Closure
 
 The audit and validator-015 reconciliation story passes for validator purposes:
@@ -316,10 +468,11 @@ checklist row may close from story 002 alone.
 
 ## Current Story Status
 
-Stories 001 and 002 are complete. The report now establishes the Phase 4
+Stories 001, 002, and 003 are complete. The report now establishes the Phase 4
 validator subject, checklist row coverage, evidence rules, required finding
-shape, and audit/validator-015 reconciliation findings. Typed error, stream,
-capability, validation, dependency, result, context, lifecycle, and final planner
-decision findings remain deferred to later validator stories so each pass can
-compare the current public API, docs, examples where present, audit rows, tests,
-and deterministic command evidence at the correct depth.
+shape, audit/validator-015 reconciliation findings, and typed-error/stream
+contract findings. Capability, validation, dependency, result, context,
+lifecycle, and final planner decision findings remain deferred to later
+validator stories so each pass can compare the current public API, docs,
+examples where present, audit rows, tests, and deterministic command evidence at
+the correct depth.
