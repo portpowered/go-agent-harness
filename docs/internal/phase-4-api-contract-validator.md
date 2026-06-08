@@ -661,7 +661,52 @@ coverage gaps. Go test commands prove current observable runtime behavior and
 also make clear where passing tests demonstrate a gap, such as passthrough
 without local validation, rather than row closure.
 
+## Final Closure Decisions
+
+No reviewed Phase 4 checklist row may close from the current starter evidence.
+The next planner action is exactly: `repair`.
+
+The planner must consume this validator report before queueing additional
+Phase 4 implementation work. The current evidence shows useful starter
+progress, but the public API contract is not ready for cleanup/reconciliation
+or the next Phase 4 feature batch because typed error taxonomy, provider
+capability discovery, local unsupported-feature validation, stream semantics,
+and row-to-audit mapping remain incomplete.
+
+| Row | Outcome | Closure decision | Evidence summary | Affected files / declarations | Exact repair work |
+| --- | --- | --- | --- | --- | --- |
+| `P4-API-01` | `uncertain` | `must remain open` | Audit findings cover session context and replay relay cancellation, but they do not map timeout/cancellation behavior across every blocking gateway, loop, provider, docs, tests, and example surface. | `go-agent-loop/pkg/messages.SessionInferencer`; `go-llm-gateway/pkg/inference.SessionGatewayInferencer`; `agent-cli/internal/services/session.go`; `go-llm-gateway/pkg/testing.SessionRecorder`; `go-llm-gateway/pkg/testing.SessionReplayer` | Add explicit `P4-API-01` audit mapping for all blocking and provider entrypoints, separate already-repaired relay cancellation from remaining session request-shape work, and attach docs/tests/examples evidence for caller-owned lifetime behavior. |
+| `P4-API-02` | `fail` | `must remain open` | Interaction events expose string-coded structured fields, but main gateway, provider, replay, validation, and cancellation paths do not expose a public typed taxonomy usable with `errors.Is` or `errors.As`. | `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`; `DefaultGateway.InferStream`; `DefaultGateway.Interact`; `InteractionError`; `InteractionCancellation`; `go-llm-gateway/pkg/testing.SessionReplayer.Err`; `ReplayWebSocketDialer.Err`; `go-agent-loop/pkg/messages.ErrorValue`; public docs | Introduce additive typed gateway error classes or helpers, preserve classes through representative stateless, stream, replay, validation, and cancellation paths, document caller branching guidance, and add credential-free `errors.Is` / `errors.As` tests. |
+| `P4-API-03` | `uncertain` | `must remain open` | Audit findings identify lifecycle and result ambiguity, but row-level evidence does not yet cover all public result values and stream events for success, partial success, terminal failure, replay divergence, cancellation, and provider rejection. | `go-agent-loop/pkg/participants.ModelRunner`; `agent-cli/internal/services/session.go`; `go-agent-loop/pkg/messages.Message`; `go-agent-loop/pkg/messages.StreamMessage`; `go-llm-gateway/pkg/models`; gateway result surfaces | Add explicit `P4-API-03` mapping for public result and stream-event declarations, define terminal state semantics, and split documentation-only repairs from implementation repairs that require fixture or CLI replay updates. |
+| `P4-API-04` | `fail` | `must remain open` | Consumers cannot query provider capabilities through public gateway/provider APIs; the README has static provider notes but no runtime capability model with supported, unsupported, and unknown states. | `go-llm-gateway/pkg/providers.Provider`; `SessionProvider`; `InferenceRequest`; `go-llm-gateway/pkg/gateway.Gateway`; `DefaultGateway`; `DefaultSessionGateway`; provider constructors; `go-llm-gateway/README.md` | Add a public capability contract, cover tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config, wire representative providers, document the API, and add credential-free discovery tests. |
+| `P4-API-05` | `uncertain` | `must remain open` | Interaction cancellation and partial-output behavior are tested, but direct stream errors and replay mismatch paths are not tied to typed or documented taxonomy classes. | `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`; `DefaultGateway.Interact`; `InteractionEvent`; `go-agent-loop/pkg/messages.ErrorValue`; `go-llm-gateway/pkg/testing.SessionReplayer.Err`; `ReplayWebSocketDialer.Err` | Define stream error mapping across direct streams, interaction events, provider adapters, and replay helpers; preserve replay divergence and cancellation as typed or documented structured classes; add docs and deterministic tests for partial success and terminal failure cases. |
+| `P4-API-06` | `fail` | `must remain open` | Gateway and session paths forward requests to providers without shared local unsupported-feature validation; provider-specific behavior is inconsistent and not inspectable as one public validation contract. | `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`; `DefaultGateway.InferStream`; `DefaultSessionGateway.ConnectSession`; `gateway.InferenceRequest`; `providers.InferenceRequest`; `models.SessionConfig`; provider option and session implementations | Add capability-backed validation before provider execution for stateless and session requests, return structured or typed validation errors naming provider, requested feature or mode, and capability state, settle fal streaming behavior, and prove no provider side effects occur before rejection. |
+| `P4-API-07` | `uncertain` | `must remain open` | Earlier dependency-injection repairs are useful, but hidden prompt-resolution side effects and Phase 4 row-level closure decisions are still incomplete across public constructors and composition seams. | `go-agent-loop/pkg/agentloop.New`; `agent-cli/internal/agent.buildProviderHTTPRuntime`; `agent-cli/internal/services/session_runtime.go`; `agent-cli/internal/agent.Executor.loadSystemPrompt`; OpenAI and Grok provider runtime seams | Add explicit `P4-API-07` mapping that separates closed prerequisite DI repairs from remaining hidden side effects, name user-facing construction seams, and identify compatibility-sensitive ownership changes. |
+| `P4-GATE-01` | `fail` | `must remain open` | Multiple row-level failures and uncertainties remain; the starter slices do not yet provide enough evidence, docs, examples, and credential-free commands to close the public API hardening gate. | `docs/internal/phase-4-api-contract-validator.md`; `docs/architecture/contract-gap-audit.md`; `docs/internal/checklist.md`; public package docs, tests, and examples | Queue the repair batches below, update the audit and public guidance with row-level evidence, rerun this validator after repairs, and do not queue the next Phase 4 feature batch until this gate can close or a new validator report supersedes this one. |
+
+## Repair Batches
+
+1. Audit reconciliation batch: update `docs/architecture/contract-gap-audit.md`
+   so every `P4-API-*` row names affected public packages, exported
+   declarations, observable contract issues, docs/tests/examples evidence, and
+   implementation-ready repair slices. This batch should close no
+   implementation row by itself unless it also cites repaired public behavior.
+2. Typed error and stream semantics batch: introduce the public error taxonomy
+   and preservation tests for gateway, provider, replay, validation, direct
+   streaming, interaction events, cancellation, and partial-output paths.
+   Update public docs so callers know when to use `errors.Is`, `errors.As`, or
+   documented event fields.
+3. Provider capability and local validation batch: add the public capability
+   contract first, then use it to reject unsupported stateless and session
+   request features locally with inspectable errors before provider execution.
+   Include public docs, examples, and credential-free tests.
+4. Dependency and result contract batch: finish row-level decisions for public
+   constructors, provider runtime ownership, prompt resolution side effects,
+   result values, and terminal stream states. Keep compatibility-sensitive
+   changes additive or explicitly staged.
+
 ## Current Story Status
 
-Stories 001, 002, 003, 004, and 005 are complete. Later validator stories must
-fill in final row closure decisions and the final next planner action.
+Stories 001, 002, 003, 004, 005, and 006 are complete. This validator report
+is ready for planner consumption, and the report's next planner action is
+`repair`.
