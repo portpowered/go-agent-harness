@@ -350,6 +350,20 @@ feature `unsupported` when the local wrapper ignores or cannot translate that
 request shape, and `unknown` when support cannot be proven without depending on
 live provider behavior or credentials.
 
+Current static provider-family capability states:
+
+| Provider family | Stateless summary | Session summary | Unknown rationale |
+| --- | --- | --- | --- |
+| Anthropic | Tools, streaming, image input, reasoning, and prompt caching are supported. Native audio input/output, video output, and raw provider config are unsupported by this wrapper. | Sessions, session tools, session audio input/output, and raw session config are unsupported. | None currently reported. |
+| OpenAI-compatible | Tools, streaming, image input, audio input/output are supported. Video output, reasoning options, prompt caching, and raw provider config are unsupported by this wrapper. | OpenAI Realtime sessions, tools, and audio input/output are supported. Raw session config is unsupported. | None currently reported. |
+| Gemini | Tools, streaming, image input, and audio input are supported. Audio output, video output, reasoning options, prompt caching, and raw provider config are unsupported by this wrapper. | Sessions, session tools, session audio input/output, and raw session config are unsupported. | None currently reported. |
+| Grok | Stateless features are unsupported because this provider is session-only in this module. | Realtime sessions, tools, and audio input/output are supported. Raw session config is unsupported. | None currently reported. |
+| fal.ai | Image input, audio input/output, video output, and raw provider config are supported for sync stateless flows. Tools, streaming, reasoning options, and prompt caching are unsupported by this wrapper. | Sessions, session tools, session audio input/output, and raw session config are unsupported. | None currently reported. |
+
+These states are local wrapper claims. They do not replace provider-side
+authorization, model availability, quota, content, or endpoint validation, and
+credential-free validation tests only prove deterministic local mismatches.
+
 ## Provider Surface Map
 
 The module does not offer one identical capability set across all providers.
@@ -362,7 +376,7 @@ every feature is portable.
 | `pkg/providers/openai` | Yes | Yes | Yes | Also supports OpenAI-compatible base URLs and Realtime sessions |
 | `pkg/providers/gemini` | Yes | Yes | No | Stateless Gemini integration |
 | `pkg/providers/grok` | No | No | Yes | Realtime session provider only |
-| `pkg/providers/fal` | Yes | No | No | Media-oriented stateless flows; model-specific request expectations |
+| `pkg/providers/fal` | Yes | No | No | Media-oriented sync stateless flows; streaming rejects locally as unsupported |
 
 Portable guarantees across stateless providers are limited to the gateway and
 provider interfaces:
@@ -379,6 +393,8 @@ Provider-specific behavior lives behind those shared interfaces. Examples:
 - OpenAI-compatible base URL overrides and Realtime sessions
 - Grok realtime session transport
 - fal.ai model-specific media flows and config payloads
+- fal.ai streaming is unsupported in this wrapper; gateway and direct provider
+  streaming calls return `providers.UnsupportedFeatureError` before HTTP work
 
 ## Using With go-agent-loop
 

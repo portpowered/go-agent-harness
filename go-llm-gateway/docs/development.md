@@ -40,11 +40,60 @@ make deps-tidy
 
 ## Provider Capability Contract
 
-- Public capability types live in `pkg/capabilities` and are re-exported from `pkg/gateway` and `pkg/providers` for callers already using those package surfaces.
-- Gateway discovery is exposed through `Capabilities()` on the default stateless and session gateways; it must remain local metadata lookup with no provider calls, credential checks, network access, or request mutation.
-- Providers without explicit capability reporting must fall back to `unknown` for every capability field. Unknown means no support claim and must not be documented or presented as supported.
-- Gateway validation should reject locally deterministic mismatches only when the capability is explicitly `unsupported`. Unknown capabilities are allowed to reach the provider so legacy behavior remains available.
-- Concrete provider reports should claim only behavior proven by local wrapper translation or parsing. Ignored request fields, unsupported raw config, and provider-specific gaps should be explicit `unsupported` or `unknown`, not implicit support.
+Public capability types live in `pkg/capabilities` and are re-exported from
+`pkg/gateway` and `pkg/providers` for callers already using those package
+surfaces. Provider families that can make static local claims should implement
+`providers.CapabilityReporter` and return `capabilities.ProviderCapabilities`.
+Every public stateless or session feature in that report must be marked as one
+of:
+
+- `supported`: the wrapper maps the feature locally for the provider family.
+- `unsupported`: the wrapper deterministically does not map the feature; include
+  detail that is useful in `capabilities.UnsupportedFeatureError`.
+- `unknown`: support depends on provider model, endpoint, automatic provider
+  behavior, or another runtime fact that the wrapper cannot prove statically;
+  include that detail and let the request reach provider runtime.
+
+Current capability semantics:
+
+| Provider family | Supported | Unsupported | Unknown |
+| --- | --- | --- | --- |
+| Anthropic | Stateless tools, streaming, image input, reasoning, prompt caching | Native audio input/output, video output, raw provider config, sessions | None currently reported |
+| OpenAI-compatible | Stateless tools, streaming, image input, audio input/output; OpenAI Realtime sessions, tools, and audio input/output | Stateless video output, reasoning options, prompt caching, raw provider config, raw realtime session config | None currently reported |
+| Gemini | Stateless tools, streaming, image input, audio input | Audio output, video output, reasoning options, prompt caching, raw provider config, sessions | None currently reported |
+| Grok | Realtime sessions, tools, and audio input/output | Stateless features and raw realtime session config | None currently reported |
+| fal.ai | Sync stateless image input, audio input/output, video output, raw provider config | Streaming, tools, reasoning options, prompt caching, sessions | None currently reported |
+
+Gateway discovery is exposed through `Capabilities()` on the default stateless
+and session gateways. It must remain local metadata lookup with no provider
+calls, credential checks, network access, or request mutation. Providers without
+explicit capability reporting must fall back to `unknown` for every capability
+field. Unknown means no support claim and must not be documented or presented as
+supported.
+
+Gateway validation rejects locally deterministic mismatches only when the
+capability is explicitly `unsupported`. It must not silently treat `unknown` as
+supported or unsupported; unknown behavior remains a provider/model runtime
+decision so legacy or provider-dependent behavior can still reach runtime.
+Concrete provider reports should claim only behavior proven by local wrapper
+translation or parsing. Ignored request fields, unsupported raw config, and
+provider-specific gaps should be explicit `unsupported` or `unknown`, not
+implicit support.
+
+Credential-free tests should prove capability reports and local rejection at
+observable public seams:
+
+- `gateway.DefaultGateway` for stateless inference and streaming.
+- `gateway.DefaultSessionGateway` before websocket or session connection setup.
+- `inference.GatewayInferencer` or `inference.SessionGatewayInferencer` when the
+  loop adapter behavior is the user-visible surface.
+- Direct provider methods when a provider has a deterministic unsupported seam,
+  such as fal.ai streaming.
+
+Use fake providers with capability reports and side-effect counters for local
+validation tests. Assert returned `*providers.UnsupportedFeatureError` fields,
+interaction terminal event details, emitted stream/session errors, or provider
+call counts rather than scanning source files or route inventories.
 
 ## Local Gotchas
 
@@ -56,6 +105,7 @@ make deps-tidy
 - OpenAI Realtime session behavior should be checked against the official OpenAI Realtime guide and API reference before changing model routing, session fields, or event normalization. Current gateway behavior sends `session.update` before user input, sends `response.create` after text input, and normalizes asynchronous server events such as `session.created`, `response.output_text.delta`, `response.output_audio.delta`, tool-call events, and `error`.
 - OpenAI Realtime `session.closed` provider events should normalize to shared `SESSION.CLOSE` so replay and Agent CLI consumers can verify graceful shutdown without provider-specific EOF handling.
 - Streaming normalization should preserve the shared `messages.StreamMessage` contract expected by `go-agent-loop`.
+- fal.ai streaming is intentionally unsupported in the public capability contract; `InferStream` should return `providers.UnsupportedFeatureError` before HTTP work rather than a clean empty stream.
 - Provider tests should avoid live API calls in CI by using recorded HTTP fixtures.
 - This package owns the committed shared session fixture contract for Phase 2 boundary cleanup. Agent CLI and other modules may consume shared fixtures from `pkg/testing/testdata/session-fixtures`, but package-private `testdata` directories are not a cross-module API.
 

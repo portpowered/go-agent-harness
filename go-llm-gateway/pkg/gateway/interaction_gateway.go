@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -57,7 +58,13 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 			}
 		}
 
-		resp, err := g.provider.Infer(ctx, interactionProviderRequest(req))
+		if err := validateStatelessRequest(g.Capabilities(), interactionInferenceRequest(req), capabilities.RequestedModeStateless); err != nil {
+			emitter.emitTerminalForErr(err)
+			return
+		}
+
+		providerReq := interactionProviderRequest(req)
+		resp, err := g.provider.Infer(ctx, providerReq)
 		if err != nil {
 			emitter.emitTerminalForErr(err)
 			return
@@ -215,6 +222,25 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		})
 		return
 	}
+	var unsupported *providers.UnsupportedFeatureError
+	if errors.As(err, &unsupported) {
+		_ = e.emitTerminalRaw(InteractionEvent{
+			Type: InteractionEventError,
+			Error: &InteractionError{
+				Code:    "unsupported_feature",
+				Message: err.Error(),
+				Details: map[string]json.RawMessage{
+					"provider":   mustRawJSON(unsupported.Provider),
+					"feature":    mustRawJSON(unsupported.Feature),
+					"mode":       mustRawJSON(unsupported.RequestedMode),
+					"state":      mustRawJSON(unsupported.Capability.State),
+					"detail":     mustRawJSON(unsupported.Capability.Detail),
+					"capability": mustRawJSON(unsupported.Capability),
+				},
+			},
+		})
+		return
+	}
 	_ = e.emitTerminalRaw(InteractionEvent{
 		Type: InteractionEventError,
 		Error: &InteractionError{
@@ -246,8 +272,25 @@ func (e *interactionEventEmitter) emitRaw(event InteractionEvent) error {
 	return nil
 }
 
+func mustRawJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 func interactionProviderRequest(req InteractionRequest) providers.InferenceRequest {
 	return providers.InferenceRequest{
+		Messages: interactionMessagesToModel(req),
+		Tools:    interactionToolsToModel(req.Tools),
+		Model:    req.Model,
+		Config:   req.Config,
+	}
+}
+
+func interactionInferenceRequest(req InteractionRequest) InferenceRequest {
+	return InferenceRequest{
 		Messages: interactionMessagesToModel(req),
 		Tools:    interactionToolsToModel(req.Tools),
 		Model:    req.Model,
