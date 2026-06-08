@@ -70,6 +70,7 @@ The root Makefile exposes these deterministic and opt-in test tiers:
 | Target | Deterministic | What it runs |
 |--------|---------------|--------------|
 | `make test` | yes | Per-module `go test ./...` across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`. |
+| `make test-factory-scripts` | yes | Factory runtime coverage for `factory/scripts/setup-workspace.py`, executed with bytecode writes disabled so the root checkout stays clean. |
 | `make test-integration` | yes | Deterministic integration packages: `agent-cli/test/integration` and `go-agent-loop/test/functional`. |
 | `make test-regressions` | yes | Committed replay and fixture regression tests, including Agent CLI replay cases and `go-llm-gateway` replay/fixture packages. |
 | `make test-customer-sessions` | no | Local-only placeholder for future private session sweeps. It skips unless you explicitly set `RUN_CUSTOMER_SESSIONS=1`, and it is not part of `make ci`. |

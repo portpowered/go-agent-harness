@@ -122,3 +122,73 @@ docs/internal/customer-ask.md  current phase and submission authorization
 docs/internal/checklist.md     high-level phase and customer ask tracking
 docs/internal/progress.txt     append-only meta-planner progress log
 ```
+
+## Setup Workspace Ownership Contract
+
+`setup-workspace` owns only per-work-item worktree resolution: it reads the PRD,
+chooses the branch/worktree path, creates or reuses that worktree, and copies
+the task artifacts into the ready checkout.
+
+It does not own routine root-checkout `git pull` or root `git worktree prune`.
+Those are shared-root maintenance operations, so running them inside a
+high-frequency concurrent setup path creates avoidable contention against other
+setup runs and planner-owned root state.
+
+This ownership split is the current factory contract for `CTRL-FAC-01` and
+`CTRL-FAC-02`. It preserves the observable setup outcome of returning a ready
+worktree for the requested PRD branch while removing the shared-root mutation
+that previously stranded `plan:init` work on setup races such as
+`fatal: Cannot rebase onto multiple branches.`.
+
+When overlapping setup runs target the same PRD branch, the losing setup run
+should observe the registered worktree created by the winner and return that
+same ready path as a reuse instead of retrying shared-root sync or failing the
+queue item. Setup still fails explicitly when the target path resolves to a
+different registered branch or another unsafe worktree state.
+
+Planner-owned root dirtiness is part of that contract. Routine changes in
+`docs/internal/checklist.md` and `docs/internal/progress.txt` are tolerated
+during setup and reuse because they are operational planner state, not
+worktree-selection inputs. The requested `tasks/todo/<prd-name>.json` and
+optional `.md` are also tolerated as direct setup inputs. Other root dirty
+state still fails explicitly so the factory does not silently treat unrelated
+checkout drift as safe.
+
+## Verification
+
+Reviewers can verify the repaired setup path with committed runtime coverage:
+
+```sh
+make test-factory-scripts
+make typecheck
+make test
+```
+
+`make test-factory-scripts` runs the setup-workspace runtime suite with
+`PYTHONDONTWRITEBYTECODE=1` and `python3 -B` so the verification path does not
+write `__pycache__` artifacts into the root checkout.
+
+The Python runtime suite covers the queue-facing setup contract directly:
+
+- setup does not issue shared-root `git pull` or `git worktree prune`
+- overlapping setup runs reuse the winner's registered worktree instead of
+  stranding `plan:init` on `fatal: Cannot rebase onto multiple branches.`
+- planner-owned dirty state in `docs/internal/checklist.md` and
+  `docs/internal/progress.txt` is tolerated for both first-time setup and
+  worktree reuse
+- unrelated root dirtiness still fails with an explicit unsafe-state error
+
+## Resolved Symptoms
+
+This repair addresses the currently observed queue symptoms:
+
+- concurrent or repeated `setup-workspace` runs no longer compete on shared
+  root `git pull` / `git worktree prune` behavior, so new `plan:init` work does
+  not fail with the reproduced rebase race
+- planner-owned dirty root state in `docs/internal/checklist.md` and
+  `docs/internal/progress.txt` no longer blocks ready-worktree creation or reuse
+
+This repair does not auto-repair queue items that were already stranded before
+the code fix landed. Any existing stuck tokens still require deliberate
+operator follow-up with `you work list`, `you session list`, and, if needed,
+manual `you work move` repair recorded in `docs/internal/progress.txt`.
