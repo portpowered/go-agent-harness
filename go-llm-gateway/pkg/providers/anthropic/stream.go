@@ -4,6 +4,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 const defaultIndex = 0
@@ -184,7 +185,7 @@ func streamAnthropicToGateway(stream messageStream, ch chan<- messages.StreamMes
 		ch <- messages.StreamMessage{
 			Type:               messages.StreamTypeError,
 			ActorProvidedIndex: 0,
-			Value:              messages.NewErrorValue(err.Error()),
+			Value:              providers.NewStreamTransportErrorValue(err),
 		}
 	}
 

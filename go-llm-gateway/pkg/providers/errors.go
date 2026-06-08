@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/portpowered/go-agent-loop/pkg/messages"
 )
 
 var (
@@ -20,6 +22,16 @@ var (
 	ErrUnsupportedRequest = errors.New("unsupported request")
 	// ErrTransport marks failures before a provider response was received.
 	ErrTransport = errors.New("transport failure")
+)
+
+const (
+	ErrorClassProviderRejected   = "provider_rejected"
+	ErrorClassAuthentication     = "authentication"
+	ErrorClassRateLimited        = "rate_limited"
+	ErrorClassInvalidRequest     = "invalid_request"
+	ErrorClassUnsupportedRequest = "unsupported_request"
+	ErrorClassTransport          = "transport"
+	ErrorClassUnknown            = "unknown"
 )
 
 // ProviderError carries provider rejection details while preserving errors.Is
@@ -121,6 +133,45 @@ func NewUnsupportedRequestError(provider, feature, requested string, supported [
 		Detail:    detail,
 		Err:       ErrUnsupportedRequest,
 	}
+}
+
+// ErrorClassification maps public provider taxonomy errors to the structured
+// stream/event classification strings exposed to consumers.
+func ErrorClassification(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrAuthentication):
+		return ErrorClassAuthentication
+	case errors.Is(err, ErrRateLimited):
+		return ErrorClassRateLimited
+	case errors.Is(err, ErrInvalidRequest):
+		return ErrorClassInvalidRequest
+	case errors.Is(err, ErrUnsupportedRequest):
+		return ErrorClassUnsupportedRequest
+	case errors.Is(err, ErrTransport):
+		return ErrorClassTransport
+	case errors.Is(err, ErrProviderRejected):
+		return ErrorClassProviderRejected
+	default:
+		return ErrorClassUnknown
+	}
+}
+
+// NewStreamErrorValue preserves readable stream error text while exposing the
+// public gateway taxonomy classification carried by typed provider errors.
+func NewStreamErrorValue(err error) *messages.ErrorValue {
+	return messages.NewErrorValueWithClassification(err.Error(), ErrorClassification(err))
+}
+
+// NewStreamTransportErrorValue classifies untyped stream reader/runtime
+// failures as transport while preserving any more specific typed class.
+func NewStreamTransportErrorValue(err error) *messages.ErrorValue {
+	classification := ErrorClassification(err)
+	if classification == ErrorClassUnknown {
+		classification = ErrorClassTransport
+	}
+	return messages.NewErrorValueWithClassification(err.Error(), classification)
 }
 
 func classifyHTTPStatus(statusCode int) error {

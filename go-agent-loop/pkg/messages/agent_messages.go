@@ -521,12 +521,13 @@ func NewUsageInfoValue(usage TokenUsage) *UsageInfoValue {
 
 // ErrorValue is the value for ERROR (inner type "error").
 type ErrorValue struct {
-	Type      string `json:"type"`                 // "error"
-	Message   string `json:"message"`              // error description
-	ErrorType string `json:"error_type,omitempty"` // provider error category
-	Code      string `json:"code,omitempty"`       // provider error code
-	Param     string `json:"param,omitempty"`      // provider parameter associated with the error
-	EventID   string `json:"event_id,omitempty"`   // related client event ID when provided
+	Type           string `json:"type"`                     // "error"
+	Message        string `json:"message"`                  // error description
+	Classification string `json:"classification,omitempty"` // public gateway taxonomy classification
+	ErrorType      string `json:"error_type,omitempty"`     // provider error category
+	Code           string `json:"code,omitempty"`           // provider error code
+	Param          string `json:"param,omitempty"`          // provider parameter associated with the error
+	EventID        string `json:"event_id,omitempty"`       // related client event ID when provided
 }
 
 func (*ErrorValue) streamMessageValue() {}
@@ -534,6 +535,12 @@ func (*ErrorValue) streamMessageValue() {}
 // NewErrorValue returns a value for ERROR.
 func NewErrorValue(message string) *ErrorValue {
 	return &ErrorValue{Type: "error", Message: message}
+}
+
+// NewErrorValueWithClassification returns an ERROR value with a public gateway
+// taxonomy classification for stream/event consumers.
+func NewErrorValueWithClassification(message, classification string) *ErrorValue {
+	return &ErrorValue{Type: "error", Message: message, Classification: classification}
 }
 
 // NewErrorValueWithDetails returns an ERROR value with provider-supplied context.

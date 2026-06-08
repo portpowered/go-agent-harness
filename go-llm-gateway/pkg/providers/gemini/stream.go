@@ -6,6 +6,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 const defaultStreamIndex = 0
@@ -163,7 +164,7 @@ func streamGeminiToGateway(iter streamIterator, ch chan<- messages.StreamMessage
 		ch <- messages.StreamMessage{
 			Type:               messages.StreamTypeError,
 			ActorProvidedIndex: defaultStreamIndex,
-			Value:              messages.NewErrorValue(streamErr.Error()),
+			Value:              providers.NewStreamTransportErrorValue(streamErr),
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 // contentState represents the current output content type during streaming.
@@ -260,7 +261,7 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 		ch <- messages.StreamMessage{
 			Type:               messages.StreamTypeError,
 			ActorProvidedIndex: 0,
-			Value:              messages.NewErrorValue(err.Error()),
+			Value:              providers.NewStreamTransportErrorValue(err),
 		}
 	}
 }
