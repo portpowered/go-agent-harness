@@ -109,6 +109,21 @@ func TestConnectSession_DialError(t *testing.T) {
 	}
 }
 
+func TestConnectSession_MissingDialerFailsBeforeDial(t *testing.T) {
+	provider := New(
+		WithAPIKey("test-key"),
+		WithBaseURL("wss://mock.example.com/v1/realtime"),
+	)
+
+	_, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "grok-3-mini"})
+	if err == nil {
+		t.Fatal("expected missing dialer error")
+	}
+	if !strings.Contains(err.Error(), "websocket dialer is required") {
+		t.Fatalf("expected missing dialer error, got: %v", err)
+	}
+}
+
 func TestConnectSession_CustomConfig(t *testing.T) {
 	conn := newMockConn()
 	dialer := &mockDialer{conn: conn}

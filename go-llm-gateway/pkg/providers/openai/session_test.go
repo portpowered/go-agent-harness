@@ -470,6 +470,21 @@ func TestConnectSession_MissingAPIKeyFailsBeforeDial(t *testing.T) {
 	}
 }
 
+func TestConnectSession_MissingDialerFailsBeforeDial(t *testing.T) {
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+	)
+
+	_, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "gpt-realtime"})
+	if err == nil {
+		t.Fatal("expected missing dialer error")
+	}
+	if !strings.Contains(err.Error(), "websocket dialer is required") {
+		t.Fatalf("expected missing dialer error, got: %v", err)
+	}
+}
+
 func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	conn := newMockWebSocketConn()
 	audioB64 := base64.StdEncoding.EncodeToString([]byte("audio-chunk"))

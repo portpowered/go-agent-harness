@@ -140,6 +140,31 @@ model:
 	}
 }
 
+func TestPlanSessionRuntime_RecordRejectsMissingOwnedDialer(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: grok
+  grok:
+    model: grok-config-model
+    api_key: xai-config-key
+`)
+
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		RecordPath: filepath.Join(t.TempDir(), "grok.session.json"),
+		Provider:   config.ProviderGrok,
+		ConfigDir:  configDir,
+	}, sessionRuntimeFactory{
+		newDefaultLiveDialer: func() grok.WebSocketDialer { return nil },
+	})
+	if err == nil {
+		t.Fatal("expected record runtime planning to reject a missing owned dialer")
+	}
+	if !strings.Contains(err.Error(), "requires an injected websocket dialer") {
+		t.Fatalf("expected missing dialer contract error, got: %v", err)
+	}
+}
+
 func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testing.T) {
 	var openAICalled bool
 	var grokCalled bool

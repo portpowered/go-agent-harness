@@ -202,6 +202,9 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if liveDialer == nil {
 		liveDialer = factory.newDefaultLiveDialer()
 	}
+	if liveDialer == nil {
+		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderGrok)
+	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderGrok, sessionCfg.Model)
 	sessionInferencer, err := factory.newGrokSessionInferencer(sessionCfg, recordingDialer)
 	if err != nil {
@@ -237,6 +240,9 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	liveDialer := opts.WebSocketDialer
 	if liveDialer == nil {
 		liveDialer = factory.newDefaultLiveDialer()
+	}
+	if liveDialer == nil {
+		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	sessionInferencer, err := factory.newOpenAISessionInf(sessionCfg, recordingDialer)
@@ -351,17 +357,23 @@ func wrapSessionRuntimeError(plan sessionRuntimePlan, err error) error {
 }
 
 func buildGrokSessionInferencer(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
-	opts := make([]grok.Option, 0, 1)
-	if dialer != nil {
-		opts = append(opts, grok.WithWebSocketDialer(dialer))
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
+	opts := make([]grok.Option, 0, 1)
+	opts = append(opts, grok.WithWebSocketDialer(dialer))
 	return NewGrokSessionInferencerWithOptions(sessionCfg, opts...)
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
-	opts := make([]oaiprovider.Option, 0, 1)
-	if dialer != nil {
-		opts = append(opts, oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(dialer)))
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
+	opts := make([]oaiprovider.Option, 0, 1)
+	opts = append(opts, oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(dialer)))
 	return NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg, opts...)
+}
+
+func missingOwnedSessionDialerError(provider string) error {
+	return fmt.Errorf("%s session runtime requires an injected websocket dialer", provider)
 }

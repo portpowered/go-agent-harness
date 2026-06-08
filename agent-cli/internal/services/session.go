@@ -429,120 +429,11 @@ func sendSessionClose(ctx context.Context, loop *agentloop.AgentLoop) error {
 	return nil
 }
 
-func runLiveSessionRecord(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
-	if strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI) {
-		sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
-		if err != nil {
-			return err
-		}
-		return runOpenAIRealtimeSessionRecord(ctx, out, opts, sessionCfg)
-	}
-
-	sessionCfg, err := resolveGrokSessionConfig(opts)
-	if err != nil {
-		return err
-	}
-
-	if _, err := fmt.Fprintf(out, "Starting Grok session recording to %s\n", opts.RecordPath); err != nil {
-		return err
-	}
-
-	liveDialer := opts.WebSocketDialer
-	if liveDialer == nil {
-		liveDialer = grok.NewDefaultWebSocketDialer()
-	}
-	recordingDialer := gwtesting.NewRecordingWebSocketDialer(liveDialer, sessionProviderGrok, sessionCfg.Model)
-	sessionInferencer, err := NewGrokSessionInferencerWithOptions(sessionCfg, grok.WithWebSocketDialer(recordingDialer))
-	if err != nil {
-		return err
-	}
-
-	loopErr := runAgentLoopSession(ctx, out, sessionInferencer, sessionLoopOptions{
-		Prompt:         opts.Prompt,
-		CloseAfterOpen: true,
-	})
-
-	flushErr := recordingDialer.FlushToFile(opts.RecordPath)
-	if loopErr != nil || flushErr != nil {
-		return fmt.Errorf("record session capture %s: %w", opts.RecordPath, errors.Join(
-			wrapSessionPhaseError("run session loop", loopErr),
-			wrapSessionPhaseError("flush capture", flushErr),
-		))
-	}
-	_, err = fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-	return err
-}
-
-func runOpenAIRealtimeSessionRecord(ctx context.Context, out io.Writer, opts SessionRunOptions, sessionCfg config.OpenAIConfig) error {
-	if _, err := fmt.Fprintf(out, "Starting OpenAI realtime session recording to %s\n", opts.RecordPath); err != nil {
-		return err
-	}
-
-	liveDialer := opts.WebSocketDialer
-	if liveDialer == nil {
-		liveDialer = grok.NewDefaultWebSocketDialer()
-	}
-	recordingDialer := gwtesting.NewRecordingWebSocketDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
-	sessionInferencer, err := NewOpenAIRealtimeSessionInferencerWithOptions(
-		sessionCfg,
-		oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(recordingDialer)),
-	)
-	if err != nil {
-		return err
-	}
-
-	loopErr := runAgentLoopSession(ctx, out, sessionInferencer, sessionLoopOptions{
-		Prompt:         opts.Prompt,
-		CloseAfterOpen: true,
-	})
-
-	flushErr := recordingDialer.FlushToFile(opts.RecordPath)
-	if loopErr != nil || flushErr != nil {
-		return fmt.Errorf("record session capture %s: %w", opts.RecordPath, errors.Join(
-			wrapSessionPhaseError("run session loop", loopErr),
-			wrapSessionPhaseError("flush capture", flushErr),
-		))
-	}
-	_, err = fmt.Fprintf(out, "Wrote session capture to %s\n", opts.RecordPath)
-	return err
-}
-
 func wrapSessionPhaseError(phase string, err error) error {
 	if err == nil {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", phase, err)
-}
-
-func runGrokSessionReplay(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
-	replayDialer, err := gwtesting.NewReplayWebSocketDialer(opts.ReplayPath)
-	if err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	model := replayDialer.Model()
-	if strings.TrimSpace(model) == "" {
-		model = "grok-replay"
-	}
-	sessionInferencer, err := NewGrokSessionInferencerWithOptions(config.GrokConfig{
-		APIKey: "replay",
-		Model:  model,
-	}, grok.WithWebSocketDialer(replayDialer))
-	if err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	if err := runAgentLoopSession(ctx, out, sessionInferencer, sessionLoopOptions{
-		Prompt:       opts.Prompt,
-		WaitForClose: grokReplayCaptureHasSessionClose(opts.ReplayPath),
-		MaxDuration:  3 * time.Second,
-		Done:         replayDialer.Done(),
-		DoneErr:      replayDialer.Err,
-	}); err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	if err := replayDialer.Err(); err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	return nil
 }
 
 func grokReplayCaptureHasSessionClose(path string) bool {
@@ -556,35 +447,6 @@ func grokReplayCaptureHasSessionClose(path string) bool {
 		}
 	}
 	return false
-}
-
-func runOpenAISessionReplay(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
-	replayDialer, err := gwtesting.NewReplayWebSocketDialer(opts.ReplayPath)
-	if err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	model := replayDialer.Model()
-	if strings.TrimSpace(model) == "" {
-		model = openAIRealtimeModel
-	}
-	sessionInferencer, err := NewOpenAIRealtimeSessionInferencerWithOptions(config.OpenAIConfig{
-		APIKey: "replay",
-		Model:  model,
-	}, oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(replayDialer)))
-	if err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	if err := runAgentLoopSession(ctx, out, sessionInferencer, sessionLoopOptions{
-		Prompt:       opts.Prompt,
-		WaitForClose: captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-		MaxDuration:  3 * time.Second,
-	}); err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	if err := replayDialer.Err(); err != nil {
-		return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-	}
-	return nil
 }
 
 func validateInjectedLiveSession(opts SessionRunOptions) error {

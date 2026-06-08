@@ -37,6 +37,9 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 	headers := map[string]string{
 		"Authorization": "Bearer " + p.apiKey,
 	}
+	if p.realtimeDialer == nil {
+		return nil, fmt.Errorf("openai realtime: websocket dialer is required")
+	}
 
 	conn, err := p.realtimeDialer.Dial(endpoint, headers)
 	if err != nil {
