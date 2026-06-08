@@ -212,11 +212,16 @@ or queue state that cannot be classified safely from the available data.
     contains deterministic tests for the repaired seam and cancellation contract
     on the exact surfaces named in the repair slice, and those tests do not
     require live credentials or external network access.
-  - `phase-2-session-runtime-ownership-repair-005`: `uncertain`. The reviewer
-    docs and audit surfaces were updated to describe the intended ownership
-    model, but this validator branch has not yet completed the later finding
-    groups that must confirm those surfaces are fully aligned with delivered
-    behavior and residue state.
+  - `phase-2-session-runtime-ownership-repair-005`: `pass`. The later
+    `Documentation and Audit Alignment`, `Stranded Queue Residue`, and
+    `Overall Convergence Verdict` finding groups are now complete in this
+    report, and they confirm that the reviewer-facing docs and audit text were
+    reconciled to the delivered repository truth. The aligned evidence now
+    lives in `agent-cli/docs/session-record-replay.md`,
+    `docs/architecture/contract-gap-audit.md`, and the validator findings
+    below, which explicitly describe the remaining record-path dialer fallback
+    and the missing constructor-ownership planning artifact instead of claiming
+    full lane convergence.
 - `required repairs / you work move actions`:
   - Move session-mode live dialer ownership from
     `session_runtime.go`'s default-dialer fallback to an explicit caller-owned
@@ -226,8 +231,6 @@ or queue state that cannot be classified safely from the available data.
     `tasks/todo/phase-2-constructor-ownership-boundaries.md` planning surface
     before claiming full `P2-COB-05` convergence for the broader
     constructor-ownership lane.
-  - Finish the remaining validator finding groups before treating the docs and
-    audit refresh commitment `...-005` as fully satisfied.
 
 ### Session Runtime Seam Ownership
 
