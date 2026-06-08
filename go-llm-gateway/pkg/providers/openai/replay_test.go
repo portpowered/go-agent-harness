@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -580,6 +582,12 @@ func TestReplay_Error400_BadRequest(t *testing.T) {
 	if !strings.Contains(err.Error(), "invalid_request_error") {
 		t.Errorf("expected error to contain error type, got: %v", err)
 	}
+	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("expected error to match provider HTTP status classification")
+	}
+	if !errors.Is(err, gateway.ErrInvalidRequest) {
+		t.Fatal("expected error to match invalid request classification")
+	}
 }
 
 func TestReplay_Error401_Unauthorized(t *testing.T) {
@@ -596,6 +604,9 @@ func TestReplay_Error401_Unauthorized(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "401") {
 		t.Errorf("expected error to contain status code 401, got: %v", err)
+	}
+	if !errors.Is(err, gateway.ErrAuthentication) {
+		t.Fatal("expected error to match authentication classification")
 	}
 }
 
@@ -614,6 +625,9 @@ func TestReplay_Error429_RateLimit(t *testing.T) {
 	if !strings.Contains(err.Error(), "429") {
 		t.Errorf("expected error to contain status code 429, got: %v", err)
 	}
+	if !errors.Is(err, gateway.ErrRateLimit) {
+		t.Fatal("expected error to match rate limit classification")
+	}
 }
 
 func TestReplay_Error500_InternalServer(t *testing.T) {
@@ -631,6 +645,87 @@ func TestReplay_Error500_InternalServer(t *testing.T) {
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("expected error to contain status code 500, got: %v", err)
 	}
+	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("expected error to match provider HTTP status classification")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("provider HTTP status should not match transport classification")
+	}
+	var statusErr *gateway.ProviderHTTPStatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatal("expected typed provider HTTP status details")
+	}
+	if statusErr.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", statusErr.StatusCode, http.StatusInternalServerError)
+	}
+}
+
+func TestReplay_InferTransportErrorClassified(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, io.ErrUnexpectedEOF
+	})
+	p := newTestProvider(transport)
+
+	_, err := p.Infer(context.Background(), providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("expected error to match transport classification")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatal("expected error to preserve transport cause")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("transport error should not match provider HTTP status classification")
+	}
+
+	var transportErr *gateway.TransportError
+	if !errors.As(err, &transportErr) {
+		t.Fatal("expected typed transport details")
+	}
+	if transportErr.Provider != "openai" {
+		t.Fatalf("provider = %q, want openai", transportErr.Provider)
+	}
+}
+
+func TestReplay_InferCancellationClassifiedSeparatelyFromTransport(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+	p := newTestProvider(transport)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := p.Infer(ctx, providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected cancellation error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrCancellation) {
+		t.Fatal("expected error to match cancellation classification")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("expected error to preserve context.Canceled cause")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("cancellation should not match transport classification")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("cancellation should not match provider HTTP status classification")
+	}
+	if errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatal("cancellation should not match replay mismatch classification")
+	}
 }
 
 func TestReplay_StreamError429_RateLimit(t *testing.T) {
@@ -647,6 +742,91 @@ func TestReplay_StreamError429_RateLimit(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "429") {
 		t.Errorf("expected error to contain status code 429, got: %v", err)
+	}
+	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("expected stream error to match provider HTTP status classification")
+	}
+	if !errors.Is(err, gateway.ErrRateLimit) {
+		t.Fatal("expected stream error to match rate limit classification")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("provider HTTP status should not match transport classification")
+	}
+
+	var statusErr *gateway.ProviderHTTPStatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatal("expected typed provider HTTP status details")
+	}
+	if statusErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", statusErr.StatusCode, http.StatusTooManyRequests)
+	}
+}
+
+func TestReplay_InferStreamTransportErrorClassified(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, io.ErrUnexpectedEOF
+	})
+	p := newTestProvider(transport)
+
+	_, err := p.InferStream(context.Background(), providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("expected stream error to match transport classification")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatal("expected stream error to preserve transport cause")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("transport error should not match provider HTTP status classification")
+	}
+
+	var transportErr *gateway.TransportError
+	if !errors.As(err, &transportErr) {
+		t.Fatal("expected typed transport details")
+	}
+	if transportErr.Operation != "chat completions stream" {
+		t.Fatalf("operation = %q, want chat completions stream", transportErr.Operation)
+	}
+}
+
+func TestReplay_InferStreamCancellationClassifiedSeparatelyFromTransport(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+	p := newTestProvider(transport)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := p.InferStream(ctx, providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected stream cancellation error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrCancellation) {
+		t.Fatal("expected stream error to match cancellation classification")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("expected stream error to preserve context.Canceled cause")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("stream cancellation should not match transport classification")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("stream cancellation should not match provider HTTP status classification")
+	}
+	if errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatal("stream cancellation should not match replay mismatch classification")
 	}
 }
 
