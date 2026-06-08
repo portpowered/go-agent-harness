@@ -170,3 +170,19 @@ func TestSessionGatewayInferencer_SendRouted(t *testing.T) {
 		t.Errorf("type: got %q, want %q", received.Type, messages.StreamTypeAudioDelta)
 	}
 }
+
+func TestSessionGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testing.T) {
+	sess := newMockSession()
+	gw := &mockSessionGateway{session: sess}
+	var inferencer messages.SessionInferencer = NewSessionGatewayInferencer(gw, WithSessionModel("grok-3-mini"))
+
+	session, err := inferencer.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("ConnectSession via messages.SessionInferencer: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	if session != sess {
+		t.Fatal("ConnectSession should expose the loop-owned session contract without wrapping it in a second shared session surface")
+	}
+}

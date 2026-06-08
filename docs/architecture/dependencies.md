@@ -58,10 +58,10 @@ Reviewer-citable rule for this phase:
 
 Reviewer rule of thumb:
 
-- A new import from `go-agent-loop` into `go-llm-gateway` is expected when it consumes loop-owned contracts or shared message models.
-- A new import from `go-agent-loop` into `agent-cli` is expected when the CLI is configuring or driving loop behavior.
-- A new import from `go-llm-gateway` into `agent-cli` is expected when the CLI is choosing or configuring concrete provider adapters.
-- A new import from `go-agent-loop` into `agent-cli` or `go-llm-gateway` is not symmetric. Imports in the reverse direction would violate the intended layering.
+- A new import from `go-llm-gateway` into `go-agent-loop` is expected when gateway adapters consume loop-owned contracts or shared message models.
+- A new import from `agent-cli` into `go-agent-loop` is expected when the CLI is configuring or driving loop behavior.
+- A new import from `agent-cli` into `go-llm-gateway` is expected when the CLI is choosing or configuring concrete provider adapters.
+- Those imports are not symmetric. New imports in the reverse direction, from `go-agent-loop` into `go-llm-gateway` or `agent-cli`, or from `go-llm-gateway` into `agent-cli`, would violate the intended layering.
 
 ## Current Contract Surfaces
 

@@ -38,7 +38,9 @@ the scoped `P3-CORE-02` work:
   `docs/architecture/dependencies.md`, the gateway compatibility-layer
   clarification that follows in later Phase 3 stories, and the automated
   dependency-direction proof in
-  `go-agent-loop/test/architecture/dependency_direction_test.go`
+  `go-agent-loop/test/architecture/dependency_direction_test.go`, plus the
+  reviewer-facing evidence checks in
+  `go-agent-loop/test/architecture/reviewer_evidence_test.go`
 
 ### HC-01: `go-llm-gateway` test hygiene depends on `agent-cli` fixture layout
 
@@ -74,8 +76,9 @@ the scoped `P3-CORE-02` work:
     layer, not an independently owned shared-message vocabulary
   - public adapter packages are documented as bridges into the loop-owned
     boundary, and `go-agent-loop/test/architecture/dependency_direction_test.go`
-    provides the reviewer-citable import-direction proof that preserves this
-    one-way dependency rule
+    plus `go-agent-loop/test/architecture/reviewer_evidence_test.go` provide
+    the reviewer-citable import-direction and evidence-surface proof that
+    preserves this one-way dependency rule
   - reviewers should treat new gateway docs or exports that present
     `pkg/models` as a second shared core surface as a regression against
     `P3-CORE-01` and `P3-CORE-02`
