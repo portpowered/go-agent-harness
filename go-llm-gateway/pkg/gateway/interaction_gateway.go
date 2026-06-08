@@ -39,8 +39,12 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 
 		if err := validateInteractionToolResults(req); err != nil {
 			_ = emitter.emitTerminal(ctx, InteractionEvent{
-				Type:  InteractionEventError,
-				Error: &InteractionError{Code: "tool_result_validation_error", Message: err.Error()},
+				Type: InteractionEventError,
+				Error: &InteractionError{
+					Code:           "tool_result_validation_error",
+					Message:        err.Error(),
+					Classification: providers.ErrorClassInvalidRequest,
+				},
 			})
 			return
 		}
@@ -208,9 +212,10 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		_ = e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventError,
 			Error: &InteractionError{
-				Code:      "provider_timeout",
-				Message:   err.Error(),
-				Retryable: true,
+				Code:           "provider_timeout",
+				Message:        err.Error(),
+				Classification: providers.ErrorClassTransport,
+				Retryable:      true,
 			},
 		})
 		return
@@ -218,8 +223,9 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 	_ = e.emitTerminalRaw(InteractionEvent{
 		Type: InteractionEventError,
 		Error: &InteractionError{
-			Code:    "provider_error",
-			Message: err.Error(),
+			Code:           "provider_error",
+			Message:        err.Error(),
+			Classification: providers.ErrorClassification(err),
 		},
 	})
 }

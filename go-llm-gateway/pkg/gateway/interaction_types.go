@@ -152,10 +152,11 @@ type InteractionUsage struct {
 
 // InteractionError contains normalized provider or gateway failure details.
 type InteractionError struct {
-	Code      string                     `json:"code"`
-	Message   string                     `json:"message"`
-	Retryable bool                       `json:"retryable,omitempty"`
-	Details   map[string]json.RawMessage `json:"details,omitempty"`
+	Code           string                     `json:"code"`
+	Message        string                     `json:"message"`
+	Classification string                     `json:"classification,omitempty"`
+	Retryable      bool                       `json:"retryable,omitempty"`
+	Details        map[string]json.RawMessage `json:"details,omitempty"`
 }
 
 // InteractionCancellation describes a normalized cancellation event.

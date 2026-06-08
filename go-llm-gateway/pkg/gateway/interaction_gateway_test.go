@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
 	"testing"
 
@@ -179,7 +178,7 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 
 	provider := &fakeInteractionProvider{
 		name: "fake-provider",
-		err:  errors.New("upstream failed"),
+		err:  providers.NewProviderHTTPError("fake-provider", 429, "rate limit exceeded"),
 	}
 	gw, err := NewGateway(WithProvider(provider))
 	if err != nil {
@@ -205,8 +204,11 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 	if events[1].Error.Code != "provider_error" {
 		t.Fatalf("error code = %q", events[1].Error.Code)
 	}
-	if events[1].Error.Message != "upstream failed" {
+	if events[1].Error.Message != "fake-provider: api error 429: rate limit exceeded" {
 		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+	if events[1].Error.Classification != providers.ErrorClassRateLimited {
+		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassRateLimited)
 	}
 }
 
@@ -341,6 +343,9 @@ func TestInteract_NormalizesDeadlineExceededAsTimeoutError(t *testing.T) {
 	}
 	if events[1].Error.Message != context.DeadlineExceeded.Error() {
 		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+	if events[1].Error.Classification != providers.ErrorClassTransport {
+		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassTransport)
 	}
 }
 
@@ -564,6 +569,9 @@ func TestInteract_RejectsInvalidToolResultsBeforeProviderContinuation(t *testing
 			}
 			if events[1].Error.Message != tt.wantMessage {
 				t.Fatalf("error message = %q, want %q", events[1].Error.Message, tt.wantMessage)
+			}
+			if events[1].Error.Classification != providers.ErrorClassInvalidRequest {
+				t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassInvalidRequest)
 			}
 			if provider.calls != 0 {
 				t.Fatalf("provider calls = %d, want 0", provider.calls)

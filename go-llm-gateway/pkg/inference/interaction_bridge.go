@@ -45,9 +45,10 @@ func LoopInteractionEventFromGateway(event gateway.InteractionEvent) messages.In
 	}
 	if event.Error != nil {
 		out.Error = &messages.InteractionError{
-			Code:      event.Error.Code,
-			Message:   event.Error.Message,
-			Retryable: event.Error.Retryable,
+			Code:           event.Error.Code,
+			Message:        event.Error.Message,
+			Classification: event.Error.Classification,
+			Retryable:      event.Error.Retryable,
 		}
 	}
 	if event.Cancellation != nil {

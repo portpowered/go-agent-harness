@@ -6,6 +6,7 @@ import (
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 func TestLoopInteractionEventFromGateway(t *testing.T) {
@@ -53,9 +54,10 @@ func TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads(t *testing.
 			TotalTokens:  15,
 		},
 		Error: &gateway.InteractionError{
-			Code:      "provider_timeout",
-			Message:   "timed out",
-			Retryable: true,
+			Code:           "provider_timeout",
+			Message:        "timed out",
+			Classification: providers.ErrorClassTransport,
+			Retryable:      true,
 		},
 		Cancellation: &gateway.InteractionCancellation{
 			Reason:  "caller_cancelled",
@@ -70,6 +72,9 @@ func TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads(t *testing.
 	}
 	if got.Error == nil || got.Error.Code != "provider_timeout" || !got.Error.Retryable {
 		t.Fatalf("error = %#v", got.Error)
+	}
+	if got.Error.Classification != providers.ErrorClassTransport {
+		t.Fatalf("error classification = %q, want %q", got.Error.Classification, providers.ErrorClassTransport)
 	}
 	if got.Cancellation == nil || got.Cancellation.Reason != "caller_cancelled" {
 		t.Fatalf("cancellation = %#v", got.Cancellation)

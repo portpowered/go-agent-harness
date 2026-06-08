@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 // mockSession is a simple messages.Session implementation for testing.
@@ -101,6 +102,29 @@ func TestSessionGatewayInferencer_ConnectSessionError(t *testing.T) {
 	_, err := si.ConnectSession(context.Background())
 	if err == nil {
 		t.Fatal("expected error from gateway")
+	}
+}
+
+func TestSessionGatewayInferencer_ConnectSessionErrorClassification(t *testing.T) {
+	gw := &mockSessionGateway{
+		err: providers.NewUnsupportedRequestError("fake-session", "session", "audio", []string{"text"}, "fake-session: audio sessions are not supported"),
+	}
+	si := NewSessionGatewayInferencer(gw, WithSessionModel("fake-session-model"))
+
+	_, err := si.ConnectSession(context.Background())
+	if err == nil {
+		t.Fatal("expected error from gateway")
+	}
+	if !errors.Is(err, providers.ErrUnsupportedRequest) {
+		t.Fatalf("ConnectSession error classification did not preserve ErrUnsupportedRequest: %v", err)
+	}
+
+	var validationErr *providers.ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("ConnectSession error did not preserve validation details: %v", err)
+	}
+	if validationErr.Provider != "fake-session" || validationErr.Feature != "session" || validationErr.Requested != "audio" {
+		t.Fatalf("validation details = %#v", validationErr)
 	}
 }
 

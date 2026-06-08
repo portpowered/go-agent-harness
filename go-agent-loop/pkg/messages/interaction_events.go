@@ -35,9 +35,10 @@ type InteractionEvent struct {
 
 // InteractionError captures normalized terminal failure details.
 type InteractionError struct {
-	Code      string
-	Message   string
-	Retryable bool
+	Code           string
+	Message        string
+	Classification string
+	Retryable      bool
 }
 
 // InteractionCancellation captures normalized cancellation details.
