@@ -72,3 +72,17 @@ symptom fixes.
 | `CTRL-FAC-02` | Worktree maintenance ownership | `setup-workspace` no longer owns routine root `git worktree prune` during setup; the contract keeps setup focused on ready-worktree resolution and records the queue symptoms that shared-root mutation previously caused. | `factory/scripts/setup-workspace.py`, `factory/docs/overview.md`, `prd.md` |
 | `CTRL-FAC-03` | Planner-owned dirty root tolerance | Routine dirty state in `docs/internal/checklist.md` and `docs/internal/progress.txt` does not block setup or reuse, while other dirty root state still fails with a direct unsafe-state error. | `factory/scripts/setup-workspace.py`, `factory/scripts/tests/test_setup_workspace.py`, `factory/docs/overview.md` |
 | `CTRL-FAC-04` | Deterministic proof and queue symptom notes | Reviewers can run committed coverage for concurrent setup and planner-dirty reuse, and the factory docs separate repaired setup failures from any still-manual queue token recovery. | `factory/scripts/tests/test_setup_workspace.py`, `factory/docs/overview.md`, `Makefile` |
+
+## Phase 3 - Library Independence Validator
+
+This checklist is the authoritative Phase 3 inventory for the library
+independence convergence pass. Reviewers should cite these item IDs directly
+when they validate whether the completed gateway decoupling and
+library-independence proof slices support closing the broader package-boundary
+realignment gate.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-03` | Loop consumer independence | `go-agent-loop` can be imported and exercised through a reviewer-runnable proof surface without importing `go-llm-gateway/pkg/providers/...` packages, requiring live credentials, or requiring network access. | `go-agent-loop` proof command, `go-agent-loop` proof files, `docs/internal/phase-3-library-independence-validator.md` |
+| `P3-CORE-04` | Gateway consumer independence | `go-llm-gateway` can be imported and exercised through a reviewer-runnable proof surface without non-contract `go-agent-loop` runtime packages, while allowing the deliberate shared message contract package. | `go-llm-gateway` proof command, `go-llm-gateway` proof files, `docs/internal/phase-3-library-independence-validator.md` |
+| `P3-GATE-01` | Broader boundary realignment gate | The repository contains truthful, deterministic, credential-free, network-free proof guidance and one convergence verdict that states whether the broader Phase 3 package-boundary work may close, must pause for repair, or remains blocked by uncertainty. | `docs/internal/phase-3-library-independence-validator.md`, `docs/internal/checklist.md`, proof commands, reviewer-facing proof documentation |
