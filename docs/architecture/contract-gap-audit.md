@@ -936,6 +936,243 @@ No reproducibility tooling was added for this slice; later implementation lanes
 must add the tests named in each finding before closing any Phase 4 checklist
 row.
 
+### Phase 4 Go API Hygiene And Implementation Order Findings
+
+These findings cover the `P4-API-07` story slice and consolidate the final
+implementation order for later Phase 4 repair lanes. They name exported Go API
+surfaces where consumers can observe unclear naming, incomplete doc comments,
+over-broad public structs, nil/empty slice ambiguity, panic-policy gaps, or
+compatibility posture gaps even when the underlying implementation is otherwise
+usable.
+
+#### P4-HYGIENE-01: exported message and content contracts lack complete consumer-facing comments
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-llm-gateway/pkg/models`
+- File path: `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-llm-gateway/pkg/models/message.go`
+- Exported declaration: `ContentPart`, `ControlPlanePart`,
+  `ControlPlaneMessageType`, `ReasoningPart`, `NewReasoningMessage`,
+  `Message`, `Message.TextContent`, `Message.ReasoningContent`,
+  `models.ContentPart`, `models.Message`, `models.NewTextMessage`
+- Observable contract issue:
+  - several exported declarations are undocumented, under-documented, or have
+    comments that do not begin with the exported identifier. For example,
+    `NewReasoningMessage` is preceded by a stale `NewReason` comment, and
+    `ControlPlanePart`, `ControlPlaneMessageType`, and `ReasoningContent` do
+    not explain their public role.
+  - `models` re-exports loop-owned message types by alias, but package docs do
+    not clearly state whether `go-agent-loop/pkg/messages` or
+    `go-llm-gateway/pkg/models` is the compatibility anchor for downstream
+    consumers.
+  - the sealed-interface comment on `ContentPart` names the unexported
+    `contentPart()` method, but it does not document whether external packages
+    are intentionally prevented from defining custom content parts or how
+    callers should represent unsupported media.
+- Mapped checklist rows: `P4-API-07`, `P4-API-04`
+- Severity: `release/documentation work`
+- Compatibility sensitivity: `documentation-only`
+- Recommended repair slice:
+  - add package-level and exported declaration comments that start with each
+    exported identifier and describe caller-visible behavior, especially the
+    sealed `ContentPart` contract and model alias ownership
+  - document whether downstream code should import `messages` directly,
+    `models` aliases, or provider/gateway-level request types for public
+    compatibility
+  - keep this as documentation-only unless the comment review exposes an
+    actual exported naming change that requires compatibility review
+- Verification notes:
+  - later documentation lanes should run `go test ./...` and optionally
+    `go vet ./...` from the affected modules; no source-scanning meta test is
+    recommended because comments are documentation contract, not runtime
+    behavior
+
+#### P4-HYGIENE-02: broad public request and event structs expose provider-specific fields without nil/zero-value rules
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-loop/pkg/messages`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/gateway/interaction_types.go`,
+  `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-agent-loop/pkg/messages/participant_messages.go`
+- Exported declaration: `providers.InferenceRequest`,
+  `providers.ThinkingConfig`, `providers.CacheControlConfig`,
+  `gateway.InteractionRequest`, `gateway.InteractionEvent`,
+  `messages.Message`, `messages.StreamMessage`, `messages.ErrorValue`
+- Observable contract issue:
+  - exported structs expose mutable slices, pointers, raw JSON, and broad
+    string fields. Some comments describe provider defaults, but the public API
+    does not consistently define nil versus empty slice behavior for
+    `Messages`, `Tools`, `StopSequences`, event payloads, tool calls, and
+    multimodal content parts.
+  - provider-specific knobs such as `Thinking`, `CacheControl`, raw `Config`,
+    provider error fields, and interaction event codes live on provider-neutral
+    structs. Without capability and validation contracts, callers cannot tell
+    whether a zero value means "provider default", "feature disabled",
+    "unsupported but ignored", or "invalid request".
+  - several event and error fields remain strings rather than typed enums or
+    structured result types. This preserves flexibility, but it leaves the
+    compatibility posture unclear for event codes, control-plane message types,
+    close reasons, provider error details, and future additions.
+- Mapped checklist rows: `P4-API-07`, `P4-API-03`, `P4-API-04`,
+  `P4-API-02`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define nil/empty/zero-value rules for public request and event structs at
+    the same time as provider capability and validation work, so unsupported
+    features and provider defaults are observable through typed results
+  - add typed constants or structured fields for public event/error codes where
+    callers already branch on string values; keep existing strings as
+    compatibility text during migration
+  - document ownership and mutation expectations for slices and raw JSON fields
+    passed into gateway/provider calls
+- Verification notes:
+  - later repair lanes should add runtime tests for nil versus empty messages,
+    tools, stop sequences, content parts, event payloads, and raw config,
+    asserting typed validation results or documented provider defaults rather
+    than source-shape checks
+
+#### P4-HYGIENE-03: public testing and replay fixtures expose mutable shapes without a clear compatibility and panic policy
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/testing`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/testing/session_fixture_contract.go`,
+  `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_record.go`,
+  `go-llm-gateway/pkg/testing/session_websocket_dialer.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`
+- Exported declaration: `SessionFixture`, `SessionStep`,
+  `SessionFixtureContract`, `SessionReplayer`, `SessionRecorder`,
+  `ReplayWebSocketDialer`, `InteractionFixture`,
+  `InteractionFixtureReplayer`, `LoadInteractionFixture`,
+  `DecodeInteractionFixture`, `ValidateInteractionFixture`
+- Observable contract issue:
+  - fixture structs and replay helpers are exported and suitable for downstream
+    test automation, but the public docs do not state which fields are stable
+    fixture schema, which are authoring conveniences, and which can evolve
+    between harness releases.
+  - loader and replayer APIs mostly return errors, but the panic policy for
+    malformed fixture values, nil internal state, invalid JSON payloads, and
+    replay misuse is not explicitly documented. Consumers building CI replay
+    tools need to know whether invalid fixtures are always returned as errors
+    or may panic.
+  - replay APIs clone fixture values for safety in some paths, but ownership of
+    returned slices, maps, raw payloads, and post-construction mutation is not
+    consistently part of the exported contract.
+- Mapped checklist rows: `P4-API-07`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `release/documentation work`
+- Compatibility sensitivity: `documentation-only`
+- Recommended repair slice:
+  - document the fixture schema compatibility promise, including which fields
+    are stable across releases and how fixture version bumps will be handled
+  - state the panic policy for exported fixture/replay APIs: invalid input
+    should be returned as a typed error, while panics should be reserved for
+    impossible programmer misuse if any such cases remain
+  - add or document clone/ownership rules so downstream replay tooling knows
+    whether mutating a fixture after constructing a replayer affects playback
+- Verification notes:
+  - later lanes should add observable fixture tests for malformed input, nil or
+    empty fixture values, mutation after replayer construction, close/replay
+    misuse, and typed replay errors; no new reproducibility tooling was added
+    by this audit
+
+#### P4-HYGIENE-04: exported constructors and options do not publish a module-wide compatibility posture
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`,
+  `github.com/portpowered/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`
+- File path: `go-agent-loop/pkg/agentloop/options.go`,
+  `go-agent-loop/pkg/participants/model_runner.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`,
+  `go-llm-gateway/pkg/inference/session_inferencer.go`,
+  `go-llm-gateway/pkg/providers/*/options.go`
+- Exported declaration: `NewAgentLoop`, `NewModelRunner`,
+  `NewSessionModelRunner`, `NewGateway`, `NewSessionGateway`,
+  `NewGatewayInferencer`, `NewSessionGatewayInferencer`, provider `New`
+  functions, and exported `With*` option functions
+- Observable contract issue:
+  - constructors and option functions are the main public extension points, but
+    the exported docs do not state compatibility expectations for adding new
+    options, changing defaults, changing default model names, changing default
+    transports, or tightening request validation.
+  - default live dependencies and provider defaults affect runtime behavior,
+    but package docs do not distinguish stable API shape from configurable
+    runtime policy. Consumers cannot tell which defaults are safe to rely on
+    versus release notes they must re-check.
+  - panic policy is not stated for nil provider/inferencer/session gateway
+    inputs, invalid option combinations, or missing runtime dependencies.
+    Current code often returns errors from constructors, but this is not a
+    documented module-wide rule.
+- Mapped checklist rows: `P4-API-07`, `P4-API-06`, `P4-API-01`,
+  `P4-API-04`
+- Severity: `later polish`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add package docs or constructor comments that define compatibility posture
+    for exported options, default model names, default transports, validation
+    timing, and nil dependency handling
+  - keep new dependency and validation controls additive where possible; mark
+    any behavior-tightening defaults as release-note work before merging API
+    hardening lanes
+  - add tests for nil dependency and invalid option combinations only where
+    the exported runtime behavior is promised to callers
+- Verification notes:
+  - later release/documentation lanes should pair doc updates with focused
+    constructor tests for nil provider, nil session provider, missing API key,
+    fake transport injection, and invalid option combinations
+
+#### Phase 4 Compatibility And Repair Map
+
+The audit separates the later implementation work into these buckets:
+
+| Bucket | Findings | Compatibility posture | Consuming lane |
+| --- | --- | --- | --- |
+| Must-fix contract defects | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-02` | mixed additive and compatibility-sensitive; each implementation lane needs caller-visible tests before closing a checklist row | Phase 4 API hardening lanes |
+| Later polish | `P4-DI-01`, `P4-HYGIENE-04` | additive unless defaults or constructor behavior change | Phase 4 dependency ownership or release-hardening lanes |
+| Release/documentation work | `P4-HYGIENE-01`, `P4-HYGIENE-03` plus package docs for repaired findings | documentation-only unless docs expose a required naming or signature repair | release notes, package docs, and fixture authoring docs |
+| Documentation-only audit output | this Phase 4 report and reviewer commands | documentation-only; audit existence does not close `P4-API-01` through `P4-API-07` | later planners use as source material |
+
+Recommended implementation order:
+
+1. Typed errors: implement `P4-ERR-01`, then mirror the taxonomy into
+   `P4-ERR-02` and `P4-ERR-03` so returned errors, stream errors, and replay
+   errors support `errors.Is`/`errors.As`.
+2. Provider capabilities and request validation: implement `P4-CAP-01`,
+   `P4-VALIDATION-01`, and `P4-DI-02`, using `P4-HYGIENE-02` to define
+   nil/empty request semantics while validation is added.
+3. Stream semantics: implement `P4-STREAM-01`, `P4-STREAM-02`, and
+   `P4-STREAM-03` after typed errors exist so terminal stream status can carry
+   stable error classes.
+4. Context and result behavior: implement `P4-CTX-02`, `P4-CTX-03`,
+   `P4-CTX-01`, `P4-CTX-04`, `P4-RESULT-01`, and `P4-RESULT-02`, preserving
+   partial results and cancellation status consistently through loop, gateway,
+   provider, session, and replay surfaces.
+5. Dependency ownership and Go API docs: implement `P4-DI-01`,
+   `P4-HYGIENE-01`, `P4-HYGIENE-03`, and `P4-HYGIENE-04` as release and
+   documentation follow-up once the behavioral contracts above are stable.
+
+Reviewer commands for this audit-only story:
+
+```bash
+make typecheck
+make test
+```
+
+No reproducibility tooling was added for this slice; later implementation lanes
+must add runtime, API, fixture, or emitted-event tests named in each finding
+before closing any Phase 4 checklist row.
+
 ## Intended Adapters vs Hidden Coupling
 
 Intended adapter seams:
