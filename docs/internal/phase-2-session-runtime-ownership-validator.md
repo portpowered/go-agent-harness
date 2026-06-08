@@ -228,3 +228,59 @@ or queue state that cannot be classified safely from the available data.
     constructor-ownership lane.
   - Finish the remaining validator finding groups before treating the docs and
     audit refresh commitment `...-005` as fully satisfied.
+
+### Session Runtime Seam Ownership
+
+- `outcome`: `fail`
+- `checklist rows / commitments inspected`: `P2-COB-04`;
+  `phase-2-session-runtime-ownership-repair-001`;
+  `phase-2-session-runtime-ownership-repair-002`
+- `affected files / surfaces / work IDs`:
+  `agent-cli/internal/services/session_runtime.go`;
+  `agent-cli/internal/services/session_test.go`;
+  `go-llm-gateway/pkg/providers/grok/provider.go`;
+  `go-llm-gateway/pkg/providers/grok/provider_test.go`;
+  `go-llm-gateway/pkg/providers/openai/session.go`;
+  `go-llm-gateway/pkg/providers/openai/session_test.go`;
+  `tasks/todo/phase-2-session-runtime-ownership-repair.md`
+- `evidence`:
+  - `pass` evidence for the repaired seam exists at the provider boundary.
+    `go-llm-gateway/pkg/providers/grok/provider.go` and
+    `go-llm-gateway/pkg/providers/openai/session.go` now reject missing
+    WebSocket dialers instead of constructing them internally, and
+    `TestConnectSession_MissingDialerFailsBeforeDial` in both provider test
+    files proves that the provider session surfaces fail before any dial
+    attempt when the owned runtime dependency is absent.
+  - `pass` evidence for the scoped CLI composition seam exists in the runtime
+    planner shape. `planSessionRuntime(...)` routes replay, injected-live, and
+    record setup through `agent-cli/internal/services/session_runtime.go`
+    before provider construction, and
+    `TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam` proves
+    that OpenAI websocket replay stays on the OpenAI-specific seam rather than
+    falling back to Grok-specific wiring.
+  - The overall runtime ownership finding is still `fail`, because the record
+    planner keeps one hidden live dependency creation path. In both
+    `planGrokRecordRuntime(...)` and `planOpenAIRecordRuntime(...)`, when
+    `SessionRunOptions.WebSocketDialer` is nil the planner assigns
+    `factory.newDefaultLiveDialer()` before provider construction. That means
+    the CLI seam still synthesizes a live transport instead of requiring the
+    caller-owned dependency to cross the seam explicitly.
+  - `TestPlanSessionRuntime_OpenAIRecordOwnsConfigAndDialerSelection` confirms
+    the current behavior directly: the test expects the OpenAI record path to
+    use a factory-owned default live dialer when none is injected. By
+    contrast, `TestPlanSessionRuntime_GrokRecordPreservesCallerOwnedDialer`
+    proves the seam does preserve ownership when a dialer is supplied, and
+    `TestPlanSessionRuntime_RecordRejectsMissingOwnedDialer` shows the planner
+    only fails when the factory cannot supply that fallback at all.
+  - Against the stricter repair commitment in
+    `phase-2-session-runtime-ownership-repair-002`, this repository state does
+    not yet prove that scoped Grok and OpenAI record behavior is driven solely
+    by explicitly injected runtime dependencies. The hidden fallback now lives
+    in the CLI planner rather than the provider constructors, but it is still a
+    live ownership leak for the validator scope.
+- `required repairs / you work move actions`:
+  - Remove the `newDefaultLiveDialer()` fallback from the record planning path
+    if `P2-COB-04` and repair commitment `phase-2-session-runtime-ownership-repair-002`
+    are intended to converge as written.
+  - Update the session-runtime planner tests to expect explicit caller-owned
+    dialer injection on record flows once that seam is repaired.
