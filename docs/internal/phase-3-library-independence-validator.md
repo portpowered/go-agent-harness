@@ -204,3 +204,48 @@ from reviewer-runnable repository artifacts.
     result for this exclusion proof.
   - `P3-CORE-04` is ready to close from the checked gateway consumer evidence.
 - `required repairs`: none.
+
+### Proof-Surface Truthfulness and Reviewer Usability
+
+- `outcome`: `pass`
+- `checklist rows inspected`: `P3-GATE-01`
+- `commands run or cited`:
+  - `cd go-agent-loop && go test ./pkg/agentloop ./pkg/participants -run 'TestExecute_(SimpleResponse|WithToolCall|MultiTurn)|TestExecuteStreaming_EndToEndDeltas|TestModelRunner_SimpleInference' -count=1`
+  - `cd go-agent-loop && go list -deps ./pkg/agentloop ./pkg/participants ./pkg/subsystems ./pkg/engine ./pkg/messages ./pkg/state | sort | rg 'go-llm-gateway/pkg/providers'`
+  - `cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_NormalizesProviderTextResponse|TestInteractionFixtureReplayer_ReplaysDeterministicNormalizedEvents|TestInfer_PassthroughMaxTokens|TestInferStream_PassthroughAllFields' -count=1`
+  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/'`
+  - `cd go-llm-gateway && go list -deps ./pkg/gateway ./pkg/inference ./pkg/models | sort | rg 'github.com/portpowered/go-agent-loop/pkg/(agentloop|engine|participants|state|subsystems|logging)'`
+- `affected files / commands / surfaces`:
+  - `docs/internal/phase-3-library-independence-validator.md`
+  - `docs/internal/checklist.md`
+  - `docs/architecture/dependencies.md`
+  - `README.md`
+  - the proof commands listed above
+- `evidence`:
+  - The validator report itself is the reviewer-facing proof guidance for this
+    convergence pass. It cites the exact loop proof command, gateway proof
+    command, allowed shared contract package
+    `github.com/portpowered/go-agent-loop/pkg/messages`, forbidden gateway-side
+    loop runtime packages, and forbidden loop-side provider package class
+    `go-llm-gateway/pkg/providers/...`.
+  - The cited loop and gateway test commands pass from the documented module
+    working directories. The tests use in-process fakes, capture gateways,
+    fixture replayers, and local inferencer doubles, so they are deterministic
+    and require no live provider credentials or network access.
+  - The loop dependency exclusion command returns no matches for
+    `go-llm-gateway/pkg/providers`, which truthfully proves that the checked
+    loop consumer path does not import gateway provider packages. The command's
+    non-zero `rg` exit is the expected successful exclusion result.
+  - The gateway dependency inclusion command returns exactly the deliberate
+    shared contract package, `github.com/portpowered/go-agent-loop/pkg/messages`,
+    for the bounded gateway consumer path. The forbidden runtime dependency
+    command returns no matches for `agentloop`, `engine`, `participants`,
+    `state`, `subsystems`, or `logging`; its non-zero `rg` exit is the expected
+    successful exclusion result.
+  - The broader architecture docs still describe the repository as a composed
+    multi-module workspace rather than claiming total package isolation. That
+    wording is consistent with this proof surface because the validator only
+    proves the scoped consumer paths required by `P3-CORE-03` and `P3-CORE-04`.
+  - The proof surfaces are sufficient evidence for `P3-GATE-01` without
+    requiring reviewers to reconstruct prior batch history.
+- `required repairs`: none.
