@@ -36,9 +36,6 @@ func New(opts ...Option) *GrokSessionProvider {
 	for _, opt := range opts {
 		opt(p)
 	}
-	if p.dialer == nil {
-		p.dialer = &gorillaDialer{}
-	}
 	return p
 }
 
@@ -52,6 +49,9 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 
 	headers := map[string]string{
 		"Authorization": "Bearer " + p.apiKey,
+	}
+	if p.dialer == nil {
+		return nil, fmt.Errorf("grok: websocket dialer is required")
 	}
 
 	conn, err := p.dialer.Dial(url, headers)

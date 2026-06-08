@@ -199,7 +199,10 @@ client := &http.Client{Transport: recorder}
 recorder.FlushToFile("captures/my-test.http.json")
 
 // Session recording
-sessionRec := testing.NewSessionRecorder(realSession)
+sessionRec := testing.NewSessionRecorder(
+    realSession,
+    testing.WithSessionRelayContext(ctx),
+)
 // ... use sessionRec as messages.Session ...
 sessionRec.FlushToFile("captures/my-test.session.json")
 
@@ -222,14 +225,19 @@ replayRT, _ := testing.NewReplayRoundTripper("captures/my-test.http.json")
 client := &http.Client{Transport: replayRT}
 
 // Session replay
-replayer, _ := testing.NewSessionReplayer("captures/my-test.session.json")
+replayer, _ := testing.NewSessionReplayer(
+    "captures/my-test.session.json",
+    testing.WithReplayContext(ctx),
+)
 // replayer implements messages.Session — inject where a real session would go
 // Send verifies outbound client events against the next recorded
 // client_to_server record. Err reports replay divergence or an omitted
 // expected outbound event.
+// Replay and recorder relay writes stop when the owned context is cancelled.
 // For read-only transcript rendering, disable outbound validation explicitly:
 reader, _ := testing.NewSessionReplayer(
     "captures/my-test.session.json",
+    testing.WithReplayContext(ctx),
     testing.WithReplayOutboundValidation(false),
 )
 

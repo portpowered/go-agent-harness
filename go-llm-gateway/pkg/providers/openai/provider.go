@@ -49,9 +49,6 @@ func New(opts ...Option) *OpenAIProvider {
 	for _, opt := range opts {
 		opt(p)
 	}
-	if p.realtimeDialer == nil {
-		p.realtimeDialer = NewDefaultWebSocketDialer()
-	}
 	return p
 }
 

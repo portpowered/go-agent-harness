@@ -15,6 +15,15 @@ import (
 // SessionReplayerOption configures a SessionReplayer.
 type SessionReplayerOption func(*SessionReplayer)
 
+// WithReplayContext makes replay delivery stop when ctx is cancelled.
+func WithReplayContext(ctx context.Context) SessionReplayerOption {
+	return func(r *SessionReplayer) {
+		if ctx != nil {
+			r.replayCtx = ctx
+		}
+	}
+}
+
 // WithReplayTiming enables real-time delays between events based on their
 // recorded timestamps. By default, all events are delivered immediately.
 func WithReplayTiming() SessionReplayerOption {
@@ -46,12 +55,14 @@ type SessionReplayer struct {
 	closeOnce        sync.Once
 
 	// sentLog records messages passed to Send (for test inspection).
-	sentLog []messages.StreamMessage
-	index   int
-	err     error
-	closed  bool
-	cond    *sync.Cond
-	mu      sync.Mutex
+	sentLog   []messages.StreamMessage
+	index     int
+	err       error
+	closed    bool
+	cond      *sync.Cond
+	mu        sync.Mutex
+	replayCtx context.Context
+	cancel    context.CancelFunc
 }
 
 var _ messages.Session = (*SessionReplayer)(nil)
@@ -85,6 +96,10 @@ func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*S
 	for _, opt := range opts {
 		opt(r)
 	}
+	if r.replayCtx == nil {
+		r.replayCtx = context.Background()
+	}
+	r.replayCtx, r.cancel = context.WithCancel(r.replayCtx)
 
 	go r.replayLoop()
 
@@ -153,6 +168,7 @@ func (r *SessionReplayer) Close() error {
 		}
 	}
 	r.mu.Unlock()
+	r.cancel()
 	r.close()
 	return nil
 }
@@ -195,6 +211,8 @@ func (r *SessionReplayer) replayLoop() {
 			select {
 			case <-r.done:
 				return
+			case <-r.replayCtx.Done():
+				return
 			case <-time.After(delay):
 			}
 		}
@@ -215,7 +233,9 @@ func (r *SessionReplayer) replayLoop() {
 		case <-r.done:
 			return
 		default:
-			r.outbound.Write(context.Background(), msg)
+			if !r.outbound.Write(r.replayCtx, msg) && r.replayCtx.Err() != nil {
+				return
+			}
 		}
 	}
 }
@@ -233,6 +253,7 @@ func (r *SessionReplayer) failLocked(err error) {
 
 func (r *SessionReplayer) close() {
 	r.closeOnce.Do(func() {
+		r.cancel()
 		r.mu.Lock()
 		r.closed = true
 		close(r.done)

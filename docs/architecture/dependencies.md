@@ -168,6 +168,29 @@ The constructor ownership enabling step from [`contract-gap-audit.md`](./contrac
 
 Future Phase 2 work should preserve those ownership boundaries instead of reintroducing constructor-side defaults in reusable packages.
 
+## Phase 2 Session Runtime Ownership Status
+
+The remaining session-mode constructor/runtime ownership gap for the scoped
+Grok and OpenAI record/replay paths is now narrowed by the delivered repair:
+
+- `agent-cli/internal/services/session_runtime.go` is the explicit CLI-owned
+  composition seam for session provider selection, config resolution, live
+  versus replay dialer choice, and provider-specific runtime wiring.
+- `go-llm-gateway/pkg/providers/grok` and
+  `go-llm-gateway/pkg/providers/openai` now treat missing session dialers as a
+  contract error at the provider session boundary instead of silently creating
+  live defaults in the reviewed runtime paths.
+- `go-llm-gateway/pkg/testing.SessionRecorder` and
+  `go-llm-gateway/pkg/testing.SessionReplayer` preserve the owned lifecycle
+  context for relay writes, which keeps cancellation ownership aligned with the
+  same seam that owns dialer injection.
+
+For reviewer-facing convergence evidence, cite
+[`docs/internal/phase-2-session-runtime-ownership-validator.md`](../internal/phase-2-session-runtime-ownership-validator.md)
+alongside the session-runtime checklist rows `P2-SRO-01` through
+`P2-GATE-01`, and the broader constructor-ownership row `P2-COB-04` that this
+slice advances.
+
 ## Decision Checklist For Future Changes
 
 Before approving a new dependency or exported constructor, check:

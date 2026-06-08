@@ -31,6 +31,20 @@ directly when it records `pass`, `fail`, or `uncertain` evidence.
 | `P2-SFO-04` | Authoring guidance | Contributor-facing docs describe the same ownership boundary, fixture classes, and validator workflow without contradictory shared-root guidance. | `README.md`, `go-llm-gateway/README.md`, `agent-cli/docs/README.md`, `agent-cli/docs/session-record-replay.md`, `go-llm-gateway/pkg/testing/README.md`, `go-llm-gateway/pkg/testing/session-fixture-authoring.md` |
 | `P2-SFO-05` | Deterministic proof | The repository contains deterministic tests that prove shared fixtures still satisfy replay and hygiene expectations after the ownership move. | `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go`, `go-llm-gateway/pkg/testing/session_replay_test.go`, root `Makefile` quality targets |
 
+## Phase 2 - Session Runtime Ownership Repair
+
+This checklist is the authoritative Phase 2 inventory for the session runtime
+ownership repair slice. The Phase 2 validator must cite these item IDs
+directly when it records `pass`, `fail`, or `uncertain` evidence.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P2-SRO-01` | CLI-owned runtime seam | `agent-cli` owns one explicit composition seam for session-mode provider selection, config resolution, dialer ownership, and provider-specific runtime wiring before session construction begins. | `agent-cli/internal/services/session.go`, `agent-cli/internal/services/session_runtime.go`, `agent-cli/internal/services/session_test.go`, `docs/architecture/dependencies.md` |
+| `P2-SRO-02` | Injected provider session runtime | Scoped Grok and OpenAI session record/replay paths consume injected runtime dependencies and fail explicitly when required owned dialers are missing instead of creating hidden live defaults. | `go-llm-gateway/pkg/providers/grok/provider.go`, `go-llm-gateway/pkg/providers/grok/provider_test.go`, `go-llm-gateway/pkg/providers/openai/session.go`, `go-llm-gateway/pkg/providers/openai/session_test.go`, `agent-cli/internal/services/session_test.go` |
+| `P2-SRO-03` | Relay cancellation contract | Shared replay and recording helpers preserve caller-owned or session-owned cancellation through the runtime seam rather than switching relay writes onto `context.Background()`. | `go-llm-gateway/pkg/testing/session_record.go`, `go-llm-gateway/pkg/testing/session_replay.go`, `go-llm-gateway/pkg/testing/session_inferencer.go`, `go-llm-gateway/pkg/testing/session_record_test.go`, `go-llm-gateway/pkg/testing/session_replay_test.go` |
+| `P2-SRO-04` | Reviewer-visible ownership evidence | Reviewer-facing docs and architecture audit surfaces describe the delivered session runtime ownership model, name the findings resolved or narrowed by this slice, and give enough evidence for follow-up validation without reconstructing planner intent. | `docs/architecture/contract-gap-audit.md`, `docs/architecture/dependencies.md`, `agent-cli/docs/session-record-replay.md`, `go-llm-gateway/pkg/testing/README.md`, `docs/internal/phase-2-session-runtime-ownership-validator.md` |
+| `P2-GATE-01` | Deterministic runtime proof and quality gate | Deterministic tests cover the repaired session seam and cancellation contract without live credentials or network access, and the changed workspace surfaces pass the required validation commands. | `agent-cli/internal/services/session_test.go`, `go-llm-gateway/pkg/testing/session_record_test.go`, `go-llm-gateway/pkg/testing/session_replay_test.go`, root `Makefile` quality targets |
+
 ## Phase 2 - Constructor Ownership Boundary
 
 This checklist is the authoritative Phase 2 inventory for the constructor

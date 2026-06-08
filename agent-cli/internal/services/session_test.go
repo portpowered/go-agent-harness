@@ -21,6 +21,199 @@ import (
 	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
+func TestPlanSessionRuntime_OpenAIRecordOwnsConfigAndDialerSelection(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: openai
+  openai:
+    model: gpt-realtime
+    api_key: sk-config-key
+`)
+
+	defaultDialer := &stubRuntimeDialer{id: "default-live"}
+	recordingDialer := &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "recording-openai"}}
+	var gotInner grok.WebSocketDialer
+	var gotProvider string
+	var gotModel string
+	var gotCfg config.OpenAIConfig
+	var gotDialer grok.WebSocketDialer
+
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		RecordPath: filepath.Join(t.TempDir(), "openai.session.json"),
+		Provider:   config.ProviderOpenAI,
+		Model:      "gpt-realtime",
+		APIKey:     "sk-override-key",
+		ConfigDir:  configDir,
+	}, sessionRuntimeFactory{
+		newDefaultLiveDialer: func() grok.WebSocketDialer { return defaultDialer },
+		newRecordingDialer: func(inner grok.WebSocketDialer, providerName string, model string) sessionRecordingDialer {
+			gotInner = inner
+			gotProvider = providerName
+			gotModel = model
+			return recordingDialer
+		},
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+			gotCfg = cfg
+			gotDialer = dialer
+			return &scriptedSessionInferencer{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+	}
+
+	if plan.mode != sessionRuntimeModeRecordOpenAI {
+		t.Fatalf("plan.mode = %q, want %q", plan.mode, sessionRuntimeModeRecordOpenAI)
+	}
+	if gotInner != defaultDialer {
+		t.Fatal("OpenAI record runtime did not use the factory-owned default live dialer")
+	}
+	if gotProvider != config.ProviderOpenAI || gotModel != "gpt-realtime" {
+		t.Fatalf("recording dialer metadata = (%q, %q), want (%q, %q)", gotProvider, gotModel, config.ProviderOpenAI, "gpt-realtime")
+	}
+	if gotDialer != recordingDialer {
+		t.Fatal("OpenAI record inferencer did not receive the owned recording dialer")
+	}
+	if gotCfg.APIKey != "sk-override-key" || gotCfg.Model != "gpt-realtime" {
+		t.Fatalf("OpenAI config overrides were not resolved before runtime planning: %#v", gotCfg)
+	}
+}
+
+func TestPlanSessionRuntime_GrokRecordPreservesCallerOwnedDialer(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: grok
+  grok:
+    model: grok-config-model
+    api_key: xai-config-key
+`)
+
+	callerDialer := &stubRuntimeDialer{id: "caller-live"}
+	recordingDialer := &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "recording-grok"}}
+	var defaultDialerCalled bool
+	var gotInner grok.WebSocketDialer
+	var gotCfg config.GrokConfig
+	var gotDialer grok.WebSocketDialer
+
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		RecordPath:      filepath.Join(t.TempDir(), "grok.session.json"),
+		Provider:        config.ProviderGrok,
+		Model:           "grok-override-model",
+		APIKey:          "xai-override-key",
+		ConfigDir:       configDir,
+		WebSocketDialer: callerDialer,
+	}, sessionRuntimeFactory{
+		newDefaultLiveDialer: func() grok.WebSocketDialer {
+			defaultDialerCalled = true
+			return &stubRuntimeDialer{id: "unexpected-default"}
+		},
+		newRecordingDialer: func(inner grok.WebSocketDialer, _ string, _ string) sessionRecordingDialer {
+			gotInner = inner
+			return recordingDialer
+		},
+		newGrokSessionInferencer: func(cfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+			gotCfg = cfg
+			gotDialer = dialer
+			return &scriptedSessionInferencer{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+	}
+
+	if plan.mode != sessionRuntimeModeRecordGrok {
+		t.Fatalf("plan.mode = %q, want %q", plan.mode, sessionRuntimeModeRecordGrok)
+	}
+	if defaultDialerCalled {
+		t.Fatal("Grok record runtime should keep the caller-owned live dialer")
+	}
+	if gotInner != callerDialer {
+		t.Fatal("Grok record runtime did not pass the caller-owned dialer into the recording seam")
+	}
+	if gotDialer != recordingDialer {
+		t.Fatal("Grok session inferencer did not receive the owned recording dialer")
+	}
+	if gotCfg.APIKey != "xai-override-key" || gotCfg.Model != "grok-override-model" {
+		t.Fatalf("Grok config overrides were not resolved before runtime planning: %#v", gotCfg)
+	}
+}
+
+func TestPlanSessionRuntime_RecordRejectsMissingOwnedDialer(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: grok
+  grok:
+    model: grok-config-model
+    api_key: xai-config-key
+`)
+
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		RecordPath: filepath.Join(t.TempDir(), "grok.session.json"),
+		Provider:   config.ProviderGrok,
+		ConfigDir:  configDir,
+	}, sessionRuntimeFactory{
+		newDefaultLiveDialer: func() grok.WebSocketDialer { return nil },
+	})
+	if err == nil {
+		t.Fatal("expected record runtime planning to reject a missing owned dialer")
+	}
+	if !strings.Contains(err.Error(), "requires an injected websocket dialer") {
+		t.Fatalf("expected missing dialer contract error, got: %v", err)
+	}
+}
+
+func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testing.T) {
+	var openAICalled bool
+	var grokCalled bool
+	replayDialer := &stubReplayDialer{
+		stubRuntimeDialer: stubRuntimeDialer{id: "openai-replay"},
+		model:             "gpt-realtime",
+		done:              make(chan struct{}),
+	}
+
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		ReplayPath: filepath.Join("..", "..", "test", "integration", "testdata", "openai_realtime_text.session.json"),
+		Prompt:     "hello realtime",
+	}, sessionRuntimeFactory{
+		newReplayDialer: func(path string) (sessionReplayDialer, error) {
+			if !strings.Contains(path, "openai_realtime_text.session.json") {
+				t.Fatalf("unexpected replay path: %s", path)
+			}
+			return replayDialer, nil
+		},
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+			openAICalled = true
+			if cfg.Model != "gpt-realtime" {
+				t.Fatalf("OpenAI replay model = %q, want gpt-realtime", cfg.Model)
+			}
+			if dialer != replayDialer {
+				t.Fatal("OpenAI replay runtime did not inject the replay dialer into the provider seam")
+			}
+			return &scriptedSessionInferencer{}, nil
+		},
+		newGrokSessionInferencer: func(config.GrokConfig, grok.WebSocketDialer) (messages.SessionInferencer, error) {
+			grokCalled = true
+			return &scriptedSessionInferencer{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+	}
+
+	if plan.mode != sessionRuntimeModeReplayOpenAI {
+		t.Fatalf("plan.mode = %q, want %q", plan.mode, sessionRuntimeModeReplayOpenAI)
+	}
+	if !openAICalled {
+		t.Fatal("OpenAI websocket replay capture did not route through the OpenAI runtime seam")
+	}
+	if grokCalled {
+		t.Fatal("OpenAI websocket replay capture should not use the Grok runtime seam")
+	}
+}
+
 type failingWriter struct {
 	err error
 }
@@ -237,6 +430,59 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	assertCapturedDirectionAndType(t, capture.Records, gwtesting.DirectionServerToClient, "session.created")
 }
 
+func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	capturePath := filepath.Join(t.TempDir(), "timed-replay.session.json")
+	writeGenericSessionCapture(t, capturePath, []gwtesting.CapturedSessionEvent{
+		capturedStreamEvent(gwtesting.DirectionServerToClient, 1, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("before cancel")),
+		capturedStreamEvent(gwtesting.DirectionServerToClient, 2, 200, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after cancel")),
+	})
+
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		ReplayPath: capturePath,
+	}, sessionRuntimeFactory{
+		newReplayInferencer: func(path string) messages.SessionInferencer {
+			return gwtesting.NewReplaySessionInferencer(path, gwtesting.WithReplayTiming())
+		},
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+	}
+
+	out := &lockedBuffer{}
+	errCh := make(chan error, 1)
+	plan.loopOut = out
+	plan.finalize = nil
+	plan.loop.MaxDuration = time.Second
+	go func() {
+		errCh <- plan.run(ctx, io.Discard)
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(out.String(), "before cancel") {
+			cancel()
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	err = <-errCh
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("replay cancellation should preserve context.Canceled, got: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "before cancel") {
+		t.Fatalf("replay output missing pre-cancellation delta, got %q", got)
+	}
+	if strings.Contains(got, "after cancel") {
+		t.Fatalf("replay output should stop before later timed deltas after cancellation, got %q", got)
+	}
+}
+
 func TestChatServiceRun_PropagatesBannerWriteError(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
@@ -299,6 +545,98 @@ func assertCapturedDirectionAndType(t *testing.T, records []gwtesting.CapturedSe
 	}
 	t.Fatalf("capture missing %s %s record: %#v", direction, eventType, records)
 }
+
+func writeSessionConfigFile(t *testing.T, configDir string, yaml string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(strings.TrimSpace(yaml)+"\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+}
+
+func writeGenericSessionCapture(t *testing.T, path string, records []gwtesting.CapturedSessionEvent) {
+	t.Helper()
+
+	data, err := json.MarshalIndent(gwtesting.SessionCapture{
+		Version: gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{
+			Name:  sessionProviderGrok,
+			Model: "grok-replay-test",
+		},
+		Session: gwtesting.SessionMetadata{
+			ID:           "sess-replay-test",
+			StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
+		},
+		Records: records,
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal replay capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write replay capture: %v", err)
+	}
+}
+
+func capturedStreamEvent(direction gwtesting.SessionEventDirection, sequence int, timestampMs int64, msgType messages.StreamMessageType, value messages.StreamMessageValue) gwtesting.CapturedSessionEvent {
+	payload, err := gwtesting.MarshalStreamMessage(messages.StreamMessage{
+		Type:  msgType,
+		Value: value,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return gwtesting.CapturedSessionEvent{
+		Sequence:    sequence,
+		Direction:   direction,
+		TimestampMs: timestampMs,
+		Type:        string(msgType),
+		PayloadType: gwtesting.SessionPayloadTypeStreamMessage,
+		Payload:     payload,
+	}
+}
+
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+type stubRuntimeDialer struct {
+	id string
+}
+
+func (d *stubRuntimeDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+	return nil, errors.New("unexpected dial")
+}
+
+type stubRecordingDialer struct {
+	stubRuntimeDialer
+}
+
+func (d *stubRecordingDialer) FlushToFile(string) error {
+	return nil
+}
+
+type stubReplayDialer struct {
+	stubRuntimeDialer
+	model string
+	done  chan struct{}
+	err   error
+}
+
+func (d *stubReplayDialer) Done() <-chan struct{} { return d.done }
+func (d *stubReplayDialer) Err() error            { return d.err }
+func (d *stubReplayDialer) Model() string         { return d.model }
 
 type scriptedSessionInferencer struct {
 	events      []messages.StreamMessage
