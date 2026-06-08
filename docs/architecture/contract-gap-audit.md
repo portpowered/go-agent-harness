@@ -67,12 +67,18 @@ the scoped `P3-CORE-02` work:
 - Recommended Phase 2 hardening:
   - either document `pkg/models` as a deliberate alias layer with no independent compatibility promise, or define a truly gateway-owned model surface and add explicit translation at the boundary
 - Phase 3 status:
+  - resolved for the scoped shared-contract decision
   - boundary ownership is now explicit: `go-agent-loop/pkg/messages` is the
     authoritative shared contract package for this slice
-  - the remaining work is clarity at the gateway surface, not a missing
-    decision about who owns the shared contracts
-  - later Phase 3 stories tighten `pkg/models` comments and adapter docs so the
-    alias layer no longer reads as an independent contract vocabulary
+  - `go-llm-gateway/pkg/models` is now documented as a compatibility alias
+    layer, not an independently owned shared-message vocabulary
+  - public adapter packages are documented as bridges into the loop-owned
+    boundary, and `go-agent-loop/test/architecture/dependency_direction_test.go`
+    provides the reviewer-citable import-direction proof that preserves this
+    one-way dependency rule
+  - reviewers should treat new gateway docs or exports that present
+    `pkg/models` as a second shared core surface as a regression against
+    `P3-CORE-01` and `P3-CORE-02`
 
 ### HC-03: session command behavior in `agent-cli` depends on provider-specific runtime helpers
 
