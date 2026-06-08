@@ -137,3 +137,22 @@ The final validator output must:
   required
 - end with one overall convergence verdict for Phase 2 factory worktree
   hygiene: `pass`, `fail`, or `uncertain`
+
+## Reproducible Execution
+
+Generate the reviewer-facing report from the current repository and queue state
+with:
+
+```sh
+python3 factory/scripts/validate_worktree_hygiene_convergence.py \
+  --write-report docs/internal/phase-2-factory-worktree-hygiene-convergence-report.md
+```
+
+That command must:
+
+- run the committed `setup-workspace` runtime suite directly as validator
+  evidence
+- inspect live durable queue state through `you session list` and
+  `you work list --session <id>`
+- rewrite `docs/internal/phase-2-factory-worktree-hygiene-convergence-report.md`
+  from the current run instead of relying on a hardcoded snapshot

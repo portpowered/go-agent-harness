@@ -114,7 +114,10 @@ test: ## Run deterministic Go tests across all workspace modules.
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
 	echo "==> test-factory-scripts factory/scripts/tests/test_setup_workspace.py"; \
-	PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest factory/scripts/tests/test_setup_workspace.py
+	echo "==> test-factory-scripts factory/scripts/tests/test_validate_worktree_hygiene_convergence.py"; \
+	PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest \
+		factory/scripts/tests/test_setup_workspace.py \
+		factory/scripts/tests/test_validate_worktree_hygiene_convergence.py
 
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \

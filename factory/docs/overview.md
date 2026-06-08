@@ -159,6 +159,8 @@ checkout drift as safe.
 Reviewers can verify the repaired setup path with committed runtime coverage:
 
 ```sh
+python3 factory/scripts/validate_worktree_hygiene_convergence.py \
+  --write-report docs/internal/phase-2-factory-worktree-hygiene-convergence-report.md
 make test-factory-scripts
 make typecheck
 make test
@@ -167,6 +169,11 @@ make test
 `make test-factory-scripts` runs the setup-workspace runtime suite with
 `PYTHONDONTWRITEBYTECODE=1` and `python3 -B` so the verification path does not
 write `__pycache__` artifacts into the root checkout.
+
+The convergence validator command above regenerates the reviewer-facing report
+from the current repository state, reruns the deterministic `setup-workspace`
+runtime suite as direct evidence, and inspects live durable queue state instead
+of relying on a stale checked-in queue snapshot.
 
 The Python runtime suite covers the queue-facing setup contract directly:
 
