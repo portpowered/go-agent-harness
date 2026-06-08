@@ -45,14 +45,17 @@ reviewed branch head:
 
 ## Branch Landing Evidence
 
-This landing was checked at `2026-06-08 11:50 UTC` against remote-qualified
-refs:
+This landing evidence was refreshed at `2026-06-08 11:58 UTC` against
+remote-qualified refs and the current review `HEAD`:
 
 - `origin/main`: `9b8f8a775acc2a33377395dec4dad6c19bc17cc8`
 - `origin/phase-3-library-independence-validator`:
   `acd78bf4457a99d19d05d869f252b68099d00f60`
-- `origin/phase-3-library-independence-validator-landing`:
-  `a787f334bb940c59022ddc75cd7a97aa587855d8`
+- review head: `HEAD` of `origin/phase-3-library-independence-validator-landing`
+  after the final evidence-refresh push. Use
+  `gh pr view --json headRefOid --jq .headRefOid` or
+  `git rev-parse origin/phase-3-library-independence-validator-landing` to
+  verify the exact pushed commit under review.
 
 Branch-comparison evidence:
 
