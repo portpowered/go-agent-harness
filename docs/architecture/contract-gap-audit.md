@@ -1,5 +1,112 @@
 # Contract Gap Audit
 
+## Phase 4 API Audit Reconciliation Map
+
+This section is the row-level Phase 4 source of truth for P4-API-01 through P4-API-07 and P4-GATE-01. The older findings below remain evidence and planning context, but audit documentation alone cannot close implementation checklist rows; a row is closable only when the named public contract, runtime behavior, docs/examples, and deterministic validation evidence exist in code or tests.
+
+Status values:
+
+- `pass`: current implementation and deterministic evidence are sufficient for this audit row.
+- `fail`: current implementation evidence shows an observable contract gap.
+- `uncertain`: evidence exists, but the row still needs targeted reconciliation before a reviewer should treat it as closed.
+- `open`: intentionally not closable in this audit-only lane.
+
+### P4-API-01: Dependency Ownership And Injection Contracts
+
+- Outcome: `uncertain`
+- Affected public packages: `go-agent-loop/pkg/agentloop`, `go-agent-loop/pkg/messages`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/inference`, `agent-cli/internal/agent`, `agent-cli/internal/services`
+- Exported declarations: `agentloop.New`, `agentloop.WithToolExecutor`, `agentloop.WithToolExecutionDisabled`, `messages.Inferencer`, `messages.SessionInferencer`, `messages.Session`, `gateway.NewGateway`, `gateway.NewSessionGateway`, `inference.NewGatewayInferencer`, `inference.NewSessionGatewayInferencer`
+- Observable contract issue: caller-owned dependencies are partly explicit after constructor-ownership repairs, but remaining IO and configuration acquisition paths still need row-specific verification before dependency ownership can be considered closed across prompt loading, session runtime setup, and provider construction.
+- Implementation evidence: `agentloop.New` now requires an explicit tool-execution capability decision when tools are configured; provider HTTP runtime construction is centralized in `agent-cli/internal/agent/provider_runtime.go`; session runtime planning is centralized in `agent-cli/internal/services/session_runtime.go`.
+- Planning-only evidence: DI-01 through DI-04 and HC-03 below describe intended ownership boundaries and historical gaps.
+- Docs/tests/examples evidence: `go-agent-loop/pkg/agentloop/agent_loop_test.go`, `agent-cli/internal/agent/provider_runtime_test.go`, and `agent-cli/internal/services/session_runtime_test.go` exercise explicit constructor/runtime ownership paths.
+- Remaining repair slice: verify prompt-resolution IO ownership, config loading, and session/provider construction seams as observable caller behavior; document any remaining hidden filesystem, network, or environment side effects at the exported contract boundary.
+- Reviewer commands: from the repository root, run `make typecheck` to prove the public packages still compile; run `(cd go-agent-loop && go test ./pkg/agentloop)` to verify constructor ownership; run `(cd agent-cli && go test ./internal/agent ./internal/services)` to verify CLI-owned provider and session runtime seams.
+
+### P4-API-02: Typed Errors And Stream Failure Contracts
+
+- Outcome: `uncertain`
+- Affected public packages: `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/participants`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/grok`, `agent-cli/internal/services`
+- Exported declarations: `messages.ErrorValue`, `messages.NewErrorValue`, `messages.NewErrorValueWithDetails`, `messages.StreamTypeError`, `gateway.InteractionError`, `gateway.InteractionEventError`, `gateway.InteractionCancellation`
+- Observable contract issue: typed error fields and interaction error codes exist, but many stream paths still emit plain `err.Error()` values, so caller-actionable failure classes are not yet uniformly preserved across provider, replay, session, and CLI command boundaries.
+- Implementation evidence: `messages.ErrorValue` exposes structured fields; `NewErrorValueWithDetails` preserves provider-supplied OpenAI realtime details; `gateway.InteractionError` carries normalized error code/message/retryability for PNIG interaction events.
+- Planning-only evidence: ERR-01, ERR-02, COMPAT-03, LIFECYCLE-01, and LIFECYCLE-02 below identify remaining typed-error and lifecycle risks.
+- Docs/tests/examples evidence: `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`, `go-llm-gateway/pkg/providers/openai/session_test.go`, and provider stream tests assert selected error and stream behavior.
+- Remaining repair slice: reconcile P4-ERR-01, P4-ERR-02, P4-ERR-03, stream error preservation, replay mismatch handling, and cancellation handling without folding in provider capability or dependency ownership work.
+- Reviewer commands: from the repository root, run `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/grok)` to verify deterministic typed-error and stream evidence; run `(cd go-agent-loop && go test ./pkg/participants ./test/functional)` to verify loop stream and session error behavior.
+
+### P4-API-03: Result, Lifecycle, And Completion Contracts
+
+- Outcome: `fail`
+- Affected public packages: `go-agent-loop/pkg/agentloop`, `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/participants`, `go-llm-gateway/pkg/inference`, `go-llm-gateway/pkg/gateway`, `agent-cli/internal/output`, `agent-cli/internal/agent`
+- Exported declarations: `agentloop.ExecuteResult`, `agentloop.Stream`, `messages.Message`, `messages.StreamMessage`, `messages.StreamMessageType`, `messages.Session`, `gateway.InteractionEvent`, `gateway.InteractionEventEnd`
+- Observable contract issue: callers can observe normalized messages and stream events, but result completion semantics still differ between provider-authored end events, loop-synthesized `MESSAGE.END`, CLI stop conditions, PNIG interaction terminal events, and session close boundaries.
+- Implementation evidence: loop participants reconstruct messages from deltas and synthesize stream boundaries; gateway interactions emit explicit start, final, cancellation, error, and end events.
+- Planning-only evidence: CTX-01, CTX-02, LIFECYCLE-01, LIFECYCLE-02, COMPAT-01, and COMPAT-02 below describe the current lifecycle/result ambiguity.
+- Docs/tests/examples evidence: `go-agent-loop/test/functional/session_lifecycle_test.go`, `go-agent-loop/pkg/engine/ordering_test.go`, `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`, and CLI output tests cover individual slices.
+- Remaining repair slice: define caller-visible terminal states for non-streaming results, streaming fallback completion, session close, replay completion, and interaction cancellation/error end events; keep compatibility staging explicit for recorded fixtures.
+- Reviewer commands: from the repository root, run `(cd go-agent-loop && go test ./pkg/engine ./test/functional)` to verify loop result reconstruction and lifecycle behavior; run `(cd go-llm-gateway && go test ./pkg/gateway)` to verify PNIG terminal event behavior.
+
+### P4-API-04: Provider Capability Discovery And Unsupported-Feature Validation
+
+- Outcome: `uncertain`
+- Affected public packages: `agent-cli/internal/config`, `agent-cli/internal/input`, `agent-cli/internal/agent`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/fal`, `go-llm-gateway/pkg/providers/grok`
+- Exported declarations: `config.ModelInfo`, `(*config.ModelInfo).SupportsOutputModality`, `(*config.ModelInfo).SupportsInputMimeType`, `input.ValidateMimeType`, `input.ValidateContentPartsMimeTypes`, `providers.Provider`, `providers.SessionProvider`
+- Observable contract issue: local model metadata validates selected input MIME types and output modalities, but the public gateway/provider surface does not yet expose one provider-neutral capability discovery contract covering tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config.
+- Implementation evidence: CLI config contains model metadata for input/output modalities, tool use, and reasoning; executor validation rejects unsupported output modalities and input MIME types when model metadata is available.
+- Planning-only evidence: capability and validation repair work is requested by P4-CAP-01 and P4-VALIDATION-01 but is only partially represented by current CLI-local validation paths.
+- Docs/tests/examples evidence: `agent-cli/internal/config/models_test.go`, `agent-cli/internal/input/validate_test.go`, and provider model/params tests cover deterministic parts of the current metadata and validation behavior.
+- Remaining repair slice: reconcile current capability evidence for tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config; identify provider families that need credential-free capability fixtures or public declarations.
+- Reviewer commands: from the repository root, run `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)` to verify local unsupported-feature validation; run `(cd go-llm-gateway && go test ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` to verify provider-local deterministic behavior.
+
+### P4-API-05: Public Gateway, Provider, And Session Surface Alignment
+
+- Outcome: `uncertain`
+- Affected public packages: `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/inference`, `go-llm-gateway/pkg/models`, `go-llm-gateway/pkg/providers`, `go-agent-loop/pkg/messages`
+- Exported declarations: `gateway.InferenceRequest`, `gateway.InferenceResponse`, `gateway.DefaultGateway`, `gateway.DefaultSessionGateway`, `gateway.InteractionRequest`, `gateway.InteractionEvent`, `inference.GatewayInferencer`, `inference.SessionGatewayInferencer`, `models.Message`, `models.SessionConfig`, `providers.InferenceRequest`, `providers.InferenceResponse`
+- Observable contract issue: gateway-facing packages expose stateless, session, and interaction surfaces, but `pkg/models` still aliases loop-owned message contracts and the audit has not yet identified which package owns compatibility for each public declaration.
+- Implementation evidence: `go-llm-gateway/pkg/models/message.go` re-exports loop message types; `go-llm-gateway/pkg/gateway` exposes provider-neutral stateless, session, and PNIG interaction contracts; `go-llm-gateway/pkg/inference` adapts gateway contracts to loop interfaces.
+- Planning-only evidence: HC-02 and DOC-01 below describe the naming facade risk and missing compatibility-boundary explanation.
+- Docs/tests/examples evidence: `go-llm-gateway/pkg/inference/main_inferencer_test.go`, `go-llm-gateway/pkg/inference/session_inferencer_test.go`, and `go-llm-gateway/pkg/gateway/interaction_types_test.go` exercise the adapters and JSON/event shapes.
+- Remaining repair slice: declare whether `pkg/models` remains a compatibility alias layer or becomes gateway-owned vocabulary; align docs, package comments, and tests with that ownership decision.
+- Reviewer commands: from the repository root, run `(cd go-llm-gateway && go test ./pkg/inference ./pkg/gateway)` to verify gateway/inference contract alignment; run `go doc ./go-llm-gateway/pkg/models` to inspect exported alias documentation.
+
+### P4-API-06: Context, Cancellation, Timeout, And Retry Semantics
+
+- Outcome: `fail`
+- Affected public packages: `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/agentloop`, `go-agent-loop/pkg/participants`, `go-llm-gateway/pkg/testing`, `go-llm-gateway/pkg/inference`, `go-llm-gateway/pkg/gateway`, `agent-cli/internal/services`
+- Exported declarations: `messages.Inferencer`, `messages.SessionInferencer`, `messages.Session`, `agentloop.Execute`, `agentloop.ExecuteStreaming`, `gateway.Infer`, `gateway.InferStream`, `gateway.Interact`, `testing.NewRecordSessionInferencer`, `testing.NewReplaySessionInferencer`
+- Observable contract issue: context cancellation is threaded through many public calls, but retry/timeout semantics and cancellation ownership across replay, recording, session relay, provider streams, and CLI stop logic are still distributed across packages.
+- Implementation evidence: inferencer and session interfaces accept `context.Context`; session record/replay helpers now accept relay lifecycle context through inferencer wrappers; interaction gateway emits cancellation events for canceled contexts.
+- Planning-only evidence: CTX-01, CTX-02, LIFECYCLE-01, LIFECYCLE-02, and COMPAT-02 below identify cancellation and lifecycle semantics that remain under-specified.
+- Docs/tests/examples evidence: `go-llm-gateway/pkg/testing/session_replay_test.go`, `go-llm-gateway/pkg/testing/session_record_test.go`, `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`, and `go-agent-loop/test/functional/run_test.go` cover selected cancellation paths.
+- Remaining repair slice: document and test which layer owns cancellation, timeout, retry, and terminal event behavior for stateless inference, streaming inference, sessions, replay, and record mode.
+- Reviewer commands: from the repository root, run `(cd go-llm-gateway && go test ./pkg/testing ./pkg/gateway)` to verify replay/record and interaction cancellation behavior; run `(cd go-agent-loop && go test ./test/functional -run 'TestRun_ExitsOnContextCancellation|TestSession')` to verify loop cancellation/session behavior.
+
+### P4-API-07: Go API Hygiene, Documentation, And Compatibility Staging
+
+- Outcome: `fail`
+- Affected public packages: `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/agentloop`, `go-llm-gateway/pkg/models`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/providers`, `agent-cli/internal/agent`, `agent-cli/internal/services`
+- Exported declarations: `messages.Message`, `messages.ContentPart`, `models.Message`, `gateway.InteractionRequest`, `gateway.InteractionEvent`, `providers.Provider`, `providers.SessionProvider`, `agent.Executor`, `agent.ProviderFactory`
+- Observable contract issue: some exported declarations carry strong comments, but package-level compatibility intent is uneven, internal CLI exports can look more stable than intended, and alias surfaces can overstate independence from loop-owned message contracts.
+- Implementation evidence: `messages.Message` documents required conversion paths; `gateway.InteractionRequest` and related PNIG types have exported comments; provider and session interfaces are narrow.
+- Planning-only evidence: DOC-01, DOC-02, COMPAT-01, COMPAT-02, and COMPAT-03 below describe documentation and compatibility staging risks.
+- Docs/tests/examples evidence: package comments and tests exist in parts of `go-agent-loop/pkg/messages`, `go-llm-gateway/pkg/gateway`, and `go-llm-gateway/pkg/inference`; CLI internal seams are tested but not documented as downstream API contracts.
+- Remaining repair slice: add or revise package comments and compatibility notes for alias packages, public gateway/provider contracts, and internal CLI composition seams; keep changes tied to explicit exported declarations and observable behavior.
+- Reviewer commands: from the repository root, run `go doc ./go-agent-loop/pkg/messages`, `go doc ./go-llm-gateway/pkg/gateway`, `go doc ./go-llm-gateway/pkg/models`, and `go doc ./go-llm-gateway/pkg/providers` to inspect public documentation; run `make typecheck` to verify exported contracts compile.
+
+### P4-GATE-01: Phase 4 Closure Gate
+
+- Outcome: `open`
+- Affected public packages: all Phase 4 public surfaces named in P4-API-01 through P4-API-07
+- Exported declarations: all exported declarations named in P4-API-01 through P4-API-07
+- Observable contract issue: this documentation pass can identify and reconcile evidence, but it cannot close the implementation gate while API rows remain `fail` or `uncertain` and while dependent repair lanes have not consumed the reconciled findings.
+- Implementation evidence: none sufficient for closure in this audit-only lane.
+- Planning-only evidence: this reconciliation map and the detailed findings below identify the remaining repair slices.
+- Docs/tests/examples evidence: reviewer commands in each row provide deterministic evidence for current state, not final closure.
+- Remaining repair slice: complete typed errors/streams, provider capabilities/validation, dependency/result/context contracts, Go API hygiene, and final closure validation in the dedicated follow-up rows before closing P4-GATE-01.
+- Reviewer commands: from the repository root, run `make typecheck` plus the row-specific commands above to verify current evidence; do not mark P4-GATE-01 closed from this audit document alone.
+
 This document records the current contract gaps that Phase 2 needs to harden. It starts with the hidden-coupling and dependency-injection findings that block clean separation between the reusable libraries and the CLI composition layer.
 
 Use [`dependencies.md`](./dependencies.md) for the intended dependency direction. Use this audit for the places where the codebase still relies on convenience coupling or constructor ownership that is broader than the intended architecture.
