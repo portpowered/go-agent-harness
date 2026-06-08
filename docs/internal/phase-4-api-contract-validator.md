@@ -482,8 +482,156 @@ typed or documented taxonomy classes. These findings reinforce the earlier
 audit conclusion that both rows must remain open until implementation evidence,
 public guidance, and credential-free taxonomy tests exist.
 
+## Provider Capability and Validation Evidence
+
+This section validates whether the completed provider capability discovery and
+local request validation slice is present in public, consumer-usable
+`go-llm-gateway` APIs. The review distinguishes documentation tables from a
+runtime capability contract: README guidance can help consumers, but it does
+not let applications gate requests programmatically or inspect local validation
+failures without importing concrete provider internals.
+
+The current repository exposes provider names, stateless and session provider
+interfaces, request fields, provider-specific option structs, and a README
+provider surface map. It does not yet expose a public capability data model,
+supported/unsupported/unknown semantics, or gateway-level validation that
+rejects unsupported features before provider execution.
+
+### `P4-API-04` - Provider capability discovery
+
+- `outcome`: `fail`
+- `evidence`:
+  - `providers.Provider` exposes `Name`, `Infer`, and `InferStream`; it has no
+    `Capabilities` method or exported capability value that applications can
+    query through `go-llm-gateway/pkg/providers` or `go-llm-gateway/pkg/gateway`.
+  - `providers.SessionProvider` exposes `Name` and `ConnectSession`; it also
+    has no session capability discovery API. Session availability can only be
+    inferred from which concrete provider interface a caller imported or wired.
+  - `gateway.DefaultGateway` and `DefaultSessionGateway` only forward requests
+    to configured providers. They do not expose provider capabilities or
+    normalize stateless/session support into one public inspection surface.
+  - `go-llm-gateway/README.md` includes a provider surface map for stateless
+    `Infer`, stateless `InferStream`, and session `ConnectSession`, plus notes
+    for Anthropic thinking/cache controls, OpenAI-compatible base URLs and
+    sessions, Grok sessions, and fal media flows. This is static documentation,
+    not a public runtime API.
+  - Capability fields required by the story are missing as an inspectable
+    contract: tools, streaming, sessions, audio, image input, video output,
+    reasoning, prompt caching, and provider-specific config do not have shared
+    supported, unsupported, or unknown states.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/providers.Provider`
+  - `go-llm-gateway/pkg/providers.SessionProvider`
+  - `go-llm-gateway/pkg/providers.InferenceRequest`
+  - `go-llm-gateway/pkg/gateway.Gateway`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway`
+  - `go-llm-gateway/pkg/gateway.DefaultSessionGateway`
+  - `go-llm-gateway/pkg/models.SessionConfig`
+  - provider constructors in `go-llm-gateway/pkg/providers/anthropic`,
+    `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/gemini`,
+    `go-llm-gateway/pkg/providers/grok`, and
+    `go-llm-gateway/pkg/providers/fal`
+  - `go-llm-gateway/README.md`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Add a public provider capability contract in `go-llm-gateway/pkg/providers`
+    or `go-llm-gateway/pkg/gateway` that callers can query without importing
+    concrete provider internals.
+  - Model capability states explicitly as supported, unsupported, or unknown
+    for tools, streaming, sessions, audio, image input, video output,
+    reasoning, prompt caching, and provider-specific config.
+  - Wire concrete providers to report capabilities through that public
+    contract, including stateless-only, session-only, media-specific, and
+    provider-specific configuration support.
+  - Document the runtime capability API in public package comments or README
+    examples, including how it relates to provider package selection.
+  - Add credential-free tests that assert capability discovery through the
+    public API for representative providers without live credentials or network
+    access.
+- `reviewer commands`:
+  - `rg -n "type Provider interface|type SessionProvider interface|type Gateway interface|type InferenceRequest struct|type SessionConfig struct" go-llm-gateway/pkg/providers go-llm-gateway/pkg/gateway go-llm-gateway/pkg/models`
+  - `rg -n "Capability|Capabilities|capability|capabilities" go-llm-gateway/pkg/providers go-llm-gateway/pkg/gateway go-llm-gateway/README.md`
+  - `sed -n '172,198p' go-llm-gateway/README.md`
+
+### `P4-API-06` - Local unsupported-feature validation
+
+- `outcome`: `fail`
+- `evidence`:
+  - `gateway.DefaultGateway.Infer` and `DefaultGateway.InferStream` copy every
+    request field to `providers.InferenceRequest` and immediately call the
+    configured provider. There is no gateway-level validation step that checks
+    requested tools, streaming, sessions, audio, image input, video output,
+    reasoning, prompt caching, or raw provider-specific config against provider
+    capabilities before provider execution.
+  - `DefaultSessionGateway.ConnectSession` forwards `models.SessionConfig`
+    directly to the configured session provider. It does not locally validate
+    requested modalities, audio formats, tools, turn detection, model, or raw
+    config against an inspectable capability contract.
+  - Provider-specific behavior is inconsistent rather than a shared validation
+    contract. Anthropic maps thinking and cache-control options; OpenAI ignores
+    `Thinking`; fal returns string errors for missing or unsupported model
+    values and returns a closed stream for `InferStream` even though README
+    marks fal streaming as unsupported; OpenAI and Grok session providers fail
+    locally for missing websocket dialers, but those errors do not identify a
+    requested unsupported feature, capability state, or shared validation class.
+  - Tests prove request passthrough, provider-specific option mapping, fal
+    model errors, and session dialer preconditions, but they do not prove a
+    public local unsupported-feature validation contract before provider
+    execution.
+  - Public docs describe provider differences, but they do not document a
+    structured validation error carrying provider, requested feature or mode,
+    and capability state.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
+  - `go-llm-gateway/pkg/gateway.DefaultSessionGateway.ConnectSession`
+  - `go-llm-gateway/pkg/gateway.InferenceRequest`
+  - `go-llm-gateway/pkg/providers.InferenceRequest`
+  - `go-llm-gateway/pkg/models.SessionConfig`
+  - `go-llm-gateway/pkg/providers/anthropic.applyInferenceRequestOptions`
+  - `go-llm-gateway/pkg/providers/openai.applyInferenceRequestOptions`
+  - `go-llm-gateway/pkg/providers/fal.FalProvider.Infer`
+  - `go-llm-gateway/pkg/providers/fal.FalProvider.InferStream`
+  - `go-llm-gateway/pkg/providers/openai.OpenAIProvider.ConnectSession`
+  - `go-llm-gateway/pkg/providers/grok.GrokSessionProvider.ConnectSession`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Add local request validation before provider execution in the gateway or a
+    shared provider validation layer, using the public capability contract from
+    `P4-API-04`.
+  - Return structured or typed validation errors that identify provider name,
+    requested feature or mode, capability state, and whether the failure was
+    local validation rather than a live provider rejection.
+  - Cover stateless and session requests, including tools, streaming, sessions,
+    audio, image input, video output, reasoning, prompt caching, and
+    provider-specific config.
+  - Decide and document the fal streaming behavior: either reject
+    `InferStream` locally as unsupported with an inspectable validation error,
+    or document the closed-channel behavior as an intentional no-op contract
+    and expose it through capabilities.
+  - Add credential-free tests with fake providers or provider-local test
+    doubles proving unsupported features are rejected before HTTP, SDK,
+    websocket, or provider execution side effects.
+- `reviewer commands`:
+  - `sed -n '28,66p' go-llm-gateway/pkg/gateway/gateway.go`
+  - `sed -n '51,53p' go-llm-gateway/pkg/gateway/session_gateway.go`
+  - `go test ./go-llm-gateway/pkg/inference -run 'TestInferStream_PassthroughAllFields|TestSessionGatewayInferencer_ConnectSession'`
+  - `go test ./go-llm-gateway/pkg/providers/fal -run 'TestFalProvider_(Infer_InvalidRequests|InferStream_ReturnsClosedChannel)'`
+  - `go test ./go-llm-gateway/pkg/providers/openai -run 'TestConnectSession_(MissingAPIKeyFailsBeforeDial|MissingDialerFailsBeforeDial)|TestApplyInferenceRequestOptions_ThinkingIgnored'`
+  - `go test ./go-llm-gateway/pkg/providers/grok -run 'TestConnectSession_MissingDialerFailsBeforeDial'`
+
+## Provider Capability and Validation Closure Summary
+
+`P4-API-04` and `P4-API-06` both fail. The repository has useful static README
+guidance and provider-specific tests, but no public runtime capability API, no
+shared supported/unsupported/unknown capability semantics, and no structured
+local unsupported-feature validation contract before provider execution. The
+next implementation batch for these rows should introduce the public
+capability contract first, then use it as the source of truth for local
+stateless and session validation.
+
 ## Current Story Status
 
-Stories 001, 002, and 003 are complete. Later validator stories must fill in
-provider capability and validation evidence, reviewer-runnable command results,
-final row closure decisions, and the final next planner action.
+Stories 001, 002, 003, and 004 are complete. Later validator stories must fill
+in reviewer-runnable command results, final row closure decisions, and the
+final next planner action.
