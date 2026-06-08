@@ -364,6 +364,301 @@ contracts.
     assert the selected sync-vs-event validation boundary and cancellation
     terminal behavior for both live `Interact` and fixture `Replay`
 
+### Phase 4 Typed Error And Stream Semantics Findings
+
+These findings cover the `P4-API-02` and `P4-API-05` story slice. They name
+public error and stream surfaces where callers cannot yet branch on stable
+failure classes or rely on one provider-neutral terminal event contract.
+
+#### P4-ERR-01: provider status and transport errors are not represented by a shared typed error taxonomy
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/providers/openai/provider.go`,
+  `go-llm-gateway/pkg/providers/anthropic/provider.go`,
+  `go-llm-gateway/pkg/providers/gemini/provider.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`
+- Exported declaration: `Provider.Infer`, `Provider.InferStream`,
+  `Gateway.Infer`, `Gateway.InferStream`, `GatewayInferencer.Infer`,
+  `GatewayInferencer.InferStream`
+- Observable contract issue:
+  - OpenAI and fal HTTP errors are returned as formatted strings containing
+    status code and response body, while Anthropic and Gemini SDK errors are
+    passed through directly. Callers cannot use `errors.Is` or `errors.As` to
+    branch uniformly on auth, authorization, rate limit, invalid request,
+    unsupported model, provider status, transport failure, cancellation, or
+    deadline exceeded.
+  - Gateway and inference adapters forward those provider errors without adding
+    a shared error kind, so downstream loop callers inherit provider-specific
+    error text as the public contract.
+  - Current replay tests assert status-code substrings such as `400`, `401`,
+    `429`, and `500`, which demonstrates that caller-observable behavior is
+    string parsing rather than a stable typed error surface.
+- Mapped checklist rows: `P4-API-02`, `P4-API-03`, `P4-API-04`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add provider-neutral exported error kinds, for example
+    `ErrInvalidRequest`, `ErrAuthentication`, `ErrAuthorization`,
+    `ErrRateLimited`, `ErrUnsupportedModel`, `ErrProviderStatus`,
+    `ErrTransport`, and wrappers that expose provider name, status code,
+    request ID, retryability, and provider body/code fields
+  - require all provider implementations to wrap local validation, HTTP status,
+    SDK, transport, cancellation, and deadline failures so
+    `errors.Is`/`errors.As` works through `Gateway` and `GatewayInferencer`
+  - keep existing error messages as human-readable text where practical, but
+    move compatibility-sensitive assertions from substring checks to typed
+    error checks in later implementation lanes
+- Verification notes:
+  - later repair lanes should add provider-neutral gateway tests plus
+    provider-specific replay tests for 400, 401, 403, 404 or unsupported model,
+    429, 5xx, transport errors, `context.Canceled`, and
+    `context.DeadlineExceeded`
+
+#### P4-ERR-02: stream error events carry free-form messages instead of caller-actionable error classes
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`
+- File path: `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-agent-loop/pkg/participants/model_runner.go`,
+  `go-agent-loop/pkg/participants/tool_runner.go`,
+  `go-llm-gateway/pkg/providers/openai/stream.go`,
+  `go-llm-gateway/pkg/providers/openai/session.go`,
+  `go-llm-gateway/pkg/providers/anthropic/stream.go`,
+  `go-llm-gateway/pkg/providers/gemini/stream.go`,
+  `go-llm-gateway/pkg/providers/grok/session.go`
+- Exported declaration: `ErrorValue`,
+  `NewErrorValue`, `NewErrorValueWithDetails`,
+  `Inferencer.InferStream`, `Provider.InferStream`,
+  `messages.StreamMessage` with `StreamTypeError`
+- Observable contract issue:
+  - `ErrorValue` has optional provider detail fields, but most public stream
+    paths still emit `NewErrorValue(err.Error())`. This collapses transport
+    failures, provider status failures, invalid request failures, tool runtime
+    failures, parser failures, replay divergence, and cancellation into one
+    free-form string.
+  - OpenAI realtime provider errors preserve provider `error.type`, `code`,
+    `param`, and `event_id`, while HTTP streaming, Anthropic, Gemini, tool
+    runner, and model runner errors do not expose the same caller-actionable
+    fields or retryability rule.
+  - The public stream contract has no exported sentinel or structured kind that
+    maps an in-band `ERROR` event back to the returned Go error taxonomy.
+- Mapped checklist rows: `P4-API-02`, `P4-API-05`, `P4-API-07`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - extend `ErrorValue` additively with stable error kind and retryability
+    fields, or define an exported stream error payload type that can carry the
+    same provider-neutral classes as returned Go errors
+  - update stream adapters and participants to preserve typed classes when
+    converting returned errors into `StreamTypeError` events
+  - document how callers should compare returned errors and in-band stream
+    error events without parsing provider or tool error text
+- Verification notes:
+  - later repair lanes should add stream tests that assert error kind and
+    retryability for provider stream status errors, stream parser errors,
+    cancelled streams, tool executor failures, and OpenAI realtime provider
+    error events
+
+#### P4-ERR-03: replay mismatch and fixture validation errors are public but not integrated into the shared error model
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/testing`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_websocket_dialer.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`
+- Exported declaration: `SessionReplayer.Err`, `ReplayWebSocketDialer.Err`,
+  `InteractionFixtureValidationError`,
+  `ValidateInteractionFixture`, `DecodeInteractionFixture`
+- Observable contract issue:
+  - session replay divergence, replay incompletion, unexpected outbound event,
+    and unsupported payload failures are returned as formatted strings. There
+    is no exported replay mismatch type carrying sequence, direction, expected
+    event type, actual event type, and fixture path.
+  - interaction fixture validation does expose
+    `InteractionFixtureValidationError`, but the replay/session fixture
+    surfaces do not share that typed validation contract, so tests and
+    automation must parse unrelated strings to identify fixture authoring
+    failures versus runtime provider failures.
+  - replay mismatch can appear through `Send` returning `false`, `Close`
+    returning `nil`, `Err()`, or WebSocket write/read errors depending on the
+    replay wrapper, without a shared typed error that callers can inspect.
+- Mapped checklist rows: `P4-API-02`, `P4-API-03`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - introduce exported replay and fixture error types with `errors.As` support,
+    including sequence, path, expected direction/type, actual direction/type,
+    and mismatch kind
+  - thread those typed errors through `SessionReplayer.Err`,
+    `ReplayWebSocketDialer.Err`, replay `Send`/`Close` paths, fixture decoding,
+    and any in-band stream error events produced from replay failure
+  - keep current messages as `Error()` text, but make test assertions and
+    caller examples use typed mismatch fields
+- Verification notes:
+  - later repair lanes should add tests for unexpected outbound event, payload
+    mismatch, incomplete replay on close, unsupported payload type, and fixture
+    validation using `errors.As`
+
+#### P4-STREAM-01: streaming APIs do not expose one terminal error and final-event contract
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-loop/pkg/agentloop`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-agent-loop/pkg/messages/participant_messages.go`,
+  `go-agent-loop/pkg/agentloop/execute_result.go`
+- Exported declaration: `Provider.InferStream`, `Gateway.InferStream`,
+  `Inferencer.InferStream`, `AgenticLoop.ExecuteStreaming`,
+  `Stream.HasNext`, `Stream.Err`, `StreamingExecuteResult.Messages`
+- Observable contract issue:
+  - `InferStream(ctx, req)` returns only a receive channel after initial setup.
+    Provider failures that occur after the channel is returned must be encoded
+    as events or disappear behind channel close; there is no stream handle with
+    a final error result.
+  - `Stream.Err()` exists at the loop layer, but provider stream channels and
+    gateway streams do not expose a corresponding final error. As a result,
+    callers cannot apply one rule across direct provider use, gateway use, and
+    loop streaming use.
+  - The exported contract does not state whether a stream error is followed by
+    `MESSAGE.END`, whether `USAGE.INFO` may appear after `MESSAGE.END`, whether
+    cancellation emits an error event or only closes the channel, or whether
+    `Messages()` includes partial messages after a stream failure.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define a provider-neutral stream lifecycle: setup error, event sequence,
+    terminal error event, final message/end event, usage event placement,
+    channel close, and final error accessor
+  - add an additive stream result handle or terminal status event to gateway and
+    provider APIs, then have `AgenticLoop.ExecuteStreaming` preserve the same
+    final status in `Stream.Err()` and `Messages()`
+  - document whether partial messages are caller-visible on late provider
+    failure and how callers should drain or close streams
+- Verification notes:
+  - later repair lanes should add fake-provider tests proving late stream
+    failure, cancellation, clean completion, usage placement, and partial
+    message preservation through provider, gateway, inference bridge, and
+    `AgenticLoop.ExecuteStreaming`
+
+#### P4-STREAM-02: provider stream adapters disagree on event ordering around errors, message end, usage, and empty streams
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`
+- File path: `go-llm-gateway/pkg/providers/openai/stream.go`,
+  `go-llm-gateway/pkg/providers/anthropic/stream.go`,
+  `go-llm-gateway/pkg/providers/gemini/stream.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`
+- Exported declaration: `OpenAIProvider.InferStream`,
+  `AnthropicProvider.InferStream`, `GeminiProvider.InferStream`,
+  `Provider.InferStream` as implemented by fal
+- Observable contract issue:
+  - OpenAI emits `MESSAGE.END` before scanner errors discovered after the SSE
+    loop, while Anthropic and Gemini emit `ERROR` before `MESSAGE.END` for
+    stream iterator errors. A caller cannot rely on a single rule for whether
+    `ERROR` is terminal or whether `MESSAGE.END` means success.
+  - Usage placement is provider-specific: OpenAI and Anthropic can emit
+    `USAGE.INFO` after `MESSAGE.END`, Gemini emits it after `MESSAGE.END` when
+    usage is present, and fal returns an immediately closed stream with no
+    start/end/error events because it has no streaming implementation.
+  - Empty or setup-only streams are not classified: Gemini forces
+    `MESSAGE.START`/`MESSAGE.END` even when no content arrives, fal returns a
+    closed channel with no events, and OpenAI may emit start/end around scanner
+    EOF. These are all public channel contracts.
+- Mapped checklist rows: `P4-API-02`, `P4-API-04`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - standardize stream event ordering for all providers, including
+    `MESSAGE.START`, content start/delta/end pairs, tool-call pairs,
+    `StreamTypeError`, `MESSAGE.END`, `USAGE.INFO`, and channel close
+  - define whether unsupported streaming should fail synchronously with
+    `ErrUnsupportedCapability` or return a typed terminal stream error instead
+    of a clean empty stream
+  - update provider adapter tests to assert the same final event contract across
+    OpenAI, Anthropic, Gemini, and fal
+- Verification notes:
+  - later repair lanes should add table-driven provider stream tests for clean
+    text, tool call, parser error, empty stream, unsupported streaming, and
+    usage-bearing completion
+
+#### P4-STREAM-03: session stream close and cancellation events lack a shared final status
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`,
+  `github.com/portpowered/go-llm-gateway/pkg/testing`
+- File path: `go-agent-loop/pkg/messages/session.go`,
+  `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-agent-loop/pkg/participants/model_runner.go`,
+  `go-llm-gateway/pkg/providers/openai/session.go`,
+  `go-llm-gateway/pkg/providers/grok/session.go`,
+  `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_record.go`
+- Exported declaration: `Session`, `Session.Done`, `Session.Close`,
+  `SessionCloseValue`, `ErrorValue`, `SessionReplayer.Err`,
+  `RecordingSessionInferencer.ConnectSession`, `ReplaySessionInferencer.ConnectSession`
+- Observable contract issue:
+  - session close, provider close, caller close, cancellation, transport error,
+    provider `error` event, replay divergence, and replay completion are
+    observable through different combinations of `SESSION.CLOSE`,
+    `StreamTypeError`, `Done()`, `Close() error`, and wrapper-specific `Err()`.
+  - `ModelRunner` synthesizes `SESSION.CLOSE` with reason `provider_closed`
+    when `session.Done()` closes without an explicit close event, but the
+    shared `Session` contract does not require providers, recorders, or
+    replayers to expose a final status reason.
+  - `SessionCloseValue.Reason` is a string, not a typed enum or error class, so
+    callers cannot distinguish normal provider close, caller cancellation,
+    timeout, replay mismatch, or transport shutdown without provider-specific
+    string conventions.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define exported session terminal status kinds and map them to
+    `SESSION.CLOSE`, `ERROR`, `Done()`, `Close()`, and optional `Err()` accessors
+  - update OpenAI, Grok, recorder, and replayer sessions to preserve the same
+    terminal reason for provider close, caller close, cancellation, timeout,
+    transport failure, provider error, replay divergence, and replay completion
+  - keep existing reason strings as compatibility text while adding typed
+    status fields or accessors for new callers
+- Verification notes:
+  - later repair lanes should add shared session contract tests plus provider
+    session tests for provider close event, caller close, context cancellation,
+    transport read/write failure, provider error event, replay divergence, and
+    replay completion
+
+#### Typed Error And Stream Repair Slice Order
+
+1. Define provider-neutral returned Go error kinds first so direct `Infer` and
+   `InferStream` setup failures have a stable taxonomy before stream events
+   mirror it.
+2. Extend `ErrorValue` or add a stream error payload that carries the same
+   taxonomy, then update provider stream adapters and participants to preserve
+   typed classes in-band.
+3. Standardize provider stream terminal ordering and unsupported-streaming
+   behavior before changing loop-level `Stream.Err()` semantics.
+4. Add replay and fixture mismatch error types so record/replay evidence can
+   test stream and session failures without string parsing.
+5. Define session terminal status kinds and align live, recording, and replay
+   sessions after the shared returned-error and stream-error taxonomy exists.
+
 #### Context/Result Repair Slice Order
 
 1. Repair `TypedBuffer` and `Session.Send` result ambiguity first because the
@@ -383,6 +678,7 @@ Reviewer commands for this audit-only story:
 
 ```bash
 make typecheck
+make test
 ```
 
 No reproducibility tooling was added for this slice; later implementation lanes
