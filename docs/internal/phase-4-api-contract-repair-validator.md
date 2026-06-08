@@ -458,6 +458,155 @@ marks `P4-API-02`, `P4-API-03`, and `P4-API-05` as failed rows that must remain
 open, cites affected public declarations and deterministic commands, and scopes
 future repair work without implementing the repair inside this validator lane.
 
+## Provider Capabilities And Local Validation Contract Validation
+
+### Evidence Inputs
+
+- `go-llm-gateway/pkg/providers/provider.go`
+- `go-llm-gateway/pkg/providers/session_provider.go`
+- `go-llm-gateway/pkg/gateway/gateway.go`
+- `go-llm-gateway/pkg/gateway/session_gateway.go`
+- `go-llm-gateway/pkg/gateway/interaction_types.go`
+- `go-llm-gateway/pkg/gateway/interaction_gateway.go`
+- `go-llm-gateway/pkg/models/session.go`
+- concrete provider implementations under `go-llm-gateway/pkg/providers/*`
+- `go-llm-gateway/README.md`
+- `agent-cli/docs/session-record-replay.md`
+- `docs/architecture/contract-gap-audit.md`
+- deterministic tests under `go-llm-gateway/pkg/gateway`,
+  `go-llm-gateway/pkg/providers/*`, and `agent-cli/test/integration`
+
+### `P4-API-04` - Provider Capability Discovery
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: `go-llm-gateway/README.md` has a provider surface map for
+  stateless `Infer`, stateless `InferStream`, and session `ConnectSession`.
+  That table is useful evidence, but it is narrower than the checklist row.
+  The exported `providers.Provider` and `providers.SessionProvider`
+  interfaces expose behavior methods and `Name()`, not a capability discovery
+  method or data structure. Public request types accept tools, text, image,
+  audio, video, reasoning (`ThinkingConfig`), prompt cache control
+  (`CacheControlConfig`), raw provider `Config`, and session modalities/audio
+  settings, but there is no exported supported/unsupported/unknown vocabulary
+  that lets callers ask whether a configured provider supports each requested
+  feature before issuing a request.
+- `affected files / declarations`: `go-llm-gateway/pkg/providers.Provider`;
+  `go-llm-gateway/pkg/providers.SessionProvider`;
+  `go-llm-gateway/pkg/providers.InferenceRequest`;
+  `go-llm-gateway/pkg/providers.ThinkingConfig`;
+  `go-llm-gateway/pkg/providers.CacheControlConfig`;
+  `go-llm-gateway/pkg/gateway.InferenceRequest`;
+  `go-llm-gateway/pkg/gateway.InteractionRequest`;
+  `go-llm-gateway/pkg/gateway.InteractionContentType`;
+  `go-llm-gateway/pkg/models.SessionConfig`;
+  concrete provider packages.
+- `docs, examples, tests, audit, and API alignment`: not aligned. Docs disclose
+  a coarse provider surface and examples show how to call a provider, but docs,
+  exported APIs, audit rows, and deterministic tests do not define one public
+  capability matrix for tools, streaming, sessions, audio, image input, video
+  output, reasoning, prompt caching, and provider-specific config. Current
+  provider comments also describe some provider-specific fields as ignored by
+  other providers, which is behavior documentation rather than a discoverable
+  capability contract.
+- `reviewer commands`: `rg -n "type Provider interface|type
+  SessionProvider interface|ThinkingConfig|CacheControlConfig|InteractionContent(Image|Audio|Video)|SessionConfig|Provider Surface Map"`
+  `go-llm-gateway`; `rg -n "capabil|unsupported|unknown|prompt cach|reasoning"`
+  `docs go-llm-gateway agent-cli`; `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: introduce a public provider
+  capability contract with an explicit tri-state (`supported`, `unsupported`,
+  `unknown`) for tools, stateless streaming, sessions, audio input/audio
+  output, image input, video output, reasoning, prompt caching, and raw
+  provider config. Expose it through the provider/gateway surface without
+  importing concrete provider packages, document the matrix, and add
+  deterministic fake-provider and concrete-provider tests proving the published
+  capability values.
+
+### `P4-API-06` - Local Unsupported-Feature Validation
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: some local validation exists, but it is not the
+  unsupported-feature validation required by the checklist. `DefaultGateway`
+  forwards `InferenceRequest` directly to the provider, and
+  `DefaultSessionGateway.ConnectSession` forwards `SessionConfig` directly to
+  the session provider. `DefaultGateway.Interact` validates tool-result
+  consistency before provider execution and emits `tool_result_validation_error`
+  without calling the provider, which is good local validation evidence for one
+  interaction-continuation rule. It does not validate unsupported tools,
+  streaming, sessions, audio, image, video, reasoning, prompt caching, or
+  provider-specific config against provider capabilities. Concrete providers
+  still handle unsupported or model-specific cases independently; for example
+  the fal provider returns a formatted unsupported-model error, and its
+  `InferStream` returns an immediately closed channel for sync-only media flows
+  instead of an inspectable unsupported streaming error.
+- `affected files / declarations`: `go-llm-gateway/pkg/gateway.DefaultGateway`;
+  `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`;
+  `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`;
+  `go-llm-gateway/pkg/gateway.DefaultGateway.Interact`;
+  `go-llm-gateway/pkg/gateway.DefaultSessionGateway.ConnectSession`;
+  `go-llm-gateway/pkg/gateway.InteractionError`;
+  `go-llm-gateway/pkg/providers.Provider`;
+  `go-llm-gateway/pkg/providers.SessionProvider`;
+  concrete provider packages including `pkg/providers/fal`,
+  `pkg/providers/anthropic`, `pkg/providers/gemini`, `pkg/providers/openai`,
+  and `pkg/providers/grok`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. Tests prove
+  local tool-result validation prevents provider calls, but no deterministic
+  public test proves unsupported stateless or session request features fail
+  locally with an inspectable error identifying feature, provider, requested
+  mode, and capability state. Docs describe provider differences but do not
+  promise a local unsupported-feature error surface. The audit also lacks an
+  explicit provider capability or unsupported-feature row.
+- `reviewer commands`: `rg -n "validateInteractionToolResults|provider.calls
+  != 0|tool_result_validation_error|InferStream|unsupported model|ConnectSession"`
+  `go-llm-gateway/pkg agent-cli`; `rg -n "unsupported|capabil|provider
+  differences|Provider Surface Map"` `docs go-llm-gateway agent-cli`; `make
+  typecheck`; `make test`.
+- `exact repair work for non-pass rows`: add gateway-level unsupported-feature
+  validation that runs before stateless and session provider execution. The
+  error must be typed and inspectable, identify the feature, provider,
+  requested mode, and capability state, preserve cancellation semantics, and
+  include deterministic tests proving providers are not called for unsupported
+  tools, streaming, sessions, audio, image, video, reasoning, prompt caching,
+  and provider-specific config requests.
+
+### `P4-GATE-01` - Capability And Validation Gate Impact
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: the current public docs, exported provider/gateway APIs,
+  audit rows, and deterministic tests do not describe the same capability and
+  unsupported-feature validation contract. The README's coarse provider surface
+  table is public evidence of provider differences, but no public API exposes
+  those differences as caller-queryable supported, unsupported, or unknown
+  states, and local validation is proven only for interaction tool-result
+  consistency.
+- `affected files / declarations`: all declarations cited by `P4-API-04` and
+  `P4-API-06`; `go-llm-gateway/README.md`;
+  `docs/architecture/contract-gap-audit.md`;
+  `docs/internal/checklist.md`.
+- `docs, examples, tests, audit, and API alignment`: not aligned for this
+  capability/validation slice. The row cannot close from CI success or README
+  prose until docs, public APIs, audit rows, examples where present, and
+  deterministic tests converge on the same contract.
+- `reviewer commands`: `rg -n "Provider Surface Map|type Provider
+  interface|type SessionProvider interface|validateInteractionToolResults|tool_result_validation_error|unsupported model"`
+  `go-llm-gateway docs agent-cli`; `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: complete the capability discovery and
+  local unsupported-feature validation repair as one implementation lane, then
+  update docs and audit rows so `P4-API-04`, `P4-API-06`, and the relevant
+  `P4-GATE-01` slice cite the same public contract and deterministic proof.
+
+## Story 004 Closure
+
+The provider capability and local request validation convergence story passes
+for validator purposes: the report verifies the current public API, docs, audit
+coverage, and deterministic tests for `P4-API-04` and `P4-API-06`; marks both
+rows and their `P4-GATE-01` impact as failed rows that must remain open; cites
+affected public declarations and reviewer commands; and scopes exact future
+repair work without implementing the repair inside this validator lane.
+
 ## Story 002 Closure
 
 The audit and validator-015 reconciliation story passes for validator purposes:
@@ -468,11 +617,11 @@ checklist row may close from story 002 alone.
 
 ## Current Story Status
 
-Stories 001, 002, and 003 are complete. The report now establishes the Phase 4
-validator subject, checklist row coverage, evidence rules, required finding
-shape, audit/validator-015 reconciliation findings, and typed-error/stream
-contract findings. Capability, validation, dependency, result, context,
-lifecycle, and final planner decision findings remain deferred to later
-validator stories so each pass can compare the current public API, docs,
-examples where present, audit rows, tests, and deterministic command evidence at
-the correct depth.
+Stories 001, 002, 003, and 004 are complete. The report now establishes the
+Phase 4 validator subject, checklist row coverage, evidence rules, required
+finding shape, audit/validator-015 reconciliation findings, typed-error/stream
+contract findings, and provider capability/local unsupported-feature validation
+findings. Dependency, result, context, lifecycle, and final planner decision
+findings remain deferred to later validator stories so each pass can compare
+the current public API, docs, examples where present, audit rows, tests, and
+deterministic command evidence at the correct depth.
