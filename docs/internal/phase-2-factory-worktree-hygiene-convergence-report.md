@@ -46,15 +46,17 @@ through `CTRL-FAC-03`.
 
 | group | subject | outcome | evidence | affectedFilesOrSurfaces | requiredFollowUp |
 | --- | --- | --- | --- | --- | --- |
-| `durable-queue-recovery` | Stranded `plan`, `task`, or `thoughts` token inspection after the repair-focused setup validation | `uncertain` | This iteration did not yet inspect the live durable queue with `you work list` and `you session list`, so the report cannot conclude whether any work items remain stranded from the pre-repair failure mode. The factory contract in `factory/docs/overview.md` already separates the repaired setup behavior from any still-manual queue recovery, but reviewer-verifiable queue state evidence has not been recorded on this branch yet. | durable queue state, `you work list`, `you session list`, `factory/docs/overview.md` | Complete the queue-focused validator pass in story `phase-2-factory-worktree-hygiene-validator-003` and record exact `you work move` actions only if stranded work is actually present. |
+| `durable-queue-recovery` | Stranded `plan`, `task`, or `thoughts` token inspection after the repair-focused setup validation | `pass` | Direct queue inspection now shows no stranded `plan`, `task`, or `thoughts` items attributable to the repaired worktree hygiene failure mode. `you session list` identifies the live project session `e7dc6d48-caed-4de0-9868-fa66ee4823ea` for `/Users/abdifamily/work/go-agent-harness`, and `you work list --session e7dc6d48-caed-4de0-9868-fa66ee4823ea` shows the repaired work item `phase-2-factory-worktree-hygiene-repair` as `idea/complete`, `task/complete`, and `plan/complete`. The only non-terminal worktree-hygiene entries are the current validator lane itself: `batch-phase-2-factory-worktree-hygiene-repair-batch-009-phase-2-factory-worktree-hygiene-validator` in `idea/to-complete`, `batch-request-022e46e44397f62845e5bd173c56b30a-phase-2-factory-worktree-hygiene-validator` in `task/init`, and `batch-phase-2-factory-worktree-hygiene-repair-batch-009-ideafy-loopback-phase-2-factory-worktree-hygiene-repair-batch-009` in `thoughts/init` with explicit dependency edges requiring both the repair idea and this validator idea to complete. Those states are active workflow dependencies, not queue damage. No `phase-2-factory-worktree-hygiene-*` work item appears in `failed`, and no exact manual recovery move is needed for this slice. An unrelated failed `work-plan-3 phase-2-constructor-ownership-boundaries` item exists in the same session, but it is outside the repaired worktree-hygiene names and therefore not evidence of remaining queue fallout from this failure mode. | durable queue state for session `e7dc6d48-caed-4de0-9868-fa66ee4823ea`, `you session list`, `you work list --session e7dc6d48-caed-4de0-9868-fa66ee4823ea`, `factory/docs/overview.md` | No manual `you work move` recovery is required for `phase-2-factory-worktree-hygiene-repair` based on the observed queue state. |
 
 ## Current Overall Convergence Verdict
 
-Current overall verdict for `phase-2-factory-worktree-hygiene-repair`:
-`uncertain`.
+Current overall verdict for `phase-2-factory-worktree-hygiene-repair` remains
+temporarily `uncertain` in this in-progress report.
 
 The repaired `setup-workspace` behavior and the checklist controls
 `CTRL-FAC-01` through `CTRL-FAC-03` now pass on observable repository evidence.
-The overall convergence verdict remains `uncertain` only because durable-queue
-inspection and any exact manual recovery mapping are intentionally deferred to
-the next validator story.
+Durable-queue inspection now also passes and records that no manual
+`you work move` recovery remains for the repaired slice. The remaining work on
+this branch is the publication step in story
+`phase-2-factory-worktree-hygiene-validator-004`, which will collapse these
+completed findings into the final reviewer-facing verdict.
