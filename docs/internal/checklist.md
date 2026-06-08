@@ -70,6 +70,19 @@ directly when it records `pass`, `fail`, or `uncertain` evidence.
 | `P2-COB-04` | Record/replay ownership consistency | Record and replay behavior remain aligned with the explicit constructor/runtime ownership seams and do not require hidden live dependency creation or provider-local runtime assembly in either stateless or session mode. | `agent-cli/internal/agent/provider_runtime.go`, `agent-cli/internal/agent/provider_runtime_test.go`, `agent-cli/test/integration/provider_runtime_integration_test.go`, `agent-cli/internal/services/session.go`, `agent-cli/test/integration/session_command_test.go`, `go-llm-gateway/pkg/testing/session_record.go`, `go-llm-gateway/pkg/testing/session_replay.go`, `go-llm-gateway/pkg/testing/session_replay_test.go`, `go-llm-gateway/pkg/testing/session_websocket_dialer_test.go`, `go-llm-gateway/pkg/providers/openai/provider.go`, root `Makefile` quality targets |
 | `P2-COB-05` | Reviewer guidance and repair visibility | The convergence report records stale guidance, missing planning inputs, and every repair required before the next Phase 2 API-hardening slice may begin. | `docs/internal/phase-2-constructor-ownership-validator.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `tasks/todo/phase-2-constructor-ownership-boundaries.md` |
 
+## Phase 3 - Library Independence Proof
+
+This checklist is the authoritative Phase 3 inventory for focused library
+independence proof. Reviewers should cite these item IDs directly when they
+validate that consumer import/use behavior preserves the shared contract
+boundary described in `docs/architecture/dependencies.md`.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-03` | Loop consumer independence | A downstream-style loop consumer can import and exercise `go-agent-loop` with a local inferencer implementation and no dependency on `go-llm-gateway/pkg/providers/...`. | `go-agent-loop/test/functional/consumer_independence_test.go`, `docs/internal/phase-3-library-independence-proof.md` |
+| `P3-CORE-04` | Gateway consumer independence | A downstream-style gateway consumer can import and exercise `go-llm-gateway` gateway/provider entrypoints while allowing only `go-agent-loop/pkg/messages` from loop-owned packages. | `go-llm-gateway/test/functional/gateway_independence_test.go`, `docs/internal/phase-3-library-independence-proof.md` |
+| `P3-GATE-01` | Independence convergence review | The reviewer-facing evidence names exact deterministic commands, expected dependency-boundary outcomes, allowed shared contract package, forbidden dependency classes, and validation results for the Phase 3 library independence proof. | `docs/internal/phase-3-library-independence-proof.md`, root `Makefile` quality targets |
+
 ## Phase 2 - Factory Worktree Hygiene Repair
 
 This checklist is the authoritative Phase 2 inventory for the factory
