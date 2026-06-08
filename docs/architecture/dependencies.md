@@ -63,6 +63,11 @@ Reviewer rule of thumb:
 - A new import from `agent-cli` into `go-llm-gateway` is expected when the CLI is choosing or configuring concrete provider adapters.
 - Those imports are not symmetric. New imports in the reverse direction, from `go-agent-loop` into `go-llm-gateway` or `agent-cli`, or from `go-llm-gateway` into `agent-cli`, would violate the intended layering.
 
+Reviewer-verifiable proof:
+
+- Run `cd go-agent-loop && go test ./test/functional -run TestDependencyDirection_GoAgentLoopDoesNotDependOnGateway`.
+- That test shells out to `go list -deps ./...` from the `go-agent-loop` module root and fails if any compiled loop package depends on `github.com/portpowered/go-llm-gateway`.
+
 ## Current Contract Surfaces
 
 `go-agent-loop` owns the core runtime-facing interfaces and shared types:

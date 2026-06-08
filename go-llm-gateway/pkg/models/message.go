@@ -2,10 +2,11 @@ package models
 
 import "github.com/portpowered/go-agent-loop/pkg/messages"
 
-// Compatibility aliases for the loop-owned shared message contract.
-// Keep pkg/models as the stable gateway import path, but treat
-// go-agent-loop/pkg/messages as the authoritative owner for these shapes.
-
+// Loop-owned shared-contract aliases.
+//
+// These names exist as a compatibility facade for gateway consumers that
+// already import pkg/models. The authoritative message and tool contract lives
+// in go-agent-loop/pkg/messages.
 type Role = messages.Role
 type ToolCall = messages.ToolCall
 type ContentPart = messages.ContentPart
@@ -19,7 +20,7 @@ type ToolDefinition = messages.ToolDefinition
 type ToolParameter = messages.ToolParameter
 type TokenUsage = messages.TokenUsage
 
-// Role constants re-export the loop-owned role vocabulary for convenience.
+// Role constants re-exported for compatibility and convenience.
 const (
 	RoleUser      = messages.RoleUser
 	RoleAssistant = messages.RoleAssistant
@@ -27,5 +28,5 @@ const (
 	RoleSystem    = messages.RoleSystem
 )
 
-// NewTextMessage forwards to the loop-owned shared message constructor.
+// NewTextMessage re-exports the loop-owned helper for building a text message.
 var NewTextMessage = messages.NewTextMessage
