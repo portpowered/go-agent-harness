@@ -79,7 +79,7 @@ func TestConsumerCanUseLoopWithLocalInferencer(t *testing.T) {
 func assertNoGatewayProviderDeps(t *testing.T) {
 	t.Helper()
 
-	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
+	out, err := exec.Command("go", "list", "-test", "-deps", ".").CombinedOutput()
 	if err != nil {
 		t.Fatalf("list proof package dependencies: %v\n%s", err, out)
 	}
