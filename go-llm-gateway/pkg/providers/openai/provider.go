@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
@@ -39,6 +40,7 @@ type OpenAIProvider struct {
 
 var _ providers.Provider = (*OpenAIProvider)(nil)
 var _ providers.SessionProvider = (*OpenAIProvider)(nil)
+var _ providers.CapabilityReporter = (*OpenAIProvider)(nil)
 
 // New creates a new OpenAI-compatible provider.
 func New(opts ...Option) *OpenAIProvider {
@@ -54,6 +56,32 @@ func New(opts ...Option) *OpenAIProvider {
 }
 
 func (p *OpenAIProvider) Name() string { return "openai" }
+
+// Capabilities reports the features this wrapper can prove from its local
+// request/response translation behavior without contacting OpenAI.
+func (p *OpenAIProvider) Capabilities() capabilities.ProviderCapabilities {
+	return capabilities.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  capabilities.Supported("chat completions requests serialize function tools"),
+			Streaming:              capabilities.Supported("chat completions streaming is implemented with SSE translation"),
+			ImageInput:             capabilities.Supported("image parts are serialized as image_url content"),
+			AudioInput:             capabilities.Supported("audio parts with bytes are serialized as input_audio content"),
+			AudioOutput:            capabilities.Supported("chat responses and stream deltas decode audio output when returned"),
+			VideoOutput:            capabilities.Unsupported("this wrapper does not normalize provider video output"),
+			Reasoning:              capabilities.Unsupported("InferenceRequest Thinking is not sent by this wrapper"),
+			PromptCaching:          capabilities.Unsupported("InferenceRequest CacheControl is not sent by this wrapper"),
+			ProviderSpecificConfig: capabilities.Unsupported("InferenceRequest Config is not merged by this wrapper"),
+		},
+		Session: capabilities.SessionCapabilities{
+			Sessions:               capabilities.Supported("OpenAI realtime websocket sessions are implemented"),
+			Tools:                  capabilities.Supported("realtime session tools are serialized as function tools"),
+			AudioInput:             capabilities.Supported("client audio buffer events and input audio formats are implemented"),
+			AudioOutput:            capabilities.Supported("realtime output audio events are normalized"),
+			ProviderSpecificConfig: capabilities.Unsupported("SessionConfig Config is not merged by this wrapper"),
+		},
+	}
+}
 
 func (p *OpenAIProvider) httpClientOrDefault() *http.Client {
 	if p.httpClient != nil {
