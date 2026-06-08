@@ -9,8 +9,10 @@ import (
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
-// DefaultSessionGateway routes session requests to a configured SessionProvider.
-// It is the sessional counterpart to DefaultGateway.
+// DefaultSessionGateway routes gateway-owned session configuration to a
+// configured SessionProvider. It is the gateway-side bridge that
+// SessionGatewayInferencer uses before control crosses into the loop-owned
+// messages.Session contract.
 type DefaultSessionGateway struct {
 	provider providers.SessionProvider
 }
@@ -38,6 +40,13 @@ func NewSessionGateway(opts ...SessionGatewayOption) (*DefaultSessionGateway, er
 	return g, nil
 }
 
+// Capabilities reports the configured session provider's public capability
+// contract. It is local metadata discovery only; providers that do not
+// implement providers.CapabilityReporter return the documented unknown fallback.
+func (g *DefaultSessionGateway) Capabilities() ProviderCapabilities {
+	return providerCapabilities(g.provider)
+}
+
 // sessionInferencer is the gateway-layer interface for establishing sessions
 // with a given configuration. It is an internal detail — external callers use
 // messages.SessionInferencer (declared in go-agent-loop) via SessionGatewayInferencer.
@@ -48,9 +57,10 @@ type sessionInferencer interface {
 // Compile-time check that DefaultSessionGateway satisfies sessionInferencer.
 var _ sessionInferencer = (*DefaultSessionGateway)(nil)
 
-// ConnectSession establishes a session via the configured provider.
+// ConnectSession establishes a session via the configured provider and returns
+// the loop-owned messages.Session boundary contract.
 func (g *DefaultSessionGateway) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
-	if err := validateSessionRequest(g.provider, config); err != nil {
+	if err := validateSessionConfig(g.Capabilities(), config); err != nil {
 		return nil, err
 	}
 	return g.provider.ConnectSession(ctx, config)

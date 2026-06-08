@@ -9,7 +9,9 @@ This guide is the package-local contributor guide for `libraries/go-llm-gateway`
 ## Local Architecture
 
 - `pkg/gateway/` owns `Gateway`, `SessionGateway`, default implementations, and top-level request routing.
-- `pkg/models/` owns shared model and session types, including re-exports from `go-agent-loop`.
+- `pkg/models/` exposes gateway-owned session configuration and realtime event
+  types, plus compatibility aliases for loop-owned message, tool, and token
+  types from `go-agent-loop/pkg/messages`.
 - `pkg/inference/` adapts gateway implementations into `go-agent-loop` inferencers.
 - `pkg/providers/` owns provider interfaces and implementations for Anthropic, OpenAI, Gemini, Grok, and fal.ai.
 - `pkg/testing/` contains deterministic HTTP record/replay utilities for provider tests.
@@ -36,33 +38,47 @@ make deps-tidy
 4. If a change touches `go-agent-loop` shared message contracts, also run `go-agent-loop` and `agent-cli` checks.
 5. Update `pkg/testing/README.md` when record/replay capture format, replay matching, or fixture workflow changes.
 
-## Capability Contract
+## Provider Capability Contract
 
-Provider families that can make static local claims should implement
-`providers.CapabilityReporter` and return `providers.ProviderCapabilities`.
+Public capability types live in `pkg/capabilities` and are re-exported from
+`pkg/gateway` and `pkg/providers` for callers already using those package
+surfaces. Provider families that can make static local claims should implement
+`providers.CapabilityReporter` and return `capabilities.ProviderCapabilities`.
 Every public stateless or session feature in that report must be marked as one
 of:
 
 - `supported`: the wrapper maps the feature locally for the provider family.
 - `unsupported`: the wrapper deterministically does not map the feature; include
-  a rationale that is useful in `providers.UnsupportedFeatureError`.
+  detail that is useful in `capabilities.UnsupportedFeatureError`.
 - `unknown`: support depends on provider model, endpoint, automatic provider
   behavior, or another runtime fact that the wrapper cannot prove statically;
-  include that rationale and let the request reach provider runtime.
+  include that detail and let the request reach provider runtime.
 
 Current capability semantics:
 
 | Provider family | Supported | Unsupported | Unknown |
 | --- | --- | --- | --- |
-| Anthropic | Stateless inference, streaming, tools, image input, reasoning, prompt caching | Native audio input, video input/output, raw provider config, sessions | None currently reported |
-| OpenAI-compatible | Stateless inference, streaming, tools, image input, audio input; OpenAI Realtime sessions, tools, text/audio modalities, known realtime audio formats, turn detection | Stateless video output, reasoning options, raw provider config; raw realtime session config | Video input for compatible transports; prompt caching behavior |
-| Gemini | Stateless inference, streaming, tools, image input, audio input | Video input/output, reasoning options, prompt caching, raw provider config, sessions | None currently reported |
-| Grok | Realtime sessions, tools, text/audio modalities, known realtime audio formats, turn detection | Stateless inference/streaming and raw realtime session config | None currently reported |
-| fal.ai | Sync stateless inference, image input, audio input, video output, raw provider config | Streaming, tools, video input, reasoning options, prompt caching, sessions | None currently reported |
+| Anthropic | Stateless tools, streaming, image input, reasoning, prompt caching | Native audio input/output, video output, raw provider config, sessions | None currently reported |
+| OpenAI-compatible | Stateless tools, streaming, image input, audio input/output; OpenAI Realtime sessions, tools, and audio input/output | Stateless video output, reasoning options, prompt caching, raw provider config, raw realtime session config | None currently reported |
+| Gemini | Stateless tools, streaming, image input, audio input | Audio output, video output, reasoning options, prompt caching, raw provider config, sessions | None currently reported |
+| Grok | Realtime sessions, tools, and audio input/output | Stateless features and raw realtime session config | None currently reported |
+| fal.ai | Sync stateless image input, audio input/output, video output, raw provider config | Streaming, tools, reasoning options, prompt caching, sessions | None currently reported |
 
-Gateway validation rejects only deterministic `unsupported` states before
-provider side effects. It must not silently treat `unknown` as supported or
-unsupported; unknown behavior remains a provider/model runtime decision.
+Gateway discovery is exposed through `Capabilities()` on the default stateless
+and session gateways. It must remain local metadata lookup with no provider
+calls, credential checks, network access, or request mutation. Providers without
+explicit capability reporting must fall back to `unknown` for every capability
+field. Unknown means no support claim and must not be documented or presented as
+supported.
+
+Gateway validation rejects locally deterministic mismatches only when the
+capability is explicitly `unsupported`. It must not silently treat `unknown` as
+supported or unsupported; unknown behavior remains a provider/model runtime
+decision so legacy or provider-dependent behavior can still reach runtime.
+Concrete provider reports should claim only behavior proven by local wrapper
+translation or parsing. Ignored request fields, unsupported raw config, and
+provider-specific gaps should be explicit `unsupported` or `unknown`, not
+implicit support.
 
 Credential-free tests should prove capability reports and local rejection at
 observable public seams:

@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -52,21 +53,27 @@ func (p *FalProvider) Name() string {
 
 func (p *FalProvider) Capabilities() providers.ProviderCapabilities {
 	sessionUnsupported := "fal.ai endpoints in this wrapper are synchronous stateless endpoints only"
-	return providers.ProviderCapabilities{
+	sessionCap := capabilities.Unsupported(sessionUnsupported)
+	return capabilities.ProviderCapabilities{
 		Provider: p.Name(),
-		Stateless: providers.StatelessCapabilities{
-			Inference:       providers.Supported(),
-			Streaming:       providers.Unsupported("fal.ai endpoints in this wrapper are sync-only"),
-			Tools:           providers.Unsupported("fal.ai model endpoints in this wrapper do not accept gateway tool definitions"),
-			ImageInput:      providers.Supported(),
-			AudioInput:      providers.Supported(),
-			VideoInput:      providers.Unsupported("the current fal.ai wrapper models generate video from image or audio inputs but do not accept video input"),
-			VideoOutput:     providers.Supported(),
-			Reasoning:       providers.Unsupported("fal.ai model endpoints in this wrapper do not accept reasoning options"),
-			PromptCaching:   providers.Unsupported("fal.ai model endpoints in this wrapper do not accept prompt cache-control options"),
-			ProviderOptions: providers.Supported(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  capabilities.Unsupported("fal.ai model endpoints in this wrapper do not accept gateway tool definitions"),
+			Streaming:              capabilities.Unsupported("fal.ai endpoints in this wrapper are sync-only"),
+			ImageInput:             capabilities.Supported("image input is mapped for image-to-video models"),
+			AudioInput:             capabilities.Supported("audio input is mapped for audio and voice models"),
+			AudioOutput:            capabilities.Supported("audio output is normalized for speech models"),
+			VideoOutput:            capabilities.Supported("video output is normalized for video-generation models"),
+			Reasoning:              capabilities.Unsupported("fal.ai model endpoints in this wrapper do not accept reasoning options"),
+			PromptCaching:          capabilities.Unsupported("fal.ai model endpoints in this wrapper do not accept prompt cache-control options"),
+			ProviderSpecificConfig: capabilities.Supported("InferenceRequest Config is merged into fal.ai request payloads"),
 		},
-		Session: providers.SessionCapabilitiesPtr(providers.UnsupportedSessionCapabilities(sessionUnsupported)),
+		Session: capabilities.SessionCapabilities{
+			Sessions:               sessionCap,
+			Tools:                  sessionCap,
+			AudioInput:             sessionCap,
+			AudioOutput:            sessionCap,
+			ProviderSpecificConfig: sessionCap,
+		},
 	}
 }
 
@@ -116,10 +123,10 @@ func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest)
 func (p *FalProvider) InferStream(ctx context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	capability := p.Capabilities().Stateless.Streaming
 	return nil, &providers.UnsupportedFeatureError{
-		Provider:   p.Name(),
-		Feature:    "streaming",
-		Mode:       "stateless",
-		Capability: capability,
+		Provider:      p.Name(),
+		Feature:       capabilities.FeatureStreaming,
+		RequestedMode: capabilities.RequestedModeStatelessStream,
+		Capability:    capability,
 	}
 }
 

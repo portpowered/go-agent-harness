@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -57,12 +58,12 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 			}
 		}
 
-		providerReq := interactionProviderRequest(req)
-		if err := validateStatelessRequest(g.provider, providerReq, false); err != nil {
+		if err := validateStatelessRequest(g.Capabilities(), interactionInferenceRequest(req), capabilities.RequestedModeStateless); err != nil {
 			emitter.emitTerminalForErr(err)
 			return
 		}
 
+		providerReq := interactionProviderRequest(req)
 		resp, err := g.provider.Infer(ctx, providerReq)
 		if err != nil {
 			emitter.emitTerminalForErr(err)
@@ -231,9 +232,9 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 				Details: map[string]json.RawMessage{
 					"provider":   mustRawJSON(unsupported.Provider),
 					"feature":    mustRawJSON(unsupported.Feature),
-					"mode":       mustRawJSON(unsupported.Mode),
+					"mode":       mustRawJSON(unsupported.RequestedMode),
 					"state":      mustRawJSON(unsupported.Capability.State),
-					"rationale":  mustRawJSON(unsupported.Capability.Rationale),
+					"detail":     mustRawJSON(unsupported.Capability.Detail),
 					"capability": mustRawJSON(unsupported.Capability),
 				},
 			},
@@ -281,6 +282,15 @@ func mustRawJSON(v any) json.RawMessage {
 
 func interactionProviderRequest(req InteractionRequest) providers.InferenceRequest {
 	return providers.InferenceRequest{
+		Messages: interactionMessagesToModel(req),
+		Tools:    interactionToolsToModel(req.Tools),
+		Model:    req.Model,
+		Config:   req.Config,
+	}
+}
+
+func interactionInferenceRequest(req InteractionRequest) InferenceRequest {
+	return InferenceRequest{
 		Messages: interactionMessagesToModel(req),
 		Tools:    interactionToolsToModel(req.Tools),
 		Model:    req.Model,

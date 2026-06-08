@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -982,17 +983,17 @@ func TestFalProvider_InferStream_ReturnsUnsupportedFeatureError(t *testing.T) {
 	if unsupported.Provider != "fal" {
 		t.Fatalf("Provider = %q, want fal", unsupported.Provider)
 	}
-	if unsupported.Feature != "streaming" {
+	if unsupported.Feature != capabilities.FeatureStreaming {
 		t.Fatalf("Feature = %q, want streaming", unsupported.Feature)
 	}
-	if unsupported.Mode != "stateless" {
-		t.Fatalf("Mode = %q, want stateless", unsupported.Mode)
+	if unsupported.RequestedMode != capabilities.RequestedModeStatelessStream {
+		t.Fatalf("RequestedMode = %q, want stateless_stream", unsupported.RequestedMode)
 	}
-	if unsupported.Capability.State != providers.CapabilityUnsupported {
+	if unsupported.Capability.State != capabilities.CapabilityStateUnsupported {
 		t.Fatalf("Capability.State = %q, want unsupported", unsupported.Capability.State)
 	}
-	if unsupported.Capability.Rationale == "" {
-		t.Fatal("Capability.Rationale is empty")
+	if unsupported.Capability.Detail == "" {
+		t.Fatal("Capability.Detail is empty")
 	}
 	if transport.lastReq != nil {
 		t.Fatal("InferStream() attempted HTTP request for unsupported streaming")

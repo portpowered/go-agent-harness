@@ -7,6 +7,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
@@ -35,21 +36,27 @@ func (p *GeminiProvider) Name() string { return "gemini" }
 
 func (p *GeminiProvider) Capabilities() providers.ProviderCapabilities {
 	sessionUnsupported := "the Gemini wrapper does not implement a bidirectional session provider"
-	return providers.ProviderCapabilities{
+	sessionCap := capabilities.Unsupported(sessionUnsupported)
+	return capabilities.ProviderCapabilities{
 		Provider: p.Name(),
-		Stateless: providers.StatelessCapabilities{
-			Inference:       providers.Supported(),
-			Streaming:       providers.Supported(),
-			Tools:           providers.Supported(),
-			ImageInput:      providers.Supported(),
-			AudioInput:      providers.Supported(),
-			VideoInput:      providers.Unsupported("the Gemini wrapper does not map video input parts"),
-			VideoOutput:     providers.Unsupported("the Gemini wrapper does not map video output responses"),
-			Reasoning:       providers.Unsupported("the Gemini wrapper does not expose a reasoning request option"),
-			PromptCaching:   providers.Unsupported("the Gemini wrapper does not map cache-control options"),
-			ProviderOptions: providers.Unsupported("raw provider Config is not applied by the Gemini wrapper"),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  capabilities.Supported("Gemini requests serialize function declarations"),
+			Streaming:              capabilities.Supported("Gemini streaming is implemented"),
+			ImageInput:             capabilities.Supported("image parts are mapped to Gemini content parts"),
+			AudioInput:             capabilities.Supported("audio parts are mapped to Gemini content parts"),
+			AudioOutput:            capabilities.Unsupported("the Gemini wrapper does not normalize audio output"),
+			VideoOutput:            capabilities.Unsupported("the Gemini wrapper does not normalize video output"),
+			Reasoning:              capabilities.Unsupported("the Gemini wrapper does not expose a reasoning request option"),
+			PromptCaching:          capabilities.Unsupported("the Gemini wrapper does not map cache-control options"),
+			ProviderSpecificConfig: capabilities.Unsupported("InferenceRequest Config is not merged by the Gemini wrapper"),
 		},
-		Session: providers.SessionCapabilitiesPtr(providers.UnsupportedSessionCapabilities(sessionUnsupported)),
+		Session: capabilities.SessionCapabilities{
+			Sessions:               sessionCap,
+			Tools:                  sessionCap,
+			AudioInput:             sessionCap,
+			AudioOutput:            sessionCap,
+			ProviderSpecificConfig: sessionCap,
+		},
 	}
 }
 

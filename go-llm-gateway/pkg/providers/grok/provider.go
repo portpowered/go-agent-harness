@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -42,18 +43,26 @@ func New(opts ...Option) *GrokSessionProvider {
 func (p *GrokSessionProvider) Name() string { return "grok" }
 
 func (p *GrokSessionProvider) Capabilities() providers.ProviderCapabilities {
-	return providers.ProviderCapabilities{
-		Provider:  p.Name(),
-		Stateless: providers.UnsupportedStatelessCapabilities("the Grok provider in this module implements realtime sessions only"),
-		Session: &providers.SessionCapabilities{
-			Sessions:           providers.Supported(),
-			Tools:              providers.Supported(),
-			TextModality:       providers.Supported(),
-			AudioModality:      providers.Supported(),
-			InputAudioFormats:  providers.RealtimeAudioFormats(),
-			OutputAudioFormats: providers.RealtimeAudioFormats(),
-			TurnDetection:      providers.Supported(),
-			ProviderOptions:    providers.Unsupported("raw session Config is not applied by the Grok realtime wrapper"),
+	statelessCap := capabilities.Unsupported("the Grok provider in this module implements realtime sessions only")
+	return capabilities.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  statelessCap,
+			Streaming:              statelessCap,
+			ImageInput:             statelessCap,
+			AudioInput:             statelessCap,
+			AudioOutput:            statelessCap,
+			VideoOutput:            statelessCap,
+			Reasoning:              statelessCap,
+			PromptCaching:          statelessCap,
+			ProviderSpecificConfig: statelessCap,
+		},
+		Session: capabilities.SessionCapabilities{
+			Sessions:               capabilities.Supported("Grok realtime websocket sessions are implemented"),
+			Tools:                  capabilities.Supported("realtime session tools are serialized as function tools"),
+			AudioInput:             capabilities.Supported("client audio input events are supported"),
+			AudioOutput:            capabilities.Supported("realtime output audio events are normalized"),
+			ProviderSpecificConfig: capabilities.Unsupported("SessionConfig Config is not merged by the Grok realtime wrapper"),
 		},
 	}
 }
