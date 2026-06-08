@@ -284,3 +284,53 @@ or queue state that cannot be classified safely from the available data.
     are intended to converge as written.
   - Update the session-runtime planner tests to expect explicit caller-owned
     dialer injection on record flows once that seam is repaired.
+
+### Relay Cancellation Contract
+
+- `outcome`: `pass`
+- `checklist rows / commitments inspected`: `P2-GATE-01`;
+  `phase-2-session-runtime-ownership-repair-003`;
+  `phase-2-session-runtime-ownership-repair-004`
+- `affected files / surfaces / work IDs`:
+  `go-llm-gateway/pkg/testing/session_record.go`;
+  `go-llm-gateway/pkg/testing/session_record_test.go`;
+  `go-llm-gateway/pkg/testing/session_replay.go`;
+  `go-llm-gateway/pkg/testing/session_replay_test.go`;
+  `go-llm-gateway/pkg/testing/session_inferencer.go`;
+  `agent-cli/internal/services/session.go`;
+  `agent-cli/docs/session-record-replay.md`;
+  `docs/architecture/contract-gap-audit.md`;
+  `tasks/todo/phase-2-session-runtime-ownership-repair.md`
+- `evidence`:
+  - The implementation now keeps replay and record relay writes on one owned
+    cancellation seam instead of switching relay delivery to
+    `context.Background()`. `go-llm-gateway/pkg/testing/session_record.go`
+    accepts `WithSessionRelayContext(...)`, wraps that context with
+    `context.WithCancel(...)`, and writes relayed inbound messages with
+    `relay.Write(rec.relayCtx, msg)`. `go-llm-gateway/pkg/testing/session_replay.go`
+    mirrors that contract through `WithReplayContext(...)`,
+    `context.WithCancel(...)`, and `r.outbound.Write(r.replayCtx, msg)`.
+  - The owned runtime context is threaded from the session caller into both
+    helper layers. `go-llm-gateway/pkg/testing/session_inferencer.go` binds the
+    `ConnectSession(ctx)` lifetime to `NewSessionRecorder(..., WithSessionRelayContext(ctx))`
+    and `NewSessionReplayer(..., WithReplayContext(ctx))`, while
+    `agent-cli/internal/services/session.go` passes the command context into
+    `gwtesting.NewSessionReplayer(...)` for transcript replay.
+  - Deterministic runtime proof matches that implementation contract.
+    `TestSessionRecorder_RelayStopsWhenOwnedContextCanceled` proves that the
+    recorder stops forwarding and recording inbound messages after the owned
+    relay context is canceled, and
+    `TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled` proves that the
+    replayer stops timed delivery and does not leave a queued post-cancel
+    message behind.
+  - Reviewer-facing docs and contract-gap audit text agree with the delivered
+    behavior on this specific surface. `agent-cli/docs/session-record-replay.md`
+    states that canceling the command context stops replay delivery and
+    recorder relay writes at the same seam that owns runtime wiring, and
+    `docs/architecture/contract-gap-audit.md` records `CTX-02` as narrowed by
+    the explicit relay lifecycle context repair rather than describing a
+    remaining `context.Background()` fallback.
+- `required repairs / you work move actions`:
+  - None for the scoped replay and record relay cancellation contract. Keep new
+    session-helper wrappers bound to the caller-owned `ConnectSession(ctx)`
+    lifetime so this contract does not regress.
