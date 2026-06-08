@@ -410,6 +410,11 @@ func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamM
 	case msg := <-replayer.Receive().Chan():
 		return msg
 	case <-replayer.Done():
+		select {
+		case msg := <-replayer.Receive().Chan():
+			return msg
+		default:
+		}
 		t.Fatalf("replayer finished before next message: %v", replayer.Err())
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for replay message")
