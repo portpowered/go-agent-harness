@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -96,13 +97,13 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
-		return providers.InferenceResponse{}, fmt.Errorf("openai: do request: %w", err)
+		return providers.InferenceResponse{}, gateway.NewTransportError(p.Name(), "chat completions", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
-		return providers.InferenceResponse{}, fmt.Errorf("openai: api error %d: %s", resp.StatusCode, string(errBody))
+		return providers.InferenceResponse{}, gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil)
 	}
 
 	var chatResp chatResponse
