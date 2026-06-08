@@ -79,10 +79,247 @@ make test-regressions
 Those commands prove only their observable behavior. They do not, by themselves,
 prove row closure without the row-specific public evidence above.
 
+## Audit And Validator-015 Reconciliation
+
+### Reconciliation Inputs
+
+- `docs/architecture/contract-gap-audit.md`
+- `docs/architecture/dependencies.md`
+- `docs/internal/checklist.md`
+- `docs/internal/phase-2-session-runtime-ownership-validator.md`
+- public package docs and README files under `go-agent-loop`,
+  `go-llm-gateway`, and `agent-cli`
+- exported public API declarations under `go-agent-loop/pkg`,
+  `go-llm-gateway/pkg`, and `agent-cli` CLI behavior docs
+
+No committed validator-015 artifact is present in this checkout. Searches for
+`validator 015`, `validator-015`, and `015` found only this PRD's reference to
+the missing input plus unrelated numeric literals. Under the evidence rules for
+this report, that absence is not a pass. It is an `uncertain` reconciliation
+finding until the prior validator output is committed, linked from the PRD, or
+explicitly superseded by a reviewer-facing cleanup note.
+
+### Reconciled Audit Row Mapping
+
+| Prior audit row | Current audit status | Phase 4 row mapping | Reconciliation decision |
+| --- | --- | --- | --- |
+| `CTX-01` | still open in `docs/architecture/contract-gap-audit.md` | `P4-API-01`, `P4-API-03`, `P4-API-07` | remains open because the session request/config contract is still split between constructor options, call-time context, and CLI helper logic. |
+| `CTX-02` | narrowed after `phase-2-session-runtime-ownership-repair` | `P4-API-01`, `P4-API-07` | may count only as partial evidence for replay and recorder relay cancellation; it does not close all public blocking-call context ownership. |
+| `ERR-01` | still open in `docs/architecture/contract-gap-audit.md` | `P4-API-02`, `P4-API-05` | remains open because shared stream errors still commonly cross module boundaries as `err.Error()` strings. |
+| `ERR-02` | still open in `docs/architecture/contract-gap-audit.md` | `P4-API-02`, `P4-API-05` | remains open because CLI session command failures still lack one caller-actionable taxonomy for transport, replay, loop, provider, and capture phases. |
+| `LIFECYCLE-01` | still open in `docs/architecture/contract-gap-audit.md` | `P4-API-03`, `P4-API-05` | remains open because session-open, response completion, provider close, replay completion, and command stop are not documented as one public lifecycle state machine. |
+| `LIFECYCLE-02` | still open in `docs/architecture/contract-gap-audit.md` | `P4-API-03`, `P4-API-05` | remains open because stream completion provenance can be provider-authored or loop-synthesized without a public result distinction. |
+| `DOC-01` | still open in `docs/architecture/contract-gap-audit.md` | `P4-GATE-01` | remains open because `go-llm-gateway/pkg/models` still reads as a gateway-owned model package while `docs/architecture/dependencies.md` says it is an alias facade over loop-owned contracts. |
+| `DOC-02` | still open in `docs/architecture/contract-gap-audit.md` | `P4-GATE-01` | remains open because `agent-cli/internal/*` exported helpers remain application wiring, not downstream APIs, but that distinction is only partially documented. |
+| `COMPAT-01` | still open risk note | `P4-API-03`, `P4-API-05`, `P4-GATE-01` | remains open as compatibility guidance for any future shared message/session contract change. |
+| `COMPAT-02` | still open risk note | `P4-API-01`, `P4-API-03`, `P4-API-05`, `P4-GATE-01` | remains open as compatibility guidance for session stop behavior and persisted capture semantics. |
+| `COMPAT-03` | still open risk note | `P4-API-02`, `P4-API-05`, `P4-GATE-01` | remains open as compatibility guidance for adding typed error classes while preserving legacy text during migration. |
+| no Phase 2 audit row found | missing audit coverage | `P4-API-04`, `P4-API-06` | uncertain because the current audit does not map provider capability discovery or local unsupported-feature validation to explicit Phase 4 repair findings. |
+
+### Reconciliation Findings
+
+#### `P4-API-01` - Audit Reconciliation For Context Ownership
+
+- `verdict`: `uncertain`
+- `closure decision`: `remains open`
+- `public evidence`: `CTX-02` is narrowed by
+  `phase-2-session-runtime-ownership-repair` for session replay and recording
+  relay cancellation, but `CTX-01` remains open for split session shape and
+  call-time context ownership.
+- `affected files / declarations`: `go-agent-loop/pkg/messages/session.go`;
+  `go-llm-gateway/pkg/inference/session_inferencer.go`;
+  `go-llm-gateway/pkg/testing/session_record.go`;
+  `go-llm-gateway/pkg/testing/session_replay.go`;
+  `agent-cli/internal/services/session.go`.
+- `docs, examples, tests, audit, and API alignment`: partial alignment exists
+  for replay and recorder relay cancellation, but the audit still records a
+  wider context-contract gap and no validator-015 evidence is available for
+  supersession.
+- `reviewer commands`: `rg -n "CTX-01|CTX-02|context.Background|ConnectSession"`
+  `docs go-llm-gateway go-agent-loop agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: add a cleanup/reconciliation idea that
+  imports or supersedes validator-015, then update the audit to distinguish the
+  closed replay/recorder relay subset from still-open public blocking-call and
+  session request/config context ownership work.
+
+#### `P4-API-02` - Audit Reconciliation For Typed Errors
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: `ERR-01` and `ERR-02` remain open in
+  `docs/architecture/contract-gap-audit.md`; the audit states shared stream
+  errors and session command failures still commonly expose wrapped text or
+  `err.Error()` instead of a caller-actionable taxonomy.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.ErrorValue`;
+  `go-agent-loop/pkg/participants/model_runner.go`;
+  `go-agent-loop/pkg/participants/tool_runner.go`;
+  provider stream adapters; `agent-cli/internal/services/session.go`.
+- `docs, examples, tests, audit, and API alignment`: aligned on the existence
+  of the gap, not on closure. No current public evidence or validator-015
+  artifact proves typed error convergence.
+- `reviewer commands`: `rg -n "ERR-01|ERR-02|NewErrorValue|err.Error|wrapSessionPhaseError"`
+  `docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: implement an additive typed error
+  repair idea that gives shared stream, gateway/provider, replay, and CLI
+  session failures stable error classes supporting `errors.Is` or `errors.As`,
+  then update audit rows and deterministic tests to prove public classification
+  without string parsing.
+
+#### `P4-API-03` - Audit Reconciliation For Result And Lifecycle Contracts
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-01`, and
+  `COMPAT-02` remain open in the audit; they describe unresolved ambiguity in
+  session completion, stream completion provenance, shared message/session
+  contract changes, and persisted capture semantics.
+- `affected files / declarations`: `go-agent-loop/pkg/messages`;
+  `go-agent-loop/pkg/participants.ModelRunner`;
+  `go-agent-loop/pkg/agentloop.AgenticLoop`;
+  `go-llm-gateway/pkg/testing`; `agent-cli/internal/services/session.go`.
+- `docs, examples, tests, audit, and API alignment`: current docs and audit
+  agree that lifecycle/result hardening remains future work. No validator-015
+  artifact proves the baseline has converged.
+- `reviewer commands`: `rg -n "LIFECYCLE-01|LIFECYCLE-02|COMPAT-01|COMPAT-02|MESSAGE.END|SESSION.CLOSE|provider_closed"`
+  `docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: create an implementation idea for a
+  documented public lifecycle/result state machine covering empty success,
+  cancellation, partial success, provider-authored terminal events,
+  loop-synthesized terminal events, replay completion, closed/drained state, and
+  terminal failure, with replay and CLI fixture coverage.
+
+#### `P4-API-04` - Audit Reconciliation For Provider Capability Discovery
+
+- `verdict`: `uncertain`
+- `closure decision`: `remains open`
+- `public evidence`: `go-llm-gateway/README.md` includes a provider surface map,
+  but the current audit has no explicit Phase 4 row covering tools, streaming,
+  sessions, audio, image input, video output, reasoning, prompt caching, and
+  provider-specific config with supported, unsupported, and unknown states.
+- `affected files / declarations`: `go-llm-gateway/pkg/providers.Provider`;
+  `go-llm-gateway/pkg/providers.SessionProvider`;
+  `go-llm-gateway/pkg/gateway`; concrete provider packages.
+- `docs, examples, tests, audit, and API alignment`: docs provide a broad
+  provider package map, but audit-to-implementation evidence is missing for the
+  full capability vocabulary required by `P4-API-04`.
+- `reviewer commands`: `rg -n "Provider Surface Map|SessionProvider|InferStream|capabil|prompt cach|reasoning"`
+  `go-llm-gateway docs`; `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: add a provider capability discovery
+  repair idea that defines the public capability vocabulary and deterministic
+  tests for supported, unsupported, and unknown states before any checklist
+  closure.
+
+#### `P4-API-05` - Audit Reconciliation For Stream Semantics
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: stream-related audit rows `ERR-01`, `LIFECYCLE-01`,
+  `LIFECYCLE-02`, `COMPAT-01`, `COMPAT-02`, and `COMPAT-03` remain open or
+  risk-bearing. The audit says terminal stream and session semantics are not
+  yet one public contract.
+- `affected files / declarations`: `go-agent-loop/pkg/messages.StreamMessage`;
+  `go-agent-loop/pkg/messages.ErrorValue`;
+  `go-agent-loop/pkg/participants.ModelRunner`;
+  `go-llm-gateway/pkg/inference`; provider stream implementations;
+  `go-llm-gateway/pkg/testing`.
+- `docs, examples, tests, audit, and API alignment`: audit and docs do not yet
+  provide closure evidence that typed error details, cancellation, replay
+  mismatch, partial output, and terminal events are preserved through a public
+  stream surface.
+- `reviewer commands`: `rg -n "ERR-01|LIFECYCLE-02|StreamMessage|MESSAGE.END|ERROR|replay mismatch|NewErrorValue"`
+  `docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: pair typed stream error repair with a
+  public stream terminal-event contract and deterministic replay/provider
+  adapter tests that distinguish cancellation, replay mismatch, partial output,
+  provider terminal events, and synthesized terminal events.
+
+#### `P4-API-06` - Audit Reconciliation For Local Unsupported-Feature Validation
+
+- `verdict`: `uncertain`
+- `closure decision`: `remains open`
+- `public evidence`: no Phase 2 audit row maps unsupported stateless or session
+  features to local validation before provider execution. Current docs mention
+  provider differences, but they do not prove local validation errors with
+  feature, provider, requested mode, and capability state.
+- `affected files / declarations`: `go-llm-gateway/pkg/gateway`;
+  `go-llm-gateway/pkg/providers/*`; `agent-cli/internal/agent`;
+  `agent-cli/internal/services`.
+- `docs, examples, tests, audit, and API alignment`: missing audit coverage and
+  missing validator-015 evidence prevent closure.
+- `reviewer commands`: `rg -n "unsupported|capabil|provider|requested mode|validation"`
+  `docs go-llm-gateway agent-cli`; `make typecheck`; `make test`.
+- `exact repair work for non-pass rows`: create a local unsupported-feature
+  validation repair idea that fails unsupported stateless and session features
+  before provider execution with inspectable typed errors and deterministic
+  provider-fake tests.
+
+#### `P4-API-07` - Audit Reconciliation For Dependency Ownership
+
+- `verdict`: `uncertain`
+- `closure decision`: `remains open`
+- `public evidence`: `docs/architecture/dependencies.md` records Phase 2
+  constructor and session runtime ownership repairs, and `CTX-02` is narrowed,
+  but `CTX-01`, `DOC-01`, and `DOC-02` still show unresolved or only partially
+  documented ownership boundaries.
+- `affected files / declarations`: `go-agent-loop/pkg/agentloop.New`;
+  `go-llm-gateway/pkg/providers/*`; `go-llm-gateway/pkg/models`;
+  `agent-cli/internal/agent`; `agent-cli/internal/services`;
+  `docs/architecture/dependencies.md`.
+- `docs, examples, tests, audit, and API alignment`: aligned for the completed
+  Phase 2 constructor/session runtime repairs, but not enough to close all
+  filesystem, environment, process, transport, network, time, prompt, and
+  provider runtime ownership surfaces required by `P4-API-07`.
+- `reviewer commands`: `rg -n "DI-01|DI-02|CTX-01|DOC-01|DOC-02|constructor ownership|runtime ownership"`
+  `docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: add an audit cleanup idea that maps
+  each dependency ownership surface to closed, open, or not-yet-reviewed status,
+  then implement focused repairs only for surfaces still creating hidden IO,
+  environment, process, network, transport, time, prompt, or provider defaults.
+
+#### `P4-GATE-01` - Audit And Validator-015 Gate Reconciliation
+
+- `verdict`: `fail`
+- `closure decision`: `remains open`
+- `public evidence`: validator-015 is missing from committed evidence, provider
+  capability and unsupported-feature rows lack audit mapping, and multiple
+  audit rows remain open or only partially narrowed.
+- `affected files / declarations`: `docs/architecture/contract-gap-audit.md`;
+  `docs/architecture/dependencies.md`; `docs/internal/checklist.md`;
+  `docs/internal/phase-4-api-contract-repair-validator.md`;
+  public API, docs, examples, and tests cited by `P4-API-01` through
+  `P4-API-07`.
+- `docs, examples, tests, audit, and API alignment`: not aligned. The current
+  public docs and audit identify some repaired Phase 2 ownership subsets, but
+  the full Phase 4 public API contract hardening baseline does not yet have
+  one reconciled, reviewer-verifiable evidence set.
+- `reviewer commands`: `rg -n "validator 015|validator-015|P4-API|P4-GATE|ERR-|CTX-|LIFECYCLE-|COMPAT-|DOC-"`
+  `prd.md docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`;
+  `make test`.
+- `exact repair work for non-pass rows`: run a cleanup/reconciliation lane that
+  either restores validator-015 or records its explicit supersession, maps every
+  open audit row to `P4-API-01` through `P4-API-07` and `P4-GATE-01`, and adds
+  missing audit rows for provider capability discovery and local unsupported
+  feature validation.
+
+## Story 002 Closure
+
+The audit and validator-015 reconciliation story passes for validator purposes:
+the report compares the available audit rows, marks the missing validator-015
+artifact as uncertain, maps stale or unresolved audit evidence to Phase 4 rows,
+and names exact future repair or cleanup work for every non-pass row. No
+checklist row may close from story 002 alone.
+
 ## Current Story Status
 
-This initial scope pass establishes the Phase 4 validator subject, checklist row
-coverage, evidence rules, and required finding shape. Row-by-row convergence
-findings are intentionally deferred to the later validator stories so each pass
-can compare the current public API, docs, examples where present, audit rows,
-tests, and deterministic command evidence at the correct depth.
+Stories 001 and 002 are complete. The report now establishes the Phase 4
+validator subject, checklist row coverage, evidence rules, required finding
+shape, and audit/validator-015 reconciliation findings. Typed error, stream,
+capability, validation, dependency, result, context, lifecycle, and final planner
+decision findings remain deferred to later validator stories so each pass can
+compare the current public API, docs, examples where present, audit rows, tests,
+and deterministic command evidence at the correct depth.
