@@ -85,36 +85,35 @@ evidence can justify planning and repair scope, but it cannot close an
 implementation checklist row by itself unless the row requires only an audit
 finding.
 
-The current audit at `docs/architecture/contract-gap-audit.md` distinguishes
-several repair classes:
+The current audit at `docs/architecture/contract-gap-audit.md` now distinguishes
+several Phase 4 repair classes:
 
-- must-fix contract defects: `CTX-01`, `ERR-01`, `ERR-02`,
-  `LIFECYCLE-01`, `LIFECYCLE-02`
-- dependency and ownership defects: `DI-03`, remaining watchpoints under
-  `DI-04`, and regression-sensitive hidden coupling under `HC-03`
-- documentation and naming defects: `DOC-01`, `DOC-02`
-- compatibility-sensitive changes: `COMPAT-01`, `COMPAT-02`, `COMPAT-03`
-- completed or narrowed prerequisite repairs: `DI-01`, `DI-02`, `DI-04`,
-  `HC-03`, and `CTX-02` status notes from earlier Phase 2 slices
+- context and result defects: `P4-CTX-*` and `P4-RESULT-*`
+- typed-error defects: `P4-ERR-*`
+- stream semantics defects: `P4-STREAM-*`
+- provider capability and validation defects: `P4-CAP-01`,
+  `P4-VALIDATION-01`, and session capability/validation evidence in `P4-DI-02`
+- dependency ownership defects and polish: `P4-DI-*`
+- API hygiene, documentation, and compatibility work: `P4-HYGIENE-*`
 
-The audit does not yet contain explicit `P4-API-*` row labels, provider
-capability discovery findings, or local unsupported-feature validation
-findings. Those omissions are report-level evidence because this validator is
-required to map every Phase 4 checklist row to affected public packages,
-exported declarations, and observable contract issues.
+The audit is now explicit enough to cover provider capability discovery and
+local unsupported-feature validation as audit findings. Remaining failures for
+`P4-API-04` and `P4-API-06` are implementation, public documentation, examples,
+and credential-free test gaps, not missing audit-coverage gaps. Audit evidence
+still cannot close a Phase 4 implementation checklist row by itself.
 
 ### `P4-API-01` - Context and cancellation contracts
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - `CTX-01` records a context contract gap in
+  - `P4-CTX-01` and `P4-CTX-03` record context contract gaps in
     `go-agent-loop/pkg/messages.SessionInferencer`,
     `go-llm-gateway/pkg/inference.SessionGatewayInferencer`, and
     `agent-cli/internal/services/session.go`: cancellation is explicit through
     `ConnectSession(ctx context.Context)`, but per-session request shape is
     split across constructor options and CLI/provider wiring.
-  - `CTX-02` records that session replay and recording relay cancellation was
-    narrowed by explicit relay lifecycle contexts.
+  - `P4-CTX-02` records that buffer waits collapse cancellation, empty buffer,
+    and backpressure into `false`, which affects session send/receive behavior.
   - The audit covers session context and relay cancellation, but does not map
     context and timeout behavior across every checklist primary surface:
     `go-agent-loop/pkg/agentloop`, `go-agent-loop/pkg/engine`,
@@ -136,20 +135,20 @@ exported declarations, and observable contract issues.
     instead of broad context cleanup.
 - `reviewer commands`:
   - `sed -n '149,187p' docs/architecture/contract-gap-audit.md`
-  - `sed -n '85p' docs/internal/checklist.md`
+  - `sed -n '150p' docs/internal/checklist.md`
 
 ### `P4-API-02` - Typed caller-actionable errors
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - `ERR-01` records that `go-agent-loop/pkg/messages.ErrorValue` has
-    structured fields, but loop, participant, tool, and provider stream paths
-    frequently collapse failures with `messages.NewErrorValue(err.Error())`.
-  - `ERR-02` records that `agent-cli/internal/services/session.go` mixes
-    transport, replay, provider, capture, and loop phases into wrapped text
-    instead of one typed caller-actionable taxonomy.
-  - `COMPAT-03` correctly classifies typed-error work as compatibility
-    sensitive and recommends additive migration, which distinguishes must-fix
+  - `P4-ERR-01` records that provider status and transport errors are not
+    represented by a shared typed error taxonomy.
+  - `P4-ERR-02` records that stream error events carry free-form messages
+    instead of caller-actionable error classes.
+  - `P4-ERR-03` records that replay mismatch and fixture validation errors are
+    public but not integrated into the shared error model.
+  - The audit classifies typed-error work as must-fix, mixed additive, and
+    compatibility-sensitive in the Phase 4 closure table, which distinguishes
     contract work from migration risk.
   - The audit does not enumerate every provider/gateway/replay validation
     declaration affected by typed error work and does not state which
@@ -171,21 +170,18 @@ exported declarations, and observable contract issues.
 - `reviewer commands`:
   - `sed -n '188,224p' docs/architecture/contract-gap-audit.md`
   - `sed -n '318,327p' docs/architecture/contract-gap-audit.md`
-  - `sed -n '86p' docs/internal/checklist.md`
+  - `sed -n '151p' docs/internal/checklist.md`
 
 ### `P4-API-03` - Result contracts and failure signals
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - `LIFECYCLE-01` records ambiguous session-open, response completion,
-    provider close, and command stop boundaries across
-    `go-agent-loop/pkg/participants.ModelRunner` and
-    `agent-cli/internal/services/session.go`.
-  - `LIFECYCLE-02` records that streaming inference completion rules differ
-    between provider streams and loop-synthesized fallbacks, making provider
-    completion versus normalization unclear.
-  - `COMPAT-01` and `COMPAT-02` identify compatibility-sensitive impact on
-    shared message/session types, CLI stop behavior, and persisted captures.
+  - `P4-RESULT-01` records zero-value text and fixture helper contracts that
+    make invalid, absent, and intentionally empty results hard to distinguish.
+  - `P4-RESULT-02` records inconsistent interaction and tool-result validation
+    errors across sync, event, and fixture APIs.
+  - `P4-STREAM-01` records that streaming APIs do not expose one terminal error
+    and final-event contract, which keeps result completion ambiguous.
   - The audit covers session and streaming result ambiguity, but it does not
     map public result contracts in `go-agent-loop/pkg/agentloop`,
     `go-agent-loop/pkg/subsystems`, `go-llm-gateway/pkg/gateway`, or
@@ -206,44 +202,64 @@ exported declarations, and observable contract issues.
 - `reviewer commands`:
   - `sed -n '225,259p' docs/architecture/contract-gap-audit.md`
   - `sed -n '292,317p' docs/architecture/contract-gap-audit.md`
-  - `sed -n '87p' docs/internal/checklist.md`
+  - `sed -n '152p' docs/internal/checklist.md`
 
 ### `P4-API-04` - Provider capability discovery
 
 - `outcome`: `fail`
 - `evidence`:
-  - The audit has no provider capability discovery finding that maps to
-    `P4-API-04`.
-  - The existing audit mentions provider-specific runtime selection in
-    `HC-03`, `DI-02`, and `DI-04`, but those findings address construction and
-    dependency ownership rather than public capability discovery.
-  - No affected public provider capability declarations, capability fields, or
-    consumer guidance are recorded in the audit.
+  - `P4-CAP-01` maps to `P4-API-04`, `P4-API-06`, `P4-API-07`,
+    `P4-API-02`, and `P4-API-03` and names the public gateway, provider, and
+    model declarations where capability support is not discoverable.
+  - `P4-CAP-01` records affected packages, files, exported declarations,
+    observable issues, severity, compatibility sensitivity, repair slices, and
+    verification notes for tools, streaming, sessions, audio input/output,
+    image input, video output, reasoning, prompt caching, embeddings, provider
+    config, and provider-specific limits.
+  - `P4-DI-02` adds session capability evidence for `models.SessionConfig`,
+    `DefaultSessionGateway.ConnectSession`, and
+    `SessionGatewayInferencer.ConnectSession`.
+  - Runtime implementation evidence still fails this row: `Provider`,
+    `SessionProvider`, `Gateway`, `DefaultGateway`, and
+    `DefaultSessionGateway` do not expose a public capability API that
+    consumers can query before sending a request.
 - `affected files / declarations`:
-  - missing from the audit for `go-llm-gateway/pkg/providers`
-  - missing from the audit for `go-llm-gateway/pkg/gateway`
-  - missing provider docs, examples, and tests mapping
+  - `go-llm-gateway/pkg/providers.Provider`
+  - `go-llm-gateway/pkg/providers.SessionProvider`
+  - `go-llm-gateway/pkg/providers.InferenceRequest`
+  - `go-llm-gateway/pkg/gateway.Gateway`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway`
+  - `go-llm-gateway/pkg/gateway.DefaultSessionGateway`
+  - `go-llm-gateway/pkg/models.Message`
+  - `go-llm-gateway/pkg/models.ContentPart`
+  - `go-llm-gateway/pkg/models.ToolDefinition`
+  - `go-llm-gateway/pkg/models.SessionConfig`
 - `closure decision`: `must remain open`
 - `exact repair work`:
-  - Add a dedicated `P4-API-04` audit finding for public provider capability
-    discovery, including affected declarations and whether consumers can query
-    capabilities without importing concrete provider internals.
-  - Classify any missing capability fields or ambiguous supported,
-    unsupported, and unknown semantics as must-fix contract defects rather than
-    polish.
+  - Implement the audit repair slice from `P4-CAP-01`: add a provider-neutral
+    exported capability model and a gateway-level discovery method so
+    consumers do not need concrete provider imports or provider type switches.
+  - Include supported, unsupported, and unknown semantics for tools, streaming,
+    sessions, audio, image input, video output, reasoning, prompt caching,
+    provider config, and provider-specific limits.
+  - Add public docs, examples, and credential-free tests that prove capability
+    discovery through gateway/provider APIs.
 - `reviewer commands`:
   - `rg -n "capabil|Capability|Capabilities" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg`
-  - `sed -n '88p' docs/internal/checklist.md`
+  - `sed -n '696,746p' docs/architecture/contract-gap-audit.md`
+  - `sed -n '153p' docs/internal/checklist.md`
 
 ### `P4-API-05` - Stream semantics and error preservation
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - `ERR-01` covers stream error classification collapse into strings.
-  - `LIFECYCLE-01` and `LIFECYCLE-02` cover session and streaming completion
-    ambiguity, including provider-close and loop-synthesized boundaries.
-  - `CTX-02` covers replay/record relay cancellation preservation after the
-    prior repair.
+  - `P4-ERR-02` covers stream error classification collapse into free-form
+    messages.
+  - `P4-STREAM-01`, `P4-STREAM-02`, and `P4-STREAM-03` cover terminal stream
+    status, provider adapter ordering, session close, and cancellation
+    semantics.
+  - `P4-ERR-03` covers replay mismatch and fixture validation errors that are
+    public but not integrated into the shared error model.
   - The audit covers several stream semantics issues, but it does not map
     replay mismatch preservation, provider-close classification, and
     credential-free tests/examples to the `P4-API-05` row explicitly.
@@ -264,46 +280,64 @@ exported declarations, and observable contract issues.
 - `reviewer commands`:
   - `sed -n '188,259p' docs/architecture/contract-gap-audit.md`
   - `sed -n '169,187p' docs/architecture/contract-gap-audit.md`
-  - `sed -n '89p' docs/internal/checklist.md`
+  - `sed -n '154p' docs/internal/checklist.md`
 
 ### `P4-API-06` - Local unsupported-feature validation
 
 - `outcome`: `fail`
 - `evidence`:
-  - The audit has no finding for local unsupported-feature validation before
+  - `P4-VALIDATION-01` maps unsupported request feature behavior to
+    `P4-API-06` and records that `DefaultGateway`, `Provider.Infer`,
+    `Provider.InferStream`, `GatewayInferencer.Infer`, and
+    `GatewayInferencer.InferStream` do not share a local validation step before
     provider execution.
-  - Existing provider runtime and session configuration findings describe
-    hidden defaults or runtime ownership, but they do not record unsupported
-    feature rejection, structured validation errors, provider identity,
-    requested feature or mode, or capability state.
+  - `P4-VALIDATION-01` identifies inconsistent provider behavior: unsupported
+    fields may be ignored, translated to provider-specific params, returned as
+    formatted string errors, or represented by fal's immediately closed stream
+    channel.
+  - `P4-CAP-01` supplies the required capability model prerequisite, and
+    `P4-DI-02` records session pre-dial validation gaps for realtime
+    modalities, audio formats, turn detection, tools, sample rates, and raw
+    config.
+  - Runtime implementation evidence still fails this row: there is no shared
+    public local validation API or typed validation taxonomy that reports the
+    provider, requested feature or mode, and capability state before provider
+    dispatch.
 - `affected files / declarations`:
-  - missing from the audit for `go-llm-gateway/pkg/providers`
-  - missing from the audit for `go-llm-gateway/pkg/gateway`
-  - missing provider validation tests, public docs, and examples mapping
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
+  - `go-llm-gateway/pkg/gateway.InferenceRequest`
+  - `go-llm-gateway/pkg/providers.Provider.Infer`
+  - `go-llm-gateway/pkg/providers.Provider.InferStream`
+  - `go-llm-gateway/pkg/providers.InferenceRequest`
+  - `go-llm-gateway/pkg/inference.GatewayInferencer.Infer`
+  - `go-llm-gateway/pkg/inference.GatewayInferencer.InferStream`
+  - `go-llm-gateway/pkg/models.SessionConfig`
 - `closure decision`: `must remain open`
 - `exact repair work`:
-  - Add a dedicated `P4-API-06` audit finding for local validation of
-    unsupported tools, streaming, sessions, audio, image input, video output,
-    reasoning, prompt caching, and provider-specific config.
-  - Record exact affected validation declarations and classify string-only or
-    provider-live rejection behavior as must-fix contract defects.
+  - Implement the audit repair slice from `P4-VALIDATION-01`: add capability-
+    backed validation before stateless and session provider dispatch.
+  - Define typed validation failures such as unsupported capability,
+    unsupported model, and invalid request details that support `errors.Is` and
+    `errors.As`.
+  - Add public docs, examples, and credential-free tests proving unsupported
+    features fail locally without HTTP, SDK, websocket, or live-provider side
+    effects.
 - `reviewer commands`:
   - `rg -n "unsupported|validate|validation|capabil|feature" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg`
-  - `sed -n '90p' docs/internal/checklist.md`
+  - `sed -n '747,801p' docs/architecture/contract-gap-audit.md`
+  - `sed -n '155p' docs/internal/checklist.md`
 
 ### `P4-API-07` - Dependency injection and hidden side effects
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - `DI-01`, `DI-02`, and `DI-04` include completed or narrowed status notes
-    for explicit tool execution decisions, stateless provider runtime wiring,
-    and scoped session runtime wiring.
-  - `DI-03` remains open for `agent-cli/internal/agent.Executor` prompt
-    resolution because `loadSystemPrompt` mixes filesystem, workspace,
-    config, and skills metadata side effects.
-  - `HC-03` is marked resolved for scoped Grok and OpenAI record/replay paths
-    and warns that provider-specific branching outside the session runtime seam
-    should be treated as a regression.
+  - `P4-DI-01` records uneven injectable runtime dependencies across provider
+    constructors and public gateway seams.
+  - `P4-DI-02` records that session configuration is bridge-owned but cannot
+    expose provider-specific realtime capability or validation.
+  - `P4-HYGIENE-04` records that exported constructors and options do not
+    publish a module-wide compatibility posture.
   - The audit distinguishes completed prerequisite repairs from remaining
     dependency defects, but it does not provide a Phase 4 row-level closure
     decision for every public constructor/composition seam in the checklist.
@@ -324,7 +358,7 @@ exported declarations, and observable contract issues.
 - `reviewer commands`:
   - `sed -n '74,148p' docs/architecture/contract-gap-audit.md`
   - `sed -n '52,73p' docs/architecture/contract-gap-audit.md`
-  - `sed -n '91p' docs/internal/checklist.md`
+  - `sed -n '156p' docs/internal/checklist.md`
 
 ### `P4-GATE-01` - Public API hardening gate readiness
 
@@ -343,27 +377,27 @@ exported declarations, and observable contract issues.
   - `docs/internal/phase-4-api-contract-validator.md`
 - `closure decision`: `must remain open`
 - `exact repair work`:
-  - Repair the exported API contract audit so it explicitly maps every Phase 4
-    row to affected public packages, declarations, observable contract issues,
-    closure blockers, and implementation-ready repair slices.
-  - Do not queue the next Phase 4 feature batch until the missing capability
-    discovery and local validation audit findings are added or this validator
-    is updated with equivalent row-level evidence from public docs, tests, and
-    examples.
+  - Preserve the exported API contract audit mappings for every Phase 4 row and
+    keep them reconciled with this validator as the implementation surface
+    changes.
+  - Do not queue the next Phase 4 feature batch until provider capability
+    discovery, local unsupported-feature validation, typed errors, stream
+    semantics, dependency injection, public docs, examples, and tests have
+    implementation evidence that satisfies the row-level closure rules.
 - `reviewer commands`:
-  - `sed -n '76,92p' docs/internal/checklist.md`
-  - `sed -n '149,327p' docs/architecture/contract-gap-audit.md`
+  - `sed -n '141,157p' docs/internal/checklist.md`
+  - `sed -n '688,930p' docs/architecture/contract-gap-audit.md`
 
 ## Audit Coverage Closure Summary
 
 No checklist row may close from audit evidence alone in this story. The audit
-does provide useful must-fix and compatibility-sensitive evidence for
-`P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, and `P4-API-07`, but each
-of those rows remains open because the audit has not yet mapped every required
-Phase 4 surface, affected declaration, public guidance surface, and exact
-repair slice. `P4-API-04`, `P4-API-06`, and therefore `P4-GATE-01` fail audit
-coverage because provider capability discovery and local unsupported-feature
-validation are missing from the audit.
+does provide useful must-fix and compatibility-sensitive evidence for every
+reviewed Phase 4 row, including provider capability discovery in `P4-CAP-01`,
+local unsupported-feature validation in `P4-VALIDATION-01`, and session
+capability/validation gaps in `P4-DI-02`. Each row remains open because audit
+coverage is planning evidence, while closure requires implementation evidence,
+public consumer guidance, examples where useful, and credential-free tests that
+prove the public contract is usable.
 
 ## Gateway Error Taxonomy Evidence
 
@@ -639,10 +673,11 @@ reviewer to reproduce the pass, fail, or uncertain outcomes in this report.
 
 | Command | Claim proved | Expected pass condition | Relevant rows |
 | --- | --- | --- | --- |
-| `sed -n '76,92p' docs/internal/checklist.md` | The validator is checking the Phase 4 rows `P4-API-01` through `P4-API-07` and `P4-GATE-01`. | Output names all reviewed rows and their row text. | all rows |
-| `sed -n '149,327p' docs/architecture/contract-gap-audit.md` | The exported API contract audit contains context, typed-error, lifecycle, stream, and compatibility findings, but does not explicitly map every `P4-API-*` checklist row. | Output shows audit findings such as `CTX-*`, `ERR-*`, `LIFECYCLE-*`, and `COMPAT-*`; absence of `P4-API-*` labels supports the audit-to-checklist mapping gap. | `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, `P4-GATE-01` |
-| `rg -n "capabil|Capability|Capabilities" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg` | Capability discovery is not covered by the audit or exposed as a public runtime provider/gateway capability contract. | Output may show only incidental references; it must not show a public capability model on `providers.Provider`, `providers.SessionProvider`, or gateway interfaces. | `P4-API-04`, `P4-GATE-01` |
-| `rg -n "unsupported|validate|validation|capabil|feature" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg` | Unsupported-feature validation is not a shared gateway/provider contract before provider execution. | Output shows scattered provider-specific validation and no shared public capability-backed validation layer. | `P4-API-06`, `P4-GATE-01` |
+| `sed -n '141,157p' docs/internal/checklist.md` | The validator is checking the Phase 4 rows `P4-API-01` through `P4-API-07` and `P4-GATE-01`. | Output names all reviewed rows and their row text. | all rows |
+| `sed -n '149,327p' docs/architecture/contract-gap-audit.md` | The exported API contract audit contains context, typed-error, lifecycle, stream, and compatibility findings for early Phase 4 rows. | Output shows audit findings such as `P4-CTX-*`, `P4-ERR-*`, and result/stream contract findings, supporting the audit-to-checklist evidence for these rows. | `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, `P4-GATE-01` |
+| `sed -n '688,930p' docs/architecture/contract-gap-audit.md` | The exported API contract audit now covers provider capability discovery, unsupported-feature validation, and related session/dependency gaps. | Output shows `P4-CAP-01`, `P4-VALIDATION-01`, and `P4-DI-02`, with affected packages, exported declarations, repair slices, and verification notes. | `P4-API-04`, `P4-API-06`, `P4-API-07`, `P4-GATE-01` |
+| `rg -n "capabil|Capability|Capabilities" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg` | Capability discovery is covered by the audit, but not yet exposed as a public runtime provider/gateway capability contract. | Output shows `P4-CAP-01` audit evidence and current package references; it must not show a public capability model on `providers.Provider`, `providers.SessionProvider`, or gateway interfaces. | `P4-API-04`, `P4-GATE-01` |
+| `rg -n "unsupported|validate|validation|capabil|feature" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg` | Unsupported-feature validation is covered by the audit, but not yet implemented as a shared gateway/provider contract before provider execution. | Output shows `P4-VALIDATION-01` audit evidence and scattered provider-specific validation, but no shared public capability-backed validation layer. | `P4-API-06`, `P4-GATE-01` |
 | `rg -n "type Provider interface|type SessionProvider interface|type Gateway interface|type InferenceRequest struct|type SessionConfig struct" go-llm-gateway/pkg/providers go-llm-gateway/pkg/gateway go-llm-gateway/pkg/models` | The public provider, gateway, request, and session declarations are inspectable without importing concrete provider internals. | Output identifies the public declarations used as affected surfaces in this report. | `P4-API-04`, `P4-API-06` |
 | `go test ./go-llm-gateway/pkg/gateway -run 'TestInteract_(NormalizesProviderError|EmitsCancellationWhenContextCancelledBeforeProviderReturns|PreservesPartialOutputBeforeCancellation)'` | Interaction events preserve structured provider error, timeout, caller cancellation, and partial-output behavior. | Tests pass without credentials, proving structured event evidence while not proving a typed `errors.Is` / `errors.As` taxonomy. | `P4-API-02`, `P4-API-05` |
 | `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|StopsDeliveryWhenOwnedContextCanceled)'` | Replay divergence and replay cancellation paths are deterministic and credential-free. | Tests pass, proving explicit replay mismatch/cancellation evidence while leaving typed replay error classification open. | `P4-API-02`, `P4-API-05` |
