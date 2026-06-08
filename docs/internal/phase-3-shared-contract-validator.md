@@ -200,16 +200,65 @@ The final convergence report must:
 - `remainingDrift`: none
 - `requiredFollowUp`: none
 
+### Adapter Explicitness
+
+- `group`: `P3-CORE-05`
+- `subject`: public cross-library adapter packages and bridge ownership between
+  `go-agent-loop` and `go-llm-gateway`
+- `outcome`: `pass`
+- `evidence`: the reviewed branch keeps the cross-library bridge in explicit,
+  named adapter packages instead of hiding it in loop core packages. The
+  public adapter types remain `go-llm-gateway/pkg/inference.GatewayInferencer`
+  and `go-llm-gateway/pkg/inference.SessionGatewayInferencer`, both of which
+  include compile-time assertions that they satisfy the loop-owned interfaces
+  `messages.Inferencer` and `messages.SessionInferencer`. Their implementations
+  delegate into gateway-owned request/response and session surfaces while
+  returning loop-owned message/session contracts, which keeps the composition
+  boundary reviewer-visible. `docs/architecture/dependencies.md`,
+  `go-llm-gateway/README.md`, and `go-llm-gateway/docs/development.md` all
+  name `pkg/inference` as the intended bridge into `go-agent-loop`, and this
+  branch does not expose any competing adapter ownership claim in
+  `go-agent-loop/pkg/messages` or other loop core packages.
+- `affectedFilesOrSurfaces`: `go-llm-gateway/pkg/inference/main_inferencer.go`;
+  `go-llm-gateway/pkg/inference/session_inferencer.go`;
+  `go-llm-gateway/README.md`; `go-llm-gateway/docs/development.md`;
+  `docs/architecture/dependencies.md`
+- `remainingDrift`: none
+- `requiredFollowUp`: none
+
+### Dependency Proof
+
+- `group`: `P3-CORE-06`
+- `subject`: reviewer-verifiable proof that `go-agent-loop` does not drift into
+  a reverse dependency on `go-llm-gateway`
+- `outcome`: `pass`
+- `evidence`: the reviewed branch now contains a committed automated proof at
+  `go-agent-loop/test/functional/dependency_direction_test.go`. Reviewers can
+  run `cd go-agent-loop && go test ./test/functional -run TestDependencyDirection_GoAgentLoopDoesNotDependOnGateway`,
+  which shells out to `go list -deps ./...` from the loop module root and
+  fails if any compiled `go-agent-loop` package depends on
+  `github.com/portpowered/go-llm-gateway`. `docs/architecture/dependencies.md`
+  now cites that exact command, so the dependency rule is no longer enforced by
+  architecture prose alone. This proof checks the delivered build graph without
+  introducing a forbidden source import in the loop module itself.
+- `affectedFilesOrSurfaces`: `go-agent-loop/test/functional/dependency_direction_test.go`;
+  `docs/architecture/dependencies.md`; root `Makefile`;
+  `docs/internal/phase-3-shared-contract-validator.md`
+- `remainingDrift`: none
+- `requiredFollowUp`: none
+
 ## Convergence Verdict
 
 - `overallOutcome`: `uncertain`
 - `summary`: the reviewed branch now converges on one truthful shared-contract
   description for `go-agent-loop/pkg/messages` and the `go-llm-gateway/pkg/models`
-  compatibility layer. The validator still cannot produce a fully authoritative
+  compatibility layer, keeps cross-library composition in explicit adapter
+  packages, and now includes an automated reverse-dependency proof reviewers
+  can run directly. The validator still cannot produce a fully authoritative
   end-state verdict because the required
   `tasks/todo/phase-3-shared-contract-decision.md` planning surface is absent,
-  and the remaining `P3-CORE-05` and `P3-CORE-06` finding groups still need
-  their dedicated convergence pass.
+  so the completed findings still cannot be mapped back to the committed slice
+  acceptance source from the reviewed branch alone.
 - `broaderPhase3Readiness`: broader Phase 3 independence slices should pause
-  pending the remaining adapter/dependency-proof validation work and restoration
-  of the missing Phase 3 decision-plan source on the reviewed branch.
+  pending restoration of the missing Phase 3 decision-plan source on the
+  reviewed branch.
