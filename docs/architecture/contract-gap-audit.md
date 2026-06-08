@@ -22,6 +22,23 @@ The findings below are written so a reviewer can distinguish "this is the contra
 
 ## Hidden Coupling Findings
 
+## Phase 3 Shared-Contract Boundary Status
+
+Phase 3 now makes one reviewer-citable boundary choice for `P3-CORE-01` and
+the scoped `P3-CORE-02` work:
+
+- `go-agent-loop/pkg/messages` is the authoritative shared contract boundary
+  for cross-library message, stream, tool, token-usage, inference, and session
+  interfaces
+- this slice keeps that boundary in the loop module instead of introducing a
+  new shared module because the repository already uses it as the live
+  compatibility anchor and does not yet show a lower-risk extraction path
+- the required evidence set for reviewers is the package-level documentation in
+  `go-agent-loop/pkg/messages`, the dependency guidance in
+  `docs/architecture/dependencies.md`, the gateway compatibility-layer
+  clarification that follows in later Phase 3 stories, and the upcoming
+  dependency-direction proof
+
 ### HC-01: `go-llm-gateway` test hygiene depends on `agent-cli` fixture layout
 
 - Affected boundary: `go-llm-gateway/internal/sessionfixturevalidator` -> `agent-cli/test/integration/testdata`
@@ -48,6 +65,13 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - an adapter would translate between loop and gateway vocabularies; the current code exposes the same types under two package paths
 - Recommended Phase 2 hardening:
   - either document `pkg/models` as a deliberate alias layer with no independent compatibility promise, or define a truly gateway-owned model surface and add explicit translation at the boundary
+- Phase 3 status:
+  - boundary ownership is now explicit: `go-agent-loop/pkg/messages` is the
+    authoritative shared contract package for this slice
+  - the remaining work is clarity at the gateway surface, not a missing
+    decision about who owns the shared contracts
+  - later Phase 3 stories tighten `pkg/models` comments and adapter docs so the
+    alias layer no longer reads as an independent contract vocabulary
 
 ### HC-03: session command behavior in `agent-cli` depends on provider-specific runtime helpers
 

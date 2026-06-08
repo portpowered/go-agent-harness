@@ -23,6 +23,35 @@ Allowed dependency direction:
 - `go-llm-gateway` may depend on `go-agent-loop` because it implements loop-owned contracts such as `messages.Inferencer`, `messages.SessionInferencer`, `messages.Session`, and the shared `messages.StreamMessage` model.
 - `agent-cli` may depend on both libraries because it is the composition layer that chooses providers, builds loops, connects IO, and persists sessions.
 
+## Phase 3 Shared-Contract Decision
+
+For `P3-CORE-01` and the scoped `P3-CORE-02` boundary work, the authoritative
+shared contract boundary is `go-agent-loop/pkg/messages`.
+
+That package owns the cross-library message, stream, tool, token-usage,
+inference, and session interfaces that both `go-llm-gateway` and `agent-cli`
+compose against. The current repository already uses that package as the real
+compatibility anchor: session interfaces are declared there, and gateway-facing
+shared-message types already track it directly.
+
+This Phase 3 slice keeps the shared boundary in `go-agent-loop/pkg/messages`
+instead of introducing a new shared module because the repository does not yet
+show a lower-risk alternative:
+
+- the loop package already defines the contracts that adapters implement
+- the gateway already depends on those contracts without reverse imports
+- extracting a new shared module here would add migration and naming churn
+  without reducing an active dependency risk in the current codebase
+
+Reviewer-citable rule for this phase:
+
+- `go-agent-loop/pkg/messages` is the source of truth for shared runtime
+  contracts
+- `go-llm-gateway` may adapt to or alias those contracts, but it does not own a
+  second shared core surface
+- any future proposal to extract a separate shared module should justify what
+  concrete risk cannot be managed at the current boundary
+
 Reviewer rule of thumb:
 
 - A new import from `go-agent-loop` into `go-llm-gateway` is expected when it consumes loop-owned contracts or shared message models.
@@ -35,7 +64,7 @@ Reviewer rule of thumb:
 `go-agent-loop` owns the core runtime-facing interfaces and shared types:
 
 - `pkg/agentloop.AgenticLoop` is the main loop API for execute, streaming execute, run, pause, state inspection, and IO configuration.
-- `pkg/messages` defines the shared `Message`, `StreamMessage`, tool payload, and session contracts used across modules.
+- `pkg/messages` is the authoritative shared contract boundary for Phase 3. It defines the shared `Message`, `StreamMessage`, tool payload, token-usage, inference, and session contracts used across modules.
 - `pkg/messages.SessionInferencer` and `pkg/messages.Session` are explicitly declared in the loop module so realtime/session implementations depend on loop contracts rather than the reverse.
 
 `go-llm-gateway` owns provider normalization and adapter implementations:
