@@ -50,5 +50,8 @@ var _ sessionInferencer = (*DefaultSessionGateway)(nil)
 
 // ConnectSession establishes a session via the configured provider.
 func (g *DefaultSessionGateway) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
+	if err := validateSessionRequest(g.provider, config); err != nil {
+		return nil, err
+	}
 	return g.provider.ConnectSession(ctx, config)
 }

@@ -50,6 +50,55 @@ func (p *fakeCapabilityProvider) InferStream(context.Context, providers.Inferenc
 	return ch, nil
 }
 
+type fakeSessionCapabilityProvider struct {
+	name         string
+	capability   providers.ProviderCapabilities
+	connectCalls int
+}
+
+func newFakeSessionCapabilityProvider(capability providers.SessionCapabilities) *fakeSessionCapabilityProvider {
+	return &fakeSessionCapabilityProvider{
+		name: "fake-capability-provider",
+		capability: providers.ProviderCapabilities{
+			Provider: "fake-capability-provider",
+			Session:  &capability,
+		},
+	}
+}
+
+func (p *fakeSessionCapabilityProvider) Name() string {
+	return p.name
+}
+
+func (p *fakeSessionCapabilityProvider) Capabilities() providers.ProviderCapabilities {
+	return p.capability
+}
+
+func (p *fakeSessionCapabilityProvider) ConnectSession(context.Context, models.SessionConfig) (messages.Session, error) {
+	p.connectCalls++
+	return fakeSession{}, nil
+}
+
+type fakeSession struct{}
+
+func (fakeSession) Send(context.Context, messages.StreamMessage) bool {
+	return true
+}
+
+func (fakeSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return nil
+}
+
+func (fakeSession) Done() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+func (fakeSession) Close() error {
+	return nil
+}
+
 func TestDefaultGatewayInferRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing.T) {
 	t.Parallel()
 
@@ -237,6 +286,150 @@ func TestDefaultGatewayInteractRejectsUnsupportedStatelessFeaturesBeforeProvider
 	}
 }
 
+func TestDefaultSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderCall(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name       string
+		feature    string
+		capability func(*providers.SessionCapabilities)
+		config     models.SessionConfig
+	}{
+		{
+			name:    "sessions",
+			feature: "sessions",
+			capability: func(c *providers.SessionCapabilities) {
+				c.Sessions = providers.Unsupported("sessions disabled")
+			},
+			config: models.SessionConfig{Model: "realtime-model"},
+		},
+		{
+			name:    "tools",
+			feature: "tools",
+			capability: func(c *providers.SessionCapabilities) {
+				c.Tools = providers.Unsupported("session tools disabled")
+			},
+			config: models.SessionConfig{
+				Model: "realtime-model",
+				Tools: []models.ToolDefinition{{Name: "lookup"}},
+			},
+		},
+		{
+			name:    "text modality",
+			feature: "textModality",
+			capability: func(c *providers.SessionCapabilities) {
+				c.TextModality = providers.Unsupported("text disabled")
+			},
+			config: models.SessionConfig{
+				Model:      "realtime-model",
+				Modalities: []models.SessionModality{models.SessionModalityText},
+			},
+		},
+		{
+			name:    "audio modality",
+			feature: "audioModality",
+			capability: func(c *providers.SessionCapabilities) {
+				c.AudioModality = providers.Unsupported("audio disabled")
+			},
+			config: models.SessionConfig{
+				Model:      "realtime-model",
+				Modalities: []models.SessionModality{models.SessionModalityAudio},
+			},
+		},
+		{
+			name:    "input audio format",
+			feature: "inputAudioFormat:pcm16",
+			capability: func(c *providers.SessionCapabilities) {
+				c.InputAudioFormats[models.AudioFormatPCM16] = providers.Unsupported("pcm16 input disabled")
+			},
+			config: models.SessionConfig{
+				Model:            "realtime-model",
+				InputAudioFormat: models.AudioFormatPCM16,
+			},
+		},
+		{
+			name:    "output audio format",
+			feature: "outputAudioFormat:g711_ulaw",
+			capability: func(c *providers.SessionCapabilities) {
+				c.OutputAudioFormats[models.AudioFormatG711Ulaw] = providers.Unsupported("g711 ulaw output disabled")
+			},
+			config: models.SessionConfig{
+				Model:             "realtime-model",
+				OutputAudioFormat: models.AudioFormatG711Ulaw,
+			},
+		},
+		{
+			name:    "turn detection",
+			feature: "turnDetection",
+			capability: func(c *providers.SessionCapabilities) {
+				c.TurnDetection = providers.Unsupported("turn detection disabled")
+			},
+			config: models.SessionConfig{
+				Model:         "realtime-model",
+				TurnDetection: &models.TurnDetectionConfig{Type: "server_vad"},
+			},
+		},
+		{
+			name:    "provider options",
+			feature: "providerOptions",
+			capability: func(c *providers.SessionCapabilities) {
+				c.ProviderOptions = providers.Unsupported("raw config disabled")
+			},
+			config: models.SessionConfig{
+				Model:  "realtime-model",
+				Config: json.RawMessage(`{"extra":true}`),
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			caps := supportedSessionCapabilities()
+			tc.capability(&caps)
+			provider := newFakeSessionCapabilityProvider(caps)
+			gw, err := NewSessionGateway(WithSessionProvider(provider))
+			if err != nil {
+				t.Fatalf("NewSessionGateway: %v", err)
+			}
+
+			session, err := gw.ConnectSession(context.Background(), tc.config)
+
+			if session != nil {
+				t.Fatalf("ConnectSession session = %#v, want nil on local rejection", session)
+			}
+			assertUnsupportedFeatureErrorWithMode(t, err, tc.feature, "session")
+			if provider.connectCalls != 0 {
+				t.Fatalf("ConnectSession calls = %d, want 0", provider.connectCalls)
+			}
+		})
+	}
+}
+
+func TestDefaultSessionGatewayAllowsUnknownSessionCapabilitiesByContract(t *testing.T) {
+	t.Parallel()
+
+	caps := supportedSessionCapabilities()
+	caps.InputAudioFormats[models.AudioFormatPCM16] = providers.Unknown("format support depends on model")
+	provider := newFakeSessionCapabilityProvider(caps)
+	gw, err := NewSessionGateway(WithSessionProvider(provider))
+	if err != nil {
+		t.Fatalf("NewSessionGateway: %v", err)
+	}
+
+	_, err = gw.ConnectSession(context.Background(), models.SessionConfig{
+		Model:            "realtime-model",
+		InputAudioFormat: models.AudioFormatPCM16,
+	})
+
+	if err != nil {
+		t.Fatalf("ConnectSession() error = %v, want nil for unknown capability pass-through", err)
+	}
+	if provider.connectCalls != 1 {
+		t.Fatalf("ConnectSession calls = %d, want 1", provider.connectCalls)
+	}
+}
+
 func TestDefaultGatewayInferAllowsUnknownCapabilitiesByContract(t *testing.T) {
 	t.Parallel()
 
@@ -289,7 +482,27 @@ func supportedStatelessCapabilities() providers.StatelessCapabilities {
 	}
 }
 
+func supportedSessionCapabilities() providers.SessionCapabilities {
+	supported := providers.Supported()
+	return providers.SessionCapabilities{
+		Sessions:           supported,
+		Tools:              supported,
+		TextModality:       supported,
+		AudioModality:      supported,
+		InputAudioFormats:  providers.RealtimeAudioFormats(),
+		OutputAudioFormats: providers.RealtimeAudioFormats(),
+		TurnDetection:      supported,
+		ProviderOptions:    supported,
+	}
+}
+
 func assertUnsupportedFeatureError(t *testing.T, err error, feature string) {
+	t.Helper()
+
+	assertUnsupportedFeatureErrorWithMode(t, err, feature, "stateless")
+}
+
+func assertUnsupportedFeatureErrorWithMode(t *testing.T, err error, feature, mode string) {
 	t.Helper()
 
 	var unsupported *providers.UnsupportedFeatureError
@@ -302,8 +515,8 @@ func assertUnsupportedFeatureError(t *testing.T, err error, feature string) {
 	if unsupported.Feature != feature {
 		t.Fatalf("Feature = %q, want %q", unsupported.Feature, feature)
 	}
-	if unsupported.Mode != "stateless" {
-		t.Fatalf("Mode = %q, want stateless", unsupported.Mode)
+	if unsupported.Mode != mode {
+		t.Fatalf("Mode = %q, want %s", unsupported.Mode, mode)
 	}
 	if unsupported.Capability.State != providers.CapabilityUnsupported {
 		t.Fatalf("Capability.State = %q", unsupported.Capability.State)
