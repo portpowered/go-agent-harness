@@ -23,25 +23,78 @@ Allowed dependency direction:
 - `go-llm-gateway` may depend on `go-agent-loop` because it implements loop-owned contracts such as `messages.Inferencer`, `messages.SessionInferencer`, `messages.Session`, and the shared `messages.StreamMessage` model.
 - `agent-cli` may depend on both libraries because it is the composition layer that chooses providers, builds loops, connects IO, and persists sessions.
 
+## Phase 3 Shared-Contract Decision
+
+For `P3-CORE-01` and the scoped `P3-CORE-02` boundary work, the authoritative
+shared contract boundary is `go-agent-loop/pkg/messages`.
+
+That package owns the cross-library message, stream, tool, token-usage,
+inference, and session interfaces that both `go-llm-gateway` and `agent-cli`
+compose against. The current repository already uses that package as the real
+compatibility anchor: session interfaces are declared there, and gateway-facing
+shared-message types already track it directly.
+
+This Phase 3 slice keeps the shared boundary in `go-agent-loop/pkg/messages`
+instead of introducing a new shared module because the repository does not yet
+show a lower-risk alternative:
+
+- the loop package already defines the contracts that adapters implement
+- the gateway already depends on those contracts without reverse imports
+- extracting a new shared module here would add migration and naming churn
+  without reducing an active dependency risk in the current codebase
+
+Reviewer-citable rule for this phase:
+
+- `go-agent-loop/pkg/messages` is the source of truth for shared runtime
+  contracts
+- `go-llm-gateway` may adapt to or alias those contracts, but it does not own a
+  second shared core surface
+- any future proposal to extract a separate shared module should justify what
+  concrete risk cannot be managed at the current boundary
+- the runtime adapter tests in `go-llm-gateway/pkg/inference` are the
+  behavioral proof for this slice: they exercise gateway adapters through
+  loop-owned contracts without introducing a second shared core surface
+
+Gateway-runtime decoupling reviewer rule for `P3-CORE-04` in the current
+slice:
+
+- treat `go-agent-loop/pkg/messages` as the only deliberate shared runtime
+  contract boundary that `go-llm-gateway` may depend on for this slice
+- treat loop-owned helper packages such as `go-agent-loop/pkg/logging` as out
+  of bounds for gateway provider code and tests
+- treat `go-llm-gateway/pkg/logging` as the gateway-owned seam for optional
+  provider logging so reviewers do not need to infer that replacement from
+  imports alone
+
 Reviewer rule of thumb:
 
-- A new import from `go-agent-loop` into `go-llm-gateway` is expected when it consumes loop-owned contracts or shared message models.
-- A new import from `go-agent-loop` into `agent-cli` is expected when the CLI is configuring or driving loop behavior.
-- A new import from `go-llm-gateway` into `agent-cli` is expected when the CLI is choosing or configuring concrete provider adapters.
-- A new import from `go-agent-loop` into `agent-cli` or `go-llm-gateway` is not symmetric. Imports in the reverse direction would violate the intended layering.
+- A new import from `go-llm-gateway` into `go-agent-loop` is expected when gateway adapters consume loop-owned contracts or shared message models.
+- A new import from `agent-cli` into `go-agent-loop` is expected when the CLI is configuring or driving loop behavior.
+- A new import from `agent-cli` into `go-llm-gateway` is expected when the CLI is choosing or configuring concrete provider adapters.
+- Those imports are not symmetric. New imports in the reverse direction, from `go-agent-loop` into `go-llm-gateway` or `agent-cli`, or from `go-llm-gateway` into `agent-cli`, would violate the intended layering.
+
+Reviewer-verifiable proof:
+
+- Run `cd go-llm-gateway && go test ./pkg/inference`.
+- The tests exercise `GatewayInferencer` and `SessionGatewayInferencer` through
+  loop-owned `messages` interfaces and pass without live provider credentials.
+- Reviewers who need to inspect dependency direction can run `go list` commands
+  manually, but dependency inventories are reviewer evidence rather than
+  quality-gate tests.
 
 ## Current Contract Surfaces
 
 `go-agent-loop` owns the core runtime-facing interfaces and shared types:
 
 - `pkg/agentloop.AgenticLoop` is the main loop API for execute, streaming execute, run, pause, state inspection, and IO configuration.
-- `pkg/messages` defines the shared `Message`, `StreamMessage`, tool payload, and session contracts used across modules.
+- `pkg/messages` is the authoritative shared contract boundary for Phase 3. It defines the shared `Message`, `StreamMessage`, tool payload, token-usage, inference, and session contracts used across modules.
 - `pkg/messages.SessionInferencer` and `pkg/messages.Session` are explicitly declared in the loop module so realtime/session implementations depend on loop contracts rather than the reverse.
 
 `go-llm-gateway` owns provider normalization and adapter implementations:
 
 - `pkg/gateway.Gateway` is the stateless inference boundary for normalized requests and responses.
 - `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are the intended adapters from gateway/provider code into loop-owned interfaces.
+- `pkg/logging` is the gateway-owned optional logging seam for provider code. It is not part of the shared cross-module runtime contract boundary.
 - `pkg/providers` owns provider-specific request shaping and provider option translation, but not generic live/record/replay transport policy.
 
 `agent-cli` owns application wiring:
@@ -49,6 +102,7 @@ Reviewer rule of thumb:
 - `internal/agent.Executor` builds loops, loads config, and selects the active provider implementation.
 - `internal/agent.Executor` and `internal/agent.buildProviderHTTPRuntime(...)` own the shared stateless provider HTTP runtime decision for live, record, and replay modes before provider-specific builders run.
 - `internal/agent.ProviderBuildContext` is the constructor seam that passes that owned runtime dependency into concrete provider builders.
+- `internal/agent.WithProviderHTTPBaseTransport(...)` is the CLI-owned test and composition seam for choosing the base live transport; record mode wraps that same transport, and replay mode replaces it with the fixture replay transport.
 - `internal/services/session.go` assembles session-mode runtime behavior by combining `agentloop`, gateway session inferencers, replay helpers, and CLI output handling.
 - `internal/tools`, `internal/session`, `internal/config`, and `internal/workspace` are application concerns that should stay above the reusable libraries.
 
@@ -89,20 +143,22 @@ Concrete Phase 2 API gap for this module:
 Primary consumer-facing entrypoints:
 
 - `pkg/gateway.Gateway` and `pkg/gateway.DefaultGateway` are the normalized request/response seam for stateless inference.
-- `pkg/gateway.DefaultSessionGateway` and `pkg/inference.SessionGatewayInferencer` are the current session-mode bridge into `go-agent-loop`.
-- `pkg/inference.GatewayInferencer` is the main adapter from gateway requests into `messages.Inferencer`.
+- `pkg/gateway.DefaultSessionGateway` is the gateway-side bridge that accepts gateway-owned `models.SessionConfig` before returning the loop-owned `messages.Session` contract.
+- `pkg/inference.SessionGatewayInferencer` is the public session-mode bridge into `go-agent-loop` and should be described as an adapter, not as an independent shared-session surface.
+- `pkg/inference.GatewayInferencer` is the public stateless adapter from gateway requests into the loop-owned `messages.Inferencer` contract.
 - `pkg/providers.Provider` and `pkg/providers.SessionProvider` are the provider-facing construction seams used by the CLI composition layer.
 
 Candidate stable contracts:
 
 - `pkg/gateway` is the most plausible downstream-stable package because it hides provider-specific request shaping behind normalized request types.
-- `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are intentionally public adapter types because they are the expected bridge into loop-owned interfaces.
+- `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are intentionally public adapter types because they are the expected bridge into loop-owned interfaces rather than a second shared core.
 - `pkg/providers.Provider` and `pkg/providers.SessionProvider` are candidate stable construction contracts for adding providers without changing loop code.
 
 Constructor ownership contract after this Phase 2 step:
 
 - Generic stateless HTTP runtime policy for live, record, and replay belongs to `agent-cli`, not to individual provider builders.
 - Provider builders consume injected runtime dependencies through `internal/agent.ProviderBuildContext` and remain focused on provider-specific option wiring.
+- Live and record base transport selection is caller-owned at `agent-cli/internal/agent.WithProviderHTTPBaseTransport(...)`; provider constructors receive the resulting `*http.Client` rather than selecting transport policy themselves.
 - Reviewers should treat implicit `http.DefaultTransport` selection or record/replay capture assembly inside provider builders as an architectural regression.
 
 Exports that currently look incidental or not yet independent:
@@ -113,6 +169,12 @@ Exports that currently look incidental or not yet independent:
 Concrete Phase 2 API gap for this module:
 
 - `SessionGatewayInferencer` only exposes `WithSessionModel`, `WithSessionVoice`, and `WithSessionInstructions`, while `models.SessionConfig` already carries modalities, audio formats, tools, turn detection, and provider-specific config. That means the exported session adapter surface is narrower than the gateway session contract and forces callers toward provider-specific wiring when they need richer session configuration.
+
+Phase 3 dependency-boundary status for this module:
+
+- `pkg/messages` remains the deliberate shared runtime contract boundary for the current gateway-independence slice.
+- Provider-local optional logging has moved behind `go-llm-gateway/pkg/logging`, so scoped OpenAI and Grok provider paths no longer need `go-agent-loop/pkg/logging`.
+- Reviewers should not treat that logging seam move as proof that every gateway package is loop-independent; the enforced claim for this slice is narrower and limited to removing loop-owned non-contract runtime helpers from the reviewed provider surfaces.
 
 ### `agent-cli`
 

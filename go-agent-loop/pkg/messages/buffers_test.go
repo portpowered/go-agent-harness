@@ -2,6 +2,7 @@ package messages
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -139,6 +140,56 @@ func TestTypedBuffer_ReadBlockingCancelled(t *testing.T) {
 	_, ok := buf.ReadBlocking(done)
 	if ok {
 		t.Error("ReadBlocking should return false when done is closed")
+	}
+}
+
+func TestTypedBuffer_ReadContextReturnsData(t *testing.T) {
+	buf := NewTypedBuffer[string](10)
+	if !buf.Write(context.Background(), "ready") {
+		t.Fatal("Write should succeed")
+	}
+
+	data, err := buf.ReadContext(context.Background())
+	if err != nil {
+		t.Fatalf("ReadContext returned error: %v", err)
+	}
+	if data != "ready" {
+		t.Errorf("expected 'ready', got %q", data)
+	}
+}
+
+func TestTypedBuffer_ReadContextCancelledBeforeRead(t *testing.T) {
+	buf := NewTypedBuffer[string](10)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	data, err := buf.ReadContext(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if data != "" {
+		t.Errorf("expected zero value on cancellation, got %q", data)
+	}
+}
+
+func TestTypedBuffer_ReadContextCancelledWhileBlocked(t *testing.T) {
+	buf := NewTypedBuffer[string](10)
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+
+	go func() {
+		_, err := buf.ReadContext(ctx)
+		result <- err
+	}()
+	cancel()
+
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("ReadContext did not return after context cancellation")
 	}
 }
 

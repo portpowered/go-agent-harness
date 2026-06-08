@@ -235,14 +235,22 @@ func (c *replayWebSocketConn) WriteMessage(_ int, payload []byte) error {
 		return io.ErrClosedPipe
 	}
 	if c.index >= len(c.events) {
-		return c.setErrLocked(fmt.Errorf("session replay divergence: unexpected outbound event %s after replay completed", websocketPayloadType(payload)))
+		return c.setErrLocked(newReplayMismatchError("replay completed", websocketPayloadType(payload), fmt.Errorf("unexpected outbound event after replay completed")))
 	}
 	evt := c.events[c.index]
 	if evt.Direction != DirectionClientToServer {
-		return c.setErrLocked(fmt.Errorf("session replay divergence at sequence %d: got outbound %s before expected %s event %s", evt.Sequence, websocketPayloadType(payload), evt.Direction, evt.Type))
+		return c.setErrLocked(newReplayMismatchError(
+			fmt.Sprintf("%s event %s at sequence %d", evt.Direction, evt.Type, evt.Sequence),
+			websocketPayloadType(payload),
+			fmt.Errorf("got outbound before expected capture event"),
+		))
 	}
 	if !rawJSONEqual(eventPayload(evt), payload) {
-		return c.setErrLocked(fmt.Errorf("session replay divergence at sequence %d: expected outbound payload for %s does not match actual outbound event %s", evt.Sequence, evt.Type, websocketPayloadType(payload)))
+		return c.setErrLocked(newReplayMismatchError(
+			fmt.Sprintf("outbound payload for %s at sequence %d", evt.Type, evt.Sequence),
+			websocketPayloadType(payload),
+			fmt.Errorf("expected outbound payload does not match actual outbound event"),
+		))
 	}
 	c.index++
 	c.cond.Broadcast()
@@ -255,7 +263,11 @@ func (c *replayWebSocketConn) Close() error {
 
 	if c.err == nil && c.index < len(c.events) {
 		evt := c.events[c.index]
-		c.err = fmt.Errorf("session replay incomplete at sequence %d: expected %s event %s", evt.Sequence, evt.Direction, evt.Type)
+		c.err = newReplayMismatchError(
+			fmt.Sprintf("%s event %s at sequence %d", evt.Direction, evt.Type, evt.Sequence),
+			"connection close",
+			fmt.Errorf("session replay incomplete"),
+		)
 	}
 	c.closed = true
 	c.closeDoneLocked()

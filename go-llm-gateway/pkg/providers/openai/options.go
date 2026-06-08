@@ -3,7 +3,7 @@ package openai
 import (
 	"net/http"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 )
 
 // Option configures the OpenAI provider.

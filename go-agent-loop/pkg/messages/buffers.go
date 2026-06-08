@@ -66,8 +66,25 @@ func (b *TypedBuffer[T]) ReadBlocking(done <-chan struct{}) (T, bool) {
 }
 
 // ReadBlockingContext waits until data is available or ctx is cancelled.
+// It is retained for compatibility with existing bool-based callers. New
+// callers that need to inspect cancellation or timeout causes should use
+// ReadContext.
 func (b *TypedBuffer[T]) ReadBlockingContext(ctx context.Context) (T, bool) {
 	return b.ReadBlocking(ctx.Done())
+}
+
+// ReadContext waits until data is available or ctx is cancelled.
+// The caller owns ctx and therefore controls cancellation and timeout behavior.
+// When ctx is cancelled before data is available, ReadContext returns the zero
+// value for T and an error matching ctx.Err().
+func (b *TypedBuffer[T]) ReadContext(ctx context.Context) (T, error) {
+	select {
+	case data := <-b.ch:
+		return data, nil
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	}
 }
 
 // HasData returns true if the buffer has pending data.

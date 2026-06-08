@@ -89,11 +89,18 @@ That example uses the main request/response path:
 
 - `agentloop.New(...)` creates a loop with explicit options
 - `loop.Execute(...)` runs one user turn and returns the collected full messages
-- `result.Text()` returns the final assistant text for the turn
+- `result.Text()` returns the final assistant text for legacy text-only callers
+- `result.FinalText()` returns an explicit final text outcome for new callers
+  that need to distinguish non-empty success, empty success, no final text,
+  cancellation, terminal failure, and partial output
 - `loop.GetConversationHistory()` and `loop.GetConversationDeltas()` expose the
   recorded full-message and delta history after execution
 
 For streaming text or reasoning deltas, use `ExecuteStreaming(...)` instead.
+Its `EventStream` keeps the legacy `HasNext()`/`Response()` iterator shape, and
+new integrations can call `EventStream.Outcome()` after `HasNext()` returns
+false to distinguish clean drain, caller close, cancellation/deadline, terminal
+failure, and partial output before failure.
 
 Tool execution is now an explicit constructor contract:
 

@@ -13,11 +13,13 @@ import (
 )
 
 type fakeInteractionProvider struct {
-	name     string
-	captured providers.InferenceRequest
-	calls    int
-	response providers.InferenceResponse
-	err      error
+	name           string
+	captured       providers.InferenceRequest
+	calls          int
+	response       providers.InferenceResponse
+	err            error
+	streamMessages []messages.StreamMessage
+	streamErr      error
 }
 
 func (p *fakeInteractionProvider) Name() string {
@@ -35,7 +37,13 @@ func (p *fakeInteractionProvider) Infer(_ context.Context, req providers.Inferen
 
 func (p *fakeInteractionProvider) InferStream(_ context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	p.captured = req
-	ch := make(chan messages.StreamMessage)
+	if p.streamErr != nil {
+		return nil, p.streamErr
+	}
+	ch := make(chan messages.StreamMessage, len(p.streamMessages))
+	for _, msg := range p.streamMessages {
+		ch <- msg
+	}
 	close(ch)
 	return ch, nil
 }
@@ -179,7 +187,7 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 
 	provider := &fakeInteractionProvider{
 		name: "fake-provider",
-		err:  errors.New("upstream failed"),
+		err:  providers.NewProviderHTTPError("fake-provider", 429, "rate limit exceeded"),
 	}
 	gw, err := NewGateway(WithProvider(provider))
 	if err != nil {
@@ -205,8 +213,50 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 	if events[1].Error.Code != "provider_error" {
 		t.Fatalf("error code = %q", events[1].Error.Code)
 	}
-	if events[1].Error.Message != "upstream failed" {
+	if events[1].Error.Message != "fake-provider: api error 429: rate limit exceeded" {
 		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+	if events[1].Error.Classification != providers.ErrorClassRateLimited {
+		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassRateLimited)
+	}
+}
+
+func TestInteract_NormalizesGatewayTransportError(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeInteractionProvider{
+		name: "fake-provider",
+		err:  NewTransportError("openai", "infer", errors.New("dial tcp failed")),
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	events := collectInteractionEvents(t, gw, InteractionRequest{
+		InteractionID: "interaction-transport-error",
+		Model:         "model-error",
+	})
+
+	wantTypes := []InteractionEventType{
+		InteractionEventStart,
+		InteractionEventError,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if events[1].Error == nil {
+		t.Fatal("error event payload is nil")
+	}
+	if events[1].Error.Code != "provider_error" {
+		t.Fatalf("error code = %q", events[1].Error.Code)
+	}
+	if events[1].Error.Message != "openai: infer transport failed: dial tcp failed" {
+		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+	if events[1].Error.Classification != providers.ErrorClassTransport {
+		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassTransport)
 	}
 }
 
@@ -245,6 +295,12 @@ func TestInteract_EmitsCancellationWhenContextCancelledBeforeProviderReturns(t *
 	}
 	if events[0].Cancellation.Message != context.Canceled.Error() {
 		t.Fatalf("cancellation message = %q", events[0].Cancellation.Message)
+	}
+	if events[0].Cancellation.Classification != providers.ErrorClassCancellation {
+		t.Fatalf("cancellation classification = %q, want %q", events[0].Cancellation.Classification, providers.ErrorClassCancellation)
+	}
+	if events[0].Cancellation.OutputState != "" {
+		t.Fatalf("cancellation output state = %q, want empty", events[0].Cancellation.OutputState)
 	}
 	if provider.calls != 0 {
 		t.Fatalf("provider calls = %d, want 0", provider.calls)
@@ -300,6 +356,12 @@ func TestInteract_PreservesPartialOutputBeforeCancellation(t *testing.T) {
 	if events[2].Cancellation == nil || events[2].Cancellation.Reason != "caller_cancelled" {
 		t.Fatalf("cancellation = %#v", events[2].Cancellation)
 	}
+	if events[2].Cancellation.Classification != providers.ErrorClassCancellation {
+		t.Fatalf("cancellation classification = %q, want %q", events[2].Cancellation.Classification, providers.ErrorClassCancellation)
+	}
+	if events[2].Cancellation.OutputState != providers.ErrorClassPartialOutput {
+		t.Fatalf("cancellation output state = %q, want %q", events[2].Cancellation.OutputState, providers.ErrorClassPartialOutput)
+	}
 	if events[3].Type != InteractionEventEnd {
 		t.Fatalf("terminal event = %#v", events[3])
 	}
@@ -341,6 +403,9 @@ func TestInteract_NormalizesDeadlineExceededAsTimeoutError(t *testing.T) {
 	}
 	if events[1].Error.Message != context.DeadlineExceeded.Error() {
 		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+	if events[1].Error.Classification != providers.ErrorClassTransport {
+		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassTransport)
 	}
 }
 
@@ -564,6 +629,9 @@ func TestInteract_RejectsInvalidToolResultsBeforeProviderContinuation(t *testing
 			}
 			if events[1].Error.Message != tt.wantMessage {
 				t.Fatalf("error message = %q, want %q", events[1].Error.Message, tt.wantMessage)
+			}
+			if events[1].Error.Classification != providers.ErrorClassInvalidRequest {
+				t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassInvalidRequest)
 			}
 			if provider.calls != 0 {
 				t.Fatalf("provider calls = %d, want 0", provider.calls)

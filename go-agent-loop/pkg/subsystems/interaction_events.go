@@ -109,7 +109,7 @@ func (s *InteractionEvents) applyEvent(ctx context.Context, curr *state.LoopStat
 		curr.Interaction.TerminalError = &errPayload
 		writeKernelDelta(ctx, curr, messages.System, messages.StreamMessage{
 			Type:  messages.StreamTypeError,
-			Value: messages.NewErrorValue(errPayload.Message),
+			Value: messages.NewErrorValueWithClassification(errPayload.Message, errPayload.Classification),
 		})
 	case messages.InteractionEventCancellation:
 		if event.Cancellation == nil {

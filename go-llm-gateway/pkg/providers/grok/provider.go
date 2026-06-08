@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -40,6 +41,31 @@ func New(opts ...Option) *GrokSessionProvider {
 }
 
 func (p *GrokSessionProvider) Name() string { return "grok" }
+
+func (p *GrokSessionProvider) Capabilities() providers.ProviderCapabilities {
+	statelessCap := capabilities.Unsupported("the Grok provider in this module implements realtime sessions only")
+	return capabilities.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  statelessCap,
+			Streaming:              statelessCap,
+			ImageInput:             statelessCap,
+			AudioInput:             statelessCap,
+			AudioOutput:            statelessCap,
+			VideoOutput:            statelessCap,
+			Reasoning:              statelessCap,
+			PromptCaching:          statelessCap,
+			ProviderSpecificConfig: statelessCap,
+		},
+		Session: capabilities.SessionCapabilities{
+			Sessions:               capabilities.Supported("Grok realtime websocket sessions are implemented"),
+			Tools:                  capabilities.Supported("realtime session tools are serialized as function tools"),
+			AudioInput:             capabilities.Supported("client audio input events are supported"),
+			AudioOutput:            capabilities.Supported("realtime output audio events are normalized"),
+			ProviderSpecificConfig: capabilities.Unsupported("SessionConfig Config is not merged by the Grok realtime wrapper"),
+		},
+	}
+}
 
 // ConnectSession establishes a WebSocket connection to the Grok realtime API,
 // sends the initial session.update with the provided config, and returns a

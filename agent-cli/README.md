@@ -169,6 +169,12 @@ with `go-agent-loop` and `go-llm-gateway` in the active workspace.
   modes.
 - Its supported surface is the `agent` command and the user documentation under
   `docs/`, not the internal package layout under `internal/`.
+- System prompt resolution is CLI-owned composition. `--system-prompt` reads an
+  existing file path or treats a non-existent path as literal prompt text; the
+  default path creates `AGENTS.md` when missing, reads it from the workspace,
+  prepends runtime system information unless `--no-system-information` is set,
+  and appends discovered skill metadata from workspace/config `skills/`
+  directories.
 
 Consumers who need a library integration point should start with
 [`go-agent-loop`](../go-agent-loop/README.md) or
@@ -183,6 +189,11 @@ For the constructor ownership boundary specifically:
   stateless providers before provider construction, then injects it through
   `ProviderBuildContext` so provider builders do not assemble record/replay
   transport policy themselves.
+- `agent-cli/internal/agent.Executor.LoadSystemPromptWithDetails(...)` is the
+  additive inspection contract for prompt-resolution composition tests. It
+  returns the resolved prompt plus the prompt sources and CLI-owned side effects
+  consulted during resolution while `LoadSystemPrompt(...)` remains compatible
+  for existing callers.
 
 ## Further Reading
 

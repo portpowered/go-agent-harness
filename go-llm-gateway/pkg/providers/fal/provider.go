@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -50,10 +51,36 @@ func (p *FalProvider) Name() string {
 	return "fal"
 }
 
+func (p *FalProvider) Capabilities() providers.ProviderCapabilities {
+	sessionUnsupported := "fal.ai endpoints in this wrapper are synchronous stateless endpoints only"
+	sessionCap := capabilities.Unsupported(sessionUnsupported)
+	return capabilities.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  capabilities.Unsupported("fal.ai model endpoints in this wrapper do not accept gateway tool definitions"),
+			Streaming:              capabilities.Unsupported("fal.ai endpoints in this wrapper are sync-only"),
+			ImageInput:             capabilities.Supported("image input is mapped for image-to-video models"),
+			AudioInput:             capabilities.Supported("audio input is mapped for audio and voice models"),
+			AudioOutput:            capabilities.Supported("audio output is normalized for speech models"),
+			VideoOutput:            capabilities.Supported("video output is normalized for video-generation models"),
+			Reasoning:              capabilities.Unsupported("fal.ai model endpoints in this wrapper do not accept reasoning options"),
+			PromptCaching:          capabilities.Unsupported("fal.ai model endpoints in this wrapper do not accept prompt cache-control options"),
+			ProviderSpecificConfig: capabilities.Supported("InferenceRequest Config is merged into fal.ai request payloads"),
+		},
+		Session: capabilities.SessionCapabilities{
+			Sessions:               sessionCap,
+			Tools:                  sessionCap,
+			AudioInput:             sessionCap,
+			AudioOutput:            sessionCap,
+			ProviderSpecificConfig: sessionCap,
+		},
+	}
+}
+
 func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest) (providers.InferenceResponse, error) {
 	model := req.Model
 	if model == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal provider requires Model to be set (e.g. %q, %q, or %q)", ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS)
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "model", fmt.Sprintf("fal provider requires Model to be set (e.g. %q, %q, or %q)", ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS))
 	}
 
 	config := req.Config
@@ -88,17 +115,20 @@ func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest)
 		case ModelQwenCloneVoice:
 			return p.inferQwenCloneVoice(ctx, audioURL, text, config)
 		default:
-			return providers.InferenceResponse{}, fmt.Errorf("fal provider: unsupported model %q (supported: %q, %q, %q, %q, %q)", model, ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS, ModelGrokImagineVideoImageToVideo, ModelKlingVideoV3ImageToVideo)
+			supported := []string{ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS, ModelGrokImagineVideoImageToVideo, ModelKlingVideoV3ImageToVideo}
+			return providers.InferenceResponse{}, providers.NewUnsupportedRequestError("fal", "model", model, supported, fmt.Sprintf("fal provider: unsupported model %q (supported: %q, %q, %q, %q, %q)", model, ModelLTXAudioToVideo, ModelQwenCloneVoice, ModelQwenTTS, ModelGrokImagineVideoImageToVideo, ModelKlingVideoV3ImageToVideo))
 		}
 	}
 }
 
 func (p *FalProvider) InferStream(ctx context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
-	// fal.ai LTX and Qwen clone-voice endpoints are sync-only; no streaming.
-	// Return a channel that immediately closes with no items.
-	ch := make(chan messages.StreamMessage)
-	close(ch)
-	return ch, nil
+	capability := p.Capabilities().Stateless.Streaming
+	return nil, &providers.UnsupportedFeatureError{
+		Provider:      p.Name(),
+		Feature:       capabilities.FeatureStreaming,
+		RequestedMode: capabilities.RequestedModeStatelessStream,
+		Capability:    capability,
+	}
 }
 
 // extractAudioAndTextFromMessages takes the last user message and returns an audio URL
@@ -243,7 +273,7 @@ type ltxAudioToVideoResponse struct {
 
 func (p *FalProvider) inferLTXAudioToVideo(ctx context.Context, audioURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if audioURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal LTX audio-to-video: audio_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "audio_url", "fal LTX audio-to-video: audio_url is required")
 	}
 	if prompt == "" {
 		prompt = "A person speaks to the camera"
@@ -288,7 +318,7 @@ type grokImagineVideoResponse struct {
 
 func (p *FalProvider) inferGrokImagineVideo(ctx context.Context, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if imageURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal Grok Imagine Video: image_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal Grok Imagine Video: image_url is required")
 	}
 	body := grokImagineVideoRequest{ImageURL: imageURL, Prompt: prompt}
 	var resp grokImagineVideoResponse
@@ -330,7 +360,7 @@ type klingVideoV3Response struct {
 
 func (p *FalProvider) inferKlingVideoV3(ctx context.Context, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if imageURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal Kling Video v3: image_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal Kling Video v3: image_url is required")
 	}
 	body := klingVideoV3Request{ImageURL: imageURL, Prompt: prompt}
 	var resp klingVideoV3Response
@@ -372,7 +402,7 @@ type qwenCloneVoiceResponse struct {
 
 func (p *FalProvider) inferQwenCloneVoice(ctx context.Context, audioURL, referenceText string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if audioURL == "" {
-		return providers.InferenceResponse{}, fmt.Errorf("fal Qwen clone-voice: audio_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "audio_url", "fal Qwen clone-voice: audio_url is required")
 	}
 	body := qwenCloneVoiceRequest{AudioURL: audioURL, ReferenceText: referenceText}
 	var resp qwenCloneVoiceResponse
@@ -494,7 +524,7 @@ func (p *FalProvider) doJSON(ctx context.Context, modelID string, body any, resu
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("fal: %s %s: %d %s", req.Method, url, resp.StatusCode, string(body))
+		return providers.NewProviderHTTPError("fal", resp.StatusCode, fmt.Sprintf("%s %s: %d %s", req.Method, url, resp.StatusCode, string(body)))
 	}
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
 		return fmt.Errorf("fal: decode response: %w", err)

@@ -7,6 +7,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -45,6 +46,32 @@ func New(opts ...Option) *AnthropicProvider {
 
 func (p *AnthropicProvider) Name() string {
 	return "anthropic"
+}
+
+func (p *AnthropicProvider) Capabilities() providers.ProviderCapabilities {
+	sessionUnsupported := "the Anthropic Messages wrapper does not implement a bidirectional session provider"
+	sessionCap := capabilities.Unsupported(sessionUnsupported)
+	return capabilities.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  capabilities.Supported("Anthropic Messages requests serialize tool definitions"),
+			Streaming:              capabilities.Supported("Anthropic Messages streaming is implemented"),
+			ImageInput:             capabilities.Supported("image parts are serialized as image content blocks"),
+			AudioInput:             capabilities.Unsupported("audio parts are converted to text data references, not native Anthropic audio input"),
+			AudioOutput:            capabilities.Unsupported("the Anthropic Messages wrapper does not normalize audio output"),
+			VideoOutput:            capabilities.Unsupported("the Anthropic Messages wrapper does not normalize video output"),
+			Reasoning:              capabilities.Supported("Anthropic thinking options are mapped to the Messages API"),
+			PromptCaching:          capabilities.Supported("Anthropic cache-control blocks are mapped by the wrapper"),
+			ProviderSpecificConfig: capabilities.Unsupported("InferenceRequest Config is not merged by the Anthropic wrapper"),
+		},
+		Session: capabilities.SessionCapabilities{
+			Sessions:               sessionCap,
+			Tools:                  sessionCap,
+			AudioInput:             sessionCap,
+			AudioOutput:            sessionCap,
+			ProviderSpecificConfig: sessionCap,
+		},
+	}
 }
 
 func (p *AnthropicProvider) Infer(ctx context.Context, req providers.InferenceRequest) (providers.InferenceResponse, error) {

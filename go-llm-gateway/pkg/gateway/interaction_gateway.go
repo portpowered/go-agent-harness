@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -39,8 +40,12 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 
 		if err := validateInteractionToolResults(req); err != nil {
 			_ = emitter.emitTerminal(ctx, InteractionEvent{
-				Type:  InteractionEventError,
-				Error: &InteractionError{Code: "tool_result_validation_error", Message: err.Error()},
+				Type: InteractionEventError,
+				Error: &InteractionError{
+					Code:           "tool_result_validation_error",
+					Message:        err.Error(),
+					Classification: providers.ErrorClassInvalidRequest,
+				},
 			})
 			return
 		}
@@ -57,7 +62,13 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 			}
 		}
 
-		resp, err := g.provider.Infer(ctx, interactionProviderRequest(req))
+		if err := validateStatelessRequest(g.Capabilities(), interactionInferenceRequest(req), capabilities.RequestedModeStateless); err != nil {
+			emitter.emitTerminalForErr(err)
+			return
+		}
+
+		providerReq := interactionProviderRequest(req)
+		resp, err := g.provider.Infer(ctx, providerReq)
 		if err != nil {
 			emitter.emitTerminalForErr(err)
 			return
@@ -72,6 +83,7 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 				emitter.emitTerminalForErr(err)
 				return
 			}
+			emitter.markOutputEmitted()
 			if err := ctx.Err(); err != nil {
 				emitter.emitTerminalForErr(err)
 				return
@@ -150,6 +162,7 @@ type interactionEventEmitter struct {
 	provider      string
 	model         string
 	sequence      int64
+	outputEmitted bool
 }
 
 func newInteractionEventEmitter(out chan<- InteractionEvent, interactionID, provider, model string, sequence int64) *interactionEventEmitter {
@@ -198,8 +211,10 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		_ = e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventCancellation,
 			Cancellation: &InteractionCancellation{
-				Reason:  "caller_cancelled",
-				Message: err.Error(),
+				Reason:         "caller_cancelled",
+				Message:        err.Error(),
+				Classification: providers.ErrorClassification(err),
+				OutputState:    e.outputStateForTerminal(),
 			},
 		})
 		return
@@ -208,9 +223,29 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		_ = e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventError,
 			Error: &InteractionError{
-				Code:      "provider_timeout",
-				Message:   err.Error(),
-				Retryable: true,
+				Code:           "provider_timeout",
+				Message:        err.Error(),
+				Classification: providers.ErrorClassTransport,
+				Retryable:      true,
+			},
+		})
+		return
+	}
+	var unsupported *providers.UnsupportedFeatureError
+	if errors.As(err, &unsupported) {
+		_ = e.emitTerminalRaw(InteractionEvent{
+			Type: InteractionEventError,
+			Error: &InteractionError{
+				Code:    "unsupported_feature",
+				Message: err.Error(),
+				Details: map[string]json.RawMessage{
+					"provider":   mustRawJSON(unsupported.Provider),
+					"feature":    mustRawJSON(unsupported.Feature),
+					"mode":       mustRawJSON(unsupported.RequestedMode),
+					"state":      mustRawJSON(unsupported.Capability.State),
+					"detail":     mustRawJSON(unsupported.Capability.Detail),
+					"capability": mustRawJSON(unsupported.Capability),
+				},
 			},
 		})
 		return
@@ -218,10 +253,47 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 	_ = e.emitTerminalRaw(InteractionEvent{
 		Type: InteractionEventError,
 		Error: &InteractionError{
-			Code:    "provider_error",
-			Message: err.Error(),
+			Code:           "provider_error",
+			Message:        err.Error(),
+			Classification: interactionErrorClassification(err),
 		},
 	})
+}
+
+func interactionErrorClassification(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrCancellation):
+		return providers.ErrorClassCancellation
+	case errors.Is(err, ErrReplayMismatch):
+		return providers.ErrorClassReplayMismatch
+	case errors.Is(err, ErrAuthentication), errors.Is(err, ErrAuthorization):
+		return providers.ErrorClassAuthentication
+	case errors.Is(err, ErrRateLimit):
+		return providers.ErrorClassRateLimited
+	case errors.Is(err, ErrInvalidRequest):
+		return providers.ErrorClassInvalidRequest
+	case errors.Is(err, ErrUnsupportedModel):
+		return providers.ErrorClassUnsupportedRequest
+	case errors.Is(err, ErrTransport):
+		return providers.ErrorClassTransport
+	case errors.Is(err, ErrProviderHTTPStatus):
+		return providers.ErrorClassProviderRejected
+	default:
+		return providers.ErrorClassification(err)
+	}
+}
+
+func (e *interactionEventEmitter) markOutputEmitted() {
+	e.outputEmitted = true
+}
+
+func (e *interactionEventEmitter) outputStateForTerminal() string {
+	if e.outputEmitted {
+		return providers.ErrorClassPartialOutput
+	}
+	return ""
 }
 
 func (e *interactionEventEmitter) emitTerminalRaw(event InteractionEvent) error {
@@ -246,8 +318,25 @@ func (e *interactionEventEmitter) emitRaw(event InteractionEvent) error {
 	return nil
 }
 
+func mustRawJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 func interactionProviderRequest(req InteractionRequest) providers.InferenceRequest {
 	return providers.InferenceRequest{
+		Messages: interactionMessagesToModel(req),
+		Tools:    interactionToolsToModel(req.Tools),
+		Model:    req.Model,
+		Config:   req.Config,
+	}
+}
+
+func interactionInferenceRequest(req InteractionRequest) InferenceRequest {
+	return InferenceRequest{
 		Messages: interactionMessagesToModel(req),
 		Tools:    interactionToolsToModel(req.Tools),
 		Model:    req.Model,

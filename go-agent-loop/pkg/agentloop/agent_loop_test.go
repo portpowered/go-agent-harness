@@ -112,12 +112,19 @@ func TestExecute_HotLoopError(t *testing.T) {
 		t.Fatalf("failed to create loop: %v", err)
 	}
 
-	_, err = loop.Execute(context.Background(), NewExecuteInput("hi"))
+	result, err := loop.Execute(context.Background(), NewExecuteInput("hi"))
 	if err == nil {
 		t.Fatal("Execute expected an error when hot loop fails")
 	}
 	if err.Error() != wantErr {
 		t.Errorf("Execute error: got %q, want %q", err.Error(), wantErr)
+	}
+	if result.Err == nil || result.Err.Error() != wantErr {
+		t.Fatalf("ExecuteResult.Err = %v, want %q", result.Err, wantErr)
+	}
+	final := result.FinalText()
+	if final.Status != FinalTextFailed {
+		t.Fatalf("FinalText status = %q, want %q", final.Status, FinalTextFailed)
 	}
 }
 
@@ -184,7 +191,6 @@ func TestExecuteStreaming_HotLoopErrorInStream(t *testing.T) {
 		if evt.Type == messages.StreamTypeError {
 			if v, ok := evt.Value.(*messages.ErrorValue); ok {
 				gotErr = v
-				break
 			}
 		}
 	}
@@ -193,6 +199,13 @@ func TestExecuteStreaming_HotLoopErrorInStream(t *testing.T) {
 	}
 	if gotErr.Message != wantErr {
 		t.Errorf("stream error message: got %q, want %q", gotErr.Message, wantErr)
+	}
+	outcome := result.EventStream.Outcome()
+	if outcome.Status != StreamFailed {
+		t.Fatalf("stream outcome status = %q, want %q", outcome.Status, StreamFailed)
+	}
+	if outcome.Err == nil || outcome.Err.Error() != wantErr {
+		t.Fatalf("stream outcome err = %v, want %q", outcome.Err, wantErr)
 	}
 }
 
@@ -217,6 +230,34 @@ func TestExecute_SimpleResponse(t *testing.T) {
 
 	if result.Text() != "Hello! How can I help?" {
 		t.Errorf("expected 'Hello! How can I help?', got %q", result.Text())
+	}
+}
+
+func TestExecute_EmptyFinalTextResult(t *testing.T) {
+	inf := &mockInferencer{
+		responses: []messages.InferenceResult{
+			{
+				Message: messages.NewTextMessage(messages.RoleAssistant, ""),
+			},
+		},
+	}
+
+	loop, err := New(WithInferencer(inf))
+	if err != nil {
+		t.Fatalf("failed to create loop: %v", err)
+	}
+
+	result, err := loop.Execute(context.Background(), NewExecuteInput("hi"))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	final := result.FinalText()
+	if final.Status != FinalTextEmptySuccess {
+		t.Fatalf("FinalText status = %q, want %q", final.Status, FinalTextEmptySuccess)
+	}
+	if final.Text != "" {
+		t.Fatalf("FinalText text = %q, want empty", final.Text)
 	}
 }
 

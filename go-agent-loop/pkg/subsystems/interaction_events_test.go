@@ -108,7 +108,7 @@ func TestInteractionEvents_RecordsTerminalErrorAndCancellation(t *testing.T) {
 	ls.Inputs.InteractionEvents = []messages.InteractionEvent{
 		{InteractionID: "int-1", Sequence: 1, Type: messages.InteractionEventStart},
 		{InteractionID: "int-1", Sequence: 2, Type: messages.InteractionEventCancellation, Cancellation: &messages.InteractionCancellation{Reason: "caller_cancelled", Message: "caller stopped"}},
-		{InteractionID: "int-1", Sequence: 3, Type: messages.InteractionEventError, Error: &messages.InteractionError{Code: "provider_timeout", Message: "timed out", Retryable: true}},
+		{InteractionID: "int-1", Sequence: 3, Type: messages.InteractionEventError, Error: &messages.InteractionError{Code: "provider_timeout", Message: "timed out", Classification: "transport", Retryable: true}},
 	}
 
 	if err := subsystem.Execute(context.Background(), ls); err != nil {
@@ -121,6 +121,9 @@ func TestInteractionEvents_RecordsTerminalErrorAndCancellation(t *testing.T) {
 	if ls.Interaction.TerminalError == nil || ls.Interaction.TerminalError.Code != "provider_timeout" {
 		t.Fatalf("terminal error = %#v", ls.Interaction.TerminalError)
 	}
+	if ls.Interaction.TerminalError.Classification != "transport" {
+		t.Fatalf("terminal classification = %q, want transport", ls.Interaction.TerminalError.Classification)
+	}
 
 	req, ok := ls.Outputs.KernelDeltaInbox.Read()
 	if !ok {
@@ -128,6 +131,13 @@ func TestInteractionEvents_RecordsTerminalErrorAndCancellation(t *testing.T) {
 	}
 	if req.Delta.Type != messages.StreamTypeError {
 		t.Fatalf("error delta type = %s, want %s", req.Delta.Type, messages.StreamTypeError)
+	}
+	errValue, ok := req.Delta.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("error delta value = %T, want *messages.ErrorValue", req.Delta.Value)
+	}
+	if errValue.Classification != "transport" {
+		t.Fatalf("error delta classification = %q, want transport", errValue.Classification)
 	}
 }
 

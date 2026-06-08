@@ -37,6 +37,13 @@ func (s *mockStream) Err() error {
 	return nil
 }
 
+func (s *mockStream) Outcome() agentloop.StreamOutcome {
+	if s.idx >= len(s.events) {
+		return agentloop.StreamOutcome{Status: agentloop.StreamDrained}
+	}
+	return agentloop.StreamOutcome{Status: agentloop.StreamOpen}
+}
+
 func (s *mockStream) Close() error {
 	return nil
 }
