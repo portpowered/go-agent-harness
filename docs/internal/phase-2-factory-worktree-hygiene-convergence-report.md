@@ -48,15 +48,37 @@ through `CTRL-FAC-03`.
 | --- | --- | --- | --- | --- | --- |
 | `durable-queue-recovery` | Stranded `plan`, `task`, or `thoughts` token inspection after the repair-focused setup validation | `pass` | Direct queue inspection now shows no stranded `plan`, `task`, or `thoughts` items attributable to the repaired worktree hygiene failure mode. `you session list` identifies the live project session `e7dc6d48-caed-4de0-9868-fa66ee4823ea` for `/Users/abdifamily/work/go-agent-harness`, and `you work list --session e7dc6d48-caed-4de0-9868-fa66ee4823ea` shows the repaired work item `phase-2-factory-worktree-hygiene-repair` as `idea/complete`, `task/complete`, and `plan/complete`. The only non-terminal worktree-hygiene entries are the current validator lane itself: `batch-phase-2-factory-worktree-hygiene-repair-batch-009-phase-2-factory-worktree-hygiene-validator` in `idea/to-complete`, `batch-request-022e46e44397f62845e5bd173c56b30a-phase-2-factory-worktree-hygiene-validator` in `task/init`, and `batch-phase-2-factory-worktree-hygiene-repair-batch-009-ideafy-loopback-phase-2-factory-worktree-hygiene-repair-batch-009` in `thoughts/init` with explicit dependency edges requiring both the repair idea and this validator idea to complete. Those states are active workflow dependencies, not queue damage. No `phase-2-factory-worktree-hygiene-*` work item appears in `failed`, and no exact manual recovery move is needed for this slice. An unrelated failed `work-plan-3 phase-2-constructor-ownership-boundaries` item exists in the same session, but it is outside the repaired worktree-hygiene names and therefore not evidence of remaining queue fallout from this failure mode. | durable queue state for session `e7dc6d48-caed-4de0-9868-fa66ee4823ea`, `you session list`, `you work list --session e7dc6d48-caed-4de0-9868-fa66ee4823ea`, `factory/docs/overview.md` | No manual `you work move` recovery is required for `phase-2-factory-worktree-hygiene-repair` based on the observed queue state. |
 
-## Current Overall Convergence Verdict
+## Final Recovery Summary
 
-Current overall verdict for `phase-2-factory-worktree-hygiene-repair` remains
-temporarily `uncertain` in this in-progress report.
+- Checklist convergence: `pass`
+  Evidence: `CTRL-FAC-01` through `CTRL-FAC-03` each map directly to the
+  delivered `setup-workspace` implementation, the updated factory overview, and
+  deterministic runtime tests that prove root sync and prune stay out of setup
+  while planner-owned dirty-root reuse remains explicitly bounded.
+- Repaired `setup-workspace` behavior: `pass`
+  Evidence: the deterministic concurrent-run test for branch
+  `phase-2-factory-worktree-hygiene-repair` shows both overlapping runs return
+  `status=ready` against the same worktree path, which matches the intended
+  repaired registration-race behavior instead of the previous failure mode.
+- Durable-queue recovery status: `pass`
+  Evidence: live project session inspection shows the repaired
+  `phase-2-factory-worktree-hygiene-repair` idea, task, and plan are terminal
+  `complete`, and no stranded `plan`, `task`, or `thoughts` items remain that
+  require recovery for this failure mode.
 
-The repaired `setup-workspace` behavior and the checklist controls
-`CTRL-FAC-01` through `CTRL-FAC-03` now pass on observable repository evidence.
-Durable-queue inspection now also passes and records that no manual
-`you work move` recovery remains for the repaired slice. The remaining work on
-this branch is the publication step in story
-`phase-2-factory-worktree-hygiene-validator-004`, which will collapse these
-completed findings into the final reviewer-facing verdict.
+Manual recovery requirement: no manual `you work move` action or other repair
+step remains for `phase-2-factory-worktree-hygiene-repair` based on the
+observed queue state.
+
+## Final Overall Convergence Verdict
+
+Final overall verdict for Phase 2 factory worktree hygiene convergence:
+`pass`.
+
+This reviewer-facing report is complete without reconstructing prior batch
+history or repeating broad CI investigation. The repaired
+`setup-workspace` path satisfies `CTRL-FAC-01`, `CTRL-FAC-02`, and
+`CTRL-FAC-03` on direct repository evidence, the previously reproduced
+concurrent setup failure is fixed by deterministic runtime proof, and the live
+durable queue shows no remaining stranded work items or manual recovery steps
+for the repaired slice.
