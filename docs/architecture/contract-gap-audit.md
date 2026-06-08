@@ -685,6 +685,257 @@ No reproducibility tooling was added for this slice; later implementation lanes
 must add the tests named in each finding before closing any Phase 4 checklist
 row.
 
+### Phase 4 Provider Capability, Validation, And Dependency Injection Findings
+
+These findings cover the `P4-API-04`, `P4-API-06`, and `P4-API-07` story
+slice. They name gateway/provider seams where callers can set feature-bearing
+request fields or runtime dependencies, but cannot discover support, validate
+unsupported requests locally, or consistently inject the dependencies needed to
+own test, replay, timeout, and transport behavior.
+
+#### P4-CAP-01: provider support for tools, media, reasoning, caching, sessions, and streaming is not discoverable
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/models`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/providers/session_provider.go`,
+  `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/models/message.go`,
+  `go-llm-gateway/pkg/models/session.go`
+- Exported declaration: `Provider`, `SessionProvider`, `InferenceRequest`,
+  `Gateway`, `DefaultGateway`, `DefaultSessionGateway`, `models.Message`,
+  `models.ContentPart`, `models.ToolDefinition`, `models.SessionConfig`,
+  `providers.ThinkingConfig`, `providers.CacheControlConfig`
+- Observable contract issue:
+  - `InferenceRequest` exposes `Tools`, `Model`, `Thinking`, `CacheControl`,
+    `Config`, and gateway model aliases expose text, image, audio, video,
+    embedding, reasoning, tool, and session shapes, but `Provider` only exposes
+    `Name`, `Infer`, and `InferStream`. A caller cannot ask whether the selected
+    provider supports tools, streaming, bidirectional sessions, audio input or
+    output, image input, video output, reasoning, prompt caching, embeddings, or
+    provider-specific config before sending the request.
+  - Session support is discoverable only by selecting a separate
+    `SessionProvider` at composition time. There is no common capability value
+    that tells a gateway consumer whether the same provider family supports
+    stateless inference, streaming inference, or realtime sessions for a model.
+  - `ThinkingConfig` and `CacheControlConfig` comments name provider-specific
+    behavior, but unsupported providers can ignore or pass through those fields
+    without a stable public unsupported-capability result.
+- Mapped checklist rows: `P4-API-04`, `P4-API-06`, `P4-API-07`,
+  `P4-API-02`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add a provider-neutral exported capability model, for example
+    `ProviderCapabilities` plus optional `Capabilities(ctx)` or
+    `CapabilitiesForModel(ctx, model)` methods, covering tools, streaming,
+    sessions, audio input/output, image input, video output, reasoning, prompt
+    caching, embeddings, provider config, and provider-specific limits
+  - expose a gateway-level capability discovery method so consumers do not need
+    to type-switch concrete providers or know whether a session provider is
+    separately wired
+  - document the rule that absence of a capability must be observable before
+    provider execution through local validation or a typed unsupported
+    capability error
+- Verification notes:
+  - later repair lanes should add fake-provider and concrete-provider tests
+    proving capability discovery for OpenAI, Anthropic, Gemini, fal, Grok
+    realtime sessions, and gateway wrappers without issuing live network calls
+
+#### P4-VALIDATION-01: unsupported request features fail at provider execution instead of a shared local validation seam
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- File path: `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`,
+  `go-llm-gateway/pkg/providers/anthropic/params.go`,
+  `go-llm-gateway/pkg/providers/openai/params.go`,
+  `go-llm-gateway/pkg/providers/gemini/provider.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`
+- Exported declaration: `DefaultGateway.Infer`,
+  `DefaultGateway.InferStream`, `Provider.Infer`, `Provider.InferStream`,
+  `providers.InferenceRequest`, `gateway.InferenceRequest`,
+  `GatewayInferencer.Infer`, `GatewayInferencer.InferStream`
+- Observable contract issue:
+  - `DefaultGateway` forwards all request fields directly to the provider with
+    no exported validation step. Unsupported tools, streaming, media parts,
+    reasoning, prompt caching, config blobs, or missing model choices therefore
+    fail differently per provider: some are ignored, some become formatted
+    provider errors, some become local string errors, and fal streaming returns
+    an immediately closed channel even though streaming is unsupported.
+  - fal validates model-specific content requirements inside `Infer` and returns
+    string errors such as missing audio/image/embedding input or unsupported
+    model. OpenAI, Anthropic, and Gemini translate broad request shapes into
+    provider-specific params without a shared unsupported-field taxonomy. The
+    gateway consumer cannot distinguish "unsupported by this provider" from
+    invalid user input or provider runtime failure without parsing text.
+  - `GatewayInferencer` forwards only the loop request plus its configured model
+    and raw JSON config; it has no validation hook to reject an unsupported
+    loop request before the agent loop observes provider execution behavior.
+- Mapped checklist rows: `P4-API-04`, `P4-API-06`, `P4-API-07`,
+  `P4-API-02`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - introduce an additive validation API, for example
+    `ValidateInferenceRequest(ctx, req)` or gateway-owned validation before
+    dispatch, backed by the capability model from `P4-CAP-01`
+  - define typed validation failures such as `ErrUnsupportedCapability`,
+    `ErrUnsupportedModel`, `ErrInvalidRequest`, and model/content requirement
+    details that support `errors.Is` and `errors.As`
+  - change unsupported streaming from a clean empty channel to a typed setup
+    failure or documented terminal stream event after compatibility review
+  - thread validation through `DefaultGateway`, interaction gateways, and
+    `GatewayInferencer` so direct gateway callers and agent-loop callers observe
+    the same unsupported capability result
+- Verification notes:
+  - later repair lanes should add table-driven gateway tests for tools,
+    streaming, sessions, audio input/output, image input, video output,
+    reasoning, prompt caching, unsupported model, and invalid provider config,
+    asserting typed local failures without live provider calls
+
+#### P4-DI-01: injectable runtime dependencies are uneven across provider constructors and public gateway seams
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/providers/openai/options.go`,
+  `go-llm-gateway/pkg/providers/openai/provider.go`,
+  `go-llm-gateway/pkg/providers/openai/realtime_dialer.go`,
+  `go-llm-gateway/pkg/providers/anthropic/options.go`,
+  `go-llm-gateway/pkg/providers/anthropic/provider.go`,
+  `go-llm-gateway/pkg/providers/gemini/options.go`,
+  `go-llm-gateway/pkg/providers/gemini/provider.go`,
+  `go-llm-gateway/pkg/providers/fal/options.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`,
+  `go-llm-gateway/pkg/providers/grok/options.go`,
+  `go-llm-gateway/pkg/providers/grok/dialer.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`
+- Exported declaration: `openai.New`, `openai.WithHTTPClient`,
+  `openai.WithBaseURL`, `openai.WithRealtimeBaseURL`,
+  `openai.WithWebSocketDialer`, `anthropic.New`,
+  `anthropic.WithHTTPClient`, `gemini.New`, `gemini.WithHTTPClient`,
+  `fal.New`, `fal.WithHTTPClient`, `grok.New`, `grok.WithWebSocketDialer`,
+  `NewGateway`, `NewSessionGateway`
+- Observable contract issue:
+  - HTTP clients, base URLs, model names, API keys, loggers, and realtime
+    WebSocket dialers are injectable for several concrete providers, but not
+    through one public gateway-owned dependency contract. A consumer that owns
+    replay, test transport, timeout, or endpoint policy must know every concrete
+    provider option shape.
+  - `OpenAIProvider` falls back to `http.DefaultClient` for stateless HTTP and
+    creates a default realtime dialer only when no dialer is set, while
+    `GrokSessionProvider` requires a dialer and has no public defaulting at
+    `New`. `FalProvider` constructs `&http.Client{}` by default, Anthropic
+    captures SDK client construction at `New`, and Gemini creates a GenAI
+    client per call. These are all reasonable implementation choices, but the
+    exported contracts do not state ownership of timeouts, retry policy, live
+    network defaults, SDK client lifecycle, or replay compatibility.
+  - There is no exported injection point for retry policy, clock, backoff, or
+    per-request timeout policy. Callers can only approximate some of that
+    behavior through `context.Context` or custom `http.Client`/dialer options,
+    and only for providers that expose those options.
+- Mapped checklist rows: `P4-API-06`, `P4-API-04`, `P4-API-07`,
+  `P4-API-01`
+- Severity: `later polish`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - document current dependency ownership on each exported provider constructor
+    and option, including whether live network defaults are created, whether
+    default clients have timeouts, and who owns retry and close behavior
+  - add optional common dependency option structs or small interfaces for
+    transports, WebSocket dialers, endpoint/model defaults, timeout policy, and
+    retry/backoff policy where provider-neutral ownership is practical
+  - keep provider-specific options for provider-specific features, but expose
+    gateway composition helpers so record/replay and tests can inject runtime
+    dependencies without concrete provider branching in application flow
+- Verification notes:
+  - later repair lanes should add constructor tests proving no live dependency
+    is created when a fake client/dialer is injected, plus replay tests showing
+    OpenAI, Anthropic, Gemini, fal, and Grok use the injected transport or
+    dialer consistently
+
+#### P4-DI-02: session configuration is bridge-owned but cannot expose provider-specific realtime capability or validation
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-llm-gateway/pkg/models`,
+  `github.com/portpowered/go-agent-loop/pkg/messages`
+- File path: `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/gateway/session_types.go`,
+  `go-llm-gateway/pkg/inference/session_inferencer.go`,
+  `go-llm-gateway/pkg/models/session.go`,
+  `go-agent-loop/pkg/messages/session.go`
+- Exported declaration: `DefaultSessionGateway.ConnectSession`,
+  `SessionGatewayInferencer.ConnectSession`, `models.SessionConfig`,
+  `messages.SessionInferencer`, `messages.Session`
+- Observable contract issue:
+  - `models.SessionConfig` exposes model, voice, instructions, modalities,
+    audio formats, sample rates, turn detection, tools, and raw config, but
+    `DefaultSessionGateway` forwards it directly to the selected session
+    provider. Callers cannot discover which realtime provider supports which
+    modalities, audio formats, turn detection fields, tool definitions, sample
+    rates, or raw config shape before opening a WebSocket.
+  - `SessionGatewayInferencer` owns only model, voice, and instructions options;
+    it cannot pass modalities, audio formats, turn detection, tools, sample
+    rates, or raw config through the agent-loop `SessionInferencer` seam. This
+    makes some provider capabilities available to direct gateway callers but
+    not to loop consumers using the exported bridge.
+  - Session config validation happens inside provider-specific builders or
+    after WebSocket connection setup, so unsupported realtime features can
+    create live connections before failing.
+- Mapped checklist rows: `P4-API-04`, `P4-API-06`, `P4-API-07`,
+  `P4-API-01`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - add session capability discovery and validation alongside stateless
+    provider capability discovery, including modalities, audio formats, turn
+    detection, tools, sample rates, raw config, and session lifecycle ownership
+  - extend `SessionGatewayInferencer` additively with options or a config
+    supplier that can pass the full `models.SessionConfig` expected by the
+    selected provider without changing `messages.SessionInferencer`
+  - validate unsupported session config before opening a live WebSocket and
+    return typed unsupported-capability or invalid-request errors
+- Verification notes:
+  - later repair lanes should add fake session gateway tests proving
+    `SessionGatewayInferencer` forwards full session config and concrete Grok
+    and OpenAI realtime tests proving unsupported config fails before dial
+
+#### Provider Capability, Validation, And DI Repair Slice Order
+
+1. Add the provider-neutral capability model first because validation, docs, and
+   gateway discovery need one shared vocabulary for supported tools, media,
+   reasoning, caching, streaming, sessions, and provider config.
+2. Add typed unsupported-capability and invalid-request errors, then implement
+   gateway-level request validation for stateless `Infer`/`InferStream`.
+3. Repair unsupported streaming behavior, especially fal's clean empty channel,
+   after the stream terminal contract and typed validation taxonomy are aligned.
+4. Add session capability discovery and pre-dial validation, then extend
+   `SessionGatewayInferencer` with additive full-config forwarding.
+5. Document and normalize provider dependency ownership after capability and
+   validation contracts are in place, keeping provider-specific knobs behind
+   small common dependency option shapes where practical.
+
+Reviewer commands for this audit-only story:
+
+```bash
+make typecheck
+```
+
+No reproducibility tooling was added for this slice; later implementation lanes
+must add the tests named in each finding before closing any Phase 4 checklist
+row.
+
 ## Intended Adapters vs Hidden Coupling
 
 Intended adapter seams:
