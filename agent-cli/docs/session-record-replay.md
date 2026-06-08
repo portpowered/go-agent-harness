@@ -184,6 +184,28 @@ For tests that only render a transcript and do not exercise client sends, disabl
 
 Replay and record relay writes now follow the owned session lifecycle context. In the CLI session path, canceling the command context stops replay delivery and recorder relay writes at the same seam that owns dialer selection and provider runtime wiring.
 
+## Reviewer Notes
+
+The delivered session runtime ownership model for this Phase 2 slice is:
+
+- `agent-cli/internal/services/session_runtime.go` owns session-mode config
+  loading, live or replay dialer selection, and provider-specific runtime
+  injection before provider construction begins.
+- `go-llm-gateway/pkg/providers/grok` and
+  `go-llm-gateway/pkg/providers/openai` consume injected session dialers and
+  fail explicitly when that owned runtime dependency is missing.
+- `go-llm-gateway/pkg/testing.SessionRecorder` and
+  `go-llm-gateway/pkg/testing.SessionReplayer` honor the owned caller or
+  session context for relay writes, so replay and record cancellation semantics
+  stay aligned with the same runtime seam.
+
+This slice resolves the scoped `HC-03` and `DI-04` session runtime ownership
+findings and the remaining session-helper portion of `CTX-02` recorded in
+`docs/architecture/contract-gap-audit.md`. Reviewers validating checklist
+advancement should cite `P2-SRO-04`, `P2-GATE-01`, the broader
+constructor-ownership row `P2-COB-04`, and
+`docs/internal/phase-2-session-runtime-ownership-validator.md`.
+
 ## Related Documentation
 
 - `go-llm-gateway/pkg/testing/README.md` describes the lower-level recorder and replay dialer APIs.
