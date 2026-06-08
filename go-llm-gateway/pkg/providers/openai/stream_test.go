@@ -3,10 +3,13 @@ package openai
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 )
 
 // sseData builds an SSE body from a slice of JSON chunk strings.
@@ -52,6 +55,50 @@ func assertTypes(t *testing.T, got []messages.StreamMessage, want []messages.Str
 		if gt[i] != want[i] {
 			t.Errorf("at index %d: got %s, want %s", i, gt[i], want[i])
 		}
+	}
+}
+
+type failingStreamReader struct{}
+
+func (failingStreamReader) Read(_ []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func TestStreamSSEToGateway_PreservesScannerErrorClassification(t *testing.T) {
+	ch := make(chan messages.StreamMessage, 64)
+	streamSSEToGateway(failingStreamReader{}, ch)
+	close(ch)
+
+	var gotErr *messages.ErrorValue
+	for msg := range ch {
+		if msg.Type != messages.StreamTypeError {
+			continue
+		}
+		value, ok := msg.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("error event value = %T, want *messages.ErrorValue", msg.Value)
+		}
+		gotErr = value
+	}
+	if gotErr == nil {
+		t.Fatal("expected stream error event")
+	}
+	if gotErr.Message == "" {
+		t.Fatal("error event should retain readable message text")
+	}
+	if !errors.Is(gotErr.Err, gateway.ErrTransport) {
+		t.Fatal("stream error should match transport classification")
+	}
+	if !errors.Is(gotErr.Err, io.ErrUnexpectedEOF) {
+		t.Fatal("stream error should preserve transport cause")
+	}
+
+	var transportErr *gateway.TransportError
+	if !errors.As(gotErr.Err, &transportErr) {
+		t.Fatal("stream error should expose typed transport details")
+	}
+	if transportErr.Operation != "chat completions stream" {
+		t.Fatalf("operation = %q, want chat completions stream", transportErr.Operation)
 	}
 }
 

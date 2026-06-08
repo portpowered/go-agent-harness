@@ -40,7 +40,8 @@ type TurnDetectionConfig struct {
 	SilenceDurationMs int `json:"silence_duration_ms,omitempty"`
 }
 
-// SessionConfig holds the configuration for establishing a session with an inference provider.
+// SessionConfig is a gateway-owned configuration surface for establishing a
+// provider session. It is not part of the loop-owned shared message contract.
 type SessionConfig struct {
 	// Model is the model ID for the session (e.g. "grok-3-mini").
 	Model string `json:"model"`

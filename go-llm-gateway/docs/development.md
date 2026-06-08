@@ -9,7 +9,9 @@ This guide is the package-local contributor guide for `libraries/go-llm-gateway`
 ## Local Architecture
 
 - `pkg/gateway/` owns `Gateway`, `SessionGateway`, default implementations, and top-level request routing.
-- `pkg/models/` owns shared model and session types, including re-exports from `go-agent-loop`.
+- `pkg/models/` exposes gateway-owned session configuration and realtime event
+  types, plus compatibility aliases for loop-owned message, tool, and token
+  types from `go-agent-loop/pkg/messages`.
 - `pkg/inference/` adapts gateway implementations into `go-agent-loop` inferencers.
 - `pkg/providers/` owns provider interfaces and implementations for Anthropic, OpenAI, Gemini, Grok, and fal.ai.
 - `pkg/testing/` contains deterministic HTTP record/replay utilities for provider tests.
@@ -35,6 +37,14 @@ make deps-tidy
 3. Run adapter tests when changing `pkg/inference`, message conversion, streaming events, or model type re-exports.
 4. If a change touches `go-agent-loop` shared message contracts, also run `go-agent-loop` and `agent-cli` checks.
 5. Update `pkg/testing/README.md` when record/replay capture format, replay matching, or fixture workflow changes.
+
+## Provider Capability Contract
+
+- Public capability types live in `pkg/capabilities` and are re-exported from `pkg/gateway` and `pkg/providers` for callers already using those package surfaces.
+- Gateway discovery is exposed through `Capabilities()` on the default stateless and session gateways; it must remain local metadata lookup with no provider calls, credential checks, network access, or request mutation.
+- Providers without explicit capability reporting must fall back to `unknown` for every capability field. Unknown means no support claim and must not be documented or presented as supported.
+- Gateway validation should reject locally deterministic mismatches only when the capability is explicitly `unsupported`. Unknown capabilities are allowed to reach the provider so legacy behavior remains available.
+- Concrete provider reports should claim only behavior proven by local wrapper translation or parsing. Ignored request fields, unsupported raw config, and provider-specific gaps should be explicit `unsupported` or `unknown`, not implicit support.
 
 ## Local Gotchas
 

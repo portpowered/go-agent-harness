@@ -1,5 +1,11 @@
 # Contract Gap Audit
 
+This document records contract gaps that reviewers and later implementation
+lanes can cite directly. It starts with the hidden-coupling and
+dependency-injection findings that Phase 2 needed to harden, and it now also
+defines the Phase 4 exported API audit shape for public contract hardening in
+`go-agent-loop/pkg` and `go-llm-gateway/pkg`.
+
 ## Phase 4 API Audit Reconciliation Map
 
 This section is the row-level Phase 4 source of truth for P4-API-01 through P4-API-07 and P4-GATE-01. The older findings below remain evidence and planning context, but audit documentation alone cannot close implementation checklist rows; a row is closable only when the named public contract, runtime behavior, docs/examples, and deterministic validation evidence exist in code or tests.
@@ -15,37 +21,38 @@ Reviewer command policy: run all commands from the repository root unless a row 
 
 ### Final Closure Validation Check
 
-The Phase 4 validator final closure artifact named in planning context, `docs/internal/phase-4-api-contract-validator.md`, is not present in this checkout. Because no Phase 4 validator final closure decision is available here, this audit treats rows as validated against current public declarations, README guidance, and deterministic tests only. Missing validator closure evidence is itself a closure constraint: `P4-GATE-01` remains open, and dependent repair lanes should consume this reconciled map before implementation or final gate review.
+The Phase 4 validator final closure artifact is available at `docs/internal/phase-4-api-contract-validator.md`. Its final closure decision is that no reviewed Phase 4 checklist row may close from the current starter evidence and the next planner action is `repair`. This audit is therefore validated against current public declarations, README guidance, deterministic tests, and that validator report; `P4-GATE-01` remains open, and dependent repair lanes should consume this reconciled map before implementation or final gate review.
 
 Cross-check summary:
 
 | Row | Current audit decision | Closure validation result |
 | --- | --- | --- |
-| P4-API-01 | `fail` | Consistent with `go-agent-loop/README.md` constructor ownership guidance and `go-llm-gateway/README.md` transport ownership guidance: injected inferencer, tool executor, and HTTP runtime seams exist, but prompt/config/filesystem/dialer side effects still need exact repair work. |
-| P4-API-02 | `fail` | Consistent with `go doc ./go-agent-loop/pkg/messages` and deterministic tests named below: `ErrorValue`, `NewErrorValueWithDetails`, PNIG errors, replay divergence, and cancellation evidence exist, while many stream and CLI paths still emit string-only errors. |
-| P4-API-03 | `fail` | Consistent with current loop/gateway README behavior and tests: normalized stream/result evidence exists, but terminal authority remains split across `ExecuteResult`, synthesized stream endings, PNIG end/error/cancellation events, session `Done`/`Close`, replay completion, and CLI stop conditions. |
-| P4-API-04 | `fail` | Consistent with `go-llm-gateway/README.md` provider surface map and `go doc ./go-llm-gateway/pkg/providers`: provider-local capability evidence exists, but there is still no provider-neutral capability discovery or unsupported-feature validation method. |
-| P4-API-05 | `uncertain` | Stale or incomplete ownership wording remains isolated to `HC-02` and `DOC-01`: `pkg/models` is visibly an alias facade in `go doc ./go-llm-gateway/pkg/models`, but no final package-ownership decision is documented. |
-| P4-API-06 | `fail` | Consistent with public context-bearing declarations and tests: cancellation evidence exists for loop, replay/record, and PNIG paths, but retry, timeout, and terminal event ownership are not one shared public contract. |
-| P4-API-07 | `fail` | Consistent with public declaration inspection: comments and exported declarations are inspectable, but compatibility staging for `pkg/models`, overlapping gateway/provider request types, CLI internal composition exports, fixtures, and text-matching callers remains open. |
-| P4-GATE-01 | `open` | Not closable from this audit. Rows with `fail` or `uncertain` outcomes plus missing Phase 4 final validator evidence block final closure. |
+| P4-API-01 | `fail` in this audit; validator outcome `uncertain` | Consistent with `go-agent-loop/README.md` constructor ownership guidance and `go-llm-gateway/README.md` transport ownership guidance: injected inferencer, tool executor, and HTTP runtime seams exist, but prompt/config/filesystem/dialer side effects plus full timeout/cancellation mapping still need exact repair work. |
+| P4-API-02 | `fail` in this audit; validator outcome `uncertain` | Current starter evidence includes `messages.ErrorValue`, `messages.NewErrorValueWithDetails`, `gateway.GatewayError`, `ProviderHTTPStatusError`, public gateway error classes, PNIG errors, replay divergence, and cancellation evidence. Stale audit identifiers to keep reconciled are `P4-ERR-01`, `P4-ERR-02`, and `P4-ERR-03`; remaining gaps are provider/session/direct-stream coverage and serialized stream taxonomy. |
+| P4-API-03 | `fail` in this audit; validator outcome `uncertain` | Consistent with current loop/gateway README behavior and tests: normalized stream/result evidence exists, but terminal authority remains split across `ExecuteResult`, synthesized stream endings, PNIG end/error/cancellation events, session `Done`/`Close`, replay completion, and CLI stop conditions. |
+| P4-API-04 | `uncertain` | Current starter evidence now includes `go-llm-gateway/pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, `DefaultGateway.Capabilities`, `DefaultSessionGateway.Capabilities`, README guidance, and gateway capability tests. Stale audit wording to keep reconciled is `P4-CAP-01` language that says capability discovery is absent; remaining work is concrete provider coverage and avoiding overclaimed support. |
+| P4-API-05 | `uncertain` | Stale or incomplete ownership wording remains isolated to `HC-02`, `DOC-01`, and stream taxonomy rows: `pkg/models` is visibly an alias facade in `go doc ./go-llm-gateway/pkg/models`, and stream/session error preservation still needs a documented mapping to gateway error classes. |
+| P4-API-06 | `fail` in this audit; validator outcome `uncertain` | Current starter evidence includes `validateStatelessRequest`, `validateSessionConfig`, and structured `UnsupportedFeatureError` for explicit unsupported gateway/session capabilities. Stale audit wording to keep reconciled is `P4-VALIDATION-01` language that says unsupported-feature validation is absent; remaining work is interaction/inferencer coverage, concrete provider reporting, and fal streaming behavior. |
+| P4-API-07 | `fail` in this audit; validator outcome `uncertain` | Consistent with public declaration inspection: comments and exported declarations are inspectable, but compatibility staging for `pkg/models`, overlapping gateway/provider request types, CLI internal composition exports, fixtures, hidden side effects, and text-matching callers remains open. |
+| P4-GATE-01 | `open`; validator outcome `fail` | Not closable from this audit. Rows with `fail` or `uncertain` outcomes plus the validator's `must remain open` decisions block final closure. |
 
 Validated public declaration commands:
 
 - `go doc ./go-agent-loop/pkg/messages` prints shared message, stream, session, and typed-error declarations including `ErrorValue`, `Session`, `SessionInferencer`, and `StreamMessage`.
-- `go doc ./go-llm-gateway/pkg/gateway` prints stateless, session, PNIG interaction, and fixture declarations including `DefaultGateway`, `DefaultSessionGateway`, `InteractionEvent`, `InteractionError`, and request/response aliases.
+- `go doc ./go-llm-gateway/pkg/gateway` prints stateless, session, PNIG interaction, capability, validation, fixture, and typed-error declarations including `DefaultGateway`, `DefaultSessionGateway`, `CapabilityReporter`, `UnsupportedFeatureError`, `GatewayError`, `ProviderHTTPStatusError`, `InteractionEvent`, `InteractionError`, and request/response aliases.
 - `go doc ./go-llm-gateway/pkg/models` prints the current alias facade over loop-owned message types plus gateway-owned session config/event declarations.
-- `go doc ./go-llm-gateway/pkg/providers` prints `Provider`, `SessionProvider`, `InferenceRequest`, `InferenceResponse`, `ThinkingConfig`, and `CacheControlConfig`, with no provider-neutral capability discovery method.
+- `go doc ./go-llm-gateway/pkg/providers` prints `Provider`, `SessionProvider`, `CapabilityReporter`, `ProviderCapabilities`, `UnsupportedFeatureError`, `UnknownProviderCapabilities`, `InferenceRequest`, `InferenceResponse`, `ThinkingConfig`, and `CacheControlConfig`.
 
 Validated deterministic test names and packages:
 
 - `go-agent-loop/pkg/agentloop/agent_loop_test.go` covers explicit tool-execution constructor decisions.
 - `go-llm-gateway/pkg/providers/openai/session_test.go` covers OpenAI Realtime typed error detail preservation.
 - `go-llm-gateway/pkg/gateway/interaction_gateway_test.go` covers PNIG provider errors, timeouts, cancellation, and terminal events.
+- `go-llm-gateway/pkg/gateway/errors_test.go`, `gateway_test.go`, and `capabilities_test.go` cover public gateway typed errors, capability discovery, unsupported-feature validation, and unknown fallback behavior.
 - `go-llm-gateway/pkg/testing/session_replay_test.go` covers replay divergence, omitted outbound events, and replay cancellation.
 - `agent-cli/internal/services/session_test.go` covers record/replay cancellation preservation and session command error behavior.
 - `agent-cli/internal/config/models_test.go`, `agent-cli/internal/input/validate_test.go`, and `agent-cli/internal/agent/provider_runtime_test.go` cover model metadata, unsupported input/output validation, and provider runtime ownership.
-- `go-llm-gateway/pkg/providers/anthropic/params_test.go`, `go-llm-gateway/pkg/providers/gemini/replay_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, and `go-llm-gateway/pkg/providers/fal/provider_test.go` cover provider-local option, modality, stream, and media/config behavior without live credentials.
+- `go-llm-gateway/pkg/providers/openai/capabilities_test.go`, `go-llm-gateway/pkg/providers/anthropic/params_test.go`, `go-llm-gateway/pkg/providers/gemini/replay_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, and `go-llm-gateway/pkg/providers/fal/provider_test.go` cover provider-local capability, option, modality, stream, and media/config behavior without live credentials.
 
 ### Credential-Free Reviewer Command Matrix
 
@@ -66,7 +73,7 @@ Validated deterministic test names and packages:
 | `go doc ./go-agent-loop/pkg/messages` | P4-API-02, P4-API-06, P4-API-07 | Current shared message, stream, session, and typed error declarations are inspectable as public documentation. | `go doc` prints package declarations without error. |
 | `go doc ./go-llm-gateway/pkg/gateway` | P4-API-03, P4-API-05, P4-API-07 | Current gateway stateless, session, and PNIG contracts are inspectable as public documentation. | `go doc` prints package declarations without error. |
 | `go doc ./go-llm-gateway/pkg/models` | P4-API-05, P4-API-07 | Current gateway model alias facade is inspectable and can be compared against `go-agent-loop/pkg/messages`. | `go doc` prints package declarations without error. |
-| `go doc ./go-llm-gateway/pkg/providers` | P4-API-04, P4-API-07 | Current provider declarations are inspectable, including the absence of a provider-neutral capability discovery method. | `go doc` prints package declarations without error. |
+| `go doc ./go-llm-gateway/pkg/providers` | P4-API-04, P4-API-07 | Current provider declarations are inspectable, including the provider-neutral `CapabilityReporter`, `ProviderCapabilities`, and `UnsupportedFeatureError` aliases plus remaining provider request/session declarations. | `go doc` prints package declarations without error. |
 
 ### P4-API-01: Dependency Ownership And Injection Contracts
 
@@ -123,28 +130,32 @@ Validated deterministic test names and packages:
 
 ### P4-API-04: Provider Capability Discovery And Unsupported-Feature Validation
 
-- Outcome: `fail`
+- Outcome: `uncertain`
 - Affected public packages: `agent-cli/internal/config`, `agent-cli/internal/input`, `agent-cli/internal/agent`, `go-llm-gateway/pkg/providers`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/fal`, `go-llm-gateway/pkg/providers/grok`
-- Exported declarations: `config.ModelInfo`, `(*config.ModelInfo).SupportsOutputModality`, `(*config.ModelInfo).SupportsInputMimeType`, `config.ModelsConfig.Lookup`, `input.ValidateMimeType`, `input.ValidateContentPartsMimeTypes`, `agent.Executor.RunAsk`, `providers.Provider`, `providers.SessionProvider`, `providers.InferenceRequest`, `providers.ThinkingConfig`, `providers.CacheControlConfig`
-- Observable contract issue: current implementation has starter evidence for local model metadata and selected provider-specific request options, but the public gateway/provider surface still lacks one provider-neutral capability discovery and unsupported-feature validation contract that callers can query before invoking tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, or provider-specific config. Unknown models and unavailable config intentionally fall through to provider runtime behavior in CLI validation, so absence of local metadata is not a caller-visible unsupported-feature guarantee.
+- Exported declarations: `config.ModelInfo`, `(*config.ModelInfo).SupportsOutputModality`, `(*config.ModelInfo).SupportsInputMimeType`, `config.ModelsConfig.Lookup`, `input.ValidateMimeType`, `input.ValidateContentPartsMimeTypes`, `agent.Executor.RunAsk`, `providers.Provider`, `providers.SessionProvider`, `providers.CapabilityReporter`, `providers.ProviderCapabilities`, `providers.UnknownProviderCapabilities`, `providers.UnsupportedFeatureError`, `gateway.CapabilityReporter`, `gateway.DefaultGateway.Capabilities`, `gateway.DefaultSessionGateway.Capabilities`, `gateway.UnsupportedFeatureError`, `providers.InferenceRequest`, `providers.ThinkingConfig`, `providers.CacheControlConfig`
+- Observable contract issue: current implementation now has a provider-neutral capability model, gateway/session discovery methods, structured unsupported-feature validation for explicitly unsupported gateway/session capabilities, CLI-local model metadata, and selected provider-specific request options. The row remains uncertain because concrete provider capability reporters are incomplete across provider families, unknown capabilities intentionally fall through, interaction/inferencer seams still need closure decisions, fal streaming behavior needs alignment with the public capability contract, and older `P4-CAP-01` / `P4-VALIDATION-01` wording can become stale when it says discovery or validation is absent rather than partially implemented.
 - Implementation evidence:
   - Supported locally: `config.ModelInfo` records `InputModalities`, `OutputModalities`, `SupportsToolUse`, `SupportsReasoning`, tokenizer, provider IDs, aliases, and `SupportedInputMimeTypes`; `SupportsOutputModality`, `SupportsInputMimeType`, and `ModelsConfig.Lookup` provide deterministic metadata checks.
   - Unsupported locally: `agent.Executor.RunAsk` calls `validateOutputModality` and `validateInputMimeTypes`, which reject non-text output modalities and input MIME types when the selected OpenAI-compatible model is known in `models.yaml`.
   - Unknown locally: CLI validation skips enforcement when model config cannot be loaded, the active provider is not OpenAI-compatible, `runData.Models` is absent, or the model is missing from `ModelsConfig`; those paths deliberately let the provider decide.
+  - Provider-neutral starter evidence: `go-llm-gateway/pkg/capabilities.ProviderCapabilities` represents supported, unsupported, and unknown feature states; `providers.CapabilityReporter` and `gateway.CapabilityReporter` expose discovery; `DefaultGateway.Capabilities` and `DefaultSessionGateway.Capabilities` return provider-reported capabilities or the documented unknown fallback; `validateStatelessRequest` and `validateSessionConfig` return `UnsupportedFeatureError` before provider execution when a requested feature is explicitly unsupported.
   - Provider-specific evidence: `providers.InferenceRequest.Tools` is accepted by stateless providers that implement tool translation; `Provider.InferStream` is the only streaming affordance on the provider interface; `SessionProvider.ConnectSession` is the only session capability seam; `ThinkingConfig` is mapped by Anthropic and ignored by OpenAI; `CacheControlConfig` is mapped by Anthropic while OpenAI keeps default cache behavior; `InferenceRequest.Config` is passed through by fal.ai for model-specific options.
-  - Capability status by requested feature: tools are `supported` in CLI metadata and provider request shapes but `uncertain` as provider-neutral discovery; streaming is `supported` as a method shape and selected provider tests but `uncertain` for per-model availability; sessions are `supported` only where a `SessionProvider` is wired and `unknown` elsewhere; audio input is `supported` by Gemini/fal metadata and fal tests but `uncertain` in provider-neutral discovery; image input is `supported` by metadata and provider conversion tests; video output is `supported` by fal response tests but `uncertain` as CLI output metadata beyond model rows; reasoning is `supported` by metadata and Anthropic request mapping but `unsupported` by OpenAI mapping; prompt caching is `supported` by Anthropic mapping, `unknown` for provider-neutral discovery, and OpenAI remains provider-default only; provider-specific config is `supported` through fal `InferenceRequest.Config` passthrough and `unknown` for other provider families.
-- Planning-only evidence: P4-CAP-01 is reconciled from "capability discovery absent" to "provider-neutral discovery still absent even though CLI metadata and selected provider option mappings exist"; P4-VALIDATION-01 is reconciled from "unsupported-feature validation absent" to "CLI-local OpenAI-compatible output and MIME validation exists, but gateway/provider validation remains partial and mostly runtime/provider-owned."
+  - Capability status by requested feature: tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config now have a provider-neutral state vocabulary, but provider-specific support remains mixed between explicitly supported, explicitly unsupported, and unknown depending on provider coverage.
+- Planning-only evidence: P4-CAP-01 is reconciled from stale "capability discovery absent" wording to "provider-neutral discovery exists, but concrete provider coverage and public closure evidence remain incomplete"; P4-VALIDATION-01 is reconciled from stale "unsupported-feature validation absent" wording to "gateway/session unsupported-feature validation exists for explicitly unsupported capabilities, while interaction/inferencer seams, concrete provider reporting, and selected provider-local behaviors remain open."
 - Docs/tests/examples evidence:
   - `agent-cli/internal/config/models_test.go` verifies output modality checks, input MIME metadata, default multimodal MIME coverage, lookup behavior, and unknown-model allow behavior.
   - `agent-cli/internal/input/validate_test.go` verifies MIME rejection errors, supported-list behavior, conversion hints, and validation across image, audio, video, and file parts.
   - `agent-cli/internal/agent/executor.go` contains the observable validation flow through `RunAsk`, `validateOutputModality`, and `validateInputMimeTypes`.
+  - `go-llm-gateway/pkg/capabilities/capabilities_test.go` verifies unknown provider capability fallback and JSON round-tripping.
+  - `go-llm-gateway/pkg/gateway/capabilities_test.go` verifies gateway/session discovery, unsupported-feature rejection before provider execution or connection, and unknown fallback behavior.
   - `go-llm-gateway/pkg/providers/openai/params_test.go` verifies OpenAI option mapping and that `Thinking` is ignored.
+  - `go-llm-gateway/pkg/providers/openai/capabilities_test.go` verifies OpenAI concrete capability reporting.
   - `go-llm-gateway/pkg/providers/anthropic/params_test.go` verifies `ThinkingConfig` and `CacheControlConfig` mapping.
   - `go-llm-gateway/pkg/providers/gemini/replay_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, and `go-llm-gateway/pkg/providers/gemini/models_test.go` verify deterministic Gemini tool, image/audio content, and streaming behavior.
   - `go-llm-gateway/pkg/providers/fal/provider_test.go` verifies audio-to-video, image-to-video, TTS, unsupported model errors, and `Config` passthrough without live provider credentials.
   - `go-llm-gateway/pkg/providers/grok/provider_test.go` and `go-llm-gateway/pkg/providers/openai/session_test.go` verify credential-free session construction behavior through injected dialers.
-- Remaining repair slice: keep P4-CAP-01 open to define a public capability discovery surface that returns supported, unsupported, and unknown for each provider/model pair across tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config; keep P4-VALIDATION-01 open to move unsupported-feature validation to the reusable gateway/provider boundary, add credential-free fixtures for OpenAI-compatible, Anthropic, Gemini, fal.ai, and Grok capability decisions, and document when unknown capabilities are intentionally deferred to the provider.
-- Reviewer commands: from the repository root, run `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)` to verify CLI-local model metadata, MIME validation, and executor validation behavior; run `(cd go-llm-gateway && go test ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` to verify provider-local deterministic option, modality, stream, session, and provider-specific config behavior; run `go doc ./go-llm-gateway/pkg/providers` to inspect the current public provider declarations and confirm that no provider-neutral capability discovery method exists.
+- Remaining repair slice: keep P4-CAP-01 open to complete or verify concrete provider capability reporters and credential-free tests across Anthropic, Gemini, fal.ai, Grok/session, OpenAI-compatible variants, and any other provider family where current behavior still falls back to unknown; keep P4-VALIDATION-01 open to extend or document validation through interaction gateways and `GatewayInferencer`, settle fal streaming behavior against the public capability contract, prove representative unsupported features fail locally before provider side effects, and document when unknown capabilities are intentionally deferred to the provider.
+- Reviewer commands: from the repository root, run `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)` to verify CLI-local model metadata, MIME validation, and executor validation behavior; run `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` to verify provider-neutral capability, gateway validation, provider-local deterministic option, modality, stream, session, and provider-specific config behavior; run `go doc ./go-llm-gateway/pkg/providers` and `go doc ./go-llm-gateway/pkg/gateway` to inspect current capability and unsupported-feature declarations.
 
 ### P4-API-05: Public Gateway, Provider, And Session Surface Alignment
 
@@ -202,9 +213,1172 @@ Validated deterministic test names and packages:
 - Remaining repair slice: complete typed errors/streams, provider capabilities/validation, dependency/result/context contracts, Go API hygiene, and final closure validation in the dedicated follow-up rows before closing P4-GATE-01.
 - Reviewer commands: from the repository root, run `make typecheck` plus the row-specific commands above to verify current evidence; do not mark P4-GATE-01 closed from this audit document alone.
 
-This document records the current contract gaps that Phase 2 needs to harden. It starts with the hidden-coupling and dependency-injection findings that block clean separation between the reusable libraries and the CLI composition layer.
-
 Use [`dependencies.md`](./dependencies.md) for the intended dependency direction. Use this audit for the places where the codebase still relies on convenience coupling or constructor ownership that is broader than the intended architecture.
+
+## Phase 4 Exported API Contract Audit Shape
+
+Phase 4 audit findings must inspect exported public API surfaces under
+`go-agent-loop/pkg` and `go-llm-gateway/pkg`, including `agentloop`,
+`messages`, `gateway`, `inference`, `providers`, `models`, and `testing`.
+Adjacent exported packages may be cited when they expose caller-visible
+contract behavior relevant to the same gap.
+
+This Phase 4 section is source material for later public API hardening lanes.
+Creating or extending the audit does not close `P4-API-01`, `P4-API-02`,
+`P4-API-03`, `P4-API-04`, `P4-API-05`, `P4-API-06`, or `P4-API-07` by itself.
+Later planners must use the concrete findings and repair slices as inputs for
+implementation work, tests, compatibility review, and release documentation.
+
+### Phase 4 Checklist Rows
+
+| Row | Contract area | Audit expectation |
+| --- | --- | --- |
+| `P4-API-01` | Context usage | Public blocking operations, buffer waits, provider calls, session connection, streaming, and I/O declare or document cancellation, timeout, and lifecycle behavior. |
+| `P4-API-02` | Typed errors | Public errors and stream error events are caller-actionable through typed errors, sentinel support, structured fields, or documented error classes rather than string parsing. |
+| `P4-API-03` | Result contracts | Public bool, nil, zero-value, channel-close, and loosely documented result signals are intentional, documented, and distinguish success, absence, cancellation, validation failure, and runtime failure. |
+| `P4-API-04` | Capability discovery | Consumers can discover provider and gateway support for tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific configuration before sending a request. |
+| `P4-API-05` | Stream semantics | Streaming APIs document event ordering, final events, close behavior, cancellation behavior, replay mismatch behavior, and error propagation. |
+| `P4-API-06` | Dependency injection | Network clients, WebSocket dialers, clocks, stores, transports, endpoints, model names, timeouts, retry behavior, and other runtime dependencies are injectable or explicitly configured at public seams when callers need ownership. |
+| `P4-API-07` | Go API hygiene | Exported names, doc comments, public struct exposure, nil/empty slice behavior, panic policy, and compatibility posture are clear enough for downstream package consumers. |
+
+### Finding Fields
+
+Each Phase 4 finding must use a stable identifier and include these fields:
+
+- Identifier: a stable ID with an area prefix, for example `P4-CTX-01`,
+  `P4-ERR-01`, `P4-RESULT-01`, `P4-CAP-01`, `P4-STREAM-01`, `P4-DI-01`, or
+  `P4-HYGIENE-01`.
+- Affected package: the public package path that exposes the contract.
+- File path: the repository path containing the exported declaration or public
+  behavior.
+- Exported declaration: the exported type, interface, function, method, const,
+  var, field, event value, or documented public behavior under review.
+- Observable contract issue: the caller-visible ambiguity, failure mode, hidden
+  dependency, lifecycle gap, or documentation gap.
+- Mapped checklist rows: one or more of `P4-API-01` through `P4-API-07`.
+- Severity: `must-fix contract defect`, `later polish`, or
+  `release/documentation work`.
+- Compatibility sensitivity: `additive`, `compatibility-sensitive`, or
+  `documentation-only`.
+- Recommended repair slice: the smallest implementation-ready change set that
+  would repair or document the public contract.
+- Verification notes: reviewer commands, expected unit or integration evidence,
+  fixture updates, compatibility checks, or explicit statement that no
+  reproducibility tooling was added for the audit finding.
+
+Use this template for new findings:
+
+```markdown
+### P4-AREA-00: Short caller-visible problem statement
+
+- Affected package: `module/pkg/name`
+- File path: `path/to/file.go`
+- Exported declaration: `Name`, `Type.Method`, `Interface`, or public event
+- Observable contract issue:
+  - what a package consumer can observe or cannot safely distinguish
+- Mapped checklist rows: `P4-API-0X`, `P4-API-0Y`
+- Severity: `must-fix contract defect` | `later polish` | `release/documentation work`
+- Compatibility sensitivity: `additive` | `compatibility-sensitive` | `documentation-only`
+- Recommended repair slice:
+  - implementation-ready change that a later lane can own
+- Verification notes:
+  - command or test evidence expected from the later repair lane
+```
+
+### Classification Rules
+
+Classify a finding as a `must-fix contract defect` when downstream callers
+cannot reliably handle cancellation, validation, provider capability, stream
+completion, typed failure classes, hidden runtime dependencies, or ambiguous
+result states through the current public contract.
+
+Classify a finding as `later polish` when the existing public contract is
+usable but confusing, overly broad, awkwardly named, or likely to accumulate
+maintenance risk without creating a direct caller-observable defect.
+
+Classify a finding as `release/documentation work` when implementation behavior
+is acceptable but the package docs, exported comments, migration notes, or
+release guidance need to state the contract explicitly.
+
+Mark changes as `compatibility-sensitive` when they alter exported signatures,
+exported type shapes, event ordering, channel behavior, error text relied on by
+existing tests or operators, fixture semantics, command completion timing, or
+provider-visible validation timing. Mark changes as `additive` when they add new
+typed errors, capability APIs, options, docs, or helper functions without
+changing existing behavior. Mark changes as `documentation-only` when no
+runtime or exported API behavior is expected to change.
+
+### Phase 4 Context And Result Behavior Findings
+
+These findings cover the `P4-API-01` and `P4-API-03` story slice. They name
+public operations that block, wait on buffers, perform provider I/O, connect
+sessions, or stream results where callers cannot yet distinguish cancellation,
+timeout, absence, buffer pressure, and runtime failure as explicit public
+contracts.
+
+#### P4-CTX-01: execution result aggregation can block without a caller-visible timeout result
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`
+- File path: `go-agent-loop/pkg/agentloop/agent_loop.go`,
+  `go-agent-loop/pkg/agentloop/execute_result.go`
+- Exported declaration: `AgenticLoop.Execute`,
+  `AgentLoop.Execute`, `AgenticLoop.ExecuteStreaming`,
+  `AgentLoop.ExecuteStreaming`, `StreamingExecuteResult.Messages`
+- Observable contract issue:
+  - `Execute(ctx, input)` accepts a context and runs the hot loop under it, but
+    the public contract does not state whether cancellation is returned as
+    `ctx.Err()`, normalized into stream data, dropped as clean completion, or
+    represented by a partial `ExecuteResult`.
+  - `ExecuteStreaming(ctx, input)` returns a result immediately, and
+    `StreamingExecuteResult.Messages()` later blocks on an internal `done`
+    channel with no context parameter. A caller that stops consuming
+    `EventStream`, closes the stream, or cancels the original context cannot
+    tell from the exported API whether `Messages()` is guaranteed to unblock.
+  - `Stream.HasNext()` returns `false` for both clean stream exhaustion and
+    caller `Close()`. `Stream.Err()` exists, but the implementation does not
+    currently populate it for context cancellation or loop failure, so callers
+    cannot reliably distinguish "no more events" from cancellation or runtime
+    failure.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define the execution lifecycle contract for synchronous and streaming
+    turns: when `ctx.Err()` is returned as an error, when partial deltas are
+    preserved, when cancellation is emitted in-band, and when `Messages()` must
+    unblock
+  - add a context-aware result accessor such as `MessagesContext(ctx)` or make
+    `Messages()` documented to unblock on `EventStream.Close()` and original
+    context cancellation
+  - populate `Stream.Err()` for caller cancellation, deadline exceeded, and
+    loop/runtime failure while preserving clean exhaustion as `nil`
+- Verification notes:
+  - later repair lanes should add observable tests in
+    `go-agent-loop/pkg/agentloop` for cancelled `Execute`, cancelled
+    `ExecuteStreaming`, `EventStream.Close()` followed by `Messages()`, and
+    `Stream.Err()` after cancellation and provider failure
+
+#### P4-CTX-02: buffer waits collapse cancellation, empty buffer, and backpressure into `false`
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`
+- File path: `go-agent-loop/pkg/messages/buffers.go`,
+  `go-agent-loop/pkg/messages/session.go`
+- Exported declaration: `TypedBuffer.Write`, `TypedBuffer.Read`,
+  `TypedBuffer.ReadBlocking`, `TypedBuffer.ReadBlockingContext`,
+  `Session.Send`, `Session.Receive`
+- Observable contract issue:
+  - `TypedBuffer.Write(ctx, data)` returns `false` for context cancellation and
+    a full buffer. `Session.Send(ctx, msg)` inherits that same bool-only result
+    contract, so callers cannot tell whether a session write failed because the
+    caller cancelled, the provider/session closed, or the outbound queue was
+    full.
+  - `TypedBuffer.Read()` returns `(zero, false)` for an empty buffer, while
+    `ReadBlocking(done)` and `ReadBlockingContext(ctx)` return `(zero, false)`
+    when the wait is stopped. The exported API does not give a typed reason for
+    "no item yet" versus "the wait ended".
+  - The only backpressure observability hook is `SetOnDrop`, which is tied to
+    the full-buffer path for `Write`; consumers using `ReadBlockingContext` or
+    `Session.Receive()` cannot observe a typed absence, cancellation, or closed
+    session reason.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - introduce an additive result type or error-returning variants for buffer
+    operations, for example `WriteResult`/`ReadResult` or
+    `WriteContext(...) error` and `ReadContext(...) (T, error)`, with stable
+    reasons for success, empty, full, cancelled, and closed
+  - keep existing bool methods as compatibility shims during migration, but
+    document that `false` is intentionally lossy
+  - thread the richer result through `Session.Send` and session relay wrappers
+    so provider session code can distinguish cancellation from buffer pressure
+- Verification notes:
+  - later repair lanes should add buffer tests for full queue versus cancelled
+    context and session tests proving `Send` exposes the richer reason without
+    requiring string parsing
+
+#### P4-CTX-03: gateway/provider calls document context plumbing but not cancellation and timeout outcomes
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- File path: `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`
+- Exported declaration: `Gateway.Infer`, `Gateway.InferStream`,
+  `DefaultGateway.Infer`, `DefaultGateway.InferStream`, `Provider.Infer`,
+  `Provider.InferStream`, `GatewayInferencer.Infer`,
+  `GatewayInferencer.InferStream`
+- Observable contract issue:
+  - these public methods accept `context.Context` and pass it down to provider
+    implementations, but the exported comments do not specify whether
+    cancellation/deadline failures are returned as `context.Canceled`,
+    `context.DeadlineExceeded`, provider-specific errors, typed gateway errors,
+    in-band stream events, or channel close without an error value.
+  - `InferStream(ctx, req)` returns `(<-chan StreamMessage, error)`, but there
+    is no public stream handle or final error result that can report a provider
+    failure after the channel has been returned. This makes late cancellation,
+    transport failure, and stream parser failure ambiguous unless every
+    provider encodes them identically as stream messages.
+  - `GatewayInferencer` bridges gateway results into loop results without
+    documenting whether context cancellation is normalized, preserved, or
+    converted during the bridge.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define one public cancellation/timeout contract shared by gateway and
+    provider methods, including whether `errors.Is(err, context.Canceled)` and
+    `errors.Is(err, context.DeadlineExceeded)` must work for direct calls
+  - define the post-return streaming error path, either with a stream result
+    handle, terminal error event taxonomy, or documented provider invariants
+  - add bridge tests proving `GatewayInferencer` preserves the selected
+    cancellation and timeout semantics into `messages.InferenceResult` and
+    stream output
+- Verification notes:
+  - later repair lanes should add provider-neutral fake-provider tests under
+    `go-llm-gateway/pkg/gateway` and bridge tests under
+    `go-llm-gateway/pkg/inference` for direct cancellation, deadline exceeded,
+    and late stream failure
+
+#### P4-CTX-04: session connection and close contracts lack explicit lifecycle outcomes
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-llm-gateway/pkg/testing`
+- File path: `go-agent-loop/pkg/messages/session.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/inference/session_inferencer.go`,
+  `go-llm-gateway/pkg/testing/session_inferencer.go`,
+  `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_record.go`
+- Exported declaration: `SessionInferencer.ConnectSession`,
+  `Session.Done`, `Session.Close`, `DefaultSessionGateway.ConnectSession`,
+  `SessionGatewayInferencer.ConnectSession`,
+  `RecordingSessionInferencer.ConnectSession`,
+  `ReplaySessionInferencer.ConnectSession`, `SessionReplayer.Close`,
+  `SessionReplayer.Err`, `SessionRecorder.Close`
+- Observable contract issue:
+  - `ConnectSession(ctx)` exposes cancellation for connection setup, but the
+    public session contract does not state whether the same context owns the
+    lifetime of `Receive()`, relay goroutines, replay delivery, or only the
+    initial provider connection attempt.
+  - `Session.Done()` only closes a channel; callers cannot tell whether the
+    session ended because the caller closed it, the provider closed it,
+    connection setup failed after partial initialization, replay diverged,
+    context was cancelled, or a transport failed.
+  - `Session.Close()` returns `error`, but the shared interface does not define
+    idempotency outcome, whether close propagates provider close errors, or
+    whether replay/capture wrappers must expose close-induced replay mismatch
+    through `Err()`, returned errors, in-band events, or all of those.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define a session lifecycle result model that separates connect failure,
+    caller close, provider close, context cancellation, replay divergence, and
+    transport failure
+  - add an additive `Err()` or terminal status accessor to the shared
+    `messages.Session` contract, or document why wrappers such as
+    `SessionReplayer.Err()` are intentionally provider/testing-specific
+  - align recorder and replayer relay contexts with the chosen lifecycle owner
+    and document close idempotency across live, record, and replay sessions
+- Verification notes:
+  - later repair lanes should add shared session contract tests with fake
+    sessions plus `go-llm-gateway/pkg/testing` tests for cancelled replay,
+    replay divergence, caller close before expected outbound events, and
+    recorder close behavior
+
+#### P4-RESULT-01: text and fixture helpers use zero values for invalid or absent results
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-agent-loop/pkg/agentloop/execute_result.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`
+- Exported declaration: `ExecuteResult.Text`,
+  `InteractionFixtureReplayer.Fixture`, `InteractionFixtureReplayer.Replay`
+- Observable contract issue:
+  - `ExecuteResult.Text()` returns an empty string when there is no final
+    assistant text, when the final assistant content is intentionally empty,
+    when the result contains only reasoning/tool calls, or when execution
+    ended before a final answer. Callers cannot distinguish absence from a
+    valid empty response.
+  - `InteractionFixtureReplayer.Fixture()` returns an empty
+    `InteractionFixture{}` when cloning fails, collapsing impossible internal
+    clone failure, absent fixture state, and a valid-but-empty zero value into
+    the same public result shape.
+  - `InteractionFixtureReplayer.Replay(ctx)` closes the channel without a
+    terminal result when cloning fails or context is cancelled; a consumer
+    cannot distinguish fixture preparation failure, cancellation, and successful
+    replay of zero events by observing the channel alone.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add explicit result helpers such as `FinalText() (string, bool)` or a
+    richer execution final-message accessor while keeping `Text()` as a
+    compatibility convenience
+  - change fixture helpers additively by adding `FixtureResult()`
+    `(InteractionFixture, error)` and a replay handle or terminal status that
+    reports clone failure and context cancellation
+  - document which zero values are valid public data and which indicate
+    compatibility fallback behavior
+- Verification notes:
+  - later repair lanes should add observable tests for final empty assistant
+    text versus absent final assistant text and for fixture clone/replay
+    cancellation outcomes
+
+#### P4-RESULT-02: interaction and tool-result validation errors are normalized inconsistently across sync, event, and fixture APIs
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/gateway/interaction_gateway.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`,
+  `go-llm-gateway/pkg/gateway/interaction_types.go`
+- Exported declaration: `DefaultGateway.Interact`,
+  `InteractionError`, `InteractionFixtureValidationError`,
+  `ValidateInteractionFixture`, `DecodeInteractionFixture`
+- Observable contract issue:
+  - `Interact(ctx, req)` returns a channel successfully even when
+    `validateInteractionToolResults(req)` later rejects the request; that
+    validation failure appears as an in-band `InteractionEventError` with code
+    `tool_result_validation_error`.
+  - fixture validation APIs return `InteractionFixtureValidationError` directly
+    as a Go error, while interaction runtime validation uses an event payload.
+    Both surfaces are caller-visible validation contracts, but the audit found
+    no shared rule for which validation failures are returned synchronously
+    versus emitted asynchronously.
+  - cancellation before provider execution emits a cancellation event and then
+    an end event; cancellation during replay closes the channel without a
+    terminal event. Consumers cannot apply one result-handling rule across live
+    interaction and fixture replay.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define a provider-neutral interaction result contract that says which
+    validation failures return from the method call, which are terminal events,
+    and which support `errors.As` against validation error types
+  - align fixture replay cancellation and preparation failure with the live
+    interaction terminal event contract, or add an explicit replay result/error
+    handle when preserving channel-only replay behavior
+  - add examples in package docs showing callers how to branch on validation,
+    cancellation, timeout, provider error, and successful end
+- Verification notes:
+  - later repair lanes should extend `go-llm-gateway/pkg/gateway` tests to
+    assert the selected sync-vs-event validation boundary and cancellation
+    terminal behavior for both live `Interact` and fixture `Replay`
+
+### Phase 4 Typed Error And Stream Semantics Findings
+
+These findings cover the `P4-API-02` and `P4-API-05` story slice. They name
+public error and stream surfaces where callers cannot yet branch on stable
+failure classes or rely on one provider-neutral terminal event contract.
+
+#### P4-ERR-01: provider status and transport errors are not represented by a shared typed error taxonomy
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/providers/openai/provider.go`,
+  `go-llm-gateway/pkg/providers/anthropic/provider.go`,
+  `go-llm-gateway/pkg/providers/gemini/provider.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`
+- Exported declaration: `Provider.Infer`, `Provider.InferStream`,
+  `Gateway.Infer`, `Gateway.InferStream`, `GatewayInferencer.Infer`,
+  `GatewayInferencer.InferStream`
+- Observable contract issue:
+  - OpenAI and fal HTTP errors are returned as formatted strings containing
+    status code and response body, while Anthropic and Gemini SDK errors are
+    passed through directly. Callers cannot use `errors.Is` or `errors.As` to
+    branch uniformly on auth, authorization, rate limit, invalid request,
+    unsupported model, provider status, transport failure, cancellation, or
+    deadline exceeded.
+  - Gateway and inference adapters forward those provider errors without adding
+    a shared error kind, so downstream loop callers inherit provider-specific
+    error text as the public contract.
+  - Current replay tests assert status-code substrings such as `400`, `401`,
+    `429`, and `500`, which demonstrates that caller-observable behavior is
+    string parsing rather than a stable typed error surface.
+- Mapped checklist rows: `P4-API-02`, `P4-API-03`, `P4-API-04`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add provider-neutral exported error kinds, for example
+    `ErrInvalidRequest`, `ErrAuthentication`, `ErrAuthorization`,
+    `ErrRateLimited`, `ErrUnsupportedModel`, `ErrProviderStatus`,
+    `ErrTransport`, and wrappers that expose provider name, status code,
+    request ID, retryability, and provider body/code fields
+  - require all provider implementations to wrap local validation, HTTP status,
+    SDK, transport, cancellation, and deadline failures so
+    `errors.Is`/`errors.As` works through `Gateway` and `GatewayInferencer`
+  - keep existing error messages as human-readable text where practical, but
+    move compatibility-sensitive assertions from substring checks to typed
+    error checks in later implementation lanes
+- Verification notes:
+  - later repair lanes should add provider-neutral gateway tests plus
+    provider-specific replay tests for 400, 401, 403, 404 or unsupported model,
+    429, 5xx, transport errors, `context.Canceled`, and
+    `context.DeadlineExceeded`
+
+#### P4-ERR-02: stream error events carry free-form messages instead of caller-actionable error classes
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`
+- File path: `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-agent-loop/pkg/participants/model_runner.go`,
+  `go-agent-loop/pkg/participants/tool_runner.go`,
+  `go-llm-gateway/pkg/providers/openai/stream.go`,
+  `go-llm-gateway/pkg/providers/openai/session.go`,
+  `go-llm-gateway/pkg/providers/anthropic/stream.go`,
+  `go-llm-gateway/pkg/providers/gemini/stream.go`,
+  `go-llm-gateway/pkg/providers/grok/session.go`
+- Exported declaration: `ErrorValue`,
+  `NewErrorValue`, `NewErrorValueWithDetails`,
+  `Inferencer.InferStream`, `Provider.InferStream`,
+  `messages.StreamMessage` with `StreamTypeError`
+- Observable contract issue:
+  - `ErrorValue` has optional provider detail fields, but most public stream
+    paths still emit `NewErrorValue(err.Error())`. This collapses transport
+    failures, provider status failures, invalid request failures, tool runtime
+    failures, parser failures, replay divergence, and cancellation into one
+    free-form string.
+  - OpenAI realtime provider errors preserve provider `error.type`, `code`,
+    `param`, and `event_id`, while HTTP streaming, Anthropic, Gemini, tool
+    runner, and model runner errors do not expose the same caller-actionable
+    fields or retryability rule.
+  - The public stream contract has no exported sentinel or structured kind that
+    maps an in-band `ERROR` event back to the returned Go error taxonomy.
+- Mapped checklist rows: `P4-API-02`, `P4-API-05`, `P4-API-07`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - extend `ErrorValue` additively with stable error kind and retryability
+    fields, or define an exported stream error payload type that can carry the
+    same provider-neutral classes as returned Go errors
+  - update stream adapters and participants to preserve typed classes when
+    converting returned errors into `StreamTypeError` events
+  - document how callers should compare returned errors and in-band stream
+    error events without parsing provider or tool error text
+- Verification notes:
+  - later repair lanes should add stream tests that assert error kind and
+    retryability for provider stream status errors, stream parser errors,
+    cancelled streams, tool executor failures, and OpenAI realtime provider
+    error events
+
+#### P4-ERR-03: replay mismatch and fixture validation errors are public but not integrated into the shared error model
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/testing`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_websocket_dialer.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`
+- Exported declaration: `SessionReplayer.Err`, `ReplayWebSocketDialer.Err`,
+  `InteractionFixtureValidationError`,
+  `ValidateInteractionFixture`, `DecodeInteractionFixture`
+- Observable contract issue:
+  - session replay divergence, replay incompletion, unexpected outbound event,
+    and unsupported payload failures are returned as formatted strings. There
+    is no exported replay mismatch type carrying sequence, direction, expected
+    event type, actual event type, and fixture path.
+  - interaction fixture validation does expose
+    `InteractionFixtureValidationError`, but the replay/session fixture
+    surfaces do not share that typed validation contract, so tests and
+    automation must parse unrelated strings to identify fixture authoring
+    failures versus runtime provider failures.
+  - replay mismatch can appear through `Send` returning `false`, `Close`
+    returning `nil`, `Err()`, or WebSocket write/read errors depending on the
+    replay wrapper, without a shared typed error that callers can inspect.
+- Mapped checklist rows: `P4-API-02`, `P4-API-03`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - introduce exported replay and fixture error types with `errors.As` support,
+    including sequence, path, expected direction/type, actual direction/type,
+    and mismatch kind
+  - thread those typed errors through `SessionReplayer.Err`,
+    `ReplayWebSocketDialer.Err`, replay `Send`/`Close` paths, fixture decoding,
+    and any in-band stream error events produced from replay failure
+  - keep current messages as `Error()` text, but make test assertions and
+    caller examples use typed mismatch fields
+- Verification notes:
+  - later repair lanes should add tests for unexpected outbound event, payload
+    mismatch, incomplete replay on close, unsupported payload type, and fixture
+    validation using `errors.As`
+
+#### P4-STREAM-01: streaming APIs do not expose one terminal error and final-event contract
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-loop/pkg/agentloop`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-agent-loop/pkg/messages/participant_messages.go`,
+  `go-agent-loop/pkg/agentloop/execute_result.go`
+- Exported declaration: `Provider.InferStream`, `Gateway.InferStream`,
+  `Inferencer.InferStream`, `AgenticLoop.ExecuteStreaming`,
+  `Stream.HasNext`, `Stream.Err`, `StreamingExecuteResult.Messages`
+- Observable contract issue:
+  - `InferStream(ctx, req)` returns only a receive channel after initial setup.
+    Provider failures that occur after the channel is returned must be encoded
+    as events or disappear behind channel close; there is no stream handle with
+    a final error result.
+  - `Stream.Err()` exists at the loop layer, but provider stream channels and
+    gateway streams do not expose a corresponding final error. As a result,
+    callers cannot apply one rule across direct provider use, gateway use, and
+    loop streaming use.
+  - The exported contract does not state whether a stream error is followed by
+    `MESSAGE.END`, whether `USAGE.INFO` may appear after `MESSAGE.END`, whether
+    cancellation emits an error event or only closes the channel, or whether
+    `Messages()` includes partial messages after a stream failure.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define a provider-neutral stream lifecycle: setup error, event sequence,
+    terminal error event, final message/end event, usage event placement,
+    channel close, and final error accessor
+  - add an additive stream result handle or terminal status event to gateway and
+    provider APIs, then have `AgenticLoop.ExecuteStreaming` preserve the same
+    final status in `Stream.Err()` and `Messages()`
+  - document whether partial messages are caller-visible on late provider
+    failure and how callers should drain or close streams
+- Verification notes:
+  - later repair lanes should add fake-provider tests proving late stream
+    failure, cancellation, clean completion, usage placement, and partial
+    message preservation through provider, gateway, inference bridge, and
+    `AgenticLoop.ExecuteStreaming`
+
+#### P4-STREAM-02: provider stream adapters disagree on event ordering around errors, message end, usage, and empty streams
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`
+- File path: `go-llm-gateway/pkg/providers/openai/stream.go`,
+  `go-llm-gateway/pkg/providers/anthropic/stream.go`,
+  `go-llm-gateway/pkg/providers/gemini/stream.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`
+- Exported declaration: `OpenAIProvider.InferStream`,
+  `AnthropicProvider.InferStream`, `GeminiProvider.InferStream`,
+  `Provider.InferStream` as implemented by fal
+- Observable contract issue:
+  - OpenAI emits `MESSAGE.END` before scanner errors discovered after the SSE
+    loop, while Anthropic and Gemini emit `ERROR` before `MESSAGE.END` for
+    stream iterator errors. A caller cannot rely on a single rule for whether
+    `ERROR` is terminal or whether `MESSAGE.END` means success.
+  - Usage placement is provider-specific: OpenAI and Anthropic can emit
+    `USAGE.INFO` after `MESSAGE.END`, Gemini emits it after `MESSAGE.END` when
+    usage is present, and fal returns an immediately closed stream with no
+    start/end/error events because it has no streaming implementation.
+  - Empty or setup-only streams are not classified: Gemini forces
+    `MESSAGE.START`/`MESSAGE.END` even when no content arrives, fal returns a
+    closed channel with no events, and OpenAI may emit start/end around scanner
+    EOF. These are all public channel contracts.
+- Mapped checklist rows: `P4-API-02`, `P4-API-04`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - standardize stream event ordering for all providers, including
+    `MESSAGE.START`, content start/delta/end pairs, tool-call pairs,
+    `StreamTypeError`, `MESSAGE.END`, `USAGE.INFO`, and channel close
+  - define whether unsupported streaming should fail synchronously with
+    `ErrUnsupportedCapability` or return a typed terminal stream error instead
+    of a clean empty stream
+  - update provider adapter tests to assert the same final event contract across
+    OpenAI, Anthropic, Gemini, and fal
+- Verification notes:
+  - later repair lanes should add table-driven provider stream tests for clean
+    text, tool call, parser error, empty stream, unsupported streaming, and
+    usage-bearing completion
+
+#### P4-STREAM-03: session stream close and cancellation events lack a shared final status
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`,
+  `github.com/portpowered/go-llm-gateway/pkg/testing`
+- File path: `go-agent-loop/pkg/messages/session.go`,
+  `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-agent-loop/pkg/participants/model_runner.go`,
+  `go-llm-gateway/pkg/providers/openai/session.go`,
+  `go-llm-gateway/pkg/providers/grok/session.go`,
+  `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_record.go`
+- Exported declaration: `Session`, `Session.Done`, `Session.Close`,
+  `SessionCloseValue`, `ErrorValue`, `SessionReplayer.Err`,
+  `RecordingSessionInferencer.ConnectSession`, `ReplaySessionInferencer.ConnectSession`
+- Observable contract issue:
+  - session close, provider close, caller close, cancellation, transport error,
+    provider `error` event, replay divergence, and replay completion are
+    observable through different combinations of `SESSION.CLOSE`,
+    `StreamTypeError`, `Done()`, `Close() error`, and wrapper-specific `Err()`.
+  - `ModelRunner` synthesizes `SESSION.CLOSE` with reason `provider_closed`
+    when `session.Done()` closes without an explicit close event, but the
+    shared `Session` contract does not require providers, recorders, or
+    replayers to expose a final status reason.
+  - `SessionCloseValue.Reason` is a string, not a typed enum or error class, so
+    callers cannot distinguish normal provider close, caller cancellation,
+    timeout, replay mismatch, or transport shutdown without provider-specific
+    string conventions.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define exported session terminal status kinds and map them to
+    `SESSION.CLOSE`, `ERROR`, `Done()`, `Close()`, and optional `Err()` accessors
+  - update OpenAI, Grok, recorder, and replayer sessions to preserve the same
+    terminal reason for provider close, caller close, cancellation, timeout,
+    transport failure, provider error, replay divergence, and replay completion
+  - keep existing reason strings as compatibility text while adding typed
+    status fields or accessors for new callers
+- Verification notes:
+  - later repair lanes should add shared session contract tests plus provider
+    session tests for provider close event, caller close, context cancellation,
+    transport read/write failure, provider error event, replay divergence, and
+    replay completion
+
+#### Typed Error And Stream Repair Slice Order
+
+1. Define provider-neutral returned Go error kinds first so direct `Infer` and
+   `InferStream` setup failures have a stable taxonomy before stream events
+   mirror it.
+2. Extend `ErrorValue` or add a stream error payload that carries the same
+   taxonomy, then update provider stream adapters and participants to preserve
+   typed classes in-band.
+3. Standardize provider stream terminal ordering and unsupported-streaming
+   behavior before changing loop-level `Stream.Err()` semantics.
+4. Add replay and fixture mismatch error types so record/replay evidence can
+   test stream and session failures without string parsing.
+5. Define session terminal status kinds and align live, recording, and replay
+   sessions after the shared returned-error and stream-error taxonomy exists.
+
+#### Context/Result Repair Slice Order
+
+1. Repair `TypedBuffer` and `Session.Send` result ambiguity first because the
+   bool-only contract sits beneath loop, session, record, and replay behavior.
+2. Define gateway/provider cancellation and late-stream failure semantics before
+   changing provider adapters, so direct gateway consumers and loop bridges get
+   one shared rule.
+3. Repair `AgenticLoop.ExecuteStreaming` completion and `Stream.Err()` after
+   the lower-level stream/cancellation taxonomy exists.
+4. Add explicit session terminal status after buffer and stream result reasons
+   are available, then align live, recording, and replay sessions.
+5. Add zero-value-safe convenience accessors for `ExecuteResult.Text()` and
+   interaction fixture helpers as additive API polish once must-fix lifecycle
+   defects are underway.
+
+Reviewer commands for this audit-only story:
+
+```bash
+make typecheck
+make test
+```
+
+No reproducibility tooling was added for this slice; later implementation lanes
+must add the tests named in each finding before closing any Phase 4 checklist
+row.
+
+### Phase 4 Provider Capability, Validation, And Dependency Injection Findings
+
+These findings cover the `P4-API-04`, `P4-API-06`, and `P4-API-07` story
+slice. They name gateway/provider seams where callers can set feature-bearing
+request fields or runtime dependencies, but cannot discover support, validate
+unsupported requests locally, or consistently inject the dependencies needed to
+own test, replay, timeout, and transport behavior.
+
+#### P4-CAP-01: provider support for tools, media, reasoning, caching, sessions, and streaming is not discoverable
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/models`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/providers/session_provider.go`,
+  `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/models/message.go`,
+  `go-llm-gateway/pkg/models/session.go`
+- Exported declaration: `Provider`, `SessionProvider`, `InferenceRequest`,
+  `Gateway`, `DefaultGateway`, `DefaultSessionGateway`, `models.Message`,
+  `models.ContentPart`, `models.ToolDefinition`, `models.SessionConfig`,
+  `providers.ThinkingConfig`, `providers.CacheControlConfig`
+- Observable contract issue:
+  - `InferenceRequest` exposes `Tools`, `Model`, `Thinking`, `CacheControl`,
+    `Config`, and gateway model aliases expose text, image, audio, video,
+    embedding, reasoning, tool, and session shapes, but `Provider` only exposes
+    `Name`, `Infer`, and `InferStream`. A caller cannot ask whether the selected
+    provider supports tools, streaming, bidirectional sessions, audio input or
+    output, image input, video output, reasoning, prompt caching, embeddings, or
+    provider-specific config before sending the request.
+  - Session support is discoverable only by selecting a separate
+    `SessionProvider` at composition time. There is no common capability value
+    that tells a gateway consumer whether the same provider family supports
+    stateless inference, streaming inference, or realtime sessions for a model.
+  - `ThinkingConfig` and `CacheControlConfig` comments name provider-specific
+    behavior, but unsupported providers can ignore or pass through those fields
+    without a stable public unsupported-capability result.
+- Mapped checklist rows: `P4-API-04`, `P4-API-06`, `P4-API-07`,
+  `P4-API-02`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add a provider-neutral exported capability model, for example
+    `ProviderCapabilities` plus optional `Capabilities(ctx)` or
+    `CapabilitiesForModel(ctx, model)` methods, covering tools, streaming,
+    sessions, audio input/output, image input, video output, reasoning, prompt
+    caching, embeddings, provider config, and provider-specific limits
+  - expose a gateway-level capability discovery method so consumers do not need
+    to type-switch concrete providers or know whether a session provider is
+    separately wired
+  - document the rule that absence of a capability must be observable before
+    provider execution through local validation or a typed unsupported
+    capability error
+- Verification notes:
+  - later repair lanes should add fake-provider and concrete-provider tests
+    proving capability discovery for OpenAI, Anthropic, Gemini, fal, Grok
+    realtime sessions, and gateway wrappers without issuing live network calls
+
+#### P4-VALIDATION-01: unsupported request features fail at provider execution instead of a shared local validation seam
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- File path: `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`,
+  `go-llm-gateway/pkg/providers/anthropic/params.go`,
+  `go-llm-gateway/pkg/providers/openai/params.go`,
+  `go-llm-gateway/pkg/providers/gemini/provider.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`
+- Exported declaration: `DefaultGateway.Infer`,
+  `DefaultGateway.InferStream`, `Provider.Infer`, `Provider.InferStream`,
+  `providers.InferenceRequest`, `gateway.InferenceRequest`,
+  `GatewayInferencer.Infer`, `GatewayInferencer.InferStream`
+- Observable contract issue:
+  - `DefaultGateway` forwards all request fields directly to the provider with
+    no exported validation step. Unsupported tools, streaming, media parts,
+    reasoning, prompt caching, config blobs, or missing model choices therefore
+    fail differently per provider: some are ignored, some become formatted
+    provider errors, some become local string errors, and fal streaming returns
+    an immediately closed channel even though streaming is unsupported.
+  - fal validates model-specific content requirements inside `Infer` and returns
+    string errors such as missing audio/image/embedding input or unsupported
+    model. OpenAI, Anthropic, and Gemini translate broad request shapes into
+    provider-specific params without a shared unsupported-field taxonomy. The
+    gateway consumer cannot distinguish "unsupported by this provider" from
+    invalid user input or provider runtime failure without parsing text.
+  - `GatewayInferencer` forwards only the loop request plus its configured model
+    and raw JSON config; it has no validation hook to reject an unsupported
+    loop request before the agent loop observes provider execution behavior.
+- Mapped checklist rows: `P4-API-04`, `P4-API-06`, `P4-API-07`,
+  `P4-API-02`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - introduce an additive validation API, for example
+    `ValidateInferenceRequest(ctx, req)` or gateway-owned validation before
+    dispatch, backed by the capability model from `P4-CAP-01`
+  - define typed validation failures such as `ErrUnsupportedCapability`,
+    `ErrUnsupportedModel`, `ErrInvalidRequest`, and model/content requirement
+    details that support `errors.Is` and `errors.As`
+  - change unsupported streaming from a clean empty channel to a typed setup
+    failure or documented terminal stream event after compatibility review
+  - thread validation through `DefaultGateway`, interaction gateways, and
+    `GatewayInferencer` so direct gateway callers and agent-loop callers observe
+    the same unsupported capability result
+- Verification notes:
+  - later repair lanes should add table-driven gateway tests for tools,
+    streaming, sessions, audio input/output, image input, video output,
+    reasoning, prompt caching, unsupported model, and invalid provider config,
+    asserting typed local failures without live provider calls
+
+#### P4-DI-01: injectable runtime dependencies are uneven across provider constructors and public gateway seams
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/providers/openai/options.go`,
+  `go-llm-gateway/pkg/providers/openai/provider.go`,
+  `go-llm-gateway/pkg/providers/openai/realtime_dialer.go`,
+  `go-llm-gateway/pkg/providers/anthropic/options.go`,
+  `go-llm-gateway/pkg/providers/anthropic/provider.go`,
+  `go-llm-gateway/pkg/providers/gemini/options.go`,
+  `go-llm-gateway/pkg/providers/gemini/provider.go`,
+  `go-llm-gateway/pkg/providers/fal/options.go`,
+  `go-llm-gateway/pkg/providers/fal/provider.go`,
+  `go-llm-gateway/pkg/providers/grok/options.go`,
+  `go-llm-gateway/pkg/providers/grok/dialer.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`
+- Exported declaration: `openai.New`, `openai.WithHTTPClient`,
+  `openai.WithBaseURL`, `openai.WithRealtimeBaseURL`,
+  `openai.WithWebSocketDialer`, `anthropic.New`,
+  `anthropic.WithHTTPClient`, `gemini.New`, `gemini.WithHTTPClient`,
+  `fal.New`, `fal.WithHTTPClient`, `grok.New`, `grok.WithWebSocketDialer`,
+  `NewGateway`, `NewSessionGateway`
+- Observable contract issue:
+  - HTTP clients, base URLs, model names, API keys, loggers, and realtime
+    WebSocket dialers are injectable for several concrete providers, but not
+    through one public gateway-owned dependency contract. A consumer that owns
+    replay, test transport, timeout, or endpoint policy must know every concrete
+    provider option shape.
+  - `OpenAIProvider` falls back to `http.DefaultClient` for stateless HTTP and
+    creates a default realtime dialer only when no dialer is set, while
+    `GrokSessionProvider` requires a dialer and has no public defaulting at
+    `New`. `FalProvider` constructs `&http.Client{}` by default, Anthropic
+    captures SDK client construction at `New`, and Gemini creates a GenAI
+    client per call. These are all reasonable implementation choices, but the
+    exported contracts do not state ownership of timeouts, retry policy, live
+    network defaults, SDK client lifecycle, or replay compatibility.
+  - There is no exported injection point for retry policy, clock, backoff, or
+    per-request timeout policy. Callers can only approximate some of that
+    behavior through `context.Context` or custom `http.Client`/dialer options,
+    and only for providers that expose those options.
+- Mapped checklist rows: `P4-API-06`, `P4-API-04`, `P4-API-07`,
+  `P4-API-01`
+- Severity: `later polish`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - document current dependency ownership on each exported provider constructor
+    and option, including whether live network defaults are created, whether
+    default clients have timeouts, and who owns retry and close behavior
+  - add optional common dependency option structs or small interfaces for
+    transports, WebSocket dialers, endpoint/model defaults, timeout policy, and
+    retry/backoff policy where provider-neutral ownership is practical
+  - keep provider-specific options for provider-specific features, but expose
+    gateway composition helpers so record/replay and tests can inject runtime
+    dependencies without concrete provider branching in application flow
+- Verification notes:
+  - later repair lanes should add constructor tests proving no live dependency
+    is created when a fake client/dialer is injected, plus replay tests showing
+    OpenAI, Anthropic, Gemini, fal, and Grok use the injected transport or
+    dialer consistently
+
+#### P4-DI-02: session configuration is bridge-owned but cannot expose provider-specific realtime capability or validation
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-llm-gateway/pkg/models`,
+  `github.com/portpowered/go-agent-loop/pkg/messages`
+- File path: `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/gateway/session_types.go`,
+  `go-llm-gateway/pkg/inference/session_inferencer.go`,
+  `go-llm-gateway/pkg/models/session.go`,
+  `go-agent-loop/pkg/messages/session.go`
+- Exported declaration: `DefaultSessionGateway.ConnectSession`,
+  `SessionGatewayInferencer.ConnectSession`, `models.SessionConfig`,
+  `messages.SessionInferencer`, `messages.Session`
+- Observable contract issue:
+  - `models.SessionConfig` exposes model, voice, instructions, modalities,
+    audio formats, sample rates, turn detection, tools, and raw config, but
+    `DefaultSessionGateway` forwards it directly to the selected session
+    provider. Callers cannot discover which realtime provider supports which
+    modalities, audio formats, turn detection fields, tool definitions, sample
+    rates, or raw config shape before opening a WebSocket.
+  - `SessionGatewayInferencer` owns only model, voice, and instructions options;
+    it cannot pass modalities, audio formats, turn detection, tools, sample
+    rates, or raw config through the agent-loop `SessionInferencer` seam. This
+    makes some provider capabilities available to direct gateway callers but
+    not to loop consumers using the exported bridge.
+  - Session config validation happens inside provider-specific builders or
+    after WebSocket connection setup, so unsupported realtime features can
+    create live connections before failing.
+- Mapped checklist rows: `P4-API-04`, `P4-API-06`, `P4-API-07`,
+  `P4-API-01`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - add session capability discovery and validation alongside stateless
+    provider capability discovery, including modalities, audio formats, turn
+    detection, tools, sample rates, raw config, and session lifecycle ownership
+  - extend `SessionGatewayInferencer` additively with options or a config
+    supplier that can pass the full `models.SessionConfig` expected by the
+    selected provider without changing `messages.SessionInferencer`
+  - validate unsupported session config before opening a live WebSocket and
+    return typed unsupported-capability or invalid-request errors
+- Verification notes:
+  - later repair lanes should add fake session gateway tests proving
+    `SessionGatewayInferencer` forwards full session config and concrete Grok
+    and OpenAI realtime tests proving unsupported config fails before dial
+
+#### Provider Capability, Validation, And DI Repair Slice Order
+
+1. Add the provider-neutral capability model first because validation, docs, and
+   gateway discovery need one shared vocabulary for supported tools, media,
+   reasoning, caching, streaming, sessions, and provider config.
+2. Add typed unsupported-capability and invalid-request errors, then implement
+   gateway-level request validation for stateless `Infer`/`InferStream`.
+3. Repair unsupported streaming behavior, especially fal's clean empty channel,
+   after the stream terminal contract and typed validation taxonomy are aligned.
+4. Add session capability discovery and pre-dial validation, then extend
+   `SessionGatewayInferencer` with additive full-config forwarding.
+5. Document and normalize provider dependency ownership after capability and
+   validation contracts are in place, keeping provider-specific knobs behind
+   small common dependency option shapes where practical.
+
+Reviewer commands for this audit-only story:
+
+```bash
+make typecheck
+```
+
+No reproducibility tooling was added for this slice; later implementation lanes
+must add the tests named in each finding before closing any Phase 4 checklist
+row.
+
+### Phase 4 Go API Hygiene And Implementation Order Findings
+
+These findings cover the `P4-API-07` story slice and consolidate the final
+implementation order for later Phase 4 repair lanes. They name exported Go API
+surfaces where consumers can observe unclear naming, incomplete doc comments,
+over-broad public structs, nil/empty slice ambiguity, panic-policy gaps, or
+compatibility posture gaps even when the underlying implementation is otherwise
+usable.
+
+#### P4-HYGIENE-01: exported message and content contracts lack complete consumer-facing comments
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-llm-gateway/pkg/models`
+- File path: `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-llm-gateway/pkg/models/message.go`
+- Exported declaration: `ContentPart`, `ControlPlanePart`,
+  `ControlPlaneMessageType`, `ReasoningPart`, `NewReasoningMessage`,
+  `Message`, `Message.TextContent`, `Message.ReasoningContent`,
+  `models.ContentPart`, `models.Message`, `models.NewTextMessage`
+- Observable contract issue:
+  - several exported declarations are undocumented, under-documented, or have
+    comments that do not begin with the exported identifier. For example,
+    `NewReasoningMessage` is preceded by a stale `NewReason` comment, and
+    `ControlPlanePart`, `ControlPlaneMessageType`, and `ReasoningContent` do
+    not explain their public role.
+  - `models` re-exports loop-owned message types by alias, but package docs do
+    not clearly state whether `go-agent-loop/pkg/messages` or
+    `go-llm-gateway/pkg/models` is the compatibility anchor for downstream
+    consumers.
+  - the sealed-interface comment on `ContentPart` names the unexported
+    `contentPart()` method, but it does not document whether external packages
+    are intentionally prevented from defining custom content parts or how
+    callers should represent unsupported media.
+- Mapped checklist rows: `P4-API-07`, `P4-API-04`
+- Severity: `release/documentation work`
+- Compatibility sensitivity: `documentation-only`
+- Recommended repair slice:
+  - add package-level and exported declaration comments that start with each
+    exported identifier and describe caller-visible behavior, especially the
+    sealed `ContentPart` contract and model alias ownership
+  - document whether downstream code should import `messages` directly,
+    `models` aliases, or provider/gateway-level request types for public
+    compatibility
+  - keep this as documentation-only unless the comment review exposes an
+    actual exported naming change that requires compatibility review
+- Verification notes:
+  - later documentation lanes should run `go test ./...` and optionally
+    `go vet ./...` from the affected modules; no source-scanning meta test is
+    recommended because comments are documentation contract, not runtime
+    behavior
+
+#### P4-HYGIENE-02: broad public request and event structs expose provider-specific fields without nil/zero-value rules
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-loop/pkg/messages`
+- File path: `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/gateway/interaction_types.go`,
+  `go-agent-loop/pkg/messages/agent_messages.go`,
+  `go-agent-loop/pkg/messages/participant_messages.go`
+- Exported declaration: `providers.InferenceRequest`,
+  `providers.ThinkingConfig`, `providers.CacheControlConfig`,
+  `gateway.InteractionRequest`, `gateway.InteractionEvent`,
+  `messages.Message`, `messages.StreamMessage`, `messages.ErrorValue`
+- Observable contract issue:
+  - exported structs expose mutable slices, pointers, raw JSON, and broad
+    string fields. Some comments describe provider defaults, but the public API
+    does not consistently define nil versus empty slice behavior for
+    `Messages`, `Tools`, `StopSequences`, event payloads, tool calls, and
+    multimodal content parts.
+  - provider-specific knobs such as `Thinking`, `CacheControl`, raw `Config`,
+    provider error fields, and interaction event codes live on provider-neutral
+    structs. Without capability and validation contracts, callers cannot tell
+    whether a zero value means "provider default", "feature disabled",
+    "unsupported but ignored", or "invalid request".
+  - several event and error fields remain strings rather than typed enums or
+    structured result types. This preserves flexibility, but it leaves the
+    compatibility posture unclear for event codes, control-plane message types,
+    close reasons, provider error details, and future additions.
+- Mapped checklist rows: `P4-API-07`, `P4-API-03`, `P4-API-04`,
+  `P4-API-02`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define nil/empty/zero-value rules for public request and event structs at
+    the same time as provider capability and validation work, so unsupported
+    features and provider defaults are observable through typed results
+  - add typed constants or structured fields for public event/error codes where
+    callers already branch on string values; keep existing strings as
+    compatibility text during migration
+  - document ownership and mutation expectations for slices and raw JSON fields
+    passed into gateway/provider calls
+- Verification notes:
+  - later repair lanes should add runtime tests for nil versus empty messages,
+    tools, stop sequences, content parts, event payloads, and raw config,
+    asserting typed validation results or documented provider defaults rather
+    than source-shape checks
+
+#### P4-HYGIENE-03: public testing and replay fixtures expose mutable shapes without a clear compatibility and panic policy
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/testing`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/testing/session_fixture_contract.go`,
+  `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_record.go`,
+  `go-llm-gateway/pkg/testing/session_websocket_dialer.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`
+- Exported declaration: `SessionFixture`, `SessionStep`,
+  `SessionFixtureContract`, `SessionReplayer`, `SessionRecorder`,
+  `ReplayWebSocketDialer`, `InteractionFixture`,
+  `InteractionFixtureReplayer`, `LoadInteractionFixture`,
+  `DecodeInteractionFixture`, `ValidateInteractionFixture`
+- Observable contract issue:
+  - fixture structs and replay helpers are exported and suitable for downstream
+    test automation, but the public docs do not state which fields are stable
+    fixture schema, which are authoring conveniences, and which can evolve
+    between harness releases.
+  - loader and replayer APIs mostly return errors, but the panic policy for
+    malformed fixture values, nil internal state, invalid JSON payloads, and
+    replay misuse is not explicitly documented. Consumers building CI replay
+    tools need to know whether invalid fixtures are always returned as errors
+    or may panic.
+  - replay APIs clone fixture values for safety in some paths, but ownership of
+    returned slices, maps, raw payloads, and post-construction mutation is not
+    consistently part of the exported contract.
+- Mapped checklist rows: `P4-API-07`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `release/documentation work`
+- Compatibility sensitivity: `documentation-only`
+- Recommended repair slice:
+  - document the fixture schema compatibility promise, including which fields
+    are stable across releases and how fixture version bumps will be handled
+  - state the panic policy for exported fixture/replay APIs: invalid input
+    should be returned as a typed error, while panics should be reserved for
+    impossible programmer misuse if any such cases remain
+  - add or document clone/ownership rules so downstream replay tooling knows
+    whether mutating a fixture after constructing a replayer affects playback
+- Verification notes:
+  - later lanes should add observable fixture tests for malformed input, nil or
+    empty fixture values, mutation after replayer construction, close/replay
+    misuse, and typed replay errors; no new reproducibility tooling was added
+    by this audit
+
+#### P4-HYGIENE-04: exported constructors and options do not publish a module-wide compatibility posture
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`,
+  `github.com/portpowered/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`
+- File path: `go-agent-loop/pkg/agentloop/options.go`,
+  `go-agent-loop/pkg/participants/model_runner.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`,
+  `go-llm-gateway/pkg/inference/session_inferencer.go`,
+  `go-llm-gateway/pkg/providers/*/options.go`
+- Exported declaration: `NewAgentLoop`, `NewModelRunner`,
+  `NewSessionModelRunner`, `NewGateway`, `NewSessionGateway`,
+  `NewGatewayInferencer`, `NewSessionGatewayInferencer`, provider `New`
+  functions, and exported `With*` option functions
+- Observable contract issue:
+  - constructors and option functions are the main public extension points, but
+    the exported docs do not state compatibility expectations for adding new
+    options, changing defaults, changing default model names, changing default
+    transports, or tightening request validation.
+  - default live dependencies and provider defaults affect runtime behavior,
+    but package docs do not distinguish stable API shape from configurable
+    runtime policy. Consumers cannot tell which defaults are safe to rely on
+    versus release notes they must re-check.
+  - panic policy is not stated for nil provider/inferencer/session gateway
+    inputs, invalid option combinations, or missing runtime dependencies.
+    Current code often returns errors from constructors, but this is not a
+    documented module-wide rule.
+- Mapped checklist rows: `P4-API-07`, `P4-API-06`, `P4-API-01`,
+  `P4-API-04`
+- Severity: `later polish`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add package docs or constructor comments that define compatibility posture
+    for exported options, default model names, default transports, validation
+    timing, and nil dependency handling
+  - keep new dependency and validation controls additive where possible; mark
+    any behavior-tightening defaults as release-note work before merging API
+    hardening lanes
+  - add tests for nil dependency and invalid option combinations only where
+    the exported runtime behavior is promised to callers
+- Verification notes:
+  - later release/documentation lanes should pair doc updates with focused
+    constructor tests for nil provider, nil session provider, missing API key,
+    fake transport injection, and invalid option combinations
+
+#### Phase 4 Compatibility And Repair Map
+
+The audit separates the later implementation work into these buckets:
+
+| Bucket | Findings | Compatibility posture | Consuming lane |
+| --- | --- | --- | --- |
+| Must-fix contract defects | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-02` | mixed additive and compatibility-sensitive; each implementation lane needs caller-visible tests before closing a checklist row | Phase 4 API hardening lanes |
+| Later polish | `P4-DI-01`, `P4-HYGIENE-04` | additive unless defaults or constructor behavior change | Phase 4 dependency ownership or release-hardening lanes |
+| Release/documentation work | `P4-HYGIENE-01`, `P4-HYGIENE-03` plus package docs for repaired findings | documentation-only unless docs expose a required naming or signature repair | release notes, package docs, and fixture authoring docs |
+| Documentation-only audit output | this Phase 4 report and reviewer commands | documentation-only; audit existence does not close `P4-API-01` through `P4-API-07` | later planners use as source material |
+
+Recommended implementation order:
+
+1. Typed errors: implement `P4-ERR-01`, then mirror the taxonomy into
+   `P4-ERR-02` and `P4-ERR-03` so returned errors, stream errors, and replay
+   errors support `errors.Is`/`errors.As`.
+2. Provider capabilities and request validation: implement `P4-CAP-01`,
+   `P4-VALIDATION-01`, and `P4-DI-02`, using `P4-HYGIENE-02` to define
+   nil/empty request semantics while validation is added.
+3. Stream semantics: implement `P4-STREAM-01`, `P4-STREAM-02`, and
+   `P4-STREAM-03` after typed errors exist so terminal stream status can carry
+   stable error classes.
+4. Context and result behavior: implement `P4-CTX-02`, `P4-CTX-03`,
+   `P4-CTX-01`, `P4-CTX-04`, `P4-RESULT-01`, and `P4-RESULT-02`, preserving
+   partial results and cancellation status consistently through loop, gateway,
+   provider, session, and replay surfaces.
+5. Dependency ownership and Go API docs: implement `P4-DI-01`,
+   `P4-HYGIENE-01`, `P4-HYGIENE-03`, and `P4-HYGIENE-04` as release and
+   documentation follow-up once the behavioral contracts above are stable.
+
+Reviewer commands for this audit-only story:
+
+```bash
+make typecheck
+make test
+```
+
+No reproducibility tooling was added for this slice; later implementation lanes
+must add runtime, API, fixture, or emitted-event tests named in each finding
+before closing any Phase 4 checklist row.
 
 ## Intended Adapters vs Hidden Coupling
 
@@ -223,6 +1397,28 @@ Hidden coupling:
 The findings below are written so a reviewer can distinguish "this is the contract" from "this happens to work today because the current packages know too much about each other".
 
 ## Hidden Coupling Findings
+
+## Phase 3 Shared-Contract Boundary Status
+
+Phase 3 now makes one reviewer-citable boundary choice for `P3-CORE-01` and
+the scoped `P3-CORE-02` work:
+
+- `go-agent-loop/pkg/messages` is the authoritative shared contract boundary
+  for cross-library message, stream, tool, token-usage, inference, and session
+  interfaces
+- this slice keeps that boundary in the loop module instead of introducing a
+  new shared module because the repository already uses it as the live
+  compatibility anchor and does not yet show a lower-risk extraction path
+- the required evidence set for reviewers is the package-level documentation in
+  `go-agent-loop/pkg/messages`, the dependency guidance in
+  `docs/architecture/dependencies.md`, the gateway compatibility-layer
+  clarification that follows in later Phase 3 stories, and the automated
+  dependency-direction proof in
+  `go-agent-loop/test/architecture/dependency_direction_test.go`, the runtime
+  adapter proofs in `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
+  `go-llm-gateway/pkg/inference/session_inferencer_test.go`, plus the
+  supplemental reviewer-facing evidence checks in
+  `go-agent-loop/test/architecture/reviewer_evidence_test.go`
 
 ### HC-01: `go-llm-gateway` test hygiene depends on `agent-cli` fixture layout
 
@@ -250,6 +1446,25 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - an adapter would translate between loop and gateway vocabularies; the current code exposes the same types under two package paths
 - Recommended Phase 2 hardening:
   - either document `pkg/models` as a deliberate alias layer with no independent compatibility promise, or define a truly gateway-owned model surface and add explicit translation at the boundary
+- Phase 3 status:
+  - resolved for the scoped shared-contract decision
+  - boundary ownership is now explicit: `go-agent-loop/pkg/messages` is the
+    authoritative shared contract package for this slice
+  - `go-llm-gateway/pkg/models` is now documented as a compatibility alias
+    layer, not an independently owned shared-message vocabulary
+  - public adapter packages are documented as bridges into the loop-owned
+    boundary, and `go-agent-loop/test/architecture/dependency_direction_test.go`
+    together with the runtime adapter proofs in
+    `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
+    `go-llm-gateway/pkg/inference/session_inferencer_test.go` provide the
+    reviewer-citable import-direction and contract-behavior proof that
+    preserves this one-way dependency rule
+  - `go-agent-loop/test/architecture/reviewer_evidence_test.go` remains as
+    supplemental drift protection so the checklist and audit continue citing the
+    same evidence set without replacing the runtime adapter proofs
+  - reviewers should treat new gateway docs or exports that present
+    `pkg/models` as a second shared core surface as a regression against
+    `P3-CORE-01` and `P3-CORE-02`
 
 ### HC-03: session command behavior in `agent-cli` depends on provider-specific runtime helpers
 
@@ -270,6 +1485,24 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - resolved for the scoped Grok and OpenAI session record/replay paths
   - `agent-cli/internal/services/session_runtime.go` now owns the provider-specific session runtime planning behind one CLI composition seam before provider construction begins
   - reviewers should treat new provider-specific branching outside that seam as a regression unless it is explicitly documented as broader than the current Phase 2 scope
+
+### HC-04: gateway provider logging depended on a loop-owned helper package outside the deliberate shared contract boundary
+
+- Affected boundary: `go-llm-gateway/pkg/providers/openai` and `go-llm-gateway/pkg/providers/grok` -> `go-agent-loop/pkg/logging`
+- Evidence before the repair:
+  - scoped provider and provider-test surfaces imported `go-agent-loop/pkg/logging` directly even though logging is a provider-local concern rather than a loop-owned runtime contract
+  - that import path made the gateway-independence story look broader in docs than it was in the actual import graph
+- Observable impact before the repair:
+  - gateway consumers inherited a loop-owned non-contract runtime helper dependency from provider construction paths
+  - reviewers had to reconstruct import details manually to tell whether `go-agent-loop/pkg/messages` was really the only shared runtime dependency
+  - the repository lacked one reviewer-facing place that named the replacement seam and its narrower independence claim explicitly
+- Why this was hidden coupling instead of an adapter:
+  - the intended shared boundary for this slice is `go-agent-loop/pkg/messages`, not loop-owned logging helpers
+  - provider logging does not implement a loop-owned interface; it is optional provider-local behavior and belongs behind a gateway-owned seam
+- Status after `phase-3-gateway-runtime-decoupling`:
+  - resolved for the scoped OpenAI and Grok provider plus provider-test surfaces
+  - `go-llm-gateway/pkg/logging` now owns the optional provider logging seam, and `go-agent-loop/pkg/messages` remains the only deliberate shared runtime contract boundary claimed for this slice
+  - reviewers should cite `docs/architecture/dependencies.md`, `go-llm-gateway/README.md`, and checklist rows `P3-CORE-04` plus `P3-DOC-01` as the boundary truth for this repair rather than inferring it from code archaeology alone
 
 ## Dependency-Injection Findings
 
@@ -344,9 +1577,10 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - introduce a session runtime dependency bundle for config loading, dialer selection, and provider-specific inferencer construction
   - keep `RunSession` responsible for command semantics, not for discovering defaults from disk and transport packages
 - Status after `phase-2-session-runtime-ownership-repair`:
-  - resolved for the scoped session runtime seam
+  - narrowed, but not fully resolved, for the scoped session runtime seam
   - `RunSession` now delegates session-mode config loading, dialer selection, and provider-specific runtime construction to `agent-cli/internal/services/session_runtime.go`
-  - Grok and OpenAI session providers no longer create hidden live WebSocket dialers in the reviewed record/replay paths; missing owned dialers fail explicitly at the planner or provider session boundary
+  - Grok and OpenAI session providers no longer create hidden live WebSocket dialers inside provider session constructors; missing owned dialers fail explicitly at the provider boundary
+  - `agent-cli/internal/services/session_runtime.go` still creates a factory-owned live default through `newDefaultLiveDialer()` on record paths when the caller omits `SessionRunOptions.WebSocketDialer`, so the broader constructor-ownership row remains open until that fallback is removed
 
 ## Context Contract Findings
 

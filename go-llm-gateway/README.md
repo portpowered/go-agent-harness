@@ -16,7 +16,7 @@ The current consumer-facing surfaces are:
 | --- | --- |
 | `pkg/gateway` | Creating stateless gateways with `NewGateway(...)` and session gateways with `NewSessionGateway(...)` |
 | `pkg/inference` | Adapting gateways to `go-agent-loop` via `GatewayInferencer` and `SessionGatewayInferencer` |
-| `pkg/models` | Building messages and session config values that flow through the gateway |
+| `pkg/models` | Building gateway-owned session values plus compatibility aliases for loop-owned message contracts |
 | `pkg/providers/anthropic` | Anthropic stateless inference provider |
 | `pkg/providers/openai` | OpenAI-compatible stateless inference plus OpenAI Realtime session provider |
 | `pkg/providers/gemini` | Gemini stateless inference provider |
@@ -26,6 +26,9 @@ The current consumer-facing surfaces are:
 
 Most consumers start with `pkg/gateway`, one provider package, and `pkg/models`.
 Use `pkg/inference` only when you are wiring this module into `go-agent-loop`.
+Within `pkg/models`, shared message-style types remain compatibility aliases
+over `go-agent-loop/pkg/messages`, while session config and session events are
+gateway-owned surfaces.
 
 ## Constructor Ownership Boundary
 
@@ -88,6 +91,10 @@ directive for `github.com/portpowered/go-agent-loop`. That is part of the
 current workspace composition, so this module should not be documented as fully
 independent from the loop contracts yet.
 
+For this Phase 3 slice, `go-agent-loop/pkg/messages` remains the deliberate
+shared runtime contract boundary. Provider logging is a gateway-owned concern
+through `pkg/logging`, not a loop runtime dependency.
+
 ## Getting Started
 
 ### Stateless Inference
@@ -133,6 +140,80 @@ func main() {
 For streaming-capable stateless providers, the same gateway exposes
 `InferStream(...)`.
 
+## Error Taxonomy
+
+`pkg/gateway` exposes a small typed error taxonomy for caller decisions. Branch
+on these classes with `errors.Is`; use `errors.As` when you need structured
+details such as provider status code or replay mismatch fields. Do not match
+error message text for control flow.
+
+| Error class | Caller action |
+| --- | --- |
+| `gateway.ErrAuthentication` | Refresh, replace, or configure provider credentials before retrying |
+| `gateway.ErrAuthorization` | Change account permissions, model access, region, or requested operation |
+| `gateway.ErrRateLimit` | Back off, retry later, or route work to another allowed provider |
+| `gateway.ErrInvalidRequest` | Fix the request payload, parameters, or tool/model inputs before retrying |
+| `gateway.ErrUnsupportedModel` | Select a model supported by the provider and requested capability |
+| `gateway.ErrProviderHTTPStatus` | Inspect `*gateway.ProviderHTTPStatusError` for provider, status, and body details |
+| `gateway.ErrTransport` | Treat as a provider transport failure before a usable provider response was available |
+| `gateway.ErrReplayMismatch` | Diagnose deterministic replay fixture or request divergence |
+| `gateway.ErrCancellation` | Handle caller cancellation or timeout separately from provider failures |
+
+Example:
+
+```go
+resp, err := gw.Infer(ctx, req)
+if err != nil {
+	var statusErr *gateway.ProviderHTTPStatusError
+	switch {
+	case errors.Is(err, gateway.ErrRateLimit):
+		// retry with backoff
+	case errors.Is(err, gateway.ErrAuthentication):
+		// refresh credentials
+	case errors.As(err, &statusErr):
+		// log statusErr.Provider, statusErr.StatusCode, and statusErr.Body
+	default:
+		// generic failure handling
+	}
+}
+_ = resp
+```
+
+Stateless streaming uses the same taxonomy for error events when classification
+is available. `messages.ErrorValue.Message` remains operator-readable text, and
+`messages.ErrorValue.Err` carries the in-process typed error for `errors.Is` and
+`errors.As` checks:
+
+```go
+for event := range stream {
+	if event.Type != messages.StreamTypeError {
+		continue
+	}
+	value, ok := event.Value.(*messages.ErrorValue)
+	if ok && errors.Is(value.Err, gateway.ErrTransport) {
+		// handle stream transport failure
+	}
+}
+```
+
+Current classification coverage is intentionally additive:
+
+- OpenAI-compatible stateless `Infer` classifies HTTP status failures, common
+  status-specific classes such as authentication and rate limit, transport
+  failures, and caller cancellation.
+- OpenAI-compatible stateless `InferStream` preserves typed stream-open
+  failures and stream runtime failures in `ERROR` event values when the error is
+  available in-process.
+- `pkg/testing` replay helpers classify replay divergence as
+  `gateway.ErrReplayMismatch`.
+- Anthropic, Gemini, fal.ai, and session provider surfaces may still return
+  provider-specific or generic errors where typed gateway classification has not
+  been wired yet. Treat those surfaces as best-effort until their adapters
+  explicitly preserve the public classes.
+- Serialized stream payloads include readable error fields, but the `Err` field
+  is not serialized. Consumers that need typed classification must inspect the
+  in-process stream value.
+
 ### Session-Based Inference
 
 Realtime sessions are a separate surface. Today they are provider-specific:
@@ -164,8 +245,107 @@ if err != nil {
 _ = session
 ```
 
-Use `pkg/models.SessionConfig` for session model, modality, audio, tool, and
-turn-detection settings.
+Use `pkg/models.SessionConfig` for gateway-owned session model, modality,
+audio, tool, and turn-detection settings. Shared message, tool, and token-usage
+contracts imported through `pkg/models` still follow the authoritative
+definitions in `go-agent-loop/pkg/messages`.
+
+## Provider Capabilities and Local Validation
+
+Applications can inspect the configured provider's public capability contract
+before deciding which features to expose. Discovery is local metadata lookup: it
+does not perform network access, require live credentials, or mutate request
+state.
+
+```go
+provider := openai.New(openai.WithAPIKey("sk-..."))
+
+gw, err := gateway.NewGateway(gateway.WithProvider(provider))
+if err != nil {
+	panic(err)
+}
+
+caps := gw.Capabilities()
+if caps.Stateless.Tools.IsSupported() {
+	// Offer tool calling for this provider.
+}
+if caps.Stateless.Reasoning.State == gateway.CapabilityStateUnknown {
+	// Do not present this as supported unless your application has another
+	// provider-specific reason to allow it.
+}
+```
+
+`Capabilities()` is available on `gateway.DefaultGateway` and
+`gateway.DefaultSessionGateway`. Callers that receive an abstract gateway can
+check `gateway.CapabilityReporter` when they need discovery. Providers that do
+not implement explicit capability reporting return `unknown` for every field,
+which means "no local support claim." Unknown is different from unsupported:
+the gateway does not reject unknown capabilities locally, but consumers should
+not display them as supported.
+
+Capability states are:
+
+| State | Meaning |
+| --- | --- |
+| `supported` | The provider wrapper explicitly claims local support for the feature. |
+| `unsupported` | The provider wrapper explicitly rejects the feature as unavailable. |
+| `unknown` | The provider wrapper has not published a support claim. This is the fallback for legacy providers. |
+
+The public capability fields map to the feature areas requested by consumers:
+
+| Customer feature | Capability field |
+| --- | --- |
+| Stateless tools | `caps.Stateless.Tools` |
+| Stateless streaming | `caps.Stateless.Streaming` |
+| Stateless image input | `caps.Stateless.ImageInput` |
+| Stateless audio input | `caps.Stateless.AudioInput` |
+| Stateless audio output | `caps.Stateless.AudioOutput` |
+| Stateless video output | `caps.Stateless.VideoOutput` |
+| Stateless reasoning | `caps.Stateless.Reasoning` |
+| Stateless prompt caching | `caps.Stateless.PromptCaching` |
+| Stateless provider-specific config | `caps.Stateless.ProviderSpecificConfig` |
+| Realtime or bidirectional sessions | `caps.Session.Sessions` |
+| Session tools | `caps.Session.Tools` |
+| Session audio input | `caps.Session.AudioInput` |
+| Session audio output | `caps.Session.AudioOutput` |
+| Session provider-specific config | `caps.Session.ProviderSpecificConfig` |
+
+Gateway validation rejects deterministic requests only when the matching
+capability is explicitly `unsupported`. For stateless requests this covers
+tools, streaming, image input, audio input/output already present in message
+history, video output already present in message history, reasoning, prompt
+caching, and raw provider-specific config. For sessions this covers unsupported
+session setup, session tools, audio input/output config, and raw
+provider-specific config before a provider connection is opened.
+
+Validation failures use the structured `UnsupportedFeatureError` contract,
+re-exported from `pkg/gateway` and `pkg/providers`:
+
+```go
+_, err = gw.Infer(ctx, gateway.InferenceRequest{
+	Messages: []models.Message{
+		models.NewTextMessage(models.RoleUser, "think step by step"),
+	},
+	Thinking: &providers.ThinkingConfig{Mode: providers.ThinkingEnabled},
+})
+if err != nil {
+	var unsupported *gateway.UnsupportedFeatureError
+	if errors.As(err, &unsupported) {
+		fmt.Printf(
+			"%s rejected %s for %s: %s\n",
+			unsupported.Provider,
+			unsupported.Feature,
+			unsupported.RequestedMode,
+			unsupported.Capability.State,
+		)
+	}
+}
+```
+
+Provider-specific gaps must stay explicit. A provider wrapper should mark a
+feature `unsupported` when the local wrapper ignores or cannot translate that
+request shape, and `unknown` when support cannot be proven without depending on
+live provider behavior or credentials.
 
 ## Provider Surface Map
 
@@ -187,8 +367,8 @@ provider interfaces:
 - `providers.Provider` exposes `Infer(...)` and `InferStream(...)`
 - `gateway.Gateway` forwards `InferenceRequest` values to the configured
   provider
-- `models.Message`, tool definitions, and token usage types come from shared
-  loop contracts re-exported through `pkg/models`
+- `models.Message`, tool definitions, and token usage types are compatibility
+  aliases over shared loop contracts re-exported through `pkg/models`
 
 Provider-specific behavior lives behind those shared interfaces. Examples:
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 )
 
 // contentState represents the current output content type during streaming.
@@ -257,10 +258,14 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 	sendMessageEnd()
 
 	if err := scanner.Err(); err != nil {
+		streamErr := gateway.NewTransportError("openai", "chat completions stream", err)
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+			streamErr = cancellationErr
+		}
 		ch <- messages.StreamMessage{
 			Type:               messages.StreamTypeError,
 			ActorProvidedIndex: 0,
-			Value:              messages.NewErrorValue(err.Error()),
+			Value:              messages.NewErrorValueWithError(streamErr),
 		}
 	}
 }
