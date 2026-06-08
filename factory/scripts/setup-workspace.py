@@ -11,10 +11,10 @@ Exit 0 on success (stdout = JSON blob), exit 1 on failure (stderr = error).
 """
 
 import json
-
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -60,6 +60,53 @@ def worktree_is_valid(worktree_path):
     return len(entries) > 0
 
 
+def list_registered_worktrees(repo_root):
+    """Return registered worktrees keyed by path."""
+    result = run_git("worktree", "list", "--porcelain", cwd=repo_root)
+    worktrees = {}
+    current = None
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            current = None
+            continue
+        key, _, value = line.partition(" ")
+        if key == "worktree":
+            current = Path(value).resolve()
+            worktrees[current] = {}
+            continue
+        if current is None:
+            continue
+        worktrees[current][key] = value
+    return worktrees
+
+
+def registered_branch_for_path(repo_root, worktree_path):
+    """Return the branch name registered for a worktree path, if any."""
+    worktrees = list_registered_worktrees(repo_root)
+    branch_ref = worktrees.get(worktree_path.resolve(), {}).get("branch")
+    if not branch_ref or not branch_ref.startswith("refs/heads/"):
+        return None
+    return branch_ref.removeprefix("refs/heads/")
+
+
+def wait_for_reusable_worktree(repo_root, branch, worktree_path, timeout_seconds=5):
+    """Wait briefly for a concurrently-created worktree to become reusable."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if worktree_path.exists() and worktree_is_valid(worktree_path):
+            registered_branch = registered_branch_for_path(repo_root, worktree_path)
+            if registered_branch == branch:
+                return True
+            if registered_branch and registered_branch != branch:
+                raise RuntimeError(
+                    f"worktree path {worktree_path} is already registered to branch "
+                    f"{registered_branch}, expected {branch}"
+                )
+        time.sleep(0.1)
+    return False
+
+
 def branch_exists_locally(repo_root, branch):
     """Check if a branch exists as a local ref."""
     result = run_git(
@@ -80,39 +127,45 @@ def branch_exists_on_remote(repo_root, branch):
 
 def create_or_reuse_worktree(repo_root, branch, worktree_path):
     """Create a new worktree or reuse an existing one. Returns reused flag."""
-    if worktree_path.exists() and worktree_is_valid(worktree_path):
-        # Reuse: checkout branch and pull latest.
-        run_git("-C", str(worktree_path), "checkout", branch, cwd=repo_root)
-        if branch_exists_on_remote(repo_root, branch):
-            run_git(
-                "-C", str(worktree_path), "pull", "--ff-only",
-                cwd=repo_root, check=False,
-            )
+    if wait_for_reusable_worktree(repo_root, branch, worktree_path, timeout_seconds=0.2):
         return True
 
-    # Remove stale path if it exists but is invalid.
+    if worktree_path.exists():
+        registered_branch = registered_branch_for_path(repo_root, worktree_path)
+        if registered_branch:
+            raise RuntimeError(
+                f"worktree path {worktree_path} is registered to branch "
+                f"{registered_branch} but is not reusable"
+            )
+
+    # Remove stale path if it exists but is invalid and unregistered.
     if worktree_path.exists():
         shutil.rmtree(worktree_path)
 
     # Create new worktree.
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if branch_exists_locally(repo_root, branch):
-        run_git(
-            "worktree", "add", str(worktree_path), branch,
-            cwd=repo_root,
-        )
-    elif branch_exists_on_remote(repo_root, branch):
-        run_git(
-            "worktree", "add", "--track", "-b", branch,
-            str(worktree_path), f"origin/{branch}",
-            cwd=repo_root,
-        )
-    else:
-        run_git(
-            "worktree", "add", "-b", branch, str(worktree_path), "main",
-            cwd=repo_root,
-        )
+    try:
+        if branch_exists_locally(repo_root, branch):
+            run_git(
+                "worktree", "add", str(worktree_path), branch,
+                cwd=repo_root,
+            )
+        elif branch_exists_on_remote(repo_root, branch):
+            run_git(
+                "worktree", "add", "--track", "-b", branch,
+                str(worktree_path), f"origin/{branch}",
+                cwd=repo_root,
+            )
+        else:
+            run_git(
+                "worktree", "add", "-b", branch, str(worktree_path), "main",
+                cwd=repo_root,
+            )
+    except RuntimeError:
+        if wait_for_reusable_worktree(repo_root, branch, worktree_path):
+            return True
+        raise
 
     return False
 

@@ -139,3 +139,9 @@ This ownership split is the current factory contract for `CTRL-FAC-01` and
 worktree for the requested PRD branch while removing the shared-root mutation
 that previously stranded `plan:init` work on setup races such as
 `fatal: Cannot rebase onto multiple branches.`.
+
+When overlapping setup runs target the same PRD branch, the losing setup run
+should observe the registered worktree created by the winner and return that
+same ready path as a reuse instead of retrying shared-root sync or failing the
+queue item. Setup still fails explicitly when the target path resolves to a
+different registered branch or another unsafe worktree state.
