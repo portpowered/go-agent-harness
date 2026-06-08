@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -33,3 +34,19 @@ type InferenceRequest struct {
 
 // InferenceResponse is the gateway output.
 type InferenceResponse = providers.InferenceResponse
+
+// ProviderCapabilities re-exports the public capability contract from the
+// gateway package for callers already importing this surface.
+type ProviderCapabilities = capabilities.ProviderCapabilities
+
+// FeatureCapability re-exports one feature capability from the public contract.
+type FeatureCapability = capabilities.FeatureCapability
+
+// CapabilityState re-exports the support-state enum from the public contract.
+type CapabilityState = capabilities.CapabilityState
+
+const (
+	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
+	CapabilityStateSupported   = capabilities.CapabilityStateSupported
+	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
+)

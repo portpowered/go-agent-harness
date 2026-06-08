@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 )
 
@@ -16,6 +17,35 @@ type Provider interface {
 	Infer(ctx context.Context, req InferenceRequest) (InferenceResponse, error)
 	// InferStream sends messages and returns a channel of streaming messages (heterogeneous: TEXT/TOOLCALL/AUDIO/IMAGE start/delta/end).
 	InferStream(ctx context.Context, req InferenceRequest) (<-chan messages.StreamMessage, error)
+}
+
+// CapabilityReporter is implemented by providers that can report their public
+// capability contract without network access or live credentials. Providers
+// that do not implement this interface default to unknown capabilities.
+type CapabilityReporter interface {
+	Capabilities() capabilities.ProviderCapabilities
+}
+
+// ProviderCapabilities re-exports the public capability contract from the
+// providers package for callers already importing this surface.
+type ProviderCapabilities = capabilities.ProviderCapabilities
+
+// FeatureCapability re-exports one feature capability from the public contract.
+type FeatureCapability = capabilities.FeatureCapability
+
+// CapabilityState re-exports the support-state enum from the public contract.
+type CapabilityState = capabilities.CapabilityState
+
+const (
+	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
+	CapabilityStateSupported   = capabilities.CapabilityStateSupported
+	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
+)
+
+// UnknownProviderCapabilities returns the documented fallback for providers
+// without explicit capability reporting.
+func UnknownProviderCapabilities(provider string) capabilities.ProviderCapabilities {
+	return capabilities.UnknownProviderCapabilities(provider)
 }
 
 // ThinkingMode configures extended thinking (Anthropic). Ignored by other providers.
