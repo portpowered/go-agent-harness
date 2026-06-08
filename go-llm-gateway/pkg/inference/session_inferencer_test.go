@@ -92,6 +92,9 @@ func TestSessionGatewayInferencer_ConnectSession(t *testing.T) {
 	if gw.capturedConfig.Instructions != "Be helpful" {
 		t.Errorf("instructions: got %q, want %q", gw.capturedConfig.Instructions, "Be helpful")
 	}
+	if session != sess {
+		t.Fatal("ConnectSession should return the loop-owned session from the gateway unchanged")
+	}
 }
 
 func TestSessionGatewayInferencer_ConnectSessionError(t *testing.T) {

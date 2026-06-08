@@ -118,14 +118,15 @@ Concrete Phase 2 API gap for this module:
 Primary consumer-facing entrypoints:
 
 - `pkg/gateway.Gateway` and `pkg/gateway.DefaultGateway` are the normalized request/response seam for stateless inference.
-- `pkg/gateway.DefaultSessionGateway` and `pkg/inference.SessionGatewayInferencer` are the current session-mode bridge into `go-agent-loop`.
-- `pkg/inference.GatewayInferencer` is the main adapter from gateway requests into `messages.Inferencer`.
+- `pkg/gateway.DefaultSessionGateway` is the gateway-side bridge that accepts gateway-owned `models.SessionConfig` before returning the loop-owned `messages.Session` contract.
+- `pkg/inference.SessionGatewayInferencer` is the public session-mode bridge into `go-agent-loop` and should be described as an adapter, not as an independent shared-session surface.
+- `pkg/inference.GatewayInferencer` is the public stateless adapter from gateway requests into the loop-owned `messages.Inferencer` contract.
 - `pkg/providers.Provider` and `pkg/providers.SessionProvider` are the provider-facing construction seams used by the CLI composition layer.
 
 Candidate stable contracts:
 
 - `pkg/gateway` is the most plausible downstream-stable package because it hides provider-specific request shaping behind normalized request types.
-- `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are intentionally public adapter types because they are the expected bridge into loop-owned interfaces.
+- `pkg/inference.GatewayInferencer` and `pkg/inference.SessionGatewayInferencer` are intentionally public adapter types because they are the expected bridge into loop-owned interfaces rather than a second shared core.
 - `pkg/providers.Provider` and `pkg/providers.SessionProvider` are candidate stable construction contracts for adding providers without changing loop code.
 
 Constructor ownership contract after this Phase 2 step:
