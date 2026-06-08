@@ -20,7 +20,7 @@ GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/t
 
 .DEFAULT_GOAL := help
 
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-integration test-regressions test-customer-sessions build coverage validate ci release release-dry-run clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release release-dry-run clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -111,6 +111,11 @@ test: ## Run deterministic Go tests across all workspace modules.
 		(cd "$$module" && $(GO) test ./... -timeout $(GO_TEST_TIMEOUT)); \
 	done
 
+test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
+	@set -euo pipefail; \
+	echo "==> test-factory-scripts factory/scripts/tests/test_setup_workspace.py"; \
+	PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest factory/scripts/tests/test_setup_workspace.py
+
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \
 	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE))"; \
@@ -163,7 +168,7 @@ coverage: ## Write per-module coverage profiles under coverage/.
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
-	steps="fmt vet lint staticcheck test test-integration test-regressions build coverage"; \
+	steps="fmt vet lint staticcheck test-factory-scripts test test-integration test-regressions build coverage"; \
 	for step in $$steps; do \
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \

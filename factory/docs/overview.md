@@ -159,10 +159,14 @@ checkout drift as safe.
 Reviewers can verify the repaired setup path with committed runtime coverage:
 
 ```sh
-python3 -m unittest factory/scripts/tests/test_setup_workspace.py
+make test-factory-scripts
 make typecheck
 make test
 ```
+
+`make test-factory-scripts` runs the setup-workspace runtime suite with
+`PYTHONDONTWRITEBYTECODE=1` and `python3 -B` so the verification path does not
+write `__pycache__` artifacts into the root checkout.
 
 The Python runtime suite covers the queue-facing setup contract directly:
 
