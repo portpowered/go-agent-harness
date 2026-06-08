@@ -186,6 +186,47 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
             self.assertEqual(payload["branch"], prd_name)
             self.assertFalse(payload["reused"])
 
+    def test_setup_workspace_reuses_existing_worktree_with_planner_owned_dirty_root_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "repo"
+            self._init_repo(repo_root)
+
+            prd_name = "phase-2-factory-worktree-hygiene-repair"
+            self._write_prd(repo_root, prd_name)
+            self._commit_planner_owned_files(repo_root)
+
+            first_result = subprocess.run(
+                ["python3", str(SCRIPT_PATH), prd_name],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(first_result.returncode, 0, first_result.stderr)
+            first_payload = json.loads(first_result.stdout)
+
+            checklist_path = repo_root / "docs" / "internal" / "checklist.md"
+            checklist_path.write_text("# checklist\nupdated\n", encoding="utf-8")
+            progress_path = repo_root / "docs" / "internal" / "progress.txt"
+            progress_path.write_text("planner progress\n", encoding="utf-8")
+
+            second_result = subprocess.run(
+                ["python3", str(SCRIPT_PATH), prd_name],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(second_result.returncode, 0, second_result.stderr)
+            second_payload = json.loads(second_result.stdout)
+            self.assertEqual(second_payload["status"], "ready")
+            self.assertEqual(second_payload["branch"], prd_name)
+            self.assertTrue(second_payload["reused"])
+            self.assertEqual(second_payload["worktree"], first_payload["worktree"])
+            self.assertEqual(second_payload["prd_path"], first_payload["prd_path"])
+            self.assertEqual(second_payload["prd_md_path"], first_payload["prd_md_path"])
+
     def test_setup_workspace_fails_for_non_planner_owned_dirty_root_state(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir) / "repo"
@@ -231,8 +272,12 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
         docs_internal_dir = repo_root / "docs" / "internal"
         docs_internal_dir.mkdir(parents=True, exist_ok=True)
         (docs_internal_dir / "checklist.md").write_text("# checklist\n", encoding="utf-8")
-        self._run(["git", "add", "docs/internal/checklist.md"], cwd=repo_root)
-        self._run(["git", "commit", "-m", "add planner checklist"], cwd=repo_root)
+        (docs_internal_dir / "progress.txt").write_text("initial planner progress\n", encoding="utf-8")
+        self._run(
+            ["git", "add", "docs/internal/checklist.md", "docs/internal/progress.txt"],
+            cwd=repo_root,
+        )
+        self._run(["git", "commit", "-m", "add planner-owned docs"], cwd=repo_root)
 
     def _wait_for_file(self, path: Path, timeout_seconds: float = 5) -> None:
         deadline = time.monotonic() + timeout_seconds
@@ -254,7 +299,8 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
         self._run(["git", "config", "user.name", "Test User"], cwd=repo_root)
         self._run(["git", "config", "user.email", "test@example.com"], cwd=repo_root)
         (repo_root / "README.md").write_text("root\n", encoding="utf-8")
-        self._run(["git", "add", "README.md"], cwd=repo_root)
+        (repo_root / ".gitignore").write_text(".claude/\n", encoding="utf-8")
+        self._run(["git", "add", "README.md", ".gitignore"], cwd=repo_root)
         self._run(["git", "commit", "-m", "init"], cwd=repo_root)
 
     def _run(self, args, cwd: Path) -> None:

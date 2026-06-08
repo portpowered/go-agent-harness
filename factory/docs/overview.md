@@ -153,3 +153,38 @@ worktree-selection inputs. The requested `tasks/todo/<prd-name>.json` and
 optional `.md` are also tolerated as direct setup inputs. Other root dirty
 state still fails explicitly so the factory does not silently treat unrelated
 checkout drift as safe.
+
+## Verification
+
+Reviewers can verify the repaired setup path with committed runtime coverage:
+
+```sh
+python3 -m unittest factory/scripts/tests/test_setup_workspace.py
+make typecheck
+make test
+```
+
+The Python runtime suite covers the queue-facing setup contract directly:
+
+- setup does not issue shared-root `git pull` or `git worktree prune`
+- overlapping setup runs reuse the winner's registered worktree instead of
+  stranding `plan:init` on `fatal: Cannot rebase onto multiple branches.`
+- planner-owned dirty state in `docs/internal/checklist.md` and
+  `docs/internal/progress.txt` is tolerated for both first-time setup and
+  worktree reuse
+- unrelated root dirtiness still fails with an explicit unsafe-state error
+
+## Resolved Symptoms
+
+This repair addresses the currently observed queue symptoms:
+
+- concurrent or repeated `setup-workspace` runs no longer compete on shared
+  root `git pull` / `git worktree prune` behavior, so new `plan:init` work does
+  not fail with the reproduced rebase race
+- planner-owned dirty root state in `docs/internal/checklist.md` and
+  `docs/internal/progress.txt` no longer blocks ready-worktree creation or reuse
+
+This repair does not auto-repair queue items that were already stranded before
+the code fix landed. Any existing stuck tokens still require deliberate
+operator follow-up with `you work list`, `you session list`, and, if needed,
+manual `you work move` repair recorded in `docs/internal/progress.txt`.
