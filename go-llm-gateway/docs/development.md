@@ -9,7 +9,7 @@ This guide is the package-local contributor guide for `libraries/go-llm-gateway`
 ## Local Architecture
 
 - `pkg/gateway/` owns `Gateway`, `SessionGateway`, default implementations, and top-level request routing.
-- `pkg/models/` owns shared model and session types, including re-exports from `go-agent-loop`.
+- `pkg/models/` owns gateway session types and exposes compatibility aliases for shared message contracts owned by `go-agent-loop/pkg/messages`.
 - `pkg/inference/` adapts gateway implementations into `go-agent-loop` inferencers.
 - `pkg/providers/` owns provider interfaces and implementations for Anthropic, OpenAI, Gemini, Grok, and fal.ai.
 - `pkg/testing/` contains deterministic HTTP record/replay utilities for provider tests.
