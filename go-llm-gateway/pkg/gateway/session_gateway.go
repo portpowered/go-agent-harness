@@ -60,5 +60,8 @@ var _ sessionInferencer = (*DefaultSessionGateway)(nil)
 // ConnectSession establishes a session via the configured provider and returns
 // the loop-owned messages.Session boundary contract.
 func (g *DefaultSessionGateway) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
+	if err := validateSessionConfig(g.Capabilities(), config); err != nil {
+		return nil, err
+	}
 	return g.provider.ConnectSession(ctx, config)
 }

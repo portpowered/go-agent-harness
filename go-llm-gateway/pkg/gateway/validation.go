@@ -41,6 +41,35 @@ func validateStatelessRequest(caps ProviderCapabilities, req InferenceRequest, m
 	return nil
 }
 
+func validateSessionConfig(caps ProviderCapabilities, config models.SessionConfig) error {
+	session := caps.Session
+
+	checks := []struct {
+		required bool
+		feature  capabilities.Feature
+		cap      capabilities.FeatureCapability
+	}{
+		{required: true, feature: capabilities.FeatureSessions, cap: session.Sessions},
+		{required: len(config.Tools) > 0, feature: capabilities.FeatureTools, cap: session.Tools},
+		{required: requiresSessionAudioInput(config), feature: capabilities.FeatureAudioInput, cap: session.AudioInput},
+		{required: requiresSessionAudioOutput(config), feature: capabilities.FeatureAudioOutput, cap: session.AudioOutput},
+		{required: hasProviderSpecificConfig(config.Config), feature: capabilities.FeatureProviderSpecificConfig, cap: session.ProviderSpecificConfig},
+	}
+
+	for _, check := range checks {
+		if check.required && check.cap.State == capabilities.CapabilityStateUnsupported {
+			return &capabilities.UnsupportedFeatureError{
+				Provider:      caps.Provider,
+				Feature:       check.feature,
+				RequestedMode: capabilities.RequestedModeSession,
+				Capability:    check.cap,
+			}
+		}
+	}
+
+	return nil
+}
+
 func providerInferenceRequest(req InferenceRequest) providers.InferenceRequest {
 	return providers.InferenceRequest{
 		Messages:         req.Messages,
@@ -118,4 +147,20 @@ func requiresReasoning(thinking *providers.ThinkingConfig) bool {
 
 func hasProviderSpecificConfig(config json.RawMessage) bool {
 	return len(config) > 0 && string(config) != "null"
+}
+
+func requiresSessionAudioInput(config models.SessionConfig) bool {
+	return config.InputAudioFormat != "" || config.InputAudioSampleRate != 0
+}
+
+func requiresSessionAudioOutput(config models.SessionConfig) bool {
+	if config.OutputAudioFormat != "" || config.OutputAudioSampleRate != 0 || config.Voice != "" {
+		return true
+	}
+	for _, modality := range config.Modalities {
+		if modality == models.SessionModalityAudio {
+			return true
+		}
+	}
+	return false
 }

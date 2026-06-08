@@ -190,6 +190,170 @@ func TestSessionGatewayCapabilitiesUsesProviderReporterWithoutConnecting(t *test
 	}
 }
 
+func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		caps    capabilities.SessionCapabilities
+		config  models.SessionConfig
+		feature Feature
+	}{
+		{
+			name: "sessions",
+			caps: capabilities.SessionCapabilities{
+				Sessions: capabilities.Unsupported("session transport unavailable"),
+			},
+			feature: FeatureSessions,
+		},
+		{
+			name: "tools",
+			caps: capabilities.SessionCapabilities{
+				Tools: capabilities.Unsupported("session tools unavailable"),
+			},
+			config: models.SessionConfig{
+				Tools: []models.ToolDefinition{{Name: "lookup"}},
+			},
+			feature: FeatureTools,
+		},
+		{
+			name: "audio input format",
+			caps: capabilities.SessionCapabilities{
+				AudioInput: capabilities.Unsupported("session audio input unavailable"),
+			},
+			config: models.SessionConfig{
+				InputAudioFormat: models.AudioFormatPCM16,
+			},
+			feature: FeatureAudioInput,
+		},
+		{
+			name: "audio input sample rate",
+			caps: capabilities.SessionCapabilities{
+				AudioInput: capabilities.Unsupported("session audio input unavailable"),
+			},
+			config: models.SessionConfig{
+				InputAudioSampleRate: models.SampleRate16000,
+			},
+			feature: FeatureAudioInput,
+		},
+		{
+			name: "audio output modality",
+			caps: capabilities.SessionCapabilities{
+				AudioOutput: capabilities.Unsupported("session audio output unavailable"),
+			},
+			config: models.SessionConfig{
+				Modalities: []models.SessionModality{models.SessionModalityText, models.SessionModalityAudio},
+			},
+			feature: FeatureAudioOutput,
+		},
+		{
+			name: "audio output format",
+			caps: capabilities.SessionCapabilities{
+				AudioOutput: capabilities.Unsupported("session audio output unavailable"),
+			},
+			config: models.SessionConfig{
+				OutputAudioFormat: models.AudioFormatPCM16,
+			},
+			feature: FeatureAudioOutput,
+		},
+		{
+			name: "audio output voice",
+			caps: capabilities.SessionCapabilities{
+				AudioOutput: capabilities.Unsupported("session audio output unavailable"),
+			},
+			config: models.SessionConfig{
+				Voice: "alloy",
+			},
+			feature: FeatureAudioOutput,
+		},
+		{
+			name: "provider config",
+			caps: capabilities.SessionCapabilities{
+				ProviderSpecificConfig: capabilities.Unsupported("session raw config unavailable"),
+			},
+			config: models.SessionConfig{
+				Config: json.RawMessage(`{"vendor":"specific"}`),
+			},
+			feature: FeatureProviderSpecificConfig,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := &capabilitySessionProvider{
+				name: "session-validation-provider",
+				caps: ProviderCapabilities{
+					Provider: "session-validation-provider",
+					Session:  tt.caps,
+				},
+			}
+			gw, err := NewSessionGateway(WithSessionProvider(provider))
+			if err != nil {
+				t.Fatalf("NewSessionGateway: %v", err)
+			}
+
+			_, err = gw.ConnectSession(context.Background(), tt.config)
+
+			var unsupported *UnsupportedFeatureError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("error = %v, want UnsupportedFeatureError", err)
+			}
+			if unsupported.Provider != "session-validation-provider" {
+				t.Fatalf("provider = %q, want session-validation-provider", unsupported.Provider)
+			}
+			if unsupported.Feature != tt.feature {
+				t.Fatalf("feature = %q, want %q", unsupported.Feature, tt.feature)
+			}
+			if unsupported.RequestedMode != capabilities.RequestedModeSession {
+				t.Fatalf("mode = %q, want %q", unsupported.RequestedMode, capabilities.RequestedModeSession)
+			}
+			if unsupported.Capability.State != CapabilityStateUnsupported {
+				t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
+			}
+			if provider.connectCalls != 0 {
+				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
+			}
+		})
+	}
+}
+
+func TestSessionGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testing.T) {
+	t.Parallel()
+
+	provider := &capabilitySessionProvider{
+		name: "unknown-session-provider",
+		caps: providers.UnknownProviderCapabilities("unknown-session-provider"),
+	}
+	gw, err := NewSessionGateway(WithSessionProvider(provider))
+	if err != nil {
+		t.Fatalf("NewSessionGateway: %v", err)
+	}
+
+	_, err = gw.ConnectSession(context.Background(), models.SessionConfig{
+		Modalities:            []models.SessionModality{models.SessionModalityAudio},
+		InputAudioFormat:      models.AudioFormatPCM16,
+		InputAudioSampleRate:  models.SampleRate16000,
+		OutputAudioFormat:     models.AudioFormatPCM16,
+		OutputAudioSampleRate: models.SampleRate24000,
+		Tools:                 []models.ToolDefinition{{Name: "lookup"}},
+		Config:                json.RawMessage(`{"vendor":"specific"}`),
+	})
+	if err != nil {
+		t.Fatalf("ConnectSession with unknown capabilities: %v", err)
+	}
+	if provider.connectCalls != 1 {
+		t.Fatalf("connect calls = %d, want 1", provider.connectCalls)
+	}
+
+	got := gw.Capabilities()
+	if got.Session.Sessions.IsSupported() {
+		t.Fatalf("unknown sessions capability must not report support")
+	}
+}
+
 func TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing.T) {
 	t.Parallel()
 

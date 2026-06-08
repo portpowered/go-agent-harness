@@ -62,6 +62,11 @@ const (
 	CapabilityStateSupported   = capabilities.CapabilityStateSupported
 	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
 
+	RequestedModeStateless       = capabilities.RequestedModeStateless
+	RequestedModeStatelessStream = capabilities.RequestedModeStatelessStream
+	RequestedModeSession         = capabilities.RequestedModeSession
+
+	FeatureSessions               = capabilities.FeatureSessions
 	FeatureTools                  = capabilities.FeatureTools
 	FeatureStreaming              = capabilities.FeatureStreaming
 	FeatureImageInput             = capabilities.FeatureImageInput

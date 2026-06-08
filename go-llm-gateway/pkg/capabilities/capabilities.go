@@ -102,6 +102,7 @@ type ProviderCapabilities struct {
 type Feature string
 
 const (
+	FeatureSessions               Feature = "sessions"
 	FeatureTools                  Feature = "tools"
 	FeatureStreaming              Feature = "streaming"
 	FeatureImageInput             Feature = "image_input"
@@ -116,6 +117,7 @@ const (
 const (
 	RequestedModeStateless       = "stateless"
 	RequestedModeStatelessStream = "stateless_stream"
+	RequestedModeSession         = "session"
 )
 
 // UnsupportedFeatureError reports a deterministic local request/capability
