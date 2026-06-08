@@ -25,15 +25,24 @@ Status values:
 
 ### P4-API-02: Typed Errors And Stream Failure Contracts
 
-- Outcome: `uncertain`
-- Affected public packages: `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/participants`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/grok`, `agent-cli/internal/services`
-- Exported declarations: `messages.ErrorValue`, `messages.NewErrorValue`, `messages.NewErrorValueWithDetails`, `messages.StreamTypeError`, `gateway.InteractionError`, `gateway.InteractionEventError`, `gateway.InteractionCancellation`
-- Observable contract issue: typed error fields and interaction error codes exist, but many stream paths still emit plain `err.Error()` values, so caller-actionable failure classes are not yet uniformly preserved across provider, replay, session, and CLI command boundaries.
-- Implementation evidence: `messages.ErrorValue` exposes structured fields; `NewErrorValueWithDetails` preserves provider-supplied OpenAI realtime details; `gateway.InteractionError` carries normalized error code/message/retryability for PNIG interaction events.
-- Planning-only evidence: ERR-01, ERR-02, COMPAT-03, LIFECYCLE-01, and LIFECYCLE-02 below identify remaining typed-error and lifecycle risks.
-- Docs/tests/examples evidence: `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`, `go-llm-gateway/pkg/providers/openai/session_test.go`, and provider stream tests assert selected error and stream behavior.
-- Remaining repair slice: reconcile P4-ERR-01, P4-ERR-02, P4-ERR-03, stream error preservation, replay mismatch handling, and cancellation handling without folding in provider capability or dependency ownership work.
-- Reviewer commands: from the repository root, run `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/grok)` to verify deterministic typed-error and stream evidence; run `(cd go-agent-loop && go test ./pkg/participants ./test/functional)` to verify loop stream and session error behavior.
+- Outcome: `fail`
+- Affected public packages: `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/participants`, `go-agent-loop/pkg/subsystems`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/testing`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/grok`, `agent-cli/internal/services`
+- Exported declarations: `messages.ErrorValue`, `messages.NewErrorValue`, `messages.NewErrorValueWithDetails`, `messages.StreamTypeError`, `messages.Session`, `messages.SessionInferencer`, `gateway.InteractionError`, `gateway.InteractionEventError`, `gateway.InteractionCancellation`, `testing.NewSessionReplayer`, `testing.WithReplayContext`
+- Observable contract issue: the shared stream contract has typed error fields and selected gateways preserve structured error data, but the row remains failed because loop participants, stream adapters, interaction-event bridging, and CLI session command paths still have caller-visible paths that collapse failures into `err.Error()` text or phase-prefixed Go errors without a stable taxonomy.
+- Implementation evidence:
+  - `messages.ErrorValue` exposes `Message`, `ErrorType`, `Code`, `Param`, and `EventID`; `messages.NewErrorValueWithDetails` preserves provider-supplied OpenAI Realtime error metadata.
+  - `gateway.Interact` emits normalized PNIG `InteractionError` events with codes such as `tool_result_validation_error`, `provider_timeout`, and `provider_error`, and emits `InteractionCancellation` with `caller_cancelled` for canceled contexts.
+  - `go-llm-gateway/pkg/testing.SessionReplayer` detects replay divergence and omitted outbound events deterministically; `testing.WithReplayContext` stops timed replay delivery when the owned lifecycle context is canceled.
+  - `agent-cli/internal/services` preserves `context.Canceled` through record and replay command paths, and renders in-band session `ERROR` messages as returned command errors.
+- Planning-only evidence: ERR-01, ERR-02, LIFECYCLE-01, LIFECYCLE-02, and COMPAT-03 below remain open planning findings for unifying typed stream errors, session command failure categories, and completion/error boundaries.
+- Docs/tests/examples evidence:
+  - `go-llm-gateway/pkg/providers/openai/session_test.go` asserts OpenAI Realtime error detail preservation through `ErrorValue`.
+  - `go-llm-gateway/pkg/gateway/interaction_gateway_test.go` asserts PNIG provider errors, timeout errors, and caller cancellation events.
+  - `go-llm-gateway/pkg/testing/session_replay_test.go` asserts replay divergence, omitted outbound events, and cancellation-stopped replay delivery.
+  - `agent-cli/internal/services/session_test.go` asserts record and replay cancellation preserve `context.Canceled` and stop timed replay output.
+  - `go-agent-loop/pkg/participants/model_runner_test.go`, `go-agent-loop/pkg/participants/tool_runner_test.go`, and `go-llm-gateway/pkg/providers/anthropic/stream_test.go` prove selected `ERROR` stream handling, while also showing remaining string-only `NewErrorValue(err.Error())` paths.
+- Remaining repair slice: keep P4-ERR-01 open to define shared caller-actionable stream error classes and convert loop/provider/interaction bridge emitters away from string-only `NewErrorValue(err.Error())`; keep P4-ERR-02 open to define typed CLI/session categories for validation, provider-connect, replay-divergence, provider-runtime, cancellation, and capture-persist failures; keep P4-ERR-03 and stream lifecycle work open to document which failures are emitted in-band as `ERROR` stream messages, which return Go errors, and how `MESSAGE.END`, cancellation, replay divergence, and provider stream errors compose.
+- Reviewer commands: from the repository root, run `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/testing ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/grok)` to verify deterministic typed-error, replay, cancellation, and provider stream evidence; run `(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems ./test/functional)` to verify loop stream error and session behavior; run `(cd agent-cli && go test ./internal/services)` to verify CLI session replay/record cancellation and command error behavior.
 
 ### P4-API-03: Result, Lifecycle, And Completion Contracts
 
@@ -299,14 +308,15 @@ The findings below are written so a reviewer can distinguish "this is the contra
 - Affected boundary: `go-agent-loop/pkg/messages.ErrorValue` consumed by loop, gateway, and CLI layers
 - Evidence:
   - `go-agent-loop/pkg/messages/agent_messages.go` defines `ErrorValue` with optional `ErrorType`, `Code`, `Param`, and `EventID`
-  - `go-agent-loop/pkg/participants/model_runner.go`, `go-agent-loop/pkg/participants/tool_runner.go`, and multiple provider stream adapters frequently emit `messages.NewErrorValue(err.Error())`, dropping category and structured details
+  - `go-llm-gateway/pkg/providers/openai/session.go` maps provider Realtime error payloads through `messages.NewErrorValueWithDetails(...)`, so current starter APIs are not absent for provider-supplied typed details
+  - `go-agent-loop/pkg/participants/model_runner.go`, `go-agent-loop/pkg/participants/tool_runner.go`, `go-agent-loop/pkg/subsystems/interaction_events.go`, and multiple provider stream adapters still emit `messages.NewErrorValue(err.Error())` in observable error paths, dropping category and structured details
 - Observable impact:
-  - callers can detect that an error occurred, but they usually cannot distinguish retryable provider failures, invalid user input, transport shutdown, replay divergence, or tool runtime errors from the shared contract alone
+  - callers can detect that an error occurred and can read typed OpenAI Realtime details when those details are present, but they usually cannot distinguish retryable provider failures, invalid user input, transport shutdown, replay divergence, or tool runtime errors from the shared stream contract alone
   - review of downstream compatibility is harder because error handling currently depends on matching free-form message text rather than named failure classes
-  - Phase 2 changes to error wording could accidentally break callers or tests that only have the string payload to reason about
+  - future changes to error wording could accidentally break callers or tests that only have the string payload to reason about
 - Why this is a typed-error gap:
-  - the contract has fields for structured classification, but most of the code path still collapses failures into a plain message string before crossing module boundaries
-- Recommended Phase 2 hardening:
+  - the contract has fields for structured classification, and selected OpenAI Realtime paths populate them, but most of the shared stream path still collapses failures into a plain message string before crossing module boundaries
+- Recommended Phase 4 hardening:
   - define a small set of caller-actionable error classes at the shared contract layer
   - require adapters to preserve provider/runtime classification when turning internal failures into `ERROR` stream messages
 
@@ -314,16 +324,15 @@ The findings below are written so a reviewer can distinguish "this is the contra
 
 - Affected boundary: `agent-cli/internal/services/session.go` user-facing command errors
 - Evidence:
-  - `runLiveSessionRecord` and `runOpenAIRealtimeSessionRecord` return `errors.Join(...)` wrapped by `record session capture %s: %w`
-  - replay paths return strings such as `replay session capture %s: %w` while runtime output paths also surface `session error: ...`
-  - `wrapSessionPhaseError` only prefixes a phase string and does not attach a typed failure kind
+  - `agent-cli/internal/services/session_runtime.go` returns strings such as `replay session capture %s: %w`, and replay/runtime output paths can surface `session error: ...`
+  - session tests prove `context.Canceled` is preserved through record and replay cancellation, but replay divergence, provider rejection, capture flush, and validation failures do not yet share stable exported categories
 - Observable impact:
   - a caller or future automation layer cannot reliably separate validation failure, replay divergence, provider rejection, session-close reason, and capture-flush failure without parsing message text
   - the CLI can explain roughly where a failure happened, but not in a way that downstream contract hardening or machine classification can depend on
   - some failures are emitted in-band as `ERROR` stream messages, while others escape as Go errors, with no unified documented mapping between the two
 - Why this is a typed-error gap:
-  - the command surface preserves human-readable context, but it does not yet expose stable error kinds that higher layers can branch on safely
-- Recommended Phase 2 hardening:
+  - the command surface preserves human-readable context and selected cancellation identity, but it does not yet expose stable error kinds that higher layers can branch on safely
+- Recommended Phase 4 hardening:
   - define typed CLI/session failure categories for validation, provider-connect, replay-divergence, provider-runtime, and capture-persist paths
   - document which failures should remain in-band stream events versus returned command errors
 
@@ -426,12 +435,13 @@ The findings below are written so a reviewer can distinguish "this is the contra
 
 - Affected boundary: `go-agent-loop/pkg/messages.ErrorValue`, provider adapters, and `agent-cli` session command errors
 - Evidence:
-  - many current paths still emit `err.Error()` strings or phase-prefixed wrapped errors
-  - existing tests and operators can only infer meaning from message text because error type/code fields are sparsely populated
+  - `ErrorValue` already has type/code/detail fields, OpenAI Realtime uses them for provider error payloads, and PNIG interactions expose normalized `InteractionError` and `InteractionCancellation` payloads
+  - many current loop, provider stream, interaction bridge, and CLI session paths still emit `err.Error()` strings or phase-prefixed wrapped errors
+  - existing tests and operators can only infer meaning from message text on those remaining paths because error type/code fields are sparsely populated outside the current OpenAI Realtime and PNIG evidence
 - Observable impact:
-  - Phase 2 error normalization may require changing message text, adding codes, or moving some failures between returned Go errors and in-band stream errors
+  - Phase 4 error normalization may require changing message text, adding codes, or moving some failures between returned Go errors and in-band stream errors
   - downstream automation that scrapes CLI stderr or recorded session events by substring may break unless the migration is staged carefully
-- Recommended Phase 2 hardening:
+- Recommended Phase 4 hardening:
   - introduce typed classifications additively first, while preserving legacy text long enough to migrate tests and operators
   - document the stable machine-readable fields that replace text matching before tightening or simplifying error wording
 
