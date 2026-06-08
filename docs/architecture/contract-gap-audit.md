@@ -1412,13 +1412,9 @@ the scoped `P3-CORE-02` work:
 - the required evidence set for reviewers is the package-level documentation in
   `go-agent-loop/pkg/messages`, the dependency guidance in
   `docs/architecture/dependencies.md`, the gateway compatibility-layer
-  clarification that follows in later Phase 3 stories, and the automated
-  dependency-direction proof in
-  `go-agent-loop/test/architecture/dependency_direction_test.go`, the runtime
-  adapter proofs in `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
-  `go-llm-gateway/pkg/inference/session_inferencer_test.go`, plus the
-  supplemental reviewer-facing evidence checks in
-  `go-agent-loop/test/architecture/reviewer_evidence_test.go`
+  clarification that follows in later Phase 3 stories, and the runtime adapter
+  proofs in `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
+  `go-llm-gateway/pkg/inference/session_inferencer_test.go`
 
 ### HC-01: `go-llm-gateway` test hygiene depends on `agent-cli` fixture layout
 
@@ -1453,15 +1449,10 @@ the scoped `P3-CORE-02` work:
   - `go-llm-gateway/pkg/models` is now documented as a compatibility alias
     layer, not an independently owned shared-message vocabulary
   - public adapter packages are documented as bridges into the loop-owned
-    boundary, and `go-agent-loop/test/architecture/dependency_direction_test.go`
-    together with the runtime adapter proofs in
+    boundary, and the runtime adapter proofs in
     `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
     `go-llm-gateway/pkg/inference/session_inferencer_test.go` provide the
-    reviewer-citable import-direction and contract-behavior proof that
-    preserves this one-way dependency rule
-  - `go-agent-loop/test/architecture/reviewer_evidence_test.go` remains as
-    supplemental drift protection so the checklist and audit continue citing the
-    same evidence set without replacing the runtime adapter proofs
+    reviewer-citable contract-behavior proof for the adapter bridge
   - reviewers should treat new gateway docs or exports that present
     `pkg/models` as a second shared core surface as a regression against
     `P3-CORE-01` and `P3-CORE-02`
