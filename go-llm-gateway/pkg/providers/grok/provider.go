@@ -41,6 +41,23 @@ func New(opts ...Option) *GrokSessionProvider {
 
 func (p *GrokSessionProvider) Name() string { return "grok" }
 
+func (p *GrokSessionProvider) Capabilities() providers.ProviderCapabilities {
+	return providers.ProviderCapabilities{
+		Provider:  p.Name(),
+		Stateless: providers.UnsupportedStatelessCapabilities("the Grok provider in this module implements realtime sessions only"),
+		Session: &providers.SessionCapabilities{
+			Sessions:           providers.Supported(),
+			Tools:              providers.Supported(),
+			TextModality:       providers.Supported(),
+			AudioModality:      providers.Supported(),
+			InputAudioFormats:  providers.RealtimeAudioFormats(),
+			OutputAudioFormats: providers.RealtimeAudioFormats(),
+			TurnDetection:      providers.Supported(),
+			ProviderOptions:    providers.Unsupported("raw session Config is not applied by the Grok realtime wrapper"),
+		},
+	}
+}
+
 // ConnectSession establishes a WebSocket connection to the Grok realtime API,
 // sends the initial session.update with the provided config, and returns a
 // Session wrapping the bidirectional StreamMessage stream.

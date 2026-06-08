@@ -47,6 +47,26 @@ func (p *AnthropicProvider) Name() string {
 	return "anthropic"
 }
 
+func (p *AnthropicProvider) Capabilities() providers.ProviderCapabilities {
+	sessionUnsupported := "the Anthropic Messages wrapper does not implement a bidirectional session provider"
+	return providers.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: providers.StatelessCapabilities{
+			Inference:       providers.Supported(),
+			Streaming:       providers.Supported(),
+			Tools:           providers.Supported(),
+			ImageInput:      providers.Supported(),
+			AudioInput:      providers.Unsupported("audio parts are converted to text data references, not native Anthropic audio input"),
+			VideoInput:      providers.Unsupported("the Anthropic Messages wrapper does not map video input parts"),
+			VideoOutput:     providers.Unsupported("the Anthropic Messages wrapper does not map video output responses"),
+			Reasoning:       providers.Supported(),
+			PromptCaching:   providers.Supported(),
+			ProviderOptions: providers.Unsupported("raw provider Config is not applied by the Anthropic wrapper"),
+		},
+		Session: providers.SessionCapabilitiesPtr(providers.UnsupportedSessionCapabilities(sessionUnsupported)),
+	}
+}
+
 func (p *AnthropicProvider) Infer(ctx context.Context, req providers.InferenceRequest) (providers.InferenceResponse, error) {
 	model := p.model
 	if req.Model != "" {

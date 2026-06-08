@@ -54,6 +54,34 @@ func New(opts ...Option) *OpenAIProvider {
 
 func (p *OpenAIProvider) Name() string { return "openai" }
 
+func (p *OpenAIProvider) Capabilities() providers.ProviderCapabilities {
+	return providers.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: providers.StatelessCapabilities{
+			Inference:       providers.Supported(),
+			Streaming:       providers.Supported(),
+			Tools:           providers.Supported(),
+			ImageInput:      providers.Supported(),
+			AudioInput:      providers.Supported(),
+			VideoInput:      providers.Unknown("OpenAI-compatible transports may accept video_url parts, but support is model and endpoint dependent."),
+			VideoOutput:     providers.Unsupported("the chat completions wrapper does not map video output responses"),
+			Reasoning:       providers.Unsupported("the wrapper does not send a reasoning request option on OpenAI-compatible chat completions"),
+			PromptCaching:   providers.Unknown("prompt caching may be automatic or endpoint-specific; the wrapper does not send explicit cache-control options"),
+			ProviderOptions: providers.Unsupported("raw provider Config is not applied by the OpenAI-compatible wrapper"),
+		},
+		Session: &providers.SessionCapabilities{
+			Sessions:           providers.Supported(),
+			Tools:              providers.Supported(),
+			TextModality:       providers.Supported(),
+			AudioModality:      providers.Supported(),
+			InputAudioFormats:  providers.RealtimeAudioFormats(),
+			OutputAudioFormats: providers.RealtimeAudioFormats(),
+			TurnDetection:      providers.Supported(),
+			ProviderOptions:    providers.Unsupported("raw session Config is not applied by the OpenAI realtime wrapper"),
+		},
+	}
+}
+
 func (p *OpenAIProvider) httpClientOrDefault() *http.Client {
 	if p.httpClient != nil {
 		return p.httpClient

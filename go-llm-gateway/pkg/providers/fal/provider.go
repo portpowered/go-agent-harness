@@ -50,6 +50,26 @@ func (p *FalProvider) Name() string {
 	return "fal"
 }
 
+func (p *FalProvider) Capabilities() providers.ProviderCapabilities {
+	sessionUnsupported := "fal.ai endpoints in this wrapper are synchronous stateless endpoints only"
+	return providers.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: providers.StatelessCapabilities{
+			Inference:       providers.Supported(),
+			Streaming:       providers.Unsupported("fal.ai endpoints in this wrapper are sync-only; InferStream currently returns an empty closed stream"),
+			Tools:           providers.Unsupported("fal.ai model endpoints in this wrapper do not accept gateway tool definitions"),
+			ImageInput:      providers.Supported(),
+			AudioInput:      providers.Supported(),
+			VideoInput:      providers.Unsupported("the current fal.ai wrapper models generate video from image or audio inputs but do not accept video input"),
+			VideoOutput:     providers.Supported(),
+			Reasoning:       providers.Unsupported("fal.ai model endpoints in this wrapper do not accept reasoning options"),
+			PromptCaching:   providers.Unsupported("fal.ai model endpoints in this wrapper do not accept prompt cache-control options"),
+			ProviderOptions: providers.Supported(),
+		},
+		Session: providers.SessionCapabilitiesPtr(providers.UnsupportedSessionCapabilities(sessionUnsupported)),
+	}
+}
+
 func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest) (providers.InferenceResponse, error) {
 	model := req.Model
 	if model == "" {

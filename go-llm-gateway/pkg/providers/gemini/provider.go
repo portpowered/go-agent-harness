@@ -33,6 +33,26 @@ func New(opts ...Option) *GeminiProvider {
 
 func (p *GeminiProvider) Name() string { return "gemini" }
 
+func (p *GeminiProvider) Capabilities() providers.ProviderCapabilities {
+	sessionUnsupported := "the Gemini wrapper does not implement a bidirectional session provider"
+	return providers.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: providers.StatelessCapabilities{
+			Inference:       providers.Supported(),
+			Streaming:       providers.Supported(),
+			Tools:           providers.Supported(),
+			ImageInput:      providers.Supported(),
+			AudioInput:      providers.Supported(),
+			VideoInput:      providers.Unsupported("the Gemini wrapper does not map video input parts"),
+			VideoOutput:     providers.Unsupported("the Gemini wrapper does not map video output responses"),
+			Reasoning:       providers.Unsupported("the Gemini wrapper does not expose a reasoning request option"),
+			PromptCaching:   providers.Unsupported("the Gemini wrapper does not map cache-control options"),
+			ProviderOptions: providers.Unsupported("raw provider Config is not applied by the Gemini wrapper"),
+		},
+		Session: providers.SessionCapabilitiesPtr(providers.UnsupportedSessionCapabilities(sessionUnsupported)),
+	}
+}
+
 // newClient creates a GenAI client configured with the provider's settings.
 func (p *GeminiProvider) newClient(ctx context.Context) (*genai.Client, error) {
 	cc := &genai.ClientConfig{
