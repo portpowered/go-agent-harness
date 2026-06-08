@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -14,6 +15,12 @@ type Gateway interface {
 	Infer(ctx context.Context, req InferenceRequest) (InferenceResponse, error)
 	InferStream(ctx context.Context, req InferenceRequest) (<-chan messages.StreamMessage, error)
 	Interact(ctx context.Context, req InteractionRequest) (<-chan InteractionEvent, error)
+}
+
+// CapabilityReporter is implemented by gateway types that can report the
+// configured provider's public capability contract.
+type CapabilityReporter interface {
+	Capabilities() ProviderCapabilities
 }
 
 // InferenceRequest is the input to the gateway.
@@ -33,3 +40,40 @@ type InferenceRequest struct {
 
 // InferenceResponse is the gateway output.
 type InferenceResponse = providers.InferenceResponse
+
+// ProviderCapabilities re-exports the public capability contract from the
+// gateway package for callers already importing this surface.
+type ProviderCapabilities = capabilities.ProviderCapabilities
+
+// FeatureCapability re-exports one feature capability from the public contract.
+type FeatureCapability = capabilities.FeatureCapability
+
+// CapabilityState re-exports the support-state enum from the public contract.
+type CapabilityState = capabilities.CapabilityState
+
+// Feature re-exports capability-gated feature identifiers.
+type Feature = capabilities.Feature
+
+// UnsupportedFeatureError re-exports deterministic local validation failures.
+type UnsupportedFeatureError = capabilities.UnsupportedFeatureError
+
+const (
+	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
+	CapabilityStateSupported   = capabilities.CapabilityStateSupported
+	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
+
+	RequestedModeStateless       = capabilities.RequestedModeStateless
+	RequestedModeStatelessStream = capabilities.RequestedModeStatelessStream
+	RequestedModeSession         = capabilities.RequestedModeSession
+
+	FeatureSessions               = capabilities.FeatureSessions
+	FeatureTools                  = capabilities.FeatureTools
+	FeatureStreaming              = capabilities.FeatureStreaming
+	FeatureImageInput             = capabilities.FeatureImageInput
+	FeatureAudioInput             = capabilities.FeatureAudioInput
+	FeatureAudioOutput            = capabilities.FeatureAudioOutput
+	FeatureVideoOutput            = capabilities.FeatureVideoOutput
+	FeatureReasoning              = capabilities.FeatureReasoning
+	FeaturePromptCaching          = capabilities.FeaturePromptCaching
+	FeatureProviderSpecificConfig = capabilities.FeatureProviderSpecificConfig
+)
