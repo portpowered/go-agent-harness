@@ -249,6 +249,14 @@ The final convergence report must:
 
 ## Convergence Verdict
 
+- `findingSummary`:
+  - `pass`: `P3-CORE-01` authoritative shared contract boundary
+  - `pass`: `P3-CORE-02` truthful gateway model boundary documentation
+  - `pass`: `P3-CORE-05` explicit adapter composition boundaries
+  - `pass`: `P3-CORE-06` reviewer-verifiable dependency proof
+  - `uncertain`: checklist-to-slice-plan convergence remains unverified because
+    `tasks/todo/phase-3-shared-contract-decision.md` is absent on the reviewed
+    branch
 - `overallOutcome`: `uncertain`
 - `summary`: the reviewed branch now converges on one truthful shared-contract
   description for `go-agent-loop/pkg/messages` and the `go-llm-gateway/pkg/models`
@@ -262,3 +270,24 @@ The final convergence report must:
 - `broaderPhase3Readiness`: broader Phase 3 independence slices should pause
   pending restoration of the missing Phase 3 decision-plan source on the
   reviewed branch.
+
+## Remaining Drift And Repair Plan
+
+- `relatedChecklistRows`: `P3-CORE-01`, `P3-CORE-02`, `P3-CORE-05`,
+  `P3-CORE-06`
+- `driftItem`: missing authoritative decision-plan source for
+  `phase-3-shared-contract-decision`
+- `triggeringEvidence`: the validator requires
+  `tasks/todo/phase-3-shared-contract-decision.md` as a direct evidence input,
+  but `tasks/todo/` on this branch only contains the two Phase 2 slice-plan
+  files. Without that Phase 3 plan artifact, reviewers cannot map the repaired
+  branch state back to the committed decision-slice acceptance source from the
+  repository alone.
+- `affectedFilesOrSurfaces`: `tasks/todo/phase-3-shared-contract-decision.md`
+  (missing); `docs/internal/phase-3-shared-contract-validator.md`;
+  `docs/internal/checklist.md`
+- `exactRepairWork`: restore or recreate
+  `tasks/todo/phase-3-shared-contract-decision.md` on the reviewed branch with
+  the committed Phase 3 decision scope and acceptance commitments, then rerun
+  this validator so the convergence findings can cite both the checklist rows
+  and the decision-plan source directly.
