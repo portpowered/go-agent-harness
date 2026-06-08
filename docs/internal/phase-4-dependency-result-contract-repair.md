@@ -38,10 +38,14 @@ row is not closed by this document unless the decision below says `pass`.
   additive `Outcome()` contract. New callers can distinguish open, drained,
   caller-closed, cancelled/deadline, terminal failure, and partial-output before
   failure states without inferring from `HasNext() == false`.
-- `agent-cli/internal/agent.Executor.LoadSystemPrompt` is exported inside an
-  `internal` package and performs filesystem and config reads through
-  `loadSystemPrompt`; default prompt resolution may create or read `AGENTS.md`
-  through `workspace.EnsureAgentsMD`.
+- `agent-cli/internal/agent.Executor.LoadSystemPrompt` remains the compatible
+  resolved-prompt helper for existing internal CLI callers.
+- `agent-cli/internal/agent.Executor.LoadSystemPromptWithDetails` is the
+  additive prompt-resolution inspection contract. It returns the resolved
+  prompt plus `PromptResolutionDetails` entries for literal prompt text, prompt
+  file reads, default `AGENTS.md` creation/read, config-backed system-info
+  loading, runtime system-info collection, skill metadata reads, and loop suffix
+  appends.
 - `agent-cli/internal/agent.buildProviderHTTPRuntime(...)` owns stateless
   provider HTTP runtime composition. `WithProviderHTTPBaseTransport(...)`
   injects the live base transport before provider construction; record mode
@@ -57,11 +61,11 @@ row is not closed by this document unless the decision below says `pass`.
 | --- | --- | --- | --- |
 | `P4-CTX-*` | `uncertain` | The current public APIs show broad context-first cancellation coverage on `AgenticLoop`, `Inferencer`, `ToolExecutor`, `SessionInferencer`, `Session.Send`, and the new `TypedBuffer.ReadContext`. The exact reconciled `P4-CTX-*` row list is missing because `phase-4-api-audit-reconciliation` is not present in this checkout. | Import or link the reconciled audit row list, then close only the rows whose blocking public calls already return inspectable cancellation errors or have additive repairs. Future story work should verify cancellation outcomes for session/result helpers that still return only `bool` or zero values. |
 | `P4-RESULT-*` | `uncertain` | `ExecuteResult.FinalText()` repairs the final text helper with explicit statuses for success, empty success, missing final text, cancellation/deadline, terminal failure, and partial output. `TypedBuffer.ReadContext` repairs one blocking buffer read with an error-returning cancellation contract. `Stream.Outcome()` repairs streaming lifecycle ambiguity for drained, closed, cancelled/deadline, terminal failure, and partial-output states. `Session.Send` and legacy `TypedBuffer.ReadBlockingContext` still expose `bool` outcomes with multiple documented meanings, and the exact reconciled `P4-RESULT-*` row list is missing from this checkout. | Import or link the reconciled audit row list. Later stories should add typed session send outcomes and finish final gate evidence before marking the whole result row set pass. |
-| `P4-DI-*` | `uncertain` | Phase 2 evidence documents repaired ownership for `agentloop.New(...)` tool execution. This story narrows stateless provider HTTP runtime ownership with `WithProviderHTTPBaseTransport(...)`, proves the injected transport is used in live mode and wrapped in record mode, and keeps provider builders consuming `ProviderBuildContext.HTTPClient`. Prompt resolution still mixes filesystem/config/skills reads in `Executor.LoadSystemPrompt`. The exact reconciled `P4-DI-*` row list is unavailable in this checkout. | Import or link the reconciled audit row list. Prompt resolution needs explicit filesystem/environment ownership evidence in a later story. Remaining non-prompt dependency rows should be closed only against direct declarations, tests, or compatibility staging. |
+| `P4-DI-*` | `uncertain` | Phase 2 evidence documents repaired ownership for `agentloop.New(...)` tool execution. This story narrows stateless provider HTTP runtime ownership with `WithProviderHTTPBaseTransport(...)`, proves the injected transport is used in live mode and wrapped in record mode, and keeps provider builders consuming `ProviderBuildContext.HTTPClient`. Prompt resolution now exposes `LoadSystemPromptWithDetails(...)` so the CLI-owned filesystem/config/system-info/skills/suffix inputs are observable without changing existing `LoadSystemPrompt(...)` callers. The exact reconciled `P4-DI-*` row list is unavailable in this checkout. | Import or link the reconciled audit row list. Remaining non-prompt dependency rows should be closed only against direct declarations, tests, or compatibility staging. |
 | `P4-HYGIENE-*` | `uncertain` | `docs/architecture/dependencies.md` names intended public surfaces and incidental exports. No reconciled `P4-HYGIENE-*` artifact is available here to verify the requested row set. | Import or link the reconciled hygiene rows, then map each exported alias, package boundary, or doc-comment issue to current declarations and either close with evidence or stage follow-up. |
 | `P4-API-01` | `uncertain` | `AgenticLoop`, `Inferencer`, `ToolExecutor`, `SessionInferencer`, and `TypedBuffer.ReadContext` use context-first signatures, so caller-owned cancellation is visible on major blocking surfaces repaired so far. `Stream.Outcome()` reports caller cancellation/deadline distinctly for streaming terminal state. Ambiguous helper outcomes remain on `Session.Send` and legacy `TypedBuffer.ReadBlockingContext`. | Define the exact `P4-API-01` row from the reconciled audit and close only the covered declarations. Later stories should add cancellation/result tests for remaining ambiguous helpers. |
 | `P4-API-03` | `uncertain` | `ExecuteResult.FinalText()` removes the final text `string` ambiguity while keeping `ExecuteResult.Text()` compatible. `Stream.Outcome()` removes `HasNext() == false` ambiguity for clean drain, caller close, cancellation/deadline, terminal failure, and partial-output states while keeping `HasNext()` compatible. Credential-free tests prove empty success, no final message, terminal failure, cancellation, partial-output final results, and streaming lifecycle outcomes. Remaining lifecycle helpers still include ambiguous `bool` outcomes: `Session.Send` and legacy `TypedBuffer.ReadBlockingContext`. | Define the exact `P4-API-03` row from the reconciled audit, then close only covered declarations. Later stories should add additive typed outcomes for session send lifecycle states. |
-| `P4-API-07` | `uncertain` | Dependency ownership is documented for intended module direction. Provider HTTP runtime ownership is explicit at the CLI composition seam: live mode uses the selected base transport, record mode wraps it, replay mode uses fixture replay, and provider constructors receive the resulting `*http.Client`. The CLI prompt resolution seam still performs user-facing filesystem/config side effects from `LoadSystemPrompt`. | Define the exact `P4-API-07` row from the reconciled audit. Later prompt work should document or inject filesystem, environment, config, system info, and skills dependencies for `LoadSystemPrompt`. |
+| `P4-API-07` | `uncertain` | Dependency ownership is documented for intended module direction. Provider HTTP runtime ownership is explicit at the CLI composition seam: live mode uses the selected base transport, record mode wraps it, replay mode uses fixture replay, and provider constructors receive the resulting `*http.Client`. Prompt resolution ownership is explicit through `LoadSystemPromptWithDetails(...)`, which reports CLI-owned prompt file reads, default `AGENTS.md` create/read behavior, config/system-info reads, skills metadata reads, and suffix appends; the Agent CLI README documents the corresponding command behavior. | Define the exact `P4-API-07` row from the reconciled audit. If future work needs library-grade prompt composition, split pure prompt assembly from these IO-backed sources behind injected loaders without changing the documented CLI defaults. |
 | `P4-GATE-01` | `fail` | This story publishes the current map, but result ambiguity and missing reconciled-audit evidence remain. The final gate cannot pass until all required `P4-CTX-*`, `P4-RESULT-*`, `P4-DI-*`, and `P4-HYGIENE-*` rows have direct implementation or compatibility-staging evidence. | Complete stories 002 through 007, update this evidence with concrete row decisions, and run the required credential-free quality gate. |
 
 ## Compatibility Staging
@@ -72,17 +76,20 @@ following compatibility-sensitive repairs are staged for later stories:
 - Additive final-result contracts are implemented by
   `ExecuteResult.FinalText()` without removing `ExecuteResult.Text()`.
 - Add typed session outcome APIs without removing existing `bool` methods.
-- Document or inject prompt-resolution filesystem, environment, config, system
-  info, and skills dependencies without changing current CLI defaults.
+- `LoadSystemPromptWithDetails(...)` documents and exposes current prompt
+  resolution filesystem, config, system-info, skills, and suffix side effects
+  without changing `LoadSystemPrompt(...)` or CLI defaults. A future pure prompt
+  assembly API can inject these sources if library consumers need it.
 - Preserve existing stream iteration through `HasNext()`/`Response()` while using
   `Stream.Outcome()` for explicit terminal status in new integrations.
 
 ## Reviewer Command
 
-Run the credential-free compile and stream lifecycle checks from the repository
-root:
+Run the credential-free compile, prompt-resolution, and stream lifecycle checks
+from the repository root:
 
 ```sh
+go test ./agent-cli/internal/agent
 go test ./go-agent-loop/pkg/agentloop
 make typecheck
 ```

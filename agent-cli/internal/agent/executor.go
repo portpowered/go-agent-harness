@@ -53,6 +53,56 @@ type Executor struct {
 	relaxModelValidation bool
 }
 
+// PromptResolutionSource describes an input consulted while building a system
+// prompt. Path is set for filesystem-backed sources.
+type PromptResolutionSource struct {
+	Kind string
+	Path string
+}
+
+// PromptResolutionSideEffect names IO, environment, or runtime side effects
+// owned by the CLI prompt resolution path.
+type PromptResolutionSideEffect string
+
+const (
+	PromptSideEffectReadPromptFile     PromptResolutionSideEffect = "read_prompt_file"
+	PromptSideEffectCreateAgentsMD     PromptResolutionSideEffect = "create_agents_md"
+	PromptSideEffectReadAgentsMD       PromptResolutionSideEffect = "read_agents_md"
+	PromptSideEffectLoadConfig         PromptResolutionSideEffect = "load_config"
+	PromptSideEffectCollectSystemInfo  PromptResolutionSideEffect = "collect_system_info"
+	PromptSideEffectReadSkillsMetadata PromptResolutionSideEffect = "read_skills_metadata"
+	PromptSideEffectAppendPromptSuffix PromptResolutionSideEffect = "append_prompt_suffix"
+)
+
+const (
+	PromptSourceKindLiteralPrompt = "literal_prompt"
+	PromptSourceKindPromptFile    = "prompt_file"
+	PromptSourceKindAgentsMD      = "agents_md"
+	PromptSourceKindConfig        = "config"
+	PromptSourceKindSystemInfo    = "system_info"
+	PromptSourceKindSkills        = "skills"
+	PromptSourceKindSuffix        = "suffix"
+)
+
+// PromptResolutionDetails exposes the sources and side effects involved in
+// resolving a system prompt.
+type PromptResolutionDetails struct {
+	Sources     []PromptResolutionSource
+	SideEffects []PromptResolutionSideEffect
+}
+
+func (d *PromptResolutionDetails) addSource(kind, path string) {
+	if d != nil {
+		d.Sources = append(d.Sources, PromptResolutionSource{Kind: kind, Path: path})
+	}
+}
+
+func (d *PromptResolutionDetails) addSideEffect(effect PromptResolutionSideEffect) {
+	if d != nil {
+		d.SideEffects = append(d.SideEffects, effect)
+	}
+}
+
 // NewExecutor creates a new Executor with the given dependencies.
 func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
 	relax := false
@@ -175,32 +225,49 @@ func (e *Executor) getInitialHistory(cfg *Config, sessionStorage *session.Storag
 // LoadSystemPrompt loads and resolves the system prompt from config or file.
 // It is exported so callers (e.g. /system command) can display the resolved prompt.
 func (e *Executor) LoadSystemPrompt(cfg *Config, workspaceDir string, toolDefs []messages.ToolDefinition) (string, error) {
-	return e.loadSystemPrompt(cfg, workspaceDir, toolDefs)
+	prompt, _, err := e.LoadSystemPromptWithDetails(cfg, workspaceDir, toolDefs)
+	return prompt, err
+}
+
+// LoadSystemPromptWithDetails loads and resolves the system prompt and reports
+// the prompt sources and CLI-owned side effects consulted along the way.
+func (e *Executor) LoadSystemPromptWithDetails(cfg *Config, workspaceDir string, toolDefs []messages.ToolDefinition) (string, PromptResolutionDetails, error) {
+	var details PromptResolutionDetails
+	prompt, err := e.loadSystemPrompt(cfg, workspaceDir, toolDefs, &details)
+	return prompt, details, err
 }
 
 // loadSystemPrompt loads the system prompt from config or file.
-func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs []messages.ToolDefinition) (string, error) {
+func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs []messages.ToolDefinition, details *PromptResolutionDetails) (string, error) {
 	systemPrompt := ""
 	if cfg.SystemPrompt == "none" {
 		// Explicitly no system prompt
 	} else if cfg.SystemPrompt != "" {
 		if _, err := os.Stat(cfg.SystemPrompt); err == nil {
+			details.addSource(PromptSourceKindPromptFile, cfg.SystemPrompt)
+			details.addSideEffect(PromptSideEffectReadPromptFile)
 			data, err := os.ReadFile(cfg.SystemPrompt)
 			if err != nil {
 				return "", fmt.Errorf("read system prompt %s: %w", cfg.SystemPrompt, err)
 			}
 			systemPrompt = string(data)
 		} else if os.IsNotExist(err) {
+			details.addSource(PromptSourceKindLiteralPrompt, "")
 			systemPrompt = cfg.SystemPrompt
 		} else {
 			return "", fmt.Errorf("system prompt path %s: %w", cfg.SystemPrompt, err)
 		}
 	} else {
 		// Default: use AGENTS.md from workspace
+		agentsPath := filepath.Join(workspaceDir, "AGENTS.md")
+		if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
+			details.addSideEffect(PromptSideEffectCreateAgentsMD)
+		}
 		if err := workspace.EnsureAgentsMD(workspaceDir, toolDefs); err != nil {
 			return "", fmt.Errorf("initialize AGENTS.md: %w", err)
 		}
-		agentsPath := filepath.Join(workspaceDir, "AGENTS.md")
+		details.addSource(PromptSourceKindAgentsMD, agentsPath)
+		details.addSideEffect(PromptSideEffectReadAgentsMD)
 		if data, err := os.ReadFile(agentsPath); err == nil {
 			systemPrompt = string(data)
 		}
@@ -209,6 +276,8 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 	// Prepend dynamic system info unless explicitly disabled.
 	if !cfg.NoSystemInformation {
 		var model, provider string
+		details.addSource(PromptSourceKindConfig, cfg.ConfigDir)
+		details.addSideEffect(PromptSideEffectLoadConfig)
 		loadedCfg, err := e.loadConfigAllowingInferencerOverride(cfg)
 		if err == nil {
 			provider = loadedCfg.Model.Provider
@@ -218,6 +287,8 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 				model = active.Model
 			}
 		}
+		details.addSource(PromptSourceKindSystemInfo, "")
+		details.addSideEffect(PromptSideEffectCollectSystemInfo)
 		systemPrompt = sysinfo.Collect(model, provider).Format() + systemPrompt
 	}
 
@@ -225,6 +296,11 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 	if workspaceDir != "" {
 		configSkillsDir := cfg.ConfigDir
 		loader := skills.NewLoader(workspaceDir, configSkillsDir)
+		details.addSource(PromptSourceKindSkills, filepath.Join(workspaceDir, "skills"))
+		if configSkillsDir != "" {
+			details.addSource(PromptSourceKindSkills, filepath.Join(configSkillsDir, "skills"))
+		}
+		details.addSideEffect(PromptSideEffectReadSkillsMetadata)
 		summary, err := loader.BuildSummary()
 		if err == nil && summary != "" {
 			systemPrompt = systemPrompt + "\n\n---\n\n" + summary
@@ -233,6 +309,8 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 
 	// Append iteration-specific suffix (for loop mode).
 	if cfg.SystemPromptSuffix != "" {
+		details.addSource(PromptSourceKindSuffix, "")
+		details.addSideEffect(PromptSideEffectAppendPromptSuffix)
 		if systemPrompt != "" {
 			systemPrompt = systemPrompt + "\n\n" + cfg.SystemPromptSuffix
 		} else {
@@ -355,7 +433,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	}
 
 	// Load system prompt (use config-filtered tool defs so AGENTS.md matches enabled tools)
-	systemPrompt, err := e.loadSystemPrompt(cfg, sessionStorage.WorkspaceDir(), loopToolDefs)
+	systemPrompt, err := e.LoadSystemPrompt(cfg, sessionStorage.WorkspaceDir(), loopToolDefs)
 	if err != nil {
 		return nil, err
 	}
