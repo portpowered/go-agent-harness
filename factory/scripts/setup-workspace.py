@@ -17,6 +17,11 @@ import sys
 import time
 from pathlib import Path
 
+PLANNER_OWNED_DIRTY_PATHS = {
+    "docs/internal/checklist.md",
+    "docs/internal/progress.txt",
+}
+
 
 def run_git(*args, cwd=None, check=True):
     """Run a git command, returning stdout. Raises on failure if check=True."""
@@ -88,6 +93,84 @@ def registered_branch_for_path(repo_root, worktree_path):
     if not branch_ref or not branch_ref.startswith("refs/heads/"):
         return None
     return branch_ref.removeprefix("refs/heads/")
+
+
+def list_root_status_entries(repo_root):
+    """Return parsed git status entries for the repository root."""
+    result = run_git(
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "-z",
+        cwd=repo_root,
+    )
+    raw_entries = result.stdout.split("\0")
+    entries = []
+    index = 0
+    while index < len(raw_entries):
+        entry = raw_entries[index]
+        index += 1
+        if not entry:
+            continue
+        status = entry[:2]
+        path = entry[3:]
+        original_path = None
+        if "R" in status or "C" in status:
+            if index >= len(raw_entries):
+                raise RuntimeError("git status returned an incomplete rename entry")
+            original_path = raw_entries[index]
+            index += 1
+        entries.append(
+            {
+                "status": status,
+                "path": Path(path).as_posix(),
+                "original_path": Path(original_path).as_posix() if original_path else None,
+            }
+        )
+    return entries
+
+
+def planner_owned_status_is_tolerated(status):
+    """Return whether a planner-owned dirty entry is safe to ignore during setup."""
+    if status == "??":
+        return True
+    return all(flag in {" ", "M", "A"} for flag in status)
+
+
+def allowed_dirty_paths_for_setup(prd_name):
+    """Return dirty paths that are safe for setup to ignore."""
+    return PLANNER_OWNED_DIRTY_PATHS | {
+        f"tasks/todo/{prd_name}.json",
+        f"tasks/todo/{prd_name}.md",
+    }
+
+
+def validate_root_dirty_state(repo_root, prd_name):
+    """Allow setup inputs and planner-owned dirty files while rejecting other dirty root state."""
+    allowed_dirty_paths = allowed_dirty_paths_for_setup(prd_name)
+    unsafe_entries = []
+    for entry in list_root_status_entries(repo_root):
+        path = entry["path"]
+        if path in allowed_dirty_paths and planner_owned_status_is_tolerated(entry["status"]):
+            continue
+        unsafe_entries.append(entry)
+
+    if not unsafe_entries:
+        return
+
+    rendered_entries = []
+    for entry in unsafe_entries:
+        rendered = f"{entry['status']} {entry['path']}"
+        if entry["original_path"]:
+            rendered = f"{rendered} <- {entry['original_path']}"
+        rendered_entries.append(rendered)
+    joined_entries = ", ".join(rendered_entries)
+    allowed_paths = ", ".join(sorted(allowed_dirty_paths))
+    raise RuntimeError(
+        "root checkout has unsupported dirty state outside planner-owned files "
+        "and requested setup artifacts; "
+        f"allowed dirty paths are {allowed_paths}; found {joined_entries}"
+    )
 
 
 def wait_for_reusable_worktree(repo_root, branch, worktree_path, timeout_seconds=5):
@@ -211,6 +294,12 @@ def main():
         read_prd(prd_json_path)
     except (json.JSONDecodeError, OSError) as e:
         print(f"Failed to read PRD: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        validate_root_dirty_state(repo_root, prd_name)
+    except RuntimeError as e:
+        print(f"Worktree setup failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     branch = f"{prd_name}"

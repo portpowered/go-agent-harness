@@ -145,3 +145,11 @@ should observe the registered worktree created by the winner and return that
 same ready path as a reuse instead of retrying shared-root sync or failing the
 queue item. Setup still fails explicitly when the target path resolves to a
 different registered branch or another unsafe worktree state.
+
+Planner-owned root dirtiness is part of that contract. Routine changes in
+`docs/internal/checklist.md` and `docs/internal/progress.txt` are tolerated
+during setup and reuse because they are operational planner state, not
+worktree-selection inputs. The requested `tasks/todo/<prd-name>.json` and
+optional `.md` are also tolerated as direct setup inputs. Other root dirty
+state still fails explicitly so the factory does not silently treat unrelated
+checkout drift as safe.

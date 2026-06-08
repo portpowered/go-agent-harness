@@ -158,6 +158,59 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
             self.assertEqual(second_payload["branch"], prd_name)
             self.assertEqual({first_payload["reused"], second_payload["reused"]}, {False, True})
 
+    def test_setup_workspace_allows_planner_owned_dirty_root_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "repo"
+            self._init_repo(repo_root)
+
+            prd_name = "phase-2-factory-worktree-hygiene-repair"
+            self._write_prd(repo_root, prd_name)
+            self._commit_planner_owned_files(repo_root)
+
+            checklist_path = repo_root / "docs" / "internal" / "checklist.md"
+            checklist_path.write_text("# checklist\nupdated\n", encoding="utf-8")
+            progress_path = repo_root / "docs" / "internal" / "progress.txt"
+            progress_path.write_text("planner progress\n", encoding="utf-8")
+
+            result = subprocess.run(
+                ["python3", str(SCRIPT_PATH), prd_name],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["branch"], prd_name)
+            self.assertFalse(payload["reused"])
+
+    def test_setup_workspace_fails_for_non_planner_owned_dirty_root_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "repo"
+            self._init_repo(repo_root)
+
+            prd_name = "phase-2-factory-worktree-hygiene-repair"
+            self._write_prd(repo_root, prd_name)
+
+            (repo_root / "notes.txt").write_text("unexpected dirty file\n", encoding="utf-8")
+
+            result = subprocess.run(
+                ["python3", str(SCRIPT_PATH), prd_name],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "unsupported dirty state outside planner-owned files and requested setup artifacts",
+                result.stderr,
+            )
+            self.assertIn("?? notes.txt", result.stderr)
+
     def _write_prd(self, repo_root: Path, prd_name: str) -> None:
         tasks_dir = repo_root / "tasks" / "todo"
         tasks_dir.mkdir(parents=True)
@@ -173,6 +226,13 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
             "# test prd\n",
             encoding="utf-8",
         )
+
+    def _commit_planner_owned_files(self, repo_root: Path) -> None:
+        docs_internal_dir = repo_root / "docs" / "internal"
+        docs_internal_dir.mkdir(parents=True, exist_ok=True)
+        (docs_internal_dir / "checklist.md").write_text("# checklist\n", encoding="utf-8")
+        self._run(["git", "add", "docs/internal/checklist.md"], cwd=repo_root)
+        self._run(["git", "commit", "-m", "add planner checklist"], cwd=repo_root)
 
     def _wait_for_file(self, path: Path, timeout_seconds: float = 5) -> None:
         deadline = time.monotonic() + timeout_seconds
