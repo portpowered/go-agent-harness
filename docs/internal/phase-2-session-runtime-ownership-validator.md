@@ -334,3 +334,103 @@ or queue state that cannot be classified safely from the available data.
   - None for the scoped replay and record relay cancellation contract. Keep new
     session-helper wrappers bound to the caller-owned `ConnectSession(ctx)`
     lifetime so this contract does not regress.
+
+### Reviewer-Facing Docs and Audit Alignment
+
+- `outcome`: `pass`
+- `checklist rows / commitments inspected`: `P2-SRO-04`;
+  `phase-2-session-runtime-ownership-repair-005`
+- `affected files / surfaces / work IDs`:
+  `docs/architecture/contract-gap-audit.md`;
+  `docs/architecture/dependencies.md`;
+  `docs/internal/checklist.md`;
+  `agent-cli/docs/session-record-replay.md`;
+  `go-llm-gateway/pkg/testing/README.md`;
+  `docs/internal/phase-2-session-runtime-ownership-validator.md`;
+  `phase-2-session-runtime-ownership-repair-005`
+- `evidence`:
+  - The reviewer-facing surfaces now distinguish the repaired session-helper
+    and provider-constructor behavior from the remaining CLI planner leak
+    instead of collapsing them into one "resolved" claim. In
+    `docs/architecture/contract-gap-audit.md`, `DI-04` now records the seam as
+    narrowed rather than resolved and names the remaining
+    `newDefaultLiveDialer()` fallback in
+    `agent-cli/internal/services/session_runtime.go` as the concrete reason the
+    broader constructor-ownership row is still open.
+  - `agent-cli/docs/session-record-replay.md` now matches the delivered
+    repository state: it records the explicit CLI-owned runtime seam, the
+    provider-boundary missing-dialer failures, the relay cancellation contract,
+    and the remaining record-path default-dialer fallback that still blocks
+    full `P2-COB-04` convergence.
+  - The supporting reviewer surfaces stay consistent with that narrower claim.
+    `docs/internal/checklist.md` still defines `P2-SRO-04` as a reviewer-
+    visible evidence obligation, `docs/architecture/dependencies.md` describes
+    the session-runtime gap as narrowed rather than eliminated, and
+    `go-llm-gateway/pkg/testing/README.md` documents the relay-context APIs
+    without claiming broader constructor-ownership convergence.
+  - No remaining stale or contradictory guidance was found on the reviewed
+    surfaces after those doc corrections. The reviewer can now read the audit,
+    session workflow doc, and validator report together without reconstructing
+    planner intent from earlier branch history.
+- `required repairs / you work move actions`:
+  - None for doc truthfulness on the reviewed surfaces. Keep future reviewer
+    docs aligned with the validator's narrower verdict until the remaining
+    dialer fallback is actually removed.
+
+### Stranded Queue Residue
+
+- `outcome`: `fail`
+- `checklist rows / commitments inspected`: `P2-COB-04`; `P2-COB-05`;
+  `phase-2-session-runtime-ownership-repair-002`;
+  `phase-2-session-runtime-ownership-repair-005`
+- `affected files / surfaces / work IDs`:
+  `agent-cli/internal/services/session_runtime.go`;
+  `agent-cli/internal/services/session_test.go`;
+  missing `tasks/todo/phase-2-constructor-ownership-boundaries.md`;
+  work IDs `P2-COB-04`, `P2-COB-05`,
+  `phase-2-session-runtime-ownership-repair-002`
+- `evidence`:
+  - One concrete constructor-ownership residue item is still stranded on the
+    reviewed branch head. `agent-cli/internal/services/session_runtime.go`
+    keeps the record path mergeable by synthesizing
+    `factory.newDefaultLiveDialer()` when the caller omits
+    `SessionRunOptions.WebSocketDialer`, and
+    `TestPlanSessionRuntime_OpenAIRecordOwnsConfigAndDialerSelection` in
+    `agent-cli/internal/services/session_test.go` still codifies that fallback
+    as expected behavior. That leaves `P2-COB-04` and repair commitment
+    `phase-2-session-runtime-ownership-repair-002` unresolved on repository
+    evidence.
+  - The broader constructor-ownership queue also has one missing planning
+    surface. `P2-COB-05` cannot be verified cleanly because
+    `tasks/todo/phase-2-constructor-ownership-boundaries.md` is absent from the
+    repository, so the validator cannot prove that the broader lane-level
+    reviewer workflow is fully represented in the checked-in backlog.
+- `required repairs / you work move actions`:
+  - Repair action: remove the record-path `newDefaultLiveDialer()` fallback
+    from `agent-cli/internal/services/session_runtime.go` and update the
+    session-runtime planner tests to require explicit caller-owned dialer
+    injection for record mode.
+  - You work move action: restore or replace
+    `tasks/todo/phase-2-constructor-ownership-boundaries.md` with the current
+    authoritative constructor-ownership planning surface before claiming
+    `P2-COB-05` convergence for this lane.
+
+## Overall Verdict
+
+- `outcome`: `fail`
+- `summary`:
+  - `pass`: relay cancellation convergence is repository-backed, deterministic,
+    and now documented truthfully on the reviewed surfaces.
+  - `pass`: reviewer-facing docs and audit text now match the delivered repair
+    slice without overstating constructor-ownership convergence.
+  - `fail`: the session-mode record planner still creates a factory-owned live
+    dialer when the caller omits one, so the broader constructor-ownership lane
+    has not converged on explicit runtime ownership as written in `P2-COB-04`
+    and repair commitment `phase-2-session-runtime-ownership-repair-002`.
+  - `uncertain`: `P2-COB-05` remains blocked by the missing
+    `tasks/todo/phase-2-constructor-ownership-boundaries.md` planning surface.
+- `exact remaining actions`:
+  - Remove the CLI planner's record-path default live dialer fallback and
+    update the observable tests that currently expect it.
+  - Restore or replace the missing constructor-ownership planning artifact so
+    the broader lane can be validated from repository state.
