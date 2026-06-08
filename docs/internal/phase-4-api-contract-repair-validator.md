@@ -810,13 +810,61 @@ artifact as uncertain, maps stale or unresolved audit evidence to Phase 4 rows,
 and names exact future repair or cleanup work for every non-pass row. No
 checklist row may close from story 002 alone.
 
-## Current Story Status
+## Final Convergence Decision
 
-Stories 001, 002, 003, 004, and 005 are complete. The report now establishes the
-Phase 4 validator subject, checklist row coverage, evidence rules, required
-finding shape, audit/validator-015 reconciliation findings, typed-error/stream
-contract findings, and provider capability/local unsupported-feature validation
-findings, plus dependency/result/context/lifecycle findings. Final checklist
-closure and the single next planner action remain deferred to the final
-validator story so that the report can summarize every requested row with one
-complete convergence decision.
+The Phase 4 public API contract hardening repair baseline is not ready to close.
+The validator stories are complete, but every checklist row under review remains
+open because the current public APIs, public docs, examples where present, audit
+rows, deterministic tests, and reviewer-runnable commands do not yet describe
+one converged current contract.
+
+CI or local quality success is supporting evidence only. It is not row closure
+evidence for this baseline because the missing or conflicting contracts are
+observable public API, documentation, audit, and deterministic proof gaps.
+
+| Checklist row | Final verdict | Closure decision | Public evidence summary | Reviewer commands | Future repair work |
+| --- | --- | --- | --- | --- | --- |
+| `P4-API-01` | `uncertain` | remains open | Public blocking calls accept `context.Context` in important gateway, session, replay, and recorder paths, and selected tests prove cancellation preservation. The row cannot close because session request/config ownership is still split, buffer/send outcomes collapse cancellation and backpressure into `false`, and audit rows `CTX-01`, `LIFECYCLE-01`, and `COMPAT-02` remain open. | `rg -n "ConnectSession\\(ctx|WithReplayContext|WithSessionRelayContext|TypedBuffer|Write\\(ctx|context\\.Canceled|CTX-01|LIFECYCLE-01|COMPAT-02" go-agent-loop go-llm-gateway agent-cli docs`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-dependency-result-context-lifecycle-contract.md` |
+| `P4-API-02` | `fail` | remains open | `ErrorValue`, `InteractionError`, and `InteractionFixtureValidationError` provide partial typed evidence, but shared stream, replay divergence, replay incomplete, CLI/session, and several provider/gateway failures still cross public boundaries as formatted text or string-only stream errors. | `rg -n "type ErrorValue|NewErrorValue|InteractionError|InteractionFixtureValidationError|ReplayWebSocketDialer|replay divergence|errors\\.As|errors\\.Is" go-agent-loop/pkg go-llm-gateway/pkg agent-cli`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-typed-errors-and-stream-terminal-contract.md` |
+| `P4-API-03` | `fail` | remains open | Public result, buffer, session, and stream surfaces expose useful events and values, but they do not define one outcome vocabulary for empty success, cancellation, partial success, provider-authored completion, loop-synthesized completion, replay mismatch, replay incomplete, closed/drained state, and terminal failure. | `rg -n "type TypedBuffer|func \\(b \\*TypedBuffer|StreamTypeMessageEnd|StreamTypeError|StreamTypeSessionClose|Completed|provider_closed|session replay closed before|replay divergence" go-agent-loop go-llm-gateway agent-cli docs`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-dependency-result-context-lifecycle-contract.md` and `tasks/ideas-to-review/go-llm-gateway/phase-4-typed-errors-and-stream-terminal-contract.md` |
+| `P4-API-04` | `fail` | remains open | `go-llm-gateway/README.md` documents a coarse provider surface map, but no exported gateway/provider API exposes supported, unsupported, and unknown capability states for tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config. | `rg -n "type Provider interface|type SessionProvider interface|ThinkingConfig|CacheControlConfig|InteractionContent(Image|Audio|Video)|SessionConfig|Provider Surface Map" go-llm-gateway`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-provider-capabilities-and-local-validation-contract.md` |
+| `P4-API-05` | `fail` | remains open | Public stream messages expose terminal-looking event types, but terminal provenance, replay mismatch, cancellation, partial output, and structured error preservation are not one documented observable stream contract. Some terminal paths synthesize `MESSAGE.END`, and several errors are still emitted from `err.Error()`. | `rg -n "StreamTypeMessageEnd|StreamTypeError|StreamTypeSessionClose|NewErrorValue|drainStream|emitSyntheticDeltas|InferStream|replay divergence|context\\.Canceled" go-agent-loop/pkg go-llm-gateway/pkg agent-cli`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-typed-errors-and-stream-terminal-contract.md` |
+| `P4-API-06` | `fail` | remains open | `DefaultGateway.Interact` proves one local tool-result validation rule, but unsupported stateless and session features are not validated through one gateway-level typed contract before provider execution. Provider-specific unsupported behavior remains late, provider-local, or uninspectable. | `rg -n "validateInteractionToolResults|provider.calls != 0|tool_result_validation_error|InferStream|unsupported model|ConnectSession" go-llm-gateway/pkg agent-cli`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-provider-capabilities-and-local-validation-contract.md` |
+| `P4-API-07` | `fail` | remains open | Phase 2 repaired several constructor and runtime ownership seams, but prompt resolution, session adapter shape, session capture/fixture filesystem and time ownership, model alias documentation, and internal wiring boundaries are not fully mapped as caller-owned, injected, side-effect free, or explicitly open work. | `rg -n "DI-03|CTX-01|DOC-01|DOC-02|loadSystemPrompt|EnsureAgentsMD|SessionGatewayInferencer|SessionConfig|time\\.Now|os\\.ReadFile|os\\.WriteFile|buildProviderHTTPRuntime|sessionRuntimePlan" docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-dependency-result-context-lifecycle-contract.md` |
+| `P4-GATE-01` | `fail` | remains open | The report itself is now reviewer-grade evidence of non-convergence, but the Phase 4 hardening gate cannot close because validator-015 is absent or unsuperseded, capability and unsupported-feature audit coverage is missing, and `P4-API-01` through `P4-API-07` remain non-pass. | `rg -n "validator 015|validator-015|P4-API|P4-GATE|ERR-|CTX-|LIFECYCLE-|COMPAT-|DOC-" prd.md docs go-agent-loop go-llm-gateway agent-cli`; `make typecheck`; `make test` | `tasks/ideas-to-review/go-llm-gateway/phase-4-audit-validator-015-reconciliation.md`, plus the three implementation ideas named above |
+
+## Implementation-Ready Future Work
+
+Every non-pass row is already scoped to an implementation-ready future idea:
+
+- `tasks/ideas-to-review/go-llm-gateway/phase-4-audit-validator-015-reconciliation.md`
+  restores or explicitly supersedes validator-015, maps stale audit evidence,
+  and adds missing audit coverage for capability discovery and local
+  unsupported-feature validation.
+- `tasks/ideas-to-review/go-llm-gateway/phase-4-typed-errors-and-stream-terminal-contract.md`
+  defines typed caller-actionable error classes and the public stream terminal
+  contract, while preserving legacy text during migration.
+- `tasks/ideas-to-review/go-llm-gateway/phase-4-provider-capabilities-and-local-validation-contract.md`
+  adds tri-state provider capability discovery and gateway-level local
+  unsupported-feature validation before provider execution.
+- `tasks/ideas-to-review/go-llm-gateway/phase-4-dependency-result-context-lifecycle-contract.md`
+  repairs context, result, lifecycle, session request, prompt/dependency
+  ownership, and side-effect documentation gaps.
+
+## Next Planner Action
+
+The next planner action is `repair`.
+
+Plan and execute the Phase 4 repair ideas above before starting any new Phase 4
+feature batch. No new Phase 4 feature batch should proceed until this validator
+decision is consumed, because the reviewed baseline does not yet provide public
+contract evidence sufficient to mark any requested checklist row complete.
+
+## Story 006 Closure
+
+The publish-closure story passes for validator purposes: the final report
+summarizes `P4-API-01` through `P4-API-07` and `P4-GATE-01` with verdicts,
+public evidence, affected declarations from the row findings above, closure
+decisions, reviewer commands, and exact future repair work for every non-pass
+row. It recommends exactly one next planner action, `repair`, and explicitly
+blocks the next Phase 4 feature batch until the decision is consumed.
