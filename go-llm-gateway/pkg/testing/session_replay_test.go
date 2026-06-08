@@ -312,6 +312,45 @@ func TestSessionReplayer_AcceptsLegacyEventArray(t *testing.T) {
 	}
 }
 
+func TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled(t *testing.T) {
+	events := []CapturedSessionEvent{
+		makeCapture(DirectionServerToClient, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("first")),
+		makeCapture(DirectionServerToClient, 200, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("second")),
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.session.json")
+	writeCapture(t, path, events)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	replayer := mustNewSessionReplayer(t, path, WithReplayContext(ctx), WithReplayTiming())
+
+	first := readReplayMessage(t, replayer)
+	firstDelta, ok := first.Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("first value type = %T, want *TextDeltaValue", first.Value)
+	}
+	if firstDelta.Content != "first" {
+		t.Fatalf("first delta = %q, want first", firstDelta.Content)
+	}
+
+	cancel()
+
+	select {
+	case msg := <-replayer.Receive().Chan():
+		t.Fatalf("unexpected replayed message after cancellation: %s", msg.Type)
+	case <-replayer.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for replay cancellation to stop delivery")
+	}
+
+	select {
+	case msg := <-replayer.Receive().Chan():
+		t.Fatalf("unexpected queued message after replay cancellation: %s", msg.Type)
+	default:
+	}
+}
+
 // --- helpers ---
 
 func makeCapture(dir SessionEventDirection, tsMs int64, msgType messages.StreamMessageType, val messages.StreamMessageValue) CapturedSessionEvent {

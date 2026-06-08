@@ -79,7 +79,7 @@ func isJSONCapturePath(path string) bool {
 }
 
 func replaySessionCapture(ctx context.Context, out io.Writer, path string) error {
-	replayer, err := gwtesting.NewSessionReplayer(path, gwtesting.WithReplayOutboundValidation(false))
+	replayer, err := gwtesting.NewSessionReplayer(path, gwtesting.WithReplayOutboundValidation(false), gwtesting.WithReplayContext(ctx))
 	if err != nil {
 		return fmt.Errorf("replay session capture %s: %w", path, err)
 	}

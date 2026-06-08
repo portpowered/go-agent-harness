@@ -206,6 +206,62 @@ func TestSessionRecorder_FlushToFile(t *testing.T) {
 	}
 }
 
+func TestSessionRecorder_RelayStopsWhenOwnedContextCanceled(t *testing.T) {
+	fake := newFakeSession()
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := NewSessionRecorder(fake, WithSessionRelayContext(ctx))
+
+	fake.inbound.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("before cancel"),
+	})
+	got, ok := readRecordedMessage(t, rec)
+	if !ok {
+		t.Fatal("expected first relayed message before cancellation")
+	}
+	delta, ok := got.Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("unexpected first value type: %T", got.Value)
+	}
+	if delta.Content != "before cancel" {
+		t.Fatalf("first relay content = %q, want before cancel", delta.Content)
+	}
+
+	cancel()
+	fake.inbound.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("dropped after cancel"),
+	})
+
+	select {
+	case msg := <-rec.Receive().Chan():
+		t.Fatalf("unexpected relayed message after cancellation: %s", msg.Type)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	events := rec.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected only the pre-cancellation inbound event to be recorded, got %d events", len(events))
+	}
+	if events[0].Direction != DirectionServerToClient {
+		t.Fatalf("event direction = %q, want %q", events[0].Direction, DirectionServerToClient)
+	}
+}
+
+func readRecordedMessage(t *testing.T, rec *SessionRecorder) (messages.StreamMessage, bool) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		got, ok := rec.Receive().Read()
+		if ok {
+			return got, true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return messages.StreamMessage{}, false
+}
+
 func containsAnyJSONKey(data []byte, keys []string) bool {
 	var walk func(any) bool
 	keySet := make(map[string]struct{}, len(keys))

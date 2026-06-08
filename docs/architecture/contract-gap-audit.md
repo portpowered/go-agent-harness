@@ -172,6 +172,10 @@ The findings below are written so a reviewer can distinguish "this is the contra
 - Recommended Phase 2 hardening:
   - document whether capture/replay buffers are intentionally best-effort after cancellation
   - if not, thread an explicit lifecycle context through relay goroutines so test and live session wrappers stop under the same cancellation contract
+- Status after `phase-2-session-runtime-ownership-repair`:
+  - narrowed substantially
+  - `go-llm-gateway/pkg/testing.SessionRecorder` and `SessionReplayer` now accept an explicit relay lifecycle context, and the inferencer wrappers bind that lifecycle to `ConnectSession(ctx)` so relay writes stop when the owned caller/session context is cancelled
+  - this repair resolves the remaining session-helper portion of the constructor-ownership validator scope and advances `P2-COB-04` plus `P2-GATE-01` by making cancellation ownership reviewer-visible at the same runtime seam as dialer ownership
 
 ## Typed-Error Findings
 

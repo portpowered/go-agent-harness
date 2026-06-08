@@ -182,6 +182,8 @@ Common causes:
 
 For tests that only render a transcript and do not exercise client sends, disable outbound validation explicitly in the test helper. Do not disable validation for behavioral replay tests.
 
+Replay and record relay writes now follow the owned session lifecycle context. In the CLI session path, canceling the command context stops replay delivery and recorder relay writes at the same seam that owns dialer selection and provider runtime wiring.
+
 ## Related Documentation
 
 - `go-llm-gateway/pkg/testing/README.md` describes the lower-level recorder and replay dialer APIs.

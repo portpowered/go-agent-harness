@@ -24,6 +24,8 @@ type SessionRecorder struct {
 	startAt  time.Time
 	capture  SessionCapture
 	sequence int
+	relayCtx context.Context
+	cancel   context.CancelFunc
 
 	// inbound is a wrapped TypedBuffer that intercepts reads from the inner
 	// session's Receive buffer and records each message.
@@ -49,6 +51,15 @@ func WithSessionCaptureID(id string) SessionRecorderOption {
 	}
 }
 
+// WithSessionRelayContext makes inbound relay writes stop when ctx is cancelled.
+func WithSessionRelayContext(ctx context.Context) SessionRecorderOption {
+	return func(r *SessionRecorder) {
+		if ctx != nil {
+			r.relayCtx = ctx
+		}
+	}
+}
+
 // NewSessionRecorder creates a SessionRecorder that wraps inner and records
 // every event that passes through Send and Receive.
 func NewSessionRecorder(inner messages.Session, opts ...SessionRecorderOption) *SessionRecorder {
@@ -68,6 +79,10 @@ func NewSessionRecorder(inner messages.Session, opts ...SessionRecorderOption) *
 	for _, opt := range opts {
 		opt(r)
 	}
+	if r.relayCtx == nil {
+		r.relayCtx = context.Background()
+	}
+	r.relayCtx, r.cancel = context.WithCancel(r.relayCtx)
 	r.inbound = newRecordingBuffer(inner.Receive(), r)
 	return r
 }
@@ -92,6 +107,7 @@ func (r *SessionRecorder) Done() <-chan struct{} {
 
 // Close delegates to the inner session.
 func (r *SessionRecorder) Close() error {
+	r.cancel()
 	return r.inner.Close()
 }
 
@@ -170,10 +186,11 @@ func newRecordingBuffer(inner *messages.TypedBuffer[messages.StreamMessage], rec
 			select {
 			case msg := <-inner.Chan():
 				rec.recordMessage(DirectionServerToClient, msg)
-				// Best-effort write; context is background because the relay is
-				// independent of any single caller's context.
-				relay.Write(context.Background(), msg)
+				relay.Write(rec.relayCtx, msg)
 			case <-rec.inner.Done():
+				rec.cancel()
+				return
+			case <-rec.relayCtx.Done():
 				return
 			}
 		}
