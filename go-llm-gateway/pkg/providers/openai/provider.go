@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
@@ -96,13 +97,16 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
-		return providers.InferenceResponse{}, fmt.Errorf("openai: do request: %w", err)
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions cancelled", err); cancellationErr != nil {
+			return providers.InferenceResponse{}, cancellationErr
+		}
+		return providers.InferenceResponse{}, gateway.NewTransportError(p.Name(), "chat completions", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
-		return providers.InferenceResponse{}, fmt.Errorf("openai: api error %d: %s", resp.StatusCode, string(errBody))
+		return providers.InferenceResponse{}, gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil)
 	}
 
 	var chatResp chatResponse
@@ -160,13 +164,16 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
 		p.logger.Error("openai: failed to open request", logging.Field{Key: "error", Value: err})
-		return nil, fmt.Errorf("openai: failed to open stream request: %w", err)
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+			return nil, cancellationErr
+		}
+		return nil, gateway.NewTransportError(p.Name(), "chat completions stream", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
 		errBody, _ := io.ReadAll(resp.Body)
 		p.logger.Error("openai: api error", logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "error_body", Value: string(errBody)})
-		return nil, fmt.Errorf("openai: api error %d: %s", resp.StatusCode, string(errBody))
+		return nil, gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil)
 	}
 
 	ch := make(chan messages.StreamMessage, 64)

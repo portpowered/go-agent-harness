@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
@@ -421,8 +422,8 @@ func TestSessionCommand_ReplayGrokWebSocketCaptureFailsOnDivergentOutbound(t *te
 	if err == nil {
 		t.Fatal("expected replay divergence error")
 	}
-	if !strings.Contains(err.Error(), "replay divergence") {
-		t.Fatalf("expected replay divergence error, got: %v", err)
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("expected replay mismatch classification, got: %v", err)
 	}
 	if elapsed >= time.Second {
 		t.Fatalf("replay divergence should fail before the bounded session timeout; elapsed=%s", elapsed)

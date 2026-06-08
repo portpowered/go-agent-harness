@@ -13,11 +13,13 @@ import (
 )
 
 type fakeInteractionProvider struct {
-	name     string
-	captured providers.InferenceRequest
-	calls    int
-	response providers.InferenceResponse
-	err      error
+	name           string
+	captured       providers.InferenceRequest
+	calls          int
+	response       providers.InferenceResponse
+	err            error
+	streamMessages []messages.StreamMessage
+	streamErr      error
 }
 
 func (p *fakeInteractionProvider) Name() string {
@@ -35,7 +37,13 @@ func (p *fakeInteractionProvider) Infer(_ context.Context, req providers.Inferen
 
 func (p *fakeInteractionProvider) InferStream(_ context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	p.captured = req
-	ch := make(chan messages.StreamMessage)
+	if p.streamErr != nil {
+		return nil, p.streamErr
+	}
+	ch := make(chan messages.StreamMessage, len(p.streamMessages))
+	for _, msg := range p.streamMessages {
+		ch <- msg
+	}
 	close(ch)
 	return ch, nil
 }
