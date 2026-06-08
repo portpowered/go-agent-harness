@@ -43,6 +43,36 @@ reviewed branch head:
 - `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
   passed.
 
+## Branch Landing Evidence
+
+This landing was checked at `2026-06-08 11:50 UTC` against remote-qualified
+refs:
+
+- `origin/main`: `9b8f8a775acc2a33377395dec4dad6c19bc17cc8`
+- `origin/phase-3-library-independence-validator`:
+  `acd78bf4457a99d19d05d869f252b68099d00f60`
+- `origin/phase-3-library-independence-validator-landing`:
+  `a787f334bb940c59022ddc75cd7a97aa587855d8`
+
+Branch-comparison evidence:
+
+- `git merge-base --is-ancestor origin/phase-3-library-independence-validator origin/main`
+  exited `0`, confirming the completed Phase 3 validator branch is represented
+  in `origin/main`.
+- `git diff --stat origin/main...origin/phase-3-library-independence-validator`
+  produced no output.
+- `git diff --name-status origin/main...origin/phase-3-library-independence-validator`
+  produced no output.
+- `git diff --stat origin/main...HEAD` showed one changed file:
+  `docs/internal/phase-3-library-independence-validator.md`.
+- `git diff --name-status origin/main...HEAD` showed:
+  `M docs/internal/phase-3-library-independence-validator.md`.
+
+The reviewed landing surface therefore remains limited to validator report
+evidence. It contains no runtime API behavior changes, exported API additions,
+provider behavior changes, loop behavior changes, or Phase 4 feature
+documentation.
+
 ## Scope
 
 This validator records findings for exactly three required groups:
