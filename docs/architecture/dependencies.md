@@ -51,6 +51,10 @@ Reviewer-citable rule for this phase:
   second shared core surface
 - any future proposal to extract a separate shared module should justify what
   concrete risk cannot be managed at the current boundary
+- `go-agent-loop/test/architecture/dependency_direction_test.go` is the
+  automated proof for this slice: it requires gateway adapters to import
+  loop-owned contracts and fails if any `go-agent-loop` package starts
+  depending on `go-llm-gateway`
 
 Reviewer rule of thumb:
 

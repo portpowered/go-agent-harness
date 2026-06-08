@@ -36,8 +36,9 @@ the scoped `P3-CORE-02` work:
 - the required evidence set for reviewers is the package-level documentation in
   `go-agent-loop/pkg/messages`, the dependency guidance in
   `docs/architecture/dependencies.md`, the gateway compatibility-layer
-  clarification that follows in later Phase 3 stories, and the upcoming
-  dependency-direction proof
+  clarification that follows in later Phase 3 stories, and the automated
+  dependency-direction proof in
+  `go-agent-loop/test/architecture/dependency_direction_test.go`
 
 ### HC-01: `go-llm-gateway` test hygiene depends on `agent-cli` fixture layout
 
