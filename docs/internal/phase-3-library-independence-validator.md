@@ -32,6 +32,17 @@ represented in `origin/main`; this lane must not re-land implementation
 behavior, add Phase 4 API features, perform broad refactors, or do unrelated
 documentation cleanup.
 
+## Authoritative Landing Verification
+
+The exact Phase 3 proof commands were rerun in this authoritative landing
+worktree at `2026-06-08 11:46 UTC` after merging current `origin/main` into the
+reviewed branch head:
+
+- `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
+  passed.
+- `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
+  passed.
+
 ## Scope
 
 This validator records findings for exactly three required groups:

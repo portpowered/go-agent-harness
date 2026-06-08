@@ -28,7 +28,7 @@ func buildOpenAIProviderFactory(ctx ProviderBuildContext) (ProviderBuildResult, 
 
 	providerOpts := []oaiprovider.Option{
 		oaiprovider.WithModel(active.Model),
-		oaiprovider.WithLogger(logger.NewZapAgentLoopAdapter(ctx.Logger)),
+		oaiprovider.WithLogger(logger.NewZapGatewayAdapter(ctx.Logger)),
 	}
 	if active.APIKey != "" {
 		providerOpts = append(providerOpts, oaiprovider.WithAPIKey(active.APIKey))

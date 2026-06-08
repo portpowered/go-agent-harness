@@ -161,3 +161,19 @@ func TestInfer_DefaultsOverriddenByPerRequestValues(t *testing.T) {
 		t.Errorf("StopSequences: got %v, want [DEFAULT_STOP]", gw.captured.StopSequences)
 	}
 }
+
+func TestGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testing.T) {
+	gw := &captureGateway{}
+	var inferencer messages.Inferencer = NewGatewayInferencer(gw)
+
+	result, err := inferencer.Infer(context.Background(), messages.InferenceRequest{})
+	if err != nil {
+		t.Fatalf("Infer via messages.Inferencer: %v", err)
+	}
+	if result.Message.Role != "assistant" {
+		t.Fatalf("message role: got %q, want assistant", result.Message.Role)
+	}
+	if result.TokenUsage.TotalTokens != 1 {
+		t.Fatalf("total tokens: got %d, want 1", result.TokenUsage.TotalTokens)
+	}
+}
