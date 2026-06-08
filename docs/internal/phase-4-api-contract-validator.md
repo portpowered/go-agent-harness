@@ -364,7 +364,11 @@ still cannot close a Phase 4 implementation checklist row by itself.
 
 - `outcome`: `fail`
 - `evidence`:
-  - Audit-backed coverage is incomplete for `P4-API-04` and `P4-API-06`.
+  - Audit-backed coverage now exists for provider capability discovery and
+    local unsupported-feature validation through `P4-CAP-01`,
+    `P4-VALIDATION-01`, and `P4-DI-02`. `P4-API-04` and `P4-API-06` still
+    fail because implementation, public docs, examples, and credential-free
+    behavioral tests are missing, not because the audit lacks those findings.
   - `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, and `P4-API-07`
     have useful audit findings, but they still need explicit Phase 4 row
     mappings, affected public declarations, docs/tests/examples evidence, and
