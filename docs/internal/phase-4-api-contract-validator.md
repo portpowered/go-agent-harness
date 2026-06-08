@@ -365,9 +365,125 @@ repair slice. `P4-API-04`, `P4-API-06`, and therefore `P4-GATE-01` fail audit
 coverage because provider capability discovery and local unsupported-feature
 validation are missing from the audit.
 
+## Gateway Error Taxonomy Evidence
+
+This section validates the implemented gateway error taxonomy and preservation
+evidence. It focuses on public caller behavior rather than only audit intent:
+typed errors must be usable through `errors.Is` or `errors.As`, and structured
+event errors must be documented fields that callers can branch on without
+parsing message text.
+
+The current repository has partial structured event evidence for the
+provider-neutral interaction surface, but it does not yet expose a public typed
+gateway error taxonomy across the main gateway, provider, replay, validation,
+and session surfaces.
+
+### `P4-API-02` - Typed caller-actionable errors
+
+- `outcome`: `fail`
+- `evidence`:
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer` and
+    `DefaultGateway.InferStream` forward provider errors directly. There are no
+    public gateway sentinel errors, typed error structs, or helper functions
+    that let callers classify provider rejection, provider timeout, replay
+    divergence, validation failure, or cancellation with `errors.Is` or
+    `errors.As`.
+  - `go-llm-gateway/pkg/gateway.Interact` emits structured
+    `InteractionError` values with `Code`, `Message`, `Retryable`, and
+    `Details` fields. Tests prove the provider error path emits
+    `provider_error`, deadline errors emit `provider_timeout` with
+    `Retryable: true`, and pre-provider cancellation emits
+    `InteractionCancellation` with reason `caller_cancelled`.
+  - The interaction event structure is useful for callers consuming
+    `Interact`, but the taxonomy is string-coded event data rather than typed
+    Go errors. It also does not cover the main `Infer`/`InferStream` return
+    paths or replay/validation errors.
+  - Public README guidance describes package surfaces and provider capability
+    limits, but it does not document gateway error classes, `errors.Is` /
+    `errors.As` usage, stream error preservation, replay divergence
+    classification, or known classification limits.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Interact`
+  - `go-llm-gateway/pkg/gateway.InteractionError`
+  - `go-llm-gateway/pkg/gateway.InteractionCancellation`
+  - `go-llm-gateway/pkg/testing.SessionReplayer.Err`
+  - `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`
+  - `go-llm-gateway/README.md`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Add a public gateway error taxonomy using exported sentinels, typed error
+    structs, or documented helpers that support `errors.Is` or `errors.As` for
+    provider rejection, timeout, cancellation, replay divergence, validation
+    failure, and unsupported feature classes.
+  - Wrap or translate `Infer`, `InferStream`, interaction event generation,
+    session replay, and validation failures so representative paths preserve
+    the intended class without forcing callers to parse `err.Error()` or
+    string event codes.
+  - Document caller branching guidance and known classification limits in
+    public gateway docs or package comments, including how structured
+    `InteractionError.Code` relates to the typed error taxonomy.
+  - Add credential-free tests proving `errors.Is` or `errors.As` behavior for
+    stateless non-streaming errors, stateless stream error events, replay
+    mismatch errors, and cancellation errors.
+- `reviewer commands`:
+  - `go test ./go-llm-gateway/pkg/gateway -run 'TestInteract_(NormalizesProviderError|EmitsCancellationWhenContextCancelledBeforeProviderReturns|PreservesPartialOutputBeforeCancellation)'`
+  - `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted)'`
+  - `rg -n "errors\\.Is|errors\\.As|InteractionError|InteractionCancellation|provider_error|provider_timeout|caller_cancelled" go-llm-gateway/pkg/gateway go-llm-gateway/pkg/testing go-llm-gateway/README.md`
+
+### `P4-API-05` - Stream semantics and error preservation
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - The interaction surface preserves cancellation as a separate terminal
+    event, and tests prove partial text output can be emitted before a later
+    cancellation event. That is useful stream-result evidence for
+    provider-neutral interaction consumers.
+  - `DefaultGateway.InferStream` still returns the provider stream directly.
+    Stream error preservation therefore depends on provider adapters and
+    `messages.StreamMessage` values rather than a gateway-level typed taxonomy.
+  - The loop message contract still represents stream errors through
+    `messages.ErrorValue` with string `Message`, optional `Code`, and
+    `Metadata` fields. The validator did not find public package guidance that
+    maps those stream error fields to gateway taxonomy classes.
+  - Replay mismatch errors from `SessionReplayer` and `ReplayWebSocketDialer`
+    are explicit and tested, but they are plain formatted errors rather than a
+    typed replay divergence class.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Interact`
+  - `go-llm-gateway/pkg/gateway.InteractionEvent`
+  - `go-agent-loop/pkg/messages.ErrorValue`
+  - `go-llm-gateway/pkg/testing.SessionReplayer.Err`
+  - `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Define how stream errors map to the public gateway taxonomy across direct
+    `InferStream`, interaction events, provider stream adapters, and session
+    replay helpers.
+  - Preserve replay divergence and cancellation as typed or structured classes
+    through stream consumers instead of exposing only formatted text.
+  - Add public docs and credential-free tests that distinguish partial success,
+    terminal failure, cancellation, replay mismatch, and provider rejection.
+- `reviewer commands`:
+  - `go test ./go-llm-gateway/pkg/gateway -run 'TestInteract_PreservesPartialOutputBeforeCancellation'`
+  - `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|StopsDeliveryWhenOwnedContextCanceled)'`
+  - `rg -n "StreamTypeError|NewErrorValue|ErrorValue|replay divergence|caller_cancelled" go-agent-loop/pkg/messages go-llm-gateway/pkg go-llm-gateway/README.md`
+
+## Gateway Error Taxonomy Closure Summary
+
+`P4-API-02` fails because the implemented evidence is structured event data for
+one interaction surface, not a public typed error taxonomy across gateway,
+provider, replay, validation, and cancellation paths. `P4-API-05` remains
+uncertain because interaction cancellation and partial-output behavior are
+tested, but direct streaming and replay mismatch paths are not yet tied to
+typed or documented taxonomy classes. These findings reinforce the earlier
+audit conclusion that both rows must remain open until implementation evidence,
+public guidance, and credential-free taxonomy tests exist.
+
 ## Current Story Status
 
-Stories 001 and 002 are complete. Later validator stories must fill in gateway
-error taxonomy evidence, provider capability and validation evidence,
-reviewer-runnable command results, final row closure decisions, and the final
-next planner action.
+Stories 001, 002, and 003 are complete. Later validator stories must fill in
+provider capability and validation evidence, reviewer-runnable command results,
+final row closure decisions, and the final next planner action.
