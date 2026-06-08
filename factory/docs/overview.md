@@ -122,3 +122,20 @@ docs/internal/customer-ask.md  current phase and submission authorization
 docs/internal/checklist.md     high-level phase and customer ask tracking
 docs/internal/progress.txt     append-only meta-planner progress log
 ```
+
+## Setup Workspace Ownership Contract
+
+`setup-workspace` owns only per-work-item worktree resolution: it reads the PRD,
+chooses the branch/worktree path, creates or reuses that worktree, and copies
+the task artifacts into the ready checkout.
+
+It does not own routine root-checkout `git pull` or root `git worktree prune`.
+Those are shared-root maintenance operations, so running them inside a
+high-frequency concurrent setup path creates avoidable contention against other
+setup runs and planner-owned root state.
+
+This ownership split is the current factory contract for `CTRL-FAC-01` and
+`CTRL-FAC-02`. It preserves the observable setup outcome of returning a ready
+worktree for the requested PRD branch while removing the shared-root mutation
+that previously stranded `plan:init` work on setup races such as
+`fatal: Cannot rebase onto multiple branches.`.

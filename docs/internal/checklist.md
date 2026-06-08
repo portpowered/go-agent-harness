@@ -44,3 +44,15 @@ directly when it records `pass`, `fail`, or `uncertain` evidence.
 | `P2-COB-03` | Stateless provider runtime seam | Live, record, and replay HTTP runtime ownership is composed once in `agent-cli` and injected into provider builders instead of being assembled inside provider-local construction paths. | `agent-cli/internal/agent/provider_runtime.go`, `agent-cli/internal/agent/executor.go`, `agent-cli/internal/agent/provider_factory.go`, `agent-cli/internal/agent/provider_openai.go`, `agent-cli/internal/agent/provider_fal.go`, `agent-cli/internal/agent/provider_runtime_test.go`, `agent-cli/test/integration/provider_runtime_integration_test.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md` |
 | `P2-COB-04` | Record/replay ownership consistency | Record and replay behavior remain aligned with the explicit constructor/runtime ownership seams and do not require hidden live dependency creation or provider-local runtime assembly in either stateless or session mode. | `agent-cli/internal/agent/provider_runtime.go`, `agent-cli/internal/agent/provider_runtime_test.go`, `agent-cli/test/integration/provider_runtime_integration_test.go`, `agent-cli/internal/services/session.go`, `agent-cli/test/integration/session_command_test.go`, `go-llm-gateway/pkg/testing/session_record.go`, `go-llm-gateway/pkg/testing/session_replay.go`, `go-llm-gateway/pkg/testing/session_replay_test.go`, `go-llm-gateway/pkg/testing/session_websocket_dialer_test.go`, `go-llm-gateway/pkg/providers/openai/provider.go`, root `Makefile` quality targets |
 | `P2-COB-05` | Reviewer guidance and repair visibility | The convergence report records stale guidance, missing planning inputs, and every repair required before the next Phase 2 API-hardening slice may begin. | `docs/internal/phase-2-constructor-ownership-validator.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `tasks/todo/phase-2-constructor-ownership-boundaries.md` |
+
+## Phase 2 - Factory Worktree Hygiene Repair
+
+This checklist is the authoritative Phase 2 inventory for the factory
+worktree-hygiene repair. Reviewers should cite these item IDs directly when
+they validate the setup-workspace ownership contract and its queue-facing
+symptom fixes.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `CTRL-FAC-01` | Root sync ownership | `setup-workspace` no longer owns routine root-checkout `git pull` during setup; the contract names that operation as shared-root maintenance outside the hot path. | `factory/scripts/setup-workspace.py`, `factory/docs/overview.md` |
+| `CTRL-FAC-02` | Worktree maintenance ownership | `setup-workspace` no longer owns routine root `git worktree prune` during setup; the contract keeps setup focused on ready-worktree resolution and records the queue symptoms that shared-root mutation previously caused. | `factory/scripts/setup-workspace.py`, `factory/docs/overview.md`, `prd.md` |

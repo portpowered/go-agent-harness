@@ -4,8 +4,8 @@
 Usage: python scripts/agents/setup-workspace.py <prd-name>
 
 Reads tasks/todo/<prd-name>.json, uses <prd-name> as the branch/worktree name,
-syncs main, creates or reuses a git worktree, copies the PRD (and optional .md)
-into the worktree root, and prints a JSON result to stdout.
+creates or reuses a git worktree, copies the PRD (and optional .md) into the
+worktree root, and prints a JSON result to stdout.
 
 Exit 0 on success (stdout = JSON blob), exit 1 on failure (stderr = error).
 """
@@ -43,26 +43,6 @@ def read_prd(prd_path):
     """Read and parse a PRD JSON file. Returns the parsed dict."""
     with open(prd_path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def sync_main(repo_root):
-    """Run git pull unless the repo has no upstream configured."""
-    result = run_git("pull", cwd=repo_root, check=False)
-    if result.returncode == 0:
-        return
-
-    stderr = result.stderr.lower()
-    if "there is no tracking information for the current branch" in stderr:
-        return
-
-    raise RuntimeError(
-        f"git pull failed (exit {result.returncode}): {result.stderr.strip()}"
-    )
-
-
-def prune_worktrees(repo_root):
-    """Prune stale worktree entries."""
-    run_git("worktree", "prune", cwd=repo_root)
 
 
 def normalize_branch(branch_name):
@@ -183,14 +163,6 @@ def main():
     branch = f"{prd_name}"
     if not branch:
         print("PRD name must not be empty", file=sys.stderr)
-        sys.exit(1)
-
-    # Sync main and prune worktrees.
-    try:
-        sync_main(repo_root)
-        prune_worktrees(repo_root)
-    except RuntimeError as e:
-        print(f"Git sync failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Create or reuse worktree.
