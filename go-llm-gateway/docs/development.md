@@ -38,6 +38,14 @@ make deps-tidy
 4. If a change touches `go-agent-loop` shared message contracts, also run `go-agent-loop` and `agent-cli` checks.
 5. Update `pkg/testing/README.md` when record/replay capture format, replay matching, or fixture workflow changes.
 
+## Provider Capability Contract
+
+- Public capability types live in `pkg/capabilities` and are re-exported from `pkg/gateway` and `pkg/providers` for callers already using those package surfaces.
+- Gateway discovery is exposed through `Capabilities()` on the default stateless and session gateways; it must remain local metadata lookup with no provider calls, credential checks, network access, or request mutation.
+- Providers without explicit capability reporting must fall back to `unknown` for every capability field. Unknown means no support claim and must not be documented or presented as supported.
+- Gateway validation should reject locally deterministic mismatches only when the capability is explicitly `unsupported`. Unknown capabilities are allowed to reach the provider so legacy behavior remains available.
+- Concrete provider reports should claim only behavior proven by local wrapper translation or parsing. Ignored request fields, unsupported raw config, and provider-specific gaps should be explicit `unsupported` or `unknown`, not implicit support.
+
 ## Local Gotchas
 
 - Provider-specific features should flow through normalized request config where possible, not leak provider-only types into callers.
