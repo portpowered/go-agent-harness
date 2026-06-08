@@ -1,8 +1,105 @@
 # Contract Gap Audit
 
-This document records the current contract gaps that Phase 2 needs to harden. It starts with the hidden-coupling and dependency-injection findings that block clean separation between the reusable libraries and the CLI composition layer.
+This document records contract gaps that reviewers and later implementation
+lanes can cite directly. It starts with the hidden-coupling and
+dependency-injection findings that Phase 2 needed to harden, and it now also
+defines the Phase 4 exported API audit shape for public contract hardening in
+`go-agent-loop/pkg` and `go-llm-gateway/pkg`.
 
 Use [`dependencies.md`](./dependencies.md) for the intended dependency direction. Use this audit for the places where the codebase still relies on convenience coupling or constructor ownership that is broader than the intended architecture.
+
+## Phase 4 Exported API Contract Audit Shape
+
+Phase 4 audit findings must inspect exported public API surfaces under
+`go-agent-loop/pkg` and `go-llm-gateway/pkg`, including `agentloop`,
+`messages`, `gateway`, `inference`, `providers`, `models`, and `testing`.
+Adjacent exported packages may be cited when they expose caller-visible
+contract behavior relevant to the same gap.
+
+This Phase 4 section is source material for later public API hardening lanes.
+Creating or extending the audit does not close `P4-API-01`, `P4-API-02`,
+`P4-API-03`, `P4-API-04`, `P4-API-05`, `P4-API-06`, or `P4-API-07` by itself.
+Later planners must use the concrete findings and repair slices as inputs for
+implementation work, tests, compatibility review, and release documentation.
+
+### Phase 4 Checklist Rows
+
+| Row | Contract area | Audit expectation |
+| --- | --- | --- |
+| `P4-API-01` | Context usage | Public blocking operations, buffer waits, provider calls, session connection, streaming, and I/O declare or document cancellation, timeout, and lifecycle behavior. |
+| `P4-API-02` | Typed errors | Public errors and stream error events are caller-actionable through typed errors, sentinel support, structured fields, or documented error classes rather than string parsing. |
+| `P4-API-03` | Result contracts | Public bool, nil, zero-value, channel-close, and loosely documented result signals are intentional, documented, and distinguish success, absence, cancellation, validation failure, and runtime failure. |
+| `P4-API-04` | Capability discovery | Consumers can discover provider and gateway support for tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific configuration before sending a request. |
+| `P4-API-05` | Stream semantics | Streaming APIs document event ordering, final events, close behavior, cancellation behavior, replay mismatch behavior, and error propagation. |
+| `P4-API-06` | Dependency injection | Network clients, WebSocket dialers, clocks, stores, transports, endpoints, model names, timeouts, retry behavior, and other runtime dependencies are injectable or explicitly configured at public seams when callers need ownership. |
+| `P4-API-07` | Go API hygiene | Exported names, doc comments, public struct exposure, nil/empty slice behavior, panic policy, and compatibility posture are clear enough for downstream package consumers. |
+
+### Finding Fields
+
+Each Phase 4 finding must use a stable identifier and include these fields:
+
+- Identifier: a stable ID with an area prefix, for example `P4-CTX-01`,
+  `P4-ERR-01`, `P4-RESULT-01`, `P4-CAP-01`, `P4-STREAM-01`, `P4-DI-01`, or
+  `P4-HYGIENE-01`.
+- Affected package: the public package path that exposes the contract.
+- File path: the repository path containing the exported declaration or public
+  behavior.
+- Exported declaration: the exported type, interface, function, method, const,
+  var, field, event value, or documented public behavior under review.
+- Observable contract issue: the caller-visible ambiguity, failure mode, hidden
+  dependency, lifecycle gap, or documentation gap.
+- Mapped checklist rows: one or more of `P4-API-01` through `P4-API-07`.
+- Severity: `must-fix contract defect`, `later polish`, or
+  `release/documentation work`.
+- Compatibility sensitivity: `additive`, `compatibility-sensitive`, or
+  `documentation-only`.
+- Recommended repair slice: the smallest implementation-ready change set that
+  would repair or document the public contract.
+- Verification notes: reviewer commands, expected unit or integration evidence,
+  fixture updates, compatibility checks, or explicit statement that no
+  reproducibility tooling was added for the audit finding.
+
+Use this template for new findings:
+
+```markdown
+### P4-AREA-00: Short caller-visible problem statement
+
+- Affected package: `module/pkg/name`
+- File path: `path/to/file.go`
+- Exported declaration: `Name`, `Type.Method`, `Interface`, or public event
+- Observable contract issue:
+  - what a package consumer can observe or cannot safely distinguish
+- Mapped checklist rows: `P4-API-0X`, `P4-API-0Y`
+- Severity: `must-fix contract defect` | `later polish` | `release/documentation work`
+- Compatibility sensitivity: `additive` | `compatibility-sensitive` | `documentation-only`
+- Recommended repair slice:
+  - implementation-ready change that a later lane can own
+- Verification notes:
+  - command or test evidence expected from the later repair lane
+```
+
+### Classification Rules
+
+Classify a finding as a `must-fix contract defect` when downstream callers
+cannot reliably handle cancellation, validation, provider capability, stream
+completion, typed failure classes, hidden runtime dependencies, or ambiguous
+result states through the current public contract.
+
+Classify a finding as `later polish` when the existing public contract is
+usable but confusing, overly broad, awkwardly named, or likely to accumulate
+maintenance risk without creating a direct caller-observable defect.
+
+Classify a finding as `release/documentation work` when implementation behavior
+is acceptable but the package docs, exported comments, migration notes, or
+release guidance need to state the contract explicitly.
+
+Mark changes as `compatibility-sensitive` when they alter exported signatures,
+exported type shapes, event ordering, channel behavior, error text relied on by
+existing tests or operators, fixture semantics, command completion timing, or
+provider-visible validation timing. Mark changes as `additive` when they add new
+typed errors, capability APIs, options, docs, or helper functions without
+changing existing behavior. Mark changes as `documentation-only` when no
+runtime or exported API behavior is expected to change.
 
 ## Intended Adapters vs Hidden Coupling
 
