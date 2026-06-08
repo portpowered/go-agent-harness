@@ -213,13 +213,19 @@ def create_or_reuse_worktree(repo_root, branch, worktree_path):
     if wait_for_reusable_worktree(repo_root, branch, worktree_path, timeout_seconds=0.2):
         return True
 
-    if worktree_path.exists():
-        registered_branch = registered_branch_for_path(repo_root, worktree_path)
-        if registered_branch:
+    registered_branch = registered_branch_for_path(repo_root, worktree_path)
+    if registered_branch:
+        if registered_branch != branch:
             raise RuntimeError(
                 f"worktree path {worktree_path} is registered to branch "
                 f"{registered_branch} but is not reusable"
             )
+        if wait_for_reusable_worktree(repo_root, branch, worktree_path):
+            return True
+        raise RuntimeError(
+            f"worktree path {worktree_path} is registered to branch "
+            f"{registered_branch} but did not become reusable before setup timed out"
+        )
 
     # Remove stale path if it exists but is invalid and unregistered.
     if worktree_path.exists():

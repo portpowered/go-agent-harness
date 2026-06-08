@@ -5,10 +5,16 @@ import subprocess
 import tempfile
 import time
 import unittest
+import importlib.util
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "setup-workspace.py"
+SCRIPT_MODULE_SPEC = importlib.util.spec_from_file_location("setup_workspace", SCRIPT_PATH)
+SCRIPT_MODULE = importlib.util.module_from_spec(SCRIPT_MODULE_SPEC)
+assert SCRIPT_MODULE_SPEC.loader is not None
+SCRIPT_MODULE_SPEC.loader.exec_module(SCRIPT_MODULE)
 
 
 class SetupWorkspaceScriptTests(unittest.TestCase):
@@ -157,6 +163,36 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
             self.assertEqual(first_payload["branch"], prd_name)
             self.assertEqual(second_payload["branch"], prd_name)
             self.assertEqual({first_payload["reused"], second_payload["reused"]}, {False, True})
+
+    def test_create_or_reuse_waits_for_registered_same_branch_worktree_to_become_reusable(self):
+        repo_root = Path("/tmp/repo-root")
+        worktree_path = Path("/tmp/repo-root/.claude/worktrees/phase-2-factory-worktree-hygiene-repair")
+        branch = "phase-2-factory-worktree-hygiene-repair"
+
+        with mock.patch.object(SCRIPT_MODULE, "registered_branch_for_path", return_value=branch), \
+             mock.patch.object(SCRIPT_MODULE, "branch_exists_locally") as branch_exists_locally, \
+             mock.patch.object(SCRIPT_MODULE, "branch_exists_on_remote") as branch_exists_on_remote, \
+             mock.patch.object(SCRIPT_MODULE, "run_git") as run_git, \
+             mock.patch.object(SCRIPT_MODULE.shutil, "rmtree") as rmtree, \
+             mock.patch.object(
+                 SCRIPT_MODULE,
+                 "wait_for_reusable_worktree",
+                 side_effect=[False, True],
+             ) as wait_for_reusable_worktree:
+            reused = SCRIPT_MODULE.create_or_reuse_worktree(repo_root, branch, worktree_path)
+
+        self.assertTrue(reused)
+        branch_exists_locally.assert_not_called()
+        branch_exists_on_remote.assert_not_called()
+        run_git.assert_not_called()
+        rmtree.assert_not_called()
+        self.assertEqual(
+            wait_for_reusable_worktree.call_args_list,
+            [
+                mock.call(repo_root, branch, worktree_path, timeout_seconds=0.2),
+                mock.call(repo_root, branch, worktree_path),
+            ],
+        )
 
     def test_setup_workspace_allows_planner_owned_dirty_root_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
