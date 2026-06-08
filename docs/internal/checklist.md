@@ -1,5 +1,16 @@
 # Internal Checklist
 
+## Phase 3 - Shared Contract Decision
+
+This checklist is the authoritative Phase 3 inventory for the shared-contract
+decision slice. Reviewers should cite these item IDs directly when validating
+that the Phase 3 boundary choice is complete and evidenced.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-01` | Authoritative shared contract boundary | The repository names `go-agent-loop/pkg/messages` as the authoritative shared contract boundary for cross-library message, stream, tool, token-usage, inference, and session contracts, with reviewer-citable rationale for keeping that boundary in the loop module during this phase. | `go-agent-loop/pkg/messages/doc.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-llm-gateway/pkg/inference/main_inferencer_test.go`, `go-agent-loop/test/architecture/reviewer_evidence_test.go` |
+| `P3-CORE-02` | Gateway compatibility layer and bridge evidence | Gateway-facing shared-message surfaces are documented as compatibility aliases over loop-owned contracts, public adapter packages are described as bridges into that boundary, and automated dependency evidence proves the intended one-way import direction without reverse loop-to-gateway imports. Runtime adapter proofs are the primary observable evidence for the bridge behavior; reviewer-evidence checks are supplemental drift protection over the cited docs surfaces. | `go-llm-gateway/pkg/models/doc.go`, `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/pkg/inference/doc.go`, `go-llm-gateway/pkg/gateway/session_gateway.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-agent-loop/test/architecture/dependency_direction_test.go`, `go-llm-gateway/pkg/inference/main_inferencer_test.go`, `go-llm-gateway/pkg/inference/session_inferencer_test.go`, `go-agent-loop/test/architecture/reviewer_evidence_test.go` |
+
 ## Phase 1 - Authoritative Checkout Baseline
 
 This checklist is the Phase 1 inventory for the authoritative checkout baseline.
@@ -86,3 +97,16 @@ runtime contract boundary in `go-agent-loop/pkg/messages` for this slice.
 | `P3-CORE-04` | Shared runtime boundary truth | Reviewer-facing docs state that `go-agent-loop/pkg/messages` is the only deliberate shared runtime contract boundary for this slice, while provider-local logging now lives behind the gateway-owned `go-llm-gateway/pkg/logging` seam rather than `go-agent-loop/pkg/logging`. | `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-llm-gateway/README.md`, `go-llm-gateway/pkg/logging/logger.go` |
 | `P3-DOC-01` | Audit and seam evidence | The dependency audit or equivalent reviewer-tracking surfaces record the logging seam replacement as concrete evidence advancing the Phase 3 gateway-independence repair without claiming broader independence than the code and proof enforce. | `docs/architecture/contract-gap-audit.md`, `docs/architecture/dependencies.md`, `docs/internal/checklist.md` |
 | `P3-GATE-01` | Deterministic proof and quality gate | Deterministic validation proves the scoped gateway/provider surfaces still pass without live credentials while automated dependency proof keeps loop-owned non-contract runtime packages out of the reviewed `go-llm-gateway` surfaces. | `go-llm-gateway/internal/dependencyproof/runtime_boundary_test.go`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/grok`, `go-llm-gateway/pkg/logging`, changed quality-gate commands |
+
+## Phase 3 - Shared Contract Validator
+
+This checklist is the authoritative Phase 3 inventory for the shared-contract
+convergence validator. The validator must cite these item IDs directly when it
+records `pass`, `fail`, or `uncertain` evidence.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-01` | Authoritative shared contract boundary | The delivered repository exposes one authoritative shared contract boundary, and package comments, architecture docs, and exported naming identify that same owner without competing claims. | `go-agent-loop/pkg/messages/*.go`, `go-agent-loop/README.md`, `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/README.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
+| `P3-CORE-02` | Truthful gateway model boundary documentation | `go-llm-gateway/pkg/models` and related docs describe compatibility aliases versus gateway-owned surfaces truthfully and do not overstate independent shared-contract ownership. | `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/pkg/models/session.go`, `go-llm-gateway/README.md`, `go-llm-gateway/docs/development.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
+| `P3-CORE-05` | Explicit adapter composition boundaries | Cross-library composition remains in explicit adapter packages instead of hidden coupling through core packages or ambiguous package ownership. | `go-llm-gateway/pkg/inference/*.go`, `go-llm-gateway/pkg/gateway/*.go`, `go-agent-loop/pkg/messages/*.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
+| `P3-CORE-06` | Reviewer-verifiable dependency proof | The chosen import or architecture proof is automated, understandable during review, and catches reverse-direction drift without introducing forbidden reverse imports. | `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-agent-loop/test/functional/dependency_direction_test.go`, root validation commands, `docs/internal/phase-3-shared-contract-validator.md` |

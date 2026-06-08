@@ -16,7 +16,7 @@ The current consumer-facing surfaces are:
 | --- | --- |
 | `pkg/gateway` | Creating stateless gateways with `NewGateway(...)` and session gateways with `NewSessionGateway(...)` |
 | `pkg/inference` | Adapting gateways to `go-agent-loop` via `GatewayInferencer` and `SessionGatewayInferencer` |
-| `pkg/models` | Building messages and session config values that flow through the gateway |
+| `pkg/models` | Building gateway-owned session values plus compatibility aliases for loop-owned message contracts |
 | `pkg/providers/anthropic` | Anthropic stateless inference provider |
 | `pkg/providers/openai` | OpenAI-compatible stateless inference plus OpenAI Realtime session provider |
 | `pkg/providers/gemini` | Gemini stateless inference provider |
@@ -26,6 +26,9 @@ The current consumer-facing surfaces are:
 
 Most consumers start with `pkg/gateway`, one provider package, and `pkg/models`.
 Use `pkg/inference` only when you are wiring this module into `go-agent-loop`.
+Within `pkg/models`, shared message-style types remain compatibility aliases
+over `go-agent-loop/pkg/messages`, while session config and session events are
+gateway-owned surfaces.
 
 ## Constructor Ownership Boundary
 
@@ -168,8 +171,10 @@ if err != nil {
 _ = session
 ```
 
-Use `pkg/models.SessionConfig` for session model, modality, audio, tool, and
-turn-detection settings.
+Use `pkg/models.SessionConfig` for gateway-owned session model, modality,
+audio, tool, and turn-detection settings. Shared message, tool, and token-usage
+contracts imported through `pkg/models` still follow the authoritative
+definitions in `go-agent-loop/pkg/messages`.
 
 ## Provider Surface Map
 
@@ -191,8 +196,8 @@ provider interfaces:
 - `providers.Provider` exposes `Infer(...)` and `InferStream(...)`
 - `gateway.Gateway` forwards `InferenceRequest` values to the configured
   provider
-- `models.Message`, tool definitions, and token usage types come from shared
-  loop contracts re-exported through `pkg/models`
+- `models.Message`, tool definitions, and token usage types are compatibility
+  aliases over shared loop contracts re-exported through `pkg/models`
 
 Provider-specific behavior lives behind those shared interfaces. Examples:
 
