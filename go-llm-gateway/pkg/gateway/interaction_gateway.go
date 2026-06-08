@@ -229,9 +229,34 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		Error: &InteractionError{
 			Code:           "provider_error",
 			Message:        err.Error(),
-			Classification: providers.ErrorClassification(err),
+			Classification: interactionErrorClassification(err),
 		},
 	})
+}
+
+func interactionErrorClassification(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrCancellation):
+		return providers.ErrorClassCancellation
+	case errors.Is(err, ErrReplayMismatch):
+		return providers.ErrorClassReplayMismatch
+	case errors.Is(err, ErrAuthentication), errors.Is(err, ErrAuthorization):
+		return providers.ErrorClassAuthentication
+	case errors.Is(err, ErrRateLimit):
+		return providers.ErrorClassRateLimited
+	case errors.Is(err, ErrInvalidRequest):
+		return providers.ErrorClassInvalidRequest
+	case errors.Is(err, ErrUnsupportedModel):
+		return providers.ErrorClassUnsupportedRequest
+	case errors.Is(err, ErrTransport):
+		return providers.ErrorClassTransport
+	case errors.Is(err, ErrProviderHTTPStatus):
+		return providers.ErrorClassProviderRejected
+	default:
+		return providers.ErrorClassification(err)
+	}
 }
 
 func (e *interactionEventEmitter) markOutputEmitted() {

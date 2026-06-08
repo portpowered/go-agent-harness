@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -217,6 +218,45 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 	}
 	if events[1].Error.Classification != providers.ErrorClassRateLimited {
 		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassRateLimited)
+	}
+}
+
+func TestInteract_NormalizesGatewayTransportError(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeInteractionProvider{
+		name: "fake-provider",
+		err:  NewTransportError("openai", "infer", errors.New("dial tcp failed")),
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	events := collectInteractionEvents(t, gw, InteractionRequest{
+		InteractionID: "interaction-transport-error",
+		Model:         "model-error",
+	})
+
+	wantTypes := []InteractionEventType{
+		InteractionEventStart,
+		InteractionEventError,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if events[1].Error == nil {
+		t.Fatal("error event payload is nil")
+	}
+	if events[1].Error.Code != "provider_error" {
+		t.Fatalf("error code = %q", events[1].Error.Code)
+	}
+	if events[1].Error.Message != "openai: infer transport failed: dial tcp failed" {
+		t.Fatalf("error message = %q", events[1].Error.Message)
+	}
+	if events[1].Error.Classification != providers.ErrorClassTransport {
+		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassTransport)
 	}
 }
 
