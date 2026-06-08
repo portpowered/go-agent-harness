@@ -18,6 +18,64 @@ relationships, and exact reviewer-runnable commands.
 The validator does not reopen those implementation slices and does not treat
 planner intent as evidence.
 
+## Authoritative Landing Scope
+
+This authoritative-checkout landing uses
+`origin/phase-3-library-independence-validator` as the source for the completed
+validator report and the `P3-CORE-03`, `P3-CORE-04`, and `P3-GATE-01`
+checklist-row evidence.
+
+The remaining landing scope is limited to this validator report, the matching
+checklist rows, exact reviewer-verification commands, and branch-comparison
+evidence. Phase 3 implementation branches are expected to already be
+represented in `origin/main`; this lane must not re-land implementation
+behavior, add Phase 4 API features, perform broad refactors, or do unrelated
+documentation cleanup.
+
+## Authoritative Landing Verification
+
+The exact Phase 3 proof commands were rerun in this authoritative landing
+worktree at `2026-06-08 11:46 UTC` after merging current `origin/main` into the
+reviewed branch head:
+
+- `(cd go-agent-loop && go test ./test/functional -run TestConsumerCanUseLoopWithLocalInferencer -count=1)`
+  passed.
+- `(cd go-llm-gateway && go test ./test/functional -run TestGatewayConsumerUsesOnlySharedLoopContract -count=1)`
+  passed.
+
+## Branch Landing Evidence
+
+This landing evidence was refreshed at `2026-06-08 11:58 UTC` against
+remote-qualified refs and the current review `HEAD`:
+
+- `origin/main`: `9b8f8a775acc2a33377395dec4dad6c19bc17cc8`
+- `origin/phase-3-library-independence-validator`:
+  `acd78bf4457a99d19d05d869f252b68099d00f60`
+- review head: `HEAD` of `origin/phase-3-library-independence-validator-landing`
+  after the final evidence-refresh push. Use
+  `gh pr view --json headRefOid --jq .headRefOid` or
+  `git rev-parse origin/phase-3-library-independence-validator-landing` to
+  verify the exact pushed commit under review.
+
+Branch-comparison evidence:
+
+- `git merge-base --is-ancestor origin/phase-3-library-independence-validator origin/main`
+  exited `0`, confirming the completed Phase 3 validator branch is represented
+  in `origin/main`.
+- `git diff --stat origin/main...origin/phase-3-library-independence-validator`
+  produced no output.
+- `git diff --name-status origin/main...origin/phase-3-library-independence-validator`
+  produced no output.
+- `git diff --stat origin/main...HEAD` showed one changed file:
+  `docs/internal/phase-3-library-independence-validator.md`.
+- `git diff --name-status origin/main...HEAD` showed:
+  `M docs/internal/phase-3-library-independence-validator.md`.
+
+The reviewed landing surface therefore remains limited to validator report
+evidence. It contains no runtime API behavior changes, exported API additions,
+provider behavior changes, loop behavior changes, or Phase 4 feature
+documentation.
+
 ## Scope
 
 This validator records findings for exactly three required groups:
