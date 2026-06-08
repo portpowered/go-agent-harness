@@ -3,6 +3,7 @@ package fal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -955,8 +956,9 @@ func TestFalProvider_Infer_KlingVideoV3_PromptOnlyNoImage(t *testing.T) {
 	}
 }
 
-func TestFalProvider_InferStream_ReturnsClosedChannel(t *testing.T) {
-	p := New()
+func TestFalProvider_InferStream_ReturnsUnsupportedFeatureError(t *testing.T) {
+	transport := &mockTransport{statusCode: 200, body: "{}"}
+	p := New(WithHTTPClient(&http.Client{Transport: transport}))
 	ctx := context.Background()
 	req := providers.InferenceRequest{
 		Model: ModelLTXAudioToVideo,
@@ -970,15 +972,30 @@ func TestFalProvider_InferStream_ReturnsClosedChannel(t *testing.T) {
 	}
 
 	ch, err := p.InferStream(ctx, req)
-	if err != nil {
-		t.Fatalf("InferStream() error = %v", err)
+	if ch != nil {
+		t.Fatalf("InferStream() channel = %#v, want nil", ch)
 	}
-	count := 0
-	for range ch {
-		count++
+	var unsupported *providers.UnsupportedFeatureError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("InferStream() error = %v, want UnsupportedFeatureError", err)
 	}
-	if count != 0 {
-		t.Errorf("InferStream() channel should have no items, got %d", count)
+	if unsupported.Provider != "fal" {
+		t.Fatalf("Provider = %q, want fal", unsupported.Provider)
+	}
+	if unsupported.Feature != "streaming" {
+		t.Fatalf("Feature = %q, want streaming", unsupported.Feature)
+	}
+	if unsupported.Mode != "stateless" {
+		t.Fatalf("Mode = %q, want stateless", unsupported.Mode)
+	}
+	if unsupported.Capability.State != providers.CapabilityUnsupported {
+		t.Fatalf("Capability.State = %q, want unsupported", unsupported.Capability.State)
+	}
+	if unsupported.Capability.Rationale == "" {
+		t.Fatal("Capability.Rationale is empty")
+	}
+	if transport.lastReq != nil {
+		t.Fatal("InferStream() attempted HTTP request for unsupported streaming")
 	}
 }
 

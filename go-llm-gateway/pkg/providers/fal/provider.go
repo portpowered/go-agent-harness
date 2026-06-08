@@ -56,7 +56,7 @@ func (p *FalProvider) Capabilities() providers.ProviderCapabilities {
 		Provider: p.Name(),
 		Stateless: providers.StatelessCapabilities{
 			Inference:       providers.Supported(),
-			Streaming:       providers.Unsupported("fal.ai endpoints in this wrapper are sync-only; InferStream currently returns an empty closed stream"),
+			Streaming:       providers.Unsupported("fal.ai endpoints in this wrapper are sync-only"),
 			Tools:           providers.Unsupported("fal.ai model endpoints in this wrapper do not accept gateway tool definitions"),
 			ImageInput:      providers.Supported(),
 			AudioInput:      providers.Supported(),
@@ -114,11 +114,13 @@ func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest)
 }
 
 func (p *FalProvider) InferStream(ctx context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
-	// fal.ai LTX and Qwen clone-voice endpoints are sync-only; no streaming.
-	// Return a channel that immediately closes with no items.
-	ch := make(chan messages.StreamMessage)
-	close(ch)
-	return ch, nil
+	capability := p.Capabilities().Stateless.Streaming
+	return nil, &providers.UnsupportedFeatureError{
+		Provider:   p.Name(),
+		Feature:    "streaming",
+		Mode:       "stateless",
+		Capability: capability,
+	}
 }
 
 // extractAudioAndTextFromMessages takes the last user message and returns an audio URL

@@ -179,7 +179,7 @@ every feature is portable.
 | `pkg/providers/openai` | Yes | Yes | Yes | Also supports OpenAI-compatible base URLs and Realtime sessions |
 | `pkg/providers/gemini` | Yes | Yes | No | Stateless Gemini integration |
 | `pkg/providers/grok` | No | No | Yes | Realtime session provider only |
-| `pkg/providers/fal` | Yes | No | No | Media-oriented stateless flows; model-specific request expectations |
+| `pkg/providers/fal` | Yes | No | No | Media-oriented sync stateless flows; streaming rejects locally as unsupported |
 
 Portable guarantees across stateless providers are limited to the gateway and
 provider interfaces:
@@ -196,6 +196,8 @@ Provider-specific behavior lives behind those shared interfaces. Examples:
 - OpenAI-compatible base URL overrides and Realtime sessions
 - Grok realtime session transport
 - fal.ai model-specific media flows and config payloads
+- fal.ai streaming is unsupported in this wrapper; gateway and direct provider
+  streaming calls return `providers.UnsupportedFeatureError` before HTTP work
 
 ## Using With go-agent-loop
 
