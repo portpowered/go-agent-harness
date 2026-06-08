@@ -3,7 +3,7 @@ package openai
 import (
 	"encoding/base64"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 )
 

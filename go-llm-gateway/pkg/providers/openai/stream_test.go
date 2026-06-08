@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -93,6 +94,50 @@ func assertTypes(t *testing.T, got []messages.StreamMessage, want []messages.Str
 	}
 }
 
+type failingStreamReader struct{}
+
+func (failingStreamReader) Read(_ []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func TestStreamSSEToGateway_PreservesScannerErrorClassification(t *testing.T) {
+	ch := make(chan messages.StreamMessage, 64)
+	streamSSEToGateway(failingStreamReader{}, ch)
+	close(ch)
+
+	var gotErr *messages.ErrorValue
+	for msg := range ch {
+		if msg.Type != messages.StreamTypeError {
+			continue
+		}
+		value, ok := msg.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("error event value = %T, want *messages.ErrorValue", msg.Value)
+		}
+		gotErr = value
+	}
+	if gotErr == nil {
+		t.Fatal("expected stream error event")
+	}
+	if gotErr.Message == "" {
+		t.Fatal("error event should retain readable message text")
+	}
+	if !errors.Is(gotErr.Err, gateway.ErrTransport) {
+		t.Fatal("stream error should match transport classification")
+	}
+	if !errors.Is(gotErr.Err, io.ErrUnexpectedEOF) {
+		t.Fatal("stream error should preserve transport cause")
+	}
+
+	var transportErr *gateway.TransportError
+	if !errors.As(gotErr.Err, &transportErr) {
+		t.Fatal("stream error should expose typed transport details")
+	}
+	if transportErr.Operation != "chat completions stream" {
+		t.Fatalf("operation = %q, want chat completions stream", transportErr.Operation)
+	}
+}
+
 func TestStreamSSEToGateway_EmitsMessageStartAndTextEvents(t *testing.T) {
 	sse := sseData(
 		`{"id":"c1","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":""}]}`,
@@ -111,9 +156,10 @@ func TestStreamSSEToGateway_EmitsMessageStartAndTextEvents(t *testing.T) {
 }
 
 func TestStreamSSEToGateway_ReaderErrorClassification(t *testing.T) {
+	readerErr := errors.New("reader failed")
 	reader := &streamErrReader{
 		body: []byte(`data: {"id":"c1","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":""}]}` + "\n\n"),
-		err:  errors.New("reader failed"),
+		err:  readerErr,
 	}
 	ch := make(chan messages.StreamMessage, 64)
 	streamSSEToGateway(reader, ch)
@@ -128,11 +174,17 @@ func TestStreamSSEToGateway_ReaderErrorClassification(t *testing.T) {
 		if !ok {
 			t.Fatalf("ERROR value = %T, want *messages.ErrorValue", m.Value)
 		}
-		if v.Message != "reader failed" {
-			t.Fatalf("ERROR message = %q, want reader failed", v.Message)
+		if v.Message == "" {
+			t.Fatal("ERROR message should retain readable text")
 		}
 		if v.Classification != providers.ErrorClassTransport {
 			t.Fatalf("ERROR classification = %q, want %q", v.Classification, providers.ErrorClassTransport)
+		}
+		if !errors.Is(v.Err, gateway.ErrTransport) {
+			t.Fatal("ERROR typed error should match gateway transport classification")
+		}
+		if !errors.Is(v.Err, readerErr) {
+			t.Fatal("ERROR typed error should preserve reader cause")
 		}
 		return
 	}

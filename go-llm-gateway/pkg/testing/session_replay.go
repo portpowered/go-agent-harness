@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
@@ -130,17 +132,25 @@ func (r *SessionReplayer) Send(ctx context.Context, msg messages.StreamMessage) 
 		return true
 	}
 	if r.index >= len(r.events) {
-		r.failLocked(newReplayMismatchError("session replay divergence: unexpected outbound event %s after replay completed", msg.Type))
+		r.failLocked(newReplayMismatchError("replay completed", string(msg.Type), fmt.Errorf("unexpected outbound event after replay completed")))
 		return false
 	}
 
 	expected := r.events[r.index]
 	if expected.Direction != DirectionClientToServer {
-		r.failLocked(newReplayMismatchError("session replay divergence at sequence %d: got outbound %s before expected %s event %s", expected.Sequence, msg.Type, expected.Direction, expected.Type))
+		r.failLocked(newReplayMismatchError(
+			fmt.Sprintf("%s event %s at sequence %d", expected.Direction, expected.Type, expected.Sequence),
+			string(msg.Type),
+			fmt.Errorf("got outbound before expected capture event"),
+		))
 		return false
 	}
 	if err := compareCapturedStreamMessage(expected, msg); err != nil {
-		r.failLocked(newReplayMismatchError("session replay divergence at sequence %d: %v", expected.Sequence, err))
+		r.failLocked(newReplayMismatchError(
+			fmt.Sprintf("outbound payload for %s at sequence %d", expected.Type, expected.Sequence),
+			string(msg.Type),
+			err,
+		))
 		return false
 	}
 
@@ -165,7 +175,11 @@ func (r *SessionReplayer) Close() error {
 	r.mu.Lock()
 	if r.validateOutbound && !r.closed && r.err == nil && r.index < len(r.events) {
 		if evt, ok := r.nextExpectedOutboundLocked(); ok {
-			r.err = newReplayMismatchError("session replay closed before expected outbound event at sequence %d (%s)", evt.Sequence, evt.Type)
+			r.err = newReplayMismatchError(
+				fmt.Sprintf("outbound event %s at sequence %d", evt.Type, evt.Sequence),
+				"replay close",
+				fmt.Errorf("session replay closed before expected outbound event"),
+			)
 		}
 	}
 	r.mu.Unlock()
@@ -272,20 +286,11 @@ func (r *SessionReplayer) nextExpectedOutboundLocked() (CapturedSessionEvent, bo
 	return CapturedSessionEvent{}, false
 }
 
-type replayMismatchError struct {
-	message string
-}
-
-func (e *replayMismatchError) Error() string {
-	return e.message
-}
-
-func (e *replayMismatchError) Unwrap() error {
-	return providers.ErrReplayMismatch
-}
-
-func newReplayMismatchError(format string, args ...any) error {
-	return &replayMismatchError{message: fmt.Sprintf(format, args...)}
+func newReplayMismatchError(expected, actual string, err error) error {
+	return errors.Join(
+		gateway.NewReplayMismatchError(expected, actual, err),
+		providers.ErrReplayMismatch,
+	)
 }
 
 // deserializeStreamMessage converts a CapturedSessionEvent back into a

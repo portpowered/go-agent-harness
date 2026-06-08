@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -38,6 +41,7 @@ type OpenAIProvider struct {
 
 var _ providers.Provider = (*OpenAIProvider)(nil)
 var _ providers.SessionProvider = (*OpenAIProvider)(nil)
+var _ providers.CapabilityReporter = (*OpenAIProvider)(nil)
 
 // New creates a new OpenAI-compatible provider.
 func New(opts ...Option) *OpenAIProvider {
@@ -53,6 +57,32 @@ func New(opts ...Option) *OpenAIProvider {
 }
 
 func (p *OpenAIProvider) Name() string { return "openai" }
+
+// Capabilities reports the features this wrapper can prove from its local
+// request/response translation behavior without contacting OpenAI.
+func (p *OpenAIProvider) Capabilities() capabilities.ProviderCapabilities {
+	return capabilities.ProviderCapabilities{
+		Provider: p.Name(),
+		Stateless: capabilities.StatelessCapabilities{
+			Tools:                  capabilities.Supported("chat completions requests serialize function tools"),
+			Streaming:              capabilities.Supported("chat completions streaming is implemented with SSE translation"),
+			ImageInput:             capabilities.Supported("image parts are serialized as image_url content"),
+			AudioInput:             capabilities.Supported("audio parts with bytes are serialized as input_audio content"),
+			AudioOutput:            capabilities.Supported("chat responses and stream deltas decode audio output when returned"),
+			VideoOutput:            capabilities.Unsupported("this wrapper does not normalize provider video output"),
+			Reasoning:              capabilities.Unsupported("InferenceRequest Thinking is not sent by this wrapper"),
+			PromptCaching:          capabilities.Unsupported("InferenceRequest CacheControl is not sent by this wrapper"),
+			ProviderSpecificConfig: capabilities.Unsupported("InferenceRequest Config is not merged by this wrapper"),
+		},
+		Session: capabilities.SessionCapabilities{
+			Sessions:               capabilities.Supported("OpenAI realtime websocket sessions are implemented"),
+			Tools:                  capabilities.Supported("realtime session tools are serialized as function tools"),
+			AudioInput:             capabilities.Supported("client audio buffer events and input audio formats are implemented"),
+			AudioOutput:            capabilities.Supported("realtime output audio events are normalized"),
+			ProviderSpecificConfig: capabilities.Unsupported("SessionConfig Config is not merged by this wrapper"),
+		},
+	}
+}
 
 func (p *OpenAIProvider) httpClientOrDefault() *http.Client {
 	if p.httpClient != nil {
@@ -96,13 +126,19 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
-		return providers.InferenceResponse{}, fmt.Errorf("openai: do request: %w", err)
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions cancelled", err); cancellationErr != nil {
+			return providers.InferenceResponse{}, cancellationErr
+		}
+		return providers.InferenceResponse{}, gateway.NewTransportError(p.Name(), "chat completions", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
-		return providers.InferenceResponse{}, providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody))
+		return providers.InferenceResponse{}, errors.Join(
+			gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil),
+			providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody)),
+		)
 	}
 
 	var chatResp chatResponse
@@ -160,13 +196,19 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
 		p.logger.Error("openai: failed to open request", logging.Field{Key: "error", Value: err})
-		return nil, fmt.Errorf("openai: failed to open stream request: %w", err)
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+			return nil, cancellationErr
+		}
+		return nil, gateway.NewTransportError(p.Name(), "chat completions stream", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
 		errBody, _ := io.ReadAll(resp.Body)
 		p.logger.Error("openai: api error", logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "error_body", Value: string(errBody)})
-		return nil, providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody))
+		return nil, errors.Join(
+			gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil),
+			providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody)),
+		)
 	}
 
 	ch := make(chan messages.StreamMessage, 64)

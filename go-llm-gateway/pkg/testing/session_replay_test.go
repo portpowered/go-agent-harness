@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
@@ -249,6 +250,15 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	if got := providers.ErrorClassification(replayer.Err()); got != providers.ErrorClassReplayMismatch {
 		t.Fatalf("replayer error classification = %q, want %q", got, providers.ErrorClassReplayMismatch)
 	}
+	if !errors.Is(replayer.Err(), gateway.ErrReplayMismatch) {
+		t.Fatal("divergence should match replay mismatch classification")
+	}
+	if errors.Is(replayer.Err(), gateway.ErrTransport) {
+		t.Fatal("replay mismatch should not match transport classification")
+	}
+	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
+		t.Fatal("replay mismatch should not match provider HTTP status classification")
+	}
 }
 
 func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
@@ -275,6 +285,15 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	}
 	if !errors.Is(replayer.Err(), providers.ErrReplayMismatch) {
 		t.Fatalf("replayer error = %v, want ErrReplayMismatch", replayer.Err())
+	}
+	if !errors.Is(replayer.Err(), gateway.ErrReplayMismatch) {
+		t.Fatal("omitted outbound should match replay mismatch classification")
+	}
+	if errors.Is(replayer.Err(), gateway.ErrTransport) {
+		t.Fatal("omitted outbound should not match transport classification")
+	}
+	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
+		t.Fatal("omitted outbound should not match provider HTTP status classification")
 	}
 }
 
@@ -406,6 +425,11 @@ func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamM
 	case msg := <-replayer.Receive().Chan():
 		return msg
 	case <-replayer.Done():
+		select {
+		case msg := <-replayer.Receive().Chan():
+			return msg
+		default:
+		}
 		t.Fatalf("replayer finished before next message: %v", replayer.Err())
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for replay message")

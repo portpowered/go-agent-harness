@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
 )
@@ -60,8 +61,14 @@ func TestReplayWebSocketDialer_FailsOnUnexpectedOutbound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected replay divergence error")
 	}
-	if !strings.Contains(err.Error(), "replay divergence") {
-		t.Fatalf("error should explain replay divergence, got %v", err)
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("error should match replay mismatch classification, got %v", err)
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("replay mismatch should not match transport classification")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("replay mismatch should not match provider HTTP status classification")
 	}
 	if !errors.Is(err, providers.ErrReplayMismatch) {
 		t.Fatalf("error = %v, want ErrReplayMismatch", err)
@@ -188,11 +195,21 @@ func TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose(t *testi
 	if err := conn.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if err := dialer.Err(); err == nil || !strings.Contains(err.Error(), "session replay incomplete") {
+	err = dialer.Err()
+	if err == nil {
 		t.Fatalf("expected incomplete replay error, got %v", err)
 	}
 	if !errors.Is(dialer.Err(), providers.ErrReplayMismatch) {
 		t.Fatalf("dialer error = %v, want ErrReplayMismatch", dialer.Err())
+	}
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("incomplete replay should match replay mismatch classification, got %v", err)
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("incomplete replay should not match transport classification")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("incomplete replay should not match provider HTTP status classification")
 	}
 }
 
