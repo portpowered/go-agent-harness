@@ -115,3 +115,110 @@ The final convergence report must:
 - end with one overall verdict on whether broader Phase 3 independence slices
   may advance immediately, must pause for repair, or remain blocked by
   uncertainty
+
+## Findings
+
+### Checklist Convergence
+
+- `group`: `P3-CORE-01`
+- `subject`: authoritative Phase 3 checklist rows plus the committed
+  `phase-3-shared-contract-decision` slice-plan source
+- `outcome`: `uncertain`
+- `evidence`: `docs/internal/checklist.md` now contains explicit `P3-CORE-01`
+  through `P3-CORE-06` rows that reviewers can cite directly. That resolves
+  the validator's missing-checklist problem. The branch still does not contain
+  the required planning surface `tasks/todo/phase-3-shared-contract-decision.md`,
+  so this validator cannot map the delivered repository state back to the
+  committed slice acceptance source without relying on inferred history.
+- `affectedFilesOrSurfaces`: `docs/internal/checklist.md`;
+  `tasks/todo/phase-3-shared-contract-decision.md` (missing);
+  `docs/internal/phase-3-shared-contract-validator.md`
+- `remainingDrift`: the checklist source is now authoritative, but the branch
+  still lacks the committed `phase-3-shared-contract-decision` slice-plan file
+  this validator is required to cite.
+- `requiredFollowUp`: restore or recreate
+  `tasks/todo/phase-3-shared-contract-decision.md` on the reviewed branch so
+  reviewers can map checklist rows and delivered repository evidence back to
+  the committed Phase 3 decision slice without reconstructing prior branch
+  history.
+
+### Authoritative Shared Contract Boundary
+
+- `group`: `P3-CORE-01`
+- `subject`: repository-wide ownership claim for the shared message contract
+  boundary
+- `outcome`: `fail`
+- `evidence`: the repository does not yet describe one authoritative shared
+  contract boundary consistently across package surfaces, docs, and exported
+  names. `go-agent-loop/README.md` and `docs/architecture/dependencies.md`
+  both state that `go-agent-loop/pkg/messages` owns the shared cross-module
+  message and session contracts. `go-llm-gateway/pkg/models/message.go`
+  reinforces that code-level ownership by aliasing loop message types directly
+  from `go-agent-loop/pkg/messages` and describing them as a single source of
+  truth re-export. But `go-llm-gateway/README.md` still presents `pkg/models`
+  as a primary consumer-facing package for "building messages and session
+  config values that flow through the gateway", and
+  `go-llm-gateway/docs/development.md` says `pkg/models/` "owns shared model
+  and session types, including re-exports from `go-agent-loop`." Those gateway
+  surfaces still read as a second ownership claim rather than a narrow
+  compatibility alias over the loop-owned shared contract. The architecture
+  audit itself also records that `pkg/models` remains a naming facade over
+  loop-owned message contracts, which confirms the reviewed branch has not yet
+  converged on one unmistakable authority.
+- `affectedFilesOrSurfaces`: `go-agent-loop/pkg/messages/agent_messages.go`;
+  `go-agent-loop/pkg/messages/session.go`; `go-agent-loop/README.md`;
+  `go-llm-gateway/pkg/models/message.go`; `go-llm-gateway/README.md`;
+  `go-llm-gateway/docs/development.md`; `docs/architecture/dependencies.md`;
+  `docs/architecture/contract-gap-audit.md`
+- `remainingDrift`: `go-agent-loop/pkg/messages` is the actual type authority,
+  but gateway package naming and docs still let reviewers or downstream
+  consumers read `go-llm-gateway/pkg/models` as a competing shared-contract
+  owner.
+- `requiredFollowUp`: update `go-llm-gateway/pkg/models` package comments and
+  gateway-facing docs so they explicitly describe loop-message exports as
+  compatibility aliases over `go-agent-loop/pkg/messages`, keep gateway-owned
+  session-specific surfaces clearly separate, and remove wording that implies
+  `pkg/models` owns an independent shared message vocabulary.
+
+### Boundary Description Cross-Check
+
+- `group`: `P3-CORE-02`
+- `subject`: whether the same repository surfaces that describe the shared
+  contract boundary also describe gateway model ownership truthfully enough to
+  avoid a second contract authority
+- `outcome`: `fail`
+- `evidence`: the current branch already exposes enough evidence to show that
+  gateway model documentation remains part of the boundary drift. The same
+  surfaces that should confirm one contract owner instead split the story:
+  `go-llm-gateway/pkg/models/message.go` is an alias layer over loop-owned
+  message contracts, while `go-llm-gateway/README.md` and
+  `go-llm-gateway/docs/development.md` still describe `pkg/models` in ownership
+  language broad enough to read as a gateway-owned shared vocabulary. Because
+  those surfaces are part of the repository's boundary description, the branch
+  does not yet truthfully satisfy the shared-surface intent behind
+  `P3-CORE-02`.
+- `affectedFilesOrSurfaces`: `go-llm-gateway/pkg/models/message.go`;
+  `go-llm-gateway/pkg/models/session.go`; `go-llm-gateway/README.md`;
+  `go-llm-gateway/docs/development.md`; `docs/architecture/dependencies.md`;
+  `docs/architecture/contract-gap-audit.md`
+- `remainingDrift`: gateway docs still mix alias-layer message exports with
+  genuinely gateway-owned session types under one `pkg/models` ownership label.
+- `requiredFollowUp`: complete the dedicated `P3-CORE-02` validator pass by
+  splitting loop-owned compatibility aliases from gateway-owned session types
+  in reviewer-facing documentation and confirming every affected gateway surface
+  describes that boundary consistently.
+
+## Convergence Verdict
+
+- `overallOutcome`: `fail`
+- `summary`: the validator now has authoritative Phase 3 checklist rows, but
+  the reviewed branch still fails the shared-boundary convergence check. The
+  actual type authority remains `go-agent-loop/pkg/messages`, yet gateway
+  package naming and docs still describe `go-llm-gateway/pkg/models` broadly
+  enough to read as a second shared-contract owner. The required
+  `phase-3-shared-contract-decision` planning surface is also absent, which
+  leaves checklist-to-commitment mapping uncertain even after the checklist
+  source was repaired.
+- `broaderPhase3Readiness`: broader Phase 3 independence slices should pause
+  for repair until the repository exposes one consistent contract authority and
+  the missing Phase 3 decision-plan source is restored on the reviewed branch.

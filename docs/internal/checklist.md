@@ -72,3 +72,16 @@ symptom fixes.
 | `CTRL-FAC-02` | Worktree maintenance ownership | `setup-workspace` no longer owns routine root `git worktree prune` during setup; the contract keeps setup focused on ready-worktree resolution and records the queue symptoms that shared-root mutation previously caused. | `factory/scripts/setup-workspace.py`, `factory/docs/overview.md`, `prd.md` |
 | `CTRL-FAC-03` | Planner-owned dirty root tolerance | Routine dirty state in `docs/internal/checklist.md` and `docs/internal/progress.txt` does not block setup or reuse, while other dirty root state still fails with a direct unsafe-state error. | `factory/scripts/setup-workspace.py`, `factory/scripts/tests/test_setup_workspace.py`, `factory/docs/overview.md` |
 | `CTRL-FAC-04` | Deterministic proof and queue symptom notes | Reviewers can run committed coverage for concurrent setup and planner-dirty reuse, and the factory docs separate repaired setup failures from any still-manual queue token recovery. | `factory/scripts/tests/test_setup_workspace.py`, `factory/docs/overview.md`, `Makefile` |
+
+## Phase 3 - Shared Contract Validator
+
+This checklist is the authoritative Phase 3 inventory for the shared-contract
+convergence validator. The validator must cite these item IDs directly when it
+records `pass`, `fail`, or `uncertain` evidence.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-01` | Authoritative shared contract boundary | The delivered repository exposes one authoritative shared contract boundary, and package comments, architecture docs, and exported naming identify that same owner without competing claims. | `go-agent-loop/pkg/messages/*.go`, `go-agent-loop/README.md`, `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/README.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
+| `P3-CORE-02` | Truthful gateway model boundary documentation | `go-llm-gateway/pkg/models` and related docs describe compatibility aliases versus gateway-owned surfaces truthfully and do not overstate independent shared-contract ownership. | `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/pkg/models/session.go`, `go-llm-gateway/README.md`, `go-llm-gateway/docs/development.md`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
+| `P3-CORE-05` | Explicit adapter composition boundaries | Cross-library composition remains in explicit adapter packages instead of hidden coupling through core packages or ambiguous package ownership. | `go-llm-gateway/pkg/inference/*.go`, `go-llm-gateway/pkg/gateway/*.go`, `go-agent-loop/pkg/messages/*.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-3-shared-contract-validator.md` |
+| `P3-CORE-06` | Reviewer-verifiable dependency proof | The chosen import or architecture proof is automated, understandable during review, and catches reverse-direction drift without introducing forbidden reverse imports. | `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, root validation commands, any committed dependency-proof tests or validator entrypoints, `docs/internal/phase-3-shared-contract-validator.md` |
