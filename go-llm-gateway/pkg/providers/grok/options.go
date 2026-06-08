@@ -1,7 +1,7 @@
 package grok
 
 import (
-	"github.com/portpowered/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 )
 
 // WebSocketDialer abstracts WebSocket connection establishment for testing.

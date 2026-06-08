@@ -88,6 +88,10 @@ directive for `github.com/portpowered/go-agent-loop`. That is part of the
 current workspace composition, so this module should not be documented as fully
 independent from the loop contracts yet.
 
+For this Phase 3 slice, `go-agent-loop/pkg/messages` remains the deliberate
+shared runtime contract boundary. Provider logging is a gateway-owned concern
+through `pkg/logging`, not a loop runtime dependency.
+
 ## Getting Started
 
 ### Stateless Inference
