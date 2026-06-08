@@ -38,15 +38,7 @@ artifacts alone.
 - `branchComparisonCommand`:
   `git diff --name-only origin/main...HEAD`
 - `branchComparisonResult`:
-  `docs/architecture/contract-gap-audit.md`,
-  `docs/architecture/dependencies.md`,
-  `docs/internal/phase-3-shared-contract-validator.md`,
-  `go-agent-loop/test/functional/dependency_direction_test.go`,
-  `go-llm-gateway/README.md`,
-  `go-llm-gateway/docs/development.md`,
-  `go-llm-gateway/pkg/inference/doc.go`,
-  `go-llm-gateway/pkg/models/doc.go`,
-  `tasks/todo/phase-3-shared-contract-decision.md`
+  `docs/internal/phase-3-shared-contract-validator.md`
 - `plannerOwnedFilesCheck`:
   `git diff --name-only origin/main...HEAD -- docs/internal/checklist.md docs/internal/progress.txt`
 - `plannerOwnedFilesResult`: no output; this landing branch does not change
@@ -173,8 +165,9 @@ artifacts alone.
   reverse-dependency proof reviewers need for `P3-CORE-06`, so the shared
   contract validator surface is repository-verifiable without relying on
   branch-only evidence for that dependency check. The final landing validation
-  also records the exact branch-diff command used to isolate this slice and
-  confirms that `docs/internal/checklist.md` and `docs/internal/progress.txt`
-  stay untouched by the landing.
+  now truthfully records that this rebased landing branch differs from
+  `origin/main` only by this reviewer-facing validator artifact and confirms
+  that `docs/internal/checklist.md` and `docs/internal/progress.txt` stay
+  untouched by the landing.
 - `broaderPhase3Readiness`: broader Phase 3 independence slices may advance
   from this shared-contract convergence baseline.
