@@ -84,6 +84,20 @@ symptom fixes.
 | `CTRL-FAC-03` | Planner-owned dirty root tolerance | Routine dirty state in `docs/internal/checklist.md` and `docs/internal/progress.txt` does not block setup or reuse, while other dirty root state still fails with a direct unsafe-state error. | `factory/scripts/setup-workspace.py`, `factory/scripts/tests/test_setup_workspace.py`, `factory/docs/overview.md` |
 | `CTRL-FAC-04` | Deterministic proof and queue symptom notes | Reviewers can run committed coverage for concurrent setup and planner-dirty reuse, and the factory docs separate repaired setup failures from any still-manual queue token recovery. | `factory/scripts/tests/test_setup_workspace.py`, `factory/docs/overview.md`, `Makefile` |
 
+## Phase 3 - Gateway Runtime Decoupling
+
+This checklist is the authoritative Phase 3 inventory for the gateway runtime
+decoupling slice. Reviewers should cite these item IDs directly when they
+validate that `go-llm-gateway` now depends only on the deliberate shared
+runtime contract boundary in `go-agent-loop/pkg/messages` for this slice.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CHK-01` | Checklist source | The repository contains authoritative Phase 3 checklist rows that reviewers can cite directly for the gateway-runtime decoupling slice. | `docs/internal/checklist.md`, `prd.json` |
+| `P3-CORE-04` | Shared runtime boundary truth | Reviewer-facing docs state that `go-agent-loop/pkg/messages` is the only deliberate shared runtime contract boundary for this slice, while provider-local logging now lives behind the gateway-owned `go-llm-gateway/pkg/logging` seam rather than `go-agent-loop/pkg/logging`. | `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-llm-gateway/README.md`, `go-llm-gateway/pkg/logging/logger.go` |
+| `P3-DOC-01` | Audit and seam evidence | The dependency audit or equivalent reviewer-tracking surfaces record the logging seam replacement as concrete evidence advancing the Phase 3 gateway-independence repair without claiming broader independence than the code and proof enforce. | `docs/architecture/contract-gap-audit.md`, `docs/architecture/dependencies.md`, `docs/internal/checklist.md` |
+| `P3-GATE-01` | Deterministic proof and quality gate | Deterministic validation proves the scoped gateway/provider surfaces still pass without live credentials while automated dependency proof keeps loop-owned non-contract runtime packages out of the reviewed `go-llm-gateway` surfaces. | `go-llm-gateway/internal/dependencyproof/runtime_boundary_test.go`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/grok`, `go-llm-gateway/pkg/logging`, changed quality-gate commands |
+
 ## Phase 3 - Shared Contract Validator
 
 This checklist is the authoritative Phase 3 inventory for the shared-contract
