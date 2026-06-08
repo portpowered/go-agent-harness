@@ -133,9 +133,39 @@ func (r ExecuteResult) partialTextFromDeltas() (string, bool) {
 // Response is a single streaming event delivered by a [Stream].
 type Response = messages.StreamMessage
 
+// StreamStatus is the explicit lifecycle outcome reported by [Stream.Outcome].
+type StreamStatus string
+
+const (
+	// StreamOpen means the stream has not reached a terminal state.
+	StreamOpen StreamStatus = "open"
+	// StreamDrained means the producer closed the stream after all events were read.
+	StreamDrained StreamStatus = "drained"
+	// StreamClosed means the caller closed the stream before draining it.
+	StreamClosed StreamStatus = "closed"
+	// StreamCanceled means the stream ended because caller-owned context was
+	// cancelled or reached its deadline.
+	StreamCanceled StreamStatus = "canceled"
+	// StreamFailed means the stream ended with a non-cancellation terminal error.
+	StreamFailed StreamStatus = "failed"
+)
+
+// StreamOutcome is the explicit terminal state for a streaming response.
+//
+// Partial is true when at least one event was delivered before a cancellation or
+// terminal failure, allowing callers to distinguish total failure from partial
+// success with inspectable Err metadata.
+type StreamOutcome struct {
+	Status  StreamStatus
+	Err     error
+	Partial bool
+}
+
 // Stream is an iterator-style interface wrapping the event channel produced by
 // [AgenticLoop.ExecuteStreaming]. Use HasNext/Response to consume events in a loop;
-// call Close when done to release underlying resources.
+// call Close when done to release underlying resources. New integrations that
+// need to distinguish drained, closed, cancelled, and failed terminal states
+// should inspect Outcome after HasNext returns false.
 type Stream interface {
 	// HasNext blocks until the next event is available or the stream is exhausted.
 	// Returns true when an event is ready; call Response() to retrieve it.
@@ -146,6 +176,10 @@ type Stream interface {
 	Response() Response
 	// Err returns any error that stopped the stream, or nil on clean completion.
 	Err() error
+	// Outcome returns the current or terminal stream state. Before termination it
+	// reports StreamOpen. After HasNext returns false, it distinguishes clean
+	// drain, caller Close, cancellation, and terminal failure.
+	Outcome() StreamOutcome
 	// Close discards any remaining events and releases resources. Safe to call
 	// multiple times; subsequent calls are no-ops.
 	Close() error
@@ -155,16 +189,24 @@ var _ Stream = &chanStream{}
 
 // chanStream implements [Stream] over a receive-only channel.
 type chanStream struct {
-	ch      <-chan messages.StreamMessage
-	current messages.StreamMessage
-	done    bool
-	err     error
-	once    sync.Once
-	closed  chan struct{}
+	ch        <-chan streamEvent
+	current   messages.StreamMessage
+	done      bool
+	err       error
+	status    StreamStatus
+	partial   bool
+	delivered bool
+	once      sync.Once
+	closed    chan struct{}
 }
 
-func newChanStream(ch <-chan messages.StreamMessage) *chanStream {
-	return &chanStream{ch: ch, closed: make(chan struct{})}
+type streamEvent struct {
+	event messages.StreamMessage
+	err   error
+}
+
+func newChanStream(ch <-chan streamEvent) *chanStream {
+	return &chanStream{ch: ch, status: StreamOpen, closed: make(chan struct{})}
 }
 
 // HasNext blocks until the next event arrives or the stream ends or is closed.
@@ -173,26 +215,65 @@ func (s *chanStream) HasNext() bool {
 		return false
 	}
 	select {
-	case evt, ok := <-s.ch:
+	case item, ok := <-s.ch:
 		if !ok {
 			s.done = true
+			if s.status == StreamOpen {
+				s.status = StreamDrained
+			}
 			return false
 		}
-		s.current = evt
+		s.recordEvent(item)
 		return true
 	case <-s.closed:
 		s.done = true
+		if s.status == StreamOpen {
+			s.status = StreamClosed
+		}
 		return false
 	}
 }
 
 func (s *chanStream) Response() Response { return s.current }
 func (s *chanStream) Err() error         { return s.err }
+func (s *chanStream) Outcome() StreamOutcome {
+	return StreamOutcome{Status: s.status, Err: s.err, Partial: s.partial}
+}
+
+func (s *chanStream) recordEvent(item streamEvent) {
+	s.current = item.event
+	if item.err != nil {
+		s.setTerminalError(item.err)
+	} else if item.event.Type == messages.StreamTypeError {
+		s.setTerminalError(errorFromStreamEvent(item.event))
+	}
+	s.delivered = true
+}
+
+func (s *chanStream) setTerminalError(err error) {
+	s.err = err
+	s.partial = s.delivered
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		s.status = StreamCanceled
+		return
+	}
+	s.status = StreamFailed
+}
+
+func errorFromStreamEvent(evt messages.StreamMessage) error {
+	if v, ok := evt.Value.(*messages.ErrorValue); ok && v.Message != "" {
+		return errors.New(v.Message)
+	}
+	return errors.New("stream error")
+}
 
 // Close signals that no more events will be consumed. A background goroutine
 // drains the underlying channel so the producer never blocks.
 func (s *chanStream) Close() error {
 	s.once.Do(func() {
+		if s.status == StreamOpen {
+			s.status = StreamClosed
+		}
 		close(s.closed)
 		go func() {
 			for range s.ch {

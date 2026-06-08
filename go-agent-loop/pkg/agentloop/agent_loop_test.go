@@ -191,7 +191,6 @@ func TestExecuteStreaming_HotLoopErrorInStream(t *testing.T) {
 		if evt.Type == messages.StreamTypeError {
 			if v, ok := evt.Value.(*messages.ErrorValue); ok {
 				gotErr = v
-				break
 			}
 		}
 	}
@@ -200,6 +199,13 @@ func TestExecuteStreaming_HotLoopErrorInStream(t *testing.T) {
 	}
 	if gotErr.Message != wantErr {
 		t.Errorf("stream error message: got %q, want %q", gotErr.Message, wantErr)
+	}
+	outcome := result.EventStream.Outcome()
+	if outcome.Status != StreamFailed {
+		t.Fatalf("stream outcome status = %q, want %q", outcome.Status, StreamFailed)
+	}
+	if outcome.Err == nil || outcome.Err.Error() != wantErr {
+		t.Fatalf("stream outcome err = %v, want %q", outcome.Err, wantErr)
 	}
 }
 

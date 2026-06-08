@@ -78,3 +78,116 @@ func TestExecuteResultFinalText_TerminalFailure(t *testing.T) {
 		t.Fatal("FinalText Partial = true, want false")
 	}
 }
+
+func TestStreamOutcome_Drained(t *testing.T) {
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("ok")}}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want first event")
+	}
+	if stream.Response().Type != messages.StreamTypeTextDelta {
+		t.Fatalf("Response type = %q, want %q", stream.Response().Type, messages.StreamTypeTextDelta)
+	}
+	if stream.Outcome().Status != StreamOpen {
+		t.Fatalf("Outcome before drain = %q, want %q", stream.Outcome().Status, StreamOpen)
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after closed channel")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.Status != StreamDrained {
+		t.Fatalf("Outcome status = %q, want %q", outcome.Status, StreamDrained)
+	}
+	if outcome.Err != nil {
+		t.Fatalf("Outcome err = %v, want nil", outcome.Err)
+	}
+	if outcome.Partial {
+		t.Fatal("Outcome Partial = true, want false on clean drain")
+	}
+}
+
+func TestStreamOutcome_Closed(t *testing.T) {
+	ch := make(chan streamEvent)
+	stream := newChanStream(ch)
+
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after Close")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.Status != StreamClosed {
+		t.Fatalf("Outcome status = %q, want %q", outcome.Status, StreamClosed)
+	}
+	if outcome.Err != nil {
+		t.Fatalf("Outcome err = %v, want nil", outcome.Err)
+	}
+	close(ch)
+}
+
+func TestStreamOutcome_FailedWithPartialOutput(t *testing.T) {
+	err := errors.New("provider failed")
+	ch := make(chan streamEvent, 2)
+	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("partial")}}
+	ch <- streamEvent{
+		event: messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(err.Error())},
+		err:   err,
+	}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want partial event")
+	}
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want error event")
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after failed stream closed")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.Status != StreamFailed {
+		t.Fatalf("Outcome status = %q, want %q", outcome.Status, StreamFailed)
+	}
+	if !errors.Is(outcome.Err, err) {
+		t.Fatalf("Outcome err = %v, want %v", outcome.Err, err)
+	}
+	if !outcome.Partial {
+		t.Fatal("Outcome Partial = false, want true")
+	}
+}
+
+func TestStreamOutcome_Canceled(t *testing.T) {
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{
+		event: messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(context.Canceled.Error())},
+		err:   context.Canceled,
+	}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want cancellation event")
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after canceled stream closed")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.Status != StreamCanceled {
+		t.Fatalf("Outcome status = %q, want %q", outcome.Status, StreamCanceled)
+	}
+	if !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("Outcome err = %v, want context.Canceled", outcome.Err)
+	}
+	if outcome.Partial {
+		t.Fatal("Outcome Partial = true, want false without delivered output")
+	}
+}

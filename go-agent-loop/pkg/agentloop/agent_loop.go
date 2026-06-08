@@ -318,17 +318,25 @@ func (al *AgentLoop) ExecuteStreaming(ctx context.Context, input ExecuteInput) (
 	// closes its channel (LOOP.END processed), so all deltas are delivered first.
 	// If the hot loop failed, send an ERROR stream message before closing so the
 	// error is delivered as part of the execution response stream.
-	resultCh := make(chan messages.StreamMessage, 256)
+	resultCh := make(chan streamEvent, 256)
 	go func() {
 		for evt := range kernelEventCh {
-			resultCh <- evt
+			resultCh <- streamEvent{event: evt}
 		}
 		cancel()
 		<-hotLoopDone
 		loopErr := <-hotLoopErrCh
-		// After we cancel(), the hot loop often exits with context.Canceled; don't send that as an ERROR event.
-		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
-			resultCh <- messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(loopErr.Error())}
+		// After the internal cleanup cancel, the hot loop often exits with
+		// context.Canceled. Suppress only that internal cancellation; caller-owned
+		// cancellation or deadlines remain observable through Stream.Outcome().
+		if errors.Is(loopErr, context.Canceled) && ctx.Err() == nil {
+			loopErr = nil
+		}
+		if loopErr != nil {
+			resultCh <- streamEvent{
+				event: messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(loopErr.Error())},
+				err:   loopErr,
+			}
 		}
 		close(resultCh)
 	}()

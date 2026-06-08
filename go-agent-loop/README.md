@@ -97,6 +97,10 @@ That example uses the main request/response path:
   recorded full-message and delta history after execution
 
 For streaming text or reasoning deltas, use `ExecuteStreaming(...)` instead.
+Its `EventStream` keeps the legacy `HasNext()`/`Response()` iterator shape, and
+new integrations can call `EventStream.Outcome()` after `HasNext()` returns
+false to distinguish clean drain, caller close, cancellation/deadline, terminal
+failure, and partial output before failure.
 
 Tool execution is now an explicit constructor contract:
 
