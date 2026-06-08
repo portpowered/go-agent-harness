@@ -17,6 +17,12 @@ type Gateway interface {
 	Interact(ctx context.Context, req InteractionRequest) (<-chan InteractionEvent, error)
 }
 
+// CapabilityReporter is implemented by gateway types that can report the
+// configured provider's public capability contract.
+type CapabilityReporter interface {
+	Capabilities() ProviderCapabilities
+}
+
 // InferenceRequest is the input to the gateway.
 type InferenceRequest struct {
 	Messages []models.Message

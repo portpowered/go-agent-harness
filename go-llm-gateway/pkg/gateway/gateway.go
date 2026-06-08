@@ -35,6 +35,13 @@ func NewGateway(opts ...Option) (*DefaultGateway, error) {
 	return g, nil
 }
 
+// Capabilities reports the configured provider's public capability contract.
+// It is local metadata discovery only; providers that do not implement
+// providers.CapabilityReporter return the documented unknown fallback.
+func (g *DefaultGateway) Capabilities() ProviderCapabilities {
+	return providerCapabilities(g.provider)
+}
+
 func (g *DefaultGateway) Infer(ctx context.Context, req InferenceRequest) (InferenceResponse, error) {
 	return g.provider.Infer(ctx, providers.InferenceRequest{
 		Messages:         req.Messages,

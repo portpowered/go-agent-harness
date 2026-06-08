@@ -40,6 +40,13 @@ func NewSessionGateway(opts ...SessionGatewayOption) (*DefaultSessionGateway, er
 	return g, nil
 }
 
+// Capabilities reports the configured session provider's public capability
+// contract. It is local metadata discovery only; providers that do not
+// implement providers.CapabilityReporter return the documented unknown fallback.
+func (g *DefaultSessionGateway) Capabilities() ProviderCapabilities {
+	return providerCapabilities(g.provider)
+}
+
 // sessionInferencer is the gateway-layer interface for establishing sessions
 // with a given configuration. It is an internal detail — external callers use
 // messages.SessionInferencer (declared in go-agent-loop) via SessionGatewayInferencer.
