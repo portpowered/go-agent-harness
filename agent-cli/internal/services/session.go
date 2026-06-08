@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -52,46 +51,11 @@ func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) erro
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
-	if opts.ReplayPath != "" {
-		sessionInferencer := opts.SessionInferencer
-		if sessionInferencer == nil {
-			if _, err := os.Stat(opts.ReplayPath); err != nil {
-				return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-			}
-			if usesWebSocketCapture(opts.ReplayPath) {
-				if usesOpenAIWebSocketCapture(opts.ReplayPath) {
-					return runOpenAISessionReplay(ctx, out, opts)
-				}
-				return runGrokSessionReplay(ctx, out, opts)
-			}
-			sessionInferencer = gwtesting.NewReplaySessionInferencer(opts.ReplayPath)
-			if err := runAgentLoopSession(ctx, io.Discard, sessionInferencer, sessionLoopOptions{
-				Prompt:      opts.Prompt,
-				MaxDuration: 200 * time.Millisecond,
-			}); err != nil {
-				return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-			}
-			return replaySessionCapture(ctx, out, opts.ReplayPath)
-		}
-		if err := runAgentLoopSession(ctx, out, sessionInferencer, sessionLoopOptions{
-			Prompt:      opts.Prompt,
-			MaxDuration: 3 * time.Second,
-		}); err != nil {
-			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
-		}
-		return nil
+	plan, err := planSessionRuntime(opts)
+	if err != nil {
+		return err
 	}
-	if opts.SessionInferencer != nil {
-		if err := validateInjectedLiveSession(opts); err != nil {
-			return err
-		}
-		return runAgentLoopSession(ctx, out, opts.SessionInferencer, sessionLoopOptions{
-			Prompt:         opts.Prompt,
-			CloseAfterOpen: true,
-			MaxDuration:    3 * time.Second,
-		})
-	}
-	return runLiveSessionRecord(ctx, out, opts)
+	return plan.run(ctx, out)
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {
