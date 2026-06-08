@@ -97,6 +97,9 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions cancelled", err); cancellationErr != nil {
+			return providers.InferenceResponse{}, cancellationErr
+		}
 		return providers.InferenceResponse{}, gateway.NewTransportError(p.Name(), "chat completions", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -161,6 +164,9 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 	resp, err := p.httpClientOrDefault().Do(httpReq)
 	if err != nil {
 		p.logger.Error("openai: failed to open request", logging.Field{Key: "error", Value: err})
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+			return nil, cancellationErr
+		}
 		return nil, gateway.NewTransportError(p.Name(), "chat completions stream", err)
 	}
 	if resp.StatusCode != http.StatusOK {

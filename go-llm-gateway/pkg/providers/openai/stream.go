@@ -259,6 +259,9 @@ func streamSSEToGateway(reader io.Reader, ch chan<- messages.StreamMessage) {
 
 	if err := scanner.Err(); err != nil {
 		streamErr := gateway.NewTransportError("openai", "chat completions stream", err)
+		if cancellationErr := gateway.CancellationErrorOrNil("openai: chat completions stream cancelled", err); cancellationErr != nil {
+			streamErr = cancellationErr
+		}
 		ch <- messages.StreamMessage{
 			Type:               messages.StreamTypeError,
 			ActorProvidedIndex: 0,

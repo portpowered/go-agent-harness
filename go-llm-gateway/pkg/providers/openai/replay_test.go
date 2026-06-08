@@ -693,6 +693,41 @@ func TestReplay_InferTransportErrorClassified(t *testing.T) {
 	}
 }
 
+func TestReplay_InferCancellationClassifiedSeparatelyFromTransport(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+	p := newTestProvider(transport)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := p.Infer(ctx, providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected cancellation error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrCancellation) {
+		t.Fatal("expected error to match cancellation classification")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("expected error to preserve context.Canceled cause")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("cancellation should not match transport classification")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("cancellation should not match provider HTTP status classification")
+	}
+	if errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatal("cancellation should not match replay mismatch classification")
+	}
+}
+
 func TestReplay_StreamError429_RateLimit(t *testing.T) {
 	body := loadFixture(t, "error_429.json")
 	p := newTestProvider(newFixtureTransport(429, "application/json", body))
@@ -757,6 +792,41 @@ func TestReplay_InferStreamTransportErrorClassified(t *testing.T) {
 	}
 	if transportErr.Operation != "chat completions stream" {
 		t.Fatalf("operation = %q, want chat completions stream", transportErr.Operation)
+	}
+}
+
+func TestReplay_InferStreamCancellationClassifiedSeparatelyFromTransport(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+	p := newTestProvider(transport)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := p.InferStream(ctx, providers.InferenceRequest{
+		Messages: []models.Message{
+			models.NewTextMessage(models.RoleUser, "test"),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected stream cancellation error, got nil")
+	}
+	if !errors.Is(err, gateway.ErrCancellation) {
+		t.Fatal("expected stream error to match cancellation classification")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("expected stream error to preserve context.Canceled cause")
+	}
+	if errors.Is(err, gateway.ErrTransport) {
+		t.Fatal("stream cancellation should not match transport classification")
+	}
+	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
+		t.Fatal("stream cancellation should not match provider HTTP status classification")
+	}
+	if errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatal("stream cancellation should not match replay mismatch classification")
 	}
 }
 

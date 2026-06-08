@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -272,4 +273,14 @@ func NewReplayMismatchError(expected, actual string, err error) error {
 // context.DeadlineExceeded.
 func NewCancellationError(message string, err error) error {
 	return NewGatewayError(ErrCancellation, "", message, err)
+}
+
+// CancellationErrorOrNil returns a gateway cancellation error when err wraps
+// context.Canceled or context.DeadlineExceeded. It returns nil for non-
+// cancellation failures so callers can preserve more specific classifications.
+func CancellationErrorOrNil(message string, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return NewCancellationError(message, err)
+	}
+	return nil
 }
