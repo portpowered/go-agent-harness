@@ -101,6 +101,294 @@ typed errors, capability APIs, options, docs, or helper functions without
 changing existing behavior. Mark changes as `documentation-only` when no
 runtime or exported API behavior is expected to change.
 
+### Phase 4 Context And Result Behavior Findings
+
+These findings cover the `P4-API-01` and `P4-API-03` story slice. They name
+public operations that block, wait on buffers, perform provider I/O, connect
+sessions, or stream results where callers cannot yet distinguish cancellation,
+timeout, absence, buffer pressure, and runtime failure as explicit public
+contracts.
+
+#### P4-CTX-01: execution result aggregation can block without a caller-visible timeout result
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`
+- File path: `go-agent-loop/pkg/agentloop/agent_loop.go`,
+  `go-agent-loop/pkg/agentloop/execute_result.go`
+- Exported declaration: `AgenticLoop.Execute`,
+  `AgentLoop.Execute`, `AgenticLoop.ExecuteStreaming`,
+  `AgentLoop.ExecuteStreaming`, `StreamingExecuteResult.Messages`
+- Observable contract issue:
+  - `Execute(ctx, input)` accepts a context and runs the hot loop under it, but
+    the public contract does not state whether cancellation is returned as
+    `ctx.Err()`, normalized into stream data, dropped as clean completion, or
+    represented by a partial `ExecuteResult`.
+  - `ExecuteStreaming(ctx, input)` returns a result immediately, and
+    `StreamingExecuteResult.Messages()` later blocks on an internal `done`
+    channel with no context parameter. A caller that stops consuming
+    `EventStream`, closes the stream, or cancels the original context cannot
+    tell from the exported API whether `Messages()` is guaranteed to unblock.
+  - `Stream.HasNext()` returns `false` for both clean stream exhaustion and
+    caller `Close()`. `Stream.Err()` exists, but the implementation does not
+    currently populate it for context cancellation or loop failure, so callers
+    cannot reliably distinguish "no more events" from cancellation or runtime
+    failure.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define the execution lifecycle contract for synchronous and streaming
+    turns: when `ctx.Err()` is returned as an error, when partial deltas are
+    preserved, when cancellation is emitted in-band, and when `Messages()` must
+    unblock
+  - add a context-aware result accessor such as `MessagesContext(ctx)` or make
+    `Messages()` documented to unblock on `EventStream.Close()` and original
+    context cancellation
+  - populate `Stream.Err()` for caller cancellation, deadline exceeded, and
+    loop/runtime failure while preserving clean exhaustion as `nil`
+- Verification notes:
+  - later repair lanes should add observable tests in
+    `go-agent-loop/pkg/agentloop` for cancelled `Execute`, cancelled
+    `ExecuteStreaming`, `EventStream.Close()` followed by `Messages()`, and
+    `Stream.Err()` after cancellation and provider failure
+
+#### P4-CTX-02: buffer waits collapse cancellation, empty buffer, and backpressure into `false`
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`
+- File path: `go-agent-loop/pkg/messages/buffers.go`,
+  `go-agent-loop/pkg/messages/session.go`
+- Exported declaration: `TypedBuffer.Write`, `TypedBuffer.Read`,
+  `TypedBuffer.ReadBlocking`, `TypedBuffer.ReadBlockingContext`,
+  `Session.Send`, `Session.Receive`
+- Observable contract issue:
+  - `TypedBuffer.Write(ctx, data)` returns `false` for context cancellation and
+    a full buffer. `Session.Send(ctx, msg)` inherits that same bool-only result
+    contract, so callers cannot tell whether a session write failed because the
+    caller cancelled, the provider/session closed, or the outbound queue was
+    full.
+  - `TypedBuffer.Read()` returns `(zero, false)` for an empty buffer, while
+    `ReadBlocking(done)` and `ReadBlockingContext(ctx)` return `(zero, false)`
+    when the wait is stopped. The exported API does not give a typed reason for
+    "no item yet" versus "the wait ended".
+  - The only backpressure observability hook is `SetOnDrop`, which is tied to
+    the full-buffer path for `Write`; consumers using `ReadBlockingContext` or
+    `Session.Receive()` cannot observe a typed absence, cancellation, or closed
+    session reason.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - introduce an additive result type or error-returning variants for buffer
+    operations, for example `WriteResult`/`ReadResult` or
+    `WriteContext(...) error` and `ReadContext(...) (T, error)`, with stable
+    reasons for success, empty, full, cancelled, and closed
+  - keep existing bool methods as compatibility shims during migration, but
+    document that `false` is intentionally lossy
+  - thread the richer result through `Session.Send` and session relay wrappers
+    so provider session code can distinguish cancellation from buffer pressure
+- Verification notes:
+  - later repair lanes should add buffer tests for full queue versus cancelled
+    context and session tests proving `Send` exposes the richer reason without
+    requiring string parsing
+
+#### P4-CTX-03: gateway/provider calls document context plumbing but not cancellation and timeout outcomes
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- File path: `go-llm-gateway/pkg/gateway/interfaces.go`,
+  `go-llm-gateway/pkg/gateway/gateway.go`,
+  `go-llm-gateway/pkg/providers/provider.go`,
+  `go-llm-gateway/pkg/inference/main_inferencer.go`
+- Exported declaration: `Gateway.Infer`, `Gateway.InferStream`,
+  `DefaultGateway.Infer`, `DefaultGateway.InferStream`, `Provider.Infer`,
+  `Provider.InferStream`, `GatewayInferencer.Infer`,
+  `GatewayInferencer.InferStream`
+- Observable contract issue:
+  - these public methods accept `context.Context` and pass it down to provider
+    implementations, but the exported comments do not specify whether
+    cancellation/deadline failures are returned as `context.Canceled`,
+    `context.DeadlineExceeded`, provider-specific errors, typed gateway errors,
+    in-band stream events, or channel close without an error value.
+  - `InferStream(ctx, req)` returns `(<-chan StreamMessage, error)`, but there
+    is no public stream handle or final error result that can report a provider
+    failure after the channel has been returned. This makes late cancellation,
+    transport failure, and stream parser failure ambiguous unless every
+    provider encodes them identically as stream messages.
+  - `GatewayInferencer` bridges gateway results into loop results without
+    documenting whether context cancellation is normalized, preserved, or
+    converted during the bridge.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`,
+  `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define one public cancellation/timeout contract shared by gateway and
+    provider methods, including whether `errors.Is(err, context.Canceled)` and
+    `errors.Is(err, context.DeadlineExceeded)` must work for direct calls
+  - define the post-return streaming error path, either with a stream result
+    handle, terminal error event taxonomy, or documented provider invariants
+  - add bridge tests proving `GatewayInferencer` preserves the selected
+    cancellation and timeout semantics into `messages.InferenceResult` and
+    stream output
+- Verification notes:
+  - later repair lanes should add provider-neutral fake-provider tests under
+    `go-llm-gateway/pkg/gateway` and bridge tests under
+    `go-llm-gateway/pkg/inference` for direct cancellation, deadline exceeded,
+    and late stream failure
+
+#### P4-CTX-04: session connection and close contracts lack explicit lifecycle outcomes
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-llm-gateway/pkg/testing`
+- File path: `go-agent-loop/pkg/messages/session.go`,
+  `go-llm-gateway/pkg/gateway/session_gateway.go`,
+  `go-llm-gateway/pkg/inference/session_inferencer.go`,
+  `go-llm-gateway/pkg/testing/session_inferencer.go`,
+  `go-llm-gateway/pkg/testing/session_replay.go`,
+  `go-llm-gateway/pkg/testing/session_record.go`
+- Exported declaration: `SessionInferencer.ConnectSession`,
+  `Session.Done`, `Session.Close`, `DefaultSessionGateway.ConnectSession`,
+  `SessionGatewayInferencer.ConnectSession`,
+  `RecordingSessionInferencer.ConnectSession`,
+  `ReplaySessionInferencer.ConnectSession`, `SessionReplayer.Close`,
+  `SessionReplayer.Err`, `SessionRecorder.Close`
+- Observable contract issue:
+  - `ConnectSession(ctx)` exposes cancellation for connection setup, but the
+    public session contract does not state whether the same context owns the
+    lifetime of `Receive()`, relay goroutines, replay delivery, or only the
+    initial provider connection attempt.
+  - `Session.Done()` only closes a channel; callers cannot tell whether the
+    session ended because the caller closed it, the provider closed it,
+    connection setup failed after partial initialization, replay diverged,
+    context was cancelled, or a transport failed.
+  - `Session.Close()` returns `error`, but the shared interface does not define
+    idempotency outcome, whether close propagates provider close errors, or
+    whether replay/capture wrappers must expose close-induced replay mismatch
+    through `Err()`, returned errors, in-band events, or all of those.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`, `P4-API-05`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define a session lifecycle result model that separates connect failure,
+    caller close, provider close, context cancellation, replay divergence, and
+    transport failure
+  - add an additive `Err()` or terminal status accessor to the shared
+    `messages.Session` contract, or document why wrappers such as
+    `SessionReplayer.Err()` are intentionally provider/testing-specific
+  - align recorder and replayer relay contexts with the chosen lifecycle owner
+    and document close idempotency across live, record, and replay sessions
+- Verification notes:
+  - later repair lanes should add shared session contract tests with fake
+    sessions plus `go-llm-gateway/pkg/testing` tests for cancelled replay,
+    replay divergence, caller close before expected outbound events, and
+    recorder close behavior
+
+#### P4-RESULT-01: text and fixture helpers use zero values for invalid or absent results
+
+- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`,
+  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-agent-loop/pkg/agentloop/execute_result.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`
+- Exported declaration: `ExecuteResult.Text`,
+  `InteractionFixtureReplayer.Fixture`, `InteractionFixtureReplayer.Replay`
+- Observable contract issue:
+  - `ExecuteResult.Text()` returns an empty string when there is no final
+    assistant text, when the final assistant content is intentionally empty,
+    when the result contains only reasoning/tool calls, or when execution
+    ended before a final answer. Callers cannot distinguish absence from a
+    valid empty response.
+  - `InteractionFixtureReplayer.Fixture()` returns an empty
+    `InteractionFixture{}` when cloning fails, collapsing impossible internal
+    clone failure, absent fixture state, and a valid-but-empty zero value into
+    the same public result shape.
+  - `InteractionFixtureReplayer.Replay(ctx)` closes the channel without a
+    terminal result when cloning fails or context is cancelled; a consumer
+    cannot distinguish fixture preparation failure, cancellation, and successful
+    replay of zero events by observing the channel alone.
+- Mapped checklist rows: `P4-API-01`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `additive`
+- Recommended repair slice:
+  - add explicit result helpers such as `FinalText() (string, bool)` or a
+    richer execution final-message accessor while keeping `Text()` as a
+    compatibility convenience
+  - change fixture helpers additively by adding `FixtureResult()`
+    `(InteractionFixture, error)` and a replay handle or terminal status that
+    reports clone failure and context cancellation
+  - document which zero values are valid public data and which indicate
+    compatibility fallback behavior
+- Verification notes:
+  - later repair lanes should add observable tests for final empty assistant
+    text versus absent final assistant text and for fixture clone/replay
+    cancellation outcomes
+
+#### P4-RESULT-02: interaction and tool-result validation errors are normalized inconsistently across sync, event, and fixture APIs
+
+- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- File path: `go-llm-gateway/pkg/gateway/interaction_gateway.go`,
+  `go-llm-gateway/pkg/gateway/interaction_fixture.go`,
+  `go-llm-gateway/pkg/gateway/interaction_types.go`
+- Exported declaration: `DefaultGateway.Interact`,
+  `InteractionError`, `InteractionFixtureValidationError`,
+  `ValidateInteractionFixture`, `DecodeInteractionFixture`
+- Observable contract issue:
+  - `Interact(ctx, req)` returns a channel successfully even when
+    `validateInteractionToolResults(req)` later rejects the request; that
+    validation failure appears as an in-band `InteractionEventError` with code
+    `tool_result_validation_error`.
+  - fixture validation APIs return `InteractionFixtureValidationError` directly
+    as a Go error, while interaction runtime validation uses an event payload.
+    Both surfaces are caller-visible validation contracts, but the audit found
+    no shared rule for which validation failures are returned synchronously
+    versus emitted asynchronously.
+  - cancellation before provider execution emits a cancellation event and then
+    an end event; cancellation during replay closes the channel without a
+    terminal event. Consumers cannot apply one result-handling rule across live
+    interaction and fixture replay.
+- Mapped checklist rows: `P4-API-01`, `P4-API-02`, `P4-API-03`
+- Severity: `must-fix contract defect`
+- Compatibility sensitivity: `compatibility-sensitive`
+- Recommended repair slice:
+  - define a provider-neutral interaction result contract that says which
+    validation failures return from the method call, which are terminal events,
+    and which support `errors.As` against validation error types
+  - align fixture replay cancellation and preparation failure with the live
+    interaction terminal event contract, or add an explicit replay result/error
+    handle when preserving channel-only replay behavior
+  - add examples in package docs showing callers how to branch on validation,
+    cancellation, timeout, provider error, and successful end
+- Verification notes:
+  - later repair lanes should extend `go-llm-gateway/pkg/gateway` tests to
+    assert the selected sync-vs-event validation boundary and cancellation
+    terminal behavior for both live `Interact` and fixture `Replay`
+
+#### Context/Result Repair Slice Order
+
+1. Repair `TypedBuffer` and `Session.Send` result ambiguity first because the
+   bool-only contract sits beneath loop, session, record, and replay behavior.
+2. Define gateway/provider cancellation and late-stream failure semantics before
+   changing provider adapters, so direct gateway consumers and loop bridges get
+   one shared rule.
+3. Repair `AgenticLoop.ExecuteStreaming` completion and `Stream.Err()` after
+   the lower-level stream/cancellation taxonomy exists.
+4. Add explicit session terminal status after buffer and stream result reasons
+   are available, then align live, recording, and replay sessions.
+5. Add zero-value-safe convenience accessors for `ExecuteResult.Text()` and
+   interaction fixture helpers as additive API polish once must-fix lifecycle
+   defects are underway.
+
+Reviewer commands for this audit-only story:
+
+```bash
+make typecheck
+```
+
+No reproducibility tooling was added for this slice; later implementation lanes
+must add the tests named in each finding before closing any Phase 4 checklist
+row.
+
 ## Intended Adapters vs Hidden Coupling
 
 Intended adapter seams:
