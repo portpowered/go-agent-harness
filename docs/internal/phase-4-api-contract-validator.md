@@ -630,8 +630,38 @@ next implementation batch for these rows should introduce the public
 capability contract first, then use it as the source of truth for local
 stateless and session validation.
 
+## Reviewer-Runnable Command Evidence
+
+Run all commands from the repository root. These commands do not require live
+provider credentials, external network access, or hidden local setup. They
+exercise the current public API contract evidence directly enough for a
+reviewer to reproduce the pass, fail, or uncertain outcomes in this report.
+
+| Command | Claim proved | Expected pass condition | Relevant rows |
+| --- | --- | --- | --- |
+| `sed -n '76,92p' docs/internal/checklist.md` | The validator is checking the Phase 4 rows `P4-API-01` through `P4-API-07` and `P4-GATE-01`. | Output names all reviewed rows and their row text. | all rows |
+| `sed -n '149,327p' docs/architecture/contract-gap-audit.md` | The exported API contract audit contains context, typed-error, lifecycle, stream, and compatibility findings, but does not explicitly map every `P4-API-*` checklist row. | Output shows audit findings such as `CTX-*`, `ERR-*`, `LIFECYCLE-*`, and `COMPAT-*`; absence of `P4-API-*` labels supports the audit-to-checklist mapping gap. | `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, `P4-GATE-01` |
+| `rg -n "capabil|Capability|Capabilities" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg` | Capability discovery is not covered by the audit or exposed as a public runtime provider/gateway capability contract. | Output may show only incidental references; it must not show a public capability model on `providers.Provider`, `providers.SessionProvider`, or gateway interfaces. | `P4-API-04`, `P4-GATE-01` |
+| `rg -n "unsupported|validate|validation|capabil|feature" docs/architecture/contract-gap-audit.md go-llm-gateway/pkg` | Unsupported-feature validation is not a shared gateway/provider contract before provider execution. | Output shows scattered provider-specific validation and no shared public capability-backed validation layer. | `P4-API-06`, `P4-GATE-01` |
+| `rg -n "type Provider interface|type SessionProvider interface|type Gateway interface|type InferenceRequest struct|type SessionConfig struct" go-llm-gateway/pkg/providers go-llm-gateway/pkg/gateway go-llm-gateway/pkg/models` | The public provider, gateway, request, and session declarations are inspectable without importing concrete provider internals. | Output identifies the public declarations used as affected surfaces in this report. | `P4-API-04`, `P4-API-06` |
+| `go test ./go-llm-gateway/pkg/gateway -run 'TestInteract_(NormalizesProviderError|EmitsCancellationWhenContextCancelledBeforeProviderReturns|PreservesPartialOutputBeforeCancellation)'` | Interaction events preserve structured provider error, timeout, caller cancellation, and partial-output behavior. | Tests pass without credentials, proving structured event evidence while not proving a typed `errors.Is` / `errors.As` taxonomy. | `P4-API-02`, `P4-API-05` |
+| `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|StopsDeliveryWhenOwnedContextCanceled)'` | Replay divergence and replay cancellation paths are deterministic and credential-free. | Tests pass, proving explicit replay mismatch/cancellation evidence while leaving typed replay error classification open. | `P4-API-02`, `P4-API-05` |
+| `go test ./go-llm-gateway/pkg/inference -run 'TestInferStream_PassthroughAllFields|TestSessionGatewayInferencer_ConnectSession'` | Gateway inferencer adapters pass request/session fields through to providers rather than applying local unsupported-feature validation. | Tests pass, confirming passthrough behavior that supports the `P4-API-06` failure evidence. | `P4-API-06` |
+| `go test ./go-llm-gateway/pkg/providers/fal -run 'TestFalProvider_(Infer_InvalidRequests|InferStream_ReturnsClosedChannel)'` | fal has provider-local invalid-request behavior and closed streaming behavior, not a shared public unsupported-feature validation contract. | Tests pass without live fal credentials or network access. | `P4-API-04`, `P4-API-06` |
+| `go test ./go-llm-gateway/pkg/providers/openai -run 'TestConnectSession_(MissingAPIKeyFailsBeforeDial|MissingDialerFailsBeforeDial)|TestApplyInferenceRequestOptions_ThinkingIgnored'` | OpenAI session preconditions and ignored thinking options are local provider behaviors, not shared capability-backed validation. | Tests pass without dialing a live provider. | `P4-API-06`, `P4-API-07` |
+| `go test ./go-llm-gateway/pkg/providers/grok -run 'TestConnectSession_MissingDialerFailsBeforeDial'` | Grok session connection preconditions fail locally before websocket dialing. | Test passes without live provider credentials or network access. | `P4-API-06`, `P4-API-07` |
+| `go test ./go-llm-gateway/pkg/...` | The gateway package tests, provider tests, docs examples compiled by Go, and public package tests remain deterministic for this validator slice. | All package tests pass locally. | all gateway rows |
+| `make typecheck` | Workspace packages compile from the documented root without live credentials. | Command exits successfully. | quality gate |
+| `make test` | Deterministic workspace tests pass from the documented root. | Command exits successfully. | quality gate |
+| `make lint` | Workspace lint passes from the documented root using the configured lint tool. | Command exits successfully, or reports the configured missing-tool guidance if the reviewer has not installed `golangci-lint`. | quality gate |
+
+The command set intentionally separates repository-inspection commands from Go
+test commands. Inspection commands prove public declarations, docs, and audit
+coverage gaps. Go test commands prove current observable runtime behavior and
+also make clear where passing tests demonstrate a gap, such as passthrough
+without local validation, rather than row closure.
+
 ## Current Story Status
 
-Stories 001, 002, 003, and 004 are complete. Later validator stories must fill
-in reviewer-runnable command results, final row closure decisions, and the
-final next planner action.
+Stories 001, 002, 003, 004, and 005 are complete. Later validator stories must
+fill in final row closure decisions and the final next planner action.
