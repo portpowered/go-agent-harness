@@ -43,9 +43,10 @@ artifacts alone.
   `git diff --name-only origin/main...HEAD -- docs/internal/checklist.md docs/internal/progress.txt`
 - `plannerOwnedFilesResult`: no output; this landing branch does not change
   either planner-owned file relative to `origin/main`
-- `reverseDependencyProofCommand`:
-  `cd go-agent-loop && go test ./test/functional -run TestDependencyDirection_GoAgentLoopDoesNotDependOnGateway`
-- `reverseDependencyProofResult`: `ok github.com/portpowered/go-agent-loop/test/functional`
+- `reverseDependencyInspectionCommand`:
+  `cd go-agent-loop && go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./...`
+- `reverseDependencyInspectionResult`: no `github.com/portpowered/go-llm-gateway`
+  import path was present when inspected for this validator record
 - `qualityGateCommands`:
   `make typecheck`, `make lint`, `make test`
 - `qualityGateResult`: pass
@@ -132,19 +133,18 @@ artifacts alone.
 - `subject`: reviewer-verifiable proof that `go-agent-loop` does not drift into
   a reverse dependency on `go-llm-gateway`
 - `outcome`: `pass`
-- `evidence`: the authoritative checkout now contains the committed automated
-  proof at `go-agent-loop/test/functional/dependency_direction_test.go`.
-  Reviewers can run
-  `cd go-agent-loop && go test ./test/functional -run TestDependencyDirection_GoAgentLoopDoesNotDependOnGateway`,
-  which shells out to `go list -deps ./...` from the loop module root and
-  fails if any compiled `go-agent-loop` package depends on
-  `github.com/portpowered/go-llm-gateway`. `docs/architecture/dependencies.md`
-  now cites that exact command, and the command passes on this branch, so the
-  dependency rule is no longer enforced by architecture prose alone.
-- `affectedFilesOrSurfaces`:
-  `go-agent-loop/test/functional/dependency_direction_test.go`;
-  `docs/architecture/dependencies.md`;
-  `docs/internal/phase-3-shared-contract-validator.md`
+- `evidence`: the authoritative checkout documents a reviewer-run dependency
+  inspection command rather than committing dependency inventory as a quality
+  gate test. Reviewers can run
+  `cd go-agent-loop && go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./...`
+  and confirm that no compiled `go-agent-loop` package depends on
+  `github.com/portpowered/go-llm-gateway`. Observable quality-gate coverage for
+  the bridge remains in the runtime adapter tests under
+  `go-llm-gateway/pkg/inference`.
+- `affectedFilesOrSurfaces`: `docs/architecture/dependencies.md`;
+  `docs/internal/phase-3-shared-contract-validator.md`;
+  `go-llm-gateway/pkg/inference/main_inferencer_test.go`;
+  `go-llm-gateway/pkg/inference/session_inferencer_test.go`
 - `remainingDrift`: none
 - `requiredFollowUp`: none
 

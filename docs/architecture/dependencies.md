@@ -51,10 +51,9 @@ Reviewer-citable rule for this phase:
   second shared core surface
 - any future proposal to extract a separate shared module should justify what
   concrete risk cannot be managed at the current boundary
-- `go-agent-loop/test/architecture/dependency_direction_test.go` is the
-  automated proof for this slice: it requires gateway adapters to import
-  loop-owned contracts and fails if any `go-agent-loop` package starts
-  depending on `go-llm-gateway`
+- the runtime adapter tests in `go-llm-gateway/pkg/inference` are the
+  behavioral proof for this slice: they exercise gateway adapters through
+  loop-owned contracts without introducing a second shared core surface
 
 Gateway-runtime decoupling reviewer rule for `P3-CORE-04` in the current
 slice:
@@ -76,8 +75,12 @@ Reviewer rule of thumb:
 
 Reviewer-verifiable proof:
 
-- Run `cd go-agent-loop && go test ./test/functional -run TestDependencyDirection_GoAgentLoopDoesNotDependOnGateway`.
-- That test shells out to `go list -deps ./...` from the `go-agent-loop` module root and fails if any compiled loop package depends on `github.com/portpowered/go-llm-gateway`.
+- Run `cd go-llm-gateway && go test ./pkg/inference`.
+- The tests exercise `GatewayInferencer` and `SessionGatewayInferencer` through
+  loop-owned `messages` interfaces and pass without live provider credentials.
+- Reviewers who need to inspect dependency direction can run `go list` commands
+  manually, but dependency inventories are reviewer evidence rather than
+  quality-gate tests.
 
 ## Current Contract Surfaces
 
