@@ -16,14 +16,15 @@ type sessionGateway interface {
 // Ensure SessionGatewayInferencer satisfies messages.SessionInferencer at compile time.
 var _ messages.SessionInferencer = (*SessionGatewayInferencer)(nil)
 
-// SessionGatewayInferencer bridges a go-llm-gateway SessionInferencer to the
-// agent loop's session inference needs. It is the sessional counterpart to
-// GatewayInferencer: where GatewayInferencer adapts Gateway for request/response
-// inference, SessionGatewayInferencer adapts SessionInferencer for persistent
-// bidirectional sessions.
+// SessionGatewayInferencer is the public bridge from gateway session
+// establishment into the loop-owned messages.SessionInferencer contract. It is
+// the session counterpart to GatewayInferencer: where GatewayInferencer adapts
+// stateless gateway behavior, SessionGatewayInferencer adapts persistent
+// bidirectional session behavior without defining a second shared session API.
 //
-// ConnectSession returns the messages.Session directly from the provider —
-// providers handle all protocol translation internally.
+// ConnectSession returns the loop-owned messages.Session boundary contract
+// directly from the gateway/provider path after provider-specific protocol
+// translation has already been handled internally.
 type SessionGatewayInferencer struct {
 	sessionGW    sessionGateway
 	model        string
@@ -55,8 +56,9 @@ func WithSessionInstructions(instructions string) SessionOption {
 	}
 }
 
-// NewSessionGatewayInferencer creates a SessionGatewayInferencer that delegates
-// to the given session gateway for session establishment.
+// NewSessionGatewayInferencer creates a bridge that delegates session
+// establishment to a gateway-owned session adapter while preserving
+// messages.SessionInferencer as the consumer-facing contract.
 func NewSessionGatewayInferencer(sessionGW sessionGateway, opts ...SessionOption) *SessionGatewayInferencer {
 	si := &SessionGatewayInferencer{sessionGW: sessionGW}
 	for _, opt := range opts {
@@ -65,8 +67,8 @@ func NewSessionGatewayInferencer(sessionGW sessionGateway, opts ...SessionOption
 	return si
 }
 
-// ConnectSession establishes a new session via the gateway and returns a
-// messages.Session. Protocol translation is handled by the provider internally.
+// ConnectSession establishes a new session via the gateway and returns the
+// loop-owned messages.Session boundary contract.
 func (si *SessionGatewayInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	return si.sessionGW.ConnectSession(ctx, models.SessionConfig{
 		Model:        si.model,

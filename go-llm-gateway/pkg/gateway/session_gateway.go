@@ -9,8 +9,10 @@ import (
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
-// DefaultSessionGateway routes session requests to a configured SessionProvider.
-// It is the sessional counterpart to DefaultGateway.
+// DefaultSessionGateway routes gateway-owned session configuration to a
+// configured SessionProvider. It is the gateway-side bridge that
+// SessionGatewayInferencer uses before control crosses into the loop-owned
+// messages.Session contract.
 type DefaultSessionGateway struct {
 	provider providers.SessionProvider
 }
@@ -48,7 +50,8 @@ type sessionInferencer interface {
 // Compile-time check that DefaultSessionGateway satisfies sessionInferencer.
 var _ sessionInferencer = (*DefaultSessionGateway)(nil)
 
-// ConnectSession establishes a session via the configured provider.
+// ConnectSession establishes a session via the configured provider and returns
+// the loop-owned messages.Session boundary contract.
 func (g *DefaultSessionGateway) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
 	return g.provider.ConnectSession(ctx, config)
 }
