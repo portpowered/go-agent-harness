@@ -198,11 +198,15 @@ The delivered session runtime ownership model for this Phase 2 slice is:
   `go-llm-gateway/pkg/testing.SessionReplayer` honor the owned caller or
   session context for relay writes, so replay and record cancellation semantics
   stay aligned with the same runtime seam.
+- The broader constructor-ownership lane is not fully converged yet: the
+  record planner still falls back to a factory-owned live dialer when the
+  caller omits `SessionRunOptions.WebSocketDialer`, so `P2-COB-04` remains
+  open until that fallback is removed.
 
-This slice resolves the scoped `HC-03` and `DI-04` session runtime ownership
-findings and the remaining session-helper portion of `CTX-02` recorded in
-`docs/architecture/contract-gap-audit.md`. Reviewers validating checklist
-advancement should cite `P2-SRO-04`, `P2-GATE-01`, the broader
+This slice resolves the scoped `HC-03` provider-constructor ownership issue
+and the remaining session-helper portion of `CTX-02`, while narrowing but not
+fully resolving `DI-04` in `docs/architecture/contract-gap-audit.md`.
+Reviewers validating checklist advancement should cite `P2-SRO-04`, `P2-GATE-01`, the broader
 constructor-ownership row `P2-COB-04`, and
 `docs/internal/phase-2-session-runtime-ownership-validator.md`.
 

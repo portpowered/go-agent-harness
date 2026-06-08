@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
