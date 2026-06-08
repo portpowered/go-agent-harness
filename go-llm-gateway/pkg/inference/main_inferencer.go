@@ -8,8 +8,9 @@ import (
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 )
 
-// GatewayInferencer implements go-agent-loop's Inferencer interface
-// by delegating to a go-llm-gateway Gateway.
+// GatewayInferencer is the public stateless bridge from a
+// go-llm-gateway gateway.Gateway into the loop-owned messages.Inferencer
+// contract.
 type GatewayInferencer struct {
 	gw          gateway.Gateway
 	model       string          // model ID forwarded to every request
@@ -48,6 +49,9 @@ func NewGatewayInferencer(gw gateway.Gateway, opts ...Option) *GatewayInferencer
 	return gi
 }
 
+// Infer forwards a loop-owned inference request into the gateway seam and
+// translates the normalized gateway response back into messages-owned result
+// shapes.
 func (gi *GatewayInferencer) Infer(ctx context.Context, req messages.InferenceRequest) (messages.InferenceResult, error) {
 	resp, err := gi.gw.Infer(ctx, gateway.InferenceRequest{
 		Messages:         req.Messages,
@@ -84,6 +88,9 @@ func (gi *GatewayInferencer) Infer(ctx context.Context, req messages.InferenceRe
 	}, nil
 }
 
+// InferStream forwards a loop-owned inference request into the gateway seam
+// and returns the loop-owned streaming contract without introducing a second
+// shared message surface.
 func (gi *GatewayInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	return gi.gw.InferStream(ctx, gateway.InferenceRequest{
 		Messages:         req.Messages,

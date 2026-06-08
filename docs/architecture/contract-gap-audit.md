@@ -22,6 +22,28 @@ The findings below are written so a reviewer can distinguish "this is the contra
 
 ## Hidden Coupling Findings
 
+## Phase 3 Shared-Contract Boundary Status
+
+Phase 3 now makes one reviewer-citable boundary choice for `P3-CORE-01` and
+the scoped `P3-CORE-02` work:
+
+- `go-agent-loop/pkg/messages` is the authoritative shared contract boundary
+  for cross-library message, stream, tool, token-usage, inference, and session
+  interfaces
+- this slice keeps that boundary in the loop module instead of introducing a
+  new shared module because the repository already uses it as the live
+  compatibility anchor and does not yet show a lower-risk extraction path
+- the required evidence set for reviewers is the package-level documentation in
+  `go-agent-loop/pkg/messages`, the dependency guidance in
+  `docs/architecture/dependencies.md`, the gateway compatibility-layer
+  clarification that follows in later Phase 3 stories, and the automated
+  dependency-direction proof in
+  `go-agent-loop/test/architecture/dependency_direction_test.go`, the runtime
+  adapter proofs in `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
+  `go-llm-gateway/pkg/inference/session_inferencer_test.go`, plus the
+  supplemental reviewer-facing evidence checks in
+  `go-agent-loop/test/architecture/reviewer_evidence_test.go`
+
 ### HC-01: `go-llm-gateway` test hygiene depends on `agent-cli` fixture layout
 
 - Affected boundary: `go-llm-gateway/internal/sessionfixturevalidator` -> `agent-cli/test/integration/testdata`
@@ -48,6 +70,25 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - an adapter would translate between loop and gateway vocabularies; the current code exposes the same types under two package paths
 - Recommended Phase 2 hardening:
   - either document `pkg/models` as a deliberate alias layer with no independent compatibility promise, or define a truly gateway-owned model surface and add explicit translation at the boundary
+- Phase 3 status:
+  - resolved for the scoped shared-contract decision
+  - boundary ownership is now explicit: `go-agent-loop/pkg/messages` is the
+    authoritative shared contract package for this slice
+  - `go-llm-gateway/pkg/models` is now documented as a compatibility alias
+    layer, not an independently owned shared-message vocabulary
+  - public adapter packages are documented as bridges into the loop-owned
+    boundary, and `go-agent-loop/test/architecture/dependency_direction_test.go`
+    together with the runtime adapter proofs in
+    `go-llm-gateway/pkg/inference/main_inferencer_test.go` and
+    `go-llm-gateway/pkg/inference/session_inferencer_test.go` provide the
+    reviewer-citable import-direction and contract-behavior proof that
+    preserves this one-way dependency rule
+  - `go-agent-loop/test/architecture/reviewer_evidence_test.go` remains as
+    supplemental drift protection so the checklist and audit continue citing the
+    same evidence set without replacing the runtime adapter proofs
+  - reviewers should treat new gateway docs or exports that present
+    `pkg/models` as a second shared core surface as a regression against
+    `P3-CORE-01` and `P3-CORE-02`
 
 ### HC-03: session command behavior in `agent-cli` depends on provider-specific runtime helpers
 
@@ -142,9 +183,10 @@ The findings below are written so a reviewer can distinguish "this is the contra
   - introduce a session runtime dependency bundle for config loading, dialer selection, and provider-specific inferencer construction
   - keep `RunSession` responsible for command semantics, not for discovering defaults from disk and transport packages
 - Status after `phase-2-session-runtime-ownership-repair`:
-  - resolved for the scoped session runtime seam
+  - narrowed, but not fully resolved, for the scoped session runtime seam
   - `RunSession` now delegates session-mode config loading, dialer selection, and provider-specific runtime construction to `agent-cli/internal/services/session_runtime.go`
-  - Grok and OpenAI session providers no longer create hidden live WebSocket dialers in the reviewed record/replay paths; missing owned dialers fail explicitly at the planner or provider session boundary
+  - Grok and OpenAI session providers no longer create hidden live WebSocket dialers inside provider session constructors; missing owned dialers fail explicitly at the provider boundary
+  - `agent-cli/internal/services/session_runtime.go` still creates a factory-owned live default through `newDefaultLiveDialer()` on record paths when the caller omits `SessionRunOptions.WebSocketDialer`, so the broader constructor-ownership row remains open until that fallback is removed
 
 ## Context Contract Findings
 

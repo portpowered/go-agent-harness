@@ -1,9 +1,11 @@
 // Package models exposes the public gateway request/response model surface.
 //
-// Message, tool, and token-usage names in this package are compatibility
-// aliases over github.com/portpowered/go-agent-loop/pkg/messages. They follow
-// the loop-owned shared contract and do not define an independent gateway
-// message vocabulary.
+// Shared message, tool, content-part, and token-usage names in this package
+// are compatibility aliases over the authoritative contracts in
+// github.com/portpowered/go-agent-loop/pkg/messages. Gateway consumers may keep
+// importing pkg/models for those shared shapes, but compatibility for that
+// subset follows the loop-owned contract and does not define an independent
+// gateway message vocabulary.
 //
 // Gateway-owned types in this package are limited to gateway-specific session
 // configuration and realtime event shapes such as SessionConfig,

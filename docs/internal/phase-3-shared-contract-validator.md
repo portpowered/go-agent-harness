@@ -123,24 +123,20 @@ The final convergence report must:
 - `group`: `P3-CORE-01`
 - `subject`: authoritative Phase 3 checklist rows plus the committed
   `phase-3-shared-contract-decision` slice-plan source
-- `outcome`: `uncertain`
+- `outcome`: `pass`
 - `evidence`: `docs/internal/checklist.md` now contains explicit `P3-CORE-01`
-  through `P3-CORE-06` rows that reviewers can cite directly. That resolves
-  the validator's missing-checklist problem. The branch still does not contain
-  the required planning surface `tasks/todo/phase-3-shared-contract-decision.md`,
-  so this validator cannot map the delivered repository state back to the
-  committed slice acceptance source without relying on inferred history.
+  through `P3-CORE-06` rows that reviewers can cite directly, and
+  `tasks/todo/phase-3-shared-contract-decision.md` now records the completed
+  slice commitments and primary evidence surfaces for the authoritative
+  boundary choice, gateway compatibility layer, explicit adapter bridges, and
+  dependency-direction proof. Together those repository surfaces let reviewers
+  map the delivered validator findings back to both the checklist rows and the
+  committed Phase 3 decision slice without reconstructing branch history.
 - `affectedFilesOrSurfaces`: `docs/internal/checklist.md`;
-  `tasks/todo/phase-3-shared-contract-decision.md` (missing);
+  `tasks/todo/phase-3-shared-contract-decision.md`;
   `docs/internal/phase-3-shared-contract-validator.md`
-- `remainingDrift`: the checklist source is now authoritative, but the branch
-  still lacks the committed `phase-3-shared-contract-decision` slice-plan file
-  this validator is required to cite.
-- `requiredFollowUp`: restore or recreate
-  `tasks/todo/phase-3-shared-contract-decision.md` on the reviewed branch so
-  reviewers can map checklist rows and delivered repository evidence back to
-  the committed Phase 3 decision slice without reconstructing prior branch
-  history.
+- `remainingDrift`: none
+- `requiredFollowUp`: none
 
 ### Authoritative Shared Contract Boundary
 
@@ -254,40 +250,24 @@ The final convergence report must:
   - `pass`: `P3-CORE-02` truthful gateway model boundary documentation
   - `pass`: `P3-CORE-05` explicit adapter composition boundaries
   - `pass`: `P3-CORE-06` reviewer-verifiable dependency proof
-  - `uncertain`: checklist-to-slice-plan convergence remains unverified because
-    `tasks/todo/phase-3-shared-contract-decision.md` is absent on the reviewed
-    branch
-- `overallOutcome`: `uncertain`
+  - `pass`: checklist-to-slice-plan convergence is now reviewer-verifiable from
+    branch-local checklist and decision-plan sources
+- `overallOutcome`: `pass`
 - `summary`: the reviewed branch now converges on one truthful shared-contract
   description for `go-agent-loop/pkg/messages` and the `go-llm-gateway/pkg/models`
   compatibility layer, keeps cross-library composition in explicit adapter
   packages, and now includes an automated reverse-dependency proof reviewers
-  can run directly. The validator still cannot produce a fully authoritative
-  end-state verdict because the required
-  `tasks/todo/phase-3-shared-contract-decision.md` planning surface is absent,
-  so the completed findings still cannot be mapped back to the committed slice
-  acceptance source from the reviewed branch alone.
-- `broaderPhase3Readiness`: broader Phase 3 independence slices should pause
-  pending restoration of the missing Phase 3 decision-plan source on the
-  reviewed branch.
+  can run directly. The reviewed branch now also contains the committed
+  `phase-3-shared-contract-decision` plan source, so the completed findings
+  map back to both the authoritative checklist rows and the decision-slice
+  acceptance commitments from repository state alone.
+- `broaderPhase3Readiness`: broader Phase 3 independence slices may advance
+  immediately from this shared-contract convergence baseline.
 
 ## Remaining Drift And Repair Plan
 
-- `relatedChecklistRows`: `P3-CORE-01`, `P3-CORE-02`, `P3-CORE-05`,
-  `P3-CORE-06`
-- `driftItem`: missing authoritative decision-plan source for
-  `phase-3-shared-contract-decision`
-- `triggeringEvidence`: the validator requires
-  `tasks/todo/phase-3-shared-contract-decision.md` as a direct evidence input,
-  but `tasks/todo/` on this branch only contains the two Phase 2 slice-plan
-  files. Without that Phase 3 plan artifact, reviewers cannot map the repaired
-  branch state back to the committed decision-slice acceptance source from the
-  repository alone.
-- `affectedFilesOrSurfaces`: `tasks/todo/phase-3-shared-contract-decision.md`
-  (missing); `docs/internal/phase-3-shared-contract-validator.md`;
-  `docs/internal/checklist.md`
-- `exactRepairWork`: restore or recreate
-  `tasks/todo/phase-3-shared-contract-decision.md` on the reviewed branch with
-  the committed Phase 3 decision scope and acceptance commitments, then rerun
-  this validator so the convergence findings can cite both the checklist rows
-  and the decision-plan source directly.
+- `relatedChecklistRows`: none
+- `driftItem`: none
+- `triggeringEvidence`: none
+- `affectedFilesOrSurfaces`: none
+- `exactRepairWork`: none

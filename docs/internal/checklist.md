@@ -1,5 +1,16 @@
 # Internal Checklist
 
+## Phase 3 - Shared Contract Decision
+
+This checklist is the authoritative Phase 3 inventory for the shared-contract
+decision slice. Reviewers should cite these item IDs directly when validating
+that the Phase 3 boundary choice is complete and evidenced.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P3-CORE-01` | Authoritative shared contract boundary | The repository names `go-agent-loop/pkg/messages` as the authoritative shared contract boundary for cross-library message, stream, tool, token-usage, inference, and session contracts, with reviewer-citable rationale for keeping that boundary in the loop module during this phase. | `go-agent-loop/pkg/messages/doc.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-llm-gateway/pkg/inference/main_inferencer_test.go`, `go-agent-loop/test/architecture/reviewer_evidence_test.go` |
+| `P3-CORE-02` | Gateway compatibility layer and bridge evidence | Gateway-facing shared-message surfaces are documented as compatibility aliases over loop-owned contracts, public adapter packages are described as bridges into that boundary, and automated dependency evidence proves the intended one-way import direction without reverse loop-to-gateway imports. Runtime adapter proofs are the primary observable evidence for the bridge behavior; reviewer-evidence checks are supplemental drift protection over the cited docs surfaces. | `go-llm-gateway/pkg/models/doc.go`, `go-llm-gateway/pkg/models/message.go`, `go-llm-gateway/pkg/inference/doc.go`, `go-llm-gateway/pkg/gateway/session_gateway.go`, `docs/architecture/dependencies.md`, `docs/architecture/contract-gap-audit.md`, `go-agent-loop/test/architecture/dependency_direction_test.go`, `go-llm-gateway/pkg/inference/main_inferencer_test.go`, `go-llm-gateway/pkg/inference/session_inferencer_test.go`, `go-agent-loop/test/architecture/reviewer_evidence_test.go` |
+
 ## Phase 1 - Authoritative Checkout Baseline
 
 This checklist is the Phase 1 inventory for the authoritative checkout baseline.
