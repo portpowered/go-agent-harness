@@ -11,6 +11,29 @@ Status values:
 - `uncertain`: evidence exists, but the row still needs targeted reconciliation before a reviewer should treat it as closed.
 - `open`: intentionally not closable in this audit-only lane.
 
+Reviewer command policy: run all commands from the repository root unless a row explicitly says otherwise. The test commands below use local Go packages, committed fixtures, and injected/mocked provider seams; they are intended to run without live provider credentials, external network access, or unspecified environment variables. `go doc` commands inspect the current public declarations and comments; they do not prove runtime behavior by themselves.
+
+### Credential-Free Reviewer Command Matrix
+
+| Command | Rows | Evidence claim | Expected pass condition |
+| --- | --- | --- | --- |
+| `make typecheck` | P4-API-01, P4-API-07, P4-GATE-01 | Workspace public packages and the CLI binary compile under the current `go.work` module graph. | The root build target exits successfully for `agent-cli`, `go-agent-loop`, and `go-llm-gateway`. |
+| `make test` | P4-API-02, P4-API-03, P4-API-04, P4-API-06 | Deterministic unit and package tests for loop, gateway, provider, replay, CLI service, and fixture behavior pass without live credentials. | All module-local `go test ./... -timeout 120s` invocations exit successfully. |
+| `(cd go-agent-loop && go test ./pkg/agentloop)` | P4-API-01 | Agent loop constructor ownership for injected inferencers and tool execution remains deterministic. | The package test exits successfully. |
+| `(cd agent-cli && go test ./internal/agent ./internal/services)` | P4-API-01, P4-API-02, P4-API-06 | CLI-owned provider runtime seams, session runtime planning, replay/record cancellation, and command error behavior remain covered by local tests. | Both package tests exit successfully without provider credentials. |
+| `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/testing ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/grok)` | P4-API-02, P4-API-06 | PNIG typed errors, replay divergence, replay cancellation, provider stream behavior, and credential-free session construction evidence remain deterministic. | All listed gateway/provider package tests exit successfully. |
+| `(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems ./test/functional)` | P4-API-02, P4-API-03, P4-API-06 | Loop participants, subsystems, and functional session flows preserve stream, error, lifecycle, and cancellation behavior. | All listed loop package tests exit successfully. |
+| `(cd go-agent-loop && go test ./pkg/engine ./test/functional)` | P4-API-03 | Loop result reconstruction and session lifecycle behavior remain deterministic. | Both package tests exit successfully. |
+| `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)` | P4-API-04 | CLI model metadata, MIME validation, and executor-side unsupported-feature validation behavior remain local and credential-free. | All listed CLI package tests exit successfully. |
+| `(cd go-llm-gateway && go test ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` | P4-API-04 | Provider-local option mapping, modality handling, stream behavior, session construction, and provider-specific config passthrough are covered by deterministic tests. | All listed provider package tests exit successfully without provider credentials. |
+| `(cd go-llm-gateway && go test ./pkg/inference ./pkg/gateway)` | P4-API-05 | Gateway, PNIG, and loop inference adapter contracts still agree on current request, response, and event shapes. | Both package tests exit successfully. |
+| `(cd go-llm-gateway && go test ./pkg/testing ./pkg/gateway)` | P4-API-06 | Replay/record lifecycle behavior and PNIG cancellation/timeout event evidence remain deterministic. | Both package tests exit successfully. |
+| `(cd go-agent-loop && go test ./test/functional -run 'TestRun_ExitsOnContextCancellation|TestSession')` | P4-API-06 | Loop cancellation and session behavior relevant to context ownership remain covered by targeted functional tests. | The targeted functional tests exit successfully. |
+| `go doc ./go-agent-loop/pkg/messages` | P4-API-02, P4-API-06, P4-API-07 | Current shared message, stream, session, and typed error declarations are inspectable as public documentation. | `go doc` prints package declarations without error. |
+| `go doc ./go-llm-gateway/pkg/gateway` | P4-API-03, P4-API-05, P4-API-07 | Current gateway stateless, session, and PNIG contracts are inspectable as public documentation. | `go doc` prints package declarations without error. |
+| `go doc ./go-llm-gateway/pkg/models` | P4-API-05, P4-API-07 | Current gateway model alias facade is inspectable and can be compared against `go-agent-loop/pkg/messages`. | `go doc` prints package declarations without error. |
+| `go doc ./go-llm-gateway/pkg/providers` | P4-API-04, P4-API-07 | Current provider declarations are inspectable, including the absence of a provider-neutral capability discovery method. | `go doc` prints package declarations without error. |
+
 ### P4-API-01: Dependency Ownership And Injection Contracts
 
 - Outcome: `fail`
