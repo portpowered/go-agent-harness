@@ -57,7 +57,13 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 			}
 		}
 
-		resp, err := g.provider.Infer(ctx, interactionProviderRequest(req))
+		providerReq := interactionProviderRequest(req)
+		if err := validateStatelessRequest(g.provider, providerReq, false); err != nil {
+			emitter.emitTerminalForErr(err)
+			return
+		}
+
+		resp, err := g.provider.Infer(ctx, providerReq)
 		if err != nil {
 			emitter.emitTerminalForErr(err)
 			return
@@ -215,6 +221,25 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		})
 		return
 	}
+	var unsupported *providers.UnsupportedFeatureError
+	if errors.As(err, &unsupported) {
+		_ = e.emitTerminalRaw(InteractionEvent{
+			Type: InteractionEventError,
+			Error: &InteractionError{
+				Code:    "unsupported_feature",
+				Message: err.Error(),
+				Details: map[string]json.RawMessage{
+					"provider":   mustRawJSON(unsupported.Provider),
+					"feature":    mustRawJSON(unsupported.Feature),
+					"mode":       mustRawJSON(unsupported.Mode),
+					"state":      mustRawJSON(unsupported.Capability.State),
+					"rationale":  mustRawJSON(unsupported.Capability.Rationale),
+					"capability": mustRawJSON(unsupported.Capability),
+				},
+			},
+		})
+		return
+	}
 	_ = e.emitTerminalRaw(InteractionEvent{
 		Type: InteractionEventError,
 		Error: &InteractionError{
@@ -244,6 +269,14 @@ func (e *interactionEventEmitter) emitRaw(event InteractionEvent) error {
 	event.CreatedAt = &now
 	e.out <- event
 	return nil
+}
+
+func mustRawJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 func interactionProviderRequest(req InteractionRequest) providers.InferenceRequest {
