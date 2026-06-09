@@ -294,6 +294,12 @@ Capability states are:
 | `unsupported` | The provider wrapper explicitly rejects the feature as unavailable. |
 | `unknown` | The provider wrapper has not published a support claim. This is the fallback for legacy providers. |
 
+Every state may include detail text. For `unknown`, that detail is the
+consumer-facing rationale for why the wrapper cannot make a static support or
+non-support claim without live provider behavior. Unknown is not a local
+failure condition by itself; use it as "do not advertise as supported" unless
+your application has a separate provider-specific policy.
+
 The public capability fields map to the feature areas requested by consumers:
 
 | Customer feature | Capability field |
@@ -428,6 +434,9 @@ Use `errors.As` when you need structured details:
 - `*providers.ValidationError` exposes `Provider`, `Feature`, `Requested`,
   `Supported`, and `Detail` for representative local invalid or unsupported
   request failures.
+- `*providers.UnsupportedFeatureError` exposes `Provider`, `Feature`,
+  `RequestedMode`, and `Capability` for deterministic capability mismatches
+  rejected locally before provider execution.
 
 Provider HTTP errors may match both `ErrProviderRejected` and a narrower class
 such as `ErrAuthentication`, `ErrRateLimited`, `ErrInvalidRequest`, or
