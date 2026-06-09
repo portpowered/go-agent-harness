@@ -80,6 +80,53 @@ taxonomy and tests, then narrow or repair the still-open typed error, stream,
 replay, cancellation, partial-output, CLI, session, docs, and reviewer-command
 gaps on top of `origin/main`.
 
+## Baseline Contract Preservation
+
+Story 002 preserves the authoritative baseline contracts instead of replaying
+or replacing them with typed-terminal-specific variants.
+
+Provider capability and local-validation behavior remain the public baseline
+for request feasibility:
+
+- `go-llm-gateway/pkg/capabilities` remains the provider-neutral capability
+  vocabulary with `supported`, `unsupported`, and `unknown` states.
+- `go-llm-gateway/pkg/gateway.DefaultGateway.Capabilities()` and
+  `DefaultSessionGateway.Capabilities()` still delegate to provider reporters
+  without executing inference or connecting sessions.
+- Unsupported stateless and session features still fail locally with
+  `UnsupportedFeatureError` before provider execution. Unknown capabilities
+  still allow execution without claiming support.
+- `go-llm-gateway/pkg/gateway/gateway_test.go` now proves direct stream typed
+  terminal error normalization is additive: terminal classification fields are
+  populated on the error event, while the provider capability states remain
+  discoverable and unchanged.
+
+Dependency, result, context, and lifecycle contracts remain governed by the
+authoritative baseline evidence rather than by this typed-terminal branch
+disposition note:
+
+- `docs/internal/phase-4-dependency-result-context-lifecycle-contract.md`
+  remains the reviewer map for `FinalText()`, `Stream.Outcome()`,
+  `TypedBuffer` context reads/writes, typed session send outcomes, replay
+  outcomes, prompt-resolution observability, and CLI/session lifecycle states.
+- `docs/architecture/dependency-result-contracts.md` remains the public
+  migration guide for additive result/lifecycle surfaces and compatible legacy
+  helpers.
+- `docs/architecture/contract-gap-audit.md` remains the row-level Phase 4
+  source of truth. This story preserves the existing provider capability and
+  dependency/result/lifecycle evidence; it does not broaden into provider
+  capability matrix completion or close `P4-GATE-01`.
+
+Reviewer commands:
+
+```sh
+go test ./go-llm-gateway/pkg/gateway -run 'TestGatewayCapabilities|TestSessionGatewayCapabilities|TestGatewayRejectsUnsupported|TestSessionGatewayRejectsUnsupported|TestInferStream_TerminalErrorNormalizationPreservesProviderCapabilities'
+go test ./go-agent-loop/pkg/agentloop ./go-agent-loop/pkg/messages
+go test ./go-llm-gateway/pkg/testing ./go-llm-gateway/pkg/inference
+make typecheck
+make test
+```
+
 ## Gate Status
 
 This story does not close `P4-GATE-01`. The gate remains governed by the

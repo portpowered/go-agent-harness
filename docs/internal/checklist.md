@@ -121,6 +121,7 @@ ambiguous unconsumed planning input.
 | Item ID | Area | Required outcome | Primary evidence surfaces |
 | --- | --- | --- | --- |
 | `P4-TT-RECON-01` | Typed-terminal branch disposition | The authoritative baseline commit, typed-terminal branch relationship, exact landed disposition, semantic drift notes, and `P4-GATE-01` non-closure are reviewer-visible. | `docs/internal/phase-4-typed-terminal-authoritative-reconciliation.md`, `docs/internal/phase-4-authoritative-baseline-sync.md`, `docs/architecture/stream-terminal-contract.md`, `docs/internal/phase-4-api-contract-validator.md` |
+| `P4-TT-RECON-02` | Baseline contract preservation | Provider capability/local-validation behavior and dependency/result/lifecycle evidence remain reviewer-visible and authoritative while typed-terminal classification is reconciled additively. | `docs/internal/phase-4-typed-terminal-authoritative-reconciliation.md`, `docs/internal/phase-4-dependency-result-context-lifecycle-contract.md`, `docs/architecture/dependency-result-contracts.md`, `go-llm-gateway/pkg/gateway/gateway_test.go`, `go-llm-gateway/pkg/gateway/capabilities_test.go` |
 
 ## Phase 3 - Gateway Runtime Decoupling
 
