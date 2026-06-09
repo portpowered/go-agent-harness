@@ -547,6 +547,38 @@ func TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled(t *testing.T) {
 	}
 }
 
+func TestSessionReplayer_CancellationWakesExpectedOutboundWait(t *testing.T) {
+	events := []CapturedSessionEvent{
+		makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("required outbound")),
+		makeCapture(DirectionServerToClient, 10, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after outbound")),
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.session.json")
+	writeCapture(t, path, events)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	replayer := mustNewSessionReplayer(t, path, WithReplayContext(ctx))
+	cancel()
+
+	select {
+	case <-replayer.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for replay cancellation while blocked on expected outbound event")
+	}
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayCancelled {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayCancelled)
+	}
+	if !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("outcome err = %v, want context.Canceled", outcome.Err)
+	}
+	if outcome.OK() {
+		t.Fatal("cancelled replay outcome reported OK")
+	}
+}
+
 // --- helpers ---
 
 func makeCapture(dir SessionEventDirection, tsMs int64, msgType messages.StreamMessageType, val messages.StreamMessageValue) CapturedSessionEvent {

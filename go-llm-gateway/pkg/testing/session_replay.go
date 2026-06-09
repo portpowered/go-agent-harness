@@ -142,6 +142,7 @@ func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*S
 	}
 	r.replayCtx, r.cancel = context.WithCancel(r.replayCtx)
 
+	go r.watchReplayContext()
 	go r.replayLoop()
 
 	return r, nil
@@ -290,8 +291,13 @@ func (r *SessionReplayer) replayLoop() {
 	var lastTimestamp int64
 	for {
 		r.mu.Lock()
-		for r.validateOutbound && !r.closed && r.err == nil && r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer {
+		for r.validateOutbound && !r.closed && r.err == nil && r.replayCtx.Err() == nil && r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer {
 			r.cond.Wait()
+		}
+		if !r.closed && r.err == nil && r.replayCtx.Err() != nil {
+			r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+			r.mu.Unlock()
+			return
 		}
 		if r.closed || r.err != nil || r.index >= len(r.events) {
 			if r.err == nil && r.index >= len(r.events) {
@@ -342,6 +348,13 @@ func (r *SessionReplayer) replayLoop() {
 			}
 		}
 	}
+}
+
+func (r *SessionReplayer) watchReplayContext() {
+	<-r.replayCtx.Done()
+	r.mu.Lock()
+	r.cond.Broadcast()
+	r.mu.Unlock()
 }
 
 func (r *SessionReplayer) failLocked(status SessionReplayStatus, err error) {
