@@ -13,10 +13,11 @@ import (
 // StreamMessage deltas to DeltaOutbox as they arrive. Message assembly (accumulating
 // deltas into a full Message) is performed by GlobalOrdering in the engine, not here.
 //
-// Streaming: each StreamMessage from InferStream is forwarded to DeltaOutbox unchanged.
+// Streaming: each StreamMessage from InferStream is forwarded to DeltaOutbox with
+// additive terminal metadata on terminal events when the provider omitted it.
 // On MESSAGE.END or ERROR the stream is considered complete.
-// If the channel closes without MESSAGE.END a synthetic MESSAGE.END is emitted so the
-// ordering layer always sees a complete boundary.
+// If the channel closes without MESSAGE.END a provider-close MESSAGE.END is emitted
+// so the ordering layer always sees a complete boundary.
 //
 // Non-streaming fallback: if InferStream returns nil or an error, Infer is called and
 // synthetic deltas (MESSAGE.START → content deltas → MESSAGE.END) are emitted to
@@ -248,22 +249,32 @@ func (r *ModelRunner) writeDelta(ctx context.Context, sm messages.StreamMessage)
 // It stops on MESSAGE.END, ERROR, or channel close (emitting a synthetic MESSAGE.END in
 // the latter case so the ordering layer always sees a complete message boundary).
 func (r *ModelRunner) drainStream(ctx context.Context, ch <-chan messages.StreamMessage) {
+	hasOutput := false
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case msg, ok := <-ch:
 			if !ok {
-				// Channel closed without MESSAGE.END; emit a synthetic end so the
-				// ordering layer can assemble whatever content was accumulated.
+				// Channel closed without MESSAGE.END; emit a provider-close end so
+				// callers can distinguish transport close from clean completion.
 				r.writeDelta(ctx, messages.StreamMessage{
-					Type:  messages.StreamTypeMessageEnd,
-					Role:  messages.RoleAssistant,
-					Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+					Type: messages.StreamTypeMessageEnd,
+					Role: messages.RoleAssistant,
+					Value: messages.NewMessageEndValueWithTerminal(
+						messages.TokenUsage{},
+						messages.TerminalReasonProviderClose,
+						messages.TerminalProvenanceProvider,
+						outputState(hasOutput),
+					),
 				})
 				return
 			}
+			msg = normalizeProviderTerminalMessage(msg, hasOutput)
 			r.writeDelta(ctx, msg)
+			if isOutputDelta(msg) {
+				hasOutput = true
+			}
 			switch msg.Value.(type) {
 			case *messages.MessageEndValue, *messages.ErrorValue:
 				return
@@ -278,8 +289,14 @@ func (r *ModelRunner) drainStream(ctx context.Context, ch <-chan messages.Stream
 func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.InferenceResult, inferErr error) {
 	if inferErr != nil {
 		r.writeDelta(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeError,
-			Value: messages.NewErrorValue(inferErr.Error()),
+			Type: messages.StreamTypeError,
+			Value: messages.NewErrorValueWithTerminal(
+				inferErr.Error(),
+				"",
+				messages.TerminalReasonTerminalFailure,
+				messages.TerminalProvenanceLoop,
+				messages.TerminalOutputNone,
+			),
 		})
 		return
 	}
@@ -352,8 +369,65 @@ func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.I
 	}
 
 	r.writeDelta(ctx, messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(result.TokenUsage),
+		Type: messages.StreamTypeMessageEnd,
+		Role: messages.RoleAssistant,
+		Value: messages.NewMessageEndValueWithTerminal(
+			result.TokenUsage,
+			messages.TerminalReasonLoopSynthesizedCompletion,
+			messages.TerminalProvenanceLoop,
+			messages.TerminalOutputComplete,
+		),
 	})
+}
+
+func normalizeProviderTerminalMessage(msg messages.StreamMessage, hasOutput bool) messages.StreamMessage {
+	switch value := msg.Value.(type) {
+	case *messages.MessageEndValue:
+		if value.TerminalReason == "" {
+			value.TerminalReason = messages.TerminalReasonProviderAuthoredCompletion
+		}
+		if value.TerminalProvenance == "" {
+			value.TerminalProvenance = messages.TerminalProvenanceProvider
+		}
+		if value.OutputState == "" {
+			value.OutputState = messages.TerminalOutputComplete
+		}
+	case *messages.ErrorValue:
+		if value.TerminalReason == "" {
+			value.TerminalReason = messages.TerminalReasonTerminalFailure
+		}
+		if value.TerminalProvenance == "" {
+			value.TerminalProvenance = messages.TerminalProvenanceProvider
+		}
+		if value.OutputState == "" {
+			value.OutputState = outputState(hasOutput)
+		}
+	}
+	return msg
+}
+
+func outputState(hasOutput bool) messages.TerminalOutputState {
+	if hasOutput {
+		return messages.TerminalOutputPartial
+	}
+	return messages.TerminalOutputNone
+}
+
+func isOutputDelta(msg messages.StreamMessage) bool {
+	switch msg.Type {
+	case messages.StreamTypeTextDelta,
+		messages.StreamTypeReasoningDelta,
+		messages.StreamTypeAudioDelta,
+		messages.StreamTypeImageDelta,
+		messages.StreamTypeVideoDelta,
+		messages.StreamTypeFileDelta,
+		messages.StreamTypeEmbeddingDelta,
+		messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeToolCallDelta,
+		messages.StreamTypeToolCallEnd,
+		messages.StreamTypeRefusal:
+		return true
+	default:
+		return false
+	}
 }

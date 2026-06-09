@@ -27,6 +27,23 @@ func (t *testInferencer) InferStream(ctx context.Context, req messages.Inference
 	return nil, nil
 }
 
+type streamInferencer struct {
+	deltas []messages.StreamMessage
+}
+
+func (s *streamInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
+	return messages.InferenceResult{}, nil
+}
+
+func (s *streamInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	ch := make(chan messages.StreamMessage, len(s.deltas))
+	for _, delta := range s.deltas {
+		ch <- delta
+	}
+	close(ch)
+	return ch, nil
+}
+
 // drainModelDeltas reads from DeltaOutbox until MESSAGE.END or ERROR, accumulating
 // text and tool calls. Returns assembled text, tool calls, and whether an error delta arrived.
 func drainModelDeltas(t *testing.T, ctx context.Context, runner *ModelRunner) (text string, toolCalls []messages.ToolCall, gotErr bool) {
@@ -64,6 +81,20 @@ func drainModelDeltas(t *testing.T, ctx context.Context, runner *ModelRunner) (t
 	}
 }
 
+func drainTerminalDelta(t *testing.T, ctx context.Context, runner *ModelRunner) messages.StreamMessage {
+	t.Helper()
+	for {
+		delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+		if !ok {
+			t.Fatal("context cancelled waiting for terminal model delta")
+		}
+		switch delta.Value.(type) {
+		case *messages.MessageEndValue, *messages.ErrorValue:
+			return delta
+		}
+	}
+}
+
 func TestModelRunner_SimpleInference(t *testing.T) {
 	inf := &testInferencer{
 		responses: []messages.InferenceResult{
@@ -92,6 +123,155 @@ func TestModelRunner_SimpleInference(t *testing.T) {
 	}
 	if text != "Hello!" {
 		t.Errorf("expected 'Hello!', got %q", text)
+	}
+}
+
+func TestModelRunner_ProviderAuthoredCompletionGetsTerminalMetadata(t *testing.T) {
+	inf := &streamInferencer{
+		deltas: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("done")},
+			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		},
+	}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.MessageEndValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.MessageEndValue", terminal.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonProviderAuthoredCompletion)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputComplete {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputComplete)
+	}
+}
+
+func TestModelRunner_LoopSynthesizedCompletionGetsTerminalMetadata(t *testing.T) {
+	inf := &testInferencer{
+		responses: []messages.InferenceResult{
+			{Message: messages.NewTextMessage(messages.RoleAssistant, "fallback")},
+		},
+	}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.MessageEndValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.MessageEndValue", terminal.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonLoopSynthesizedCompletion)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceLoop {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceLoop)
+	}
+	if value.OutputState != messages.TerminalOutputComplete {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputComplete)
+	}
+}
+
+func TestModelRunner_ProviderCloseGetsDistinctTerminalMetadata(t *testing.T) {
+	inf := &streamInferencer{
+		deltas: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("partial")},
+		},
+	}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.MessageEndValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.MessageEndValue", terminal.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonProviderClose {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonProviderClose)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
+	}
+}
+
+func TestModelRunner_TerminalFailureAfterPartialOutputGetsTerminalMetadata(t *testing.T) {
+	inf := &streamInferencer{
+		deltas: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("partial")},
+			{Type: messages.StreamTypeError, Role: messages.RoleAssistant, Value: messages.NewErrorValue("provider failed")},
+		},
+	}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.ErrorValue", terminal.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonTerminalFailure {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonTerminalFailure)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
 	}
 }
 
