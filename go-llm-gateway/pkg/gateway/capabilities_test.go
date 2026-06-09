@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-llm-gateway/pkg/providers/fal"
 )
 
 type capabilityProvider struct {
@@ -39,6 +44,29 @@ func (p *capabilityProvider) InferStream(_ context.Context, _ providers.Inferenc
 	ch := make(chan messages.StreamMessage)
 	close(ch)
 	return ch, nil
+}
+
+type countingTransport struct {
+	calls int
+}
+
+func (t *countingTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	t.calls++
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("{}")),
+		Header:     make(http.Header),
+	}, nil
+}
+
+type countingFalProvider struct {
+	*fal.FalProvider
+	streamCalls int
+}
+
+func (p *countingFalProvider) InferStream(ctx context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	p.streamCalls++
+	return p.FalProvider.InferStream(ctx, req)
 }
 
 type legacyProvider struct {
@@ -267,6 +295,16 @@ func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t 
 			feature: FeatureAudioOutput,
 		},
 		{
+			name: "audio output sample rate",
+			caps: capabilities.SessionCapabilities{
+				AudioOutput: capabilities.Unsupported("session audio output unavailable"),
+			},
+			config: models.SessionConfig{
+				OutputAudioSampleRate: models.SampleRate24000,
+			},
+			feature: FeatureAudioOutput,
+		},
+		{
 			name: "provider config",
 			caps: capabilities.SessionCapabilities{
 				ProviderSpecificConfig: capabilities.Unsupported("session raw config unavailable"),
@@ -312,6 +350,72 @@ func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t 
 			}
 			if unsupported.Capability.State != CapabilityStateUnsupported {
 				t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
+			}
+			if provider.connectCalls != 0 {
+				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
+			}
+		})
+	}
+}
+
+func TestSessionGatewayReturnsContextErrorBeforeUnsupportedFeatureValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want error
+	}{
+		{
+			name: "canceled",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			want: context.Canceled,
+		},
+		{
+			name: "deadline exceeded",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			}(),
+			want: context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := &capabilitySessionProvider{
+				name: "session-validation-provider",
+				caps: ProviderCapabilities{
+					Provider: "session-validation-provider",
+					Session: capabilities.SessionCapabilities{
+						Sessions: capabilities.Unsupported("session transport unavailable"),
+					},
+				},
+			}
+			gw, err := NewSessionGateway(WithSessionProvider(provider))
+			if err != nil {
+				t.Fatalf("NewSessionGateway: %v", err)
+			}
+
+			_, err = gw.ConnectSession(tt.ctx, models.SessionConfig{})
+
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+			var unsupported *UnsupportedFeatureError
+			if errors.As(err, &unsupported) {
+				t.Fatalf("error = %v, did not want UnsupportedFeatureError", err)
+			}
+			if provider.capCalls != 0 {
+				t.Fatalf("validation read capabilities after context finished %d times", provider.capCalls)
 			}
 			if provider.connectCalls != 0 {
 				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
@@ -522,6 +626,55 @@ func TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing
 	}
 }
 
+func TestGatewayRejectsFalStreamingBeforeProviderExecution(t *testing.T) {
+	t.Parallel()
+
+	transport := &countingTransport{}
+	provider := &countingFalProvider{
+		FalProvider: fal.New(fal.WithHTTPClient(&http.Client{Transport: transport})),
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	ch, err := gw.InferStream(context.Background(), InferenceRequest{
+		Model: fal.ModelLTXAudioToVideo,
+		Messages: []models.Message{{
+			Role: models.RoleUser,
+			ContentParts: []models.ContentPart{
+				models.TextPart{Text: "render"},
+				models.AudioPart{URL: "https://example.com/audio.mp3"},
+			},
+		}},
+	})
+	if ch != nil {
+		t.Fatalf("InferStream() channel = %#v, want nil", ch)
+	}
+	var unsupported *UnsupportedFeatureError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("InferStream() error = %v, want UnsupportedFeatureError", err)
+	}
+	if unsupported.Provider != "fal" {
+		t.Fatalf("provider = %q, want fal", unsupported.Provider)
+	}
+	if unsupported.Feature != FeatureStreaming {
+		t.Fatalf("feature = %q, want streaming", unsupported.Feature)
+	}
+	if unsupported.RequestedMode != capabilities.RequestedModeStatelessStream {
+		t.Fatalf("mode = %q, want stateless_stream", unsupported.RequestedMode)
+	}
+	if unsupported.Capability.State != CapabilityStateUnsupported {
+		t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
+	}
+	if provider.streamCalls != 0 {
+		t.Fatalf("gateway called fal InferStream before rejecting: %d", provider.streamCalls)
+	}
+	if transport.calls != 0 {
+		t.Fatalf("gateway attempted fal HTTP before rejecting: %d", transport.calls)
+	}
+}
+
 func TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testing.T) {
 	t.Parallel()
 
@@ -551,8 +704,19 @@ func TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testing.T) {
 		t.Fatalf("infer calls = %d, want 1", provider.inferCalls)
 	}
 
+	_, err = gw.InferStream(context.Background(), InferenceRequest{})
+	if err != nil {
+		t.Fatalf("InferStream with unknown capabilities: %v", err)
+	}
+	if provider.streamCalls != 1 {
+		t.Fatalf("stream calls = %d, want 1", provider.streamCalls)
+	}
+
 	got := gw.Capabilities()
 	if got.Stateless.Tools.IsSupported() {
 		t.Fatalf("unknown tools capability must not report support")
+	}
+	if got.Stateless.Streaming.IsSupported() {
+		t.Fatalf("unknown streaming capability must not report support")
 	}
 }
