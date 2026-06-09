@@ -25,8 +25,11 @@ var (
 	ErrTransport = errors.New("transport failure")
 	// ErrCancellation marks caller-initiated cancellation.
 	ErrCancellation = errors.New("cancellation")
-	// ErrReplayMismatch marks deterministic replay divergence or incompletion.
+	// ErrReplayMismatch marks deterministic replay divergence.
 	ErrReplayMismatch = errors.New("replay mismatch")
+	// ErrReplayIncomplete marks deterministic replay that ended before all
+	// required capture or fixture events were consumed.
+	ErrReplayIncomplete = errors.New("replay incomplete")
 	// ErrPartialOutput marks an interrupted stream or event sequence that
 	// delivered caller-visible output before terminal failure or cancellation.
 	ErrPartialOutput = errors.New("partial output")
@@ -41,6 +44,7 @@ const (
 	ErrorClassTransport          = "transport"
 	ErrorClassCancellation       = "cancellation"
 	ErrorClassReplayMismatch     = "replay_mismatch"
+	ErrorClassReplayIncomplete   = "replay_incomplete"
 	ErrorClassPartialOutput      = "partial_output"
 	ErrorClassUnknown            = "unknown"
 )
@@ -154,6 +158,8 @@ func ErrorClassification(err error) string {
 		return ""
 	case errors.Is(err, context.Canceled), errors.Is(err, ErrCancellation):
 		return ErrorClassCancellation
+	case errors.Is(err, ErrReplayIncomplete):
+		return ErrorClassReplayIncomplete
 	case errors.Is(err, ErrReplayMismatch):
 		return ErrorClassReplayMismatch
 	case errors.Is(err, ErrPartialOutput):

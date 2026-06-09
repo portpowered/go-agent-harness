@@ -64,6 +64,9 @@ func TestReplayWebSocketDialer_FailsOnUnexpectedOutbound(t *testing.T) {
 	if !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("error should match replay mismatch classification, got %v", err)
 	}
+	if errors.Is(err, gateway.ErrReplayIncomplete) {
+		t.Fatal("replay mismatch should not match replay incomplete classification")
+	}
 	if errors.Is(err, gateway.ErrTransport) {
 		t.Fatal("replay mismatch should not match transport classification")
 	}
@@ -199,17 +202,30 @@ func TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose(t *testi
 	if err == nil {
 		t.Fatalf("expected incomplete replay error, got %v", err)
 	}
-	if !errors.Is(dialer.Err(), providers.ErrReplayMismatch) {
-		t.Fatalf("dialer error = %v, want ErrReplayMismatch", dialer.Err())
+	if !errors.Is(dialer.Err(), providers.ErrReplayIncomplete) {
+		t.Fatalf("dialer error = %v, want ErrReplayIncomplete", dialer.Err())
 	}
-	if !errors.Is(err, gateway.ErrReplayMismatch) {
-		t.Fatalf("incomplete replay should match replay mismatch classification, got %v", err)
+	if errors.Is(dialer.Err(), providers.ErrReplayMismatch) {
+		t.Fatal("incomplete replay should not match replay mismatch classification")
+	}
+	if got := providers.ErrorClassification(err); got != providers.ErrorClassReplayIncomplete {
+		t.Fatalf("dialer error classification = %q, want %q", got, providers.ErrorClassReplayIncomplete)
+	}
+	if !errors.Is(err, gateway.ErrReplayIncomplete) {
+		t.Fatalf("incomplete replay should match replay incomplete classification, got %v", err)
+	}
+	if errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatal("incomplete replay should not match replay mismatch classification")
 	}
 	if errors.Is(err, gateway.ErrTransport) {
 		t.Fatal("incomplete replay should not match transport classification")
 	}
 	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
 		t.Fatal("incomplete replay should not match provider HTTP status classification")
+	}
+	var incompleteErr *gateway.ReplayIncompleteError
+	if !errors.As(err, &incompleteErr) {
+		t.Fatal("incomplete replay should expose typed replay incomplete details")
 	}
 }
 

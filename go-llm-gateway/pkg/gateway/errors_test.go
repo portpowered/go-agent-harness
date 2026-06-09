@@ -124,6 +124,28 @@ func TestReplayMismatchError_MatchesReplayMismatchOnly(t *testing.T) {
 	}
 }
 
+func TestReplayIncompleteError_MatchesReplayIncompleteOnly(t *testing.T) {
+	err := fmt.Errorf("fixture failed: %w", NewReplayIncompleteError("remaining event", "session close", nil))
+
+	if !errors.Is(err, ErrReplayIncomplete) {
+		t.Fatal("replay incomplete error should match replay incomplete class")
+	}
+	if errors.Is(err, ErrReplayMismatch) {
+		t.Fatal("replay incomplete should not match replay mismatch")
+	}
+	if errors.Is(err, ErrProviderHTTPStatus) {
+		t.Fatal("replay incomplete should not match provider HTTP status")
+	}
+	if errors.Is(err, ErrTransport) {
+		t.Fatal("replay incomplete should not match transport")
+	}
+
+	var replayErr *ReplayIncompleteError
+	if !errors.As(err, &replayErr) {
+		t.Fatal("replay incomplete should expose typed details")
+	}
+}
+
 func TestCancellationError_MatchesCancellationAndContextCause(t *testing.T) {
 	err := fmt.Errorf("outer context: %w", NewCancellationError("caller cancelled request", context.Canceled))
 

@@ -20,6 +20,7 @@ func TestErrorClassification_DistinguishesRuntimeOutcomes(t *testing.T) {
 		{name: "context cancellation", err: context.Canceled, want: ErrorClassCancellation},
 		{name: "taxonomy cancellation", err: ErrCancellation, want: ErrorClassCancellation},
 		{name: "replay mismatch", err: ErrReplayMismatch, want: ErrorClassReplayMismatch},
+		{name: "replay incomplete", err: ErrReplayIncomplete, want: ErrorClassReplayIncomplete},
 		{name: "partial output", err: ErrPartialOutput, want: ErrorClassPartialOutput},
 	}
 

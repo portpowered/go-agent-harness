@@ -147,8 +147,8 @@ For streaming-capable stateless providers, the same gateway exposes
 
 `pkg/gateway` exposes a small typed error taxonomy for caller decisions. Branch
 on these classes with `errors.Is`; use `errors.As` when you need structured
-details such as provider status code or replay mismatch fields. Do not match
-error message text for control flow.
+details such as provider status code, replay mismatch fields, or replay
+incomplete fields. Do not match error message text for control flow.
 
 | Error class | Caller action |
 | --- | --- |
@@ -160,6 +160,7 @@ error message text for control flow.
 | `gateway.ErrProviderHTTPStatus` | Inspect `*gateway.ProviderHTTPStatusError` for provider, status, and body details |
 | `gateway.ErrTransport` | Treat as a provider transport failure before a usable provider response was available |
 | `gateway.ErrReplayMismatch` | Diagnose deterministic replay fixture or request divergence |
+| `gateway.ErrReplayIncomplete` | Diagnose a replay that ended before all required fixture or capture events were consumed |
 | `gateway.ErrCancellation` | Handle caller cancellation or timeout separately from provider failures |
 
 Example:
@@ -418,7 +419,8 @@ Use `errors.Is` for policy decisions against the public taxonomy in
 | `providers.ErrUnsupportedRequest` | `unsupported_request` | Choose a supported provider, model, feature, or mode. |
 | `providers.ErrTransport` | `transport` | Retry according to network and provider availability policy. |
 | `providers.ErrCancellation` | `cancellation` | Treat as caller-initiated shutdown or cancellation, not provider failure. |
-| `providers.ErrReplayMismatch` | `replay_mismatch` | Treat deterministic replay as divergent or incomplete and refresh the fixture or test expectation. |
+| `providers.ErrReplayMismatch` | `replay_mismatch` | Treat deterministic replay as divergent and refresh the fixture or test expectation. |
+| `providers.ErrReplayIncomplete` | `replay_incomplete` | Treat deterministic replay as ending before all required fixture or capture events were consumed. |
 | `providers.ErrPartialOutput` | `partial_output` | Treat the operation as interrupted after caller-visible output was produced. |
 
 Use `errors.As` when you need structured details:
@@ -468,18 +470,20 @@ text output is reported with a partial-output terminal state.
 
 Session connection errors are returned as Go errors and should be classified
 with `errors.Is` or `errors.As`. Replay helpers in `pkg/testing`, including
-session replayers and replay WebSocket dialers, preserve replay divergence and
-incomplete replay as `providers.ErrReplayMismatch`.
+session replayers and replay WebSocket dialers, preserve replay divergence as
+`providers.ErrReplayMismatch` / `gateway.ErrReplayMismatch` and incomplete
+replay as `providers.ErrReplayIncomplete` / `gateway.ErrReplayIncomplete`.
 
 ### Current Representative Scope
 
 The repaired contract covers representative provider rejection, local
 validation, direct stream error, session connect error, normalized interaction
-error, cancellation, replay mismatch, and partial-output paths. Remaining
-follow-up scope is provider-wide parity for every adapter/status/parser shape,
-every replay entrypoint, and a broader shared final-status design if callers
-need one final accessor across all stream APIs. Those limits are tracked in the
-Phase 4 repair scope record under `docs/internal`.
+error, cancellation, replay mismatch, replay incomplete, and partial-output
+paths. Remaining follow-up scope is provider-wide parity for every
+adapter/status/parser shape, every replay entrypoint, and a broader shared
+final-status design if callers need one final accessor across all stream APIs.
+Those limits are tracked in the Phase 4 repair scope record under
+`docs/internal`.
 
 ## Using With go-agent-loop
 
