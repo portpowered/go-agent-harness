@@ -178,7 +178,18 @@ func ErrorClassification(err error) string {
 // NewStreamErrorValue preserves readable stream error text while exposing the
 // public gateway taxonomy classification carried by typed provider errors.
 func NewStreamErrorValue(err error) *messages.ErrorValue {
-	return messages.NewErrorValueWithClassification(err.Error(), ErrorClassification(err))
+	if err == nil {
+		return messages.NewErrorValueWithTerminal("", "", messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceProvider, messages.TerminalOutputNone)
+	}
+	value := messages.NewErrorValueWithTerminal(
+		err.Error(),
+		ErrorClassification(err),
+		messages.TerminalReasonTerminalFailure,
+		messages.TerminalProvenanceProvider,
+		messages.TerminalOutputNone,
+	)
+	value.Err = err
+	return value
 }
 
 // NewStreamTransportErrorValue classifies untyped stream reader/runtime
@@ -188,7 +199,18 @@ func NewStreamTransportErrorValue(err error) *messages.ErrorValue {
 	if classification == ErrorClassUnknown {
 		classification = ErrorClassTransport
 	}
-	return messages.NewErrorValueWithClassification(err.Error(), classification)
+	if err == nil {
+		return messages.NewErrorValueWithTerminal("", classification, messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceProvider, messages.TerminalOutputNone)
+	}
+	value := messages.NewErrorValueWithTerminal(
+		err.Error(),
+		classification,
+		messages.TerminalReasonTerminalFailure,
+		messages.TerminalProvenanceProvider,
+		messages.TerminalOutputNone,
+	)
+	value.Err = err
+	return value
 }
 
 func classifyHTTPStatus(statusCode int) error {
