@@ -129,6 +129,34 @@ description: A test skill.
 	assertPromptSideEffect(t, details, PromptSideEffectReadSkillsMetadata)
 }
 
+func TestLoadSystemPromptWithDetails_SystemInfoAndSuffixReportRuntimeSources(t *testing.T) {
+	workspaceDir := t.TempDir()
+	configDir := t.TempDir()
+	exec := NewExecutor(nil, nil, stubInferencer{}, true)
+
+	prompt, details, err := exec.LoadSystemPromptWithDetails(&Config{
+		SystemPrompt:      "base prompt",
+		ConfigDir:         configDir,
+		SystemPromptSuffix: "iteration suffix",
+	}, workspaceDir, nil)
+	if err != nil {
+		t.Fatalf("LoadSystemPromptWithDetails() error = %v", err)
+	}
+	for _, want := range []string{"## System Information", "base prompt", "iteration suffix"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q: %s", want, prompt)
+		}
+	}
+
+	assertPromptSource(t, details, PromptSourceKindLiteralPrompt, "")
+	assertPromptSource(t, details, PromptSourceKindConfig, configDir)
+	assertPromptSource(t, details, PromptSourceKindSystemInfo, "")
+	assertPromptSource(t, details, PromptSourceKindSuffix, "")
+	assertPromptSideEffect(t, details, PromptSideEffectLoadConfig)
+	assertPromptSideEffect(t, details, PromptSideEffectCollectSystemInfo)
+	assertPromptSideEffect(t, details, PromptSideEffectAppendPromptSuffix)
+}
+
 func assertPromptSource(t *testing.T, details PromptResolutionDetails, kind, path string) {
 	t.Helper()
 	for _, source := range details.Sources {

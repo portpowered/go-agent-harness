@@ -163,8 +163,23 @@ side effects consulted during resolution, including:
 - skill metadata reads
 - loop suffix appends
 
-The CLI defaults remain compatible. A future library-grade prompt assembler can
-inject these sources if consumers need pure prompt construction outside the CLI.
+This is the compatibility-staged boundary for prompt composition in the current
+repair batch. The CLI keeps ownership of prompt file reads, default `AGENTS.md`
+creation, config loading, runtime system-information collection, skill metadata
+discovery, and loop suffix assembly. Library callers that need pure prompt
+construction should compose their prompt before calling the loop APIs, or use
+`LoadSystemPromptWithDetails(...)` in tests to verify exactly which CLI-owned
+sources and side effects were consulted.
+
+The repaired dependency ownership decisions for these Phase 4 surfaces are:
+
+| Dependency class | Ownership decision |
+| --- | --- |
+| Filesystem | CLI-owned for prompt files, `AGENTS.md`, config files, skills metadata, session storage, and capture files; provider replay fixtures are explicit caller-provided paths. |
+| Environment | CLI-owned config loading may consult `AGENT_*` variables through the config storage layer; provider libraries receive resolved config and do not read CLI environment variables directly. |
+| Process/runtime | CLI-owned system-information injection reads process runtime facts such as working directory, OS, architecture, and current time when not disabled. |
+| Transport/network | Application composition owns HTTP transport, record/replay, and live network policy before constructing providers; provider packages own provider-specific protocol behavior. |
+| Time | Caller-owned `context.Context` controls operation deadlines and cancellation; CLI system-information timestamps and capture event offsets remain CLI/testing side effects reported or isolated at their composition seams. |
 
 ## Compatibility-Staged Work
 
@@ -178,6 +193,9 @@ version explicitly breaks compatibility:
   `inference.SessionRequest`
 - keep `ReadBlockingContext`, `Text`, and `HasNext` available until callers have
   migrated to the explicit contracts above
+- keep prompt resolution as CLI-owned composition unless a future story
+  introduces injected filesystem, config, system-information, skills, and clock
+  dependencies as a separate library-grade prompt assembler
 - split prompt assembly into pure injected loaders only if a future public
   library surface needs prompt composition outside the CLI
 
