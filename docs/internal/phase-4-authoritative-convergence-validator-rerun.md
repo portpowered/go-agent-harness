@@ -409,6 +409,77 @@ implement repairs.
   message/session/error changes additively with fixture validators, CLI
   replay/record tests, and legacy text compatibility.
 
+## Gate Readiness And Closure Decisions
+
+This section completes story
+`phase-4-authoritative-convergence-validator-rerun-004` by evaluating
+`P4-GATE-01` from the aggregate state of `P4-API-01` through `P4-API-07` and
+by summarizing every requested row closure decision. The gate verdict is based
+on the row evidence above, not on CI status alone.
+
+### P4-GATE-01 - Phase 4 Public API Contract Readiness
+
+- Checklist row: the Phase 4 public API contract rows are ready to close only
+  when each requested API row has public implementation evidence, public
+  docs/examples where required, deterministic credential-free validation, and
+  a reviewer-runnable closure rationale.
+- Verdict: `fail`.
+- Closure decision: `remains open`.
+- Public evidence: the aggregate row set has two closable pass rows and five
+  rows that remain open. `P4-API-04` may close for provider capability
+  discovery, and `P4-API-06` may close for local unsupported-feature
+  validation. `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, and
+  `P4-API-07` remain open because the current authoritative evidence still
+  names public contract gaps or incomplete reviewer-verifiable coverage. The
+  current audit also states that whole-Phase-4 `P4-GATE-01` remains open until
+  the remaining typed error/stream, dependency/result/context/lifecycle, API
+  hygiene, and final validation repair lanes provide implementation evidence,
+  docs/examples alignment where needed, deterministic validation, and a final
+  validator decision that explicitly permits closure.
+- Affected declarations and outcomes: all public surfaces named by the API row
+  findings, including `agentloop.ExecuteResult`, `agentloop.Stream`,
+  `messages.ErrorValue`, `messages.Session`, `gateway.DefaultGateway`,
+  `gateway.DefaultSessionGateway`, `gateway.InferenceRequest`,
+  `gateway.InteractionEvent`, `gateway.GatewayError`,
+  `providers.UnsupportedFeatureError`, `providers.ProviderCapabilities`,
+  `providers.InferenceRequest`, `models.Message`, `models.SessionConfig`,
+  `agent.Executor`, and `services.SessionRunOptions`.
+- Docs/tests/examples alignment: the report, audit, README guidance, stream
+  terminal contract docs, exported declarations, and deterministic tests align
+  for the two pass rows. The same evidence does not yet align enough to close
+  the five non-pass rows, because those rows still name missing, partial, or
+  representative-only public coverage rather than complete row closure.
+- Reviewer commands: run `make typecheck`; run `make test`; run `make lint`;
+  run `make staticcheck`; run the row-specific commands listed under
+  `P4-API-01` through `P4-API-07` to verify the individual public evidence.
+  These commands prove reviewer-runnable quality and row evidence, but they do
+  not convert non-pass rows into pass rows by themselves.
+- Exact next work: keep whole-Phase-4 `P4-GATE-01` open and plan future repair
+  lanes for the remaining open row work: context/timeout/dependency ownership
+  for `P4-API-01`; provider-wide typed error and stream failure parity for
+  `P4-API-02`; terminal result/lifecycle authority for `P4-API-03`;
+  provider-wide stream/session parity plus package ownership reconciliation for
+  `P4-API-05`; and API hygiene, dependency ownership, compatibility staging,
+  and hidden-side-effect cleanup for `P4-API-07`.
+
+### Requested Row Closure Summary
+
+| Row | Verdict | Closure decision | Closure rationale |
+| --- | --- | --- | --- |
+| `P4-API-01` | `fail` | `remains open` | Public evidence still identifies prompt/config/filesystem loading, session/config/dialer side effects, full timeout/cancellation ownership, and stable dependency/result errors as open. |
+| `P4-API-02` | `fail` | `remains open` | Representative typed-terminal evidence exists, but provider-wide and parser-wide parity for every adapter, helper entrypoint, and stream failure path is not publicly proven. |
+| `P4-API-03` | `fail` | `remains open` | Representative terminal metadata exists, but public result and lifecycle authority is not yet documented and proven across every public mode and helper. |
+| `P4-API-04` | `pass` | `may close` | Provider capability discovery has public capability vocabulary, reporter interfaces, gateway/session accessors, docs, and deterministic credential-free tests. |
+| `P4-API-05` | `uncertain` | `remains open` | Stream/session terminal behavior is proven only for representative repaired surfaces, with provider-wide parity, parser failure coverage, package ownership, and compatibility staging still incomplete. |
+| `P4-API-06` | `pass` | `may close` | Local unsupported-feature validation has public typed errors, gateway/session/interaction/inferencer coverage, capability-state evidence, docs, and deterministic credential-free tests. |
+| `P4-API-07` | `fail` | `remains open` | Public API hygiene and dependency ownership still have unresolved package ownership, request overlap, CLI composition, fixture staging, hidden side effects, and text-compatibility work. |
+| `P4-GATE-01` | `fail` | `remains open` | The gate cannot close while five API rows remain open; pass rows are not inferred from CI success and stale branch evidence is only advisory unless reproduced on this authoritative head. |
+
+Rows marked `may close` cite public evidence and credential-free reviewer
+commands in their row findings. Rows marked `remains open` are scoped to exact
+future repair or cleanup work in the row findings and in the `P4-GATE-01`
+aggregate next work above.
+
 ## Story 001 Closure
 
 Story `phase-4-authoritative-convergence-validator-rerun-001` may close for
@@ -440,3 +511,12 @@ contracts, deterministic credential-free tests, and reconciled prior evidence.
 Pass rows cite public declarations and reviewer commands; non-pass rows name
 affected public declarations or outcomes plus exact future repair or cleanup
 work. `P4-GATE-01` remains assigned to story 004.
+
+## Story 004 Closure
+
+Story `phase-4-authoritative-convergence-validator-rerun-004` may close for
+this PRD iteration because `P4-GATE-01` now has a reviewer-grade aggregate
+verdict, every requested row has an explicit closure decision, pass rows cite
+public evidence and credential-free commands, and open rows are scoped to exact
+future repair or cleanup work. No row is marked closable from CI status, private
+helper behavior, undocumented internals, or unreconciled stale branch evidence.
