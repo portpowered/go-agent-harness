@@ -180,6 +180,60 @@ contract. Replay/cancellation/partial-output distinction, CLI/session parity,
 docs/audit final alignment, and final reviewer validation remain assigned to
 stories 004 through 007. This story still does not close `P4-GATE-01`.
 
+## Replay, Cancellation, And Partial Output Reconciliation
+
+Story 004 reconciles replay, cancellation, and partial-output evidence on the
+authoritative baseline without changing provider capability or provider
+transport contracts.
+
+Replay outcomes are distinguishable through public replay results and typed Go
+errors:
+
+- `SessionReplayOutcome.Status=diverged` identifies outbound replay divergence.
+  The error matches `gateway.ErrReplayMismatch` and
+  `providers.ErrReplayMismatch`, exposes mismatch details through
+  `gateway.ReplayMismatchError`, and does not match replay incomplete,
+  provider HTTP status, or transport classes.
+- `SessionReplayOutcome.Status=incomplete` identifies replay closure before a
+  required fixture event was consumed. The error matches
+  `gateway.ErrReplayIncomplete` and `providers.ErrReplayIncomplete`, exposes
+  missing-event details through `gateway.ReplayIncompleteError`, and does not
+  match replay mismatch, provider HTTP status, or transport classes.
+- `SessionReplayOutcome.Status=cancelled` identifies caller-owned replay
+  context cancellation. The error preserves `context.Canceled`, classifies as
+  `cancellation` through provider taxonomy helpers, and does not match replay
+  mismatch, replay incomplete, provider rejection, provider HTTP status, or
+  transport classes.
+
+Partial output remains available separately from the terminal cause:
+
+- `ExecuteResult.FinalText()` reports `FinalTextCanceled` or
+  `FinalTextFailed` and sets `Partial=true` with the accumulated text deltas
+  when output was emitted before cancellation or terminal failure.
+- `Stream.Outcome()` reports `StreamCanceled` or `StreamFailed` and sets
+  `Partial=true` when at least one event was delivered before the terminal
+  event.
+- Loop stream `ERROR` events can carry `classification`, `terminal_reason`,
+  `terminal_provenance`, and `output_state=partial`; `Stream.Outcome()` now
+  preserves the typed in-process `ErrorValue.Err` when present so cancellation
+  after partial output remains a cancellation rather than a string-only
+  terminal failure.
+
+Credential-free evidence:
+
+```sh
+go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|CancellationWakesExpectedOutboundWait)'
+go test ./go-agent-loop/pkg/agentloop -run 'TestExecuteResultFinalText_CanceledWithPartialText|TestStreamOutcome_(FailedWithPartialOutput|Canceled|CanceledWithPartialOutputPreservesTerminalMetadata)'
+go test ./go-llm-gateway/pkg/providers -run 'TestErrorClassification_DistinguishesRuntimeOutcomes'
+make typecheck
+make test
+```
+
+The evidence above closes the story-004 replay, cancellation, and
+partial-output distinction. CLI/session parity, docs/audit final alignment, and
+final reviewer validation remain assigned to stories 005 through 007. This
+story still does not close `P4-GATE-01`.
+
 ## Gate Status
 
 This story does not close `P4-GATE-01`. The gate remains governed by the
