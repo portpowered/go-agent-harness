@@ -266,6 +266,8 @@ func interactionErrorClassification(err error) string {
 		return ""
 	case errors.Is(err, ErrCancellation):
 		return providers.ErrorClassCancellation
+	case errors.Is(err, ErrReplayIncomplete):
+		return providers.ErrorClassReplayIncomplete
 	case errors.Is(err, ErrReplayMismatch):
 		return providers.ErrorClassReplayMismatch
 	case errors.Is(err, ErrAuthentication), errors.Is(err, ErrAuthorization):

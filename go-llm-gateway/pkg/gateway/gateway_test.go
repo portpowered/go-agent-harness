@@ -123,6 +123,18 @@ func TestInferStream_PreservesErrorEventClassification(t *testing.T) {
 	if gotErr.Message == "" {
 		t.Fatal("error event should retain readable message text")
 	}
+	if gotErr.Classification != "authentication" {
+		t.Fatalf("classification = %q, want authentication", gotErr.Classification)
+	}
+	if gotErr.TerminalReason != messages.TerminalReasonTerminalFailure {
+		t.Fatalf("terminal reason = %q, want %q", gotErr.TerminalReason, messages.TerminalReasonTerminalFailure)
+	}
+	if gotErr.TerminalProvenance != messages.TerminalProvenanceGateway {
+		t.Fatalf("terminal provenance = %q, want %q", gotErr.TerminalProvenance, messages.TerminalProvenanceGateway)
+	}
+	if gotErr.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", gotErr.OutputState, messages.TerminalOutputNone)
+	}
 	if !errors.Is(gotErr.Err, ErrProviderHTTPStatus) {
 		t.Fatal("stream error should match provider HTTP status classification")
 	}
@@ -136,5 +148,65 @@ func TestInferStream_PreservesErrorEventClassification(t *testing.T) {
 	}
 	if statusErr.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", statusErr.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestInferStream_PreservesRuntimeErrorEventClassification(t *testing.T) {
+	t.Parallel()
+
+	streamErr := NewTransportError("fake-provider", "direct stream", io.ErrUnexpectedEOF)
+	provider := &fakeInteractionProvider{
+		name: "fake-provider",
+		streamMessages: []messages.StreamMessage{
+			{
+				Type:  messages.StreamTypeError,
+				Value: messages.NewErrorValueWithError(streamErr),
+			},
+		},
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	ch, err := gw.InferStream(context.Background(), InferenceRequest{Model: "model-a"})
+	if err != nil {
+		t.Fatalf("InferStream() error = %v", err)
+	}
+
+	var gotErr *messages.ErrorValue
+	for msg := range ch {
+		if msg.Type != messages.StreamTypeError {
+			continue
+		}
+		value, ok := msg.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("error event value = %T, want *messages.ErrorValue", msg.Value)
+		}
+		gotErr = value
+	}
+	if gotErr == nil {
+		t.Fatal("expected stream error event")
+	}
+	if gotErr.Classification != "transport" {
+		t.Fatalf("classification = %q, want transport", gotErr.Classification)
+	}
+	if gotErr.TerminalReason != messages.TerminalReasonTerminalFailure {
+		t.Fatalf("terminal reason = %q, want %q", gotErr.TerminalReason, messages.TerminalReasonTerminalFailure)
+	}
+	if gotErr.TerminalProvenance != messages.TerminalProvenanceGateway {
+		t.Fatalf("terminal provenance = %q, want %q", gotErr.TerminalProvenance, messages.TerminalProvenanceGateway)
+	}
+	if gotErr.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", gotErr.OutputState, messages.TerminalOutputNone)
+	}
+	if !errors.Is(gotErr.Err, ErrTransport) {
+		t.Fatal("stream error should match transport classification")
+	}
+	if !errors.Is(gotErr.Err, io.ErrUnexpectedEOF) {
+		t.Fatal("stream error should preserve runtime cause")
+	}
+	if errors.Is(gotErr.Err, ErrProviderHTTPStatus) {
+		t.Fatal("runtime stream error should not match provider HTTP status classification")
 	}
 }

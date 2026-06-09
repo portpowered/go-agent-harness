@@ -253,6 +253,9 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	if !errors.Is(replayer.Err(), gateway.ErrReplayMismatch) {
 		t.Fatal("divergence should match replay mismatch classification")
 	}
+	if errors.Is(replayer.Err(), gateway.ErrReplayIncomplete) {
+		t.Fatal("divergence should not match replay incomplete classification")
+	}
 	if errors.Is(replayer.Err(), gateway.ErrTransport) {
 		t.Fatal("replay mismatch should not match transport classification")
 	}
@@ -369,17 +372,30 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	if replayer.Err() == nil {
 		t.Fatal("expected omitted outbound event error")
 	}
-	if !errors.Is(replayer.Err(), providers.ErrReplayMismatch) {
-		t.Fatalf("replayer error = %v, want ErrReplayMismatch", replayer.Err())
+	if !errors.Is(replayer.Err(), providers.ErrReplayIncomplete) {
+		t.Fatalf("replayer error = %v, want ErrReplayIncomplete", replayer.Err())
 	}
-	if !errors.Is(replayer.Err(), gateway.ErrReplayMismatch) {
-		t.Fatal("omitted outbound should match replay mismatch classification")
+	if errors.Is(replayer.Err(), providers.ErrReplayMismatch) {
+		t.Fatal("omitted outbound should not match replay mismatch classification")
+	}
+	if got := providers.ErrorClassification(replayer.Err()); got != providers.ErrorClassReplayIncomplete {
+		t.Fatalf("replayer error classification = %q, want %q", got, providers.ErrorClassReplayIncomplete)
+	}
+	if !errors.Is(replayer.Err(), gateway.ErrReplayIncomplete) {
+		t.Fatal("omitted outbound should match replay incomplete classification")
+	}
+	if errors.Is(replayer.Err(), gateway.ErrReplayMismatch) {
+		t.Fatal("omitted outbound should not match replay mismatch classification")
 	}
 	if errors.Is(replayer.Err(), gateway.ErrTransport) {
 		t.Fatal("omitted outbound should not match transport classification")
 	}
 	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
 		t.Fatal("omitted outbound should not match provider HTTP status classification")
+	}
+	var incompleteErr *gateway.ReplayIncompleteError
+	if !errors.As(replayer.Err(), &incompleteErr) {
+		t.Fatal("omitted outbound should expose typed replay incomplete details")
 	}
 
 	outcome := replayer.Outcome()
@@ -389,8 +405,8 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	if outcome.OK() {
 		t.Fatal("incomplete replay outcome reported OK")
 	}
-	if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
-		t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+	if !errors.Is(outcome.Err, providers.ErrReplayIncomplete) {
+		t.Fatalf("outcome err = %v, want ErrReplayIncomplete", outcome.Err)
 	}
 	if outcome.Expected == "" || outcome.Actual != "replay close" {
 		t.Fatalf("outcome mismatch detail = expected %q actual %q, want omitted outbound close detail", outcome.Expected, outcome.Actual)

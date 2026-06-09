@@ -54,5 +54,40 @@ func (g *DefaultGateway) InferStream(ctx context.Context, req InferenceRequest) 
 	if err := validateStatelessRequest(g.Capabilities(), req, capabilities.RequestedModeStatelessStream); err != nil {
 		return nil, err
 	}
-	return g.provider.InferStream(ctx, providerInferenceRequest(req))
+	stream, err := g.provider.InferStream(ctx, providerInferenceRequest(req))
+	if err != nil {
+		return nil, err
+	}
+	return normalizeStreamErrors(stream), nil
+}
+
+func normalizeStreamErrors(in <-chan messages.StreamMessage) <-chan messages.StreamMessage {
+	out := make(chan messages.StreamMessage)
+	go func() {
+		defer close(out)
+		for msg := range in {
+			normalizeStreamErrorValue(msg.Value)
+			out <- msg
+		}
+	}()
+	return out
+}
+
+func normalizeStreamErrorValue(value messages.StreamMessageValue) {
+	errValue, ok := value.(*messages.ErrorValue)
+	if !ok || errValue == nil || errValue.Err == nil {
+		return
+	}
+	if errValue.Classification == "" {
+		errValue.Classification = interactionErrorClassification(errValue.Err)
+	}
+	if errValue.TerminalReason == "" {
+		errValue.TerminalReason = messages.TerminalReasonTerminalFailure
+	}
+	if errValue.TerminalProvenance == "" {
+		errValue.TerminalProvenance = messages.TerminalProvenanceGateway
+	}
+	if errValue.OutputState == "" {
+		errValue.OutputState = messages.TerminalOutputNone
+	}
 }

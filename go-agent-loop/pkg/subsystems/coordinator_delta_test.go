@@ -206,6 +206,84 @@ func TestCoordinatorDelta_NoLoopEndWhenNotTerminating(t *testing.T) {
 	}
 }
 
+func TestCoordinatorDelta_DuplexSessionClientCloseHasTerminalMetadata(t *testing.T) {
+	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
+	cd := NewCoordinatorDelta(*buf, nil)
+	ls := newCoordinatorDeltaTestState()
+	ls.Mode = state.DuplexSession
+	ls.SessionID = "session-1"
+	ls.Inputs.TerminateLoop = true
+	ls.Inputs.UserControlPlaneMessage = []messages.Message{{
+		ContentParts: []messages.ContentPart{
+			messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeSessionClose},
+		},
+	}}
+
+	if err := cd.Execute(context.Background(), ls); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	req, ok := buf.Read()
+	if !ok {
+		t.Fatal("expected SESSION.CLOSE KernelDeltaRequest")
+	}
+	if req.Delta.Type != messages.StreamTypeSessionClose {
+		t.Fatalf("delta type = %s, want %s", req.Delta.Type, messages.StreamTypeSessionClose)
+	}
+	value, ok := req.Delta.Value.(*messages.SessionCloseValue)
+	if !ok {
+		t.Fatalf("delta value = %T, want *messages.SessionCloseValue", req.Delta.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonSessionClose {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonSessionClose)
+	}
+	if value.Classification != string(messages.TerminalReasonSessionClose) {
+		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonSessionClose)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceLoop {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceLoop)
+	}
+	if value.OutputState != messages.TerminalOutputNotApplicable {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNotApplicable)
+	}
+}
+
+func TestCoordinatorDelta_DuplexSessionStopHasCancellationMetadata(t *testing.T) {
+	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
+	cd := NewCoordinatorDelta(*buf, nil)
+	ls := newCoordinatorDeltaTestState()
+	ls.Mode = state.DuplexSession
+	ls.SessionID = "session-1"
+	ls.Inputs.TerminateLoop = true
+	ls.Inputs.UserControlPlaneMessage = []messages.Message{{
+		ContentParts: []messages.ContentPart{
+			messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeStop},
+		},
+	}}
+
+	if err := cd.Execute(context.Background(), ls); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	req, ok := buf.Read()
+	if !ok {
+		t.Fatal("expected SESSION.CLOSE KernelDeltaRequest")
+	}
+	value, ok := req.Delta.Value.(*messages.SessionCloseValue)
+	if !ok {
+		t.Fatalf("delta value = %T, want *messages.SessionCloseValue", req.Delta.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonCancellation {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonCancellation)
+	}
+	if value.Classification != string(messages.TerminalReasonCancellation) {
+		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonCancellation)
+	}
+	if value.Reason != "stop" {
+		t.Fatalf("reason = %q, want stop", value.Reason)
+	}
+}
+
 // --- No forwarding when no deltas ---
 
 func TestCoordinatorDelta_NoInputsNoOutput(t *testing.T) {

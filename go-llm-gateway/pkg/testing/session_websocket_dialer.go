@@ -263,7 +263,7 @@ func (c *replayWebSocketConn) Close() error {
 
 	if c.err == nil && c.index < len(c.events) {
 		evt := c.events[c.index]
-		c.err = newReplayMismatchError(
+		c.err = newReplayIncompleteError(
 			fmt.Sprintf("%s event %s at sequence %d", evt.Direction, evt.Type, evt.Sequence),
 			"connection close",
 			fmt.Errorf("session replay incomplete"),

@@ -232,7 +232,7 @@ func (r *SessionReplayer) Close() error {
 	r.mu.Lock()
 	if r.validateOutbound && !r.closed && r.err == nil && r.index < len(r.events) {
 		if evt, ok := r.nextExpectedOutboundLocked(); ok {
-			err := newReplayMismatchError(
+			err := newReplayIncompleteError(
 				fmt.Sprintf("outbound event %s at sequence %d", evt.Type, evt.Sequence),
 				"replay close",
 				fmt.Errorf("session replay closed before expected outbound event"),
@@ -382,6 +382,11 @@ func replayOutcomeFromError(status SessionReplayStatus, err error) SessionReplay
 		outcome.Expected = mismatch.Expected
 		outcome.Actual = mismatch.Actual
 	}
+	var incomplete *gateway.ReplayIncompleteError
+	if errors.As(err, &incomplete) {
+		outcome.Expected = incomplete.Expected
+		outcome.Actual = incomplete.Actual
+	}
 	return outcome
 }
 
@@ -412,6 +417,13 @@ func newReplayMismatchError(expected, actual string, err error) error {
 	return errors.Join(
 		gateway.NewReplayMismatchError(expected, actual, err),
 		providers.ErrReplayMismatch,
+	)
+}
+
+func newReplayIncompleteError(expected, actual string, err error) error {
+	return errors.Join(
+		gateway.NewReplayIncompleteError(expected, actual, err),
+		providers.ErrReplayIncomplete,
 	)
 }
 

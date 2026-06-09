@@ -127,6 +127,19 @@ unsupported-feature validation scope. Rows outside that scope keep their
 existing outcomes until their dedicated repair lanes update runtime behavior and
 evidence.
 
+Typed-errors stream terminal contract update: the
+`phase-4-typed-errors-stream-terminal-contract` repair adds representative
+evidence for direct stream, provider, session, replay, cancellation,
+partial-output, provider-authored completion, loop-synthesized completion,
+provider close, and terminal failure paths. The public contract is
+`docs/architecture/stream-terminal-contract.md`; the gateway-facing consumer
+guidance is `go-llm-gateway/README.md`. These updates advance `P4-API-02`,
+`P4-API-03`, `P4-API-05`, and the evidence required by `P4-GATE-01` for this
+selected representative scope. They do not by themselves close the older broad
+audit rows for every provider adapter, parser failure, fixture entrypoint,
+session helper, result helper, or compatibility-staging concern named later in
+this audit.
+
 Reconciliation validation outcome: `pass`. The provenance note and compact row
 map have been compared with the current validator artifact, public
 declarations, and deterministic test evidence listed below. No stale Phase 4
@@ -148,13 +161,13 @@ Cross-check summary:
 | Row | Current audit decision | Closure validation result |
 | --- | --- | --- |
 | P4-API-01 | `fail` in this audit; validator outcome `uncertain` | Consistent with `go-agent-loop/README.md` constructor ownership guidance and `go-llm-gateway/README.md` transport ownership guidance: injected inferencer, tool executor, and HTTP runtime seams exist, but prompt/config/filesystem/dialer side effects plus full timeout/cancellation mapping still need exact repair work. |
-| P4-API-02 | `fail` in this audit; validator outcome `uncertain` | Current starter evidence includes `messages.ErrorValue`, `messages.NewErrorValueWithDetails`, `gateway.GatewayError`, `ProviderHTTPStatusError`, public gateway error classes, PNIG errors, replay divergence, and cancellation evidence. Stale audit identifiers to keep reconciled are `P4-ERR-01`, `P4-ERR-02`, and `P4-ERR-03`; remaining gaps are provider/session/direct-stream coverage and serialized stream taxonomy. |
-| P4-API-03 | `fail` in this audit; validator outcome `uncertain` | Consistent with current loop/gateway README behavior and tests: normalized stream/result evidence exists, but terminal authority remains split across `ExecuteResult`, synthesized stream endings, PNIG end/error/cancellation events, session `Done`/`Close`, replay completion, and CLI stop conditions. |
+| P4-API-02 | representative terminal-contract repair landed; broader audit row remains open | Current evidence includes `messages.ErrorValue`, additive serialized `classification`, `terminal_reason`, `terminal_provenance`, and `output_state` fields, `gateway.GatewayError`, `ProviderHTTPStatusError`, public gateway error classes, provider classification strings, direct stream normalization, replay mismatch/incomplete classes, and cancellation evidence. Remaining broad gaps are provider-wide/session-wide parity beyond the representative repaired paths. |
+| P4-API-03 | representative terminal-contract repair landed; broader audit row remains open | Current loop/gateway/CLI tests now distinguish provider-authored completion, loop-synthesized completion, cancellation, provider close, terminal failure after partial output, replay divergence, replay incomplete, session close, and CLI-visible terminal fields. Broader result-helper and lifecycle-helper ambiguities remain where they are not part of the selected terminal-contract scope. |
 | P4-API-04 | `pass` | Provider capability discovery now has a provider-neutral vocabulary in `go-llm-gateway/pkg/capabilities`, concrete `providers.CapabilityReporter` coverage for Anthropic, OpenAI-compatible, Gemini, Grok, and fal.ai, gateway/session `Capabilities()` accessors, documented unknown fallback semantics, README/development guidance, and credential-free provider/gateway tests that cover supported, unsupported, and unknown states without overclaiming provider-specific limits. |
-| P4-API-05 | `uncertain` | Stale or incomplete ownership wording remains isolated to `HC-02`, `DOC-01`, and stream taxonomy rows: `pkg/models` is visibly an alias facade in `go doc ./go-llm-gateway/pkg/models`, and stream/session error preservation still needs a documented mapping to gateway error classes. |
+| P4-API-05 | representative terminal-contract repair landed; broader audit row remains open | `go-llm-gateway/README.md` and `docs/architecture/stream-terminal-contract.md` now document typed gateway/provider classes, direct stream terminal fields, session close fields, replay mismatch/incomplete handling, and caller guidance to use `errors.Is`, `errors.As`, or structured fields. Broader package ownership and provider-wide parity items in `HC-02`, `DOC-01`, and remaining stream rows are still separate follow-up scope. |
 | P4-API-06 | `pass` for provider capability/local validation scope; broader context/retry ownership remains tracked by its detailed row | Unsupported stateless, streaming, session, interaction, and inferencer requests now reject locally on representative public seams with inspectable `UnsupportedFeatureError` values before provider side effects. Tests cover unknown fallback policy, cancellation/timeout precedence for session connect, interaction event details, inferencer error preservation, and fal streaming as an explicit unsupported setup failure. |
 | P4-API-07 | `fail` in this audit; validator outcome `uncertain` | Consistent with public declaration inspection: comments and exported declarations are inspectable, but compatibility staging for `pkg/models`, overlapping gateway/provider request types, CLI internal composition exports, fixtures, hidden side effects, and text-matching callers remains open. |
-| P4-GATE-01 | `pass` for the provider capability/local validation repair lane | P4-API-04 and the provider capability/local validation portion of P4-API-06 have runtime behavior, tests, and docs aligned. Other Phase 4 rows named in this audit retain their own outcomes and must be closed by their dedicated repair lanes before a whole-Phase-4 closure decision. |
+| P4-GATE-01 | `pass` for the provider capability/local validation repair lane; representative terminal-contract repair evidence landed | P4-API-04 and the provider capability/local validation portion of P4-API-06 have runtime behavior, tests, and docs aligned. The selected terminal-contract repair has public docs and deterministic credential-free evidence for its representative scope. Other Phase 4 rows named in this audit retain their own outcomes and must be closed by their dedicated repair lanes before a whole-Phase-4 closure decision. |
 
 Validated public declaration commands:
 

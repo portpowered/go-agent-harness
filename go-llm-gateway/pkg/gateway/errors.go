@@ -35,9 +35,13 @@ var ErrProviderHTTPStatus = errors.New("gateway provider http status failure")
 // decoding provider transport data before a provider response is available.
 var ErrTransport = errors.New("gateway transport failure")
 
-// ErrReplayMismatch identifies deterministic replay requests that did not
-// match any recorded capture or fixture event.
+// ErrReplayMismatch identifies deterministic replay requests that diverged
+// from a recorded capture or fixture event.
 var ErrReplayMismatch = errors.New("gateway replay mismatch")
+
+// ErrReplayIncomplete identifies deterministic replay sessions that ended
+// before all required recorded capture or fixture events were consumed.
+var ErrReplayIncomplete = errors.New("gateway replay incomplete")
 
 // ErrCancellation identifies caller cancellation or timeout failures. Callers
 // can use this class to keep shutdown and timeout handling separate from
@@ -261,6 +265,51 @@ func (e *ReplayMismatchError) Is(target error) bool {
 // ErrReplayMismatch.
 func NewReplayMismatchError(expected, actual string, err error) error {
 	return &ReplayMismatchError{
+		Expected: expected,
+		Actual:   actual,
+		Err:      err,
+	}
+}
+
+// ReplayIncompleteError describes a deterministic replay that ended before all
+// required capture or fixture events were consumed.
+type ReplayIncompleteError struct {
+	Expected string
+	Actual   string
+	Err      error
+}
+
+// Error returns a readable replay incomplete error message.
+func (e *ReplayIncompleteError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Expected != "" || e.Actual != "" {
+		return fmt.Sprintf("replay incomplete: expected %s, actual %s", e.Expected, e.Actual)
+	}
+	if e.Err != nil {
+		return "replay incomplete: " + e.Err.Error()
+	}
+	return "replay incomplete"
+}
+
+// Unwrap returns the lower-level replay incomplete cause.
+func (e *ReplayIncompleteError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+// Is reports whether target is ErrReplayIncomplete.
+func (e *ReplayIncompleteError) Is(target error) bool {
+	return e != nil && target == ErrReplayIncomplete
+}
+
+// NewReplayIncompleteError returns a typed replay incomplete failure that
+// matches ErrReplayIncomplete.
+func NewReplayIncompleteError(expected, actual string, err error) error {
+	return &ReplayIncompleteError{
 		Expected: expected,
 		Actual:   actual,
 		Err:      err,
