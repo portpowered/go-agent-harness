@@ -10,6 +10,13 @@ defines the Phase 4 exported API audit shape for public contract hardening in
 
 This section is the row-level Phase 4 source of truth for P4-API-01 through P4-API-07 and P4-GATE-01. The older findings below remain evidence and planning context, but audit documentation alone cannot close implementation checklist rows; a row is closable only when the named public contract, runtime behavior, docs/examples, and deterministic validation evidence exist in code or tests.
 
+Validator provenance: the missing `validator-015` artifact is explicitly
+superseded by `docs/internal/phase-4-api-contract-validator.md` and this audit
+reconciliation. The reviewer-facing supersession note is
+`docs/internal/phase-4-validator-015-provenance.md`; it states that
+validator-015 findings are replaced by current Phase 4 validator evidence and
+that no checklist row closes from provenance alone.
+
 Status values:
 
 - `pass`: current implementation and deterministic evidence are sufficient for this audit row.
