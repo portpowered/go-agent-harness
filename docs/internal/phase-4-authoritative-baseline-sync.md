@@ -55,13 +55,34 @@ authoritative baseline is ahead of the original sync prompt assumptions:
 | `phase-4-typed-errors-stream-terminal-contract` | Local and remote branch head `b50b6219f22c16ef97649842cb665eb8aec16d8f`; merge commit `a64ee15` / PR `#37` | Branch head is an ancestor of `origin/main`; `origin/main` is not an ancestor of the branch head. | `landed`; the old unmerged-candidate state is superseded by PR `#37`. |
 | `phase-4-api-contract-convergence-validator` | Local branch head `4029637d13a899144f70f30736efc0da533c1650`; merge commit `6e78595` / PR `#38` | Branch head is an ancestor of `origin/main`; `origin/main` is not an ancestor of the branch head. | `landed`; the old stale-validator warning is superseded by PR `#38`. |
 
-The landed provider capability and local validation evidence is preserved by
-PR `#35` and remains visible in gateway capability and provider validation
-surfaces. The landed dependency, result, context, and lifecycle evidence is
-preserved by PR `#36`, including the public gateway README update from that
-merge. The landed audit reconciliation evidence is preserved by PR `#34` and
-the convergence validator evidence is preserved by PR `#38` in
-`docs/internal/phase-4-api-contract-validator.md`.
+## Landed Phase 4 Repair Evidence Preservation
+
+This sync branch is a descendant of `origin/main` at
+`6e785952affad9cc5d07458c84f9a45b755c72c0`, so it preserves the already
+landed Phase 4 repair evidence instead of replaying, replacing, or deleting it.
+The preserved evidence is:
+
+| Evidence area | Landed source | Preserved reviewer artifacts |
+| --- | --- | --- |
+| Provider capability and local validation | PR `#35`, merge commit `2853c1e` | `go-llm-gateway/pkg/capabilities`, `go-llm-gateway/pkg/gateway/capabilities_test.go`, provider capability tests, `go-llm-gateway/README.md`, `go-llm-gateway/docs/development.md`, and the provider capability rows in `docs/architecture/contract-gap-audit.md` plus `docs/internal/phase-4-api-contract-repair-validator.md`. |
+| Dependency, result, context, and lifecycle contracts | PR `#36`, merge commit `b21f338` | `docs/architecture/dependency-result-contracts.md`, `docs/internal/phase-4-dependency-result-context-lifecycle-contract.md`, `agentloop.ExecuteResult.FinalText()`, `agentloop.Stream.Outcome()`, `messages.TypedBuffer` context helpers, `messages.SendSessionWithOutcome`, `testing.SessionReplayer.Outcome()`, session inferencer request tests, prompt-detail tests, replay lifecycle tests, and CLI session lifecycle tests. |
+| Audit reconciliation and validator provenance | PR `#34`, merge commit `7886f0a`; later convergence evidence in PR `#38`, merge commit `6e78595` | `docs/architecture/contract-gap-audit.md`, `docs/internal/phase-4-validator-015-provenance.md`, and `docs/internal/phase-4-api-contract-validator.md`. |
+
+This preservation story does not implement new public API contract repairs. It
+also does not mark `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-04`,
+`P4-API-05`, `P4-API-06`, `P4-API-07`, or `P4-GATE-01` complete in
+`docs/internal/checklist.md`; their current status remains owned by the
+underlying repair and validator artifacts listed above.
+
+The preservation claim is reproducible with:
+
+```sh
+git merge-base --is-ancestor 2853c1e HEAD
+git merge-base --is-ancestor b21f338 HEAD
+git merge-base --is-ancestor 7886f0a HEAD
+git merge-base --is-ancestor 6e78595 HEAD
+git ls-tree -r --name-only HEAD -- docs/architecture/contract-gap-audit.md docs/architecture/dependency-result-contracts.md docs/internal/phase-4-api-contract-validator.md docs/internal/phase-4-dependency-result-context-lifecycle-contract.md docs/internal/phase-4-validator-015-provenance.md
+```
 
 ## Setup Workspace Artifact Tolerance Preservation
 
