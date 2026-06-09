@@ -118,6 +118,22 @@ Reviewer command policy: run all commands from the repository root unless a row 
 
 The Phase 4 validator final closure artifact is available at `docs/internal/phase-4-api-contract-validator.md`. Its final closure decision is that no reviewed Phase 4 checklist row may close from the current starter evidence and the next planner action is `repair`. This audit is therefore validated against current public declarations, README guidance, deterministic tests, and that validator report; `P4-GATE-01` remains open, and dependent repair lanes should consume this reconciled map before implementation or final gate review.
 
+Reconciliation validation outcome: `pass`. The provenance note and compact row
+map have been compared with the current validator artifact, public
+declarations, and deterministic test evidence listed below. No stale Phase 4
+row remains silently dropped or claimed closed by audit prose alone. Remaining
+open work is intentionally reported as `fail` or `uncertain` in the row map and
+cross-check summary: `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-06`, and
+`P4-API-07` remain `fail`; `P4-API-04` and `P4-API-05` remain `uncertain`.
+The exact stale wording under watch is `P4-CAP-01` language that capability
+discovery is absent, `P4-VALIDATION-01` language that unsupported-feature
+validation is absent, and `HC-02`/`DOC-01` stream and `pkg/models` ownership
+wording that predates the current alias-facade and gateway error evidence.
+Those stale rows are not treated as closed; they are narrowed to the remaining
+provider coverage, interaction/inferencer validation, documentation, stream
+taxonomy, and compatibility-staging work named in this section. `P4-GATE-01`
+remains `open` and is not closable from this reconciliation.
+
 Cross-check summary:
 
 | Row | Current audit decision | Closure validation result |
