@@ -929,6 +929,171 @@ provider coverage, interaction/inferencer validation seams, fal streaming
 behavior, docs, examples, and provider-specific tests are complete enough for
 row closure.
 
+## Dependency, Result, Context, and Lifecycle Evidence
+
+This section validates the dependency/result/context/lifecycle repair lane
+without treating compatibility-staged helpers as final closure. The repository
+now exposes several explicit public contracts for caller-owned cancellation,
+final text status, stream lifecycle status, provider runtime ownership, and
+prompt-resolution observability. The convergence decision remains conservative
+because session send outcomes, prompt assembly purity, provider/session timeout
+policy, and row-wide lifecycle authority still need repair or reconciliation.
+
+### `P4-API-01` - Context and cancellation contracts
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - Public blocking library calls accept caller-owned contexts at the primary
+    seams: `AgenticLoop.Execute`, `AgenticLoop.ExecuteStreaming`,
+    `messages.Inferencer.Infer`, `messages.Inferencer.InferStream`,
+    `messages.SessionInferencer.ConnectSession`, `gateway.Gateway.Infer`,
+    `gateway.Gateway.InferStream`, and `gateway.Gateway.Interact`.
+  - `messages.TypedBuffer.ReadContext(ctx)` now returns `ctx.Err()` so callers
+    can distinguish cancellation and deadlines from empty reads. The older
+    `ReadBlockingContext(ctx)` bool shape is documented as compatibility-only.
+  - Replay and record helpers preserve caller-owned lifecycle context through
+    `testing.WithReplayContext`, session replay cancellation tests, and
+    recorder relay tests. CLI session record/replay tests preserve
+    `context.Canceled` through command paths.
+  - The row remains open because timeout ownership and retry policy are still
+    not mapped for every blocking/provider path. Session send still exposes a
+    bool result through `Session.Send(ctx, msg)`, so cancellation, closed
+    session, full outbound buffer, and terminal failure are not yet separable
+    at that public seam.
+- `affected files / declarations`:
+  - `go-agent-loop/pkg/agentloop.AgenticLoop.Execute`
+  - `go-agent-loop/pkg/agentloop.AgenticLoop.ExecuteStreaming`
+  - `go-agent-loop/pkg/messages.TypedBuffer.ReadContext`
+  - `go-agent-loop/pkg/messages.TypedBuffer.ReadBlockingContext`
+  - `go-agent-loop/pkg/messages.Session.Send`
+  - `go-llm-gateway/pkg/testing.WithReplayContext`
+  - `go-llm-gateway/pkg/testing.NewRecordSessionInferencer`
+  - `go-llm-gateway/pkg/testing.NewReplaySessionInferencer`
+  - `agent-cli/internal/services.RunSession`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Add typed session send outcomes for cancellation, closed session, full
+    outbound buffer, and terminal failure while preserving the legacy bool API.
+  - Document per-surface ownership for caller cancellation, command timeout,
+    provider timeout, and retry policy across stateless inference, streaming
+    inference, PNIG interactions, realtime sessions, replay, and record mode.
+  - Add deterministic tests for any timeout or retry contract introduced; keep
+    retry behavior caller-owned or explicitly injected.
+- `reviewer commands`:
+  - `go doc ./go-agent-loop/pkg/messages TypedBuffer Session`
+  - `go test ./go-agent-loop/pkg/messages -run 'TestTypedBuffer_ReadContext'`
+  - `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled|TestRecordSessionInferencer'`
+  - `go test ./agent-cli/internal/services -run 'TestRunSession_(Record|Replay).*Cancel|TestRunSession_ContextCanceled'`
+
+### `P4-API-03` - Result contracts and lifecycle states
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - `agentloop.ExecuteResult.FinalText()` exposes explicit final text status
+    values for non-empty success, empty success, no final message,
+    cancellation/deadline, terminal failure, and partial output with terminal
+    error metadata. The legacy `Text()` helper remains text-only for
+    compatibility.
+  - `agentloop.Stream.Outcome()` exposes stream lifecycle states for open,
+    drained, caller-closed, canceled/deadline, failed, and partial output
+    before cancellation or failure. Existing `HasNext()` and `Response()`
+    remain available for legacy iteration.
+  - Tests in `go-agent-loop/pkg/agentloop` cover empty final text, failed final
+    text, stream cancellation, stream close, and stream failure outcomes.
+    `docs/architecture/dependency-result-contracts.md` documents the
+    migration path for callers that need inspectable result state.
+  - The row remains open because result authority is still split across
+    non-streaming results, loop-synthesized streaming endings,
+    provider-authored `MESSAGE.END`, PNIG end/error/cancellation events,
+    session `Done`/`Close`, replay completion, and CLI stop conditions.
+- `affected files / declarations`:
+  - `go-agent-loop/pkg/agentloop.ExecuteResult`
+  - `go-agent-loop/pkg/agentloop.FinalTextResult`
+  - `go-agent-loop/pkg/agentloop.FinalTextStatus`
+  - `go-agent-loop/pkg/agentloop.Stream`
+  - `go-agent-loop/pkg/agentloop.StreamOutcome`
+  - `go-agent-loop/pkg/agentloop.StreamStatus`
+  - `go-llm-gateway/pkg/gateway.InteractionEvent`
+  - `go-llm-gateway/pkg/testing.SessionReplayer`
+  - `docs/architecture/dependency-result-contracts.md`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Define one terminal-state authority for each public mode: non-streaming
+    loop execution, streaming loop execution, PNIG interaction, direct provider
+    stream, realtime session, replay, and CLI command execution.
+  - Add or update tests that prove cancellation, partial output, clean drain,
+    provider close, replay divergence, and terminal failure map to the same
+    documented outcomes across those modes.
+  - Keep `Text()`, `HasNext()`, and other compatibility helpers available while
+    directing new code to the explicit result contracts.
+- `reviewer commands`:
+  - `go doc ./go-agent-loop/pkg/agentloop ExecuteResult FinalTextResult Stream StreamOutcome`
+  - `go test ./go-agent-loop/pkg/agentloop -run 'TestExecuteResultFinalText|TestExecute_EmptyFinalTextResult|TestExecute_ErrorResult|TestExecuteStreaming_.*Outcome'`
+  - `sed -n '24,58p' docs/architecture/dependency-result-contracts.md`
+
+### `P4-API-07` - Dependency injection and hidden side effects
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - `agentloop.New` requires callers to inject an inferencer/session inferencer
+    and now requires an explicit tool-execution decision when tools are
+    advertised. Constructor tests prove tools are not silently executed through
+    an implicit default.
+  - Stateless provider HTTP runtime policy is composed in `agent-cli` before
+    provider construction through `ProviderBuildContext.HTTPClient` and
+    `WithProviderHTTPBaseTransport(...)`; provider builders consume the injected
+    client instead of selecting live/record/replay transport policy locally.
+  - Session runtime planning is centralized in
+    `agent-cli/internal/services/session_runtime.go`, and OpenAI/Grok session
+    constructors fail before dialing when required injected dialers are absent.
+  - `Executor.LoadSystemPromptWithDetails(...)` makes prompt-resolution side
+    effects observable by reporting prompt file reads, default `AGENTS.md`
+    creation/reads, config-backed system information, runtime system
+    information, skill metadata reads, and loop suffix appends.
+  - The row remains open because prompt assembly is still CLI side-effecting
+    rather than pure injected loaders, some provider/session timeout and retry
+    policy remains application-owned but not fully documented, and
+    compatibility boundaries for `pkg/models`, gateway/provider request types,
+    and CLI `internal/*` exports still need explicit staging.
+- `affected files / declarations`:
+  - `go-agent-loop/pkg/agentloop.New`
+  - `go-agent-loop/pkg/agentloop.WithInferencer`
+  - `go-agent-loop/pkg/agentloop.WithSessionInferencer`
+  - `go-agent-loop/pkg/agentloop.WithToolExecutor`
+  - `go-agent-loop/pkg/agentloop.WithToolExecutionDisabled`
+  - `agent-cli/internal/agent.ProviderBuildContext`
+  - `agent-cli/internal/agent.WithProviderHTTPBaseTransport`
+  - `agent-cli/internal/agent.Executor.LoadSystemPromptWithDetails`
+  - `agent-cli/internal/services.session_runtime.go`
+  - `go-llm-gateway/pkg/providers/openai.OpenAIProvider.ConnectSession`
+  - `go-llm-gateway/pkg/providers/grok.GrokSessionProvider.ConnectSession`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Split prompt assembly into pure injected loaders if future public library
+    callers need prompt construction outside CLI-owned composition; otherwise
+    document it as CLI behavior with explicit side-effect reporting.
+  - Document the compatibility boundary for gateway model aliases,
+    gateway/provider request ownership, and CLI `internal/*` composition exports.
+  - Keep provider runtime policy injected at composition seams and add
+    regression tests before adding new live defaults, clocks, stores,
+    transports, dialers, endpoints, or retry behavior.
+- `reviewer commands`:
+  - `go test ./go-agent-loop/pkg/agentloop -run 'TestNew_.*Tool|TestExecute'`
+  - `go test ./agent-cli/internal/agent -run 'TestBuildProviderHTTPRuntime|TestLoadSystemPromptWithDetails|TestProviderFactory'`
+  - `go test ./agent-cli/internal/services -run 'TestBuildSessionRuntime|TestRunSession'`
+  - `go test ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/pkg/providers/grok -run 'TestConnectSession_Missing.*Dialer'`
+  - `sed -n '1,112p' docs/architecture/dependency-result-contracts.md`
+
+## Dependency, Result, Context, and Lifecycle Closure Summary
+
+`P4-API-01`, `P4-API-03`, and `P4-API-07` remain uncertain. The repository has
+useful public evidence for explicit cancellation, final text status, stream
+lifecycle status, provider runtime ownership, session runtime planning, and
+prompt side-effect observability. These rows cannot close until remaining bool
+results, hidden prompt side effects, terminal-state authority, timeout/retry
+ownership, provider/session lifecycle gaps, docs, and deterministic tests are
+reconciled into one row-level public contract.
+
 ## Reviewer-Runnable Command Evidence
 
 Run all commands from the repository root. These commands do not require live
@@ -1010,6 +1175,7 @@ incomplete.
 
 ## Current Story Status
 
-Stories 001, 002, 003, 004, 005, and 006 are complete. This validator report
-is ready for planner consumption, and the report's next planner action is
-`repair`.
+Stories 001, 002, 003, 004, and 005 are complete. Story 006 must still publish
+the final row closure decisions from this validator, and story 007 must still
+publish exactly one next planner action after those closure decisions are
+confirmed.
