@@ -92,6 +92,25 @@ Do not infer these lifecycle states from `HasNext() == false` in new code.
 events as provider-authored. New loop-synthesized boundaries should be emitted
 with `messages.NewSynthesizedMessageEndValue(...)`.
 
+## Replay Lifecycle
+
+For bidirectional session fixture replay, prefer
+`testing.SessionReplayer.Outcome()` after `Done()` or after a send/close
+failure. It reports:
+
+- open replay
+- successful completion
+- divergent outbound replay
+- incomplete replay where an expected capture event was omitted
+- caller-owned replay context cancellation
+
+`Outcome().Err` preserves the existing replay mismatch classifications, so
+callers can continue to use `errors.Is(err, providers.ErrReplayMismatch)` or
+`errors.Is(err, gateway.ErrReplayMismatch)`. `Outcome().Expected` and
+`Outcome().Actual` expose mismatch detail for deterministic harnesses without
+parsing log text. The older `SessionReplayer.Err()` helper remains available
+for compatible error-only callers.
+
 ## Provider Runtime Ownership
 
 Provider packages in `go-llm-gateway` own provider-specific protocol behavior.
@@ -134,9 +153,6 @@ The current repair batch intentionally avoids removing legacy declarations.
 Remaining compatibility-sensitive work should be additive unless a future major
 version explicitly breaks compatibility:
 
-- decide whether replay divergence and incomplete replay need a first-class
-  public outcome value beyond typed errors returned through replay helpers such
-  as `SessionReplayer.Err()`
 - preserve the context/config lifetime split when extending loop-facing session
   adapters: `context.Context` should own one operation lifetime, while
   persistent session shape should remain explicit configuration

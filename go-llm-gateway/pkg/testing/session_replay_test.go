@@ -259,6 +259,20 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
 		t.Fatal("replay mismatch should not match provider HTTP status classification")
 	}
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayDiverged {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayDiverged)
+	}
+	if outcome.OK() {
+		t.Fatal("divergent replay outcome reported OK")
+	}
+	if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+		t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+	}
+	if outcome.Expected == "" || outcome.Actual == "" {
+		t.Fatalf("outcome mismatch detail = expected %q actual %q, want both populated", outcome.Expected, outcome.Actual)
+	}
 }
 
 func TestSessionReplayer_SendWithOutcomeDistinguishesLifecycleStates(t *testing.T) {
@@ -366,6 +380,81 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	}
 	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
 		t.Fatal("omitted outbound should not match provider HTTP status classification")
+	}
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayIncomplete {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayIncomplete)
+	}
+	if outcome.OK() {
+		t.Fatal("incomplete replay outcome reported OK")
+	}
+	if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+		t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+	}
+	if outcome.Expected == "" || outcome.Actual != "replay close" {
+		t.Fatalf("outcome mismatch detail = expected %q actual %q, want omitted outbound close detail", outcome.Expected, outcome.Actual)
+	}
+}
+
+func TestSessionReplayer_OutcomeReportsSuccessfulReplayCompletion(t *testing.T) {
+	events := []CapturedSessionEvent{
+		makeCapture(DirectionServerToClient, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("complete")),
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.session.json")
+	writeCapture(t, path, events)
+
+	replayer := mustNewSessionReplayer(t, path)
+	<-replayer.Done()
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayCompleted {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayCompleted)
+	}
+	if !outcome.OK() {
+		t.Fatal("completed replay outcome did not report OK")
+	}
+	if outcome.Err != nil {
+		t.Fatalf("outcome err = %v, want nil", outcome.Err)
+	}
+}
+
+func TestSessionReplayer_ReplaysFlushedCaptureToCompletionOutcome(t *testing.T) {
+	fake := newFakeSession()
+	rec := NewSessionRecorder(fake, WithSessionCaptureProvider("grok", "grok-realtime"))
+
+	fake.inbound.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("flushed"),
+	})
+	if _, ok := readRecordedMessage(t, rec); !ok {
+		t.Fatal("expected recorder relay to capture inbound message")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "capture.session.json")
+	if err := rec.FlushToFile(path); err != nil {
+		t.Fatalf("FlushToFile: %v", err)
+	}
+
+	replayer := mustNewSessionReplayer(t, path)
+	<-replayer.Done()
+
+	msg, ok := replayer.Receive().Read()
+	if !ok {
+		t.Fatal("expected replayed flushed capture message")
+	}
+	delta, ok := msg.Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("replayed value type = %T, want *TextDeltaValue", msg.Value)
+	}
+	if delta.Content != "flushed" {
+		t.Fatalf("replayed content = %q, want flushed", delta.Content)
+	}
+	if outcome := replayer.Outcome(); outcome.Status != SessionReplayCompleted {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayCompleted)
 	}
 }
 

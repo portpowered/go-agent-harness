@@ -18,6 +18,42 @@ import (
 // SessionReplayerOption configures a SessionReplayer.
 type SessionReplayerOption func(*SessionReplayer)
 
+// SessionReplayStatus is the public terminal state of a session replay.
+type SessionReplayStatus string
+
+const (
+	// SessionReplayOpen indicates replay has not reached a terminal state.
+	SessionReplayOpen SessionReplayStatus = "open"
+	// SessionReplayCompleted indicates every captured event was replayed or
+	// validated successfully.
+	SessionReplayCompleted SessionReplayStatus = "completed"
+	// SessionReplayDiverged indicates caller output differed from the next
+	// expected capture event.
+	SessionReplayDiverged SessionReplayStatus = "diverged"
+	// SessionReplayIncomplete indicates replay stopped before an expected
+	// capture event was observed.
+	SessionReplayIncomplete SessionReplayStatus = "incomplete"
+	// SessionReplayCancelled indicates the caller-owned replay context stopped
+	// delivery before completion.
+	SessionReplayCancelled SessionReplayStatus = "cancelled"
+)
+
+// SessionReplayOutcome is an inspectable replay result for test harnesses and
+// fixture validators. Err preserves existing replay mismatch classifications,
+// while Expected and Actual expose mismatch details without parsing log text.
+type SessionReplayOutcome struct {
+	Status   SessionReplayStatus
+	Err      error
+	Expected string
+	Actual   string
+}
+
+// OK reports whether replay completed without divergence, incompletion, or
+// caller cancellation.
+func (o SessionReplayOutcome) OK() bool {
+	return o.Status == SessionReplayCompleted
+}
+
 // WithReplayContext makes replay delivery stop when ctx is cancelled.
 func WithReplayContext(ctx context.Context) SessionReplayerOption {
 	return func(r *SessionReplayer) {
@@ -61,6 +97,7 @@ type SessionReplayer struct {
 	sentLog   []messages.StreamMessage
 	index     int
 	err       error
+	outcome   SessionReplayOutcome
 	closed    bool
 	cond      *sync.Cond
 	mu        sync.Mutex
@@ -141,7 +178,7 @@ func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.Stre
 	}
 	if r.index >= len(r.events) {
 		err := newReplayMismatchError("replay completed", string(msg.Type), fmt.Errorf("unexpected outbound event after replay completed"))
-		r.failLocked(err)
+		r.failLocked(SessionReplayDiverged, err)
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
 
@@ -152,7 +189,7 @@ func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.Stre
 			string(msg.Type),
 			fmt.Errorf("got outbound before expected capture event"),
 		)
-		r.failLocked(err)
+		r.failLocked(SessionReplayDiverged, err)
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
 	if err := compareCapturedStreamMessage(expected, msg); err != nil {
@@ -161,7 +198,7 @@ func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.Stre
 			string(msg.Type),
 			err,
 		)
-		r.failLocked(mismatchErr)
+		r.failLocked(SessionReplayDiverged, mismatchErr)
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: mismatchErr}
 	}
 
@@ -194,11 +231,12 @@ func (r *SessionReplayer) Close() error {
 	r.mu.Lock()
 	if r.validateOutbound && !r.closed && r.err == nil && r.index < len(r.events) {
 		if evt, ok := r.nextExpectedOutboundLocked(); ok {
-			r.err = newReplayMismatchError(
+			err := newReplayMismatchError(
 				fmt.Sprintf("outbound event %s at sequence %d", evt.Type, evt.Sequence),
 				"replay close",
 				fmt.Errorf("session replay closed before expected outbound event"),
 			)
+			r.setOutcomeLocked(SessionReplayIncomplete, err)
 		}
 	}
 	r.mu.Unlock()
@@ -223,6 +261,29 @@ func (r *SessionReplayer) Err() error {
 	return r.err
 }
 
+// Outcome returns the current or terminal replay state. Callers should prefer
+// this over inferring replay completion from Done plus Err, because incomplete
+// replay and divergent replay both preserve replay mismatch error classes while
+// carrying different lifecycle meanings.
+func (r *SessionReplayer) Outcome() SessionReplayOutcome {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.outcome.Status != "" {
+		return r.outcome
+	}
+	if r.err != nil {
+		return replayOutcomeFromError(SessionReplayDiverged, r.err)
+	}
+	if r.index >= len(r.events) {
+		return SessionReplayOutcome{Status: SessionReplayCompleted}
+	}
+	if r.closed {
+		return SessionReplayOutcome{Status: SessionReplayIncomplete}
+	}
+	return SessionReplayOutcome{Status: SessionReplayOpen}
+}
+
 func (r *SessionReplayer) replayLoop() {
 	defer r.close()
 
@@ -233,6 +294,9 @@ func (r *SessionReplayer) replayLoop() {
 			r.cond.Wait()
 		}
 		if r.closed || r.err != nil || r.index >= len(r.events) {
+			if r.err == nil && r.index >= len(r.events) {
+				r.setOutcomeLocked(SessionReplayCompleted, nil)
+			}
 			r.mu.Unlock()
 			return
 		}
@@ -246,6 +310,9 @@ func (r *SessionReplayer) replayLoop() {
 			case <-r.done:
 				return
 			case <-r.replayCtx.Done():
+				r.mu.Lock()
+				r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+				r.mu.Unlock()
 				return
 			case <-time.After(delay):
 			}
@@ -268,16 +335,17 @@ func (r *SessionReplayer) replayLoop() {
 			return
 		default:
 			if !r.outbound.Write(r.replayCtx, msg) && r.replayCtx.Err() != nil {
+				r.mu.Lock()
+				r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+				r.mu.Unlock()
 				return
 			}
 		}
 	}
 }
 
-func (r *SessionReplayer) failLocked(err error) {
-	if r.err == nil {
-		r.err = err
-	}
+func (r *SessionReplayer) failLocked(status SessionReplayStatus, err error) {
+	r.setOutcomeLocked(status, err)
 	r.closeOnce.Do(func() {
 		r.closed = true
 		close(r.done)
@@ -285,10 +353,32 @@ func (r *SessionReplayer) failLocked(err error) {
 	r.cond.Broadcast()
 }
 
+func (r *SessionReplayer) setOutcomeLocked(status SessionReplayStatus, err error) {
+	if r.err == nil {
+		r.err = err
+	}
+	if r.outcome.Status == "" || r.outcome.Status == SessionReplayOpen {
+		r.outcome = replayOutcomeFromError(status, err)
+	}
+}
+
+func replayOutcomeFromError(status SessionReplayStatus, err error) SessionReplayOutcome {
+	outcome := SessionReplayOutcome{Status: status, Err: err}
+	var mismatch *gateway.ReplayMismatchError
+	if errors.As(err, &mismatch) {
+		outcome.Expected = mismatch.Expected
+		outcome.Actual = mismatch.Actual
+	}
+	return outcome
+}
+
 func (r *SessionReplayer) close() {
 	r.closeOnce.Do(func() {
 		r.cancel()
 		r.mu.Lock()
+		if r.outcome.Status == "" && r.err == nil && r.index >= len(r.events) {
+			r.setOutcomeLocked(SessionReplayCompleted, nil)
+		}
 		r.closed = true
 		close(r.done)
 		r.mu.Unlock()
