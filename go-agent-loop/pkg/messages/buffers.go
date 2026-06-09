@@ -2,6 +2,27 @@ package messages
 
 import "context"
 
+// BufferWriteStatus identifies the observable outcome of a TypedBuffer write.
+type BufferWriteStatus string
+
+const (
+	BufferWriteSucceeded  BufferWriteStatus = "succeeded"
+	BufferWriteCancelled  BufferWriteStatus = "cancelled"
+	BufferWriteTimedOut   BufferWriteStatus = "timed_out"
+	BufferWriteBufferFull BufferWriteStatus = "buffer_full"
+)
+
+// BufferWriteOutcome is the typed result returned by WriteContext.
+type BufferWriteOutcome struct {
+	Status BufferWriteStatus
+	Err    error
+}
+
+// OK reports whether the write was delivered to the buffer.
+func (o BufferWriteOutcome) OK() bool {
+	return o.Status == BufferWriteSucceeded
+}
+
 // TypedBuffer is a generic, non-blocking, channel-based message buffer for participant communication.
 type TypedBuffer[T any] struct {
 	ch     chan T
@@ -24,23 +45,40 @@ func (b *TypedBuffer[T]) SetOnDrop(fn func()) {
 }
 
 // Write sends data into the buffer. Context-aware: returns false if ctx is cancelled or buffer is full. Non-blocking when buffer has space.
+// It is retained for compatibility with existing bool-based callers. New
+// callers that need to distinguish cancellation, timeout, and buffer-full
+// outcomes should use WriteContext.
 func (b *TypedBuffer[T]) Write(ctx context.Context, data T) bool {
+	return b.WriteContext(ctx, data).OK()
+}
+
+// WriteContext sends data into the buffer and returns a typed write outcome.
+// It is non-blocking when the buffer is full.
+func (b *TypedBuffer[T]) WriteContext(ctx context.Context, data T) BufferWriteOutcome {
 	select {
 	case <-ctx.Done():
-		return false
+		return bufferWriteContextOutcome(ctx)
 	default:
 	}
 	select {
 	case b.ch <- data:
-		return true
+		return BufferWriteOutcome{Status: BufferWriteSucceeded}
 	case <-ctx.Done():
-		return false
+		return bufferWriteContextOutcome(ctx)
 	default:
 		if b.onDrop != nil {
 			b.onDrop()
 		}
-		return false
+		return BufferWriteOutcome{Status: BufferWriteBufferFull}
 	}
+}
+
+func bufferWriteContextOutcome(ctx context.Context) BufferWriteOutcome {
+	err := ctx.Err()
+	if err == context.DeadlineExceeded {
+		return BufferWriteOutcome{Status: BufferWriteTimedOut, Err: err}
+	}
+	return BufferWriteOutcome{Status: BufferWriteCancelled, Err: err}
 }
 
 // Read polls the buffer for data. Non-blocking: returns zero value, false if empty.

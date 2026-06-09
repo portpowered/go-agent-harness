@@ -52,6 +52,53 @@ func TestTypedBuffer_WriteFull(t *testing.T) {
 	}
 }
 
+func TestTypedBuffer_WriteContextOutcomes(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		buf := NewTypedBuffer[string](1)
+		outcome := buf.WriteContext(context.Background(), "first")
+		if outcome.Status != BufferWriteSucceeded || !outcome.OK() {
+			t.Fatalf("outcome = %+v, want success", outcome)
+		}
+	})
+
+	t.Run("buffer full", func(t *testing.T) {
+		buf := NewTypedBuffer[string](1)
+		if !buf.Write(context.Background(), "first") {
+			t.Fatal("initial write failed")
+		}
+		outcome := buf.WriteContext(context.Background(), "second")
+		if outcome.Status != BufferWriteBufferFull || outcome.OK() {
+			t.Fatalf("outcome = %+v, want buffer full", outcome)
+		}
+	})
+
+	t.Run("cancelled", func(t *testing.T) {
+		buf := NewTypedBuffer[string](1)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		outcome := buf.WriteContext(ctx, "value")
+		if outcome.Status != BufferWriteCancelled {
+			t.Fatalf("status = %q, want %q", outcome.Status, BufferWriteCancelled)
+		}
+		if !errors.Is(outcome.Err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", outcome.Err)
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		buf := NewTypedBuffer[string](1)
+		ctx, cancel := context.WithTimeout(context.Background(), 0)
+		defer cancel()
+		outcome := buf.WriteContext(ctx, "value")
+		if outcome.Status != BufferWriteTimedOut {
+			t.Fatalf("status = %q, want %q", outcome.Status, BufferWriteTimedOut)
+		}
+		if !errors.Is(outcome.Err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want context.DeadlineExceeded", outcome.Err)
+		}
+	})
+}
+
 func TestTypedBuffer_OnDropCalledWhenFull(t *testing.T) {
 	buf := NewTypedBuffer[string](1)
 	dropCount := 0
@@ -221,5 +268,91 @@ func TestTypedBuffer_StructType(t *testing.T) {
 	}
 	if data.ID != "abc" || data.Data != 42 {
 		t.Errorf("unexpected data: %+v", data)
+	}
+}
+
+type boolOnlySession struct {
+	ok bool
+}
+
+func (s boolOnlySession) Send(context.Context, StreamMessage) bool {
+	return s.ok
+}
+
+func (s boolOnlySession) Receive() *TypedBuffer[StreamMessage] {
+	return NewTypedBuffer[StreamMessage](1)
+}
+
+func (s boolOnlySession) Done() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+func (s boolOnlySession) Close() error {
+	return nil
+}
+
+type outcomeSession struct {
+	outcome SessionSendOutcome
+}
+
+func (s outcomeSession) Send(context.Context, StreamMessage) bool {
+	return s.outcome.OK()
+}
+
+func (s outcomeSession) SendWithOutcome(context.Context, StreamMessage) SessionSendOutcome {
+	return s.outcome
+}
+
+func (s outcomeSession) Receive() *TypedBuffer[StreamMessage] {
+	return NewTypedBuffer[StreamMessage](1)
+}
+
+func (s outcomeSession) Done() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+func (s outcomeSession) Close() error {
+	return nil
+}
+
+func TestSendSessionWithOutcome(t *testing.T) {
+	msg := StreamMessage{Type: StreamTypeTextDelta, Value: NewTextDeltaValue("hello")}
+
+	success := SendSessionWithOutcome(context.Background(), boolOnlySession{ok: true}, msg)
+	if success.Status != SessionSendSucceeded || !success.OK() {
+		t.Fatalf("success = %+v, want succeeded", success)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cancelled := SendSessionWithOutcome(ctx, boolOnlySession{ok: false}, msg)
+	if cancelled.Status != SessionSendCancelled {
+		t.Fatalf("cancelled status = %q, want %q", cancelled.Status, SessionSendCancelled)
+	}
+	if !errors.Is(cancelled.Err, context.Canceled) {
+		t.Fatalf("cancelled err = %v, want context.Canceled", cancelled.Err)
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 0)
+	defer cancel()
+	timedOut := SendSessionWithOutcome(ctx, boolOnlySession{ok: false}, msg)
+	if timedOut.Status != SessionSendTimedOut {
+		t.Fatalf("timeout status = %q, want %q", timedOut.Status, SessionSendTimedOut)
+	}
+	if !errors.Is(timedOut.Err, context.DeadlineExceeded) {
+		t.Fatalf("timeout err = %v, want context.DeadlineExceeded", timedOut.Err)
+	}
+
+	for _, status := range []SessionSendStatus{SessionSendBufferFull, SessionSendClosed, SessionSendTerminalFailure} {
+		outcome := SendSessionWithOutcome(context.Background(), outcomeSession{
+			outcome: SessionSendOutcome{Status: status},
+		}, msg)
+		if outcome.Status != status || outcome.OK() {
+			t.Fatalf("outcome status = %q, want %q", outcome.Status, status)
+		}
 	}
 }

@@ -69,6 +69,7 @@ type SessionReplayer struct {
 }
 
 var _ messages.Session = (*SessionReplayer)(nil)
+var _ messages.SessionSendOutcomeSender = (*SessionReplayer)(nil)
 
 // NewSessionReplayer creates a SessionReplayer from a capture file at the given
 // path. The file must be a SessionCapture JSON object produced by
@@ -112,9 +113,16 @@ func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*S
 // Send verifies the outbound message against the next expected client-to-server
 // capture record. A divergence terminates replay and is available via Err.
 func (r *SessionReplayer) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return r.SendWithOutcome(ctx, msg).OK()
+}
+
+// SendWithOutcome verifies the outbound message against the next expected
+// client-to-server capture record and reports the precise public lifecycle
+// outcome.
+func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	select {
 	case <-ctx.Done():
-		return false
+		return sessionSendContextOutcome(ctx)
 	default:
 	}
 
@@ -122,42 +130,53 @@ func (r *SessionReplayer) Send(ctx context.Context, msg messages.StreamMessage) 
 	defer r.mu.Unlock()
 
 	if r.closed {
-		return false
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	}
 	if r.err != nil {
-		return false
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: r.err}
 	}
 	if !r.validateOutbound {
 		r.sentLog = append(r.sentLog, msg)
-		return true
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	}
 	if r.index >= len(r.events) {
-		r.failLocked(newReplayMismatchError("replay completed", string(msg.Type), fmt.Errorf("unexpected outbound event after replay completed")))
-		return false
+		err := newReplayMismatchError("replay completed", string(msg.Type), fmt.Errorf("unexpected outbound event after replay completed"))
+		r.failLocked(err)
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
 
 	expected := r.events[r.index]
 	if expected.Direction != DirectionClientToServer {
-		r.failLocked(newReplayMismatchError(
+		err := newReplayMismatchError(
 			fmt.Sprintf("%s event %s at sequence %d", expected.Direction, expected.Type, expected.Sequence),
 			string(msg.Type),
 			fmt.Errorf("got outbound before expected capture event"),
-		))
-		return false
+		)
+		r.failLocked(err)
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
 	if err := compareCapturedStreamMessage(expected, msg); err != nil {
-		r.failLocked(newReplayMismatchError(
+		mismatchErr := newReplayMismatchError(
 			fmt.Sprintf("outbound payload for %s at sequence %d", expected.Type, expected.Sequence),
 			string(msg.Type),
 			err,
-		))
-		return false
+		)
+		r.failLocked(mismatchErr)
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: mismatchErr}
 	}
 
 	r.sentLog = append(r.sentLog, msg)
 	r.index++
 	r.cond.Broadcast()
-	return true
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome {
+	err := ctx.Err()
+	if err == context.DeadlineExceeded {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
 // Receive returns the buffer from which server-to-client events are delivered.

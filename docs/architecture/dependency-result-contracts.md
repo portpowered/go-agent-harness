@@ -23,10 +23,24 @@ For blocking message buffers, prefer:
 
 - `messages.TypedBuffer.ReadContext(ctx)` for an error-returning read that
   reports caller cancellation with `ctx.Err()`.
+- `messages.TypedBuffer.WriteContext(ctx, value)` for a typed write outcome
+  that distinguishes success, caller cancellation, timeout, and full buffers.
 - `messages.TypedBuffer.ReadBlockingContext(ctx)` only for legacy callers that
   still need the existing `(T, bool)` shape. Its `false` result is compatible,
   but it cannot identify cancellation separately from another closed `done`
   signal.
+- `messages.TypedBuffer.Write(ctx, value)` only for legacy callers that still
+  need the existing `bool` shape. Its `false` result is compatible, but it
+  collapses cancellation, timeout, and buffer-full outcomes.
+
+For persistent sessions, existing `messages.Session.Send(ctx, msg) bool`
+callers remain compatible. New callers that need lifecycle precision should use
+`messages.SendSessionWithOutcome(ctx, session, msg)`. Sessions that implement
+`messages.SessionSendOutcomeSender` can report success, caller cancellation,
+timeout, full outbound buffers, closed sessions, and terminal failures. Bool-only
+session implementations are adapted for cancellation and timeout, while other
+legacy `false` results are reported as terminal failures because the precise
+cause is not observable through the old interface.
 
 ## Final Agent Output
 
@@ -105,9 +119,6 @@ The current repair batch intentionally avoids removing legacy declarations.
 Remaining compatibility-sensitive work should be additive unless a future major
 version explicitly breaks compatibility:
 
-- add typed session send outcomes for the remaining `Session.Send(ctx, msg)
-  bool` ambiguity, including cancellation, closed session, full outbound buffer,
-  and terminal failure where the session implementation can observe them
 - decide whether provider-authored completion and loop-synthesized completion
   need a public stream/final-text status, metadata field, emitted event, or
   documented compatibility gap

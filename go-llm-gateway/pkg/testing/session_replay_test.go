@@ -261,6 +261,78 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	}
 }
 
+func TestSessionReplayer_SendWithOutcomeDistinguishesLifecycleStates(t *testing.T) {
+	msg := messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("unexpected"),
+	}
+
+	t.Run("terminal replay failure", func(t *testing.T) {
+		events := []CapturedSessionEvent{
+			makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.session.json")
+		writeCapture(t, path, events)
+		replayer := mustNewSessionReplayer(t, path)
+
+		outcome := messages.SendSessionWithOutcome(context.Background(), replayer, msg)
+		if outcome.Status != messages.SessionSendTerminalFailure {
+			t.Fatalf("status = %q, want %q", outcome.Status, messages.SessionSendTerminalFailure)
+		}
+		if outcome.OK() {
+			t.Fatal("terminal failure outcome reported OK")
+		}
+		if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+			t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+		}
+	})
+
+	t.Run("closed session", func(t *testing.T) {
+		events := []CapturedSessionEvent{
+			makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.session.json")
+		writeCapture(t, path, events)
+		replayer := mustNewSessionReplayer(t, path)
+		if err := replayer.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+
+		outcome := messages.SendSessionWithOutcome(context.Background(), replayer, msg)
+		if outcome.Status != messages.SessionSendClosed {
+			t.Fatalf("status = %q, want %q", outcome.Status, messages.SessionSendClosed)
+		}
+		if outcome.OK() {
+			t.Fatal("closed outcome reported OK")
+		}
+	})
+
+	t.Run("caller cancellation", func(t *testing.T) {
+		events := []CapturedSessionEvent{
+			makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.session.json")
+		writeCapture(t, path, events)
+		replayer := mustNewSessionReplayer(t, path)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		outcome := messages.SendSessionWithOutcome(ctx, replayer, msg)
+		if outcome.Status != messages.SessionSendCancelled {
+			t.Fatalf("status = %q, want %q", outcome.Status, messages.SessionSendCancelled)
+		}
+		if !errors.Is(outcome.Err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", outcome.Err)
+		}
+	})
+}
+
 func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	events := []CapturedSessionEvent{
 		makeCapture(DirectionServerToClient, 0, messages.StreamTypeSessionCreated, messages.NewSessionCreatedValue("", "")),
