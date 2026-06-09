@@ -440,6 +440,164 @@ coverage is planning evidence, while closure requires implementation evidence,
 public consumer guidance, examples where useful, and credential-free tests that
 prove the public contract is usable.
 
+## Provider Capability And Local Validation Evidence
+
+This section validates the public capability discovery and local
+unsupported-feature validation starter surface. The current repository now has
+a provider-neutral capability contract, gateway-level discovery methods,
+concrete provider-family reports, public README guidance, and deterministic
+validation tests. The convergence decision remains conservative because
+`unknown` intentionally does not reject locally, interaction/inferencer closure
+is still mostly inferred through `DefaultGateway`, and the audit still contains
+older absence wording that must stay reconciled with the implemented contract.
+
+### `P4-API-04` - Provider capability discovery
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - Public declarations expose the capability state vocabulary without
+    importing concrete provider internals. `go-llm-gateway/pkg/capabilities`
+    defines `CapabilityStateUnknown`, `CapabilityStateSupported`,
+    `CapabilityStateUnsupported`, `FeatureCapability`,
+    `StatelessCapabilities`, `SessionCapabilities`, and
+    `ProviderCapabilities`.
+  - `go-llm-gateway/pkg/providers` and `go-llm-gateway/pkg/gateway`
+    re-export the public capability types, feature identifiers, requested
+    modes, and `UnsupportedFeatureError` for callers already importing those
+    package surfaces.
+  - Discovery is public at both provider and gateway seams:
+    `providers.CapabilityReporter`, `gateway.CapabilityReporter`,
+    `DefaultGateway.Capabilities`, and
+    `DefaultSessionGateway.Capabilities`. Gateway tests prove discovery calls
+    the provider capability reporter without invoking `Infer`, `InferStream`,
+    or `ConnectSession`.
+  - The capability model includes the story-required public feature areas:
+    tools, streaming, sessions, audio input, audio output, image input, video
+    output, reasoning, prompt caching, and provider-specific config.
+    `ProviderCapabilities` also preserves provider name and optional metadata.
+  - Supported, unsupported, and unknown semantics are documented and tested.
+    `UnknownProviderCapabilities` reports `unknown` for every field and tests
+    prove unknown is not treated as support. README guidance tells consumers
+    not to display unknown capabilities as supported and explains that unknown
+    differs from unsupported because the gateway does not reject unknown
+    capabilities locally.
+  - Concrete provider-family coverage exists for Anthropic, OpenAI-compatible,
+    Gemini, Grok, and fal.ai. `TestConcreteProviderFamiliesReportCapabilities`
+    proves each reports at least one supported and one unsupported capability
+    without live credentials, and OpenAI-specific tests prove selected
+    supported states plus explicit unsupported gaps.
+  - Public docs are aligned with the implemented API: `go-llm-gateway/README.md`
+    documents `Capabilities()`, the three capability states, the feature field
+    list, local validation behavior, and the current static provider-family
+    capability table.
+  - The row remains open because closure still requires a provider-by-provider
+    reconciliation that no supported feature is overclaimed, no known
+    unsupported feature is left as unknown, and examples beyond README snippets
+    are either added or explicitly deemed unnecessary for each public consumer
+    flow.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/capabilities.ProviderCapabilities`
+  - `go-llm-gateway/pkg/capabilities.StatelessCapabilities`
+  - `go-llm-gateway/pkg/capabilities.SessionCapabilities`
+  - `go-llm-gateway/pkg/capabilities.FeatureCapability`
+  - `go-llm-gateway/pkg/providers.CapabilityReporter`
+  - `go-llm-gateway/pkg/providers.UnknownProviderCapabilities`
+  - `go-llm-gateway/pkg/gateway.CapabilityReporter`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Capabilities`
+  - `go-llm-gateway/pkg/gateway.DefaultSessionGateway.Capabilities`
+  - concrete provider `Capabilities()` methods in Anthropic,
+    OpenAI-compatible, Gemini, Grok, and fal.ai packages
+  - `go-llm-gateway/README.md`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Reconcile `P4-CAP-01` from stale "capability discovery absent" wording to
+    the current provider-neutral model and name only the remaining concrete
+    provider coverage, documentation, example, or overclaim gaps.
+  - For every concrete provider family, verify each public capability field
+    against request translation and session behavior: tools, streaming,
+    sessions, audio input, audio output, image input, video output, reasoning,
+    prompt caching, and provider-specific config.
+  - Add provider-family tests where a field currently relies on broad table
+    coverage rather than direct assertions, especially unsupported gaps whose
+    state must remain explicit instead of unknown.
+  - Decide whether README snippets are sufficient examples for this API or add
+    a credential-free example that shows a downstream caller gating UI/request
+    behavior from `Capabilities()`.
+- `reviewer commands`:
+  - `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers ./pkg/providers/openai -run 'TestCapabilityStateSemantics|TestUnknownProviderCapabilitiesDoesNotClaimSupport|TestGatewayCapabilitiesUsesProviderReporterWithoutInference|TestGatewayCapabilitiesFallbacksToUnknownForLegacyProvider|TestSessionGatewayCapabilitiesUsesProviderReporterWithoutConnecting|TestConcreteProviderFamiliesReportCapabilities|TestOpenAIProviderCapabilities' -timeout 120s)`
+  - `go doc ./go-llm-gateway/pkg/capabilities`
+  - `go doc ./go-llm-gateway/pkg/gateway CapabilityReporter ProviderCapabilities UnsupportedFeatureError`
+  - `go doc ./go-llm-gateway/pkg/providers CapabilityReporter ProviderCapabilities UnknownProviderCapabilities`
+  - `sed -n '256,361p' go-llm-gateway/README.md`
+
+### `P4-API-06` - Local unsupported-feature validation
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - Public local validation returns an inspectable
+    `UnsupportedFeatureError` with `Provider`, `Feature`, `RequestedMode`, and
+    `Capability`. The capability payload includes the exact support state and
+    detail that caused rejection.
+  - Stateless validation covers requested tools, streaming, user image input,
+    user audio input, assistant audio output, assistant video output,
+    reasoning config, prompt caching, and provider-specific raw config. Session
+    validation covers session availability, tools, audio input, audio output,
+    and provider-specific raw config.
+  - Gateway tests prove explicitly unsupported stateless features are rejected
+    before provider execution and explicitly unsupported session features are
+    rejected before provider connection. The tests assert `errors.As` to
+    `UnsupportedFeatureError`, the expected feature, requested mode, provider,
+    unsupported state, and zero execution/connect calls.
+  - Unknown capability fallback is intentionally not a local rejection.
+    `TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport` and README
+    guidance align on the rule that unknown means no local support claim;
+    consumers must not present it as supported, while the gateway defers
+    provider execution instead of inventing an unsupported result.
+  - fal.ai now reports streaming as unsupported and tests cover both gateway
+    and direct provider streaming rejection before HTTP work, which narrows the
+    old audit claim that unsupported streaming could look like a clean empty
+    stream.
+  - Public docs in `go-llm-gateway/README.md` document the local validation
+    scope, the structured error fields, the `errors.As` usage pattern, and the
+    provider-family static capability table.
+  - The row remains open because validation evidence is strongest at the
+    gateway/session boundary. Closure still needs an explicit decision for
+    interaction and inference bridge seams, provider-local invalid request
+    errors that are not pure capability rejections, and unknown-capability
+    behavior for every provider family.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/capabilities.UnsupportedFeatureError`
+  - `go-llm-gateway/pkg/gateway.validateStatelessRequest`
+  - `go-llm-gateway/pkg/gateway.validateSessionConfig`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
+  - `go-llm-gateway/pkg/gateway.DefaultSessionGateway.ConnectSession`
+  - `go-llm-gateway/pkg/gateway.InferenceRequest`
+  - `go-llm-gateway/pkg/models.SessionConfig`
+  - `go-llm-gateway/pkg/providers/fal.FalProvider.InferStream`
+  - `go-llm-gateway/README.md`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Reconcile `P4-VALIDATION-01` from stale "validation absent" wording to the
+    current gateway/session local validation seam and identify only the
+    remaining unsupported-feature gaps.
+  - Add or document closure evidence for `DefaultGateway.Interact`,
+    `GatewayInferencer`, and `SessionGatewayInferencer`, making clear whether
+    they rely on the same gateway validation or need their own public
+    validation behavior.
+  - Normalize provider-local invalid request errors that are not capability
+    rejections so callers can distinguish unsupported capability, invalid
+    model/content requirement, provider rejection, and transport failure
+    without parsing strings.
+  - Extend credential-free tests to cover representative unsupported request
+    features through every public gateway/session path claimed by the row,
+    including provider-specific config and unknown-capability fallthrough.
+- `reviewer commands`:
+  - `(cd go-llm-gateway && go test ./pkg/gateway -run 'TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall|TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect|TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport' -timeout 120s)`
+  - `(cd go-llm-gateway && go test ./pkg/providers/fal -run 'TestFalProvider_InferStream_ReturnsUnsupportedFeatureError' -timeout 120s)`
+  - `rg -n "UnsupportedFeatureError|validateStatelessRequest|validateSessionConfig|Capabilities\\(\\)" go-llm-gateway/pkg/capabilities go-llm-gateway/pkg/gateway go-llm-gateway/pkg/providers go-llm-gateway/README.md`
+  - `sed -n '317,350p' go-llm-gateway/README.md`
+
 ## Gateway Error Taxonomy Evidence
 
 This section validates the implemented gateway error taxonomy and preservation
