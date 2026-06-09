@@ -63,6 +63,33 @@ merge. The landed audit reconciliation evidence is preserved by PR `#34` and
 the convergence validator evidence is preserved by PR `#38` in
 `docs/internal/phase-4-api-contract-validator.md`.
 
+## Setup Workspace Artifact Tolerance Preservation
+
+The setup-workspace planner batch artifact tolerance from local `main` commit
+`34fc154e4e519cde4b35a91e5d10dd184a76ea71` remains present in this baseline
+through ancestry from `origin/main`. The preserved behavior is implemented in
+`factory/scripts/setup-workspace.py` by the bounded planner-owned dirty path
+allowlist:
+
+- `docs/internal/checklist.md`
+- `docs/internal/progress.txt`
+- submitted planner batch request artifacts matching
+  `docs/internal/*-batch-*.json`
+- requested setup inputs under `tasks/todo/<prd-name>.json` and optional
+  `tasks/todo/<prd-name>.md`
+
+The behavior remains covered by committed runtime tests in
+`factory/scripts/tests/test_setup_workspace.py`, including planner-owned dirty
+root files, submitted batch request artifacts, reuse with planner-owned dirty
+root files, and explicit failure for unrelated dirty root state. The factory
+operator contract remains documented in `factory/docs/overview.md` under
+`Setup Workspace Ownership Contract`.
+
+`CTRL-FAC-03` remains listed in `docs/internal/checklist.md` as reviewer
+evidence for the Phase 2 setup-workspace repair. This sync item does not change
+that checklist row, does not mark it complete, and does not expand the
+setup-workspace contract beyond preserving the already landed tolerance.
+
 Because `phase-4-api-contract-convergence-validator` is now an ancestor of
 `origin/main`, it is no longer a stale branch that would delete merged batch
 017 evidence if treated as authoritative. That stale-state risk applied before
