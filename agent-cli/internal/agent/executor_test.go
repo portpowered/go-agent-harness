@@ -135,8 +135,8 @@ func TestLoadSystemPromptWithDetails_SystemInfoAndSuffixReportRuntimeSources(t *
 	exec := NewExecutor(nil, nil, stubInferencer{}, true)
 
 	prompt, details, err := exec.LoadSystemPromptWithDetails(&Config{
-		SystemPrompt:      "base prompt",
-		ConfigDir:         configDir,
+		SystemPrompt:       "base prompt",
+		ConfigDir:          configDir,
 		SystemPromptSuffix: "iteration suffix",
 	}, workspaceDir, nil)
 	if err != nil {
