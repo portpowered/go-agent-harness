@@ -557,3 +557,17 @@ that explicitly state what behavior or evidence each command proves, and the
 commands remain credential-free and reproducible from the authoritative head.
 Pass rows still cite public evidence, and non-pass rows still keep exact next
 work scoped to future repair or cleanup.
+
+## Story 006 Closure
+
+Story `phase-4-authoritative-convergence-validator-rerun-006` may close for
+this PRD iteration because the report now recommends exactly one next planner
+action: `repair`.
+
+That recommendation is consistent with the row verdicts and closure decisions
+above. `P4-API-04` and `P4-API-06` may close on the current authoritative
+head, while `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-05`, and
+`P4-API-07` remain open and already name exact future repair or cleanup work.
+The gate verdict remains `fail`, so the correct single next planner action is
+to repair the remaining open row work rather than start a new feature batch or
+reframe the result as reconciliation-only cleanup.
