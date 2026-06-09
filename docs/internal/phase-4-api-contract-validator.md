@@ -1,30 +1,48 @@
-# Phase 4 API Contract Validator
+# Phase 4 API Contract Convergence Validator
 
 ## Subject Under Review
 
-This validator reviews the completed Phase 4 public API contract hardening
-starter work. Run this pass only after the starter slices under review have
-landed and the branch under review is intended to represent the candidate
-baseline for the next Phase 4 planning decision.
+This validator reviews the post-batch-017 Phase 4 public API contract hardening
+baseline. Run this pass only after the repair slices under review have landed
+and the branch under review is intended to represent the candidate baseline for
+the next Phase 4 planning decision.
 
 The validator inspects observable repository state. It does not implement new
 Phase 4 API features and does not use broad cleanup or duplicate CI coverage as
 a substitute for API contract evidence.
 
-## Scope
+## Baseline Under Review
 
-This validator records findings for exactly these checklist rows:
+The candidate baseline under review is the combined current repository evidence
+from these Phase 4 repair lanes:
 
-- `P4-API-01`: context usage and caller-controlled cancellation/timeout
-  contracts
-- `P4-API-02`: typed, caller-actionable error contracts
-- `P4-API-03`: unambiguous result contracts and failure signals
-- `P4-API-04`: provider capability discovery
-- `P4-API-05`: stream semantics and error preservation
-- `P4-API-06`: local validation of unsupported provider/request features
-- `P4-API-07`: dependency injection, provider configuration, and hidden side
-  effects
-- `P4-GATE-01`: overall public API contract hardening gate readiness
+1. Audit/provenance reconciliation across `docs/architecture/contract-gap-audit.md`,
+   prior validator findings, checklist rows, public docs, deterministic tests,
+   and batch 017 repair evidence.
+2. Typed error and stream terminal repair across gateway, provider, loop,
+   session, replay, cancellation, partial-output, and terminal-failure paths.
+3. Provider capability and local validation repair across public capability
+   discovery, supported/unsupported/unknown states, and unsupported-feature
+   rejection before provider execution.
+4. Dependency/result/context/lifecycle repair across caller-owned contexts,
+   public result contracts, stream/session lifecycle states, constructor seams,
+   injected dependencies, and hidden side-effect boundaries.
+
+## Checklist Rows Under Review
+
+This validator records findings for exactly these `docs/internal/checklist.md`
+rows. The row text below is the authoritative closure target, not a summary:
+
+| Row | Required outcome from `docs/internal/checklist.md` | Primary evidence surfaces |
+| --- | --- | --- |
+| `P4-API-01` | Public APIs that can block or perform provider work expose caller-controlled context, cancellation, and timeout behavior clearly enough for consumers to own request lifetime. | `go-agent-loop/pkg/agentloop`, `go-agent-loop/pkg/engine`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/inference`, provider packages, public docs, tests, examples |
+| `P4-API-02` | Public gateway, provider, replay, validation, and cancellation failures preserve typed or structured classifications so callers can branch with `errors.Is`, `errors.As`, or documented fields instead of parsing strings. | `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/testing`, provider packages, `agent-cli/internal/services`, public docs, tests, examples |
+| `P4-API-03` | Public result values and stream events make success, partial success, terminal failure, replay divergence, cancellation, and provider rejection unambiguous. | `go-agent-loop/pkg/agentloop`, `go-agent-loop/pkg/subsystems`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/models`, public docs, tests, examples |
+| `P4-API-04` | Consumers can discover provider capabilities through public `go-llm-gateway` APIs without importing `go-agent-loop` runtime internals or concrete provider internals. | `go-llm-gateway/pkg/providers`, `go-llm-gateway/pkg/gateway`, provider docs, examples, tests |
+| `P4-API-05` | Streaming and session APIs document and preserve completion, cancellation, replay mismatch, provider-close, and error-classification semantics across provider and gateway boundaries. | `go-agent-loop/pkg/subsystems`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/inference`, `go-llm-gateway/pkg/testing`, provider stream adapters, public docs, tests |
+| `P4-API-06` | Unsupported provider/request features fail locally before provider execution, with inspectable errors that identify the provider, requested feature or mode, and capability state. | `go-llm-gateway/pkg/providers`, `go-llm-gateway/pkg/gateway`, provider validation tests, public docs, examples |
+| `P4-API-07` | Public constructors and composition seams keep filesystem, environment, process, network, transport, time, and provider runtime dependencies caller-owned or explicitly injected instead of hidden behind defaults. | `agent-cli/internal/agent`, `agent-cli/internal/services`, `go-agent-loop/pkg/agentloop`, `go-llm-gateway/pkg/providers`, `docs/architecture/dependencies.md`, tests |
+| `P4-GATE-01` | The completed Phase 4 starter slices have reviewer-verifiable evidence, docs, examples, and credential-free local commands sufficient for planners to decide whether to repair, reconcile, or queue the next Phase 4 feature batch. | `docs/internal/phase-4-api-contract-validator.md`, `docs/architecture/contract-gap-audit.md`, public package docs, tests, examples, root `Makefile` quality targets |
 
 The validator evaluates the completed starter slices for:
 
@@ -47,6 +65,10 @@ This convergence pass cites the following authoritative repository surfaces:
 - tests and examples that prove public API behavior without live credentials or
   external network access
 - reviewer-runnable local commands that make each reported claim reproducible
+
+CI, lint, typecheck, and test success are quality gates for the reviewed
+repository state, but command success alone is not sufficient row closure
+without public contract evidence tied to the checklist row.
 
 ## Required Finding Shape
 
