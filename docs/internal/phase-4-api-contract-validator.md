@@ -825,12 +825,17 @@ wording that has not yet been reconciled with the implementation.
   - README guidance documents the capability API, unknown fallback semantics,
     field mapping, and local validation behavior. Gateway tests prove discovery
     for fake stateless/session providers and prove unknown fallback behavior
-    without provider execution.
-  - The row remains open because current concrete-provider evidence is narrower
-    than the row: OpenAI reports capabilities, but the validator did not find
-    equivalent concrete capability reporter tests for every provider family
-    named in the gateway README, and `P4-CAP-01` in the audit still describes
-    capability discovery as absent.
+    without provider execution. `TestConcreteProviderFamiliesReportCapabilities`
+    also proves that Anthropic, OpenAI-compatible, Gemini, Grok, and fal.ai each
+    report at least one supported and one unsupported capability without live
+    credentials; OpenAI-specific tests add direct assertions for selected
+    supported states and unsupported gaps.
+  - The row remains open because broad provider-family table evidence is not
+    yet the same as provider-by-provider closure for every public capability
+    field. Closure still requires reconciliation that no supported feature is
+    overclaimed, no known unsupported feature is left as unknown, README/example
+    guidance is sufficient for consumer flows, and `P4-CAP-01` in the audit no
+    longer describes capability discovery as absent.
 - `affected files / declarations`:
   - `go-llm-gateway/pkg/providers.Provider`
   - `go-llm-gateway/pkg/providers.SessionProvider`
@@ -849,15 +854,18 @@ wording that has not yet been reconciled with the implementation.
   - Reconcile `P4-CAP-01` in `docs/architecture/contract-gap-audit.md` with
     the implemented capability package, gateway/provider aliases, discovery
     methods, README guidance, and tests.
-  - Add or verify concrete provider capability reporters and credential-free
-    tests across Anthropic, Gemini, fal.ai, Grok/session, and any other provider
-    family where current public behavior still falls back to unknown.
-  - Record provider-specific limits precisely so closure does not overclaim
-    support for media, reasoning, prompt caching, sessions, or raw config.
+  - Verify every concrete provider capability field against request/session
+    behavior for Anthropic, OpenAI-compatible, Gemini, Grok, fal.ai, and any
+    other provider family that can expose a capability reporter.
+  - Add direct provider-family tests where current evidence relies on broad
+    table coverage rather than field-specific assertions, and record
+    provider-specific limits precisely so closure does not overclaim support
+    for media, reasoning, prompt caching, sessions, or raw config.
 - `reviewer commands`:
   - `rg -n "type Provider interface|type SessionProvider interface|type Gateway interface|type InferenceRequest struct|type SessionConfig struct" go-llm-gateway/pkg/providers go-llm-gateway/pkg/gateway go-llm-gateway/pkg/models`
+  - `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers ./pkg/providers/openai -run 'TestCapabilityStateSemantics|TestUnknownProviderCapabilitiesDoesNotClaimSupport|TestGatewayCapabilitiesUsesProviderReporterWithoutInference|TestGatewayCapabilitiesFallbacksToUnknownForLegacyProvider|TestSessionGatewayCapabilitiesUsesProviderReporterWithoutConnecting|TestConcreteProviderFamiliesReportCapabilities|TestOpenAIProviderCapabilities' -timeout 120s)`
   - `rg -n "Capability|Capabilities|capability|capabilities" go-llm-gateway/pkg/providers go-llm-gateway/pkg/gateway go-llm-gateway/README.md`
-  - `sed -n '172,198p' go-llm-gateway/README.md`
+  - `sed -n '256,361p' go-llm-gateway/README.md`
 
 ### `P4-API-06` - Local unsupported-feature validation
 
