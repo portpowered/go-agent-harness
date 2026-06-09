@@ -26,29 +26,30 @@ Status values:
 
 ### Compact Phase 4 Row Reconciliation Table
 
-No Phase 4 checklist row is closed by this audit-only reconciliation. The
-closed or narrowed subsets below name only the implemented evidence that
-reduces the remaining repair slice; each checklist row remains open until a
-future implementation lane supplies both implementation evidence and validator
-evidence for closure.
+This reconciliation now includes implementation evidence from the provider
+capability/local validation repair lane. Rows outside that lane remain open
+until a future implementation lane supplies both implementation evidence and
+validator evidence for closure. Rows marked `pass` for a subset are closed only
+for the named provider capability/local validation scope, not for unrelated
+Phase 4 contract areas.
 
 | Checklist row | Current status | Mapped audit rows | Validator/provenance evidence | Closed or narrowed subset | Remaining open work |
 | --- | --- | --- | --- | --- | --- |
 | `P4-API-01` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-DI-01`, `P4-DI-03`, `P4-DI-04`, `HC-03` | Validator-015 is superseded by `docs/internal/phase-4-api-contract-validator.md`; current audit evidence is the `P4-API-01` row below plus credential-free constructor, runtime, and cancellation tests. | Explicit tool-execution constructor decisions, provider HTTP runtime ownership, gateway-to-loop inferencer adapters, and replay/record relay cancellation are narrowed by implementation and tests. | Prompt/config/filesystem loading, session/config/dialer side effects, complete timeout/cancellation ownership, and stable dependency/result errors remain open. |
 | `P4-API-02` | `fail` | `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator typed-error report; current audit evidence includes public gateway error classes, `messages.ErrorValue`, PNIG error events, replay mismatch tests, and session command tests. | Gateway typed errors, OpenAI Realtime error details, PNIG timeout/provider/cancellation events, and replay divergence are narrowed by deterministic tests. | Loop/provider/session emitters still need a shared caller-actionable taxonomy, serialized stream error classes, and provider/session/direct-stream coverage. |
 | `P4-API-03` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-STREAM-01`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator result/lifecycle report; current audit evidence includes loop result reconstruction, gateway/PNIG terminal events, replay completion, and CLI session behavior. | Normalized result and selected terminal-event behavior are narrowed where loop, gateway, replay, and CLI tests assert current behavior. | Terminal authority remains split across `ExecuteResult`, synthesized stream endings, session `Done`/`Close`, replay completion, capture flush, PNIG end/error/cancellation events, and CLI stop conditions. |
-| `P4-API-04` | `uncertain` | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-01`, `P4-HYGIENE-02` | Superseded validator evidence is the Phase 4 capability report; current audit evidence includes `pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, gateway/session `Capabilities()` methods, README guidance, and capability tests. | Provider-neutral supported, unsupported, and unknown states; gateway/session discovery; unknown fallback; OpenAI capability reporting; and selected provider option/modality tests are narrowed. | Concrete provider capability reporters, overclaimed support checks, unknown fallback decisions, interaction/inferencer capability closure, and fal streaming alignment remain open. |
+| `P4-API-04` | `pass` for provider capability discovery | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-01`, `P4-HYGIENE-02` | Superseded validator evidence is the Phase 4 capability report; current audit evidence includes `pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, gateway/session `Capabilities()` methods, README guidance, development guidance, and credential-free capability tests. | Provider-neutral supported, unsupported, and unknown states; concrete provider-family capability reporters; gateway/session discovery; unknown fallback; overclaimed-support checks; interaction/inferencer capability closure; and fal streaming alignment are closed for this repair lane. | None for provider capability discovery. Broader stream terminal, model ownership, dependency/result/context, and API hygiene issues remain in their own rows. |
 | `P4-API-05` | `uncertain` | `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `P4-ERR-01`, `P4-ERR-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `HC-02`, `DOC-01`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 stream and public-surface report; current audit evidence includes gateway/inference adapter tests, PNIG JSON/event-shape tests, provider stream tests, and `go doc` declaration inspection. | Gateway, PNIG, inference adapter, provider stream, and `pkg/models` alias-facade behavior are narrowed where deterministic tests and docs identify current shape. | Stream ordering, final events, cancellation behavior, replay mismatch behavior, error propagation, and package ownership for gateway/provider/model/session contracts remain open. |
-| `P4-API-06` | `fail` | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-04`, `LIFECYCLE-01`, `LIFECYCLE-02` | Superseded validator evidence is the Phase 4 unsupported-feature and context report; current audit evidence includes `UnsupportedFeatureError`, `validateStatelessRequest`, `validateSessionConfig`, PNIG cancellation/timeout tests, replay lifecycle tests, and CLI session timeout behavior. | Gateway and session unsupported-feature validation for explicitly unsupported capabilities, caller context acceptance, replay lifecycle cancellation, and PNIG cancellation events are narrowed. | Interaction and `GatewayInferencer` validation, concrete provider reporting, fal unsupported streaming semantics, retry ownership, timeout ownership, and cross-surface cancellation documentation remain open. |
+| `P4-API-06` | `pass` for provider capability/local validation scope; broader context/retry ownership remains open | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-04`, `LIFECYCLE-01`, `LIFECYCLE-02` | Superseded validator evidence is the Phase 4 unsupported-feature and context report; current audit evidence includes `UnsupportedFeatureError`, `validateStatelessRequest`, `validateSessionConfig`, PNIG cancellation/timeout tests, replay lifecycle tests, CLI session timeout behavior, interaction local-validation tests, inferencer local-validation tests, and fal unsupported-streaming tests. | Gateway, session, interaction, and inferencer unsupported-feature validation for explicitly unsupported capabilities; caller context acceptance; replay lifecycle cancellation; PNIG cancellation events; concrete provider reporting; and fal unsupported streaming semantics are closed for this repair lane. | Retry ownership, timeout ownership, and broader cross-surface cancellation documentation remain open outside the provider capability/local validation scope. |
 | `P4-API-07` | `fail` | `P4-DI-01`, `P4-DI-02`, `P4-DI-03`, `P4-DI-04`, `P4-HYGIENE-01`, `P4-HYGIENE-02`, `P4-HYGIENE-03`, `P4-HYGIENE-04`, `DOC-01`, `DOC-02`, `COMPAT-01`, `COMPAT-02`, `COMPAT-03`, `HC-02`, `HC-03` | Superseded validator evidence is the Phase 4 dependency, API hygiene, and compatibility report; current audit evidence includes public declaration `go doc` output, README guidance, fixture tests, interaction shape tests, and adapter tests. | Exported comments, narrow provider/session interfaces, selected dependency ownership seams, PNIG event shapes, and fixture compatibility checks are narrowed. | Compatibility ownership for `pkg/models`, gateway/provider request overlap, CLI internal composition exports, hidden side effects, fixture staging, and text-matching caller compatibility remain open. |
-| `P4-GATE-01` | `open` | All rows mapped to `P4-API-01` through `P4-API-07` | Superseded validator evidence is the Phase 4 validator final closure decision; the current audit and provenance note both state the gate remains open. | None. This lane supplies planning evidence only. | Complete the typed error/stream, capability/validation, dependency/result/context/lifecycle, API hygiene, and final validation repair lanes before any gate closure. |
+| `P4-GATE-01` | `pass` for the provider capability/local validation repair lane; whole-Phase-4 gate remains open | All rows mapped to `P4-API-01` through `P4-API-07` | Superseded validator evidence is the Phase 4 validator final closure decision; current capability/local validation evidence is this audit reconciliation plus the provider/gateway/inference/fal tests named below. | Provider capability discovery and local unsupported-feature validation are closed for this repair lane. | Complete the remaining typed error/stream, dependency/result/context/lifecycle, API hygiene, and final validation repair lanes before whole-Phase-4 closure. |
 
 ### Closed Or Narrowed Evidence Versus Open Repair Work
 
 The reconciliation separates evidence that narrows a row from work that can
-close a row. A narrowed subset is not a checklist closure; it is only the part
-of an audit row where current implementation evidence and validator evidence
-agree that a future repair lane should not repeat already completed work.
+close a row. A narrowed subset is not whole-row closure; it is only the part of
+an audit row where current implementation evidence and validator evidence agree
+that a future repair lane should not repeat already completed work.
 
 Closed or narrowed subsets with supporting evidence:
 
@@ -116,7 +117,15 @@ Reviewer command policy: run all commands from the repository root unless a row 
 
 ### Final Closure Validation Check
 
-The Phase 4 validator final closure artifact is available at `docs/internal/phase-4-api-contract-validator.md`. Its final closure decision is that no reviewed Phase 4 checklist row may close from the current starter evidence and the next planner action is `repair`. This audit is therefore validated against current public declarations, README guidance, deterministic tests, and that validator report; `P4-GATE-01` remains open, and dependent repair lanes should consume this reconciled map before implementation or final gate review.
+The Phase 4 validator starter artifact is available at
+`docs/internal/phase-4-api-contract-validator.md`. That starter validation
+found the capability and local-validation rows unclosable from audit evidence
+alone. The provider capability/local validation repair lane has now added the
+runtime contracts, credential-free tests, README/development guidance, and
+audit reconciliation needed to close the capability discovery and local
+unsupported-feature validation scope. Rows outside that scope keep their
+existing outcomes until their dedicated repair lanes update runtime behavior and
+evidence.
 
 Reconciliation validation outcome: `pass`. The provenance note and compact row
 map have been compared with the current validator artifact, public
@@ -141,11 +150,11 @@ Cross-check summary:
 | P4-API-01 | `fail` in this audit; validator outcome `uncertain` | Consistent with `go-agent-loop/README.md` constructor ownership guidance and `go-llm-gateway/README.md` transport ownership guidance: injected inferencer, tool executor, and HTTP runtime seams exist, but prompt/config/filesystem/dialer side effects plus full timeout/cancellation mapping still need exact repair work. |
 | P4-API-02 | `fail` in this audit; validator outcome `uncertain` | Current starter evidence includes `messages.ErrorValue`, `messages.NewErrorValueWithDetails`, `gateway.GatewayError`, `ProviderHTTPStatusError`, public gateway error classes, PNIG errors, replay divergence, and cancellation evidence. Stale audit identifiers to keep reconciled are `P4-ERR-01`, `P4-ERR-02`, and `P4-ERR-03`; remaining gaps are provider/session/direct-stream coverage and serialized stream taxonomy. |
 | P4-API-03 | `fail` in this audit; validator outcome `uncertain` | Consistent with current loop/gateway README behavior and tests: normalized stream/result evidence exists, but terminal authority remains split across `ExecuteResult`, synthesized stream endings, PNIG end/error/cancellation events, session `Done`/`Close`, replay completion, and CLI stop conditions. |
-| P4-API-04 | `uncertain` | Current starter evidence now includes `go-llm-gateway/pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, `DefaultGateway.Capabilities`, `DefaultSessionGateway.Capabilities`, README guidance, and gateway capability tests. Stale audit wording to keep reconciled is `P4-CAP-01` language that says capability discovery is absent; remaining work is concrete provider coverage and avoiding overclaimed support. |
+| P4-API-04 | `pass` | Provider capability discovery now has a provider-neutral vocabulary in `go-llm-gateway/pkg/capabilities`, concrete `providers.CapabilityReporter` coverage for Anthropic, OpenAI-compatible, Gemini, Grok, and fal.ai, gateway/session `Capabilities()` accessors, documented unknown fallback semantics, README/development guidance, and credential-free provider/gateway tests that cover supported, unsupported, and unknown states without overclaiming provider-specific limits. |
 | P4-API-05 | `uncertain` | Stale or incomplete ownership wording remains isolated to `HC-02`, `DOC-01`, and stream taxonomy rows: `pkg/models` is visibly an alias facade in `go doc ./go-llm-gateway/pkg/models`, and stream/session error preservation still needs a documented mapping to gateway error classes. |
-| P4-API-06 | `fail` in this audit; validator outcome `uncertain` | Current starter evidence includes `validateStatelessRequest`, `validateSessionConfig`, and structured `UnsupportedFeatureError` for explicit unsupported gateway/session capabilities. Stale audit wording to keep reconciled is `P4-VALIDATION-01` language that says unsupported-feature validation is absent; remaining work is interaction/inferencer coverage, concrete provider reporting, and fal streaming behavior. |
+| P4-API-06 | `pass` for provider capability/local validation scope; broader context/retry ownership remains tracked by its detailed row | Unsupported stateless, streaming, session, interaction, and inferencer requests now reject locally on representative public seams with inspectable `UnsupportedFeatureError` values before provider side effects. Tests cover unknown fallback policy, cancellation/timeout precedence for session connect, interaction event details, inferencer error preservation, and fal streaming as an explicit unsupported setup failure. |
 | P4-API-07 | `fail` in this audit; validator outcome `uncertain` | Consistent with public declaration inspection: comments and exported declarations are inspectable, but compatibility staging for `pkg/models`, overlapping gateway/provider request types, CLI internal composition exports, fixtures, hidden side effects, and text-matching callers remains open. |
-| P4-GATE-01 | `open`; validator outcome `fail` | Not closable from this audit. Rows with `fail` or `uncertain` outcomes plus the validator's `must remain open` decisions block final closure. |
+| P4-GATE-01 | `pass` for the provider capability/local validation repair lane | P4-API-04 and the provider capability/local validation portion of P4-API-06 have runtime behavior, tests, and docs aligned. Other Phase 4 rows named in this audit retain their own outcomes and must be closed by their dedicated repair lanes before a whole-Phase-4 closure decision. |
 
 Validated public declaration commands:
 
@@ -163,7 +172,7 @@ Validated deterministic test names and packages:
 - `go-llm-gateway/pkg/testing/session_replay_test.go` covers replay divergence, omitted outbound events, and replay cancellation.
 - `agent-cli/internal/services/session_test.go` covers record/replay cancellation preservation and session command error behavior.
 - `agent-cli/internal/config/models_test.go`, `agent-cli/internal/input/validate_test.go`, and `agent-cli/internal/agent/provider_runtime_test.go` cover model metadata, unsupported input/output validation, and provider runtime ownership.
-- `go-llm-gateway/pkg/providers/openai/capabilities_test.go`, `go-llm-gateway/pkg/providers/anthropic/params_test.go`, `go-llm-gateway/pkg/providers/gemini/replay_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, and `go-llm-gateway/pkg/providers/fal/provider_test.go` cover provider-local capability, option, modality, stream, and media/config behavior without live credentials.
+- `go-llm-gateway/pkg/providers/capabilities_test.go`, `go-llm-gateway/pkg/providers/openai/capabilities_test.go`, `go-llm-gateway/pkg/providers/anthropic/params_test.go`, `go-llm-gateway/pkg/providers/gemini/replay_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, `go-llm-gateway/pkg/providers/fal/provider_test.go`, `go-llm-gateway/pkg/gateway/interaction_gateway_test.go`, and `go-llm-gateway/pkg/inference/main_inferencer_test.go` cover provider-local capability reporting, option, modality, stream, media/config, interaction, inferencer, and fal unsupported-streaming behavior without live credentials.
 
 ### Credential-Free Reviewer Command Matrix
 
@@ -177,9 +186,9 @@ Validated deterministic test names and packages:
 | `(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems ./test/functional)` | P4-API-02, P4-API-03, P4-API-06 | Loop participants, subsystems, and functional session flows preserve stream, error, lifecycle, and cancellation behavior. | All listed loop package tests exit successfully. |
 | `(cd go-agent-loop && go test ./pkg/engine ./test/functional)` | P4-API-03 | Loop result reconstruction and session lifecycle behavior remain deterministic. | Both package tests exit successfully. |
 | `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)` | P4-API-04 | CLI model metadata, MIME validation, and executor-side unsupported-feature validation behavior remain local and credential-free. | All listed CLI package tests exit successfully. |
-| `(cd go-llm-gateway && go test ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` | P4-API-04 | Provider-local option mapping, modality handling, stream behavior, session construction, and provider-specific config passthrough are covered by deterministic tests. | All listed provider package tests exit successfully without provider credentials. |
+| `(cd go-llm-gateway && go test ./pkg/providers ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` | P4-API-04 | Provider-local capability reporting, option mapping, modality handling, stream behavior, session construction, and provider-specific config passthrough are covered by deterministic tests. | All listed provider package tests exit successfully without provider credentials. |
 | `(cd go-llm-gateway && go test ./pkg/inference ./pkg/gateway)` | P4-API-05 | Gateway, PNIG, and loop inference adapter contracts still agree on current request, response, and event shapes. | Both package tests exit successfully. |
-| `(cd go-llm-gateway && go test ./pkg/testing ./pkg/gateway)` | P4-API-06 | Replay/record lifecycle behavior and PNIG cancellation/timeout event evidence remain deterministic. | Both package tests exit successfully. |
+| `(cd go-llm-gateway && go test ./pkg/testing ./pkg/gateway ./pkg/inference)` | P4-API-06 | Replay/record lifecycle behavior, PNIG cancellation/timeout event evidence, local unsupported-feature validation, and inferencer unsupported-feature preservation remain deterministic. | All listed package tests exit successfully. |
 | `(cd go-agent-loop && go test ./test/functional -run 'TestRun_ExitsOnContextCancellation|TestSession')` | P4-API-06 | Loop cancellation and session behavior relevant to context ownership remain covered by targeted functional tests. | The targeted functional tests exit successfully. |
 | `go doc ./go-agent-loop/pkg/messages` | P4-API-02, P4-API-06, P4-API-07 | Current shared message, stream, session, and typed error declarations are inspectable as public documentation. | `go doc` prints package declarations without error. |
 | `go doc ./go-llm-gateway/pkg/gateway` | P4-API-03, P4-API-05, P4-API-07 | Current gateway stateless, session, and PNIG contracts are inspectable as public documentation. | `go doc` prints package declarations without error. |
@@ -241,17 +250,26 @@ Validated deterministic test names and packages:
 
 ### P4-API-04: Provider Capability Discovery And Unsupported-Feature Validation
 
-- Outcome: `uncertain`
+- Outcome: `pass` for provider capability discovery and local unsupported-feature validation
 - Affected public packages: `agent-cli/internal/config`, `agent-cli/internal/input`, `agent-cli/internal/agent`, `go-llm-gateway/pkg/providers`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/fal`, `go-llm-gateway/pkg/providers/grok`
 - Exported declarations: `config.ModelInfo`, `(*config.ModelInfo).SupportsOutputModality`, `(*config.ModelInfo).SupportsInputMimeType`, `config.ModelsConfig.Lookup`, `input.ValidateMimeType`, `input.ValidateContentPartsMimeTypes`, `agent.Executor.RunAsk`, `providers.Provider`, `providers.SessionProvider`, `providers.CapabilityReporter`, `providers.ProviderCapabilities`, `providers.UnknownProviderCapabilities`, `providers.UnsupportedFeatureError`, `gateway.CapabilityReporter`, `gateway.DefaultGateway.Capabilities`, `gateway.DefaultSessionGateway.Capabilities`, `gateway.UnsupportedFeatureError`, `providers.InferenceRequest`, `providers.ThinkingConfig`, `providers.CacheControlConfig`
-- Observable contract issue: current implementation now has a provider-neutral capability model, gateway/session discovery methods, structured unsupported-feature validation for explicitly unsupported gateway/session capabilities, CLI-local model metadata, and selected provider-specific request options. The row remains uncertain because concrete provider capability reporters are incomplete across provider families, unknown capabilities intentionally fall through, interaction/inferencer seams still need closure decisions, fal streaming behavior needs alignment with the public capability contract, and older `P4-CAP-01` / `P4-VALIDATION-01` wording can become stale when it says discovery or validation is absent rather than partially implemented.
+- Observable contract issue: repaired for the provider capability/local
+  validation scope. The implementation has a provider-neutral capability model,
+  gateway/session discovery methods, concrete provider-family capability
+  reporters, structured unsupported-feature validation for explicitly
+  unsupported gateway/session capabilities, interaction and inferencer evidence,
+  fal streaming classified as unsupported, CLI-local model metadata, and
+  selected provider-specific request options. Unknown capability states remain
+  an intentional no-support-claim fallback and are documented as deferred to
+  provider/runtime behavior rather than local rejection.
 - Implementation evidence:
   - Supported locally: `config.ModelInfo` records `InputModalities`, `OutputModalities`, `SupportsToolUse`, `SupportsReasoning`, tokenizer, provider IDs, aliases, and `SupportedInputMimeTypes`; `SupportsOutputModality`, `SupportsInputMimeType`, and `ModelsConfig.Lookup` provide deterministic metadata checks.
   - Unsupported locally: `agent.Executor.RunAsk` calls `validateOutputModality` and `validateInputMimeTypes`, which reject non-text output modalities and input MIME types when the selected OpenAI-compatible model is known in `models.yaml`.
   - Unknown locally: CLI validation skips enforcement when model config cannot be loaded, the active provider is not OpenAI-compatible, `runData.Models` is absent, or the model is missing from `ModelsConfig`; those paths deliberately let the provider decide.
-  - Provider-neutral starter evidence: `go-llm-gateway/pkg/capabilities.ProviderCapabilities` represents supported, unsupported, and unknown feature states; `providers.CapabilityReporter` and `gateway.CapabilityReporter` expose discovery; `DefaultGateway.Capabilities` and `DefaultSessionGateway.Capabilities` return provider-reported capabilities or the documented unknown fallback; `validateStatelessRequest` and `validateSessionConfig` return `UnsupportedFeatureError` before provider execution when a requested feature is explicitly unsupported.
-  - Provider-specific evidence: `providers.InferenceRequest.Tools` is accepted by stateless providers that implement tool translation; `Provider.InferStream` is the only streaming affordance on the provider interface; `SessionProvider.ConnectSession` is the only session capability seam; `ThinkingConfig` is mapped by Anthropic and ignored by OpenAI; `CacheControlConfig` is mapped by Anthropic while OpenAI keeps default cache behavior; `InferenceRequest.Config` is passed through by fal.ai for model-specific options.
-  - Capability status by requested feature: tools, streaming, sessions, audio, image input, video output, reasoning, prompt caching, and provider-specific config now have a provider-neutral state vocabulary, but provider-specific support remains mixed between explicitly supported, explicitly unsupported, and unknown depending on provider coverage.
+  - Provider-neutral evidence: `go-llm-gateway/pkg/capabilities.ProviderCapabilities` represents supported, unsupported, and unknown feature states; `providers.CapabilityReporter` and `gateway.CapabilityReporter` expose discovery; `DefaultGateway.Capabilities` and `DefaultSessionGateway.Capabilities` return provider-reported capabilities or the documented unknown fallback; `validateStatelessRequest` and `validateSessionConfig` return `UnsupportedFeatureError` before provider execution when a requested feature is explicitly unsupported.
+  - Concrete provider evidence: Anthropic, OpenAI-compatible, Gemini, Grok, and fal.ai reporters populate every public stateless/session capability field for tools, streaming, sessions, audio input/output, image input, video output, reasoning, prompt caching, and provider-specific config. No current concrete family reports unknown; the unknown fallback remains tested for providers that do not implement `CapabilityReporter`.
+  - Provider-specific behavior: `ThinkingConfig` and `CacheControlConfig` are supported by Anthropic and unsupported by providers that do not translate them; OpenAI-compatible stateless requests support tools, streaming, image input, and audio input/output but reject unsupported reasoning, prompt caching, raw config, and video output locally; fal.ai supports sync media/config flows and rejects streaming locally as unsupported before HTTP work.
+  - Local validation evidence: `DefaultGateway.Infer`, `DefaultGateway.InferStream`, `DefaultSessionGateway.ConnectSession`, `gateway.Interact`, and `inference.GatewayInferencer` all have representative tests showing explicit unsupported capabilities fail locally before provider side effects while unknown capabilities are not silently treated as supported.
 - Current feature-state reconciliation:
   - Tools: supported by OpenAI, Anthropic, Gemini, and Grok session capability reporters; unsupported by fal.ai and Grok stateless capability reporters; unknown only for providers that do not implement `CapabilityReporter`.
   - Streaming: supported by OpenAI, Anthropic, and Gemini stateless reporters; unsupported by fal.ai and Grok stateless reporters; unknown only through the fallback path for non-reporting providers. fal.ai also returns `UnsupportedFeatureError` from `InferStream`, so its provider-local stream behavior now aligns with the unsupported state.
@@ -262,20 +280,21 @@ Validated deterministic test names and packages:
   - Reasoning: Anthropic reports supported reasoning through `ThinkingConfig`; OpenAI, Gemini, fal.ai, and Grok stateless report unsupported or do not send reasoning options; non-reporting providers remain unknown.
   - Prompt caching: Anthropic reports supported cache-control mapping; OpenAI, Gemini, fal.ai, and Grok stateless report unsupported or do not map cache-control options; non-reporting providers remain unknown.
   - Provider-specific config: fal.ai reports supported stateless raw config passthrough; OpenAI, Anthropic, Gemini, Grok session, and unsupported stateless/session modes report unsupported; non-reporting providers remain unknown.
-- Planning-only evidence: P4-CAP-01 is reconciled from stale "capability discovery absent" wording to "provider-neutral discovery exists, but concrete provider coverage and public closure evidence remain incomplete"; P4-VALIDATION-01 is reconciled from stale "unsupported-feature validation absent" wording to "gateway/session unsupported-feature validation exists for explicitly unsupported capabilities, while interaction/inferencer seams, concrete provider reporting, and selected provider-local behaviors remain open."
+- Planning-only evidence: P4-CAP-01 and P4-VALIDATION-01 are reconciled for this repair lane; older wording that says discovery is absent, validation is absent, interaction/inferencer seams remain open, or fal streaming returns an empty successful stream is stale for the current head.
 - Docs/tests/examples evidence:
   - `agent-cli/internal/config/models_test.go` verifies output modality checks, input MIME metadata, default multimodal MIME coverage, lookup behavior, and unknown-model allow behavior.
   - `agent-cli/internal/input/validate_test.go` verifies MIME rejection errors, supported-list behavior, conversion hints, and validation across image, audio, video, and file parts.
   - `agent-cli/internal/agent/executor.go` contains the observable validation flow through `RunAsk`, `validateOutputModality`, and `validateInputMimeTypes`.
   - `go-llm-gateway/pkg/capabilities/capabilities_test.go` verifies unknown provider capability fallback and JSON round-tripping.
   - `go-llm-gateway/pkg/gateway/capabilities_test.go` verifies gateway/session discovery, unsupported-feature rejection before provider execution or connection, and unknown fallback behavior.
+  - `go-llm-gateway/pkg/providers/capabilities_test.go` verifies every concrete provider family publishes valid supported, unsupported, or unknown states for every public capability field.
   - `go-llm-gateway/pkg/providers/openai/params_test.go` verifies OpenAI option mapping and that `Thinking` is ignored.
   - `go-llm-gateway/pkg/providers/openai/capabilities_test.go` verifies OpenAI concrete capability reporting.
   - `go-llm-gateway/pkg/providers/anthropic/params_test.go` verifies `ThinkingConfig` and `CacheControlConfig` mapping.
   - `go-llm-gateway/pkg/providers/gemini/replay_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, and `go-llm-gateway/pkg/providers/gemini/models_test.go` verify deterministic Gemini tool, image/audio content, and streaming behavior.
-  - `go-llm-gateway/pkg/providers/fal/provider_test.go` verifies audio-to-video, image-to-video, TTS, unsupported model errors, and `Config` passthrough without live provider credentials.
+  - `go-llm-gateway/pkg/providers/fal/provider_test.go` verifies audio-to-video, image-to-video, TTS, unsupported model errors, `Config` passthrough, and streaming rejection as `UnsupportedFeatureError` without live provider credentials.
   - `go-llm-gateway/pkg/providers/grok/provider_test.go` and `go-llm-gateway/pkg/providers/openai/session_test.go` verify credential-free session construction behavior through injected dialers.
-- Remaining repair slice: keep P4-CAP-01 open to complete or verify concrete provider capability reporters and credential-free tests across Anthropic, Gemini, fal.ai, Grok/session, OpenAI-compatible variants, and any other provider family where current behavior still falls back to unknown; keep P4-VALIDATION-01 open to extend or document validation through interaction gateways and `GatewayInferencer`, prove representative unsupported features fail locally before provider side effects on each public surface, and document when unknown capabilities are intentionally deferred to the provider.
+- Remaining repair slice: none for the provider capability/local validation scope. Broader Phase 4 rows for stream terminal ordering, public model ownership, and dependency/result contracts remain tracked separately.
 - Reviewer commands: from the repository root, run `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)` to verify CLI-local model metadata, MIME validation, and executor validation behavior; run `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)` to verify provider-neutral capability, gateway validation, provider-local deterministic option, modality, stream, session, and provider-specific config behavior; run `go doc ./go-llm-gateway/pkg/providers` and `go doc ./go-llm-gateway/pkg/gateway` to inspect current capability and unsupported-feature declarations.
 
 ### P4-API-05: Public Gateway, Provider, And Session Surface Alignment
@@ -324,15 +343,25 @@ Validated deterministic test names and packages:
 
 ### P4-GATE-01: Phase 4 Closure Gate
 
-- Outcome: `open`
+- Outcome: `pass` for the provider capability/local validation repair lane; whole-Phase-4 closure remains bounded by other rows
 - Affected public packages: all Phase 4 public surfaces named in P4-API-01 through P4-API-07
 - Exported declarations: all exported declarations named in P4-API-01 through P4-API-07
-- Observable contract issue: this documentation pass can identify and reconcile evidence, but it cannot close the implementation gate while API rows remain `fail` or `uncertain` and while dependent repair lanes have not consumed the reconciled findings.
-- Implementation evidence: none sufficient for closure in this audit-only lane.
-- Planning-only evidence: this reconciliation map and the detailed findings below identify the remaining repair slices.
-- Docs/tests/examples evidence: reviewer commands in each row provide deterministic evidence for current state, not final closure.
-- Remaining repair slice: complete typed errors/streams, provider capabilities/validation, dependency/result/context contracts, Go API hygiene, and final closure validation in the dedicated follow-up rows before closing P4-GATE-01.
-- Reviewer commands: from the repository root, run `make typecheck` plus the row-specific commands above to verify current evidence; do not mark P4-GATE-01 closed from this audit document alone.
+- Observable contract issue: repaired for the capability/local validation lane.
+  This row should not be read as whole-Phase-4 closure because the audit still
+  contains other rows with dedicated repair scope.
+- Implementation evidence: provider capability reporters, gateway/session
+  discovery, local validation, interaction/inferencer propagation, and fal
+  streaming unsupported behavior are implemented on the current head.
+- Planning-only evidence: broader typed stream terminal ordering, public model
+  ownership, dependency/result/context contracts, and Go API hygiene remain in
+  their respective rows.
+- Docs/tests/examples evidence: the README, gateway development guide, and
+  reviewer command matrix now describe supported, unsupported, and unknown
+  semantics plus fal streaming's unsupported contract.
+- Remaining repair slice: none for provider capability/local validation.
+- Reviewer commands: from the repository root, run `make typecheck`, `make test`,
+  and the P4-API-04/P4-API-06 package-level commands above to verify the
+  capability/local validation gate evidence.
 
 Use [`dependencies.md`](./dependencies.md) for the intended dependency direction. Use this audit for the places where the codebase still relies on convenience coupling or constructor ownership that is broader than the intended architecture.
 
@@ -901,12 +930,13 @@ failure classes or rely on one provider-neutral terminal event contract.
     `ERROR` is terminal or whether `MESSAGE.END` means success.
   - Usage placement is provider-specific: OpenAI and Anthropic can emit
     `USAGE.INFO` after `MESSAGE.END`, Gemini emits it after `MESSAGE.END` when
-    usage is present, and fal returns an immediately closed stream with no
-    start/end/error events because it has no streaming implementation.
+    usage is present. fal no longer returns an immediately closed successful
+    stream; it fails setup with `UnsupportedFeatureError` because the wrapper
+    does not implement provider streaming.
   - Empty or setup-only streams are not classified: Gemini forces
-    `MESSAGE.START`/`MESSAGE.END` even when no content arrives, fal returns a
-    closed channel with no events, and OpenAI may emit start/end around scanner
-    EOF. These are all public channel contracts.
+    `MESSAGE.START`/`MESSAGE.END` even when no content arrives, and OpenAI may
+    emit start/end around scanner EOF. fal unsupported streaming is now outside
+    the channel-ordering ambiguity because it returns a typed setup error.
 - Mapped checklist rows: `P4-API-02`, `P4-API-04`, `P4-API-05`
 - Severity: `must-fix contract defect`
 - Compatibility sensitivity: `compatibility-sensitive`
@@ -914,15 +944,15 @@ failure classes or rely on one provider-neutral terminal event contract.
   - standardize stream event ordering for all providers, including
     `MESSAGE.START`, content start/delta/end pairs, tool-call pairs,
     `StreamTypeError`, `MESSAGE.END`, `USAGE.INFO`, and channel close
-  - define whether unsupported streaming should fail synchronously with
-    `ErrUnsupportedCapability` or return a typed terminal stream error instead
-    of a clean empty stream
+  - keep unsupported streaming failures synchronous with
+    `UnsupportedFeatureError`; standardize terminal stream events for providers
+    that do support streaming
   - update provider adapter tests to assert the same final event contract across
     OpenAI, Anthropic, Gemini, and fal
 - Verification notes:
   - later repair lanes should add table-driven provider stream tests for clean
-    text, tool call, parser error, empty stream, unsupported streaming, and
-    usage-bearing completion
+    text, tool call, parser error, empty stream, and usage-bearing completion;
+    fal unsupported streaming is covered by `pkg/providers/fal/provider_test.go`
 
 #### P4-STREAM-03: session stream close and cancellation events lack a shared final status
 
@@ -1092,11 +1122,12 @@ own test, replay, timeout, and transport behavior.
   `GatewayInferencer.Infer`, `GatewayInferencer.InferStream`
 - Observable contract issue:
   - `DefaultGateway` forwards all request fields directly to the provider with
-    no exported validation step. Unsupported tools, streaming, media parts,
-    reasoning, prompt caching, config blobs, or missing model choices therefore
-    fail differently per provider: some are ignored, some become formatted
-    provider errors, some become local string errors, and fal streaming returns
-    an immediately closed channel even though streaming is unsupported.
+    no exported standalone validation step, but `DefaultGateway` now validates
+    explicit unsupported capabilities before provider dispatch. Unsupported
+    tools, streaming, media parts, reasoning, prompt caching, config blobs, or
+    missing model choices that are proven unsupported by the capability report
+    return `UnsupportedFeatureError`; provider-dependent or unknown behavior is
+    still allowed to reach runtime.
   - fal validates model-specific content requirements inside `Infer` and returns
     string errors such as missing audio/image/embedding input or unsupported
     model. OpenAI, Anthropic, and Gemini translate broad request shapes into
@@ -1117,8 +1148,7 @@ own test, replay, timeout, and transport behavior.
   - define typed validation failures such as `ErrUnsupportedCapability`,
     `ErrUnsupportedModel`, `ErrInvalidRequest`, and model/content requirement
     details that support `errors.Is` and `errors.As`
-  - change unsupported streaming from a clean empty channel to a typed setup
-    failure or documented terminal stream event after compatibility review
+  - keep unsupported streaming as a typed setup failure
   - thread validation through `DefaultGateway`, interaction gateways, and
     `GatewayInferencer` so direct gateway callers and agent-loop callers observe
     the same unsupported capability result
@@ -1247,8 +1277,9 @@ own test, replay, timeout, and transport behavior.
    reasoning, caching, streaming, sessions, and provider config.
 2. Add typed unsupported-capability and invalid-request errors, then implement
    gateway-level request validation for stateless `Infer`/`InferStream`.
-3. Repair unsupported streaming behavior, especially fal's clean empty channel,
-   after the stream terminal contract and typed validation taxonomy are aligned.
+3. Keep unsupported streaming behavior aligned with the typed setup failure
+   contract; fal's former clean empty channel behavior is repaired on the
+   current head.
 4. Add session capability discovery and pre-dial validation, then extend
    `SessionGatewayInferencer` with additive full-config forwarding.
 5. Document and normalize provider dependency ownership after capability and

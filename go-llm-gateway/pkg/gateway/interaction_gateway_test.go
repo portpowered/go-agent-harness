@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
@@ -20,6 +21,8 @@ type fakeInteractionProvider struct {
 	err            error
 	streamMessages []messages.StreamMessage
 	streamErr      error
+	caps           ProviderCapabilities
+	capCalls       int
 }
 
 func (p *fakeInteractionProvider) Name() string {
@@ -46,6 +49,14 @@ func (p *fakeInteractionProvider) InferStream(_ context.Context, req providers.I
 	}
 	close(ch)
 	return ch, nil
+}
+
+func (p *fakeInteractionProvider) Capabilities() ProviderCapabilities {
+	p.capCalls++
+	if p.caps.Provider == "" {
+		return providers.UnknownProviderCapabilities(p.name)
+	}
+	return p.caps
 }
 
 func TestInteract_NormalizesProviderTextResponse(t *testing.T) {
@@ -219,6 +230,64 @@ func TestInteract_NormalizesProviderError(t *testing.T) {
 	if events[1].Error.Classification != providers.ErrorClassRateLimited {
 		t.Fatalf("error classification = %q, want %q", events[1].Error.Classification, providers.ErrorClassRateLimited)
 	}
+}
+
+func TestInteract_RejectsUnsupportedFeaturesBeforeProviderCall(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeInteractionProvider{
+		name: "interaction-validation-provider",
+		caps: ProviderCapabilities{
+			Provider: "interaction-validation-provider",
+			Stateless: capabilities.StatelessCapabilities{
+				Tools: capabilities.Unsupported("interaction tools unavailable"),
+			},
+		},
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	events := collectInteractionEvents(t, gw, InteractionRequest{
+		InteractionID: "interaction-unsupported-tools",
+		Model:         "model-validation",
+		Tools: []InteractionTool{{
+			Name: "lookup",
+			Parameters: []InteractionToolParameter{{
+				Name:     "query",
+				Type:     "string",
+				Required: true,
+			}},
+		}},
+	})
+
+	wantTypes := []InteractionEventType{
+		InteractionEventStart,
+		InteractionEventError,
+		InteractionEventEnd,
+	}
+	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
+		t.Fatalf("event types = %v, want %v", got, wantTypes)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("provider calls = %d, want 0", provider.calls)
+	}
+	if provider.capCalls != 1 {
+		t.Fatalf("capability calls = %d, want 1", provider.capCalls)
+	}
+	if events[1].Error == nil {
+		t.Fatal("error event payload is nil")
+	}
+	if events[1].Error.Code != "unsupported_feature" {
+		t.Fatalf("error code = %q, want unsupported_feature", events[1].Error.Code)
+	}
+
+	details := events[1].Error.Details
+	assertRawString(t, details["provider"], "interaction-validation-provider")
+	assertRawString(t, details["feature"], string(capabilities.FeatureTools))
+	assertRawString(t, details["mode"], capabilities.RequestedModeStateless)
+	assertRawString(t, details["state"], string(capabilities.CapabilityStateUnsupported))
 }
 
 func TestInteract_NormalizesGatewayTransportError(t *testing.T) {
@@ -667,4 +736,16 @@ func interactionEventTypes(events []InteractionEvent) []InteractionEventType {
 		types[i] = event.Type
 	}
 	return types
+}
+
+func assertRawString(t *testing.T, raw json.RawMessage, want string) {
+	t.Helper()
+
+	var got string
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("detail JSON = %s: %v", raw, err)
+	}
+	if got != want {
+		t.Fatalf("detail = %q, want %q", got, want)
+	}
 }

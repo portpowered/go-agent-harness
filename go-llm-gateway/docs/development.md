@@ -68,8 +68,8 @@ Gateway discovery is exposed through `Capabilities()` on the default stateless
 and session gateways. It must remain local metadata lookup with no provider
 calls, credential checks, network access, or request mutation. Providers without
 explicit capability reporting must fall back to `unknown` for every capability
-field. Unknown means no support claim and must not be documented or presented as
-supported.
+field with a detail rationale. Unknown means no support claim and must not be
+documented or presented as supported.
 
 Gateway validation rejects locally deterministic mismatches only when the
 capability is explicitly `unsupported`. It must not silently treat `unknown` as

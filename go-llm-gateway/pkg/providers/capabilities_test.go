@@ -87,3 +87,60 @@ func TestConcreteProviderFamiliesReportCapabilities(t *testing.T) {
 		})
 	}
 }
+
+func TestConcreteProviderFamiliesReportEveryPublicCapability(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		reporter providers.CapabilityReporter
+	}{
+		{name: "anthropic", reporter: anthropic.New()},
+		{name: "openai", reporter: openai.New()},
+		{name: "gemini", reporter: gemini.New()},
+		{name: "grok", reporter: grok.New()},
+		{name: "fal", reporter: fal.New()},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.reporter.Capabilities()
+			if got.Provider == "" {
+				t.Fatal("Provider is empty")
+			}
+
+			features := map[string]capabilities.FeatureCapability{
+				"stateless.tools":                  got.Stateless.Tools,
+				"stateless.streaming":              got.Stateless.Streaming,
+				"stateless.imageInput":             got.Stateless.ImageInput,
+				"stateless.audioInput":             got.Stateless.AudioInput,
+				"stateless.audioOutput":            got.Stateless.AudioOutput,
+				"stateless.videoOutput":            got.Stateless.VideoOutput,
+				"stateless.reasoning":              got.Stateless.Reasoning,
+				"stateless.promptCaching":          got.Stateless.PromptCaching,
+				"stateless.providerSpecificConfig": got.Stateless.ProviderSpecificConfig,
+				"session.sessions":                 got.Session.Sessions,
+				"session.tools":                    got.Session.Tools,
+				"session.audioInput":               got.Session.AudioInput,
+				"session.audioOutput":              got.Session.AudioOutput,
+				"session.providerSpecificConfig":   got.Session.ProviderSpecificConfig,
+			}
+
+			for name, feature := range features {
+				switch feature.State {
+				case capabilities.CapabilityStateSupported,
+					capabilities.CapabilityStateUnsupported,
+					capabilities.CapabilityStateUnknown:
+				default:
+					t.Errorf("%s state = %q, want supported, unsupported, or unknown", name, feature.State)
+				}
+				if feature.Detail == "" {
+					t.Errorf("%s detail is empty", name)
+				}
+			}
+		})
+	}
+}
