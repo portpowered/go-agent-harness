@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -218,13 +219,15 @@ func (r *ModelRunner) runInference(ctx context.Context) error {
 		r.currentPassID = req.LoopPassID
 
 		streamCh, err := r.inferencer.InferStream(execCtx, req)
-		if err == nil && streamCh != nil {
-			r.drainStream(execCtx, streamCh)
+		if isCancellationError(err) {
+			r.emitSyntheticDeltas(ctx, messages.InferenceResult{}, err)
+		} else if err == nil && streamCh != nil {
+			r.drainStream(ctx, execCtx, streamCh)
 		} else {
 			// The inference provider does not support streaming; fall back to non-streaming
 			// and emit synthetic deltas so the ordering layer sees the same delta boundary.
 			result, inferErr := r.inferencer.Infer(execCtx, req)
-			r.emitSyntheticDeltas(execCtx, result, inferErr)
+			r.emitSyntheticDeltas(ctx, result, inferErr)
 		}
 
 		r.execMu.Lock()
@@ -248,17 +251,24 @@ func (r *ModelRunner) writeDelta(ctx context.Context, sm messages.StreamMessage)
 // drainStream forwards each StreamMessage from the inferencer channel to DeltaOutbox.
 // It stops on MESSAGE.END, ERROR, or channel close (emitting a synthetic MESSAGE.END in
 // the latter case so the ordering layer always sees a complete message boundary).
-func (r *ModelRunner) drainStream(ctx context.Context, ch <-chan messages.StreamMessage) {
+func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan messages.StreamMessage) {
 	hasOutput := false
 	for {
 		select {
-		case <-ctx.Done():
+		case <-writeCtx.Done():
+			return
+		case <-execCtx.Done():
+			r.writeDelta(writeCtx, messages.StreamMessage{
+				Type:  messages.StreamTypeError,
+				Role:  messages.RoleAssistant,
+				Value: cancellationErrorValue(execCtx.Err(), messages.TerminalProvenanceLoop, outputState(hasOutput)),
+			})
 			return
 		case msg, ok := <-ch:
 			if !ok {
 				// Channel closed without MESSAGE.END; emit a provider-close end so
 				// callers can distinguish transport close from clean completion.
-				r.writeDelta(ctx, messages.StreamMessage{
+				r.writeDelta(writeCtx, messages.StreamMessage{
 					Type: messages.StreamTypeMessageEnd,
 					Role: messages.RoleAssistant,
 					Value: messages.NewMessageEndValueWithTerminal(
@@ -271,7 +281,7 @@ func (r *ModelRunner) drainStream(ctx context.Context, ch <-chan messages.Stream
 				return
 			}
 			msg = normalizeProviderTerminalMessage(msg, hasOutput)
-			r.writeDelta(ctx, msg)
+			r.writeDelta(writeCtx, msg)
 			if isOutputDelta(msg) {
 				hasOutput = true
 			}
@@ -288,6 +298,13 @@ func (r *ModelRunner) drainStream(ctx context.Context, ch <-chan messages.Stream
 // path is identical regardless of whether the inferencer supports streaming.
 func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.InferenceResult, inferErr error) {
 	if inferErr != nil {
+		if isCancellationError(inferErr) {
+			r.writeDelta(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeError,
+				Value: cancellationErrorValue(inferErr, messages.TerminalProvenanceLoop, messages.TerminalOutputNone),
+			})
+			return
+		}
 		r.writeDelta(ctx, messages.StreamMessage{
 			Type: messages.StreamTypeError,
 			Value: messages.NewErrorValueWithTerminal(
@@ -411,6 +428,25 @@ func outputState(hasOutput bool) messages.TerminalOutputState {
 		return messages.TerminalOutputPartial
 	}
 	return messages.TerminalOutputNone
+}
+
+func cancellationErrorValue(err error, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) *messages.ErrorValue {
+	if err == nil {
+		err = context.Canceled
+	}
+	value := messages.NewErrorValueWithTerminal(
+		err.Error(),
+		string(messages.TerminalReasonCancellation),
+		messages.TerminalReasonCancellation,
+		provenance,
+		outputState,
+	)
+	value.Err = err
+	return value
+}
+
+func isCancellationError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func isOutputDelta(msg messages.StreamMessage) bool {

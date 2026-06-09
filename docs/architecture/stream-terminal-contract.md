@@ -41,7 +41,7 @@ remote or CLI consumers.
 | --- | --- | --- |
 | `provider_authored_completion` | Treat as successful completion authored by the provider. | `MESSAGE.END` with `terminal_reason`, `terminal_provenance=provider`, and `output_state=complete`. |
 | `loop_synthesized_completion` | Treat as successful completion synthesized by the loop after reconstructing output. | `MESSAGE.END` or loop result/stream outcome with `terminal_provenance=loop`; legacy synthesized boundaries remain readable and ordered. |
-| `cancellation` | Stop work and handle as caller shutdown or deadline; do not retry as provider failure. | Returned errors preserve `context.Canceled` or `context.DeadlineExceeded` and may also match gateway cancellation classification; in-band errors use `ErrorValue.terminal_reason=cancellation`. |
+| `cancellation` | Stop work and handle as caller shutdown or deadline; do not retry as provider failure. | Returned errors preserve `context.Canceled` or `context.DeadlineExceeded` and may also match gateway cancellation classification; in-band errors use `ErrorValue.classification=cancellation` and `ErrorValue.terminal_reason=cancellation`. |
 | `replay_divergence` | Treat deterministic replay as mismatched input or fixture data. | Returned replay errors should match replay mismatch classes with `errors.Is`/`errors.As`; replay stream/session events use `terminal_reason=replay_divergence` where emitted in-band. |
 | `replay_incomplete` | Treat replay as incomplete fixture/capture consumption, separate from divergence. | Returned replay errors or in-band replay events use `terminal_reason=replay_incomplete`; callers should not collapse it into provider close or cancellation. |
 | `session_close` | Treat as a session lifecycle close when no more specific reason is available. | `SESSION.CLOSE.reason` remains the readable/provider reason; additive fields carry `terminal_reason=session_close` and session provenance. |
@@ -66,3 +66,20 @@ The taxonomy is intentionally additive:
 Provider capability matrices are not expanded by this contract. Later repair
 stories should add provider-close or unsupported-stream classification only when
 the stream terminal behavior itself requires that public distinction.
+
+## Cancellation And Partial Output
+
+Caller cancellation is distinct from provider rejection, provider close, replay
+mismatch, replay incomplete, and terminal failure. Loop-owned stream
+cancellation is emitted in-band as an `ERROR` payload with
+`classification=cancellation`, `terminal_reason=cancellation`, and
+`terminal_provenance=loop` when a per-request execution is cancelled while the
+runner remains active. The in-process `ErrorValue.Err` preserves
+`context.Canceled` or `context.DeadlineExceeded` for callers that receive the
+typed value directly.
+
+When caller-visible output was already emitted before cancellation or terminal
+failure, the terminal payload preserves that distinction with
+`output_state=partial`. Consumers should keep the available deltas and branch on
+`terminal_reason` for the stop cause instead of treating partial output as its
+own failure class.

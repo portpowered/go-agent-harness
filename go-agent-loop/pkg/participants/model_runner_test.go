@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +34,35 @@ type streamInferencer struct {
 
 func (s *streamInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
 	return messages.InferenceResult{}, nil
+}
+
+type controlledStreamInferencer struct {
+	stream chan messages.StreamMessage
+	ready  chan struct{}
+	once   sync.Once
+}
+
+func (s *controlledStreamInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
+	return messages.InferenceResult{}, nil
+}
+
+func (s *controlledStreamInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	if s.ready != nil {
+		s.once.Do(func() { close(s.ready) })
+	}
+	return s.stream, nil
+}
+
+type streamErrorInferencer struct {
+	err error
+}
+
+func (s *streamErrorInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
+	return messages.InferenceResult{}, nil
+}
+
+func (s *streamErrorInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	return nil, s.err
 }
 
 func (s *streamInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
@@ -272,6 +302,131 @@ func TestModelRunner_TerminalFailureAfterPartialOutputGetsTerminalMetadata(t *te
 	}
 	if value.OutputState != messages.TerminalOutputPartial {
 		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
+	}
+}
+
+func TestModelRunner_CancellationGetsDistinctTerminalError(t *testing.T) {
+	inf := &controlledStreamInferencer{stream: make(chan messages.StreamMessage), ready: make(chan struct{})}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+	<-inf.ready
+	runner.CancelCurrentExecution()
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.ErrorValue", terminal.Value)
+	}
+	if !errors.Is(value.Err, context.Canceled) {
+		t.Fatalf("terminal error should preserve context.Canceled, got %v", value.Err)
+	}
+	if value.Classification != string(messages.TerminalReasonCancellation) {
+		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonCancellation)
+	}
+	if value.TerminalReason != messages.TerminalReasonCancellation {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonCancellation)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceLoop {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceLoop)
+	}
+	if value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
+	}
+	if value.TerminalReason == messages.TerminalReasonProviderClose || value.TerminalReason == messages.TerminalReasonTerminalFailure {
+		t.Fatalf("cancellation terminal reason should not collapse into %q", value.TerminalReason)
+	}
+}
+
+func TestModelRunner_PreStreamCancellationGetsDistinctTerminalError(t *testing.T) {
+	inf := &streamErrorInferencer{err: context.Canceled}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.ErrorValue", terminal.Value)
+	}
+	if !errors.Is(value.Err, context.Canceled) {
+		t.Fatalf("terminal error should preserve context.Canceled, got %v", value.Err)
+	}
+	if value.TerminalReason != messages.TerminalReasonCancellation {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonCancellation)
+	}
+	if value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
+	}
+}
+
+func TestModelRunner_CancellationAfterPartialOutputReportsPartialState(t *testing.T) {
+	stream := make(chan messages.StreamMessage, 2)
+	stream <- messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()}
+	stream <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("partial")}
+	inf := &controlledStreamInferencer{stream: stream, ready: make(chan struct{})}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+	<-inf.ready
+
+	for {
+		delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+		if !ok {
+			t.Fatal("context cancelled waiting for partial delta")
+		}
+		if delta.Type == messages.StreamTypeTextDelta {
+			break
+		}
+	}
+	runner.CancelCurrentExecution()
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.ErrorValue", terminal.Value)
+	}
+	if !errors.Is(value.Err, context.Canceled) {
+		t.Fatalf("terminal error should preserve context.Canceled, got %v", value.Err)
+	}
+	if value.TerminalReason != messages.TerminalReasonCancellation {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonCancellation)
+	}
+	if value.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
+	}
+	if value.Classification != string(messages.TerminalReasonCancellation) {
+		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonCancellation)
 	}
 }
 
