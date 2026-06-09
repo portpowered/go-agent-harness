@@ -234,6 +234,49 @@ partial-output distinction. CLI/session parity, docs/audit final alignment, and
 final reviewer validation remain assigned to stories 005 through 007. This
 story still does not close `P4-GATE-01`.
 
+## CLI And Session Terminal Surface Reconciliation
+
+Story 005 reconciles representative session and CLI terminal surfaces while
+keeping legacy session output readable and backward compatible.
+
+Session provider normalization now preserves terminal fields on public
+`messages.SessionCloseValue` and `messages.ErrorValue` payloads:
+
+- OpenAI and Grok `session.closed` events still expose `SessionID` and readable
+  `Reason`, and now add `classification=provider_close`,
+  `terminal_reason=provider_close`, `terminal_provenance=provider`, and
+  `output_state=not_applicable`.
+- OpenAI and Grok session `ERROR` events still expose readable `Message`, and
+  now add `classification=provider_rejected`,
+  `terminal_reason=terminal_failure`, `terminal_provenance=provider`, and
+  `output_state=none`.
+- Existing successful message output and close behavior remains compatible; the
+  new fields are additive on terminal payloads.
+
+CLI session replay and record/replay loop rendering now maps terminal fields to
+machine-readable output instead of requiring consumers to parse prose:
+
+- The legacy close line remains `[session closed: <reason>]`.
+- When terminal metadata exists, a second line carries stable key/value fields:
+  `[session terminal: classification=<class> terminal_reason=<reason> terminal_provenance=<layer> output_state=<state>]`.
+- Session terminal errors keep the readable `session error: <message>` prefix
+  and append the same key/value fields when metadata exists.
+
+Credential-free evidence:
+
+```sh
+go test ./go-llm-gateway/pkg/providers/openai -run 'TestConnectSession_NormalizesOpenAIRealtime(EventsInOrder|ErrorDetails)'
+go test ./go-llm-gateway/pkg/providers/grok -run 'TestSession_(SessionCreatedEmitsSessionCreated|SessionUpdatedEmitsSessionUpdated|SessionClosedEmitsTerminalMetadata)'
+go test ./agent-cli/internal/services -run 'TestWriteSessionReplayMessage|TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer|TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation'
+go test ./agent-cli/test/integration -run 'TestSessionCommand_(OpenAIRealtimeReplay_EndToEndSmoke|ReplayGrokWebSocketCapture_EndToEndSmoke|OpenAIRealtimeReplayReportsProviderError)'
+make typecheck
+make test
+```
+
+The evidence above closes the story-005 CLI/session terminal surface parity.
+Docs/audit final alignment and final reviewer validation remain assigned to
+stories 006 and 007. This story still does not close `P4-GATE-01`.
+
 ## Gate Status
 
 This story does not close `P4-GATE-01`. The gate remains governed by the

@@ -363,6 +363,16 @@ func TestSessionCommand_OpenAIRealtimeReplay_EndToEndSmoke(t *testing.T) {
 	if !strings.Contains(got, "[session closed: fixture_complete]") {
 		t.Fatalf("OpenAI replay output missing session close status, got:\n%s", got)
 	}
+	for _, want := range []string{
+		"classification=provider_close",
+		"terminal_reason=provider_close",
+		"terminal_provenance=provider",
+		"output_state=not_applicable",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("OpenAI replay output missing terminal field %q, got:\n%s", want, got)
+		}
+	}
 }
 
 func TestSessionCommand_ReplayGrokWebSocketCapture_EndToEndSmoke(t *testing.T) {
@@ -401,6 +411,16 @@ model:
 	}
 	if !strings.Contains(got, "[session closed: fixture_complete]") {
 		t.Fatalf("replay output missing session close status, got:\n%s", got)
+	}
+	for _, want := range []string{
+		"classification=provider_close",
+		"terminal_reason=provider_close",
+		"terminal_provenance=provider",
+		"output_state=not_applicable",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Grok replay output missing terminal field %q, got:\n%s", want, got)
+		}
 	}
 }
 

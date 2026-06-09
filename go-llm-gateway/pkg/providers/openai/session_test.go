@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
 )
 
@@ -591,6 +592,12 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	if sessionClose.SessionID != "sess-openai-normalize" || sessionClose.Reason != "fixture_complete" {
 		t.Fatalf("session close value: got %#v", sessionClose)
 	}
+	if sessionClose.Classification != string(messages.TerminalReasonProviderClose) ||
+		sessionClose.TerminalReason != messages.TerminalReasonProviderClose ||
+		sessionClose.TerminalProvenance != messages.TerminalProvenanceProvider ||
+		sessionClose.OutputState != messages.TerminalOutputNotApplicable {
+		t.Fatalf("session close terminal metadata: got %#v", sessionClose)
+	}
 }
 
 func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
@@ -636,6 +643,12 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 		value.Param != "event.type" ||
 		value.EventID != "client-event-123" {
 		t.Fatalf("error value: got %#v", value)
+	}
+	if value.Classification != providers.ErrorClassProviderRejected ||
+		value.TerminalReason != messages.TerminalReasonTerminalFailure ||
+		value.TerminalProvenance != messages.TerminalProvenanceProvider ||
+		value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("error terminal metadata: got %#v", value)
 	}
 }
 

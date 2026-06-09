@@ -222,6 +222,69 @@ func (w failingWriter) Write([]byte) (int, error) {
 	return 0, w.err
 }
 
+func TestWriteSessionReplayMessage_PrintsSessionTerminalFields(t *testing.T) {
+	var out bytes.Buffer
+
+	err := writeSessionReplayMessage(&out, messages.StreamMessage{
+		Type: messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValueWithTerminal(
+			"session-1",
+			"provider_closed",
+			string(messages.TerminalReasonProviderClose),
+			messages.TerminalReasonProviderClose,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNotApplicable,
+		),
+	})
+	if err != nil {
+		t.Fatalf("writeSessionReplayMessage: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "[session closed: provider_closed]") {
+		t.Fatalf("legacy close line missing from output:\n%s", got)
+	}
+	for _, want := range []string{
+		"classification=provider_close",
+		"terminal_reason=provider_close",
+		"terminal_provenance=provider",
+		"output_state=not_applicable",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("terminal output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.T) {
+	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
+		Type: messages.StreamTypeError,
+		Value: messages.NewErrorValueWithTerminal(
+			"provider rejected request",
+			"provider_rejected",
+			messages.TerminalReasonTerminalFailure,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNone,
+		),
+	})
+	if err == nil {
+		t.Fatal("expected session error")
+	}
+
+	got := err.Error()
+	for _, want := range []string{
+		"session error: provider rejected request",
+		"classification=provider_rejected",
+		"terminal_reason=terminal_failure",
+		"terminal_provenance=provider",
+		"output_state=none",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("session error missing %q: %v", want, err)
+		}
+	}
+}
+
 type stubInferencer struct{}
 
 func (stubInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {

@@ -365,3 +365,38 @@ func TestSession_SessionUpdatedEmitsSessionUpdated(t *testing.T) {
 		t.Errorf("session_id: got %q, want %q", v.SessionID, "sess-xyz")
 	}
 }
+
+func TestSession_SessionClosedEmitsTerminalMetadata(t *testing.T) {
+	conn := newMockConn()
+	conn.addServerEvent("session.closed", map[string]any{
+		"session_id": "sess-xyz",
+		"reason":     "fixture_complete",
+	})
+
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	got, ok := session.Receive().ReadBlockingContext(ctx)
+	if !ok {
+		t.Fatal("did not receive SESSION.CLOSE within 1 second")
+	}
+	if got.Type != messages.StreamTypeSessionClose {
+		t.Fatalf("type: got %q, want %q", got.Type, messages.StreamTypeSessionClose)
+	}
+	v, ok := got.Value.(*messages.SessionCloseValue)
+	if !ok || v == nil {
+		t.Fatal("expected SessionCloseValue")
+	}
+	if v.SessionID != "sess-xyz" || v.Reason != "fixture_complete" {
+		t.Fatalf("session close value: got %#v", v)
+	}
+	if v.Classification != string(messages.TerminalReasonProviderClose) ||
+		v.TerminalReason != messages.TerminalReasonProviderClose ||
+		v.TerminalProvenance != messages.TerminalProvenanceProvider ||
+		v.OutputState != messages.TerminalOutputNotApplicable {
+		t.Fatalf("session close terminal metadata: got %#v", v)
+	}
+}

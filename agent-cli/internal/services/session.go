@@ -120,16 +120,45 @@ func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error 
 		return err
 	case *messages.SessionCloseValue:
 		if v.Reason != "" {
-			_, err := fmt.Fprintf(out, "\n[session closed: %s]\n", v.Reason)
+			if _, err := fmt.Fprintf(out, "\n[session closed: %s]\n", v.Reason); err != nil {
+				return err
+			}
+		}
+		if fields := sessionTerminalFields(v.Classification, v.TerminalReason, v.TerminalProvenance, v.OutputState); fields != "" {
+			_, err := fmt.Fprintf(out, "[session terminal: %s]\n", fields)
 			return err
 		}
 	case *messages.ErrorValue:
+		fields := sessionTerminalFields(v.Classification, v.TerminalReason, v.TerminalProvenance, v.OutputState)
 		if v.Message != "" {
+			if fields != "" {
+				return fmt.Errorf("session error: %s [%s]", v.Message, fields)
+			}
 			return fmt.Errorf("session error: %s", v.Message)
+		}
+		if fields != "" {
+			return fmt.Errorf("session error [%s]", fields)
 		}
 		return fmt.Errorf("session error")
 	}
 	return nil
+}
+
+func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {
+	var fields []string
+	if classification != "" {
+		fields = append(fields, "classification="+classification)
+	}
+	if reason != "" {
+		fields = append(fields, "terminal_reason="+string(reason))
+	}
+	if provenance != "" {
+		fields = append(fields, "terminal_provenance="+string(provenance))
+	}
+	if outputState != "" {
+		fields = append(fields, "output_state="+string(outputState))
+	}
+	return strings.Join(fields, " ")
 }
 
 type sessionLoopOptions struct {

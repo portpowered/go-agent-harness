@@ -7,6 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 // wireEvent is the JSON shape sent/received over the Grok WebSocket.
@@ -87,7 +88,14 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		sessionID := extractStringField(event.Data, "session_id")
 		reason := extractStringField(event.Data, "reason")
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue(sessionID, reason)},
+			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+				sessionID,
+				reason,
+				string(messages.TerminalReasonProviderClose),
+				messages.TerminalReasonProviderClose,
+				messages.TerminalProvenanceProvider,
+				messages.TerminalOutputNotApplicable,
+			)},
 		}
 
 	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
@@ -175,8 +183,15 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		if msg == "" {
 			msg = "session error"
 		}
+		value := messages.NewErrorValueWithTerminal(
+			msg,
+			providers.ErrorClassProviderRejected,
+			messages.TerminalReasonTerminalFailure,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNone,
+		)
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeError, Value: messages.NewErrorValue(msg)},
+			{Type: messages.StreamTypeError, Value: value},
 		}
 
 	default:

@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 const conversationItemCreateEvent = models.SessionEventType("conversation.item.create")
@@ -420,7 +421,14 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		sessionID := firstStringField(event.Data, "session_id", "session.id", "id")
 		reason := firstStringField(event.Data, "reason", "session.reason")
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue(sessionID, reason)},
+			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
+				sessionID,
+				reason,
+				string(messages.TerminalReasonProviderClose),
+				messages.TerminalReasonProviderClose,
+				messages.TerminalProvenanceProvider,
+				messages.TerminalOutputNotApplicable,
+			)},
 		}
 	case models.SessionEventResponseCreated:
 		return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}}
@@ -491,15 +499,20 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		if msg == "" {
 			msg = "session error"
 		}
+		value := messages.NewErrorValueWithTerminal(
+			msg,
+			providers.ErrorClassProviderRejected,
+			messages.TerminalReasonTerminalFailure,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputNone,
+		)
+		value.ErrorType = firstStringField(event.Data, "error.type")
+		value.Code = firstStringField(event.Data, "error.code")
+		value.Param = firstStringField(event.Data, "error.param")
+		value.EventID = firstStringField(event.Data, "error.event_id")
 		return []messages.StreamMessage{{
-			Type: messages.StreamTypeError,
-			Value: messages.NewErrorValueWithDetails(
-				msg,
-				firstStringField(event.Data, "error.type"),
-				firstStringField(event.Data, "error.code"),
-				firstStringField(event.Data, "error.param"),
-				firstStringField(event.Data, "error.event_id"),
-			),
+			Type:  messages.StreamTypeError,
+			Value: value,
 		}}
 	default:
 		return nil

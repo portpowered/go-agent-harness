@@ -35,6 +35,28 @@ above. Some paths expose both: the returned error preserves in-process
 classification and the stream event carries the serialized classification for
 remote or CLI consumers.
 
+## CLI Session Output
+
+`agent session --replay` and session record/replay loop output keep the legacy
+human-readable close line:
+
+```text
+[session closed: <reason>]
+```
+
+When the underlying `SESSION.CLOSE` payload carries terminal metadata, the CLI
+also emits an additive machine-readable line:
+
+```text
+[session terminal: classification=<class> terminal_reason=<reason> terminal_provenance=<layer> output_state=<state>]
+```
+
+Session `ERROR` payloads returned by the CLI keep the readable
+`session error: <message>` prefix and append the same key/value terminal fields
+when present. Consumers that need automation should read those key/value fields
+or the underlying stream JSON event fields instead of parsing the readable
+message or close reason.
+
 ## Terminal Categories
 
 | Terminal reason | Caller action | Public classification surface |
