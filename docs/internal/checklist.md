@@ -111,6 +111,17 @@ partial-output classification behavior.
 | `P4-API-05` | Public gateway, provider, and session surface alignment | Returned errors and event payloads use the same documented provider taxonomy across gateway, provider, loop message, interaction bridge, session, and replay surfaces. | `go-llm-gateway/README.md`, `go-llm-gateway/pkg/providers/errors_test.go`, `go-llm-gateway/pkg/providers/openai/stream_test.go`, `go-llm-gateway/pkg/providers/gemini/stream_test.go`, `go-llm-gateway/pkg/inference/session_inferencer_test.go`, `docs/internal/phase-4-typed-errors-stream-repair-evidence.md` |
 | `P4-GATE-01` | Final repair evidence and quality gate | Reviewer-runnable credential-free commands prove the representative repaired behavior, public docs describe caller usage, remaining stale audit claims are narrowed, and root typecheck, tests, and lint pass. | `docs/internal/phase-4-typed-errors-stream-repair-scope.md`, `docs/internal/phase-4-typed-errors-stream-repair-evidence.md`, `go-llm-gateway/README.md`, root `Makefile` quality targets |
 
+## Phase 4 - Typed Terminal Authoritative Reconciliation
+
+This checklist entry is the authoritative Phase 4 inventory for the
+typed-terminal branch disposition reconciliation. Reviewers should cite this
+item when validating that the completed typed-terminal branch is no longer an
+ambiguous unconsumed planning input.
+
+| Item ID | Area | Required outcome | Primary evidence surfaces |
+| --- | --- | --- | --- |
+| `P4-TT-RECON-01` | Typed-terminal branch disposition | The authoritative baseline commit, typed-terminal branch relationship, exact landed disposition, semantic drift notes, and `P4-GATE-01` non-closure are reviewer-visible. | `docs/internal/phase-4-typed-terminal-authoritative-reconciliation.md`, `docs/internal/phase-4-authoritative-baseline-sync.md`, `docs/architecture/stream-terminal-contract.md`, `docs/internal/phase-4-api-contract-validator.md` |
+
 ## Phase 3 - Gateway Runtime Decoupling
 
 This checklist is the authoritative Phase 3 inventory for the gateway runtime
