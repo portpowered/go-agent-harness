@@ -130,6 +130,23 @@ callers can continue to use `errors.Is(err, providers.ErrReplayMismatch)` or
 parsing log text. The older `SessionReplayer.Err()` helper remains available
 for compatible error-only callers.
 
+## CLI Session Lifecycle Evidence
+
+The `agent session` command keeps lifecycle ownership at the composition
+boundary:
+
+- caller cancellation is returned as `context.Canceled`
+- the bounded internal session-loop timeout cancels loop execution after
+  draining available output and does not masquerade as caller cancellation
+- provider/session close exits promptly and can print the session close reason
+- record mode flushes the capture file even when the run is cancelled
+- replay completion, replay cancellation, provider replay errors, and divergent
+  outbound replay are observable through local fixtures
+
+These behaviors are covered without live credentials or network access by
+`agent-cli/internal/services/session_test.go` and
+`agent-cli/test/integration/session_command_test.go`.
+
 ## Provider Runtime Ownership
 
 Provider packages in `go-llm-gateway` own provider-specific protocol behavior.
@@ -208,6 +225,8 @@ from the repository root:
 go test ./agent-cli/internal/agent
 go test ./go-agent-loop/pkg/agentloop
 go test ./go-agent-loop/pkg/messages
+go test ./agent-cli/internal/services -run 'TestRunSession_RecordFlushesCaptureWhenContextCanceled|TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation|TestRunAgentLoopSession_ReturnsOnCleanDoneSignal|TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError|TestRunSession_SessionProviderCloseExitsPromptly'
+go test ./agent-cli/test/integration -run 'TestSessionCommand_.*Replay.*|TestRecordReplaySession'
 make typecheck
 make test
 ```
