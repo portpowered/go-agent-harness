@@ -448,46 +448,58 @@ typed errors must be usable through `errors.Is` or `errors.As`, and structured
 event errors must be documented fields that callers can branch on without
 parsing message text.
 
-The current repository now exposes a public typed gateway error taxonomy through
-`go-llm-gateway/pkg/gateway/errors.go`, including exported error classes,
-`GatewayError`, provider HTTP status classification, replay mismatch, and
-cancellation helpers. The evidence is still partial: public README guidance
-documents additive coverage, while several provider and session surfaces remain
-best-effort or provider-specific.
+The current repository exposes two public classification layers. The
+provider-facing layer in `go-llm-gateway/pkg/providers/errors.go` defines
+sentinels such as `ErrProviderRejected`, `ErrAuthentication`,
+`ErrRateLimited`, `ErrInvalidRequest`, `ErrUnsupportedRequest`,
+`ErrTransport`, `ErrCancellation`, `ErrReplayMismatch`, and
+`ErrPartialOutput`, plus `ProviderError`, `ValidationError`, and
+`ErrorClassification`. The gateway-facing layer in
+`go-llm-gateway/pkg/gateway/errors.go` defines `GatewayError`,
+`ProviderHTTPStatusError`, `TransportError`, `ReplayMismatchError`,
+`CancellationError`, and stable `Err*` classes. Structured event surfaces use
+classification fields instead of string parsing. The evidence is still
+conservative because the public docs explicitly describe representative
+coverage and remaining parity work rather than provider-wide closure.
 
 ### `P4-API-02` - Typed caller-actionable errors
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - `go-llm-gateway/pkg/gateway/errors.go` defines public classes including
-    `ErrAuthentication`, `ErrAuthorization`, `ErrRateLimit`,
-    `ErrInvalidRequest`, `ErrUnsupportedModel`, `ErrProviderHTTPStatus`,
-    `ErrTransport`, `ErrReplayMismatch`, and `ErrCancellation`.
-    `GatewayError.Is` supports `errors.Is`, and
-    `ProviderHTTPStatusError` supports `errors.As` for provider, status, and
-    body details.
-  - Gateway and provider tests now prove representative typed classification
-    for provider HTTP status, transport, stream error events, replay mismatch,
-    and cancellation paths. The README includes caller guidance for
-    `errors.Is` / `errors.As` and documents current additive classification
-    limits.
-  - `go-llm-gateway/pkg/gateway.Interact` emits structured
-    `InteractionError` values with `Code`, `Message`, `Retryable`, and
-    `Details` fields. Tests prove the provider error path emits
-    `provider_error`, deadline errors emit `provider_timeout` with
-    `Retryable: true`, and pre-provider cancellation emits
-    `InteractionCancellation` with reason `caller_cancelled`.
-  - The row remains open because classification is not yet uniform across all
-    provider adapters and session surfaces. Public docs explicitly state that
-    Anthropic, Gemini, fal.ai, and session provider surfaces may still return
-    provider-specific or generic errors where typed gateway classification has
-    not been wired.
+  - Returned Go errors are public and inspectable. `GatewayError.Is`,
+    `ProviderHTTPStatusError.Is`, `TransportError.Is`,
+    `ReplayMismatchError.Is`, and `CancellationError` support `errors.Is`;
+    `ProviderHTTPStatusError`, provider `ProviderError`, and provider
+    `ValidationError` expose details through `errors.As`.
+  - Non-streaming and interaction paths have deterministic tests for provider
+    rejection, gateway transport, deadline timeout, caller cancellation before
+    provider execution, and partial-output cancellation:
+    `TestInteract_NormalizesProviderError`,
+    `TestInteract_NormalizesGatewayTransportError`,
+    `TestInteract_NormalizesDeadlineExceededAsTimeoutError`,
+    `TestInteract_EmitsCancellationWhenContextCancelledBeforeProviderReturns`,
+    and `TestInteract_PreservesPartialOutputBeforeCancellation`.
+  - Replay divergence and replay incomplete paths are typed:
+    `SessionReplayer.Err` and `ReplayWebSocketDialer.Err` match
+    `providers.ErrReplayMismatch` and `gateway.ErrReplayMismatch` in tests for
+    unexpected outbound events and omitted expected outbound events.
+  - Public documentation in `go-llm-gateway/README.md` tells callers to use
+    `errors.Is`, `errors.As`, `messages.ErrorValue.Classification`,
+    `InteractionError.Classification`, `InteractionCancellation.Classification`,
+    and `InteractionCancellation.OutputState` rather than parsing error text.
+  - The row remains open because the repaired evidence is representative, not
+    exhaustive. The README and typed-error repair evidence leave provider-wide
+    parity, every replay entrypoint, every parser failure shape, and a broader
+    final stream status accessor as future work.
 - `affected files / declarations`:
   - `go-llm-gateway/pkg/gateway.DefaultGateway.Infer`
   - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
   - `go-llm-gateway/pkg/gateway.DefaultGateway.Interact`
   - `go-llm-gateway/pkg/gateway.InteractionError`
   - `go-llm-gateway/pkg/gateway.InteractionCancellation`
+  - `go-llm-gateway/pkg/providers.ProviderError`
+  - `go-llm-gateway/pkg/providers.ValidationError`
+  - `go-llm-gateway/pkg/providers.ErrorClassification`
   - `go-llm-gateway/pkg/testing.SessionReplayer.Err`
   - `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`
   - `go-llm-gateway/README.md`
@@ -496,69 +508,137 @@ best-effort or provider-specific.
   - Reconcile `P4-ERR-01`, `P4-ERR-02`, and `P4-ERR-03` in the audit so stale
     absence claims are replaced with the current typed taxonomy and the precise
     remaining provider/session coverage gaps.
-  - Finish wrapping or translating the remaining Anthropic, Gemini, fal.ai,
-    session, and validation paths so representative public surfaces preserve the
-    intended class without forcing callers to parse `err.Error()` or string
-    event codes.
+  - Finish wrapping or translating every remaining provider, session, replay,
+    parser, and validation path so public surfaces preserve the intended class
+    without forcing callers to parse `err.Error()` or event-message text.
   - Add or extend credential-free tests where classification is still best
-    effort, especially session provider errors and any provider adapters not yet
-    covered by `errors.Is` / `errors.As` assertions.
+    effort, especially session provider errors, direct stream setup errors, and
+    provider adapters not yet covered by `errors.Is` / `errors.As` assertions.
 - `reviewer commands`:
-  - `go test ./go-llm-gateway/pkg/gateway -run 'TestInteract_(NormalizesProviderError|EmitsCancellationWhenContextCancelledBeforeProviderReturns|PreservesPartialOutputBeforeCancellation)'`
-  - `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted)'`
-  - `rg -n "errors\\.Is|errors\\.As|InteractionError|InteractionCancellation|provider_error|provider_timeout|caller_cancelled" go-llm-gateway/pkg/gateway go-llm-gateway/pkg/testing go-llm-gateway/README.md`
+  - `(cd go-llm-gateway && go test ./pkg/gateway -run 'TestInteract_(NormalizesProviderError|NormalizesGatewayTransportError|NormalizesDeadlineExceededAsTimeoutError|EmitsCancellationWhenContextCancelledBeforeProviderReturns|PreservesPartialOutputBeforeCancellation)' -timeout 120s)`
+  - `(cd go-llm-gateway && go test ./pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted)|TestReplayWebSocketDialer_(FailsOnUnexpectedOutbound|ReportsIncompleteExpectedOutboundOnClose)' -timeout 120s)`
+  - `rg -n "errors\\.Is|errors\\.As|InteractionError|InteractionCancellation|ErrorClassification|provider_error|provider_timeout|caller_cancelled|replay_mismatch|partial_output" go-llm-gateway/pkg/gateway go-llm-gateway/pkg/providers go-llm-gateway/pkg/testing go-llm-gateway/README.md`
+
+### `P4-API-03` - Result contracts and failure signals
+
+- `outcome`: `uncertain`
+- `evidence`:
+  - Provider-authored completion is public on the interaction surface:
+    `TestInteract_NormalizesProviderTextResponse` emits `interaction.start`,
+    `text.delta`, `message.final`, `usage`, and `interaction.end`, and
+    `TestInteract_EmptyProviderOutputCompletesWithEmptyFinalMessage`
+    distinguishes an empty successful final message from missing output.
+  - Loop-synthesized completion is explicit in
+    `go-agent-loop/pkg/subsystems/interaction_events_test.go`:
+    `TestInteractionEvents_TracksStateAndOutputs` records the final message,
+    usage, completed state, and loop termination, while
+    `TestInteractionEvents_LoopEndRemainsAfterInteractionOutputs` proves the
+    final message is emitted before loop-end.
+  - Terminal failure and cancellation are public structured states.
+    `InteractionError` carries `Code`, `Message`, `Classification`, and
+    `Retryable`; `InteractionCancellation` carries `Reason`, `Message`,
+    `Classification`, and `OutputState`. The gateway-to-loop bridge preserves
+    those terminal payloads in
+    `TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads`.
+  - Partial output is distinguishable from clean completion and total failure:
+    `TestInteract_PreservesPartialOutputBeforeCancellation` emits text before
+    cancellation and marks `OutputState` as `partial_output`.
+  - Replay divergence and replay incomplete are distinguishable from provider
+    rejection, transport failure, and provider HTTP status through the
+    `ErrReplayMismatch` tests listed for `P4-API-02`.
+  - The row remains open because direct `InferStream` and session surfaces do
+    not yet expose one shared final-status contract for provider close,
+    cancellation, replay divergence, replay incomplete, partial output, and
+    terminal failure. Some evidence is interaction-specific rather than
+    uniform across every result, buffer, session, and stream API.
+- `affected files / declarations`:
+  - `go-llm-gateway/pkg/gateway.DefaultGateway.Interact`
+  - `go-llm-gateway/pkg/gateway.InteractionEvent`
+  - `go-llm-gateway/pkg/gateway.InteractionError`
+  - `go-llm-gateway/pkg/gateway.InteractionCancellation`
+  - `go-llm-gateway/pkg/inference.LoopInteractionEventFromGateway`
+  - `go-agent-loop/pkg/messages.InteractionState`
+  - `go-agent-loop/pkg/subsystems.InteractionEvents`
+  - `go-llm-gateway/pkg/testing.SessionReplayer.Err`
+  - `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`
+- `closure decision`: `must remain open`
+- `exact repair work`:
+  - Define a public terminal-status model, or documented equivalent, that
+    applies consistently across direct provider streams, gateway interaction
+    events, loop interaction state, session replay helpers, and provider
+    session close paths.
+  - Add credential-free tests that prove provider close, cancellation, replay
+    divergence, replay incomplete, partial output, provider rejection, and
+    terminal failure are distinguishable through each public result or stream
+    surface that claims to support those outcomes.
+  - Reconcile `P4-RESULT-*` and `P4-STREAM-*` audit rows with the implemented
+    interaction evidence so the future repair is scoped to remaining public
+    result and lifecycle surfaces rather than redoing the completed PNIG proof.
+- `reviewer commands`:
+  - `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference -run 'TestInteract_(NormalizesProviderTextResponse|EmptyProviderOutputCompletesWithEmptyFinalMessage|PreservesPartialOutputBeforeCancellation)|TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads' -timeout 120s)`
+  - `(cd go-agent-loop && go test ./pkg/subsystems -run 'TestInteractionEvents_(TracksStateAndOutputs|RecordsTerminalErrorAndCancellation|LoopEndRemainsAfterInteractionOutputs)' -timeout 120s)`
+  - `(cd go-llm-gateway && go test ./pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted)' -timeout 120s)`
 
 ### `P4-API-05` - Stream semantics and error preservation
 
 - `outcome`: `uncertain`
 - `evidence`:
-  - The interaction surface preserves cancellation as a separate terminal
-    event, and tests prove partial text output can be emitted before a later
-    cancellation event. That is useful stream-result evidence for
-    provider-neutral interaction consumers.
+  - Provider-authored completion and loop-synthesized completion have
+    credential-free interaction evidence through final-message and
+    loop-end tests, and provider-close replay evidence exists through the
+    committed session fixture that ends with `SESSION.CLOSE`.
+  - Cancellation is a separate terminal event with
+    `InteractionCancellation.Classification == "cancellation"`, and partial
+    text output before cancellation sets `OutputState == "partial_output"`.
+  - Terminal failure is structured on interaction and loop surfaces:
+    provider rejection, transport timeout, and runtime errors become
+    `InteractionError` payloads with stable classification fields.
+  - Replay divergence and replay incomplete are typed by
+    `SessionReplayer.Err` and `ReplayWebSocketDialer.Err`, matching both
+    provider and gateway replay-mismatch sentinels without parsing text.
   - `DefaultGateway.InferStream` still returns the provider stream directly.
     Stream error preservation therefore depends on provider adapters and
     `messages.StreamMessage` values rather than a gateway-level typed taxonomy.
-  - The loop message contract still represents stream errors through
-    `messages.ErrorValue` with string `Message`, optional `Code`, and
-    `Metadata` fields. The validator did not find public package guidance that
-    maps those stream error fields to gateway taxonomy classes.
-  - Replay mismatch errors from `SessionReplayer` and `ReplayWebSocketDialer`
-    now use `gateway.ErrReplayMismatch` and are tested with `errors.Is`.
-    Remaining uncertainty is concentrated in end-to-end stream taxonomy
-    preservation across provider adapters, serialized payloads, and session
-    surfaces.
+    Public docs now state that direct stream callers should inspect
+    `messages.ErrorValue.Classification`, but the validator still treats direct
+    stream and session terminal parity as incomplete because not every adapter,
+    parser failure, provider close, and serialized payload boundary is covered.
 - `affected files / declarations`:
   - `go-llm-gateway/pkg/gateway.DefaultGateway.InferStream`
   - `go-llm-gateway/pkg/gateway.DefaultGateway.Interact`
   - `go-llm-gateway/pkg/gateway.InteractionEvent`
   - `go-agent-loop/pkg/messages.ErrorValue`
+  - `go-agent-loop/pkg/messages.InteractionCancellation`
+  - `go-agent-loop/pkg/messages.InteractionError`
   - `go-llm-gateway/pkg/testing.SessionReplayer.Err`
   - `go-llm-gateway/pkg/testing.ReplayWebSocketDialer.Err`
 - `closure decision`: `must remain open`
 - `exact repair work`:
-  - Define how stream errors map to the public gateway taxonomy across direct
-    `InferStream`, interaction events, provider stream adapters, and session
-    replay helpers.
+  - Define the final terminal-state contract for direct streams and sessions,
+    including provider-authored completion, loop-synthesized completion,
+    provider close, cancellation, replay divergence, replay incomplete, partial
+    output, provider rejection, and terminal failure.
   - Preserve typed error classes consistently through all stream consumers,
-    including provider adapters, serialized error payload boundaries, and
-    session surfaces.
-  - Add public docs and credential-free tests that distinguish partial success,
-    terminal failure, cancellation, replay mismatch, and provider rejection.
+    including provider adapters, serialized error payload boundaries, session
+    surfaces, and any public replay helpers that can terminate early.
+  - Add public docs and credential-free tests that prove the terminal matrix
+    above through every supported public stream/session surface.
 - `reviewer commands`:
-  - `go test ./go-llm-gateway/pkg/gateway -run 'TestInteract_PreservesPartialOutputBeforeCancellation'`
-  - `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|StopsDeliveryWhenOwnedContextCanceled)'`
-  - `rg -n "StreamTypeError|NewErrorValue|ErrorValue|replay divergence|caller_cancelled" go-agent-loop/pkg/messages go-llm-gateway/pkg go-llm-gateway/README.md`
+  - `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference ./pkg/testing -run 'TestInteract_(NormalizesProviderTextResponse|NormalizesProviderError|PreservesPartialOutputBeforeCancellation)|TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads|TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|StopsDeliveryWhenOwnedContextCanceled)' -timeout 120s)`
+  - `(cd go-agent-loop && go test ./pkg/subsystems -run 'TestInteractionEvents_(TracksStateAndOutputs|RecordsTerminalErrorAndCancellation|LoopEndRemainsAfterInteractionOutputs)' -timeout 120s)`
+  - `rg -n "StreamTypeError|NewStreamErrorValue|NewStreamTransportErrorValue|ErrorValue|Classification|OutputState|replay mismatch|partial_output|SESSION.CLOSE" go-agent-loop/pkg/messages go-llm-gateway/pkg go-llm-gateway/README.md`
 
 ## Gateway Error Taxonomy Closure Summary
 
-`P4-API-02` is uncertain rather than failed: the public typed taxonomy and
-several preservation tests now exist, but coverage is explicitly additive and
-not yet uniform across every provider, validation, replay, direct stream, and
-session path. `P4-API-05` remains uncertain because interaction cancellation,
-partial-output behavior, and some stream error classifications are tested, while
-serialized stream payloads and remaining provider/session paths still need a
-clear documented mapping to the taxonomy.
+`P4-API-02`, `P4-API-03`, and `P4-API-05` are uncertain rather than failed. The
+public typed taxonomy, structured interaction events, loop projection,
+provider-authored completion, loop-synthesized completion, cancellation,
+partial-output, replay divergence, replay incomplete, and terminal-failure
+evidence are now public and reviewer-runnable for representative paths. They
+still may not close because the convergence target is broader than the repaired
+representative scope: direct stream and session surfaces need one documented
+terminal-state contract and provider-wide classification parity before planners
+can mark the rows complete.
 
 ## Provider Capability and Validation Evidence
 
