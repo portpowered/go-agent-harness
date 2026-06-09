@@ -283,8 +283,13 @@ func (s *chanStream) setTerminalError(err error) {
 }
 
 func errorFromStreamEvent(evt messages.StreamMessage) error {
-	if v, ok := evt.Value.(*messages.ErrorValue); ok && v.Message != "" {
-		return errors.New(v.Message)
+	if v, ok := evt.Value.(*messages.ErrorValue); ok {
+		if v.Err != nil {
+			return v.Err
+		}
+		if v.Message != "" {
+			return errors.New(v.Message)
+		}
 	}
 	return errors.New("stream error")
 }

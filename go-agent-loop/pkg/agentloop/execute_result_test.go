@@ -251,3 +251,60 @@ func TestStreamOutcome_Canceled(t *testing.T) {
 		t.Fatal("Outcome Partial = true, want false without delivered output")
 	}
 }
+
+func TestStreamOutcome_CanceledWithPartialOutputPreservesTerminalMetadata(t *testing.T) {
+	errValue := messages.NewErrorValueWithTerminal(
+		context.Canceled.Error(),
+		"cancellation",
+		messages.TerminalReasonCancellation,
+		messages.TerminalProvenanceLoop,
+		messages.TerminalOutputPartial,
+	)
+	errValue.Err = context.Canceled
+
+	ch := make(chan streamEvent, 2)
+	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("partial")}}
+	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeError, Value: errValue}}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want partial output")
+	}
+	if stream.Response().Type != messages.StreamTypeTextDelta {
+		t.Fatalf("first response type = %q, want %q", stream.Response().Type, messages.StreamTypeTextDelta)
+	}
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want cancellation event")
+	}
+	value, ok := stream.Response().Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("error value type = %T, want *messages.ErrorValue", stream.Response().Value)
+	}
+	if value.Classification != "cancellation" {
+		t.Fatalf("classification = %q, want cancellation", value.Classification)
+	}
+	if value.TerminalReason != messages.TerminalReasonCancellation {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonCancellation)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceLoop {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceLoop)
+	}
+	if value.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after canceled stream closed")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.Status != StreamCanceled {
+		t.Fatalf("Outcome status = %q, want %q", outcome.Status, StreamCanceled)
+	}
+	if !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("Outcome err = %v, want context.Canceled", outcome.Err)
+	}
+	if !outcome.Partial {
+		t.Fatal("Outcome Partial = false, want true")
+	}
+}

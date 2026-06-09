@@ -590,6 +590,21 @@ func TestSessionReplayer_CancellationWakesExpectedOutboundWait(t *testing.T) {
 	if !errors.Is(outcome.Err, context.Canceled) {
 		t.Fatalf("outcome err = %v, want context.Canceled", outcome.Err)
 	}
+	if errors.Is(outcome.Err, providers.ErrReplayMismatch) ||
+		errors.Is(outcome.Err, providers.ErrReplayIncomplete) ||
+		errors.Is(outcome.Err, providers.ErrProviderRejected) ||
+		errors.Is(outcome.Err, providers.ErrTransport) {
+		t.Fatalf("cancellation should not match replay or provider failure classes: %v", outcome.Err)
+	}
+	if errors.Is(outcome.Err, gateway.ErrReplayMismatch) ||
+		errors.Is(outcome.Err, gateway.ErrReplayIncomplete) ||
+		errors.Is(outcome.Err, gateway.ErrProviderHTTPStatus) ||
+		errors.Is(outcome.Err, gateway.ErrTransport) {
+		t.Fatalf("cancellation should not match gateway replay/provider failure classes: %v", outcome.Err)
+	}
+	if got := providers.ErrorClassification(outcome.Err); got != providers.ErrorClassCancellation {
+		t.Fatalf("outcome error classification = %q, want %q", got, providers.ErrorClassCancellation)
+	}
 	if outcome.OK() {
 		t.Fatal("cancelled replay outcome reported OK")
 	}

@@ -21,6 +21,7 @@ type fakeInteractionProvider struct {
 	err            error
 	streamMessages []messages.StreamMessage
 	streamErr      error
+	streamCalls    int
 	caps           ProviderCapabilities
 	capCalls       int
 }
@@ -40,6 +41,7 @@ func (p *fakeInteractionProvider) Infer(_ context.Context, req providers.Inferen
 
 func (p *fakeInteractionProvider) InferStream(_ context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	p.captured = req
+	p.streamCalls++
 	if p.streamErr != nil {
 		return nil, p.streamErr
 	}

@@ -1,0 +1,397 @@
+# Phase 4 Typed Terminal Authoritative Reconciliation
+
+This note records the story-001 disposition for
+`phase-4-typed-terminal-authoritative-reconciliation`. It is reviewer evidence
+for the branch relationship only; it does not close `P4-GATE-01` and it does
+not by itself close the typed-terminal repair rows.
+
+## Reconciliation Baseline
+
+Evidence captured after fetching `origin` on 2026-06-09 00:00 UTC:
+
+| Ref | Commit | Role |
+| --- | --- | --- |
+| `origin/main` | `3510ed599cd1c86e12fef6ae9b69a4a9c7d9feaf` | Current authoritative baseline used for this reconciliation worktree. |
+| `origin/phase-4-authoritative-baseline-sync` | `a472b53f83efc3039aa5716eba203a1c8c50a917` | Baseline-sync evidence branch merged into `origin/main` by PR `#39`. |
+| `origin/phase-4-typed-errors-stream-terminal-contract` | `b50b6219f22c16ef97649842cb665eb8aec16d8f` | Completed typed-terminal work branch. |
+| Current worktree head before story-001 evidence | `3510ed599cd1c86e12fef6ae9b69a4a9c7d9feaf` | Fast-forwarded to `origin/main` before adding this note. |
+
+The relationship is:
+
+- `origin/phase-4-typed-errors-stream-terminal-contract` is an ancestor of
+  `origin/main`.
+- `origin/phase-4-authoritative-baseline-sync` is an ancestor of `origin/main`.
+- The older local worktree head `34fc154e4e519cde4b35a91e5d10dd184a76ea71`
+  was an ancestor of `origin/main` and was fast-forwarded before this evidence
+  was written.
+
+Reviewer commands:
+
+```sh
+git rev-parse origin/main origin/phase-4-authoritative-baseline-sync origin/phase-4-typed-errors-stream-terminal-contract
+git merge-base --is-ancestor origin/phase-4-typed-errors-stream-terminal-contract origin/main
+git merge-base --is-ancestor origin/phase-4-authoritative-baseline-sync origin/main
+git log --oneline --grep='Merge pull request #3[7-9]' origin/main
+```
+
+The expected result is that both `merge-base --is-ancestor` commands exit `0`,
+and the log includes PR `#37` for the typed-terminal branch, PR `#38` for the
+convergence validator, and PR `#39` for the authoritative baseline sync.
+
+## Disposition
+
+Disposition: `landed`.
+
+The standalone `phase-4-typed-errors-stream-terminal-contract` branch is no
+longer an unconsumed or ambiguous completed branch. It was landed into
+`origin/main` through PR `#37` and then preserved by the authoritative baseline
+sync merged through PR `#39`. Future work should use `origin/main` at
+`3510ed599cd1c86e12fef6ae9b69a4a9c7d9feaf` or a descendant, not the old
+standalone branch head, because the standalone head does not contain later
+validator and baseline-sync evidence.
+
+This disposition intentionally differs from a request to cherry-pick or
+re-land the old branch. Replaying branch head
+`b50b6219f22c16ef97649842cb665eb8aec16d8f` would risk dropping later
+authoritative evidence. The compatible resolution is to preserve the landed
+merge ancestry and reconcile any remaining typed-terminal gaps on top of the
+current authoritative baseline.
+
+## Drift And Remaining Repair Scope
+
+No merge conflict remains for story 001 because the typed-terminal branch is
+already in the ancestry of `origin/main`. Semantic drift still matters for
+later stories:
+
+- `docs/internal/phase-4-authoritative-baseline-sync.md` names the typed
+  terminal branch as landed and superseded as a standalone planning input.
+- `docs/internal/phase-4-api-contract-validator.md` still keeps
+  `P4-API-02`, `P4-API-03`, and `P4-API-05` open or uncertain where coverage
+  is representative rather than exhaustive.
+- `docs/architecture/stream-terminal-contract.md` is the landed taxonomy
+  reference for terminal reason, provenance, output state, and classification
+  fields.
+- `docs/internal/phase-4-typed-errors-stream-repair-evidence.md` is the
+  landed representative repair evidence, not a final closure of all
+  provider/session/direct-stream parity gaps.
+
+The remaining reconciliation stories should therefore preserve the landed
+taxonomy and tests, then narrow or repair the still-open typed error, stream,
+replay, cancellation, partial-output, CLI, session, docs, and reviewer-command
+gaps on top of `origin/main`.
+
+## Baseline Contract Preservation
+
+Story 002 preserves the authoritative baseline contracts instead of replaying
+or replacing them with typed-terminal-specific variants.
+
+Provider capability and local-validation behavior remain the public baseline
+for request feasibility:
+
+- `go-llm-gateway/pkg/capabilities` remains the provider-neutral capability
+  vocabulary with `supported`, `unsupported`, and `unknown` states.
+- `go-llm-gateway/pkg/gateway.DefaultGateway.Capabilities()` and
+  `DefaultSessionGateway.Capabilities()` still delegate to provider reporters
+  without executing inference or connecting sessions.
+- Unsupported stateless and session features still fail locally with
+  `UnsupportedFeatureError` before provider execution. Unknown capabilities
+  still allow execution without claiming support.
+- `go-llm-gateway/pkg/gateway/gateway_test.go` now proves direct stream typed
+  terminal error normalization is additive: terminal classification fields are
+  populated on the error event, while the provider capability states remain
+  discoverable and unchanged.
+
+Dependency, result, context, and lifecycle contracts remain governed by the
+authoritative baseline evidence rather than by this typed-terminal branch
+disposition note:
+
+- `docs/internal/phase-4-dependency-result-context-lifecycle-contract.md`
+  remains the reviewer map for `FinalText()`, `Stream.Outcome()`,
+  `TypedBuffer` context reads/writes, typed session send outcomes, replay
+  outcomes, prompt-resolution observability, and CLI/session lifecycle states.
+- `docs/architecture/dependency-result-contracts.md` remains the public
+  migration guide for additive result/lifecycle surfaces and compatible legacy
+  helpers.
+- `docs/architecture/contract-gap-audit.md` remains the row-level Phase 4
+  source of truth. This story preserves the existing provider capability and
+  dependency/result/lifecycle evidence; it does not broaden into provider
+  capability matrix completion or close `P4-GATE-01`.
+
+Reviewer commands:
+
+```sh
+go test ./go-llm-gateway/pkg/gateway -run 'TestGatewayCapabilities|TestSessionGatewayCapabilities|TestGatewayRejectsUnsupported|TestSessionGatewayRejectsUnsupported|TestInferStream_TerminalErrorNormalizationPreservesProviderCapabilities'
+go test ./go-agent-loop/pkg/agentloop ./go-agent-loop/pkg/messages
+go test ./go-llm-gateway/pkg/testing ./go-llm-gateway/pkg/inference
+make typecheck
+make test
+```
+
+## Public Typed Error And Direct Stream Reconciliation
+
+Story 003 reconciles the public typed error taxonomy and direct stream terminal
+fields on top of the landed authoritative baseline. The disposition remains
+`landed`; this section narrows the reviewer-visible proof for the direct
+gateway/provider stream surface without claiming replay, session, or CLI parity
+from later stories.
+
+Returned representative gateway and provider failures expose stable
+caller-actionable classes:
+
+- `go-llm-gateway/pkg/gateway/errors.go` exports gateway sentinels including
+  provider HTTP status, authentication, rate limit, invalid request,
+  unsupported model, transport, cancellation, replay mismatch, and replay
+  incomplete classes.
+- `go-llm-gateway/pkg/gateway.ProviderHTTPStatusError` and
+  `TransportError` preserve inspectable public details for `errors.As`.
+- `go-llm-gateway/pkg/providers/errors.go` exports provider sentinels and
+  classification strings including provider rejection, authentication, rate
+  limit, invalid request, unsupported request, transport, cancellation, replay
+  mismatch, replay incomplete, partial output, and unknown.
+- Human-readable `Error()` text remains available for operators while callers
+  branch on `errors.Is`, `errors.As`, or serialized classification fields.
+
+Direct gateway stream `ERROR` payloads expose machine-readable terminal fields
+after passing through `DefaultGateway.InferStream`:
+
+- `ErrorValue.classification` carries the public gateway classification such as
+  `authentication` or `transport`.
+- `ErrorValue.terminal_reason` is populated with `terminal_failure` for
+  representative non-cancellation direct stream failures.
+- `ErrorValue.terminal_provenance` is populated with `gateway` when gateway
+  normalization authors the terminal metadata.
+- `ErrorValue.output_state` is populated with `none` for representative
+  failures that emitted no usable output before the terminal event.
+- `ErrorValue.message` remains readable, and the in-process `ErrorValue.Err`
+  keeps the typed Go error for `errors.Is`/`errors.As` callers.
+
+Credential-free evidence:
+
+```sh
+go test ./go-llm-gateway/pkg/gateway -run 'TestInfer_PreservesProviderHTTPStatusClassification|TestInfer_PreservesTransportClassification|TestInferStream_PreservesErrorEventClassification|TestInferStream_ErrorEventClassificationIsPublicAndSerializable|TestInferStream_PreservesRuntimeErrorEventClassification'
+go test ./go-llm-gateway/pkg/providers -run 'TestErrorClassification_DistinguishesRuntimeOutcomes|TestNewStreamErrorValue_PreservesTypedErrorAndTerminalClassification|TestNewStreamTransportErrorValue_PreservesRuntimeClassification'
+go test ./go-agent-loop/pkg/messages -run 'TestTerminalMetadataSerializesOn(ErrorValue|MessageEndValue|SessionCloseValue)|TestLegacyTerminalPayloadsOmitEmptyTerminalMetadata'
+make typecheck
+make test
+```
+
+The evidence above closes the story-003 direct stream and returned-error
+contract. Replay/cancellation/partial-output distinction, CLI/session parity,
+docs/audit final alignment, and final reviewer validation remain assigned to
+stories 004 through 007. This story still does not close `P4-GATE-01`.
+
+## Replay, Cancellation, And Partial Output Reconciliation
+
+Story 004 reconciles replay, cancellation, and partial-output evidence on the
+authoritative baseline without changing provider capability or provider
+transport contracts.
+
+Replay outcomes are distinguishable through public replay results and typed Go
+errors:
+
+- `SessionReplayOutcome.Status=diverged` identifies outbound replay divergence.
+  The error matches `gateway.ErrReplayMismatch` and
+  `providers.ErrReplayMismatch`, exposes mismatch details through
+  `gateway.ReplayMismatchError`, and does not match replay incomplete,
+  provider HTTP status, or transport classes.
+- `SessionReplayOutcome.Status=incomplete` identifies replay closure before a
+  required fixture event was consumed. The error matches
+  `gateway.ErrReplayIncomplete` and `providers.ErrReplayIncomplete`, exposes
+  missing-event details through `gateway.ReplayIncompleteError`, and does not
+  match replay mismatch, provider HTTP status, or transport classes.
+- `SessionReplayOutcome.Status=cancelled` identifies caller-owned replay
+  context cancellation. The error preserves `context.Canceled`, classifies as
+  `cancellation` through provider taxonomy helpers, and does not match replay
+  mismatch, replay incomplete, provider rejection, provider HTTP status, or
+  transport classes.
+
+Partial output remains available separately from the terminal cause:
+
+- `ExecuteResult.FinalText()` reports `FinalTextCanceled` or
+  `FinalTextFailed` and sets `Partial=true` with the accumulated text deltas
+  when output was emitted before cancellation or terminal failure.
+- `Stream.Outcome()` reports `StreamCanceled` or `StreamFailed` and sets
+  `Partial=true` when at least one event was delivered before the terminal
+  event.
+- Loop stream `ERROR` events can carry `classification`, `terminal_reason`,
+  `terminal_provenance`, and `output_state=partial`; `Stream.Outcome()` now
+  preserves the typed in-process `ErrorValue.Err` when present so cancellation
+  after partial output remains a cancellation rather than a string-only
+  terminal failure.
+
+Credential-free evidence:
+
+```sh
+go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|CancellationWakesExpectedOutboundWait)'
+go test ./go-agent-loop/pkg/agentloop -run 'TestExecuteResultFinalText_CanceledWithPartialText|TestStreamOutcome_(FailedWithPartialOutput|Canceled|CanceledWithPartialOutputPreservesTerminalMetadata)'
+go test ./go-llm-gateway/pkg/providers -run 'TestErrorClassification_DistinguishesRuntimeOutcomes'
+make typecheck
+make test
+```
+
+The evidence above closes the story-004 replay, cancellation, and
+partial-output distinction. CLI/session parity, docs/audit final alignment, and
+final reviewer validation remain assigned to stories 005 through 007. This
+story still does not close `P4-GATE-01`.
+
+## CLI And Session Terminal Surface Reconciliation
+
+Story 005 reconciles representative session and CLI terminal surfaces while
+keeping legacy session output readable and backward compatible.
+
+Session provider normalization now preserves terminal fields on public
+`messages.SessionCloseValue` and `messages.ErrorValue` payloads:
+
+- OpenAI and Grok `session.closed` events still expose `SessionID` and readable
+  `Reason`, and now add `classification=provider_close`,
+  `terminal_reason=provider_close`, `terminal_provenance=provider`, and
+  `output_state=not_applicable`.
+- OpenAI and Grok session `ERROR` events still expose readable `Message`, and
+  now add `classification=provider_rejected`,
+  `terminal_reason=terminal_failure`, `terminal_provenance=provider`, and
+  `output_state=none`.
+- Existing successful message output and close behavior remains compatible; the
+  new fields are additive on terminal payloads.
+
+CLI session replay and record/replay loop rendering now maps terminal fields to
+machine-readable output instead of requiring consumers to parse prose:
+
+- The legacy close line remains `[session closed: <reason>]`.
+- When terminal metadata exists, a second line carries stable key/value fields:
+  `[session terminal: classification=<class> terminal_reason=<reason> terminal_provenance=<layer> output_state=<state>]`.
+- Session terminal errors keep the readable `session error: <message>` prefix
+  and append the same key/value fields when metadata exists.
+
+Credential-free evidence:
+
+```sh
+go test ./go-llm-gateway/pkg/providers/openai -run 'TestConnectSession_NormalizesOpenAIRealtime(EventsInOrder|ErrorDetails)'
+go test ./go-llm-gateway/pkg/providers/grok -run 'TestSession_(SessionCreatedEmitsSessionCreated|SessionUpdatedEmitsSessionUpdated|SessionClosedEmitsTerminalMetadata)'
+go test ./agent-cli/internal/services -run 'TestWriteSessionReplayMessage|TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer|TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation'
+go test ./agent-cli/test/integration -run 'TestSessionCommand_(OpenAIRealtimeReplay_EndToEndSmoke|ReplayGrokWebSocketCapture_EndToEndSmoke|OpenAIRealtimeReplayReportsProviderError)'
+make typecheck
+make test
+```
+
+The evidence above closes the story-005 CLI/session terminal surface parity.
+Docs/audit final alignment and final reviewer validation remain assigned to
+stories 006 and 007. This story still does not close `P4-GATE-01`.
+
+## Docs And Audit Alignment
+
+Story 006 reconciles public docs and internal audit evidence with the landed
+typed-terminal contract. This section is the reviewer-visible map from the
+landed representative behavior to the Phase 4 rows it narrows. It is not a
+whole-Phase-4 gate closure decision.
+
+Public documentation alignment:
+
+- `docs/architecture/stream-terminal-contract.md` is the public taxonomy
+  reference for typed terminal reasons, provenance values, output states,
+  serialized `ERROR`, `MESSAGE.END`, and `SESSION.CLOSE` fields, and the
+  landed surface map across returned Go errors, direct streams, loop outcomes,
+  sessions, replay, and CLI output.
+- `go-llm-gateway/README.md` is the gateway-facing consumer guide for typed
+  gateway error classes, provider classification strings, terminal event
+  fields, and the split between returned Go errors and in-band stream/session
+  events.
+- `docs/architecture/contract-gap-audit.md` now treats the typed-terminal work
+  as representative landed evidence for `P4-API-02`, `P4-API-03`, and
+  `P4-API-05`, while preserving explicit broader open work instead of
+  inheriting stale "taxonomy absent" or "terminal authority absent" wording.
+
+Internal audit row mapping:
+
+| Row | Landed or superseded evidence | Remaining status |
+| --- | --- | --- |
+| `P4-API-02` | Returned gateway/provider errors expose typed classes with `errors.Is`/`errors.As`; direct stream, session error, replay, cancellation, and partial-output paths expose classification through typed errors or structured event fields on representative surfaces. Older audit claims that no shared taxonomy exists are superseded for this representative scope by the stream terminal contract and tests cited in stories 003 through 005. | Broader provider-wide and parser-wide parity remains open outside this reconciliation. |
+| `P4-API-03` | Loop `FinalTextResult`, `StreamOutcome`, replay outcomes, session close/error events, and CLI output distinguish clean completion, provider close, cancellation, replay divergence, replay incomplete, terminal failure, and partial output for the repaired representative paths. | Broader result-helper and lifecycle-helper ambiguity remains open where no representative test or public field has been landed. |
+| `P4-API-05` | Gateway, provider, loop message, session, replay, and CLI docs now describe one additive terminal vocabulary and the serialized public fields that carry it. | Provider-wide session/direct-stream parity and package-ownership follow-up remain open where the audit names unproven surfaces. |
+| `P4-GATE-01` | The typed-terminal repair contributes credential-free evidence and public docs for its representative scope. | Whole-Phase-4 gate closure remains open and must wait for the final validation story plus any unrelated Phase 4 rows still marked fail or uncertain. |
+
+Returned Go errors versus in-band events:
+
+- Request setup, local validation, stream-open, provider HTTP status, transport,
+  replay divergence, replay incomplete, and caller cancellation before an
+  active stream/session surface return Go errors that callers classify with
+  `errors.Is` or `errors.As`.
+- Mid-stream runtime failures, cancellation observed after stream output,
+  provider-authored completion, loop-synthesized completion, provider close,
+  session close, session terminal errors, and CLI replay output are emitted
+  in-band when the stream/session/CLI surface is already active.
+- In-process stream `ERROR` values may expose both surfaces: `ErrorValue.Err`
+  keeps the typed Go error for Go callers, while serialized fields carry
+  `classification`, `terminal_reason`, `terminal_provenance`, and
+  `output_state` for JSON, replay, session, or CLI consumers.
+
+Credential-free alignment checks:
+
+```sh
+go doc ./go-agent-loop/pkg/messages
+go doc ./go-llm-gateway/pkg/gateway
+go doc ./go-llm-gateway/pkg/providers
+make typecheck
+```
+
+The evidence above closes the story-006 docs/audit alignment scope. Final
+reviewer validation commands and the end-to-end evidence summary remain
+assigned to story 007. This story still does not close `P4-GATE-01`.
+
+## Credential-Free Reviewer Validation
+
+Story 007 publishes the final reviewer validation brief for this reconciliation
+branch. The authoritative branch disposition remains `landed`: the completed
+`phase-4-typed-errors-stream-terminal-contract` branch is already an ancestor
+of `origin/main` through PR `#37`, the authoritative baseline sync is also an
+ancestor of `origin/main` through PR `#39`, and this worktree repaired or
+documented the remaining representative terminal evidence on top of that
+baseline. Reviewers should use this branch and its merged ancestors, not the
+old standalone typed-terminal branch head, when validating Phase 4 terminal
+evidence.
+
+Run the commands below from the repository root. They use local packages,
+committed fixtures, fake providers, replay harnesses, and public declaration
+inspection; they do not require live provider credentials.
+
+```sh
+git rev-parse origin/main origin/phase-4-authoritative-baseline-sync origin/phase-4-typed-errors-stream-terminal-contract
+git merge-base --is-ancestor origin/phase-4-typed-errors-stream-terminal-contract origin/main
+git merge-base --is-ancestor origin/phase-4-authoritative-baseline-sync origin/main
+go test ./go-llm-gateway/pkg/gateway -run 'TestInfer_PreservesProviderHTTPStatusClassification|TestInfer_PreservesTransportClassification|TestInferStream_PreservesErrorEventClassification|TestInferStream_ErrorEventClassificationIsPublicAndSerializable|TestInferStream_PreservesRuntimeErrorEventClassification|TestInferStream_TerminalErrorNormalizationPreservesProviderCapabilities'
+go test ./go-llm-gateway/pkg/providers -run 'TestErrorClassification_DistinguishesRuntimeOutcomes|TestNewStreamErrorValue_PreservesTypedErrorAndTerminalClassification|TestNewStreamTransportErrorValue_PreservesRuntimeClassification'
+go test ./go-agent-loop/pkg/messages -run 'TestTerminalMetadataSerializesOn(ErrorValue|MessageEndValue|SessionCloseValue)|TestLegacyTerminalPayloadsOmitEmptyTerminalMetadata'
+go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|CancellationWakesExpectedOutboundWait)'
+go test ./go-agent-loop/pkg/agentloop -run 'TestExecuteResultFinalText_CanceledWithPartialText|TestStreamOutcome_(FailedWithPartialOutput|Canceled|CanceledWithPartialOutputPreservesTerminalMetadata)'
+go test ./go-llm-gateway/pkg/providers/openai -run 'TestConnectSession_NormalizesOpenAIRealtime(EventsInOrder|ErrorDetails)'
+go test ./go-llm-gateway/pkg/providers/grok -run 'TestSession_(SessionCreatedEmitsSessionCreated|SessionUpdatedEmitsSessionUpdated|SessionClosedEmitsTerminalMetadata)'
+go test ./agent-cli/internal/services -run 'TestWriteSessionReplayMessage|TestRunSession_OpenAIRealtimeRecordWithInjectedInferencer|TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation'
+go test ./agent-cli/test/integration -run 'TestSessionCommand_(OpenAIRealtimeReplay_EndToEndSmoke|ReplayGrokWebSocketCapture_EndToEndSmoke|OpenAIRealtimeReplayReportsProviderError)'
+go doc ./go-agent-loop/pkg/messages
+go doc ./go-llm-gateway/pkg/gateway
+go doc ./go-llm-gateway/pkg/providers
+make typecheck
+make test
+make lint
+```
+
+Validation brief:
+
+| Category | Result | Evidence and remaining gaps |
+| --- | --- | --- |
+| Branch disposition | `pass` | The typed-terminal branch and the authoritative baseline-sync branch are ancestors of `origin/main`; the disposition is `landed`, so there is no longer an ambiguous completed but unconsumed standalone branch. |
+| Typed errors and direct stream terminal fields | `pass` | Gateway/provider tests prove returned error classes and direct stream `ERROR` metadata through public behavior and serialization. Remaining provider-wide parser parity is outside this representative reconciliation and stays tracked in the broader Phase 4 audit. |
+| Replay, cancellation, and partial output | `pass` | Replay and loop outcome tests distinguish replay divergence, replay incomplete, cancellation, terminal failure, clean completion, and partial output through returned errors, replay status, stream outcomes, and terminal metadata. |
+| CLI and session terminal surfaces | `pass` | OpenAI, Grok, CLI service, and CLI integration tests prove representative session close/error metadata and stable CLI key/value terminal rendering while preserving readable legacy output. |
+| Docs and audit alignment | `pass` | `stream-terminal-contract.md`, this note, `contract-gap-audit.md`, and `checklist.md` describe the same representative landed contract and avoid claiming provider-wide parity. |
+| Quality gate | `pass` | The story validation includes `make typecheck`, `make test`, and `make lint`; these commands are credential-free and cover the workspace quality gate for this reconciliation. |
+| Whole-Phase-4 `P4-GATE-01` | `open` | This reconciliation contributes representative typed-terminal evidence only. Whole-gate closure still waits on unrelated broader Phase 4 rows for full provider/parser parity, dependency/result/context/lifecycle repair, API hygiene, compatibility ownership, and final Phase 4 validator closure. |
+
+This story closes the final typed-terminal reconciliation validation scope. It
+does not close whole-Phase-4 `P4-GATE-01`.
+
+## Gate Status
+
+This story does not close `P4-GATE-01`. The gate remains governed by the
+current validator and audit evidence, especially
+`docs/internal/phase-4-api-contract-validator.md` and
+`docs/architecture/contract-gap-audit.md`.
