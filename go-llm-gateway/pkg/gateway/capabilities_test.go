@@ -551,8 +551,19 @@ func TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport(t *testing.T) {
 		t.Fatalf("infer calls = %d, want 1", provider.inferCalls)
 	}
 
+	_, err = gw.InferStream(context.Background(), InferenceRequest{})
+	if err != nil {
+		t.Fatalf("InferStream with unknown capabilities: %v", err)
+	}
+	if provider.streamCalls != 1 {
+		t.Fatalf("stream calls = %d, want 1", provider.streamCalls)
+	}
+
 	got := gw.Capabilities()
 	if got.Stateless.Tools.IsSupported() {
 		t.Fatalf("unknown tools capability must not report support")
+	}
+	if got.Stateless.Streaming.IsSupported() {
+		t.Fatalf("unknown streaming capability must not report support")
 	}
 }
