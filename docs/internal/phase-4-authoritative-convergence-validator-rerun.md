@@ -96,6 +96,56 @@ the current authoritative baseline through public files, exported declarations,
 deterministic tests, reviewer commands, or landed docs. CI success alone is not
 row closure evidence.
 
+## Row Verdict and Closure Evidence Standard
+
+Every row finding in this rerun must use the same reviewer-grade shape:
+
+- Checklist row: the row id and direct checklist text or a direct citation to
+  the checklist source.
+- Verdict: exactly one of `pass`, `fail`, or `uncertain`.
+- Closure decision: exactly one of `may close` or `remains open`.
+- Public evidence: credential-free evidence that a reviewer can inspect or
+  rerun from the authoritative head.
+- Affected declarations and outcomes: exported declarations, serialized fields,
+  returned errors, emitted events, CLI/API behavior, docs, examples, or other
+  public user-visible outcomes affected by the row.
+- Docs/tests/examples alignment: whether public docs, deterministic tests, and
+  examples agree with the claimed behavior, are missing, or conflict.
+- Reviewer commands: credential-free commands and the specific behavior or
+  artifact each command proves.
+- Exact next work: required for every non-pass row and limited to future
+  implementation-ready repair or cleanup work.
+
+A `pass` requires public, credential-free evidence from the current
+authoritative head. Acceptable pass evidence includes exported Go declarations,
+returned Go errors, `errors.Is` or `errors.As` behavior, emitted stream or
+session events, serialized payload fields, CLI-visible output, public docs,
+examples where present, and deterministic tests that use fakes or fixtures.
+Successful CI, implementation intent, private helper behavior, undocumented
+internals, or unreconciled stale branch conclusions are not sufficient row
+closure evidence.
+
+A `fail` finding must name the observable public evidence that proves the row
+does not meet the checklist requirement, such as a missing exported contract,
+wrong error/result behavior, missing emitted field, contradictory public docs,
+or deterministic test evidence of the wrong behavior. An `uncertain` finding
+must name the evidence gap that prevents closure, such as missing public docs,
+missing deterministic tests, stale prior evidence that no longer maps cleanly to
+the current head, conflicting public artifacts, or evidence that requires live
+provider credentials or private local state.
+
+Rows may close only when the row verdict is `pass` and the closure rationale
+cites public evidence and reviewer commands from the authoritative head. Rows
+remain open when the verdict is `fail` or `uncertain`, when the only evidence is
+CI status, private implementation detail, undocumented behavior, non-public
+state, or stale branch evidence that has not been reconciled against the current
+head.
+
+This validator must not implement feature repairs while producing row verdicts.
+For non-pass rows, it must describe future work as a concrete repair or cleanup
+task with observable expected behavior and proof requirements, not broad
+validator-side investigation.
+
 ## Story 001 Closure
 
 Story `phase-4-authoritative-convergence-validator-rerun-001` may close for
@@ -106,3 +156,14 @@ and explains how the prior validator, batch 017, typed-terminal, and
 
 This story does not provide row verdicts for `P4-API-01` through `P4-API-07` or
 `P4-GATE-01`. Those remain assigned to later PRD stories.
+
+## Story 002 Closure
+
+Story `phase-4-authoritative-convergence-validator-rerun-002` may close for
+this PRD iteration because the report now defines the required row finding
+shape, verdict meanings, pass evidence threshold, fail and uncertain evidence
+requirements, closure decision rules, and the no-repair boundary for this
+validator.
+
+This story does not evaluate `P4-API-01` through `P4-API-07` or `P4-GATE-01`.
+Those row verdicts remain assigned to later PRD stories.
