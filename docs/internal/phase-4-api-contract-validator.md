@@ -1151,6 +1151,198 @@ incomplete.
 | `P4-API-07` | `uncertain` | `must remain open` | Earlier dependency-injection repairs are useful, but hidden prompt-resolution side effects and Phase 4 row-level closure decisions are still incomplete across public constructors and composition seams. | `go-agent-loop/pkg/agentloop.New`; `agent-cli/internal/agent.buildProviderHTTPRuntime`; `agent-cli/internal/services/session_runtime.go`; `agent-cli/internal/agent.Executor.loadSystemPrompt`; OpenAI and Grok provider runtime seams | Add explicit `P4-API-07` mapping that separates closed prerequisite DI repairs from remaining hidden side effects, name user-facing construction seams, and identify compatibility-sensitive ownership changes. |
 | `P4-GATE-01` | `fail` | `must remain open` | Multiple row-level uncertainties remain; the starter slices do not yet provide enough reconciled audit, provider-coverage, stream/session, docs, examples, and credential-free command evidence to close the public API hardening gate. | `docs/internal/phase-4-api-contract-validator.md`; `docs/architecture/contract-gap-audit.md`; `docs/internal/checklist.md`; public package docs, tests, and examples | Queue the repair batches below, update the audit and public guidance with row-level evidence, rerun this validator after repairs, and do not queue the next Phase 4 feature batch until this gate can close or a new validator report supersedes this one. |
 
+## Row Closure Evidence Map
+
+This section is the final publication view for checklist closure. It repeats
+the row verdicts with the evidence fields a reviewer needs before changing
+`docs/internal/checklist.md`.
+
+### `P4-API-01` - Context and cancellation contracts
+
+- `verdict`: `uncertain`
+- `public evidence`: public blocking seams accept contexts and
+  `TypedBuffer.ReadContext(ctx)` returns `ctx.Err()`, but session send,
+  timeout ownership, and retry policy remain incomplete.
+- `affected files / declarations`: `AgenticLoop.Execute`,
+  `AgenticLoop.ExecuteStreaming`, `messages.TypedBuffer.ReadContext`,
+  `messages.Session.Send`, `gateway.Gateway.Infer`,
+  `gateway.Gateway.InferStream`, `gateway.Gateway.Interact`,
+  `testing.WithReplayContext`, and CLI session record/replay paths.
+- `docs/tests/examples alignment`: docs and tests prove useful cancellation
+  and replay evidence, but no public doc/example maps every blocking,
+  streaming, provider, session, replay, and CLI command lifetime contract.
+- `reviewer commands`: `go doc ./go-agent-loop/pkg/messages TypedBuffer Session`;
+  `go test ./go-agent-loop/pkg/messages -run 'TestTypedBuffer_ReadContext'`;
+  `go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled|TestRecordSessionInferencer'`;
+  `go test ./agent-cli/internal/services -run 'TestRunSession_(Record|Replay).*Cancel|TestRunSession_ContextCanceled'`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: add typed session send outcomes, document
+  cancellation/timeout/retry ownership per public surface, and add deterministic
+  tests for each newly documented timeout or retry contract.
+
+### `P4-API-02` - Typed caller-actionable errors
+
+- `verdict`: `uncertain`
+- `public evidence`: gateway/provider typed errors, sentinels, structured
+  interaction error fields, and representative `errors.Is` / `errors.As` tests
+  exist for provider rejection, validation, replay mismatch, cancellation,
+  timeout, and partial-output paths.
+- `affected files / declarations`: `GatewayError`,
+  `ProviderHTTPStatusError`, `TransportError`, `ReplayMismatchError`,
+  `CancellationError`, `ProviderError`, `ValidationError`,
+  `InteractionError`, `InteractionCancellation`, `SessionReplayer.Err`,
+  `ReplayWebSocketDialer.Err`, `messages.ErrorValue`, and
+  `go-llm-gateway/README.md`.
+- `docs/tests/examples alignment`: README guidance and deterministic tests are
+  aligned for representative paths; provider-wide, parser, direct stream,
+  session, and replay parity remain additive future work.
+- `reviewer commands`: `(cd go-llm-gateway && go test ./pkg/gateway -run 'TestInteract_(NormalizesProviderError|NormalizesGatewayTransportError|NormalizesDeadlineExceededAsTimeoutError|EmitsCancellationWhenContextCancelledBeforeProviderReturns|PreservesPartialOutputBeforeCancellation)' -timeout 120s)`;
+  `(cd go-llm-gateway && go test ./pkg/testing -run 'TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted)|TestReplayWebSocketDialer_(FailsOnUnexpectedOutbound|ReportsIncompleteExpectedOutboundOnClose)' -timeout 120s)`;
+  `rg -n "errors\\.Is|errors\\.As|InteractionError|InteractionCancellation|ErrorClassification" go-llm-gateway/pkg go-llm-gateway/README.md`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: reconcile stale audit rows with the implemented
+  taxonomy, finish classification on remaining provider/session/replay/parser
+  paths, and keep credential-free tests for each public error class.
+
+### `P4-API-03` - Result contracts and failure signals
+
+- `verdict`: `uncertain`
+- `public evidence`: `ExecuteResult.FinalText()`, `Stream.Outcome()`,
+  interaction terminal payloads, replay divergence errors, cancellation, and
+  partial-output tests expose several explicit outcomes.
+- `affected files / declarations`: `ExecuteResult`, `FinalTextResult`,
+  `FinalTextStatus`, `Stream`, `StreamOutcome`, `StreamStatus`,
+  `InteractionEvent`, `InteractionError`, `InteractionCancellation`,
+  `SessionReplayer`, and `docs/architecture/dependency-result-contracts.md`.
+- `docs/tests/examples alignment`: migration docs and package tests align on
+  loop result/stream outcomes, but terminal authority is still split across
+  direct streams, sessions, replay, PNIG interaction, and CLI stop conditions.
+- `reviewer commands`: `go doc ./go-agent-loop/pkg/agentloop ExecuteResult FinalTextResult Stream StreamOutcome`;
+  `go test ./go-agent-loop/pkg/agentloop -run 'TestExecuteResultFinalText|TestExecute_EmptyFinalTextResult|TestExecute_ErrorResult|TestExecuteStreaming_.*Outcome'`;
+  `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference ./pkg/testing -run 'TestInteract_(NormalizesProviderTextResponse|EmptyProviderOutputCompletesWithEmptyFinalMessage|PreservesPartialOutputBeforeCancellation)|TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads|TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted)' -timeout 120s)`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: define terminal-state authority for every public
+  mode and prove cancellation, partial output, clean drain, provider close,
+  replay divergence, and terminal failure across those modes.
+
+### `P4-API-04` - Provider capability discovery
+
+- `verdict`: `uncertain`
+- `public evidence`: public capability types, provider/gateway aliases,
+  `CapabilityReporter`, `DefaultGateway.Capabilities`, and
+  `DefaultSessionGateway.Capabilities` expose supported, unsupported, and
+  unknown states without concrete provider imports.
+- `affected files / declarations`: `go-llm-gateway/pkg/capabilities`,
+  `providers.CapabilityReporter`, `providers.UnknownProviderCapabilities`,
+  `gateway.CapabilityReporter`, `DefaultGateway.Capabilities`,
+  `DefaultSessionGateway.Capabilities`, concrete provider `Capabilities()`
+  methods, and `go-llm-gateway/README.md`.
+- `docs/tests/examples alignment`: README guidance and deterministic gateway
+  tests align with the public API, but provider-by-provider coverage and example
+  sufficiency remain unresolved.
+- `reviewer commands`: `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers ./pkg/providers/openai -run 'TestCapabilityStateSemantics|TestUnknownProviderCapabilitiesDoesNotClaimSupport|TestGatewayCapabilitiesUsesProviderReporterWithoutInference|TestGatewayCapabilitiesFallbacksToUnknownForLegacyProvider|TestSessionGatewayCapabilitiesUsesProviderReporterWithoutConnecting|TestConcreteProviderFamiliesReportCapabilities|TestOpenAIProviderCapabilities' -timeout 120s)`;
+  `go doc ./go-llm-gateway/pkg/capabilities`;
+  `go doc ./go-llm-gateway/pkg/gateway CapabilityReporter ProviderCapabilities UnsupportedFeatureError`;
+  `sed -n '256,361p' go-llm-gateway/README.md`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: reconcile `P4-CAP-01`, verify every concrete
+  provider capability field against request/session behavior, and add direct
+  tests where current evidence relies on broad table coverage.
+
+### `P4-API-05` - Stream semantics and error preservation
+
+- `verdict`: `uncertain`
+- `public evidence`: interaction completion, loop-synthesized completion,
+  cancellation, partial output, terminal failure, provider-close replay
+  evidence, and replay mismatch typing are present for representative paths.
+- `affected files / declarations`: `DefaultGateway.InferStream`,
+  `DefaultGateway.Interact`, `InteractionEvent`, `messages.ErrorValue`,
+  `messages.InteractionCancellation`, `messages.InteractionError`,
+  `SessionReplayer.Err`, and `ReplayWebSocketDialer.Err`.
+- `docs/tests/examples alignment`: README and tests align for interaction and
+  replay evidence, but direct stream/session terminal parity and serialized
+  payload boundaries are still incomplete.
+- `reviewer commands`: `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference ./pkg/testing -run 'TestInteract_(NormalizesProviderTextResponse|NormalizesProviderError|PreservesPartialOutputBeforeCancellation)|TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads|TestSessionReplayer_(FailsOnUnexpectedOutboundEvent|FailsWhenExpectedOutboundIsOmitted|StopsDeliveryWhenOwnedContextCanceled)' -timeout 120s)`;
+  `(cd go-agent-loop && go test ./pkg/subsystems -run 'TestInteractionEvents_(TracksStateAndOutputs|RecordsTerminalErrorAndCancellation|LoopEndRemainsAfterInteractionOutputs)' -timeout 120s)`;
+  `rg -n "StreamTypeError|NewStreamErrorValue|ErrorValue|Classification|OutputState|replay mismatch|partial_output|SESSION.CLOSE" go-agent-loop/pkg/messages go-llm-gateway/pkg go-llm-gateway/README.md`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: define the final terminal-state contract for
+  direct streams and sessions, preserve typed classes through stream consumers
+  and serialized boundaries, and add docs/tests for the full terminal matrix.
+
+### `P4-API-06` - Local unsupported-feature validation
+
+- `verdict`: `uncertain`
+- `public evidence`: gateway and session validation reject explicitly
+  unsupported capabilities locally with `UnsupportedFeatureError` that exposes
+  provider, feature, requested mode, and capability state before provider
+  execution or session connection.
+- `affected files / declarations`: `UnsupportedFeatureError`,
+  `validateStatelessRequest`, `validateSessionConfig`, `DefaultGateway.Infer`,
+  `DefaultGateway.InferStream`, `DefaultSessionGateway.ConnectSession`,
+  `gateway.InferenceRequest`, `providers.InferenceRequest`,
+  `models.SessionConfig`, and fal/OpenAI/Grok provider seams.
+- `docs/tests/examples alignment`: README guidance and gateway tests align for
+  explicit unsupported features and unknown fallback; interaction/inferencer
+  seams, provider-local invalid request errors, and concrete provider coverage
+  remain incomplete.
+- `reviewer commands`: `(cd go-llm-gateway && go test ./pkg/gateway -run 'TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall|TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect|TestGatewayAllowsUnknownCapabilitiesWithoutClaimingSupport' -timeout 120s)`;
+  `(cd go-llm-gateway && go test ./pkg/providers/fal -run 'TestFalProvider_InferStream_ReturnsUnsupportedFeatureError' -timeout 120s)`;
+  `rg -n "UnsupportedFeatureError|validateStatelessRequest|validateSessionConfig|Capabilities\\(\\)" go-llm-gateway/pkg/capabilities go-llm-gateway/pkg/gateway go-llm-gateway/pkg/providers go-llm-gateway/README.md`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: reconcile `P4-VALIDATION-01`, extend validation
+  evidence through remaining public seams, complete concrete provider reporting,
+  settle fal streaming behavior, and normalize provider-local invalid request
+  errors.
+
+### `P4-API-07` - Dependency injection and hidden side effects
+
+- `verdict`: `uncertain`
+- `public evidence`: `agentloop.New` requires explicit inferencer/session and
+  tool-execution ownership, CLI provider runtime construction injects HTTP
+  policy, session runtime planning is centralized, and prompt side effects are
+  observable through `LoadSystemPromptWithDetails`.
+- `affected files / declarations`: `agentloop.New`,
+  `agentloop.WithInferencer`, `agentloop.WithSessionInferencer`,
+  `agentloop.WithToolExecutor`, `agentloop.WithToolExecutionDisabled`,
+  `ProviderBuildContext`, `WithProviderHTTPBaseTransport`,
+  `Executor.LoadSystemPromptWithDetails`, session runtime planning, and
+  OpenAI/Grok session connection seams.
+- `docs/tests/examples alignment`: dependency/result docs and local tests align
+  with several repaired seams, but prompt assembly purity, timeout/retry
+  ownership, provider/session lifecycle policy, and compatibility staging are
+  not fully documented.
+- `reviewer commands`: `go test ./go-agent-loop/pkg/agentloop -run 'TestNew_.*Tool|TestExecute'`;
+  `go test ./agent-cli/internal/agent -run 'TestBuildProviderHTTPRuntime|TestLoadSystemPromptWithDetails|TestProviderFactory'`;
+  `go test ./agent-cli/internal/services -run 'TestBuildSessionRuntime|TestRunSession'`;
+  `go test ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/pkg/providers/grok -run 'TestConnectSession_Missing.*Dialer'`;
+  `sed -n '1,112p' docs/architecture/dependency-result-contracts.md`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: separate closed DI repairs from remaining hidden
+  side effects, document user-facing constructor/composition ownership, and add
+  regression tests before introducing new defaults for live runtime
+  dependencies.
+
+### `P4-GATE-01` - Public API hardening gate readiness
+
+- `verdict`: `fail`
+- `public evidence`: this report has reviewer-runnable evidence for every row,
+  but every implementation row is still `uncertain`, so the gate cannot close.
+- `affected files / declarations`: `docs/internal/phase-4-api-contract-validator.md`,
+  `docs/architecture/contract-gap-audit.md`, `docs/internal/checklist.md`,
+  public package docs, tests, and examples.
+- `docs/tests/examples alignment`: current docs, audit rows, tests, and public
+  APIs are aligned enough to plan repairs, but not enough to close the gate or
+  queue the next Phase 4 feature batch.
+- `reviewer commands`: `sed -n '141,171p' docs/internal/checklist.md`;
+  `sed -n '1,76p' docs/architecture/contract-gap-audit.md`;
+  `sed -n '/^## Reviewer-Runnable Command Evidence/,$p' docs/internal/phase-4-api-contract-validator.md`;
+  `make typecheck`; `make test`; `make lint`.
+- `closure decision`: `must remain open`
+- `exact future repair work`: consume the repair batches below, rerun this
+  validator after repairs, and keep `P4-GATE-01` open until a later report can
+  show row-level public evidence is sufficient for closure.
+
 ## Repair Batches
 
 1. Audit reconciliation batch: update `docs/architecture/contract-gap-audit.md`
@@ -1175,7 +1367,6 @@ incomplete.
 
 ## Current Story Status
 
-Stories 001, 002, 003, 004, and 005 are complete. Story 006 must still publish
-the final row closure decisions from this validator, and story 007 must still
+Stories 001, 002, 003, 004, 005, and 006 are complete. Story 007 must still
 publish exactly one next planner action after those closure decisions are
 confirmed.
