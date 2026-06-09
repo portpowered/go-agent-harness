@@ -112,7 +112,7 @@ inventories, or asset-bundle checks unless that inventory is itself the public
 behavior under review. Prefer observable runtime, API, CLI, UI, fixture, or
 emitted-event assertions for closure evidence.
 
-Reviewer command policy: run all commands from the repository root unless a row explicitly says otherwise. The test commands below use local Go packages, committed fixtures, and injected/mocked provider seams; they are intended to run without live provider credentials, external network access, or unspecified environment variables. `go doc` commands inspect the current public declarations and comments; they do not prove runtime behavior by themselves.
+Reviewer command policy: run all commands from the repository root unless a row explicitly says otherwise. The credential-free reviewer command matrix below is the canonical command evidence for this reconciliation. The test commands use local Go packages, committed fixtures, and injected/mocked provider seams; they are intended to run without live provider credentials, external network access, or unspecified environment variables. `go doc` commands inspect the current public declarations and comments; they do not prove runtime behavior by themselves. Each command names the checklist row or rows it supports, the public claim it verifies, and the expected pass condition.
 
 ### Final Closure Validation Check
 
@@ -993,9 +993,10 @@ make typecheck
 make test
 ```
 
-No reproducibility tooling was added for this slice; later implementation lanes
-must add the tests named in each finding before closing any Phase 4 checklist
-row.
+Use the credential-free reviewer command matrix above as the authoritative
+row-to-command mapping for this slice. Later implementation lanes must add or
+keep runtime, API, CLI, fixture, or emitted-event tests named in each finding
+before closing any Phase 4 checklist row.
 
 ### Phase 4 Provider Capability, Validation, And Dependency Injection Findings
 
@@ -1244,9 +1245,10 @@ Reviewer commands for this audit-only story:
 make typecheck
 ```
 
-No reproducibility tooling was added for this slice; later implementation lanes
-must add the tests named in each finding before closing any Phase 4 checklist
-row.
+Use the credential-free reviewer command matrix above as the authoritative
+row-to-command mapping for this slice. Later implementation lanes must add or
+keep runtime, API, CLI, fixture, or emitted-event tests named in each finding
+before closing any Phase 4 checklist row.
 
 ### Phase 4 Go API Hygiene And Implementation Order Findings
 
@@ -1481,8 +1483,9 @@ make typecheck
 make test
 ```
 
-No reproducibility tooling was added for this slice; later implementation lanes
-must add runtime, API, fixture, or emitted-event tests named in each finding
+Use the credential-free reviewer command matrix above as the authoritative
+row-to-command mapping for this slice. Later implementation lanes must add or
+keep runtime, API, CLI, fixture, or emitted-event tests named in each finding
 before closing any Phase 4 checklist row.
 
 ## Intended Adapters vs Hidden Coupling
