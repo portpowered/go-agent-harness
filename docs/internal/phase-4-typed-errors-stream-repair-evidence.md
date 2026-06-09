@@ -35,6 +35,35 @@ failure paths.
 | Returned versus in-band failures | `go-llm-gateway/README.md` and `docs/architecture/stream-terminal-contract.md` state that setup, validation, replay, and provider-open failures return Go errors, while active stream/session terminal outcomes are emitted in-band when that surface is already active. | `P4-API-02`, `P4-API-03`, `P4-API-05` |
 | Audit reconciliation | `docs/architecture/contract-gap-audit.md` maps the representative terminal-contract evidence to `P4-API-02`, `P4-API-03`, `P4-API-05`, and `P4-GATE-01` without closing provider-wide or helper-wide follow-up rows outside this selected repair scope. | `P4-GATE-01` |
 
+## Terminal Contract Final Review Evidence
+
+The following commands are the final review set for
+`phase-4-typed-errors-stream-terminal-contract`. They are deterministic,
+credential-free, and scoped to observable public behavior rather than source or
+route inventories.
+
+| Representative path | Reviewer command | Evidence claim |
+| --- | --- | --- |
+| Direct stream provider and gateway failures | `(cd go-llm-gateway && go test ./pkg/providers ./pkg/gateway -run 'Test(NewStreamErrorValue_|NewStreamTransportErrorValue_|InferStream_PreservesErrorEventClassification|InferStream_PreservesRuntimeErrorEventClassification)' -timeout 120s)` | Provider and gateway stream `ERROR` payloads preserve readable text plus typed in-process errors or serialized `classification`, `terminal_reason`, `terminal_provenance`, and `output_state`. |
+| Completion provenance, provider close, cancellation, partial output, and session close | `(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems -run 'TestModelRunner_(ProviderAuthoredCompletionGetsTerminalMetadata|LoopSynthesizedCompletionGetsTerminalMetadata|ProviderCloseGetsDistinctTerminalMetadata|TerminalFailureAfterPartialOutputGetsTerminalMetadata|CancellationGetsDistinctTerminalError|PreStreamCancellationGetsDistinctTerminalError|CancellationAfterPartialOutputReportsPartialState)|TestSessionModelRunner_(SessionDoneEmitsSessionClose|NormalizesProviderSessionCloseMetadata)|TestCoordinatorDelta_DuplexSession(ClientCloseHasTerminalMetadata|StopHasCancellationMetadata)' -timeout 120s)` | Loop and session surfaces distinguish provider-authored completion, loop-synthesized completion, provider close, cancellation, terminal failure after partial output, and session close through public payload fields. |
+| Replay divergence and replay incomplete | `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/providers ./pkg/testing -run 'TestReplay(Mismatch|Incomplete)Error_MatchesReplay.*Only|TestErrorClassification_DistinguishesRuntimeOutcomes|TestSessionReplayer_FailsOnUnexpectedOutboundEvent|TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted|TestReplayWebSocketDialer_FailsOnUnexpectedOutbound|TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose' -timeout 120s)` | Replay divergence and replay incomplete remain distinct from cancellation, provider close, and terminal failure through public typed errors and provider classification strings. |
+| CLI-visible serialized terminal payloads | `(cd agent-cli && go test ./internal/output -run 'TestWriteStreamEventJSON_TerminalMetadataFields' -timeout 120s)` | CLI NDJSON exposes the same additive terminal fields for completion, cancellation, provider close, partial-output terminal failure, and session close without text parsing. |
+
+The repaired representative paths are:
+
+- Direct stream provider and gateway/runtime failures classify through
+  `errors.Is`, `errors.As`, `messages.ErrorValue.Err`, or serialized
+  classification fields.
+- Provider-authored completion, loop-synthesized completion, provider close,
+  session close, cancellation, replay divergence, replay incomplete,
+  partial-output terminal failure, and terminal failure have public terminal
+  reason and provenance values where those events are emitted in-band.
+- Returned setup, validation, provider-open, and replay failures remain Go
+  errors; active stream/session/CLI terminal outcomes are emitted in-band on the
+  already-open event surface.
+- Existing readable text is preserved as compatibility surface; the new public
+  fields are additive and intended for machine classification.
+
 ## Reviewer Commands
 
 Run these focused commands to prove the repaired representative behavior:
@@ -45,6 +74,10 @@ Run these focused commands to prove the repaired representative behavior:
 (cd go-llm-gateway && go test ./pkg/gateway ./pkg/inference ./pkg/providers -run 'TestInteract_NormalizesProviderError|TestInteract_EmitsCancellationWhenContextCancelledBeforeProviderReturns|TestInteract_PreservesPartialOutputBeforeCancellation|TestInteract_NormalizesDeadlineExceededAsTimeoutError|TestInteract_RejectsInvalidToolResultsBeforeProviderContinuation|TestLoopInteractionEventFromGateway|TestSessionGatewayInferencer_ConnectSessionErrorClassification|TestErrorClassification_DistinguishesRuntimeOutcomes' -timeout 120s)
 (cd go-llm-gateway && go test ./pkg/testing -run 'TestSessionReplayer_FailsOnUnexpectedOutboundEvent|TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted|TestReplayWebSocketDialer_FailsOnUnexpectedOutbound|TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose' -timeout 120s)
 (cd go-agent-loop && go test ./pkg/subsystems -run 'TestInteractionEvents_RecordsTerminalErrorAndCancellation|TestInteractionEvents_TracksStateAndOutputs' -timeout 120s)
+(cd go-llm-gateway && go test ./pkg/providers ./pkg/gateway -run 'Test(NewStreamErrorValue_|NewStreamTransportErrorValue_|InferStream_PreservesErrorEventClassification|InferStream_PreservesRuntimeErrorEventClassification)' -timeout 120s)
+(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems -run 'TestModelRunner_(ProviderAuthoredCompletionGetsTerminalMetadata|LoopSynthesizedCompletionGetsTerminalMetadata|ProviderCloseGetsDistinctTerminalMetadata|TerminalFailureAfterPartialOutputGetsTerminalMetadata|CancellationGetsDistinctTerminalError|PreStreamCancellationGetsDistinctTerminalError|CancellationAfterPartialOutputReportsPartialState)|TestSessionModelRunner_(SessionDoneEmitsSessionClose|NormalizesProviderSessionCloseMetadata)|TestCoordinatorDelta_DuplexSession(ClientCloseHasTerminalMetadata|StopHasCancellationMetadata)' -timeout 120s)
+(cd go-llm-gateway && go test ./pkg/gateway ./pkg/providers ./pkg/testing -run 'TestReplay(Mismatch|Incomplete)Error_MatchesReplay.*Only|TestErrorClassification_DistinguishesRuntimeOutcomes|TestSessionReplayer_FailsOnUnexpectedOutboundEvent|TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted|TestReplayWebSocketDialer_FailsOnUnexpectedOutbound|TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose' -timeout 120s)
+(cd agent-cli && go test ./internal/output -run 'TestWriteStreamEventJSON_TerminalMetadataFields' -timeout 120s)
 ```
 
 Run the root quality gate before review:
@@ -82,4 +115,8 @@ remaining scopes are:
 `P4-API-02`, `P4-API-03`, `P4-API-05`, and `P4-GATE-01` pass for the
 representative typed-error and stream repair scope selected in
 `docs/internal/phase-4-typed-errors-stream-repair-scope.md` once the reviewer
-commands and root quality gate pass on the reviewed head.
+commands and root quality gate pass on the reviewed head. For
+`phase-4-typed-errors-stream-terminal-contract`, that representative scope now
+includes direct stream, provider, session, replay, cancellation, CLI,
+partial-output, provider-authored completion, loop-synthesized completion,
+provider close, and terminal failure evidence.
