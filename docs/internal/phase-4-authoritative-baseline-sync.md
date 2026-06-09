@@ -5,6 +5,30 @@ authoritative baseline sync. It is a planner and reviewer reference only; it
 does not close Phase 4 checklist rows and does not rerun the final Phase 4
 convergence validator.
 
+## Published Baseline Source of Truth
+
+Use this note as the durable reviewer-facing source of truth for Phase 4
+baseline planning after batch 017. The authoritative baseline is `origin/main`
+at `6e785952affad9cc5d07458c84f9a45b755c72c0` or a descendant that preserves
+that commit in ancestry. Older local snapshots and pre-merge factory branches
+are not authoritative when they omit, predate, or have been superseded by the
+landed remote evidence listed below.
+
+Checklist rows in scope for this sync are `P4-API-01`, `P4-API-02`,
+`P4-API-03`, `P4-API-04`, `P4-API-05`, `P4-API-06`, `P4-API-07`,
+`P4-GATE-01`, and `CTRL-FAC-03`. This sync does not close those rows, does not
+implement new public API contract repairs, and does not rerun the final Phase 4
+convergence validator. It only publishes the branch-status and preservation
+evidence reviewers need before future repair or validator work is planned.
+
+No branch listed in this note currently requires conflict repair before it can
+be reconciled with the authoritative baseline: the originally stale or
+unmerged Phase 4 branches are now ancestors of `origin/main` through PRs `#37`
+and `#38`. Remaining follow-up is therefore planning disposition only:
+future Phase 4 work should consume `origin/main` or a descendant, keep the
+landed evidence from PRs `#33` through `#38`, and avoid treating older branch
+heads as replacement baselines.
+
 ## Baseline Evidence
 
 Evidence captured after fetching `origin` on 2026-06-09 04:16 UTC:
