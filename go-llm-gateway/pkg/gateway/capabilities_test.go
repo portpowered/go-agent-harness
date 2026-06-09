@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
@@ -267,6 +268,16 @@ func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t 
 			feature: FeatureAudioOutput,
 		},
 		{
+			name: "audio output sample rate",
+			caps: capabilities.SessionCapabilities{
+				AudioOutput: capabilities.Unsupported("session audio output unavailable"),
+			},
+			config: models.SessionConfig{
+				OutputAudioSampleRate: models.SampleRate24000,
+			},
+			feature: FeatureAudioOutput,
+		},
+		{
 			name: "provider config",
 			caps: capabilities.SessionCapabilities{
 				ProviderSpecificConfig: capabilities.Unsupported("session raw config unavailable"),
@@ -312,6 +323,72 @@ func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t 
 			}
 			if unsupported.Capability.State != CapabilityStateUnsupported {
 				t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
+			}
+			if provider.connectCalls != 0 {
+				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
+			}
+		})
+	}
+}
+
+func TestSessionGatewayReturnsContextErrorBeforeUnsupportedFeatureValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want error
+	}{
+		{
+			name: "canceled",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			want: context.Canceled,
+		},
+		{
+			name: "deadline exceeded",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			}(),
+			want: context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := &capabilitySessionProvider{
+				name: "session-validation-provider",
+				caps: ProviderCapabilities{
+					Provider: "session-validation-provider",
+					Session: capabilities.SessionCapabilities{
+						Sessions: capabilities.Unsupported("session transport unavailable"),
+					},
+				},
+			}
+			gw, err := NewSessionGateway(WithSessionProvider(provider))
+			if err != nil {
+				t.Fatalf("NewSessionGateway: %v", err)
+			}
+
+			_, err = gw.ConnectSession(tt.ctx, models.SessionConfig{})
+
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+			var unsupported *UnsupportedFeatureError
+			if errors.As(err, &unsupported) {
+				t.Fatalf("error = %v, did not want UnsupportedFeatureError", err)
+			}
+			if provider.capCalls != 0 {
+				t.Fatalf("validation read capabilities after context finished %d times", provider.capCalls)
 			}
 			if provider.connectCalls != 0 {
 				t.Fatalf("validation connected session provider %d times", provider.connectCalls)
