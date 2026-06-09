@@ -1367,6 +1367,7 @@ the row verdicts with the evidence fields a reviewer needs before changing
 
 ## Current Story Status
 
-Stories 001, 002, 003, 004, 005, and 006 are complete. Story 007 must still
-publish exactly one next planner action after those closure decisions are
-confirmed.
+Stories 001, 002, 003, 004, 005, 006, and 007 are complete. The final closure
+decision publishes exactly one next planner action: `repair`. Planners must
+consume the repair batches above before relying on the batch 017 baseline for
+further Phase 4 planning.
