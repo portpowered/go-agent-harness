@@ -57,12 +57,31 @@ type streamErrorInferencer struct {
 	err error
 }
 
+type cancelThenClosedStreamInferencer struct {
+	ready chan struct{}
+	once  sync.Once
+}
+
 func (s *streamErrorInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
 	return messages.InferenceResult{}, nil
 }
 
 func (s *streamErrorInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	return nil, s.err
+}
+
+func (s *cancelThenClosedStreamInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
+	return messages.InferenceResult{}, nil
+}
+
+func (s *cancelThenClosedStreamInferencer) InferStream(ctx context.Context, _ messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	if s.ready != nil {
+		s.once.Do(func() { close(s.ready) })
+	}
+	<-ctx.Done()
+	ch := make(chan messages.StreamMessage)
+	close(ch)
+	return ch, nil
 }
 
 func (s *streamInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
@@ -345,6 +364,43 @@ func TestModelRunner_CancellationGetsDistinctTerminalError(t *testing.T) {
 	}
 	if value.TerminalReason == messages.TerminalReasonProviderClose || value.TerminalReason == messages.TerminalReasonTerminalFailure {
 		t.Fatalf("cancellation terminal reason should not collapse into %q", value.TerminalReason)
+	}
+}
+
+func TestModelRunner_CancellationTakesPrecedenceWhenProviderClosesStream(t *testing.T) {
+	inf := &cancelThenClosedStreamInferencer{ready: make(chan struct{})}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+	<-inf.ready
+	runner.CancelCurrentExecution()
+
+	terminal := drainTerminalDelta(t, ctx, runner)
+	value, ok := terminal.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.ErrorValue", terminal.Value)
+	}
+	if !errors.Is(value.Err, context.Canceled) {
+		t.Fatalf("terminal error should preserve context.Canceled, got %v", value.Err)
+	}
+	if value.TerminalReason != messages.TerminalReasonCancellation {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonCancellation)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceLoop {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceLoop)
+	}
+	if value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
 	}
 }
 

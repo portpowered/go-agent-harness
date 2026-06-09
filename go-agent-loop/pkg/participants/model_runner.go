@@ -286,6 +286,14 @@ func (r *ModelRunner) writeDelta(ctx context.Context, sm messages.StreamMessage)
 func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan messages.StreamMessage) {
 	hasOutput := false
 	for {
+		if err := execCtx.Err(); err != nil {
+			r.writeDelta(writeCtx, messages.StreamMessage{
+				Type:  messages.StreamTypeError,
+				Role:  messages.RoleAssistant,
+				Value: cancellationErrorValue(err, messages.TerminalProvenanceLoop, outputState(hasOutput)),
+			})
+			return
+		}
 		select {
 		case <-writeCtx.Done():
 			return
@@ -298,6 +306,14 @@ func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan m
 			return
 		case msg, ok := <-ch:
 			if !ok {
+				if err := execCtx.Err(); err != nil {
+					r.writeDelta(writeCtx, messages.StreamMessage{
+						Type:  messages.StreamTypeError,
+						Role:  messages.RoleAssistant,
+						Value: cancellationErrorValue(err, messages.TerminalProvenanceLoop, outputState(hasOutput)),
+					})
+					return
+				}
 				// Channel closed without MESSAGE.END; emit a provider-close end so
 				// callers can distinguish transport close from clean completion.
 				r.writeDelta(writeCtx, messages.StreamMessage{
