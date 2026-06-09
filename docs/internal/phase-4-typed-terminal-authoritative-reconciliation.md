@@ -127,6 +127,59 @@ make typecheck
 make test
 ```
 
+## Public Typed Error And Direct Stream Reconciliation
+
+Story 003 reconciles the public typed error taxonomy and direct stream terminal
+fields on top of the landed authoritative baseline. The disposition remains
+`landed`; this section narrows the reviewer-visible proof for the direct
+gateway/provider stream surface without claiming replay, session, or CLI parity
+from later stories.
+
+Returned representative gateway and provider failures expose stable
+caller-actionable classes:
+
+- `go-llm-gateway/pkg/gateway/errors.go` exports gateway sentinels including
+  provider HTTP status, authentication, rate limit, invalid request,
+  unsupported model, transport, cancellation, replay mismatch, and replay
+  incomplete classes.
+- `go-llm-gateway/pkg/gateway.ProviderHTTPStatusError` and
+  `TransportError` preserve inspectable public details for `errors.As`.
+- `go-llm-gateway/pkg/providers/errors.go` exports provider sentinels and
+  classification strings including provider rejection, authentication, rate
+  limit, invalid request, unsupported request, transport, cancellation, replay
+  mismatch, replay incomplete, partial output, and unknown.
+- Human-readable `Error()` text remains available for operators while callers
+  branch on `errors.Is`, `errors.As`, or serialized classification fields.
+
+Direct gateway stream `ERROR` payloads expose machine-readable terminal fields
+after passing through `DefaultGateway.InferStream`:
+
+- `ErrorValue.classification` carries the public gateway classification such as
+  `authentication` or `transport`.
+- `ErrorValue.terminal_reason` is populated with `terminal_failure` for
+  representative non-cancellation direct stream failures.
+- `ErrorValue.terminal_provenance` is populated with `gateway` when gateway
+  normalization authors the terminal metadata.
+- `ErrorValue.output_state` is populated with `none` for representative
+  failures that emitted no usable output before the terminal event.
+- `ErrorValue.message` remains readable, and the in-process `ErrorValue.Err`
+  keeps the typed Go error for `errors.Is`/`errors.As` callers.
+
+Credential-free evidence:
+
+```sh
+go test ./go-llm-gateway/pkg/gateway -run 'TestInfer_PreservesProviderHTTPStatusClassification|TestInfer_PreservesTransportClassification|TestInferStream_PreservesErrorEventClassification|TestInferStream_ErrorEventClassificationIsPublicAndSerializable|TestInferStream_PreservesRuntimeErrorEventClassification'
+go test ./go-llm-gateway/pkg/providers -run 'TestErrorClassification_DistinguishesRuntimeOutcomes|TestNewStreamErrorValue_PreservesTypedErrorAndTerminalClassification|TestNewStreamTransportErrorValue_PreservesRuntimeClassification'
+go test ./go-agent-loop/pkg/messages -run 'TestTerminalMetadataSerializesOn(ErrorValue|MessageEndValue|SessionCloseValue)|TestLegacyTerminalPayloadsOmitEmptyTerminalMetadata'
+make typecheck
+make test
+```
+
+The evidence above closes the story-003 direct stream and returned-error
+contract. Replay/cancellation/partial-output distinction, CLI/session parity,
+docs/audit final alignment, and final reviewer validation remain assigned to
+stories 004 through 007. This story still does not close `P4-GATE-01`.
+
 ## Gate Status
 
 This story does not close `P4-GATE-01`. The gate remains governed by the
