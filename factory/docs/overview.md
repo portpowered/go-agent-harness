@@ -149,10 +149,12 @@ different registered branch or another unsafe worktree state.
 Planner-owned root dirtiness is part of that contract. Routine changes in
 `docs/internal/checklist.md` and `docs/internal/progress.txt` are tolerated
 during setup and reuse because they are operational planner state, not
-worktree-selection inputs. The requested `tasks/todo/<prd-name>.json` and
-optional `.md` are also tolerated as direct setup inputs. Other root dirty
-state still fails explicitly so the factory does not silently treat unrelated
-checkout drift as safe.
+worktree-selection inputs. Submitted planner batch request artifacts matching
+`docs/internal/*-batch-*.json` are also tolerated because they record durable
+factory submissions and can remain staged while downstream setup runs. The
+requested `tasks/todo/<prd-name>.json` and optional `.md` are also tolerated as
+direct setup inputs. Other root dirty state still fails explicitly so the
+factory does not silently treat unrelated checkout drift as safe.
 
 ## Verification
 
@@ -181,8 +183,9 @@ The Python runtime suite covers the queue-facing setup contract directly:
 - overlapping setup runs reuse the winner's registered worktree instead of
   stranding `plan:init` on `fatal: Cannot rebase onto multiple branches.`
 - planner-owned dirty state in `docs/internal/checklist.md` and
-  `docs/internal/progress.txt` is tolerated for both first-time setup and
-  worktree reuse
+  `docs/internal/progress.txt`, plus bounded submitted batch request artifacts
+  under `docs/internal/*-batch-*.json`, is tolerated for both first-time setup
+  and worktree reuse
 - unrelated root dirtiness still fails with an explicit unsafe-state error
 
 ## Resolved Symptoms

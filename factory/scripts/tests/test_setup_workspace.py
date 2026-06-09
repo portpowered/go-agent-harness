@@ -222,6 +222,53 @@ class SetupWorkspaceScriptTests(unittest.TestCase):
             self.assertEqual(payload["branch"], prd_name)
             self.assertFalse(payload["reused"])
 
+    def test_setup_workspace_allows_planner_owned_batch_request_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "repo"
+            self._init_repo(repo_root)
+
+            prd_name = "phase-4-audit-validator-015-reconciliation"
+            self._write_prd(repo_root, prd_name)
+            self._commit_planner_owned_files(repo_root)
+
+            batch_path = (
+                repo_root
+                / "docs"
+                / "internal"
+                / "phase-4-api-contract-convergence-repair-batch-017.json"
+            )
+            batch_path.write_text(
+                json.dumps(
+                    {
+                        "requestId": "phase-4-api-contract-convergence-repair-batch-017",
+                        "type": "FACTORY_REQUEST_BATCH",
+                        "works": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._run(
+                [
+                    "git",
+                    "add",
+                    "docs/internal/phase-4-api-contract-convergence-repair-batch-017.json",
+                ],
+                cwd=repo_root,
+            )
+
+            result = subprocess.run(
+                ["python3", str(SCRIPT_PATH), prd_name],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["branch"], prd_name)
+
     def test_setup_workspace_reuses_existing_worktree_with_planner_owned_dirty_root_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir) / "repo"

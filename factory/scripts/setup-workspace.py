@@ -23,6 +23,18 @@ PLANNER_OWNED_DIRTY_PATHS = {
 }
 
 
+def planner_owned_dirty_path(path):
+    """Return whether a dirty path is owned by the meta-planner control loop."""
+    if path in PLANNER_OWNED_DIRTY_PATHS:
+        return True
+    path_obj = Path(path)
+    return (
+        path_obj.parent.as_posix() == "docs/internal"
+        and path_obj.suffix == ".json"
+        and "-batch-" in path_obj.name
+    )
+
+
 def run_git(*args, cwd=None, check=True):
     """Run a git command, returning stdout. Raises on failure if check=True."""
     result = subprocess.run(
@@ -139,7 +151,7 @@ def planner_owned_status_is_tolerated(status):
 
 def allowed_dirty_paths_for_setup(prd_name):
     """Return dirty paths that are safe for setup to ignore."""
-    return PLANNER_OWNED_DIRTY_PATHS | {
+    return {
         f"tasks/todo/{prd_name}.json",
         f"tasks/todo/{prd_name}.md",
     }
@@ -151,7 +163,10 @@ def validate_root_dirty_state(repo_root, prd_name):
     unsafe_entries = []
     for entry in list_root_status_entries(repo_root):
         path = entry["path"]
-        if path in allowed_dirty_paths and planner_owned_status_is_tolerated(entry["status"]):
+        if (
+            (path in allowed_dirty_paths or planner_owned_dirty_path(path))
+            and planner_owned_status_is_tolerated(entry["status"])
+        ):
             continue
         unsafe_entries.append(entry)
 
@@ -165,7 +180,10 @@ def validate_root_dirty_state(repo_root, prd_name):
             rendered = f"{rendered} <- {entry['original_path']}"
         rendered_entries.append(rendered)
     joined_entries = ", ".join(rendered_entries)
-    allowed_paths = ", ".join(sorted(allowed_dirty_paths))
+    allowed_paths = ", ".join(
+        sorted(PLANNER_OWNED_DIRTY_PATHS | allowed_dirty_paths)
+        + ["docs/internal/*-batch-*.json"]
+    )
     raise RuntimeError(
         "root checkout has unsupported dirty state outside planner-owned files "
         "and requested setup artifacts; "
