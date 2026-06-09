@@ -8,6 +8,10 @@ Use this note as the public migration guide for the Phase 4 dependency/result
 repair batch. The legacy helpers remain available, but new code should choose
 the explicit contracts below when ambiguity matters.
 
+Reviewer-facing closure evidence for the broader dependency, result, context,
+lifecycle, replay, prompt-resolution, and session-configuration map lives in
+`docs/internal/phase-4-dependency-result-context-lifecycle-contract.md`.
+
 ## Caller-Owned Cancellation
 
 Blocking public calls that accept `context.Context` treat the caller as the
@@ -104,6 +108,15 @@ version explicitly breaks compatibility:
 - add typed session send outcomes for the remaining `Session.Send(ctx, msg)
   bool` ambiguity, including cancellation, closed session, full outbound buffer,
   and terminal failure where the session implementation can observe them
+- decide whether provider-authored completion and loop-synthesized completion
+  need a public stream/final-text status, metadata field, emitted event, or
+  documented compatibility gap
+- decide whether replay divergence and incomplete replay need a first-class
+  public outcome value beyond typed errors returned through replay helpers such
+  as `SessionReplayer.Err()`
+- preserve the context/config lifetime split when extending loop-facing session
+  adapters: `context.Context` should own one operation lifetime, while
+  persistent session shape should remain explicit configuration
 - keep `ReadBlockingContext`, `Text`, and `HasNext` available until callers have
   migrated to the explicit contracts above
 - split prompt assembly into pure injected loaders only if a future public
