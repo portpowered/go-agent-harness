@@ -36,10 +36,10 @@ Phase 4 contract areas.
 | Checklist row | Current status | Mapped audit rows | Validator/provenance evidence | Closed or narrowed subset | Remaining open work |
 | --- | --- | --- | --- | --- | --- |
 | `P4-API-01` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-DI-01`, `P4-DI-03`, `P4-DI-04`, `HC-03` | Validator-015 is superseded by `docs/internal/phase-4-api-contract-validator.md`; current audit evidence is the `P4-API-01` row below plus credential-free constructor, runtime, and cancellation tests. | Explicit tool-execution constructor decisions, provider HTTP runtime ownership, gateway-to-loop inferencer adapters, and replay/record relay cancellation are narrowed by implementation and tests. | Prompt/config/filesystem loading, session/config/dialer side effects, complete timeout/cancellation ownership, and stable dependency/result errors remain open. |
-| `P4-API-02` | `fail` | `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator typed-error report; current audit evidence includes public gateway error classes, `messages.ErrorValue`, PNIG error events, replay mismatch tests, and session command tests. | Gateway typed errors, OpenAI Realtime error details, PNIG timeout/provider/cancellation events, and replay divergence are narrowed by deterministic tests. | Loop/provider/session emitters still need a shared caller-actionable taxonomy, serialized stream error classes, and provider/session/direct-stream coverage. |
-| `P4-API-03` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-STREAM-01`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator result/lifecycle report; current audit evidence includes loop result reconstruction, gateway/PNIG terminal events, replay completion, and CLI session behavior. | Normalized result and selected terminal-event behavior are narrowed where loop, gateway, replay, and CLI tests assert current behavior. | Terminal authority remains split across `ExecuteResult`, synthesized stream endings, session `Done`/`Close`, replay completion, capture flush, PNIG end/error/cancellation events, and CLI stop conditions. |
+| `P4-API-02` | representative typed-terminal repair landed; broader row remains open | `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator typed-error report; current audit evidence includes public gateway error classes, provider classification strings, `messages.ErrorValue` terminal fields, direct stream normalization, session close/error metadata, replay mismatch/incomplete outcomes, cancellation tests, and CLI session tests. | Returned gateway/provider errors, direct stream `ERROR` payloads, representative session close/error events, replay divergence, replay incomplete, cancellation, and partial-output terminal metadata are narrowed by deterministic tests and public docs. | Provider-wide and parser-wide parity for every adapter, session helper, and stream failure remains open outside the representative typed-terminal scope. |
+| `P4-API-03` | representative typed-terminal repair landed; broader row remains open | `P4-CTX-01`, `P4-CTX-02`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-STREAM-01`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator result/lifecycle report; current audit evidence includes loop final-text and stream outcomes, gateway/PNIG terminal events, replay completion/divergence/incomplete/cancellation outcomes, session close metadata, and CLI session behavior. | Provider-authored completion, loop-synthesized completion, cancellation, provider close, terminal failure after partial output, replay divergence, replay incomplete, session close, and CLI-visible terminal fields are distinguishable on the repaired representative surfaces. | Broader result-helper and lifecycle-helper ambiguities remain where no public field, outcome value, or representative test has been landed. |
 | `P4-API-04` | `pass` for provider capability discovery | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-01`, `P4-HYGIENE-02` | Superseded validator evidence is the Phase 4 capability report; current audit evidence includes `pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, gateway/session `Capabilities()` methods, README guidance, development guidance, and credential-free capability tests. | Provider-neutral supported, unsupported, and unknown states; concrete provider-family capability reporters; gateway/session discovery; unknown fallback; overclaimed-support checks; interaction/inferencer capability closure; and fal streaming alignment are closed for this repair lane. | None for provider capability discovery. Broader stream terminal, model ownership, dependency/result/context, and API hygiene issues remain in their own rows. |
-| `P4-API-05` | `uncertain` | `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `P4-ERR-01`, `P4-ERR-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `HC-02`, `DOC-01`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 stream and public-surface report; current audit evidence includes gateway/inference adapter tests, PNIG JSON/event-shape tests, provider stream tests, and `go doc` declaration inspection. | Gateway, PNIG, inference adapter, provider stream, and `pkg/models` alias-facade behavior are narrowed where deterministic tests and docs identify current shape. | Stream ordering, final events, cancellation behavior, replay mismatch behavior, error propagation, and package ownership for gateway/provider/model/session contracts remain open. |
+| `P4-API-05` | representative typed-terminal repair landed; broader row remains open | `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `P4-ERR-01`, `P4-ERR-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `HC-02`, `DOC-01`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 stream and public-surface report; current audit evidence includes gateway/inference adapter tests, PNIG JSON/event-shape tests, provider stream tests, stream terminal contract docs, gateway README guidance, session/CLI terminal tests, and `go doc` declaration inspection. | Gateway, provider, loop message, session, replay, and CLI docs now share the additive terminal vocabulary for returned errors and structured event fields on the repaired representative surfaces. | Provider-wide stream/session parity, parser failure coverage, package ownership, and compatibility-staging items in `HC-02`, `DOC-01`, and remaining stream rows stay open outside this representative scope. |
 | `P4-API-06` | `pass` for provider capability/local validation scope; broader context/retry ownership remains open | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-04`, `LIFECYCLE-01`, `LIFECYCLE-02` | Superseded validator evidence is the Phase 4 unsupported-feature and context report; current audit evidence includes `UnsupportedFeatureError`, `validateStatelessRequest`, `validateSessionConfig`, PNIG cancellation/timeout tests, replay lifecycle tests, CLI session timeout behavior, interaction local-validation tests, inferencer local-validation tests, and fal unsupported-streaming tests. | Gateway, session, interaction, and inferencer unsupported-feature validation for explicitly unsupported capabilities; caller context acceptance; replay lifecycle cancellation; PNIG cancellation events; concrete provider reporting; and fal unsupported streaming semantics are closed for this repair lane. | Retry ownership, timeout ownership, and broader cross-surface cancellation documentation remain open outside the provider capability/local validation scope. |
 | `P4-API-07` | `fail` | `P4-DI-01`, `P4-DI-02`, `P4-DI-03`, `P4-DI-04`, `P4-HYGIENE-01`, `P4-HYGIENE-02`, `P4-HYGIENE-03`, `P4-HYGIENE-04`, `DOC-01`, `DOC-02`, `COMPAT-01`, `COMPAT-02`, `COMPAT-03`, `HC-02`, `HC-03` | Superseded validator evidence is the Phase 4 dependency, API hygiene, and compatibility report; current audit evidence includes public declaration `go doc` output, README guidance, fixture tests, interaction shape tests, and adapter tests. | Exported comments, narrow provider/session interfaces, selected dependency ownership seams, PNIG event shapes, and fixture compatibility checks are narrowed. | Compatibility ownership for `pkg/models`, gateway/provider request overlap, CLI internal composition exports, hidden side effects, fixture staging, and text-matching caller compatibility remain open. |
 | `P4-GATE-01` | `pass` for the provider capability/local validation repair lane; whole-Phase-4 gate remains open | All rows mapped to `P4-API-01` through `P4-API-07` | Superseded validator evidence is the Phase 4 validator final closure decision; current capability/local validation evidence is this audit reconciliation plus the provider/gateway/inference/fal tests named below. | Provider capability discovery and local unsupported-feature validation are closed for this repair lane. | Complete the remaining typed error/stream, dependency/result/context/lifecycle, API hygiene, and final validation repair lanes before whole-Phase-4 closure. |
@@ -59,15 +59,23 @@ Closed or narrowed subsets with supporting evidence:
   includes constructor tests, provider runtime tests, adapter tests, and replay
   cancellation tests; validator evidence is the current Phase 4 dependency and
   context report in `docs/internal/phase-4-api-contract-validator.md`.
-- Typed error evidence is narrowed for public gateway error classes, OpenAI
-  Realtime error details, PNIG timeout/provider/cancellation events, and replay
-  divergence. Implementation evidence includes gateway error tests, OpenAI
-  session tests, PNIG interaction tests, and replay mismatch tests; validator
-  evidence is the Phase 4 typed-error and stream-failure report.
+- Typed error evidence is narrowed for public gateway/provider error classes,
+  direct stream `ERROR` terminal fields, OpenAI and Grok session close/error
+  metadata, PNIG timeout/provider/cancellation events, replay divergence,
+  replay incomplete, cancellation, and partial-output terminal metadata.
+  Implementation evidence includes gateway error and stream tests, provider
+  error tests, OpenAI and Grok session tests, PNIG interaction tests, replay
+  tests, loop outcome tests, and CLI session tests; validator evidence is the
+  Phase 4 typed-error and stream-failure report plus the typed-terminal
+  reconciliation note.
 - Result and lifecycle evidence is narrowed for loop result reconstruction,
-  selected gateway and PNIG terminal events, replay completion, and CLI session
-  command behavior. Implementation evidence includes loop, gateway, replay, and
-  CLI session tests; validator evidence is the Phase 4 result/lifecycle report.
+  selected gateway and PNIG terminal events, provider-authored completion,
+  loop-synthesized completion, replay completion, replay divergence, replay
+  incomplete, replay cancellation, provider close, session close, partial
+  output, and CLI session command behavior. Implementation evidence includes
+  loop, gateway, replay, provider session, and CLI session tests; validator
+  evidence is the Phase 4 result/lifecycle report plus the typed-terminal
+  reconciliation note.
 - Capability and unsupported-feature evidence is narrowed for provider-neutral
   supported, unsupported, and unknown states, gateway/session discovery,
   unknown fallback behavior, OpenAI capability reporting, and selected provider
@@ -84,28 +92,33 @@ Closed or narrowed subsets with supporting evidence:
 
 Remaining open repair work is grouped by observable behavior:
 
-- Typed stream and error contracts: define a shared caller-actionable taxonomy
-  for returned errors, stream errors, interaction errors, replay divergence,
-  session command failures, cancellation, provider rejection, and serialized
-  error payloads; prove each representative path with runtime or emitted-event
-  tests rather than source inventories.
+- Typed stream and error contracts: the shared additive taxonomy is landed for
+  representative returned errors, direct stream errors, replay divergence,
+  replay incomplete, session close/error events, cancellation, partial output,
+  and CLI-visible terminal fields. Remaining work is provider-wide and
+  parser-wide parity for unproven adapters, helper entrypoints, and stream
+  failure paths; prove any new closure with runtime or emitted-event tests
+  rather than source inventories.
 - Capability and validation coverage: finish or explicitly document concrete
   provider capability reporting, overclaimed support checks, unknown fallback
   behavior, interaction and `GatewayInferencer` validation, fal streaming
   alignment, and local unsupported-feature failures before provider side
   effects.
-- Dependency, result, context, and lifecycle contracts: document and test
-  caller cancellation, timeout ownership, retry ownership, terminal result
-  authority, replay/record lifecycle, stream finality, and session close
-  reasons across loop, gateway, provider, CLI, replay, and PNIG surfaces.
+- Dependency, result, context, and lifecycle contracts: representative terminal
+  authority is landed for loop outcomes, direct stream terminal metadata,
+  replay outcomes, session close/error metadata, partial output, and CLI
+  session rendering. Remaining work is complete timeout/retry ownership and any
+  public result or lifecycle helper not covered by those repaired surfaces.
 - API hygiene and compatibility staging: declare ownership for `pkg/models`,
   gateway/provider request overlap, exported fixture schemas, nil/empty value
   semantics, public event codes, CLI internal composition boundaries, and
   additive compatibility rules for future message/session/error changes.
-- Final gate readiness: keep `P4-GATE-01` open until the repair lanes above
-  provide implementation evidence, docs/examples where the public contract
-  needs consumer guidance, deterministic validation, and a final validator
-  decision that explicitly permits closure.
+- Final gate readiness: the typed-terminal repair contributes public docs,
+  audit mapping, and credential-free evidence for its representative scope, but
+  keep whole-Phase-4 `P4-GATE-01` open until the remaining repair lanes provide
+  implementation evidence, docs/examples where the public contract needs
+  consumer guidance, deterministic validation, and a final validator decision
+  that explicitly permits closure.
 
 Review non-goals: later repair lanes should not add broad source inventories,
 documentation link-topology checks, command inventories, route-registration

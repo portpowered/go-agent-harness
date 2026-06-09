@@ -277,6 +277,66 @@ The evidence above closes the story-005 CLI/session terminal surface parity.
 Docs/audit final alignment and final reviewer validation remain assigned to
 stories 006 and 007. This story still does not close `P4-GATE-01`.
 
+## Docs And Audit Alignment
+
+Story 006 reconciles public docs and internal audit evidence with the landed
+typed-terminal contract. This section is the reviewer-visible map from the
+landed representative behavior to the Phase 4 rows it narrows. It is not a
+whole-Phase-4 gate closure decision.
+
+Public documentation alignment:
+
+- `docs/architecture/stream-terminal-contract.md` is the public taxonomy
+  reference for typed terminal reasons, provenance values, output states,
+  serialized `ERROR`, `MESSAGE.END`, and `SESSION.CLOSE` fields, and the
+  landed surface map across returned Go errors, direct streams, loop outcomes,
+  sessions, replay, and CLI output.
+- `go-llm-gateway/README.md` is the gateway-facing consumer guide for typed
+  gateway error classes, provider classification strings, terminal event
+  fields, and the split between returned Go errors and in-band stream/session
+  events.
+- `docs/architecture/contract-gap-audit.md` now treats the typed-terminal work
+  as representative landed evidence for `P4-API-02`, `P4-API-03`, and
+  `P4-API-05`, while preserving explicit broader open work instead of
+  inheriting stale "taxonomy absent" or "terminal authority absent" wording.
+
+Internal audit row mapping:
+
+| Row | Landed or superseded evidence | Remaining status |
+| --- | --- | --- |
+| `P4-API-02` | Returned gateway/provider errors expose typed classes with `errors.Is`/`errors.As`; direct stream, session error, replay, cancellation, and partial-output paths expose classification through typed errors or structured event fields on representative surfaces. Older audit claims that no shared taxonomy exists are superseded for this representative scope by the stream terminal contract and tests cited in stories 003 through 005. | Broader provider-wide and parser-wide parity remains open outside this reconciliation. |
+| `P4-API-03` | Loop `FinalTextResult`, `StreamOutcome`, replay outcomes, session close/error events, and CLI output distinguish clean completion, provider close, cancellation, replay divergence, replay incomplete, terminal failure, and partial output for the repaired representative paths. | Broader result-helper and lifecycle-helper ambiguity remains open where no representative test or public field has been landed. |
+| `P4-API-05` | Gateway, provider, loop message, session, replay, and CLI docs now describe one additive terminal vocabulary and the serialized public fields that carry it. | Provider-wide session/direct-stream parity and package-ownership follow-up remain open where the audit names unproven surfaces. |
+| `P4-GATE-01` | The typed-terminal repair contributes credential-free evidence and public docs for its representative scope. | Whole-Phase-4 gate closure remains open and must wait for the final validation story plus any unrelated Phase 4 rows still marked fail or uncertain. |
+
+Returned Go errors versus in-band events:
+
+- Request setup, local validation, stream-open, provider HTTP status, transport,
+  replay divergence, replay incomplete, and caller cancellation before an
+  active stream/session surface return Go errors that callers classify with
+  `errors.Is` or `errors.As`.
+- Mid-stream runtime failures, cancellation observed after stream output,
+  provider-authored completion, loop-synthesized completion, provider close,
+  session close, session terminal errors, and CLI replay output are emitted
+  in-band when the stream/session/CLI surface is already active.
+- In-process stream `ERROR` values may expose both surfaces: `ErrorValue.Err`
+  keeps the typed Go error for Go callers, while serialized fields carry
+  `classification`, `terminal_reason`, `terminal_provenance`, and
+  `output_state` for JSON, replay, session, or CLI consumers.
+
+Credential-free alignment checks:
+
+```sh
+go doc ./go-agent-loop/pkg/messages
+go doc ./go-llm-gateway/pkg/gateway
+go doc ./go-llm-gateway/pkg/providers
+make typecheck
+```
+
+The evidence above closes the story-006 docs/audit alignment scope. Final
+reviewer validation commands and the end-to-end evidence summary remain
+assigned to story 007. This story still does not close `P4-GATE-01`.
+
 ## Gate Status
 
 This story does not close `P4-GATE-01`. The gate remains governed by the

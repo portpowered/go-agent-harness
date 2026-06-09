@@ -35,6 +35,25 @@ above. Some paths expose both: the returned error preserves in-process
 classification and the stream event carries the serialized classification for
 remote or CLI consumers.
 
+## Landed Surface Map
+
+The reconciled contract is representative and additive. These public surfaces
+currently carry the taxonomy without requiring callers to parse operator text:
+
+| Surface | Returned Go error | In-band or serialized terminal fields |
+| --- | --- | --- |
+| Gateway/provider setup, validation, and stream-open failures | `gateway.ErrAuthentication`, `ErrAuthorization`, `ErrRateLimit`, `ErrInvalidRequest`, `ErrUnsupportedModel`, `ErrProviderHTTPStatus`, `ErrTransport`, `ErrCancellation`, and structured `errors.As` details where available. | Not applicable unless a stream has already started. |
+| Direct gateway stream `ERROR` events | In-process `messages.ErrorValue.Err` preserves typed classes when the caller receives the Go value directly. | `classification`, `terminal_reason`, `terminal_provenance`, and `output_state` serialize on `ERROR`. |
+| Loop `FinalText()` and `Stream.Outcome()` | Outcome errors preserve cancellation, deadline, or terminal-failure cause where observable. | `MESSAGE.END` and `ERROR` payloads expose terminal reason/provenance/output state; outcomes expose final status and partial-output state. |
+| Session close and session error events | Session connection or setup failures return Go errors; active session terminal states are event based. | `SESSION.CLOSE` and session `ERROR` payloads expose classification, terminal reason, provenance, and output state where the provider surface emits terminal metadata. |
+| Session replay outcomes | Replay errors match `gateway.ErrReplayMismatch`, `gateway.ErrReplayIncomplete`, provider replay sentinels, or caller cancellation. | Replay/session/CLI surfaces expose replay status or terminal fields where events are emitted. |
+| CLI stream/session output | Command setup failures return CLI errors; active stream/session events are rendered. | NDJSON preserves payload fields, and `agent session` renders additive key/value terminal lines for session close and error metadata. |
+
+The exact representative proof is recorded in
+`docs/internal/phase-4-typed-terminal-authoritative-reconciliation.md`.
+Provider-wide parity for every adapter, parser failure, and session helper is
+outside this contract note unless a path is explicitly listed as landed there.
+
 ## CLI Session Output
 
 `agent session --replay` and session record/replay loop output keep the legacy
