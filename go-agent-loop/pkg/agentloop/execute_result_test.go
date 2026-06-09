@@ -79,6 +79,25 @@ func TestExecuteResultFinalText_TerminalFailure(t *testing.T) {
 	}
 }
 
+func TestExecuteResultFinalText_ReportsTerminalSourceFromDeltas(t *testing.T) {
+	result := ExecuteResult{
+		Deltas: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageEnd, Value: messages.NewSynthesizedMessageEndValue(messages.TokenUsage{})},
+		},
+		Messages: []messages.Message{
+			messages.NewTextMessage(messages.RoleAssistant, "from fallback"),
+		},
+	}
+
+	final := result.FinalText()
+	if final.Status != FinalTextSuccess {
+		t.Fatalf("FinalText status = %q, want %q", final.Status, FinalTextSuccess)
+	}
+	if final.TerminalSource != messages.TerminalSourceLoopSynthesized {
+		t.Fatalf("FinalText terminal source = %q, want %q", final.TerminalSource, messages.TerminalSourceLoopSynthesized)
+	}
+}
+
 func TestStreamOutcome_Drained(t *testing.T) {
 	ch := make(chan streamEvent, 1)
 	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("ok")}}
@@ -107,6 +126,47 @@ func TestStreamOutcome_Drained(t *testing.T) {
 	}
 	if outcome.Partial {
 		t.Fatal("Outcome Partial = true, want false on clean drain")
+	}
+}
+
+func TestStreamOutcome_ReportsProviderTerminalSource(t *testing.T) {
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want MESSAGE.END event")
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after closed channel")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.Status != StreamDrained {
+		t.Fatalf("Outcome status = %q, want %q", outcome.Status, StreamDrained)
+	}
+	if outcome.TerminalSource != messages.TerminalSourceProvider {
+		t.Fatalf("Outcome terminal source = %q, want %q", outcome.TerminalSource, messages.TerminalSourceProvider)
+	}
+}
+
+func TestStreamOutcome_ReportsLoopSynthesizedTerminalSource(t *testing.T) {
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewSynthesizedMessageEndValue(messages.TokenUsage{})}}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() {
+		t.Fatal("HasNext = false, want MESSAGE.END event")
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after closed channel")
+	}
+
+	outcome := stream.Outcome()
+	if outcome.TerminalSource != messages.TerminalSourceLoopSynthesized {
+		t.Fatalf("Outcome terminal source = %q, want %q", outcome.TerminalSource, messages.TerminalSourceLoopSynthesized)
 	}
 }
 

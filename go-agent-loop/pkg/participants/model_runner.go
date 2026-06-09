@@ -259,7 +259,7 @@ func (r *ModelRunner) drainStream(ctx context.Context, ch <-chan messages.Stream
 				r.writeDelta(ctx, messages.StreamMessage{
 					Type:  messages.StreamTypeMessageEnd,
 					Role:  messages.RoleAssistant,
-					Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+					Value: messages.NewSynthesizedMessageEndValue(messages.TokenUsage{}),
 				})
 				return
 			}
@@ -354,6 +354,6 @@ func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.I
 	r.writeDelta(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(result.TokenUsage),
+		Value: messages.NewSynthesizedMessageEndValue(result.TokenUsage),
 	})
 }

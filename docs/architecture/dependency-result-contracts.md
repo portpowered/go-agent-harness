@@ -56,9 +56,18 @@ For final text from `go-agent-loop`, prefer
 - caller cancellation or deadline
 - terminal failure
 - partial output with a terminal error
+- terminal source when a `MESSAGE.END` boundary was observed
 
 `Text()` remains available for compatible text-only callers that already treat
 an empty string as acceptable.
+
+`FinalTextResult.TerminalSource` distinguishes provider-authored terminal
+boundaries from loop-synthesized boundaries. Provider-authored boundaries are
+reported as `messages.TerminalSourceProvider`, including legacy `MESSAGE.END`
+values without explicit source metadata. Loop-synthesized boundaries are
+reported as `messages.TerminalSourceLoopSynthesized` when the model runner
+converts a non-streaming result into deltas or closes a provider stream that
+ended without `MESSAGE.END`.
 
 ## Stream Lifecycle
 
@@ -74,8 +83,14 @@ iteration completes. It distinguishes:
 - caller cancellation or deadline
 - terminal failure
 - partial output before terminal failure
+- provider-authored versus loop-synthesized `MESSAGE.END` boundaries
 
 Do not infer these lifecycle states from `HasNext() == false` in new code.
+
+`messages.MessageEndValue` carries optional `terminal_source` metadata. Use
+`messages.MessageEndTerminalSource(value)` to normalize older empty-source
+events as provider-authored. New loop-synthesized boundaries should be emitted
+with `messages.NewSynthesizedMessageEndValue(...)`.
 
 ## Provider Runtime Ownership
 
@@ -119,9 +134,6 @@ The current repair batch intentionally avoids removing legacy declarations.
 Remaining compatibility-sensitive work should be additive unless a future major
 version explicitly breaks compatibility:
 
-- decide whether provider-authored completion and loop-synthesized completion
-  need a public stream/final-text status, metadata field, emitted event, or
-  documented compatibility gap
 - decide whether replay divergence and incomplete replay need a first-class
   public outcome value beyond typed errors returned through replay helpers such
   as `SessionReplayer.Err()`

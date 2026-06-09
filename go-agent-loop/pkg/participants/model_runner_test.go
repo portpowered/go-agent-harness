@@ -12,6 +12,7 @@ import (
 type testInferencer struct {
 	responses []messages.InferenceResult
 	callCount int
+	stream    <-chan messages.StreamMessage
 }
 
 func (t *testInferencer) Infer(ctx context.Context, req messages.InferenceRequest) (messages.InferenceResult, error) {
@@ -24,6 +25,9 @@ func (t *testInferencer) Infer(ctx context.Context, req messages.InferenceReques
 }
 
 func (t *testInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	if t.stream != nil {
+		return t.stream, nil
+	}
 	return nil, nil
 }
 
@@ -130,6 +134,109 @@ func TestModelRunner_WithToolCalls(t *testing.T) {
 	}
 	if toolCalls[0].Name != "get_weather" {
 		t.Errorf("expected tool 'get_weather', got %q", toolCalls[0].Name)
+	}
+}
+
+func TestModelRunner_NonStreamingFallbackMarksSynthesizedMessageEnd(t *testing.T) {
+	inf := &testInferencer{
+		responses: []messages.InferenceResult{
+			{Message: messages.NewTextMessage(messages.RoleAssistant, "fallback")},
+		},
+	}
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	for {
+		delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+		if !ok {
+			t.Fatal("context cancelled waiting for model delta")
+		}
+		if delta.Type != messages.StreamTypeMessageEnd {
+			continue
+		}
+		value, ok := delta.Value.(*messages.MessageEndValue)
+		if !ok {
+			t.Fatalf("MESSAGE.END value type = %T, want *MessageEndValue", delta.Value)
+		}
+		if messages.MessageEndTerminalSource(value) != messages.TerminalSourceLoopSynthesized {
+			t.Fatalf("terminal source = %q, want %q", messages.MessageEndTerminalSource(value), messages.TerminalSourceLoopSynthesized)
+		}
+		return
+	}
+}
+
+func TestModelRunner_StreamMessageEndDefaultsToProviderAuthored(t *testing.T) {
+	stream := make(chan messages.StreamMessage, 1)
+	stream <- messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	close(stream)
+	inf := &testInferencer{stream: stream}
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+	if !ok {
+		t.Fatal("context cancelled waiting for model delta")
+	}
+	value, ok := delta.Value.(*messages.MessageEndValue)
+	if !ok {
+		t.Fatalf("MESSAGE.END value type = %T, want *MessageEndValue", delta.Value)
+	}
+	if messages.MessageEndTerminalSource(value) != messages.TerminalSourceProvider {
+		t.Fatalf("terminal source = %q, want %q", messages.MessageEndTerminalSource(value), messages.TerminalSourceProvider)
+	}
+}
+
+func TestModelRunner_StreamCloseWithoutMessageEndMarksSynthesizedMessageEnd(t *testing.T) {
+	stream := make(chan messages.StreamMessage)
+	close(stream)
+	inf := &testInferencer{stream: stream}
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	})
+
+	delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+	if !ok {
+		t.Fatal("context cancelled waiting for model delta")
+	}
+	value, ok := delta.Value.(*messages.MessageEndValue)
+	if !ok {
+		t.Fatalf("MESSAGE.END value type = %T, want *MessageEndValue", delta.Value)
+	}
+	if messages.MessageEndTerminalSource(value) != messages.TerminalSourceLoopSynthesized {
+		t.Fatalf("terminal source = %q, want %q", messages.MessageEndTerminalSource(value), messages.TerminalSourceLoopSynthesized)
 	}
 }
 
