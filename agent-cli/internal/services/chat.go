@@ -14,11 +14,11 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/skills"
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // chatLineKind identifies how to style a line in the conversation.

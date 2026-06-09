@@ -3,8 +3,8 @@ package openai
 import (
 	"testing"
 
-	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 func TestOpenAIProviderCapabilitiesReportsLocalWrapperEvidence(t *testing.T) {

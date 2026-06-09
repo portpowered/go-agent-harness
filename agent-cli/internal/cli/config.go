@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portpowered/agent-cli/internal/config"
-	"github.com/portpowered/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/spf13/cobra"
 	yamlv3 "gopkg.in/yaml.v3"
 )

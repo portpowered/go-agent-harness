@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // captureGateway records the InferenceRequest it receives so tests can inspect it.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // fakeTokenCounter counts each message as having a fixed number of tokens.

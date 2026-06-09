@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	gatewaytesting "github.com/portpowered/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestRun_ValidFixtureDirectory_PrintsSuccessSummary(t *testing.T) {

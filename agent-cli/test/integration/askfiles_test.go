@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/config"
-	"github.com/portpowered/agent-cli/internal/input"
-	"github.com/portpowered/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // TestAskFilesParseArgs is a smoke test that the input package and file-input tests are compiled.

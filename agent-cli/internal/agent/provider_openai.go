@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"github.com/portpowered/agent-cli/internal/logger"
-	oaiprovider "github.com/portpowered/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/logger"
+	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 
 // RegisterOpenAIProvider registers the OpenAI-compatible provider builder

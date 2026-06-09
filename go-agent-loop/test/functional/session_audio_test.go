@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // TestSessionAudioServerToClient verifies that server audio deltas injected via

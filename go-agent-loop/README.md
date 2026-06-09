@@ -21,15 +21,15 @@ they are not the first consumer-facing surface to build against.
 ## Install
 
 ```bash
-go get github.com/portpowered/go-agent-loop@latest
+go get github.com/portpowered/go-agent-harness/go-agent-loop@v0.0.1
 ```
 
 Then import the package entrypoints you need:
 
 ```go
 import (
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 ```
 
@@ -46,8 +46,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 type staticInferencer struct{}

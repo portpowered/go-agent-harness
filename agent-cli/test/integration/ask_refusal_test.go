@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // refusalInferencer returns a response with the Refusal field set (no text content).

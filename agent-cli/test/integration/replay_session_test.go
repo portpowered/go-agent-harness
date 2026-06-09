@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // TestRecordReplaySession exercises the session replay path by loading a

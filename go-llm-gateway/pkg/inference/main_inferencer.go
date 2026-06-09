@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 )
 
 // GatewayInferencer is the public stateless bridge from a

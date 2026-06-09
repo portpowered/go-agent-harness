@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 )
 
 // ---------------------------------------------------------------------------

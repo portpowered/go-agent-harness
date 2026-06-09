@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/spf13/cobra"
 )
 

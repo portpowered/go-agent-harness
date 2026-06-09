@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 type staticRoundTripper struct {

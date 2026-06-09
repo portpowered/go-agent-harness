@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/logging"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 const conversationItemCreateEvent = models.SessionEventType("conversation.item.create")

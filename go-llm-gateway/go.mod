@@ -1,11 +1,11 @@
-module github.com/portpowered/go-llm-gateway
+module github.com/portpowered/go-agent-harness/go-llm-gateway
 
 go 1.24.2
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/portpowered/go-agent-loop v0.0.0
+	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.1
 	google.golang.org/genai v1.48.0
 )
 
@@ -31,5 +31,3 @@ require (
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
-
-replace github.com/portpowered/go-agent-loop => ../go-agent-loop

@@ -3,7 +3,7 @@ package subsystems
 import (
 	"context"
 
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // Subsystem is a subsystem that runs during each tick of the engine.

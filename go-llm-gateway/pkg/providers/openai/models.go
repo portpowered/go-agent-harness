@@ -3,8 +3,8 @@ package openai
 import (
 	"encoding/base64"
 
-	"github.com/portpowered/go-llm-gateway/pkg/logging"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 // messagesToParams converts gateway messages to OpenAI request messages.

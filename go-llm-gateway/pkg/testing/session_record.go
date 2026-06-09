@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // SessionRecorder wraps a messages.Session and records all sent and received

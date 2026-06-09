@@ -9,18 +9,24 @@ COVERAGE_DIR ?= coverage
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
+GORELEASER ?= goreleaser
 GOLANGCI_LINT_VERSION ?= v2.3.0
 STATICCHECK_VERSION ?= 2025.1.1
 GOLANGCI_LINT_INSTALL ?= go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 STATICCHECK_INSTALL ?= go install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
+GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@latest
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
+RELEASE_VERSION ?= v0.0.1
+RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
+GORELEASER_CONFIG ?= .goreleaser.yaml
+SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
 
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release release-dry-run clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,9 +36,10 @@ help: ## Show available targets.
 	@printf "\nOpt-in test env vars:\n"
 	@printf "  %-18s %s\n" "RUN_CUSTOMER_SESSIONS=1" "Acknowledge local-only private session sweep targets."
 	@printf "  %-18s %s\n" "CUSTOMER_SESSION_DIR=..." "Override the private session directory checked by test-customer-sessions."
-	@printf "\nRelease placeholders:\n"
-	@printf "  %-18s %s\n" "release" "Placeholder target for Phase 4 release automation (not implemented)."
-	@printf "  %-18s %s\n" "release-dry-run" "Placeholder target for Phase 4 release dry runs (not implemented)."
+	@printf "\nRelease env vars:\n"
+	@printf "  %-18s %s\n" "RELEASE_VERSION=v0.0.1" "Version used by release targets."
+	@printf "  %-18s %s\n" "SKIP_RELEASE_CI=1" "Skip the CI pipeline inside make release."
+	@printf "  %-18s %s\n" "GORELEASER=..." "Override the GoReleaser binary."
 
 deps: ## Sync the workspace and download module dependencies for all modules.
 	@set -euo pipefail; \
@@ -179,13 +186,55 @@ ci: ## Run the full deterministic validation pipeline used by contributors and C
 
 validate: ci ## Backward-compatible alias for the full deterministic root validation pipeline.
 
-release: ## Placeholder for Phase 4 release automation; prints guidance and exits non-zero.
-	@echo "make release is reserved for Phase 4 release automation and is not implemented in Phase 1."
-	@exit 1
+release-check: ## Validate release inputs and required release tooling.
+	@set -euo pipefail; \
+	case "$(RELEASE_VERSION)" in \
+		v[0-9]*.[0-9]*.[0-9]*) ;; \
+		*) echo "RELEASE_VERSION must look like vMAJOR.MINOR.PATCH, got $(RELEASE_VERSION)"; exit 1 ;; \
+	esac; \
+	if ! command -v "$(GORELEASER)" >/dev/null 2>&1; then \
+		echo "goreleaser is required for release targets."; \
+		echo "Install it with: $(GORELEASER_INSTALL)"; \
+		exit 1; \
+	fi; \
+	test -f "$(GORELEASER_CONFIG)"
 
-release-dry-run: ## Placeholder for Phase 4 release dry runs; prints guidance and exits non-zero.
-	@echo "make release-dry-run is reserved for Phase 4 release automation and is not implemented in Phase 1."
-	@exit 1
+release-tags: ## Create local v0.0.1 root and per-module tags for Go module publication.
+	@set -euo pipefail; \
+	if ! git diff --quiet || ! git diff --cached --quiet; then \
+		echo "release-tags requires a clean worktree so tags point at committed release content."; \
+		exit 1; \
+	fi; \
+	head="$$(git rev-parse HEAD)"; \
+	for tag in $(RELEASE_TAGS); do \
+		if git rev-parse -q --verify "refs/tags/$$tag" >/dev/null; then \
+			tag_head="$$(git rev-list -n 1 "$$tag")"; \
+			if [ "$$tag_head" != "$$head" ]; then \
+				echo "tag $$tag already exists at $$tag_head, not HEAD $$head"; \
+				exit 1; \
+			fi; \
+			echo "==> release-tags $$tag already points at HEAD"; \
+		else \
+			echo "==> release-tags creating $$tag"; \
+			git tag -a "$$tag" -m "Release $$tag"; \
+		fi; \
+	done
+
+release-push: release-tags ## Push root and per-module release tags to origin.
+	git push origin $(RELEASE_TAGS)
+
+release-dry-run: release-check ## Build release artifacts locally without publishing.
+	$(GORELEASER) release --snapshot --clean --skip=publish --config "$(GORELEASER_CONFIG)"
+
+release: release-check ## Run validation and publish the GitHub release for RELEASE_VERSION.
+	@set -euo pipefail; \
+	if [ "$${SKIP_RELEASE_CI:-$(SKIP_RELEASE_CI)}" != "1" ]; then \
+		$(MAKE) ci; \
+	else \
+		echo "==> release skipping ci via SKIP_RELEASE_CI=1"; \
+	fi; \
+	$(MAKE) release-tags; \
+	$(GORELEASER) release --clean --config "$(GORELEASER_CONFIG)"
 
 clean: ## Remove root-generated build and coverage outputs.
-	rm -rf "$(COVERAGE_DIR)" "$(AGENT_CLI_OUTPUT)"
+	rm -rf "$(COVERAGE_DIR)" "$(AGENT_CLI_OUTPUT)" dist

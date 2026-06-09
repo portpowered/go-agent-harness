@@ -19,7 +19,7 @@ make build
 Or install the command into your Go bin directory:
 
 ```bash
-go install ./cmd/agent
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@v0.0.1
 agent --help
 ```
 

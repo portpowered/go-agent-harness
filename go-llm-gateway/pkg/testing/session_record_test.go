@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // fakeSession is a minimal messages.Session for testing.

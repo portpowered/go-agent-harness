@@ -1,6 +1,6 @@
 package openai
 
-import "github.com/portpowered/go-llm-gateway/pkg/providers"
+import "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 
 // applyInferenceRequestOptions sets MaxTokens, Temperature, FrequencyPenalty,
 // and Stop on the request from the gateway InferenceRequest.

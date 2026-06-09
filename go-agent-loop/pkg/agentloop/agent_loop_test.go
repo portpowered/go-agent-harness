@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/test/test_logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/test/test_logging"
 )
 
 // streamTextFromEventStream drains stream and returns concatenated TEXT.DELTA and REASONING.DELTA content.

@@ -3,7 +3,7 @@ package audio_test
 import (
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 )
 
 // makeSpeechFrame returns one FrameSize frame of high-energy samples

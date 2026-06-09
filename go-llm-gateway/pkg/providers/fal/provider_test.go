@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // mockTransport captures the last request and returns a configured response.

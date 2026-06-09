@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/config"
-	"github.com/portpowered/agent-cli/internal/wire"
-	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestAskReplayUsesInjectedRuntimeWithoutLiveCredentials(t *testing.T) {

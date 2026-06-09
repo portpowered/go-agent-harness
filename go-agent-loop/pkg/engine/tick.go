@@ -3,7 +3,7 @@ package engine
 import (
 	"sort"
 
-	"github.com/portpowered/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 )
 
 // orderedSubsystems sorts helpers by their tick group for deterministic execution.

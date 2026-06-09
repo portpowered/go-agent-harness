@@ -1,6 +1,6 @@
 package gateway
 
-import "github.com/portpowered/go-llm-gateway/pkg/providers"
+import "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 
 var _ CapabilityReporter = (*DefaultGateway)(nil)
 var _ CapabilityReporter = (*DefaultSessionGateway)(nil)

@@ -5,10 +5,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/input"
-	"github.com/portpowered/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/spf13/cobra"
 )
 

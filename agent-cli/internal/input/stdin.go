@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // StdinContent holds the result of reading stdin.

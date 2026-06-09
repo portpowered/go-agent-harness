@@ -8,12 +8,12 @@ package wire
 
 import (
 	"github.com/google/wire"
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/cli"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/services"
-	"github.com/portpowered/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // Injectors from wire.go:

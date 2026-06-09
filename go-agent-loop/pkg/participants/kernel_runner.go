@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // KernelRunner is responsible for dispatching messages to IO.

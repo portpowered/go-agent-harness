@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // TestRecordReplayStateless exercises the HTTP replay round-tripper by loading

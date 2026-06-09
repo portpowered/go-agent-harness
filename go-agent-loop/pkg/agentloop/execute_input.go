@@ -6,7 +6,7 @@ import (
 	"image"
 	"image/jpeg"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // Audio holds raw PCM audio samples.

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/spf13/cobra"
 )
 

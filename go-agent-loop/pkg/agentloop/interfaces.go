@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // AgenticLoop is the porcelain API for interacting with the agentic loop engine.

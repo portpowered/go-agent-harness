@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/config"
-	"github.com/portpowered/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // mockInferencer returns a single canned text response (no tool calls).

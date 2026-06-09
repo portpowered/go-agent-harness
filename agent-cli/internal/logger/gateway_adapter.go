@@ -3,7 +3,7 @@ package logger
 import (
 	"go.uber.org/zap"
 
-	gatewaylogging "github.com/portpowered/go-llm-gateway/pkg/logging"
+	gatewaylogging "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 )
 
 // ZapGatewayAdapter wraps a zap.Logger to implement the go-llm-gateway logging seam.

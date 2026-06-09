@@ -3,9 +3,9 @@ package subsystems
 import (
 	"context"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // The coordinator is responsible for executing at each tick, checking the inputs, and then determining to push the next inference step/tool call based on the world state.

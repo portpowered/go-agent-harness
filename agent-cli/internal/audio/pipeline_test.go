@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 )
 
 // makeSpeech returns n frames of high-energy PCM samples.

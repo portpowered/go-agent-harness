@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // InteractionRunner is an input-only participant used to feed normalized

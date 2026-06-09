@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/agent-cli/internal/config"
-	"github.com/portpowered/agent-cli/internal/logger"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/logger"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"go.uber.org/zap"
 )
 

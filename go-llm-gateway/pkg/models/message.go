@@ -1,6 +1,6 @@
 package models
 
-import "github.com/portpowered/go-agent-loop/pkg/messages"
+import "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 
 // Loop-owned shared-contract aliases.
 //

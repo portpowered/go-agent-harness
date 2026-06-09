@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // Gateway is the unified interface for sending inference requests to LLM providers.

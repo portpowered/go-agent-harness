@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // mockIter builds a streamIterator from a slice of responses and an optional final error.

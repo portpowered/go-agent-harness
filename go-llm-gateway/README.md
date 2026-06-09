@@ -76,23 +76,23 @@ and [`pkg/testing/README.md`](pkg/testing/README.md).
 ## Install
 
 ```bash
-go get github.com/portpowered/go-llm-gateway@latest
+go get github.com/portpowered/go-agent-harness/go-llm-gateway@v0.0.1
 ```
 
 Then import the public packages you need:
 
 ```go
 import (
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 ```
 
-During workspace development this module currently uses a local `replace`
-directive for `github.com/portpowered/go-agent-loop`. That is part of the
-current workspace composition, so this module should not be documented as fully
-independent from the loop contracts yet.
+During workspace development this module resolves
+`github.com/portpowered/go-agent-harness/go-agent-loop` through the root
+`go.work` file. That is part of the current workspace composition, so this
+module should not be documented as fully independent from the loop contracts yet.
 
 For this Phase 3 slice, `go-agent-loop/pkg/messages` remains the deliberate
 shared runtime contract boundary. Provider logging is a gateway-owned concern
@@ -111,9 +111,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 
 func main() {
@@ -577,10 +577,10 @@ package main
 import (
 	"context"
 
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 
 func main() {
@@ -611,7 +611,7 @@ Use:
 
 This relationship is part of the current architecture boundary: `agent-cli`
 composes `go-agent-loop` and `go-llm-gateway`, and this module currently
-develops against the checked-out loop contracts through `replace`.
+develops against the checked-out loop contracts through the root workspace.
 
 ## Deterministic Validation
 

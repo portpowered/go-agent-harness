@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // MouseTool lets the model control the mouse: move, click, double-click, hold,

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 func TestWriteEventStreamToWriter_RefusalNotWrittenToWriter(t *testing.T) {

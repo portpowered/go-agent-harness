@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // streamEventJSON is the NDJSON wire shape for a single delta event.

@@ -3,7 +3,7 @@ package logger
 import (
 	"go.uber.org/zap"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 )
 
 // ZapAgentLoopAdapter wraps a zap.Logger to implement the go-agent-loop logging.Logger interface.

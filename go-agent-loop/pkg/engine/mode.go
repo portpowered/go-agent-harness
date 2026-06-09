@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/portpowered/go-agent-loop/pkg/state"
+import "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 
 // ExecutionMode is a type alias for state.ExecutionMode. The canonical declaration
 // lives in the state package; this alias keeps existing engine-package callers working.

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/wire"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 )
 
 func TestInteractionCommand_HelpDocumentsReplayOutputAndCredentialFreeBehavior(t *testing.T) {

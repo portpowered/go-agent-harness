@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // DispatchAgentTool spawns an isolated child agent with its own system prompt and task,

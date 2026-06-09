@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/participants"
-	"github.com/portpowered/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 )
 
 // textInferencer returns a single text response as streaming deltas.

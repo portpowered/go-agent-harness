@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
 
 // TestAtFile_TextFileIncludedInResponse verifies that submitting '@tempfile.txt explain this'

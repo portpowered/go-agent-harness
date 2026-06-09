@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/participants"
-	"github.com/portpowered/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 )
 
 // benchInferencer returns a canned streaming response for each InferStream call.

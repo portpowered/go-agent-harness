@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 )
 
 // writeTestConfig creates a config.yaml and models.yaml in configDir for MIME type validation tests.

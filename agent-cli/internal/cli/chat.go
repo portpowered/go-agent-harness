@@ -10,12 +10,12 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/audio"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/services"
-	"github.com/portpowered/agent-cli/internal/session"
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/spf13/cobra"
 )
 

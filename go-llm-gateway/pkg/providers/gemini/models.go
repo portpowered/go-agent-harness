@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // messagesToContents converts gateway messages to Gemini Content slices.

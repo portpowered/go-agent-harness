@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/audio"
-	"github.com/portpowered/agent-cli/internal/cli"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // --------------------------------------------------------------------------

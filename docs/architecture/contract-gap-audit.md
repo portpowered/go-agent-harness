@@ -494,7 +494,7 @@ contracts.
 
 #### P4-CTX-01: execution result aggregation can block without a caller-visible timeout result
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop`
 - File path: `go-agent-loop/pkg/agentloop/agent_loop.go`,
   `go-agent-loop/pkg/agentloop/execute_result.go`
 - Exported declaration: `AgenticLoop.Execute`,
@@ -536,7 +536,7 @@ contracts.
 
 #### P4-CTX-02: buffer waits collapse cancellation, empty buffer, and backpressure into `false`
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`
 - File path: `go-agent-loop/pkg/messages/buffers.go`,
   `go-agent-loop/pkg/messages/session.go`
 - Exported declaration: `TypedBuffer.Write`, `TypedBuffer.Read`,
@@ -575,9 +575,9 @@ contracts.
 
 #### P4-CTX-03: gateway/provider calls document context plumbing but not cancellation and timeout outcomes
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers`,
-  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference`
 - File path: `go-llm-gateway/pkg/gateway/interfaces.go`,
   `go-llm-gateway/pkg/gateway/gateway.go`,
   `go-llm-gateway/pkg/providers/provider.go`,
@@ -621,10 +621,10 @@ contracts.
 
 #### P4-CTX-04: session connection and close contracts lack explicit lifecycle outcomes
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/inference`,
-  `github.com/portpowered/go-llm-gateway/pkg/testing`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing`
 - File path: `go-agent-loop/pkg/messages/session.go`,
   `go-llm-gateway/pkg/gateway/session_gateway.go`,
   `go-llm-gateway/pkg/inference/session_inferencer.go`,
@@ -670,8 +670,8 @@ contracts.
 
 #### P4-RESULT-01: text and fixture helpers use zero values for invalid or absent results
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`
 - File path: `go-agent-loop/pkg/agentloop/execute_result.go`,
   `go-llm-gateway/pkg/gateway/interaction_fixture.go`
 - Exported declaration: `ExecuteResult.Text`,
@@ -709,7 +709,7 @@ contracts.
 
 #### P4-RESULT-02: interaction and tool-result validation errors are normalized inconsistently across sync, event, and fixture APIs
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`
 - File path: `go-llm-gateway/pkg/gateway/interaction_gateway.go`,
   `go-llm-gateway/pkg/gateway/interaction_fixture.go`,
   `go-llm-gateway/pkg/gateway/interaction_types.go`
@@ -755,9 +755,9 @@ failure classes or rely on one provider-neutral terminal event contract.
 
 #### P4-ERR-01: provider status and transport errors are not represented by a shared typed error taxonomy
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference`
 - File path: `go-llm-gateway/pkg/providers/provider.go`,
   `go-llm-gateway/pkg/providers/openai/provider.go`,
   `go-llm-gateway/pkg/providers/anthropic/provider.go`,
@@ -804,12 +804,12 @@ failure classes or rely on one provider-neutral terminal event contract.
 
 #### P4-ERR-02: stream error events carry free-form messages instead of caller-actionable error classes
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
-  `github.com/portpowered/go-agent-loop/pkg/participants`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok`
 - File path: `go-agent-loop/pkg/messages/agent_messages.go`,
   `go-agent-loop/pkg/participants/model_runner.go`,
   `go-agent-loop/pkg/participants/tool_runner.go`,
@@ -853,8 +853,8 @@ failure classes or rely on one provider-neutral terminal event contract.
 
 #### P4-ERR-03: replay mismatch and fixture validation errors are public but not integrated into the shared error model
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/testing`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`
 - File path: `go-llm-gateway/pkg/testing/session_replay.go`,
   `go-llm-gateway/pkg/testing/session_websocket_dialer.go`,
   `go-llm-gateway/pkg/gateway/interaction_fixture.go`
@@ -893,10 +893,10 @@ failure classes or rely on one provider-neutral terminal event contract.
 
 #### P4-STREAM-01: streaming APIs do not expose one terminal error and final-event contract
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-agent-loop/pkg/messages`,
-  `github.com/portpowered/go-agent-loop/pkg/agentloop`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop`
 - File path: `go-llm-gateway/pkg/providers/provider.go`,
   `go-llm-gateway/pkg/gateway/interfaces.go`,
   `go-agent-loop/pkg/messages/participant_messages.go`,
@@ -938,10 +938,10 @@ failure classes or rely on one provider-neutral terminal event contract.
 
 #### P4-STREAM-02: provider stream adapters disagree on event ordering around errors, message end, usage, and empty streams
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal`
 - File path: `go-llm-gateway/pkg/providers/openai/stream.go`,
   `go-llm-gateway/pkg/providers/anthropic/stream.go`,
   `go-llm-gateway/pkg/providers/gemini/stream.go`,
@@ -982,11 +982,11 @@ failure classes or rely on one provider-neutral terminal event contract.
 
 #### P4-STREAM-03: session stream close and cancellation events lack a shared final status
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
-  `github.com/portpowered/go-agent-loop/pkg/participants`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`,
-  `github.com/portpowered/go-llm-gateway/pkg/testing`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing`
 - File path: `go-agent-loop/pkg/messages/session.go`,
   `go-agent-loop/pkg/messages/agent_messages.go`,
   `go-agent-loop/pkg/participants/model_runner.go`,
@@ -1080,9 +1080,9 @@ own test, replay, timeout, and transport behavior.
 
 #### P4-CAP-01: provider support for tools, media, reasoning, caching, sessions, and streaming is not discoverable
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/models`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models`
 - File path: `go-llm-gateway/pkg/providers/provider.go`,
   `go-llm-gateway/pkg/providers/session_provider.go`,
   `go-llm-gateway/pkg/gateway/interfaces.go`,
@@ -1131,9 +1131,9 @@ own test, replay, timeout, and transport behavior.
 
 #### P4-VALIDATION-01: unsupported request features fail at provider execution instead of a shared local validation seam
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers`,
-  `github.com/portpowered/go-llm-gateway/pkg/inference`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference`
 - File path: `go-llm-gateway/pkg/gateway/gateway.go`,
   `go-llm-gateway/pkg/gateway/interfaces.go`,
   `go-llm-gateway/pkg/providers/provider.go`,
@@ -1186,12 +1186,12 @@ own test, replay, timeout, and transport behavior.
 
 #### P4-DI-01: injectable runtime dependencies are uneven across provider constructors and public gateway seams
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`
 - File path: `go-llm-gateway/pkg/providers/openai/options.go`,
   `go-llm-gateway/pkg/providers/openai/provider.go`,
   `go-llm-gateway/pkg/providers/openai/realtime_dialer.go`,
@@ -1251,10 +1251,10 @@ own test, replay, timeout, and transport behavior.
 
 #### P4-DI-02: session configuration is bridge-owned but cannot expose provider-specific realtime capability or validation
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/inference`,
-  `github.com/portpowered/go-llm-gateway/pkg/models`,
-  `github.com/portpowered/go-agent-loop/pkg/messages`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`
 - File path: `go-llm-gateway/pkg/gateway/session_gateway.go`,
   `go-llm-gateway/pkg/gateway/session_types.go`,
   `go-llm-gateway/pkg/inference/session_inferencer.go`,
@@ -1334,8 +1334,8 @@ usable.
 
 #### P4-HYGIENE-01: exported message and content contracts lack complete consumer-facing comments
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/messages`,
-  `github.com/portpowered/go-llm-gateway/pkg/models`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models`
 - File path: `go-agent-loop/pkg/messages/agent_messages.go`,
   `go-llm-gateway/pkg/models/message.go`
 - Exported declaration: `ContentPart`, `ControlPlanePart`,
@@ -1376,9 +1376,9 @@ usable.
 
 #### P4-HYGIENE-02: broad public request and event structs expose provider-specific fields without nil/zero-value rules
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/providers`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-agent-loop/pkg/messages`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages`
 - File path: `go-llm-gateway/pkg/providers/provider.go`,
   `go-llm-gateway/pkg/gateway/interaction_types.go`,
   `go-agent-loop/pkg/messages/agent_messages.go`,
@@ -1423,8 +1423,8 @@ usable.
 
 #### P4-HYGIENE-03: public testing and replay fixtures expose mutable shapes without a clear compatibility and panic policy
 
-- Affected package: `github.com/portpowered/go-llm-gateway/pkg/testing`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`
+- Affected package: `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`
 - File path: `go-llm-gateway/pkg/testing/session_fixture_contract.go`,
   `go-llm-gateway/pkg/testing/session_replay.go`,
   `go-llm-gateway/pkg/testing/session_record.go`,
@@ -1468,15 +1468,15 @@ usable.
 
 #### P4-HYGIENE-04: exported constructors and options do not publish a module-wide compatibility posture
 
-- Affected package: `github.com/portpowered/go-agent-loop/pkg/agentloop`,
-  `github.com/portpowered/go-agent-loop/pkg/participants`,
-  `github.com/portpowered/go-llm-gateway/pkg/gateway`,
-  `github.com/portpowered/go-llm-gateway/pkg/inference`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/openai`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/anthropic`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/gemini`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/fal`,
-  `github.com/portpowered/go-llm-gateway/pkg/providers/grok`
+- Affected package: `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop`,
+  `github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/anthropic`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal`,
+  `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok`
 - File path: `go-agent-loop/pkg/agentloop/options.go`,
   `go-agent-loop/pkg/participants/model_runner.go`,
   `go-llm-gateway/pkg/gateway/gateway.go`,

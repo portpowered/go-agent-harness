@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // DefaultContextPressureWarningMessage is the warning injected when context pressure

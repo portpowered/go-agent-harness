@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/portpowered/agent-cli/internal/agent"
-	"github.com/portpowered/agent-cli/internal/flags"
-	"github.com/portpowered/agent-cli/internal/input"
-	"github.com/portpowered/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // BuildExecuteInput constructs an ExecuteInput from optional piped stdin, a text arg prompt, and file paths.

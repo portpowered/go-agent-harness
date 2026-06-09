@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	falprovider "github.com/portpowered/go-llm-gateway/pkg/providers/fal"
+	falprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal"
 )
 
 // RegisterFalProvider registers the FAL provider builder under the given names.

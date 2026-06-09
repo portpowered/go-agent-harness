@@ -1,13 +1,13 @@
 # Go workspace layout
 
-This repository is a multi-module Go workspace. A root `go.work` file is committed so contributors can build and test all libraries from the repository root without publishing pseudo-versions or guessing local `replace` paths.
+This repository is a multi-module Go workspace. A root `go.work` file is committed so contributors can build and test all libraries from the repository root without publishing pseudo-versions or guessing local module paths.
 
 ## Why `go.work` is committed
 
 - **Local cross-module edits**: `agent-cli` depends on `go-agent-loop` and `go-llm-gateway`. A workspace lets those dependencies resolve to the sibling directories in this checkout.
 - **Single validation surface**: Root tooling (`make ci`, future CI) can run `go` commands from the repository root and see every module.
 - **One CI contract**: GitHub Actions delegates to the same root `make ci` pipeline contributors run locally, so workflow YAML does not drift from module validation behavior.
-- **Reproducible onboarding**: New contributors clone once, run `go work sync` if needed, and work from the root—no manual `replace` setup.
+- **Reproducible onboarding**: New contributors clone once, run `go work sync` if needed, and work from the root with no manual module-path setup.
 
 `AGENTS.md` describes this layout; the committed `go.work` is the canonical expression of that decision.
 
@@ -15,9 +15,9 @@ This repository is a multi-module Go workspace. A root `go.work` file is committ
 
 | Directory        | Module path                          | Role                                      |
 |------------------|--------------------------------------|-------------------------------------------|
-| `./agent-cli`    | `github.com/portpowered/agent-cli`   | CLI for exercising the agent loop and gateway |
-| `./go-agent-loop`| `github.com/portpowered/go-agent-loop` | Tick-based agent execution harness      |
-| `./go-llm-gateway` | `github.com/portpowered/go-llm-gateway` | Provider-agnostic LLM gateway        |
+| `./agent-cli`    | `github.com/portpowered/go-agent-harness/agent-cli`   | CLI for exercising the agent loop and gateway |
+| `./go-agent-loop`| `github.com/portpowered/go-agent-harness/go-agent-loop` | Tick-based agent execution harness      |
+| `./go-llm-gateway` | `github.com/portpowered/go-agent-harness/go-llm-gateway` | Provider-agnostic LLM gateway        |
 
 The root `go.work` lists these three paths in `use` directives. Other top-level trees (for example `tests/`, `factory/`, `docs/`) are not workspace modules unless explicitly added later.
 
@@ -27,20 +27,29 @@ All workspace modules require **Go 1.24** or newer. Individual `go.mod` files ma
 
 Install Go 1.24+ before working in this repo. Run `go version` from the repository root to confirm.
 
-## Relationship to `replace` directives
+## Relationship to Workspace Replaces
 
-Some modules still declare `replace` directives pointing at sibling directories:
+Released module `go.mod` files do not declare local `replace` directives.
+Instead, the root `go.work` file owns local development resolution for the
+workspace's first public module version:
 
-- **`agent-cli/go.mod`** replaces `github.com/portpowered/go-agent-loop` and `github.com/portpowered/go-llm-gateway` with `../go-agent-loop` and `../go-llm-gateway`.
-- **`go-llm-gateway/go.mod`** replaces `github.com/portpowered/go-agent-loop` with `../go-agent-loop`.
+- `github.com/portpowered/go-agent-harness/go-agent-loop v0.0.1` resolves to
+  `./go-agent-loop`
+- `github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.1` resolves to
+  `./go-llm-gateway`
 
-When you are **inside the workspace** (repository root with `go.work` present, or `GOWORK` pointing at it), the workspace `use` entries take precedence for local resolution. The `replace` directives remain useful for:
+When you are **inside the workspace** (repository root with `go.work` present,
+or `GOWORK` pointing at it), the workspace `use` entries and version-specific
+workspace replaces take precedence for local resolution. Published consumers do
+not see `go.work`; they resolve the module-prefixed git tags instead.
 
-- Tools or editors invoked **outside** workspace mode (for example running `go test` from a single module directory without `GOWORK` set).
-- Downstream consumers that copy a module in isolation and rely on documented relative paths.
-- CI or scripts that explicitly disable workspace mode.
+The first public release uses these module tags:
 
-You do not need to remove `replace` directives to use the workspace; they are complementary, not conflicting, as long as paths stay aligned with the directory layout.
+```text
+agent-cli/v0.0.1
+go-agent-loop/v0.0.1
+go-llm-gateway/v0.0.1
+```
 
 ## Common commands
 

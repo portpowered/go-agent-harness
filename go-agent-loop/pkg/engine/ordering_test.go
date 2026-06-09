@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // fullModelTextDeltas returns the delta sequence for a complete assistant text message.

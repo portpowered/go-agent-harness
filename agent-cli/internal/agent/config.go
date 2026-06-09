@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // Config holds all configuration parameters for constructing and executing an agent loop.

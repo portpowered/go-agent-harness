@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // fixedTokenCounter returns a fixed token count regardless of input.

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 )
 
 // RecordingWebSocketDialer records bidirectional Grok WebSocket traffic.

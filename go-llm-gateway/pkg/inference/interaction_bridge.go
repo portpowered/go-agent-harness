@@ -1,8 +1,8 @@
 package inference
 
 import (
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 )
 
 // LoopInteractionEventFromGateway projects a gateway interaction event into the

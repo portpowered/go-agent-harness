@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 type localGatewayProvider struct {
@@ -118,8 +118,8 @@ func assertOnlySharedLoopContractDeps(t *testing.T) {
 	}
 
 	const (
-		loopPkgPrefix       = "github.com/portpowered/go-agent-loop/pkg/"
-		allowedContractPath = "github.com/portpowered/go-agent-loop/pkg/messages"
+		loopPkgPrefix       = "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/"
+		allowedContractPath = "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	)
 	for _, dep := range strings.Fields(string(out)) {
 		if strings.HasPrefix(dep, loopPkgPrefix) && dep != allowedContractPath {

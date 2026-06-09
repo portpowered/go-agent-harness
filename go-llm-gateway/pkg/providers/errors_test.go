@@ -6,7 +6,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 func TestErrorClassification_DistinguishesRuntimeOutcomes(t *testing.T) {

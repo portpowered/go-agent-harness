@@ -1,6 +1,6 @@
 package gateway
 
-import "github.com/portpowered/go-llm-gateway/pkg/models"
+import "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 
 // Re-export session types from models so gateway consumers can use them
 // without importing the models package directly.

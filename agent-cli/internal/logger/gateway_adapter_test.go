@@ -3,7 +3,7 @@ package logger
 import (
 	"testing"
 
-	gatewaylogging "github.com/portpowered/go-llm-gateway/pkg/logging"
+	gatewaylogging "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"

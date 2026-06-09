@@ -11,15 +11,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/engine"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-llm-gateway/pkg/gateway"
-	"github.com/portpowered/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
-	oaiprovider "github.com/portpowered/go-llm-gateway/pkg/providers/openai"
-	gwtesting "github.com/portpowered/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (

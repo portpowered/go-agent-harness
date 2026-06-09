@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 type localConsumerInferencer struct {
@@ -84,7 +84,7 @@ func assertNoGatewayProviderDeps(t *testing.T) {
 		t.Fatalf("list proof package dependencies: %v\n%s", err, out)
 	}
 
-	const forbidden = "github.com/portpowered/go-llm-gateway/pkg/providers/"
+	const forbidden = "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/"
 	for _, dep := range strings.Fields(string(out)) {
 		if strings.HasPrefix(dep, forbidden) {
 			t.Fatalf("loop consumer proof depends on forbidden provider package %q", dep)

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/portpowered/agent-cli/internal/execctx"
-	"github.com/portpowered/agent-cli/internal/skills"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/execctx"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // LoadSkillTool lets the model load a skill's full instructions or a resource file from a skill.

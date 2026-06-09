@@ -28,14 +28,13 @@ Choose the entrypoint that matches the surface you need:
 The modules are related, but they are not fully independent in the current
 workspace layout:
 
-- `agent-cli` is the top-level executable and currently depends on both
-  `go-agent-loop` and `go-llm-gateway` through local `replace` directives during
-  workspace development.
+- `agent-cli` is the top-level executable and depends on both `go-agent-loop`
+  and `go-llm-gateway` through the root workspace during development.
 - `go-agent-loop` is the runtime library. It defines the loop, tick model, and
   subsystem-facing contracts that agent integrations build around.
 - `go-llm-gateway` provides provider adapters plus loop-facing inferencer
-  adapters. It also uses a local `replace` directive to develop against the
-  checked-out `go-agent-loop` module.
+  adapters. It develops against the checked-out `go-agent-loop` module through
+  the root workspace.
 
 That means the workspace should be described as a composed multi-module repo,
 not as three completely isolated packages.
@@ -48,6 +47,20 @@ explicitly.
 For the current compatibility-staged cancellation, result, lifecycle, provider
 runtime, and prompt-resolution contracts, see
 [`docs/architecture/dependency-result-contracts.md`](./docs/architecture/dependency-result-contracts.md).
+
+## Releases
+
+The first public module version is `v0.0.1`. Customers can consume the modules
+with:
+
+```bash
+go get github.com/portpowered/go-agent-harness/go-agent-loop@v0.0.1
+go get github.com/portpowered/go-agent-harness/go-llm-gateway@v0.0.1
+go install github.com/portpowered/go-agent-harness/agent-cli/cmd/agent@v0.0.1
+```
+
+Maintainers can run `make release-dry-run` before tagging and use
+[`docs/release.md`](./docs/release.md) for the full release flow.
 
 ## Root Validation Commands
 

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/portpowered/go-agent-loop/pkg/engine"
-	"github.com/portpowered/go-agent-loop/pkg/logging"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/participants"
-	"github.com/portpowered/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 )
 
 // AgentLoop is the default implementation of AgenticLoop.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/subsystems"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 )
 
 // iterTestTokenCounter is a test double that returns a fixed token count.

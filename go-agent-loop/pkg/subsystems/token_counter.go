@@ -3,8 +3,8 @@ package subsystems
 import (
 	"context"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // TokenCounter counts tokens in the conversation buffer.

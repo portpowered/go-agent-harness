@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/portpowered/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // ProviderHTTPRuntime centralizes the shared HTTP runtime ownership for provider construction.

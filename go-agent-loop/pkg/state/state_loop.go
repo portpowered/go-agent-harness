@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // ExecutionMode is the canonical execution mode type. Engine and agentloop packages

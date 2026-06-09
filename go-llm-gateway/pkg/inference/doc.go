@@ -1,6 +1,6 @@
 // Package inference exposes the public bridge from go-llm-gateway runtime
 // behavior into the authoritative loop-owned contracts in
-// github.com/portpowered/go-agent-loop/pkg/messages.
+// github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages.
 //
 // GatewayInferencer adapts stateless gateway inference to messages.Inferencer.
 // SessionGatewayInferencer adapts gateway session establishment to

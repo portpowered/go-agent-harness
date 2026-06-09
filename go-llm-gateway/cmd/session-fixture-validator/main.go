@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/portpowered/go-llm-gateway/internal/sessionfixturevalidator"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/internal/sessionfixturevalidator"
 )
 
 func main() {

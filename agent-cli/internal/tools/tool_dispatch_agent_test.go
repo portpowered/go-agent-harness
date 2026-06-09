@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // dispatchMockInferencer is a test double that returns canned responses.

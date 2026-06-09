@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 func TestMessagesToParams_UserMessageTextOnly(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // SleepTool pauses execution for a given duration. Useful for rate limiting,

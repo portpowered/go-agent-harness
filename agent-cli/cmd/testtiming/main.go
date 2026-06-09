@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/portpowered/agent-cli/internal/testtiming"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming"
 )
 
 func main() {

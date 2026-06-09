@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // FinalTextStatus is the explicit terminal outcome reported by

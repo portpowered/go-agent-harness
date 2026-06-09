@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/logging"
-	"github.com/portpowered/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // PingPong responds to ping control plane messages with PONG stream events.

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 )
 
 type failingWriter struct {

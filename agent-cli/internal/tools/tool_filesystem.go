@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	_ "golang.org/x/image/webp"
 )
 

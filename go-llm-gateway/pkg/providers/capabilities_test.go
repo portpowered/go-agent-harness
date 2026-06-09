@@ -3,13 +3,13 @@ package providers_test
 import (
 	"testing"
 
-	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
-	"github.com/portpowered/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/anthropic"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/fal"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/gemini"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/grok"
-	"github.com/portpowered/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/anthropic"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 
 func TestConcreteProviderFamiliesReportCapabilities(t *testing.T) {

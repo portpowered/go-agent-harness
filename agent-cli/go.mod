@@ -1,4 +1,4 @@
-module github.com/portpowered/agent-cli
+module github.com/portpowered/go-agent-harness/agent-cli
 
 go 1.24.2
 
@@ -15,8 +15,8 @@ require (
 	github.com/knadh/koanf/providers/structs v1.0.0
 	github.com/knadh/koanf/v2 v2.3.2
 	github.com/mattn/go-runewidth v0.0.19
-	github.com/portpowered/go-agent-loop v0.0.0
-	github.com/portpowered/go-llm-gateway v0.0.0
+	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.1
+	github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.27.1
@@ -69,9 +69,4 @@ require (
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
-)
-
-replace (
-	github.com/portpowered/go-agent-loop => ../go-agent-loop
-	github.com/portpowered/go-llm-gateway => ../go-llm-gateway
 )

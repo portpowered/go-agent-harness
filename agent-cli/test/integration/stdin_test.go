@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 )
 
 // wavHeaderBytes is a minimal WAV file header recognized by http.DetectContentType as "audio/wave".

@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // Tool is the interface that all tools must implement.

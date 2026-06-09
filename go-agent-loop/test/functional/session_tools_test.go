@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // TestSessionToolCallDuringAudio verifies that tool call events interleave

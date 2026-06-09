@@ -3,7 +3,7 @@ package participants
 import (
 	"context"
 
-	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // ParticipantRunner is implemented by active participants that run as background

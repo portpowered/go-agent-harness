@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/portpowered/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 )
 
 func TestNewToolRegistryFromConfig_NilConfigAllEnabled(t *testing.T) {
