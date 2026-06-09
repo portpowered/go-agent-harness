@@ -143,7 +143,7 @@ func main() {
 For streaming-capable stateless providers, the same gateway exposes
 `InferStream(...)`.
 
-## Error Taxonomy
+## Error And Terminal Taxonomy
 
 `pkg/gateway` exposes a small typed error taxonomy for caller decisions. Branch
 on these classes with `errors.Is`; use `errors.As` when you need structured
@@ -162,6 +162,23 @@ incomplete fields. Do not match error message text for control flow.
 | `gateway.ErrReplayMismatch` | Diagnose deterministic replay fixture or request divergence |
 | `gateway.ErrReplayIncomplete` | Diagnose a replay that ended before all required fixture or capture events were consumed |
 | `gateway.ErrCancellation` | Handle caller cancellation or timeout separately from provider failures |
+
+Provider and stream adapters serialize the same caller-actionable meanings with
+the provider classification strings in `pkg/providers`:
+
+| Classification | Meaning |
+| --- | --- |
+| `provider_rejected` | The provider rejected the request, with more detail on the typed error when available |
+| `authentication` | Credentials are missing, invalid, expired, or rejected |
+| `rate_limited` | Provider or gateway throttling; callers may retry with backoff |
+| `invalid_request` | The request shape, parameters, model, or tool input should be fixed before retrying |
+| `unsupported_request` | The requested provider, model, feature, or mode is unsupported |
+| `transport` | The transport failed before a usable provider response or completion was available |
+| `cancellation` | Caller cancellation or deadline stopped the operation |
+| `replay_mismatch` | Deterministic replay diverged from the committed fixture or capture |
+| `replay_incomplete` | Replay closed before all required fixture or capture events were consumed |
+| `partial_output` | Caller-visible output was emitted before cancellation or failure |
+| `unknown` | No more specific public class was available |
 
 Example:
 
@@ -183,10 +200,36 @@ if err != nil {
 _ = resp
 ```
 
-Stateless streaming uses the same taxonomy for error events when classification
-is available. `messages.ErrorValue.Message` remains operator-readable text, and
-`messages.ErrorValue.Err` carries the in-process typed error for `errors.Is` and
-`errors.As` checks:
+Stateless streaming, loop streams, sessions, replay helpers, and CLI NDJSON use
+an additive terminal-event contract from `go-agent-loop/pkg/messages`. The
+serialized fields are:
+
+| Payload | Additive fields |
+| --- | --- |
+| `MESSAGE.END` | `terminal_reason`, `terminal_provenance`, `output_state` |
+| `ERROR` | `classification`, `terminal_reason`, `terminal_provenance`, `output_state` |
+| `SESSION.CLOSE` | `classification`, `terminal_reason`, `terminal_provenance`, `output_state` |
+
+Terminal reasons are `provider_authored_completion`,
+`loop_synthesized_completion`, `cancellation`, `replay_divergence`,
+`replay_incomplete`, `session_close`, `partial_output`, `provider_close`, and
+`terminal_failure`. Provenance values are `provider`, `loop`, `gateway`,
+`session`, `replay`, and `cli`. Output states are `complete`, `partial`, `none`,
+and `not_applicable`.
+
+Returned setup, validation, replay, and provider-open failures are Go errors.
+Mid-stream provider/runtime failures, cancellation observed after stream output
+starts, provider close, synthesized completion, provider-authored completion,
+and session close are emitted in-band on the stream/session/CLI event surface
+when that surface is already active. Some in-process stream events expose both:
+`messages.ErrorValue.Err` preserves the typed Go error, while the JSON payload
+contains the structured classification and terminal fields. `Err` itself is not
+serialized.
+
+`messages.ErrorValue.Message` and `SESSION.CLOSE.reason` remain
+operator-readable compatibility text. New callers should branch on
+`errors.Is`, `errors.As`, `classification`, `terminal_reason`,
+`terminal_provenance`, and `output_state`:
 
 ```go
 for event := range stream {
@@ -200,7 +243,7 @@ for event := range stream {
 }
 ```
 
-Current classification coverage is intentionally additive:
+Current representative coverage is intentionally additive:
 
 - OpenAI-compatible stateless `Infer` classifies HTTP status failures, common
   status-specific classes such as authentication and rate limit, transport
@@ -208,15 +251,25 @@ Current classification coverage is intentionally additive:
 - OpenAI-compatible stateless `InferStream` preserves typed stream-open
   failures and stream runtime failures in `ERROR` event values when the error is
   available in-process.
+- Gateway direct streams normalize provider and runtime `ERROR` payloads with
+  serialized `classification`, `terminal_reason=terminal_failure`,
+  gateway/provider provenance, and output state.
+- Loop streams distinguish provider-authored completion, loop-synthesized
+  completion, provider close, cancellation, terminal failure after partial
+  output, and session close through structured terminal fields.
 - `pkg/testing` replay helpers classify replay divergence as
-  `gateway.ErrReplayMismatch`.
+  `gateway.ErrReplayMismatch` / `providers.ErrReplayMismatch` and incomplete
+  replay as `gateway.ErrReplayIncomplete` / `providers.ErrReplayIncomplete`.
+- CLI NDJSON writes the concrete stream/session payload values directly, so the
+  additive terminal fields above are visible to CLI consumers without parsing
+  text.
 - Anthropic, Gemini, fal.ai, and session provider surfaces may still return
   provider-specific or generic errors where typed gateway classification has not
   been wired yet. Treat those surfaces as best-effort until their adapters
   explicitly preserve the public classes.
-- Serialized stream payloads include readable error fields, but the `Err` field
-  is not serialized. Consumers that need typed classification must inspect the
-  in-process stream value.
+
+For the cross-surface contract and category-by-category caller actions, see
+[`docs/architecture/stream-terminal-contract.md`](../docs/architecture/stream-terminal-contract.md).
 
 ### Session-Based Inference
 

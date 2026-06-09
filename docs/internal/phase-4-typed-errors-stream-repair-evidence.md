@@ -21,6 +21,20 @@ credentials.
 | Partial output | Gateway and bridge tests assert interrupted interaction output exposes a partial-output terminal state through structured event fields rather than inferred missing completion. | `P4-API-03`, `P4-API-05`, `P4-GATE-01` |
 | Public documentation | `go-llm-gateway/README.md` documents when callers should use `errors.Is`, `errors.As`, `messages.ErrorValue.Classification`, interaction `Classification`, and cancellation `OutputState`. | `P4-API-02`, `P4-API-05`, `P4-GATE-01` |
 
+## Terminal Contract Addendum
+
+The `phase-4-typed-errors-stream-terminal-contract` repair extends this evidence
+with an explicit public terminal taxonomy for representative direct stream,
+provider, loop, session, replay, cancellation, partial-output, CLI, and terminal
+failure paths.
+
+| Area | Evidence | Audit rows |
+| --- | --- | --- |
+| Public terminal taxonomy | `docs/architecture/stream-terminal-contract.md` names terminal reasons for provider-authored completion, loop-synthesized completion, cancellation, replay divergence, replay incomplete, session close, partial output, provider close, and terminal failure, plus caller actions for each category. | `P4-API-02`, `P4-API-03`, `P4-API-05` |
+| Serialized direct stream fields | `go-llm-gateway/README.md` documents additive `classification`, `terminal_reason`, `terminal_provenance`, and `output_state` fields on `ERROR`, `MESSAGE.END`, and `SESSION.CLOSE` payloads, while preserving readable `message`, `reason`, and `err.Error()` text. | `P4-API-02`, `P4-API-05`, `P4-GATE-01` |
+| Returned versus in-band failures | `go-llm-gateway/README.md` and `docs/architecture/stream-terminal-contract.md` state that setup, validation, replay, and provider-open failures return Go errors, while active stream/session terminal outcomes are emitted in-band when that surface is already active. | `P4-API-02`, `P4-API-03`, `P4-API-05` |
+| Audit reconciliation | `docs/architecture/contract-gap-audit.md` maps the representative terminal-contract evidence to `P4-API-02`, `P4-API-03`, `P4-API-05`, and `P4-GATE-01` without closing provider-wide or helper-wide follow-up rows outside this selected repair scope. | `P4-GATE-01` |
+
 ## Reviewer Commands
 
 Run these focused commands to prove the repaired representative behavior:
