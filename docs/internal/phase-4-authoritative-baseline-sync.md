@@ -79,6 +79,37 @@ authoritative baseline is ahead of the original sync prompt assumptions:
 | `phase-4-typed-errors-stream-terminal-contract` | Local and remote branch head `b50b6219f22c16ef97649842cb665eb8aec16d8f`; merge commit `a64ee15` / PR `#37` | Branch head is an ancestor of `origin/main`; `origin/main` is not an ancestor of the branch head. | `landed`; the old unmerged-candidate state is superseded by PR `#37`. |
 | `phase-4-api-contract-convergence-validator` | Local branch head `4029637d13a899144f70f30736efc0da533c1650`; merge commit `6e78595` / PR `#38` | Branch head is an ancestor of `origin/main`; `origin/main` is not an ancestor of the branch head. | `landed`; the old stale-validator warning is superseded by PR `#38`. |
 
+## Typed-Terminal Disposition
+
+Recommendation: explicitly supersede the standalone
+`phase-4-typed-errors-stream-terminal-contract` branch as a planning input.
+Do not land, repair, merge, cherry-pick, or consume branch head
+`b50b6219f22c16ef97649842cb665eb8aec16d8f` directly for future Phase 4
+repair work.
+
+The authoritative replacement evidence is `origin/main` at
+`6e785952affad9cc5d07458c84f9a45b755c72c0` or a descendant that preserves
+merge commit `a64ee15` for PR `#37`. That merge commit landed the
+typed-terminal branch, and the branch head is now an ancestor of `origin/main`.
+The standalone branch head is not authoritative because `origin/main` is not an
+ancestor of that head, so basing new work there would omit later landed
+evidence, including PR `#38` convergence validator evidence and this baseline
+sync note.
+
+This disposition does not close `P4-API-02`, `P4-API-03`, `P4-API-05`, or
+`P4-GATE-01`. Those rows remain owned by the underlying repair and validator
+work. Future work that needs typed-terminal behavior should consume
+`origin/main` or a descendant instead of the superseded standalone branch.
+
+The recommendation is reproducible with:
+
+```sh
+git rev-parse origin/main phase-4-typed-errors-stream-terminal-contract
+git log --oneline --grep='Merge pull request #37' origin/main
+git merge-base --is-ancestor phase-4-typed-errors-stream-terminal-contract origin/main
+git merge-base --is-ancestor origin/main phase-4-typed-errors-stream-terminal-contract
+```
+
 ## Landed Phase 4 Repair Evidence Preservation
 
 This sync branch is a descendant of `origin/main` at
