@@ -180,9 +180,13 @@ implement repairs.
   session runtime planning, and gateway-to-loop adapters, but public docs and
   tests do not yet prove the full timeout/cancellation and hidden-side-effect
   contract across all blocking/provider surfaces.
-- Reviewer commands: run `make typecheck`; run
-  `(cd go-agent-loop && go test ./pkg/agentloop)`; run
-  `(cd agent-cli && go test ./internal/agent ./internal/services)`.
+- Reviewer commands: run `make typecheck` to prove the workspace still
+  typechecks with the current public contract surfaces; run
+  `(cd go-agent-loop && go test ./pkg/agentloop)` to prove the loop tests that
+  cover explicit tool-execution constructor decisions and runtime ownership;
+  run `(cd agent-cli && go test ./internal/agent ./internal/services)` to
+  prove the CLI composition tests that exercise the session-run wiring
+  boundaries.
 - Exact next work: split `agent.Executor.loadSystemPrompt` into pure prompt
   assembly plus injected filesystem/config/system-info/skills loaders; document
   whether `services.RunSession` is an internal composition contract or only CLI
@@ -219,9 +223,14 @@ implement repairs.
   yet prove provider-wide and parser-wide parity for every adapter, helper
   entrypoint, and stream failure path.
 - Reviewer commands: run
-  `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/testing ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/grok)`;
-  run `(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems ./test/functional)`;
-  run `(cd agent-cli && go test ./internal/services)`.
+  `(cd go-llm-gateway && go test ./pkg/gateway ./pkg/testing ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/grok)`
+  to prove the gateway/provider/tests that preserve typed terminal fields and
+  error classification; run
+  `(cd go-agent-loop && go test ./pkg/participants ./pkg/subsystems ./test/functional)`
+  to prove the loop participants, subsystems, and functional stream adapters
+  still surface the representative failure and cancellation paths; run
+  `(cd agent-cli && go test ./internal/services)` to prove the CLI session
+  command paths that emit the row-relevant error classes.
 - Exact next work: define shared caller-actionable stream error classes and
   convert loop/provider/interaction bridge emitters away from string-only
   `NewErrorValue(err.Error())`; define typed CLI/session categories for
@@ -254,8 +263,11 @@ implement repairs.
   and binary stream framing, replay divergence/incomplete/cancellation, and
   partial-output terminal metadata. They do not yet prove a single documented
   result/lifecycle contract for every public mode and helper.
-- Reviewer commands: run `(cd go-agent-loop && go test ./pkg/engine ./test/functional)`;
-  run `(cd go-llm-gateway && go test ./pkg/gateway)`.
+- Reviewer commands: run `(cd go-agent-loop && go test ./pkg/engine ./test/functional)`
+  to prove the execution and functional tests that distinguish synthesized
+  completion from terminal failures; run `(cd go-llm-gateway && go test ./pkg/gateway)`
+  to prove the gateway response and session lifecycle tests that expose the
+  terminal-authority boundary.
 - Exact next work: define caller-visible terminal states for `Execute`,
   `ExecuteStreaming`, provider-authored streams, synthesized fallback streams,
   `messages.Session.Done`, `messages.Session.Close`, replay completion,
@@ -289,11 +301,15 @@ implement repairs.
   capability reporting, overclaimed support checks, and fal streaming
   alignment. No live provider credentials are required.
 - Reviewer commands: run
-  `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)`;
-  run
-  `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)`;
-  run `go doc ./go-llm-gateway/pkg/providers`; run
-  `go doc ./go-llm-gateway/pkg/gateway`.
+  `(cd agent-cli && go test ./internal/config ./internal/input ./internal/agent)`
+  to prove the CLI config, input, and wiring tests that exercise the public
+  capability-discovery path; run
+  `(cd go-llm-gateway && go test ./pkg/capabilities ./pkg/gateway ./pkg/providers/openai ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/fal ./pkg/providers/grok)`
+  to prove provider-neutral capability fallback and concrete provider
+  capability reporting; run `go doc ./go-llm-gateway/pkg/providers` to prove
+  the exported provider capability vocabulary; run
+  `go doc ./go-llm-gateway/pkg/gateway` to prove the gateway/session discovery
+  surface exposed to consumers.
 - Exact next work: none for provider capability discovery. Broader stream,
   model ownership, dependency/result/context, and API hygiene concerns remain
   tracked by their own non-pass rows.
@@ -325,8 +341,11 @@ implement repairs.
   prove representative behavior. Evidence is still not exhaustive for every
   provider adapter, parser failure, fixture entrypoint, session helper, result
   helper, or package ownership boundary.
-- Reviewer commands: run `(cd go-llm-gateway && go test ./pkg/inference ./pkg/gateway)`;
-  run `go doc ./go-llm-gateway/pkg/models`.
+- Reviewer commands: run `(cd go-llm-gateway && go test ./pkg/inference ./pkg/gateway)`
+  to prove the inference and gateway tests that preserve representative
+  stream terminal ordering and session behavior; run
+  `go doc ./go-llm-gateway/pkg/models` to prove the current compatibility-alias
+  surface and its package-level documentation.
 - Exact next work: declare whether `pkg/models` remains a compatibility alias
   layer or becomes gateway-owned vocabulary; standardize provider stream
   terminal ordering and session terminal status across every supported
@@ -360,11 +379,13 @@ implement repairs.
   provider-local capability reporting, CLI-local model metadata and MIME
   validation, replay lifecycle cancellation, PNIG cancellation/timeout events,
   and fal unsupported streaming.
-- Reviewer commands: run `(cd go-llm-gateway && go test ./pkg/testing ./pkg/gateway ./pkg/inference)`;
-  run
-  `(cd go-agent-loop && go test ./test/functional -run 'TestRun_ExitsOnContextCancellation|TestSession')`;
-  run the `P4-API-04` provider capability commands when validating the
-  capability state that drives local rejection.
+- Reviewer commands: run `(cd go-llm-gateway && go test ./pkg/testing ./pkg/gateway ./pkg/inference)`
+  to prove the gateway, inference, and testing helpers that reject unsupported
+  features before provider execution; run
+  `(cd go-agent-loop && go test ./test/functional -run 'TestRun_ExitsOnContextCancellation|TestSession')`
+  to prove the functional cases that demonstrate local cancellation and
+  session validation behavior; run the `P4-API-04` provider capability
+  commands when validating the capability state that drives local rejection.
 - Exact next work: none for local unsupported-feature validation. Retry
   ownership, timeout ownership, and broader cross-surface cancellation
   documentation remain tracked by `P4-API-01`, `P4-API-03`, `P4-API-05`, and
@@ -396,10 +417,14 @@ implement repairs.
   provider runtime tests, and public docs narrow several risks. They do not yet
   establish complete package ownership, compatibility policy, hidden
   side-effect boundaries, or additive fixture/CLI migration rules.
-- Reviewer commands: run `go doc ./go-agent-loop/pkg/messages`; run
-  `go doc ./go-llm-gateway/pkg/gateway`; run
-  `go doc ./go-llm-gateway/pkg/models`; run
-  `go doc ./go-llm-gateway/pkg/providers`; run `make typecheck`.
+- Reviewer commands: run `go doc ./go-agent-loop/pkg/messages` to prove the
+  exported message and error vocabulary; run
+  `go doc ./go-llm-gateway/pkg/gateway` to prove the gateway constructor and
+  request ownership comments; run `go doc ./go-llm-gateway/pkg/models` to
+  prove the compatibility alias surface; run
+  `go doc ./go-llm-gateway/pkg/providers` to prove the provider ownership and
+  capability comments; run `make typecheck` to prove the workspace still
+  compiles after any compatibility-staging updates.
 - Exact next work: add package-level compatibility notes that declare
   `pkg/models` as an alias layer or migrate it to gateway-owned vocabulary with
   adapters; document ownership between `gateway.InferenceRequest`,
@@ -449,9 +474,12 @@ on the row evidence above, not on CI status alone.
   for the two pass rows. The same evidence does not yet align enough to close
   the five non-pass rows, because those rows still name missing, partial, or
   representative-only public coverage rather than complete row closure.
-- Reviewer commands: run `make typecheck`; run `make test`; run `make lint`;
-  run `make staticcheck`; run the row-specific commands listed under
-  `P4-API-01` through `P4-API-07` to verify the individual public evidence.
+- Reviewer commands: run `make typecheck` to prove the full workspace remains
+  type-correct; run `make test` to prove the deterministic row-level tests
+  still pass; run `make lint` to prove the codebase still satisfies the lint
+  gates; run `make staticcheck` to prove static analysis still accepts the
+  current public contract; run the row-specific commands listed under
+  `P4-API-01` through `P4-API-07` to prove the individual public evidence.
   These commands prove reviewer-runnable quality and row evidence, but they do
   not convert non-pass rows into pass rows by themselves.
 - Exact next work: keep whole-Phase-4 `P4-GATE-01` open and plan future repair
@@ -520,3 +548,12 @@ verdict, every requested row has an explicit closure decision, pass rows cite
 public evidence and credential-free commands, and open rows are scoped to exact
 future repair or cleanup work. No row is marked closable from CI status, private
 helper behavior, undocumented internals, or unreconciled stale branch evidence.
+
+## Story 005 Closure
+
+Story `phase-4-authoritative-convergence-validator-rerun-005` may close for
+this PRD iteration because every row finding now includes reviewer commands
+that explicitly state what behavior or evidence each command proves, and the
+commands remain credential-free and reproducible from the authoritative head.
+Pass rows still cite public evidence, and non-pass rows still keep exact next
+work scoped to future repair or cleanup.
