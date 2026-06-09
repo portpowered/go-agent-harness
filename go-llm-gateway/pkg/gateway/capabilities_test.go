@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-llm-gateway/pkg/providers/fal"
 )
 
 type capabilityProvider struct {
@@ -40,6 +44,29 @@ func (p *capabilityProvider) InferStream(_ context.Context, _ providers.Inferenc
 	ch := make(chan messages.StreamMessage)
 	close(ch)
 	return ch, nil
+}
+
+type countingTransport struct {
+	calls int
+}
+
+func (t *countingTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	t.calls++
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("{}")),
+		Header:     make(http.Header),
+	}, nil
+}
+
+type countingFalProvider struct {
+	*fal.FalProvider
+	streamCalls int
+}
+
+func (p *countingFalProvider) InferStream(ctx context.Context, req providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	p.streamCalls++
+	return p.FalProvider.InferStream(ctx, req)
 }
 
 type legacyProvider struct {
@@ -596,6 +623,55 @@ func TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing
 				t.Fatalf("validation called provider execution: infer=%d stream=%d", provider.inferCalls, provider.streamCalls)
 			}
 		})
+	}
+}
+
+func TestGatewayRejectsFalStreamingBeforeProviderExecution(t *testing.T) {
+	t.Parallel()
+
+	transport := &countingTransport{}
+	provider := &countingFalProvider{
+		FalProvider: fal.New(fal.WithHTTPClient(&http.Client{Transport: transport})),
+	}
+	gw, err := NewGateway(WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	ch, err := gw.InferStream(context.Background(), InferenceRequest{
+		Model: fal.ModelLTXAudioToVideo,
+		Messages: []models.Message{{
+			Role: models.RoleUser,
+			ContentParts: []models.ContentPart{
+				models.TextPart{Text: "render"},
+				models.AudioPart{URL: "https://example.com/audio.mp3"},
+			},
+		}},
+	})
+	if ch != nil {
+		t.Fatalf("InferStream() channel = %#v, want nil", ch)
+	}
+	var unsupported *UnsupportedFeatureError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("InferStream() error = %v, want UnsupportedFeatureError", err)
+	}
+	if unsupported.Provider != "fal" {
+		t.Fatalf("provider = %q, want fal", unsupported.Provider)
+	}
+	if unsupported.Feature != FeatureStreaming {
+		t.Fatalf("feature = %q, want streaming", unsupported.Feature)
+	}
+	if unsupported.RequestedMode != capabilities.RequestedModeStatelessStream {
+		t.Fatalf("mode = %q, want stateless_stream", unsupported.RequestedMode)
+	}
+	if unsupported.Capability.State != CapabilityStateUnsupported {
+		t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
+	}
+	if provider.streamCalls != 0 {
+		t.Fatalf("gateway called fal InferStream before rejecting: %d", provider.streamCalls)
+	}
+	if transport.calls != 0 {
+		t.Fatalf("gateway attempted fal HTTP before rejecting: %d", transport.calls)
 	}
 }
 
