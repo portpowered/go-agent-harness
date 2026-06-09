@@ -92,6 +92,25 @@ Do not infer these lifecycle states from `HasNext() == false` in new code.
 events as provider-authored. New loop-synthesized boundaries should be emitted
 with `messages.NewSynthesizedMessageEndValue(...)`.
 
+## Session Request Lifetime
+
+Gateway-owned sessions use `models.SessionConfig` as the persistent session
+shape and `ConnectSession(ctx, config)` for one connection attempt. The
+`context.Context` passed to `ConnectSession` is caller-owned cancellation and
+timeout state; it is not part of the persistent config.
+
+Loop-managed session adapters use `inference.SessionRequest` to carry the same
+persistent session shape into `SessionGatewayInferencer`. Configure it with
+`inference.WithSessionRequest(...)` when the loop needs the full model,
+modality, audio, tool, turn-detection, or provider-specific config. The older
+`WithSessionModel`, `WithSessionVoice`, and `WithSessionInstructions` options
+remain compatible wrappers for simple callers.
+
+`SessionGatewayInferencer` copies the request on input, returns a copy from
+`Request()`, and copies the config again for each `ConnectSession(ctx)` call.
+Cancelling one connection attempt therefore does not mutate the persistent
+request used by later attempts.
+
 ## Replay Lifecycle
 
 For bidirectional session fixture replay, prefer
@@ -155,7 +174,8 @@ version explicitly breaks compatibility:
 
 - preserve the context/config lifetime split when extending loop-facing session
   adapters: `context.Context` should own one operation lifetime, while
-  persistent session shape should remain explicit configuration
+  persistent session shape should remain explicit configuration such as
+  `inference.SessionRequest`
 - keep `ReadBlockingContext`, `Text`, and `HasNext` available until callers have
   migrated to the explicit contracts above
 - split prompt assembly into pure injected loaders only if a future public

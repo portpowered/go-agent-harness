@@ -47,16 +47,21 @@ func (s *mockSession) Close() error {
 
 // mockSessionGateway implements sessionGateway for testing.
 type mockSessionGateway struct {
-	mu             sync.Mutex
-	capturedConfig models.SessionConfig
-	session        messages.Session
-	err            error
+	mu              sync.Mutex
+	capturedConfig  models.SessionConfig
+	capturedConfigs []models.SessionConfig
+	session         messages.Session
+	err             error
 }
 
-func (m *mockSessionGateway) ConnectSession(_ context.Context, config models.SessionConfig) (messages.Session, error) {
+func (m *mockSessionGateway) ConnectSession(ctx context.Context, config models.SessionConfig) (messages.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.capturedConfig = config
+	m.capturedConfigs = append(m.capturedConfigs, config)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -95,6 +100,157 @@ func TestSessionGatewayInferencer_ConnectSession(t *testing.T) {
 	}
 	if session != sess {
 		t.Fatal("ConnectSession should return the loop-owned session from the gateway unchanged")
+	}
+}
+
+func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *testing.T) {
+	sess := newMockSession()
+	gw := &mockSessionGateway{session: sess}
+	req := SessionRequest{
+		Config: models.SessionConfig{
+			Model:                 "gpt-realtime",
+			Modalities:            []models.SessionModality{models.SessionModalityText, models.SessionModalityAudio},
+			Voice:                 "alloy",
+			Instructions:          "Keep answers concise.",
+			InputAudioFormat:      models.AudioFormatPCM16,
+			OutputAudioFormat:     models.AudioFormatG711Ulaw,
+			InputAudioSampleRate:  models.SampleRate16000,
+			OutputAudioSampleRate: models.SampleRate24000,
+			Tools: []models.ToolDefinition{{
+				Name:        "lookup",
+				Description: "Look up a value",
+				Parameters: []models.ToolParameter{{
+					Name:        "query",
+					Type:        "string",
+					Description: "query text",
+					Required:    true,
+				}},
+			}},
+			TurnDetection: &models.TurnDetectionConfig{
+				Type:              "server_vad",
+				Threshold:         0.6,
+				PrefixPaddingMs:   120,
+				SilenceDurationMs: 240,
+			},
+			Config: []byte(`{"vendor":"specific"}`),
+		},
+	}
+	si := NewSessionGatewayInferencer(gw, WithSessionRequest(req))
+
+	session, err := si.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	got := gw.capturedConfig
+	if got.Model != req.Config.Model || got.Voice != req.Config.Voice || got.Instructions != req.Config.Instructions {
+		t.Fatalf("basic config = %#v, want %#v", got, req.Config)
+	}
+	if len(got.Modalities) != 2 || got.Modalities[0] != models.SessionModalityText || got.Modalities[1] != models.SessionModalityAudio {
+		t.Fatalf("modalities = %#v", got.Modalities)
+	}
+	if got.InputAudioFormat != models.AudioFormatPCM16 || got.OutputAudioFormat != models.AudioFormatG711Ulaw {
+		t.Fatalf("audio formats = %#v/%#v", got.InputAudioFormat, got.OutputAudioFormat)
+	}
+	if got.InputAudioSampleRate != models.SampleRate16000 || got.OutputAudioSampleRate != models.SampleRate24000 {
+		t.Fatalf("sample rates = %#v/%#v", got.InputAudioSampleRate, got.OutputAudioSampleRate)
+	}
+	if len(got.Tools) != 1 || got.Tools[0].Name != "lookup" || len(got.Tools[0].Parameters) != 1 || got.Tools[0].Parameters[0].Name != "query" {
+		t.Fatalf("tools = %#v", got.Tools)
+	}
+	if got.TurnDetection == nil || got.TurnDetection.Type != "server_vad" || got.TurnDetection.SilenceDurationMs != 240 {
+		t.Fatalf("turn detection = %#v", got.TurnDetection)
+	}
+	if string(got.Config) != `{"vendor":"specific"}` {
+		t.Fatalf("provider config = %s", string(got.Config))
+	}
+}
+
+func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
+	req := SessionRequest{
+		Config: models.SessionConfig{
+			Model:      "original",
+			Modalities: []models.SessionModality{models.SessionModalityText},
+			Tools: []models.ToolDefinition{{
+				Name:       "original-tool",
+				Parameters: []models.ToolParameter{{Name: "original-param"}},
+			}},
+			TurnDetection: &models.TurnDetectionConfig{Type: "server_vad"},
+			Config:        []byte(`{"mode":"original"}`),
+		},
+	}
+	si := NewSessionGatewayInferencer(&mockSessionGateway{session: newMockSession()}, WithSessionRequest(req))
+
+	req.Config.Model = "mutated"
+	req.Config.Modalities[0] = models.SessionModalityAudio
+	req.Config.Tools[0].Name = "mutated-tool"
+	req.Config.Tools[0].Parameters[0].Name = "mutated-param"
+	req.Config.TurnDetection.Type = "mutated"
+	req.Config.Config[9] = 'X'
+
+	snapshot := si.Request()
+	if snapshot.Config.Model != "original" ||
+		snapshot.Config.Modalities[0] != models.SessionModalityText ||
+		snapshot.Config.Tools[0].Name != "original-tool" ||
+		snapshot.Config.Tools[0].Parameters[0].Name != "original-param" ||
+		snapshot.Config.TurnDetection.Type != "server_vad" ||
+		string(snapshot.Config.Config) != `{"mode":"original"}` {
+		t.Fatalf("request was not defensively copied: %#v", snapshot.Config)
+	}
+
+	snapshot.Config.Model = "snapshot-mutated"
+	snapshot.Config.Modalities[0] = models.SessionModalityAudio
+	snapshot.Config.Tools[0].Parameters[0].Name = "snapshot-mutated"
+	snapshot.Config.TurnDetection.Type = "snapshot-mutated"
+	snapshot.Config.Config[9] = 'Y'
+
+	again := si.Request()
+	if again.Config.Model != "original" ||
+		again.Config.Modalities[0] != models.SessionModalityText ||
+		again.Config.Tools[0].Parameters[0].Name != "original-param" ||
+		again.Config.TurnDetection.Type != "server_vad" ||
+		string(again.Config.Config) != `{"mode":"original"}` {
+		t.Fatalf("Request returned mutable internal state: %#v", again.Config)
+	}
+}
+
+func TestSessionGatewayInferencer_CancelledConnectDoesNotMutatePersistentRequest(t *testing.T) {
+	sess := newMockSession()
+	gw := &mockSessionGateway{session: sess}
+	si := NewSessionGatewayInferencer(gw, WithSessionRequest(SessionRequest{
+		Config: models.SessionConfig{
+			Model:        "gpt-realtime",
+			Voice:        "alloy",
+			Instructions: "persistent",
+			Modalities:   []models.SessionModality{models.SessionModalityText},
+			Config:       []byte(`{"vendor":"specific"}`),
+		},
+	}))
+
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := si.ConnectSession(cancelledCtx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled ConnectSession error = %v, want context.Canceled", err)
+	}
+
+	session, err := si.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("second ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	if len(gw.capturedConfigs) != 2 {
+		t.Fatalf("captured configs = %d, want 2", len(gw.capturedConfigs))
+	}
+	first := gw.capturedConfigs[0]
+	second := gw.capturedConfigs[1]
+	if first.Model != second.Model || first.Voice != second.Voice || first.Instructions != second.Instructions {
+		t.Fatalf("persistent request changed after cancellation: first=%#v second=%#v", first, second)
+	}
+	if string(first.Config) != string(second.Config) || first.Config == nil || second.Config == nil {
+		t.Fatalf("provider config changed after cancellation: first=%s second=%s", first.Config, second.Config)
 	}
 }
 
