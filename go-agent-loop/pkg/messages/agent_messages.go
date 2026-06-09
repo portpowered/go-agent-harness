@@ -492,10 +492,34 @@ func NewToolCallEndValue(toolCallID, name, arguments string) *ToolCallEndValue {
 	return &ToolCallEndValue{Type: "tool_use_end", ToolCallID: toolCallID, Name: name, Arguments: arguments}
 }
 
+// TerminalSource identifies who authored a terminal MESSAGE.END boundary.
+type TerminalSource string
+
+const (
+	// TerminalSourceProvider means the upstream provider or session produced the
+	// terminal boundary. Empty legacy MESSAGE.END values are treated as provider
+	// authored for compatibility.
+	TerminalSourceProvider TerminalSource = "provider"
+	// TerminalSourceLoopSynthesized means the loop synthesized the terminal
+	// boundary from a non-streaming result or an upstream stream that closed
+	// without MESSAGE.END.
+	TerminalSourceLoopSynthesized TerminalSource = "loop_synthesized"
+)
+
+// MessageEndTerminalSource returns the public terminal source for a MESSAGE.END
+// value. Nil and legacy empty-source values are provider-authored by default.
+func MessageEndTerminalSource(v *MessageEndValue) TerminalSource {
+	if v == nil || v.TerminalSource == "" {
+		return TerminalSourceProvider
+	}
+	return v.TerminalSource
+}
+
 // MessageEndValue is the value for MESSAGE.END (inner type "message_end").
 type MessageEndValue struct {
-	Type  string     `json:"type"` // "message_end"
-	Usage TokenUsage `json:"usage,omitempty"`
+	Type           string         `json:"type"` // "message_end"
+	Usage          TokenUsage     `json:"usage,omitempty"`
+	TerminalSource TerminalSource `json:"terminal_source,omitempty"`
 }
 
 func (*MessageEndValue) streamMessageValue() {}
@@ -503,6 +527,11 @@ func (*MessageEndValue) streamMessageValue() {}
 // NewMessageEndValue returns a value for MESSAGE.END.
 func NewMessageEndValue(usage TokenUsage) *MessageEndValue {
 	return &MessageEndValue{Type: "message_end", Usage: usage}
+}
+
+// NewSynthesizedMessageEndValue returns a loop-authored MESSAGE.END boundary.
+func NewSynthesizedMessageEndValue(usage TokenUsage) *MessageEndValue {
+	return &MessageEndValue{Type: "message_end", Usage: usage, TerminalSource: TerminalSourceLoopSynthesized}
 }
 
 // UsageInfoValue is the value for USAGE.INFO: system information denoting token usage

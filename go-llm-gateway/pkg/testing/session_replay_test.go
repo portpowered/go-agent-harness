@@ -259,6 +259,92 @@ func TestSessionReplayer_FailsOnUnexpectedOutboundEvent(t *testing.T) {
 	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
 		t.Fatal("replay mismatch should not match provider HTTP status classification")
 	}
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayDiverged {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayDiverged)
+	}
+	if outcome.OK() {
+		t.Fatal("divergent replay outcome reported OK")
+	}
+	if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+		t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+	}
+	if outcome.Expected == "" || outcome.Actual == "" {
+		t.Fatalf("outcome mismatch detail = expected %q actual %q, want both populated", outcome.Expected, outcome.Actual)
+	}
+}
+
+func TestSessionReplayer_SendWithOutcomeDistinguishesLifecycleStates(t *testing.T) {
+	msg := messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("unexpected"),
+	}
+
+	t.Run("terminal replay failure", func(t *testing.T) {
+		events := []CapturedSessionEvent{
+			makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.session.json")
+		writeCapture(t, path, events)
+		replayer := mustNewSessionReplayer(t, path)
+
+		outcome := messages.SendSessionWithOutcome(context.Background(), replayer, msg)
+		if outcome.Status != messages.SessionSendTerminalFailure {
+			t.Fatalf("status = %q, want %q", outcome.Status, messages.SessionSendTerminalFailure)
+		}
+		if outcome.OK() {
+			t.Fatal("terminal failure outcome reported OK")
+		}
+		if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+			t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+		}
+	})
+
+	t.Run("closed session", func(t *testing.T) {
+		events := []CapturedSessionEvent{
+			makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.session.json")
+		writeCapture(t, path, events)
+		replayer := mustNewSessionReplayer(t, path)
+		if err := replayer.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+
+		outcome := messages.SendSessionWithOutcome(context.Background(), replayer, msg)
+		if outcome.Status != messages.SessionSendClosed {
+			t.Fatalf("status = %q, want %q", outcome.Status, messages.SessionSendClosed)
+		}
+		if outcome.OK() {
+			t.Fatal("closed outcome reported OK")
+		}
+	})
+
+	t.Run("caller cancellation", func(t *testing.T) {
+		events := []CapturedSessionEvent{
+			makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.session.json")
+		writeCapture(t, path, events)
+		replayer := mustNewSessionReplayer(t, path)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		outcome := messages.SendSessionWithOutcome(ctx, replayer, msg)
+		if outcome.Status != messages.SessionSendCancelled {
+			t.Fatalf("status = %q, want %q", outcome.Status, messages.SessionSendCancelled)
+		}
+		if !errors.Is(outcome.Err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", outcome.Err)
+		}
+	})
 }
 
 func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
@@ -294,6 +380,81 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	}
 	if errors.Is(replayer.Err(), gateway.ErrProviderHTTPStatus) {
 		t.Fatal("omitted outbound should not match provider HTTP status classification")
+	}
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayIncomplete {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayIncomplete)
+	}
+	if outcome.OK() {
+		t.Fatal("incomplete replay outcome reported OK")
+	}
+	if !errors.Is(outcome.Err, providers.ErrReplayMismatch) {
+		t.Fatalf("outcome err = %v, want ErrReplayMismatch", outcome.Err)
+	}
+	if outcome.Expected == "" || outcome.Actual != "replay close" {
+		t.Fatalf("outcome mismatch detail = expected %q actual %q, want omitted outbound close detail", outcome.Expected, outcome.Actual)
+	}
+}
+
+func TestSessionReplayer_OutcomeReportsSuccessfulReplayCompletion(t *testing.T) {
+	events := []CapturedSessionEvent{
+		makeCapture(DirectionServerToClient, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("complete")),
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.session.json")
+	writeCapture(t, path, events)
+
+	replayer := mustNewSessionReplayer(t, path)
+	<-replayer.Done()
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayCompleted {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayCompleted)
+	}
+	if !outcome.OK() {
+		t.Fatal("completed replay outcome did not report OK")
+	}
+	if outcome.Err != nil {
+		t.Fatalf("outcome err = %v, want nil", outcome.Err)
+	}
+}
+
+func TestSessionReplayer_ReplaysFlushedCaptureToCompletionOutcome(t *testing.T) {
+	fake := newFakeSession()
+	rec := NewSessionRecorder(fake, WithSessionCaptureProvider("grok", "grok-realtime"))
+
+	fake.inbound.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("flushed"),
+	})
+	if _, ok := readRecordedMessage(t, rec); !ok {
+		t.Fatal("expected recorder relay to capture inbound message")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "capture.session.json")
+	if err := rec.FlushToFile(path); err != nil {
+		t.Fatalf("FlushToFile: %v", err)
+	}
+
+	replayer := mustNewSessionReplayer(t, path)
+	<-replayer.Done()
+
+	msg, ok := replayer.Receive().Read()
+	if !ok {
+		t.Fatal("expected replayed flushed capture message")
+	}
+	delta, ok := msg.Value.(*messages.TextDeltaValue)
+	if !ok {
+		t.Fatalf("replayed value type = %T, want *TextDeltaValue", msg.Value)
+	}
+	if delta.Content != "flushed" {
+		t.Fatalf("replayed content = %q, want flushed", delta.Content)
+	}
+	if outcome := replayer.Outcome(); outcome.Status != SessionReplayCompleted {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayCompleted)
 	}
 }
 
@@ -383,6 +544,38 @@ func TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled(t *testing.T) {
 	case msg := <-replayer.Receive().Chan():
 		t.Fatalf("unexpected queued message after replay cancellation: %s", msg.Type)
 	default:
+	}
+}
+
+func TestSessionReplayer_CancellationWakesExpectedOutboundWait(t *testing.T) {
+	events := []CapturedSessionEvent{
+		makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("required outbound")),
+		makeCapture(DirectionServerToClient, 10, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after outbound")),
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.session.json")
+	writeCapture(t, path, events)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	replayer := mustNewSessionReplayer(t, path, WithReplayContext(ctx))
+	cancel()
+
+	select {
+	case <-replayer.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for replay cancellation while blocked on expected outbound event")
+	}
+
+	outcome := replayer.Outcome()
+	if outcome.Status != SessionReplayCancelled {
+		t.Fatalf("outcome status = %q, want %q", outcome.Status, SessionReplayCancelled)
+	}
+	if !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("outcome err = %v, want context.Canceled", outcome.Err)
+	}
+	if outcome.OK() {
+		t.Fatal("cancelled replay outcome reported OK")
 	}
 }
 

@@ -2,6 +2,64 @@ package messages
 
 import "context"
 
+// SessionSendStatus identifies the observable outcome of sending a message to
+// a persistent session.
+type SessionSendStatus string
+
+const (
+	SessionSendSucceeded       SessionSendStatus = "succeeded"
+	SessionSendCancelled       SessionSendStatus = "cancelled"
+	SessionSendTimedOut        SessionSendStatus = "timed_out"
+	SessionSendBufferFull      SessionSendStatus = "buffer_full"
+	SessionSendClosed          SessionSendStatus = "closed"
+	SessionSendTerminalFailure SessionSendStatus = "terminal_failure"
+)
+
+// SessionSendOutcome is the typed result returned by session send helpers.
+type SessionSendOutcome struct {
+	Status SessionSendStatus
+	Err    error
+}
+
+// OK reports whether the message was accepted for delivery.
+func (o SessionSendOutcome) OK() bool {
+	return o.Status == SessionSendSucceeded
+}
+
+// SessionSendOutcomeSender is implemented by sessions that can report why a
+// send did not succeed. It is intentionally separate from Session so existing
+// bool-only Session implementations continue to compile.
+type SessionSendOutcomeSender interface {
+	SendWithOutcome(ctx context.Context, msg StreamMessage) SessionSendOutcome
+}
+
+// SendSessionWithOutcome sends msg and returns a typed outcome. Sessions that
+// implement SessionSendOutcomeSender provide authoritative closed, buffer-full,
+// and terminal-failure states. Bool-only sessions are adapted for compatibility:
+// context cancellation and timeout remain distinguishable, while other false
+// results are reported as terminal failures because their precise cause is not
+// observable through the legacy contract.
+func SendSessionWithOutcome(ctx context.Context, session Session, msg StreamMessage) SessionSendOutcome {
+	if sender, ok := session.(SessionSendOutcomeSender); ok {
+		return sender.SendWithOutcome(ctx, msg)
+	}
+	if session.Send(ctx, msg) {
+		return SessionSendOutcome{Status: SessionSendSucceeded}
+	}
+	return sessionSendContextOrFailure(ctx)
+}
+
+func sessionSendContextOrFailure(ctx context.Context) SessionSendOutcome {
+	err := ctx.Err()
+	if err == context.DeadlineExceeded {
+		return SessionSendOutcome{Status: SessionSendTimedOut, Err: err}
+	}
+	if err != nil {
+		return SessionSendOutcome{Status: SessionSendCancelled, Err: err}
+	}
+	return SessionSendOutcome{Status: SessionSendTerminalFailure}
+}
+
 // SessionInferencer establishes persistent, bidirectional inference sessions.
 // It is the sessional counterpart to the agent loop's Inferencer interface:
 // where Inferencer handles stateless request/response inference, SessionInferencer
@@ -26,7 +84,9 @@ type SessionInferencer interface {
 // go-agent-loop's contracts rather than the reverse.
 type Session interface {
 	// Send writes a StreamMessage to the session's outbound queue.
-	// Returns false if the context is cancelled or the outbound buffer is full.
+	// Returns false if the context is cancelled, the outbound buffer is full, the
+	// session is closed, or delivery fails. Call SendSessionWithOutcome when the
+	// precise public lifecycle outcome is required.
 	Send(ctx context.Context, msg StreamMessage) bool
 	// Receive returns the inbound typed buffer. Callers read from this buffer
 	// to consume events from the session (e.g. AUDIO.DELTA, SESSION.OPEN).

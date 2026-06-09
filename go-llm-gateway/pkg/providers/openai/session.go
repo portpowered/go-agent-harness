@@ -246,6 +246,8 @@ type realtimeSession struct {
 	closeOnce sync.Once
 }
 
+var _ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
+
 func newRealtimeSession(conn WebSocketConn, logger logging.Logger) *realtimeSession {
 	return &realtimeSession{
 		conn:    conn,
@@ -262,20 +264,41 @@ func (s *realtimeSession) start(ctx context.Context) {
 }
 
 func (s *realtimeSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+// SendWithOutcome writes a StreamMessage to the outbound queue and reports the
+// precise public lifecycle outcome.
+func (s *realtimeSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	events, ok := realtimeOutboundEvents(msg)
 	if !ok {
-		return false
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	select {
+	case <-ctx.Done():
+		return sessionSendContextOutcome(ctx)
+	default:
 	}
 	for _, event := range events {
 		select {
 		case <-ctx.Done():
-			return false
+			return sessionSendContextOutcome(ctx)
 		case <-s.done:
-			return false
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 		case s.sendCh <- event:
+		default:
+			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
 		}
 	}
-	return true
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome {
+	err := ctx.Err()
+	if err == context.DeadlineExceeded {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
 func (s *realtimeSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {

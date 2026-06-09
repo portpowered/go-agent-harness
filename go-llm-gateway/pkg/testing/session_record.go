@@ -90,8 +90,14 @@ func NewSessionRecorder(inner messages.Session, opts ...SessionRecorderOption) *
 // Send forwards the message to the inner session and records it as a
 // client-to-server event.
 func (r *SessionRecorder) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return r.SendWithOutcome(ctx, msg).OK()
+}
+
+// SendWithOutcome forwards the message to the inner session and preserves
+// typed send outcomes when the wrapped session exposes them.
+func (r *SessionRecorder) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	r.recordMessage(DirectionClientToServer, msg)
-	return r.inner.Send(ctx, msg)
+	return messages.SendSessionWithOutcome(ctx, r.inner, msg)
 }
 
 // Receive returns a TypedBuffer whose reads are intercepted so that every
