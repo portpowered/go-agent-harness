@@ -43,6 +43,75 @@ evidence for closure.
 | `P4-API-07` | `fail` | `P4-DI-01`, `P4-DI-02`, `P4-DI-03`, `P4-DI-04`, `P4-HYGIENE-01`, `P4-HYGIENE-02`, `P4-HYGIENE-03`, `P4-HYGIENE-04`, `DOC-01`, `DOC-02`, `COMPAT-01`, `COMPAT-02`, `COMPAT-03`, `HC-02`, `HC-03` | Superseded validator evidence is the Phase 4 dependency, API hygiene, and compatibility report; current audit evidence includes public declaration `go doc` output, README guidance, fixture tests, interaction shape tests, and adapter tests. | Exported comments, narrow provider/session interfaces, selected dependency ownership seams, PNIG event shapes, and fixture compatibility checks are narrowed. | Compatibility ownership for `pkg/models`, gateway/provider request overlap, CLI internal composition exports, hidden side effects, fixture staging, and text-matching caller compatibility remain open. |
 | `P4-GATE-01` | `open` | All rows mapped to `P4-API-01` through `P4-API-07` | Superseded validator evidence is the Phase 4 validator final closure decision; the current audit and provenance note both state the gate remains open. | None. This lane supplies planning evidence only. | Complete the typed error/stream, capability/validation, dependency/result/context/lifecycle, API hygiene, and final validation repair lanes before any gate closure. |
 
+### Closed Or Narrowed Evidence Versus Open Repair Work
+
+The reconciliation separates evidence that narrows a row from work that can
+close a row. A narrowed subset is not a checklist closure; it is only the part
+of an audit row where current implementation evidence and validator evidence
+agree that a future repair lane should not repeat already completed work.
+
+Closed or narrowed subsets with supporting evidence:
+
+- Dependency ownership is narrowed for explicit tool-execution constructor
+  decisions, provider HTTP runtime ownership, gateway-to-loop inferencer
+  adapters, and replay/record relay cancellation. Implementation evidence
+  includes constructor tests, provider runtime tests, adapter tests, and replay
+  cancellation tests; validator evidence is the current Phase 4 dependency and
+  context report in `docs/internal/phase-4-api-contract-validator.md`.
+- Typed error evidence is narrowed for public gateway error classes, OpenAI
+  Realtime error details, PNIG timeout/provider/cancellation events, and replay
+  divergence. Implementation evidence includes gateway error tests, OpenAI
+  session tests, PNIG interaction tests, and replay mismatch tests; validator
+  evidence is the Phase 4 typed-error and stream-failure report.
+- Result and lifecycle evidence is narrowed for loop result reconstruction,
+  selected gateway and PNIG terminal events, replay completion, and CLI session
+  command behavior. Implementation evidence includes loop, gateway, replay, and
+  CLI session tests; validator evidence is the Phase 4 result/lifecycle report.
+- Capability and unsupported-feature evidence is narrowed for provider-neutral
+  supported, unsupported, and unknown states, gateway/session discovery,
+  unknown fallback behavior, OpenAI capability reporting, and selected provider
+  option/modality tests. Implementation evidence includes `pkg/capabilities`,
+  `providers.CapabilityReporter`, gateway/session `Capabilities()` methods,
+  validation tests, and provider-local tests; validator evidence is the Phase 4
+  capability and unsupported-feature report.
+- Public surface and API hygiene evidence is narrowed for PNIG event shapes,
+  gateway/inference adapters, `pkg/models` alias-facade declaration inspection,
+  exported comments on selected public contracts, and fixture compatibility
+  checks. Implementation evidence includes interaction shape tests, adapter
+  tests, fixture tests, and `go doc` output; validator evidence is the Phase 4
+  public-surface and compatibility report.
+
+Remaining open repair work is grouped by observable behavior:
+
+- Typed stream and error contracts: define a shared caller-actionable taxonomy
+  for returned errors, stream errors, interaction errors, replay divergence,
+  session command failures, cancellation, provider rejection, and serialized
+  error payloads; prove each representative path with runtime or emitted-event
+  tests rather than source inventories.
+- Capability and validation coverage: finish or explicitly document concrete
+  provider capability reporting, overclaimed support checks, unknown fallback
+  behavior, interaction and `GatewayInferencer` validation, fal streaming
+  alignment, and local unsupported-feature failures before provider side
+  effects.
+- Dependency, result, context, and lifecycle contracts: document and test
+  caller cancellation, timeout ownership, retry ownership, terminal result
+  authority, replay/record lifecycle, stream finality, and session close
+  reasons across loop, gateway, provider, CLI, replay, and PNIG surfaces.
+- API hygiene and compatibility staging: declare ownership for `pkg/models`,
+  gateway/provider request overlap, exported fixture schemas, nil/empty value
+  semantics, public event codes, CLI internal composition boundaries, and
+  additive compatibility rules for future message/session/error changes.
+- Final gate readiness: keep `P4-GATE-01` open until the repair lanes above
+  provide implementation evidence, docs/examples where the public contract
+  needs consumer guidance, deterministic validation, and a final validator
+  decision that explicitly permits closure.
+
+Review non-goals: later repair lanes should not add broad source inventories,
+documentation link-topology checks, command inventories, route-registration
+inventories, or asset-bundle checks unless that inventory is itself the public
+behavior under review. Prefer observable runtime, API, CLI, UI, fixture, or
+emitted-event assertions for closure evidence.
+
 Reviewer command policy: run all commands from the repository root unless a row explicitly says otherwise. The test commands below use local Go packages, committed fixtures, and injected/mocked provider seams; they are intended to run without live provider credentials, external network access, or unspecified environment variables. `go doc` commands inspect the current public declarations and comments; they do not prove runtime behavior by themselves.
 
 ### Final Closure Validation Check
