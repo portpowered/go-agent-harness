@@ -221,7 +221,11 @@ release-tags: ## Create local v0.0.1 root and per-module tags for Go module publ
 	done
 
 release-push: release-tags ## Push root and per-module release tags to origin.
-	git push origin $(RELEASE_TAGS)
+	@set -euo pipefail; \
+	for tag in $(RELEASE_TAGS); do \
+		echo "==> release-push $$tag"; \
+		git push origin "$$tag"; \
+	done
 
 release-dry-run: release-check ## Build release artifacts locally without publishing.
 	$(GORELEASER) release --snapshot --clean --skip=publish --config "$(GORELEASER_CONFIG)"
