@@ -2,11 +2,14 @@ package inference
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/portpowered/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-llm-gateway/pkg/providers"
 )
 
 // captureGateway records the InferenceRequest it receives so tests can inspect it.
@@ -31,6 +34,34 @@ func (g *captureGateway) InferStream(_ context.Context, req gateway.InferenceReq
 
 func (g *captureGateway) Interact(_ context.Context, _ gateway.InteractionRequest) (<-chan gateway.InteractionEvent, error) {
 	ch := make(chan gateway.InteractionEvent)
+	close(ch)
+	return ch, nil
+}
+
+type capabilityProvider struct {
+	name       string
+	caps       gateway.ProviderCapabilities
+	inferCalls int
+}
+
+func (p *capabilityProvider) Name() string {
+	return p.name
+}
+
+func (p *capabilityProvider) Capabilities() gateway.ProviderCapabilities {
+	return p.caps
+}
+
+func (p *capabilityProvider) Infer(context.Context, providers.InferenceRequest) (providers.InferenceResponse, error) {
+	p.inferCalls++
+	return providers.InferenceResponse{
+		Message: models.NewTextMessage(models.RoleAssistant, "should not call"),
+	}, nil
+}
+
+func (p *capabilityProvider) InferStream(context.Context, providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	p.inferCalls++
+	ch := make(chan messages.StreamMessage)
 	close(ch)
 	return ch, nil
 }
@@ -175,5 +206,46 @@ func TestGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testing.T) {
 	}
 	if result.TokenUsage.TotalTokens != 1 {
 		t.Fatalf("total tokens: got %d, want 1", result.TokenUsage.TotalTokens)
+	}
+}
+
+func TestGatewayInferencer_PreservesUnsupportedFeatureErrorBeforeProviderCall(t *testing.T) {
+	provider := &capabilityProvider{
+		name: "inferencer-validation-provider",
+		caps: gateway.ProviderCapabilities{
+			Provider: "inferencer-validation-provider",
+			Stateless: capabilities.StatelessCapabilities{
+				Tools: capabilities.Unsupported("inferencer tools unavailable"),
+			},
+		},
+	}
+	gw, err := gateway.NewGateway(gateway.WithProvider(provider))
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	inferencer := NewGatewayInferencer(gw)
+	_, err = inferencer.Infer(context.Background(), messages.InferenceRequest{
+		Tools: []messages.ToolDefinition{{Name: "lookup"}},
+	})
+
+	var unsupported *gateway.UnsupportedFeatureError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("error = %v, want UnsupportedFeatureError", err)
+	}
+	if unsupported.Provider != "inferencer-validation-provider" {
+		t.Fatalf("provider = %q, want inferencer-validation-provider", unsupported.Provider)
+	}
+	if unsupported.Feature != capabilities.FeatureTools {
+		t.Fatalf("feature = %q, want %q", unsupported.Feature, capabilities.FeatureTools)
+	}
+	if unsupported.RequestedMode != capabilities.RequestedModeStateless {
+		t.Fatalf("mode = %q, want %q", unsupported.RequestedMode, capabilities.RequestedModeStateless)
+	}
+	if unsupported.Capability.State != capabilities.CapabilityStateUnsupported {
+		t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
+	}
+	if provider.inferCalls != 0 {
+		t.Fatalf("provider calls = %d, want 0", provider.inferCalls)
 	}
 }
