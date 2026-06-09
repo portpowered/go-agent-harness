@@ -434,14 +434,9 @@ func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.I
 	}
 
 	r.writeDelta(ctx, messages.StreamMessage{
-		Type: messages.StreamTypeMessageEnd,
-		Role: messages.RoleAssistant,
-		Value: messages.NewMessageEndValueWithTerminal(
-			result.TokenUsage,
-			messages.TerminalReasonLoopSynthesizedCompletion,
-			messages.TerminalProvenanceLoop,
-			messages.TerminalOutputComplete,
-		),
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewSynthesizedMessageEndValue(result.TokenUsage),
 	})
 }
 

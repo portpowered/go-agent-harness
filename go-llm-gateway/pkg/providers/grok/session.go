@@ -12,6 +12,7 @@ import (
 
 // Ensure grokSession satisfies messages.Session at compile time.
 var _ messages.Session = (*grokSession)(nil)
+var _ messages.SessionSendOutcomeSender = (*grokSession)(nil)
 
 // grokSession wraps a WebSocket connection as a bidirectional StreamMessage session.
 // It translates between agent loop StreamMessages and the Grok wire protocol
@@ -54,18 +55,39 @@ func (s *grokSession) start(ctx context.Context) {
 // if the context is cancelled, the session is done, or the message type
 // has no outbound representation.
 func (s *grokSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+// SendWithOutcome writes a StreamMessage to the outbound queue and reports the
+// precise public lifecycle outcome.
+func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	event, ok := translateOutbound(msg)
 	if !ok {
-		return false
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
 	select {
 	case <-ctx.Done():
-		return false
-	case <-s.done:
-		return false
-	case s.sendCh <- event:
-		return true
+		return sessionSendContextOutcome(ctx)
+	default:
 	}
+	select {
+	case <-ctx.Done():
+		return sessionSendContextOutcome(ctx)
+	case <-s.done:
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+	case s.sendCh <- event:
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	default:
+		return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+	}
+}
+
+func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome {
+	err := ctx.Err()
+	if err == context.DeadlineExceeded {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
 // Receive returns the inbound typed buffer of StreamMessages translated from

@@ -536,6 +536,31 @@ func TestRunAgentLoopSession_ReturnsOnCleanDoneSignal(t *testing.T) {
 	}
 }
 
+func TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError(t *testing.T) {
+	sessionInf := &scriptedSessionInferencer{
+		events: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("timeout response")},
+		},
+	}
+	var out bytes.Buffer
+
+	start := time.Now()
+	err := runAgentLoopSession(context.Background(), &out, sessionInf, sessionLoopOptions{
+		MaxDuration: 75 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("runAgentLoopSession timeout should not report caller cancellation: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed >= time.Second {
+		t.Fatalf("session loop timeout should return promptly; elapsed=%s", elapsed)
+	}
+	if !sessionInf.connected {
+		t.Fatal("session loop timeout path did not connect the configured inferencer")
+	}
+}
+
 func assertCapturedDirectionAndType(t *testing.T, records []gwtesting.CapturedSessionEvent, direction gwtesting.SessionEventDirection, eventType string) {
 	t.Helper()
 	for _, record := range records {

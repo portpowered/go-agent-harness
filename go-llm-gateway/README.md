@@ -307,6 +307,25 @@ audio, tool, and turn-detection settings. Shared message, tool, and token-usage
 contracts imported through `pkg/models` still follow the authoritative
 definitions in `go-agent-loop/pkg/messages`.
 
+For loop-managed session flows, pass the persistent session shape through
+`inference.SessionRequest`; keep `context.Context` on each `ConnectSession`
+operation:
+
+```go
+sessionInferencer := inference.NewSessionGatewayInferencer(
+	sessionGW,
+	inference.WithSessionRequest(inference.SessionRequest{
+		Config: models.SessionConfig{
+			Model:        "gpt-realtime",
+			Modalities:   []models.SessionModality{models.SessionModalityText},
+			Instructions: "Keep answers concise.",
+		},
+	}),
+)
+
+session, err = sessionInferencer.ConnectSession(context.Background())
+```
+
 ## Provider Capabilities and Local Validation
 
 Applications can inspect the configured provider's public capability contract

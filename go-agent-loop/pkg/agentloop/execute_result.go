@@ -35,10 +35,11 @@ const (
 // message, cancellation, terminal failure, and partial output. Legacy callers can
 // keep using [ExecuteResult.Text], which returns only the final non-empty text.
 type FinalTextResult struct {
-	Text    string
-	Status  FinalTextStatus
-	Err     error
-	Partial bool
+	Text           string
+	Status         FinalTextStatus
+	Err            error
+	Partial        bool
+	TerminalSource messages.TerminalSource
 }
 
 // ExecuteResult is the response returned by [AgenticLoop.Execute].
@@ -73,6 +74,7 @@ func (r ExecuteResult) Text() string {
 // FinalText returns the explicit final text outcome for this execution.
 func (r ExecuteResult) FinalText() FinalTextResult {
 	text, found := r.finalAssistantText()
+	terminalSource := r.terminalSourceFromDeltas()
 	if r.Err != nil {
 		status := FinalTextFailed
 		if errors.Is(r.Err, context.Canceled) || errors.Is(r.Err, context.DeadlineExceeded) {
@@ -82,19 +84,20 @@ func (r ExecuteResult) FinalText() FinalTextResult {
 			text, found = r.partialTextFromDeltas()
 		}
 		return FinalTextResult{
-			Text:    text,
-			Status:  status,
-			Err:     r.Err,
-			Partial: found,
+			Text:           text,
+			Status:         status,
+			Err:            r.Err,
+			Partial:        found,
+			TerminalSource: terminalSource,
 		}
 	}
 	if found {
 		if text == "" {
-			return FinalTextResult{Status: FinalTextEmptySuccess}
+			return FinalTextResult{Status: FinalTextEmptySuccess, TerminalSource: terminalSource}
 		}
-		return FinalTextResult{Text: text, Status: FinalTextSuccess}
+		return FinalTextResult{Text: text, Status: FinalTextSuccess, TerminalSource: terminalSource}
 	}
-	return FinalTextResult{Status: FinalTextNoFinalMessage}
+	return FinalTextResult{Status: FinalTextNoFinalMessage, TerminalSource: terminalSource}
 }
 
 func (r ExecuteResult) finalAssistantText() (string, bool) {
@@ -130,6 +133,19 @@ func (r ExecuteResult) partialTextFromDeltas() (string, bool) {
 	return partial, found
 }
 
+func (r ExecuteResult) terminalSourceFromDeltas() messages.TerminalSource {
+	var source messages.TerminalSource
+	for _, delta := range r.Deltas {
+		if delta.Type != messages.StreamTypeMessageEnd {
+			continue
+		}
+		if v, ok := delta.Value.(*messages.MessageEndValue); ok {
+			source = messages.MessageEndTerminalSource(v)
+		}
+	}
+	return source
+}
+
 // Response is a single streaming event delivered by a [Stream].
 type Response = messages.StreamMessage
 
@@ -156,9 +172,10 @@ const (
 // terminal failure, allowing callers to distinguish total failure from partial
 // success with inspectable Err metadata.
 type StreamOutcome struct {
-	Status  StreamStatus
-	Err     error
-	Partial bool
+	Status         StreamStatus
+	Err            error
+	Partial        bool
+	TerminalSource messages.TerminalSource
 }
 
 // Stream is an iterator-style interface wrapping the event channel produced by
@@ -196,6 +213,7 @@ type chanStream struct {
 	status    StreamStatus
 	partial   bool
 	delivered bool
+	source    messages.TerminalSource
 	once      sync.Once
 	closed    chan struct{}
 }
@@ -237,7 +255,7 @@ func (s *chanStream) HasNext() bool {
 func (s *chanStream) Response() Response { return s.current }
 func (s *chanStream) Err() error         { return s.err }
 func (s *chanStream) Outcome() StreamOutcome {
-	return StreamOutcome{Status: s.status, Err: s.err, Partial: s.partial}
+	return StreamOutcome{Status: s.status, Err: s.err, Partial: s.partial, TerminalSource: s.source}
 }
 
 func (s *chanStream) recordEvent(item streamEvent) {
@@ -246,6 +264,10 @@ func (s *chanStream) recordEvent(item streamEvent) {
 		s.setTerminalError(item.err)
 	} else if item.event.Type == messages.StreamTypeError {
 		s.setTerminalError(errorFromStreamEvent(item.event))
+	} else if item.event.Type == messages.StreamTypeMessageEnd {
+		if v, ok := item.event.Value.(*messages.MessageEndValue); ok {
+			s.source = messages.MessageEndTerminalSource(v)
+		}
 	}
 	s.delivered = true
 }
