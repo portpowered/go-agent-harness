@@ -68,7 +68,7 @@ func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) e
 				Source: messages.System,
 				Delta: messages.StreamMessage{
 					Type:  messages.StreamTypeSessionClose,
-					Value: messages.NewSessionCloseValue(curr.SessionID, reason),
+					Value: newLoopSessionCloseValue(curr.SessionID, reason),
 				},
 			})
 		}
@@ -108,4 +108,19 @@ func extractSessionCloseReason(msg messages.Message) string {
 		}
 	}
 	return ""
+}
+
+func newLoopSessionCloseValue(sessionID, reason string) *messages.SessionCloseValue {
+	terminalReason := messages.TerminalReasonSessionClose
+	if reason == "stop" {
+		terminalReason = messages.TerminalReasonCancellation
+	}
+	return messages.NewSessionCloseValueWithTerminal(
+		sessionID,
+		reason,
+		string(terminalReason),
+		terminalReason,
+		messages.TerminalProvenanceLoop,
+		messages.TerminalOutputNotApplicable,
+	)
 }

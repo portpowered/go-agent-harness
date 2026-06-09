@@ -145,3 +145,137 @@ func TestWriteStreamEventJSON_RefusalNotMixedWithTextEvents(t *testing.T) {
 		t.Errorf("expected second event type %q, got %q", "REFUSAL", refusalEvt.Type)
 	}
 }
+
+func TestWriteStreamEventJSON_TerminalMetadataFields(t *testing.T) {
+	tests := []struct {
+		name               string
+		msg                messages.StreamMessage
+		wantType           string
+		wantClassification string
+		wantReason         messages.TerminalReason
+		wantProvenance     messages.TerminalProvenance
+		wantOutputState    messages.TerminalOutputState
+	}{
+		{
+			name: "provider authored completion",
+			msg: messages.StreamMessage{
+				Type: messages.StreamTypeMessageEnd,
+				Value: messages.NewMessageEndValueWithTerminal(
+					messages.TokenUsage{},
+					messages.TerminalReasonProviderAuthoredCompletion,
+					messages.TerminalProvenanceProvider,
+					messages.TerminalOutputComplete,
+				),
+			},
+			wantType:        "MESSAGE.END",
+			wantReason:      messages.TerminalReasonProviderAuthoredCompletion,
+			wantProvenance:  messages.TerminalProvenanceProvider,
+			wantOutputState: messages.TerminalOutputComplete,
+		},
+		{
+			name: "terminal failure after partial output",
+			msg: messages.StreamMessage{
+				Type: messages.StreamTypeError,
+				Value: messages.NewErrorValueWithTerminal(
+					"provider failed",
+					"transport",
+					messages.TerminalReasonTerminalFailure,
+					messages.TerminalProvenanceProvider,
+					messages.TerminalOutputPartial,
+				),
+			},
+			wantType:           "ERROR",
+			wantClassification: "transport",
+			wantReason:         messages.TerminalReasonTerminalFailure,
+			wantProvenance:     messages.TerminalProvenanceProvider,
+			wantOutputState:    messages.TerminalOutputPartial,
+		},
+		{
+			name: "cancellation",
+			msg: messages.StreamMessage{
+				Type: messages.StreamTypeError,
+				Value: messages.NewErrorValueWithTerminal(
+					"context canceled",
+					string(messages.TerminalReasonCancellation),
+					messages.TerminalReasonCancellation,
+					messages.TerminalProvenanceLoop,
+					messages.TerminalOutputPartial,
+				),
+			},
+			wantType:           "ERROR",
+			wantClassification: string(messages.TerminalReasonCancellation),
+			wantReason:         messages.TerminalReasonCancellation,
+			wantProvenance:     messages.TerminalProvenanceLoop,
+			wantOutputState:    messages.TerminalOutputPartial,
+		},
+		{
+			name: "provider close",
+			msg: messages.StreamMessage{
+				Type: messages.StreamTypeMessageEnd,
+				Value: messages.NewMessageEndValueWithTerminal(
+					messages.TokenUsage{},
+					messages.TerminalReasonProviderClose,
+					messages.TerminalProvenanceProvider,
+					messages.TerminalOutputPartial,
+				),
+			},
+			wantType:        "MESSAGE.END",
+			wantReason:      messages.TerminalReasonProviderClose,
+			wantProvenance:  messages.TerminalProvenanceProvider,
+			wantOutputState: messages.TerminalOutputPartial,
+		},
+		{
+			name: "session close",
+			msg: messages.StreamMessage{
+				Type: messages.StreamTypeSessionClose,
+				Value: messages.NewSessionCloseValueWithTerminal(
+					"session-1",
+					"client_close",
+					string(messages.TerminalReasonSessionClose),
+					messages.TerminalReasonSessionClose,
+					messages.TerminalProvenanceLoop,
+					messages.TerminalOutputNotApplicable,
+				),
+			},
+			wantType:           "SESSION.CLOSE",
+			wantClassification: string(messages.TerminalReasonSessionClose),
+			wantReason:         messages.TerminalReasonSessionClose,
+			wantProvenance:     messages.TerminalProvenanceLoop,
+			wantOutputState:    messages.TerminalOutputNotApplicable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := WriteStreamEventJSON(&buf, tt.msg); err != nil {
+				t.Fatalf("WriteStreamEventJSON: %v", err)
+			}
+
+			var evt streamEventJSON
+			if err := json.Unmarshal(buf.Bytes(), &evt); err != nil {
+				t.Fatalf("unmarshal event: %v", err)
+			}
+			if evt.Type != tt.wantType {
+				t.Fatalf("event type = %q, want %q", evt.Type, tt.wantType)
+			}
+
+			var value map[string]any
+			if err := json.Unmarshal(evt.Value, &value); err != nil {
+				t.Fatalf("unmarshal value: %v", err)
+			}
+			if tt.wantClassification != "" && value["classification"] != tt.wantClassification {
+				t.Fatalf("classification = %v, want %q", value["classification"], tt.wantClassification)
+			}
+			if value["terminal_reason"] != string(tt.wantReason) {
+				t.Fatalf("terminal_reason = %v, want %q", value["terminal_reason"], tt.wantReason)
+			}
+			if value["terminal_provenance"] != string(tt.wantProvenance) {
+				t.Fatalf("terminal_provenance = %v, want %q", value["terminal_provenance"], tt.wantProvenance)
+			}
+			if value["output_state"] != string(tt.wantOutputState) {
+				t.Fatalf("output_state = %v, want %q", value["output_state"], tt.wantOutputState)
+			}
+		})
+	}
+}

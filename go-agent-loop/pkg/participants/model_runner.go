@@ -126,8 +126,15 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			}
 			if !sessionClosed {
 				r.DeltaOutbox.Write(ctx, messages.StreamMessage{
-					Type:  messages.StreamTypeSessionClose,
-					Value: messages.NewSessionCloseValue("", "provider_closed"),
+					Type: messages.StreamTypeSessionClose,
+					Value: messages.NewSessionCloseValueWithTerminal(
+						"",
+						"provider_closed",
+						string(messages.TerminalReasonProviderClose),
+						messages.TerminalReasonProviderClose,
+						messages.TerminalProvenanceSession,
+						messages.TerminalOutputNotApplicable,
+					),
 				})
 			}
 			return nil
@@ -171,6 +178,7 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		audioStreaming = false
 	case messages.StreamTypeSessionClose:
 		sessionClosed = true
+		msg = normalizeSessionCloseMessage(msg)
 	}
 	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
 	// session parameters (model, instructions, modalities) if set.
@@ -182,6 +190,30 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 	}
 	r.DeltaOutbox.Write(ctx, msg)
 	return audioStreaming, sessionClosed
+}
+
+func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMessage {
+	value, ok := msg.Value.(*messages.SessionCloseValue)
+	if !ok {
+		return msg
+	}
+	if value.TerminalReason == "" {
+		if value.Reason == "provider_closed" {
+			value.TerminalReason = messages.TerminalReasonProviderClose
+		} else {
+			value.TerminalReason = messages.TerminalReasonSessionClose
+		}
+	}
+	if value.Classification == "" {
+		value.Classification = string(value.TerminalReason)
+	}
+	if value.TerminalProvenance == "" {
+		value.TerminalProvenance = messages.TerminalProvenanceSession
+	}
+	if value.OutputState == "" {
+		value.OutputState = messages.TerminalOutputNotApplicable
+	}
+	return msg
 }
 
 func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.Session, req messages.InferenceRequest) {

@@ -506,6 +506,57 @@ func TestSessionModelRunner_SessionDoneEmitsSessionClose(t *testing.T) {
 	if delta.Type != messages.StreamTypeSessionClose {
 		t.Fatalf("delta type = %s, want %s", delta.Type, messages.StreamTypeSessionClose)
 	}
+	value, ok := delta.Value.(*messages.SessionCloseValue)
+	if !ok {
+		t.Fatalf("delta value = %T, want *messages.SessionCloseValue", delta.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonProviderClose {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonProviderClose)
+	}
+	if value.Classification != string(messages.TerminalReasonProviderClose) {
+		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonProviderClose)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceSession {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceSession)
+	}
+	if value.OutputState != messages.TerminalOutputNotApplicable {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNotApplicable)
+	}
+}
+
+func TestSessionModelRunner_NormalizesProviderSessionCloseMetadata(t *testing.T) {
+	session := newCompletedSession()
+	session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValue("session-1", "closed"),
+	})
+	close(session.done)
+
+	runner := NewSessionModelRunner(&completedSessionInferencer{session: session}, 16, nil)
+	if err := runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	delta, ok := runner.DeltaOutbox.Read()
+	if !ok {
+		t.Fatal("expected session close delta")
+	}
+	value, ok := delta.Value.(*messages.SessionCloseValue)
+	if !ok {
+		t.Fatalf("delta value = %T, want *messages.SessionCloseValue", delta.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonSessionClose {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonSessionClose)
+	}
+	if value.Classification != string(messages.TerminalReasonSessionClose) {
+		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonSessionClose)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceSession {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceSession)
+	}
+	if value.OutputState != messages.TerminalOutputNotApplicable {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNotApplicable)
+	}
 }
 
 type testSessionInferencer struct {
