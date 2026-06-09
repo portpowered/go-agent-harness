@@ -10,6 +10,13 @@ defines the Phase 4 exported API audit shape for public contract hardening in
 
 This section is the row-level Phase 4 source of truth for P4-API-01 through P4-API-07 and P4-GATE-01. The older findings below remain evidence and planning context, but audit documentation alone cannot close implementation checklist rows; a row is closable only when the named public contract, runtime behavior, docs/examples, and deterministic validation evidence exist in code or tests.
 
+Validator provenance: the missing `validator-015` artifact is explicitly
+superseded by `docs/internal/phase-4-api-contract-validator.md` and this audit
+reconciliation. The reviewer-facing supersession note is
+`docs/internal/phase-4-validator-015-provenance.md`; it states that
+validator-015 findings are replaced by current Phase 4 validator evidence and
+that no checklist row closes from provenance alone.
+
 Status values:
 
 - `pass`: current implementation and deterministic evidence are sufficient for this audit row.
@@ -17,7 +24,96 @@ Status values:
 - `uncertain`: evidence exists, but the row still needs targeted reconciliation before a reviewer should treat it as closed.
 - `open`: intentionally not closable in this audit-only lane.
 
-Reviewer command policy: run all commands from the repository root unless a row explicitly says otherwise. The test commands below use local Go packages, committed fixtures, and injected/mocked provider seams; they are intended to run without live provider credentials, external network access, or unspecified environment variables. `go doc` commands inspect the current public declarations and comments; they do not prove runtime behavior by themselves.
+### Compact Phase 4 Row Reconciliation Table
+
+This reconciliation now includes implementation evidence from the provider
+capability/local validation repair lane. Rows outside that lane remain open
+until a future implementation lane supplies both implementation evidence and
+validator evidence for closure. Rows marked `pass` for a subset are closed only
+for the named provider capability/local validation scope, not for unrelated
+Phase 4 contract areas.
+
+| Checklist row | Current status | Mapped audit rows | Validator/provenance evidence | Closed or narrowed subset | Remaining open work |
+| --- | --- | --- | --- | --- | --- |
+| `P4-API-01` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-DI-01`, `P4-DI-03`, `P4-DI-04`, `HC-03` | Validator-015 is superseded by `docs/internal/phase-4-api-contract-validator.md`; current audit evidence is the `P4-API-01` row below plus credential-free constructor, runtime, and cancellation tests. | Explicit tool-execution constructor decisions, provider HTTP runtime ownership, gateway-to-loop inferencer adapters, and replay/record relay cancellation are narrowed by implementation and tests. | Prompt/config/filesystem loading, session/config/dialer side effects, complete timeout/cancellation ownership, and stable dependency/result errors remain open. |
+| `P4-API-02` | `fail` | `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator typed-error report; current audit evidence includes public gateway error classes, `messages.ErrorValue`, PNIG error events, replay mismatch tests, and session command tests. | Gateway typed errors, OpenAI Realtime error details, PNIG timeout/provider/cancellation events, and replay divergence are narrowed by deterministic tests. | Loop/provider/session emitters still need a shared caller-actionable taxonomy, serialized stream error classes, and provider/session/direct-stream coverage. |
+| `P4-API-03` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-STREAM-01`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator result/lifecycle report; current audit evidence includes loop result reconstruction, gateway/PNIG terminal events, replay completion, and CLI session behavior. | Normalized result and selected terminal-event behavior are narrowed where loop, gateway, replay, and CLI tests assert current behavior. | Terminal authority remains split across `ExecuteResult`, synthesized stream endings, session `Done`/`Close`, replay completion, capture flush, PNIG end/error/cancellation events, and CLI stop conditions. |
+| `P4-API-04` | `pass` for provider capability discovery | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-01`, `P4-HYGIENE-02` | Superseded validator evidence is the Phase 4 capability report; current audit evidence includes `pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, gateway/session `Capabilities()` methods, README guidance, development guidance, and credential-free capability tests. | Provider-neutral supported, unsupported, and unknown states; concrete provider-family capability reporters; gateway/session discovery; unknown fallback; overclaimed-support checks; interaction/inferencer capability closure; and fal streaming alignment are closed for this repair lane. | None for provider capability discovery. Broader stream terminal, model ownership, dependency/result/context, and API hygiene issues remain in their own rows. |
+| `P4-API-05` | `uncertain` | `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `P4-ERR-01`, `P4-ERR-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `HC-02`, `DOC-01`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 stream and public-surface report; current audit evidence includes gateway/inference adapter tests, PNIG JSON/event-shape tests, provider stream tests, and `go doc` declaration inspection. | Gateway, PNIG, inference adapter, provider stream, and `pkg/models` alias-facade behavior are narrowed where deterministic tests and docs identify current shape. | Stream ordering, final events, cancellation behavior, replay mismatch behavior, error propagation, and package ownership for gateway/provider/model/session contracts remain open. |
+| `P4-API-06` | `pass` for provider capability/local validation scope; broader context/retry ownership remains open | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-04`, `LIFECYCLE-01`, `LIFECYCLE-02` | Superseded validator evidence is the Phase 4 unsupported-feature and context report; current audit evidence includes `UnsupportedFeatureError`, `validateStatelessRequest`, `validateSessionConfig`, PNIG cancellation/timeout tests, replay lifecycle tests, CLI session timeout behavior, interaction local-validation tests, inferencer local-validation tests, and fal unsupported-streaming tests. | Gateway, session, interaction, and inferencer unsupported-feature validation for explicitly unsupported capabilities; caller context acceptance; replay lifecycle cancellation; PNIG cancellation events; concrete provider reporting; and fal unsupported streaming semantics are closed for this repair lane. | Retry ownership, timeout ownership, and broader cross-surface cancellation documentation remain open outside the provider capability/local validation scope. |
+| `P4-API-07` | `fail` | `P4-DI-01`, `P4-DI-02`, `P4-DI-03`, `P4-DI-04`, `P4-HYGIENE-01`, `P4-HYGIENE-02`, `P4-HYGIENE-03`, `P4-HYGIENE-04`, `DOC-01`, `DOC-02`, `COMPAT-01`, `COMPAT-02`, `COMPAT-03`, `HC-02`, `HC-03` | Superseded validator evidence is the Phase 4 dependency, API hygiene, and compatibility report; current audit evidence includes public declaration `go doc` output, README guidance, fixture tests, interaction shape tests, and adapter tests. | Exported comments, narrow provider/session interfaces, selected dependency ownership seams, PNIG event shapes, and fixture compatibility checks are narrowed. | Compatibility ownership for `pkg/models`, gateway/provider request overlap, CLI internal composition exports, hidden side effects, fixture staging, and text-matching caller compatibility remain open. |
+| `P4-GATE-01` | `pass` for the provider capability/local validation repair lane; whole-Phase-4 gate remains open | All rows mapped to `P4-API-01` through `P4-API-07` | Superseded validator evidence is the Phase 4 validator final closure decision; current capability/local validation evidence is this audit reconciliation plus the provider/gateway/inference/fal tests named below. | Provider capability discovery and local unsupported-feature validation are closed for this repair lane. | Complete the remaining typed error/stream, dependency/result/context/lifecycle, API hygiene, and final validation repair lanes before whole-Phase-4 closure. |
+
+### Closed Or Narrowed Evidence Versus Open Repair Work
+
+The reconciliation separates evidence that narrows a row from work that can
+close a row. A narrowed subset is not whole-row closure; it is only the part of
+an audit row where current implementation evidence and validator evidence agree
+that a future repair lane should not repeat already completed work.
+
+Closed or narrowed subsets with supporting evidence:
+
+- Dependency ownership is narrowed for explicit tool-execution constructor
+  decisions, provider HTTP runtime ownership, gateway-to-loop inferencer
+  adapters, and replay/record relay cancellation. Implementation evidence
+  includes constructor tests, provider runtime tests, adapter tests, and replay
+  cancellation tests; validator evidence is the current Phase 4 dependency and
+  context report in `docs/internal/phase-4-api-contract-validator.md`.
+- Typed error evidence is narrowed for public gateway error classes, OpenAI
+  Realtime error details, PNIG timeout/provider/cancellation events, and replay
+  divergence. Implementation evidence includes gateway error tests, OpenAI
+  session tests, PNIG interaction tests, and replay mismatch tests; validator
+  evidence is the Phase 4 typed-error and stream-failure report.
+- Result and lifecycle evidence is narrowed for loop result reconstruction,
+  selected gateway and PNIG terminal events, replay completion, and CLI session
+  command behavior. Implementation evidence includes loop, gateway, replay, and
+  CLI session tests; validator evidence is the Phase 4 result/lifecycle report.
+- Capability and unsupported-feature evidence is narrowed for provider-neutral
+  supported, unsupported, and unknown states, gateway/session discovery,
+  unknown fallback behavior, OpenAI capability reporting, and selected provider
+  option/modality tests. Implementation evidence includes `pkg/capabilities`,
+  `providers.CapabilityReporter`, gateway/session `Capabilities()` methods,
+  validation tests, and provider-local tests; validator evidence is the Phase 4
+  capability and unsupported-feature report.
+- Public surface and API hygiene evidence is narrowed for PNIG event shapes,
+  gateway/inference adapters, `pkg/models` alias-facade declaration inspection,
+  exported comments on selected public contracts, and fixture compatibility
+  checks. Implementation evidence includes interaction shape tests, adapter
+  tests, fixture tests, and `go doc` output; validator evidence is the Phase 4
+  public-surface and compatibility report.
+
+Remaining open repair work is grouped by observable behavior:
+
+- Typed stream and error contracts: define a shared caller-actionable taxonomy
+  for returned errors, stream errors, interaction errors, replay divergence,
+  session command failures, cancellation, provider rejection, and serialized
+  error payloads; prove each representative path with runtime or emitted-event
+  tests rather than source inventories.
+- Capability and validation coverage: finish or explicitly document concrete
+  provider capability reporting, overclaimed support checks, unknown fallback
+  behavior, interaction and `GatewayInferencer` validation, fal streaming
+  alignment, and local unsupported-feature failures before provider side
+  effects.
+- Dependency, result, context, and lifecycle contracts: document and test
+  caller cancellation, timeout ownership, retry ownership, terminal result
+  authority, replay/record lifecycle, stream finality, and session close
+  reasons across loop, gateway, provider, CLI, replay, and PNIG surfaces.
+- API hygiene and compatibility staging: declare ownership for `pkg/models`,
+  gateway/provider request overlap, exported fixture schemas, nil/empty value
+  semantics, public event codes, CLI internal composition boundaries, and
+  additive compatibility rules for future message/session/error changes.
+- Final gate readiness: keep `P4-GATE-01` open until the repair lanes above
+  provide implementation evidence, docs/examples where the public contract
+  needs consumer guidance, deterministic validation, and a final validator
+  decision that explicitly permits closure.
+
+Review non-goals: later repair lanes should not add broad source inventories,
+documentation link-topology checks, command inventories, route-registration
+inventories, or asset-bundle checks unless that inventory is itself the public
+behavior under review. Prefer observable runtime, API, CLI, UI, fixture, or
+emitted-event assertions for closure evidence.
+
+Reviewer command policy: run all commands from the repository root unless a row explicitly says otherwise. The credential-free reviewer command matrix below is the canonical command evidence for this reconciliation. The test commands use local Go packages, committed fixtures, and injected/mocked provider seams; they are intended to run without live provider credentials, external network access, or unspecified environment variables. `go doc` commands inspect the current public declarations and comments; they do not prove runtime behavior by themselves. Each command names the checklist row or rows it supports, the public claim it verifies, and the expected pass condition.
 
 ### Final Closure Validation Check
 
@@ -30,6 +126,22 @@ audit reconciliation needed to close the capability discovery and local
 unsupported-feature validation scope. Rows outside that scope keep their
 existing outcomes until their dedicated repair lanes update runtime behavior and
 evidence.
+
+Reconciliation validation outcome: `pass`. The provenance note and compact row
+map have been compared with the current validator artifact, public
+declarations, and deterministic test evidence listed below. No stale Phase 4
+row remains silently dropped or claimed closed by audit prose alone. Remaining
+open work is intentionally reported as `fail` or `uncertain` in the row map and
+cross-check summary: `P4-API-01`, `P4-API-02`, `P4-API-03`, `P4-API-06`, and
+`P4-API-07` remain `fail`; `P4-API-04` and `P4-API-05` remain `uncertain`.
+The exact stale wording under watch is `P4-CAP-01` language that capability
+discovery is absent, `P4-VALIDATION-01` language that unsupported-feature
+validation is absent, and `HC-02`/`DOC-01` stream and `pkg/models` ownership
+wording that predates the current alias-facade and gateway error evidence.
+Those stale rows are not treated as closed; they are narrowed to the remaining
+provider coverage, interaction/inferencer validation, documentation, stream
+taxonomy, and compatibility-staging work named in this section. `P4-GATE-01`
+remains `open` and is not closable from this reconciliation.
 
 Cross-check summary:
 
@@ -158,7 +270,17 @@ Validated deterministic test names and packages:
   - Concrete provider evidence: Anthropic, OpenAI-compatible, Gemini, Grok, and fal.ai reporters populate every public stateless/session capability field for tools, streaming, sessions, audio input/output, image input, video output, reasoning, prompt caching, and provider-specific config. No current concrete family reports unknown; the unknown fallback remains tested for providers that do not implement `CapabilityReporter`.
   - Provider-specific behavior: `ThinkingConfig` and `CacheControlConfig` are supported by Anthropic and unsupported by providers that do not translate them; OpenAI-compatible stateless requests support tools, streaming, image input, and audio input/output but reject unsupported reasoning, prompt caching, raw config, and video output locally; fal.ai supports sync media/config flows and rejects streaming locally as unsupported before HTTP work.
   - Local validation evidence: `DefaultGateway.Infer`, `DefaultGateway.InferStream`, `DefaultSessionGateway.ConnectSession`, `gateway.Interact`, and `inference.GatewayInferencer` all have representative tests showing explicit unsupported capabilities fail locally before provider side effects while unknown capabilities are not silently treated as supported.
-- Planning-only evidence: P4-CAP-01 and P4-VALIDATION-01 are reconciled for this repair lane; older wording that says discovery is absent, validation is absent, or fal streaming returns an empty successful stream is stale for the current head.
+- Current feature-state reconciliation:
+  - Tools: supported by OpenAI, Anthropic, Gemini, and Grok session capability reporters; unsupported by fal.ai and Grok stateless capability reporters; unknown only for providers that do not implement `CapabilityReporter`.
+  - Streaming: supported by OpenAI, Anthropic, and Gemini stateless reporters; unsupported by fal.ai and Grok stateless reporters; unknown only through the fallback path for non-reporting providers. fal.ai also returns `UnsupportedFeatureError` from `InferStream`, so its provider-local stream behavior now aligns with the unsupported state.
+  - Sessions: supported by OpenAI and Grok session reporters; unsupported by Anthropic, Gemini, fal.ai, and Grok stateless-only modes; unknown only for non-reporting providers.
+  - Audio: OpenAI reports stateless and session audio input/output support where implemented; Gemini and fal.ai report selected stateless audio input or output support; Anthropic reports stateless audio input/output unsupported; Grok reports session audio input/output supported and stateless audio unsupported; non-reporting providers remain unknown.
+  - Image input: OpenAI, Anthropic, Gemini, and fal.ai report supported stateless image input; Grok stateless reports unsupported; non-reporting providers remain unknown.
+  - Video output: fal.ai reports supported stateless video output; OpenAI, Anthropic, Gemini, and Grok stateless report unsupported; non-reporting providers remain unknown.
+  - Reasoning: Anthropic reports supported reasoning through `ThinkingConfig`; OpenAI, Gemini, fal.ai, and Grok stateless report unsupported or do not send reasoning options; non-reporting providers remain unknown.
+  - Prompt caching: Anthropic reports supported cache-control mapping; OpenAI, Gemini, fal.ai, and Grok stateless report unsupported or do not map cache-control options; non-reporting providers remain unknown.
+  - Provider-specific config: fal.ai reports supported stateless raw config passthrough; OpenAI, Anthropic, Gemini, Grok session, and unsupported stateless/session modes report unsupported; non-reporting providers remain unknown.
+- Planning-only evidence: P4-CAP-01 and P4-VALIDATION-01 are reconciled for this repair lane; older wording that says discovery is absent, validation is absent, interaction/inferencer seams remain open, or fal streaming returns an empty successful stream is stale for the current head.
 - Docs/tests/examples evidence:
   - `agent-cli/internal/config/models_test.go` verifies output modality checks, input MIME metadata, default multimodal MIME coverage, lookup behavior, and unknown-model allow behavior.
   - `agent-cli/internal/input/validate_test.go` verifies MIME rejection errors, supported-list behavior, conversion hints, and validation across image, audio, video, and file parts.
@@ -917,9 +1039,10 @@ make typecheck
 make test
 ```
 
-No reproducibility tooling was added for this slice; later implementation lanes
-must add the tests named in each finding before closing any Phase 4 checklist
-row.
+Use the credential-free reviewer command matrix above as the authoritative
+row-to-command mapping for this slice. Later implementation lanes must add or
+keep runtime, API, CLI, fixture, or emitted-event tests named in each finding
+before closing any Phase 4 checklist row.
 
 ### Phase 4 Provider Capability, Validation, And Dependency Injection Findings
 
@@ -1169,9 +1292,10 @@ Reviewer commands for this audit-only story:
 make typecheck
 ```
 
-No reproducibility tooling was added for this slice; later implementation lanes
-must add the tests named in each finding before closing any Phase 4 checklist
-row.
+Use the credential-free reviewer command matrix above as the authoritative
+row-to-command mapping for this slice. Later implementation lanes must add or
+keep runtime, API, CLI, fixture, or emitted-event tests named in each finding
+before closing any Phase 4 checklist row.
 
 ### Phase 4 Go API Hygiene And Implementation Order Findings
 
@@ -1406,8 +1530,9 @@ make typecheck
 make test
 ```
 
-No reproducibility tooling was added for this slice; later implementation lanes
-must add runtime, API, fixture, or emitted-event tests named in each finding
+Use the credential-free reviewer command matrix above as the authoritative
+row-to-command mapping for this slice. Later implementation lanes must add or
+keep runtime, API, CLI, fixture, or emitted-event tests named in each finding
 before closing any Phase 4 checklist row.
 
 ## Intended Adapters vs Hidden Coupling
