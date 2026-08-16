@@ -159,6 +159,7 @@ func TestMalformedExpectationsHaveTypedValidationIdentity(t *testing.T) {
 		expect(ExpectToolCalled, "", 0),
 		expect(ExpectLatencyWithinTicks, "", -1),
 		expect(ExpectFrameCount, "", -1),
+		{Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks, At: -1, HasAt: true},
 		{Type: ExpectLatencyWithinTicks, Kind: ExpectAudioEnergy},
 	}
 	for _, e := range tests {
@@ -167,6 +168,63 @@ func TestMalformedExpectationsHaveTypedValidationIdentity(t *testing.T) {
 		if !errors.As(err, &validation) || !errors.Is(err, ErrInvalidExpectation) || !errors.Is(err, ErrInvalidField) {
 			t.Fatalf("validation identity/type for %#v: %v", e, err)
 		}
+	}
+}
+
+func TestLatencyRejectsNegativeStartsAndAvoidsTickOverflow(t *testing.T) {
+	const (
+		maxLogicalTime LogicalTime = 1<<63 - 1
+		minLogicalTime LogicalTime = -1 << 63
+	)
+
+	negativeStart := ExpectedBehavior{
+		Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks,
+		At: -1, HasAt: true, Count: 0,
+	}
+	err := Evaluate(negativeStart, ObservationSnapshot{ObservedTick: maxLogicalTime, HasObservedTick: true})
+	var validation *ExpectationValidationError
+	if !errors.As(err, &validation) || validation.Field != "start_tick" {
+		t.Fatalf("negative start identity: %v", err)
+	}
+
+	latestStart := ExpectedBehavior{
+		Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks,
+		At: maxLogicalTime, HasAt: true, Count: 0,
+	}
+	err = Evaluate(latestStart, ObservationSnapshot{ObservedTick: minLogicalTime, HasObservedTick: true})
+	var mismatch *ExpectationMismatchError
+	if !errors.As(err, &mismatch) || !strings.Contains(mismatch.Error(), "precedes start tick") {
+		t.Fatalf("earlier extreme tick identity: %v", err)
+	}
+
+	firstTick := ExpectedBehavior{
+		Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks,
+		At: 1, HasAt: true, Count: 0,
+	}
+	err = Evaluate(firstTick, ObservationSnapshot{ObservedTick: maxLogicalTime, HasObservedTick: true})
+	if !errors.As(err, &mismatch) || mismatch.Actual != maxLogicalTime-1 {
+		t.Fatalf("latest extreme tick diagnostic: %v", err)
+	}
+}
+
+func TestDiagnosticErrorsAndEvaluationWrapper(t *testing.T) {
+	if err := EvaluateExpectation(expect(ExpectTranscriptContains, "ready", 0), ObservationSnapshot{Transcript: "ready"}); err != nil {
+		t.Fatalf("evaluation wrapper: %v", err)
+	}
+
+	err := EvaluateExpectation(ExpectedBehavior{Type: ExpectationKind("unknown")}, ObservationSnapshot{})
+	var validation *ExpectationValidationError
+	if !errors.As(err, &validation) || validation.Error() == "" || validation.Unwrap() != ErrInvalidExpectation {
+		t.Fatalf("validation diagnostic: %v", err)
+	}
+
+	var nilValidation *ExpectationValidationError
+	if nilValidation.Error() != "<nil>" {
+		t.Fatalf("nil validation diagnostic: %q", nilValidation.Error())
+	}
+	var nilMismatch *ExpectationMismatchError
+	if nilMismatch.Error() != "<nil>" {
+		t.Fatalf("nil mismatch diagnostic: %q", nilMismatch.Error())
 	}
 }
 

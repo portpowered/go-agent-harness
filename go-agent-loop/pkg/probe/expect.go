@@ -130,8 +130,13 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 			return mismatch(expectation, kind,
 				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count), "missing observed tick")
 		}
+		if observed < start {
+			return mismatch(expectation, kind,
+				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count),
+				fmt.Sprintf("observed tick %d precedes start tick %d", observed, start))
+		}
 		delta := observed - start
-		if observed < start || delta > LogicalTime(expectation.Count) {
+		if delta > LogicalTime(expectation.Count) {
 			return mismatch(expectation, kind,
 				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count), delta)
 		}
@@ -212,13 +217,18 @@ func startTick(e ExpectedBehavior) (LogicalTime, error) {
 	if e.At != 0 && e.Time != 0 && e.At != e.Time {
 		return 0, invalid(e, declaredKind(e), "start_tick", "at and time aliases disagree")
 	}
+	var start LogicalTime
 	if e.HasAt || e.At != 0 {
-		return e.At, nil
+		start = e.At
+	} else if e.Time != 0 {
+		start = e.Time
+	} else {
+		return 0, invalid(e, declaredKind(e), "start_tick", "declared start tick is required")
 	}
-	if e.Time != 0 {
-		return e.Time, nil
+	if start < 0 {
+		return 0, invalid(e, declaredKind(e), "start_tick", "declared start tick must not be negative")
 	}
-	return 0, invalid(e, declaredKind(e), "start_tick", "declared start tick is required")
+	return start, nil
 }
 func observationTick(o ObservationSnapshot) (LogicalTime, bool) {
 	return o.ObservedTick, o.HasObservedTick || o.ObservedTick != 0
