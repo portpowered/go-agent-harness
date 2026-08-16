@@ -77,7 +77,7 @@ func (i *sessionTextSeedInferencer) ConnectSession(ctx context.Context) (message
 		return nil, err
 	}
 	wrapped := &sessionTextSeedSession{
-		Session:    session,
+		inner:      session,
 		wirePrompt: i.wirePrompt,
 		value:      i.value,
 		audioOut:   i.audioOut,
@@ -88,7 +88,7 @@ func (i *sessionTextSeedInferencer) ConnectSession(ctx context.Context) (message
 }
 
 type sessionTextSeedSession struct {
-	messages.Session
+	inner      messages.Session
 	wirePrompt string
 	value      string
 	audioOut   *sessionTextOutput
@@ -104,27 +104,35 @@ func (s *sessionTextSeedSession) Send(ctx context.Context, msg messages.StreamMe
 	if s.replaceSeed(msg) {
 		msg.Value = messages.NewTextDeltaValue(s.value)
 	}
-	return s.Session.Send(ctx, msg)
+	return s.inner.Send(ctx, msg)
 }
 
 func (s *sessionTextSeedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }
 
+func (s *sessionTextSeedSession) Done() <-chan struct{} {
+	return s.inner.Done()
+}
+
+func (s *sessionTextSeedSession) Close() error {
+	return s.inner.Close()
+}
+
 func (s *sessionTextSeedSession) forwardIncoming() {
 	for {
-		msg, ok := s.Session.Receive().ReadBlocking(s.Session.Done())
+		msg, ok := s.inner.Receive().ReadBlocking(s.inner.Done())
 		if !ok {
 			return
 		}
 		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok {
 			if err := s.audioOut.writeAudio(value.Content); err != nil {
-				_ = s.Session.Close()
+				_ = s.inner.Close()
 				return
 			}
 		}
 		if !s.receive.Write(context.Background(), msg) {
-			_ = s.Session.Close()
+			_ = s.inner.Close()
 			return
 		}
 	}
