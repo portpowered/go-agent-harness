@@ -334,11 +334,11 @@ func pairedRecordsEqual(left, right []Record) bool {
 }
 
 type agentLiveScenarioResult struct {
-	inCount   int
-	inError   error
-	inCalls   int
-	inSeen    []byte
-	inPayload []byte
+	inCount    int
+	inError    error
+	inCalls    int
+	inSeen     []byte
+	inPayload  []byte
 	outCount   int
 	outError   error
 	outCalls   int
