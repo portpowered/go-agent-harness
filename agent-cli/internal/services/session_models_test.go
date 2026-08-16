@@ -177,6 +177,41 @@ model:
 	}
 }
 
+func TestRunSession_OpenAIRealtimeExplicitEmptyModelRejectsBeforeDial(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: openai
+  openai:
+    api_key: sk-test-key
+`)
+	dialer := &recordingGrokRealtimeDialer{dialErr: errors.New("dial should not be reached")}
+
+	err := RunSession(context.Background(), &strings.Builder{}, SessionRunOptions{
+		RecordPath:      filepath.Join(t.TempDir(), "openai-session.json"),
+		Provider:        config.ProviderOpenAI,
+		ModelProvided:   true,
+		ConfigDir:       configDir,
+		WebSocketDialer: dialer,
+	})
+	if err == nil {
+		t.Fatal("expected explicit empty model rejection")
+	}
+	if !errors.Is(err, ErrUnsupportedRealtimeModel) {
+		t.Fatalf("error = %v, want ErrUnsupportedRealtimeModel", err)
+	}
+	var unsupported *UnsupportedRealtimeModelError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("error = %v, want UnsupportedRealtimeModelError", err)
+	}
+	if unsupported.Model != "" {
+		t.Fatalf("rejected model = %q, want empty model", unsupported.Model)
+	}
+	if dialer.calls != 0 {
+		t.Fatalf("explicit empty model attempted %d dials", dialer.calls)
+	}
+}
+
 func TestResolveOpenAIRealtimeSessionConfig_WhitespaceOverrideIsTypedRejection(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, `
