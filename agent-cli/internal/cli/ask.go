@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +37,7 @@ type AskCommand struct {
 	askFlags    *flags.AskFlags
 	loopFlags   *flags.LoopFlags
 	globalFlags *flags.GlobalFlags
+	runAsk      func(context.Context, *agent.Config, agentloop.ExecuteInput, io.Writer) (string, error)
 }
 
 var (
@@ -142,7 +145,11 @@ func (c *AskCommand) Generate() *cobra.Command {
 				return nil
 			}
 
-			_, err = c.executor.RunAsk(cmd.Context(), cfg, execInput, cmd.OutOrStdout())
+			runAsk := c.executor.RunAsk
+			if c.runAsk != nil {
+				runAsk = c.runAsk
+			}
+			_, err = runAsk(cmd.Context(), cfg, execInput, cmd.OutOrStdout())
 			if err != nil {
 				return wrapAskError(errAskExecution, "execution failed", err)
 			}

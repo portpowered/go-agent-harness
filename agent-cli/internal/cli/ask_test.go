@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/spf13/cobra"
 )
@@ -52,7 +53,10 @@ func (f *askTestInferencer) InferStream(_ context.Context, req messages.Inferenc
 	f.mu.Unlock()
 	result, err := f.next(req)
 	if err != nil {
-		return nil, err
+		stream := make(chan messages.StreamMessage, 1)
+		stream <- messages.StreamMessage{Type: messages.StreamTypeError, Role: messages.RoleAssistant, Value: messages.NewErrorValueWithError(err)}
+		close(stream)
+		return stream, nil
 	}
 	stream := make(chan messages.StreamMessage, 8)
 	stream <- messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()}
@@ -90,6 +94,12 @@ func (w askTestFailWriter) Write(p []byte) (int, error) {
 
 func newAskTestCommand(t *testing.T, inf *askTestInferencer) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
+	_, cmd, stdout, stderr := newAskTestSubject(t, inf)
+	return cmd, stdout, stderr
+}
+
+func newAskTestSubject(t *testing.T, inf *askTestInferencer) (*AskCommand, *cobra.Command, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	askFlags := flags.NewAskFlags()
@@ -97,11 +107,12 @@ func newAskTestCommand(t *testing.T, inf *askTestInferencer) (*cobra.Command, *b
 	askFlags.NoSystemInformation = true
 	loopFlags := flags.NewLoopFlags()
 	executor := agent.NewExecutor(askTestToolExecutor{}, nil, inf)
-	cmd := NewAskCommand(executor, askFlags, loopFlags, globalFlags).Generate()
+	subject := NewAskCommand(executor, askFlags, loopFlags, globalFlags)
+	cmd := subject.Generate()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	return cmd, stdout, stderr
+	return subject, cmd, stdout, stderr
 }
 
 func runAskTestCommand(t *testing.T, args []string, stdin io.Reader, inf *askTestInferencer, out, errOut io.Writer) error {
@@ -255,5 +266,24 @@ func TestAskCommandWriterErrorKeepsIdentity(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "execution failed") {
 		t.Errorf("error = %v, want execution context", err)
+	}
+}
+
+func TestAskCommandS4PreservesExecutionIdentity(t *testing.T) {
+	want := errors.New("inferencer sentinel")
+	subject, cmd, stdout, stderr := newAskTestSubject(t, &askTestInferencer{})
+	subject.runAsk = func(context.Context, *agent.Config, agentloop.ExecuteInput, io.Writer) (string, error) {
+		return "", want
+	}
+	cmd.SetArgs([]string{"prompt"})
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !errors.Is(err, want) {
+		t.Fatalf("error = %v, want supplied execution identity", err)
+	}
+	if !errors.Is(err, errAskExecution) {
+		t.Fatalf("error = %v, want CLI execution identity", err)
 	}
 }
