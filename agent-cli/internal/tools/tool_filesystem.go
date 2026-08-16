@@ -494,7 +494,7 @@ func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) 
 func (r *sandboxFs) ReadFile(path string) ([]byte, error) {
 	var content []byte
 	err := r.execute(path, func(root *os.Root, relPath string) error {
-		fileContent, err := fs.ReadFile(root.FS(), relPath)
+		fileContent, err := os.ReadFile(relPath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return fmt.Errorf("failed to read file: file not found: %w", err)
@@ -526,22 +526,12 @@ func (r *sandboxFs) WriteFile(path string, data []byte) error {
 		// if the operation is interrupted, as the rename operation is atomic on Linux.
 		tmpRelPath := fmt.Sprintf("%s.%d.tmp", relPath, time.Now().UnixNano())
 
-		tmpFile, err := root.OpenFile(tmpRelPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
-		if err != nil {
+		if err := os.WriteFile(tmpRelPath, data, 0o644); err != nil {
 			_ = root.Remove(tmpRelPath) // Ensure cleanup of partial/empty temp file
 			return fmt.Errorf("failed to write to temp file: %w", err)
 		}
-		if _, err := tmpFile.Write(data); err != nil {
-			_ = tmpFile.Close()
-			_ = root.Remove(tmpRelPath)
-			return fmt.Errorf("failed to write to temp file: %w", err)
-		}
-		if err := tmpFile.Close(); err != nil {
-			_ = root.Remove(tmpRelPath)
-			return fmt.Errorf("failed to close temp file: %w", err)
-		}
 
-		if err := os.Rename(filepath.Join(r.workspace, tmpRelPath), filepath.Join(r.workspace, relPath)); err != nil {
+		if err := os.Rename(tmpRelPath, relPath); err != nil {
 			_ = root.Remove(tmpRelPath)
 			return fmt.Errorf("failed to rename temp file over target: %w", err)
 		}

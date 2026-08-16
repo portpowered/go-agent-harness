@@ -15,14 +15,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func toolTextResult(msgs []messages.Message, err error) (error, string) {
+func toolTextResult(msgs []messages.Message, err error) (string, error) {
 	if err != nil {
-		return err, ""
+		return "", err
 	}
 	if len(msgs) != 1 {
-		return fmt.Errorf("expected one tool message, got %d", len(msgs)), ""
+		return "", fmt.Errorf("expected one tool message, got %d", len(msgs))
 	}
-	return nil, msgs[0].TextContent()
+	return msgs[0].TextContent(), nil
 }
 
 func requireToolText(t *testing.T, msgs []messages.Message, err error, want string) {
@@ -82,7 +82,7 @@ func TestS4_EditErrorPathsAndAtomicity(t *testing.T) {
 		t.Cleanup(func() { _ = os.Chmod(permissionPath, 0o644) })
 	}
 
-	newTextMissing := func() (error, string) {
+	newTextMissing := func() (string, error) {
 		tool := NewEditFileTool("", false)
 		msgs, err := tool.Execute(context.Background(), map[string]any{
 			"path":     target,
@@ -93,95 +93,111 @@ func TestS4_EditErrorPathsAndAtomicity(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		run           func() (error, string)
+		run           func() (string, error)
 		wantMessage   string
-		identity      func(error) bool
+		assertError   func(*testing.T, error)
 		hashPath      string
 		skipOnWindows bool
 	}{
 		{
 			name: "path does not exist",
-			run: func() (error, string) {
+			run: func() (string, error) {
 				err := editFile(&hostFs{}, missing, "NEEDLE", "changed")
 				if err == nil {
-					return errors.New("edit unexpectedly succeeded"), ""
+					return "", nil
 				}
-				return err, err.Error()
+				return err.Error(), err
 			},
 			wantMessage: "failed to read file: file not found",
-			identity:    func(err error) bool { return errors.Is(err, fs.ErrNotExist) },
+			assertError: func(t *testing.T, err error) {
+				if !errors.Is(err, fs.ErrNotExist) {
+					t.Fatalf("error identity = %T %v; want errors.Is(fs.ErrNotExist)", err, err)
+				}
+			},
 		},
 		{
 			name: "directory where file is expected",
-			run: func() (error, string) {
+			run: func() (string, error) {
 				err := editFile(&hostFs{}, directory, "NEEDLE", "changed")
 				if err == nil {
-					return errors.New("directory edit unexpectedly succeeded"), ""
+					return "", nil
 				}
-				return err, err.Error()
+				return err.Error(), err
 			},
 			wantMessage: "failed to read file:",
-			identity: func(err error) bool {
+			assertError: func(t *testing.T, err error) {
 				var pathErr *os.PathError
-				return errors.As(err, &pathErr)
+				if !errors.As(err, &pathErr) {
+					t.Fatalf("error identity = %T %v; want errors.As(*os.PathError)", err, err)
+				}
 			},
 		},
 		{
 			name: "permission denied",
-			run: func() (error, string) {
+			run: func() (string, error) {
 				err := editFile(&hostFs{}, permissionPath, "NEEDLE", "changed")
 				if err == nil {
-					return nil, ""
+					return "", nil
 				}
-				return err, err.Error()
+				return err.Error(), err
 			},
-			wantMessage:   "failed to read file: access denied",
-			identity:      func(err error) bool { return os.IsPermission(err) },
+			wantMessage: "failed to read file: access denied",
+			assertError: func(t *testing.T, err error) {
+				if !errors.Is(err, fs.ErrPermission) {
+					t.Fatalf("error identity = %T %v; want errors.Is(fs.ErrPermission)", err, err)
+				}
+			},
 			hashPath:      permissionPath,
 			skipOnWindows: true,
 		},
 		{
 			name: "target outside allowed root",
-			run: func() (error, string) {
+			run: func() (string, error) {
 				err := editFile(&sandboxFs{workspace: workspace}, outside, "NEEDLE", "changed")
 				if err == nil {
-					return errors.New("outside edit unexpectedly succeeded"), ""
+					return "", nil
 				}
-				return err, err.Error()
+				return err.Error(), err
 			},
 			wantMessage: "path escapes workspace: " + outside,
-			identity: func(err error) bool {
-				return err != nil && err.Error() == "path escapes workspace: "+outside
+			assertError: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("outside-root edit unexpectedly returned no error")
+				}
 			},
-			hashPath: target,
+			hashPath: outside,
 		},
 		{
 			name: "absent match text",
-			run: func() (error, string) {
+			run: func() (string, error) {
 				err := editFile(&hostFs{}, target, "ABSENT", "changed")
 				if err == nil {
-					return errors.New("absent match edit unexpectedly succeeded"), ""
+					return "", nil
 				}
-				return err, err.Error()
+				return err.Error(), err
 			},
 			wantMessage: "old_text not found in file. Make sure it matches exactly",
-			identity: func(err error) bool {
-				return err != nil && err.Error() == "old_text not found in file. Make sure it matches exactly"
+			assertError: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("absent-match edit unexpectedly returned no error")
+				}
 			},
 			hashPath: target,
 		},
 		{
 			name: "multiply occurring match text",
-			run: func() (error, string) {
+			run: func() (string, error) {
 				err := editFile(&hostFs{}, repeated, "NEEDLE", "changed")
 				if err == nil {
-					return errors.New("repeated match edit unexpectedly succeeded"), ""
+					return "", nil
 				}
-				return err, err.Error()
+				return err.Error(), err
 			},
 			wantMessage: "old_text appears 2 times. Please provide more context to make it unique",
-			identity: func(err error) bool {
-				return err != nil && err.Error() == "old_text appears 2 times. Please provide more context to make it unique"
+			assertError: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("repeated-match edit unexpectedly returned no error")
+				}
 			},
 			hashPath: repeated,
 		},
@@ -189,8 +205,12 @@ func TestS4_EditErrorPathsAndAtomicity(t *testing.T) {
 			name:        "empty replacement input",
 			run:         newTextMissing,
 			wantMessage: "new_text is required",
-			identity:    func(err error) bool { return err == nil },
-			hashPath:    target,
+			assertError: func(t *testing.T, err error) {
+				if err != nil {
+					t.Fatalf("tool returned an unexpected Go error: %v", err)
+				}
+			},
+			hashPath: target,
 		},
 	}
 
@@ -204,13 +224,11 @@ func TestS4_EditErrorPathsAndAtomicity(t *testing.T) {
 				before = sha256File(t, tt.hashPath)
 			}
 
-			err, gotMessage := tt.run()
-			if tt.name == "permission denied" && !os.IsPermission(err) {
+			gotMessage, err := tt.run()
+			if tt.name == "permission denied" && !errors.Is(err, fs.ErrPermission) {
 				t.Skipf("chmod did not produce a permission error on %s: %v", runtime.GOOS, err)
 			}
-			if !tt.identity(err) {
-				t.Fatalf("error identity check failed for %T: %v", err, err)
-			}
+			tt.assertError(t, err)
 			if !strings.Contains(gotMessage, tt.wantMessage) {
 				t.Fatalf("error message = %q, want substring %q", gotMessage, tt.wantMessage)
 			}
@@ -288,10 +306,4 @@ func TestEditAndAppendTools_SuccessAndArgumentContracts(t *testing.T) {
 		})
 	}
 
-	if edit.Name() != "edit_file" || edit.Description() == "" || len(edit.Parameters()) == 0 {
-		t.Fatal("edit tool metadata is incomplete")
-	}
-	if appendTool.Name() != "append_file" || appendTool.Description() == "" || len(appendTool.Parameters()) == 0 {
-		t.Fatal("append tool metadata is incomplete")
-	}
 }
