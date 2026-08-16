@@ -227,67 +227,17 @@ func ComposeAgentCLI(
 }
 
 // InitializeAgentCLI builds the production CLI with the registry-backed tool
-// executor. It shares the same explicit assembly helper as all test paths.
+// executor. It shares the same live-port defaults and explicit assembly helper
+// as all test paths.
 func InitializeAgentCLI() (*cli.AgentCLI, error) {
-	registry := tools.NewToolRegistry()
-	values := compositionValues{
-		toolExecutor:    tools.NewRegistryExecutor(registry),
-		transportDialer: defaultTransportDialer(),
-		deviceRegistry:  defaultDeviceRegistry(),
-		audioSource:     defaultAudioSource(),
-		audioSink:       defaultAudioSink(),
-		clockSource:     clock.Ensure(nil),
-	}
-	if err := validateDependencies(&values); err != nil {
-		return nil, err
-	}
-	return assembleAgentCLI(
-		values.toolExecutor,
-		values.transportDialer,
-		values.deviceRegistry,
-		values.audioSource,
-		values.audioSink,
-		values.clockSource,
-		services.DefaultToolDefs(registry),
-		values.inferencer,
-		values.sessionInferencer,
-		false,
-	)
+	return initializeAgentCLIWithPorts(false)
 }
 
 // InitializeMockAgentCLIWithPorts is the one uniform mock-injection entry
 // point. Its cases are named replacements, validated against the same live
-// port definitions used by required-port validation.
+// port definitions used by defaults, discovery, and required-port validation.
 func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
-	registry := tools.NewToolRegistry()
-	values := compositionValues{
-		toolExecutor:    tools.NewRegistryExecutor(registry),
-		transportDialer: defaultTransportDialer(),
-		deviceRegistry:  defaultDeviceRegistry(),
-		audioSource:     defaultAudioSource(),
-		audioSink:       defaultAudioSink(),
-		clockSource:     clock.Ensure(nil),
-	}
-	for _, swap := range swaps {
-		if err := applyPortSwap(&values, swap); err != nil {
-			return nil, err
-		}
-	}
-	if err := validateDependencies(&values); err != nil {
-		return nil, err
-	}
-	return assembleAgentCLI(
-		values.toolExecutor,
-		values.transportDialer,
-		values.deviceRegistry,
-		values.audioSource,
-		values.audioSink,
-		values.clockSource,
-		services.DefaultToolDefs(registry),
-		values.inferencer,
-		values.sessionInferencer,
-		true,
-	)
+	return initializeAgentCLIWithPorts(true, swaps...)
 }
 
 // InitializeMockAgentCLI is retained for existing integration callers and
@@ -309,20 +259,29 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 }
 
 func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
-	values := compositionValues{
-		toolExecutor:      toolExecutor,
-		transportDialer:   defaultTransportDialer(),
-		deviceRegistry:    defaultDeviceRegistry(),
-		audioSource:       defaultAudioSource(),
-		audioSink:         defaultAudioSink(),
-		clockSource:       clock.Ensure(nil),
-		inferencer:        inferencer,
-		sessionInferencer: sessionInferencer,
-	}
-	if err := validateDependencies(&values); err != nil {
+	return initializeAgentCLIWithPorts(
+		relaxModelValidation,
+		NewPortSwap(PortToolExecutor, toolExecutor),
+		NewPortSwap(PortInferencer, inferencer),
+		NewPortSwap(PortSessionInferencer, sessionInferencer),
+	)
+}
+
+// initializeAgentCLIWithPorts is the single assembly path for default and
+// mock composition. Swap validation happens before the registry or any port
+// default is constructed. Defaults are then created only for ports that were
+// not explicitly replaced, which keeps a displaced real implementation from
+// running its constructor alongside a supplied double.
+func initializeAgentCLIWithPorts(relaxModelValidation bool, swaps ...PortSwap) (*cli.AgentCLI, error) {
+	definitions := livePortDefinitions()
+	if err := validatePortSwaps(definitions, swaps); err != nil {
 		return nil, err
 	}
 	registry := tools.NewToolRegistry()
+	values, err := compositionValuesWithPorts(definitions, registry, swaps)
+	if err != nil {
+		return nil, err
+	}
 	return assembleAgentCLI(
 		values.toolExecutor,
 		values.transportDialer,
@@ -335,6 +294,33 @@ func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer mess
 		values.sessionInferencer,
 		relaxModelValidation,
 	)
+}
+
+func compositionValuesWithPorts(definitions []portDefinition, registry *tools.ToolRegistry, swaps []PortSwap) (compositionValues, error) {
+	if err := validatePortSwaps(definitions, swaps); err != nil {
+		return compositionValues{}, err
+	}
+
+	values := compositionValues{}
+	swapped := make(map[string]struct{}, len(swaps))
+	for _, swap := range swaps {
+		swapped[swap.Name] = struct{}{}
+	}
+	for _, definition := range definitions {
+		if _, replaced := swapped[definition.descriptor.Name]; replaced || definition.defaultValue == nil {
+			continue
+		}
+		definition.assign(&values, definition.defaultValue(registry))
+	}
+	for _, swap := range swaps {
+		definition, _ := findPortDefinitionIn(definitions, swap.Name)
+		definition.assign(&values, swap.Value)
+	}
+
+	if err := validateDependenciesWithDefinitions(&values, definitions); err != nil {
+		return compositionValues{}, err
+	}
+	return values, nil
 }
 
 func applyCompositionOptions(options []CompositionOption) (compositionOptions, error) {
@@ -362,9 +348,10 @@ type compositionValues struct {
 }
 
 type portDefinition struct {
-	descriptor PortDescriptor
-	value      func(*compositionValues) any
-	assign     func(*compositionValues, any)
+	descriptor   PortDescriptor
+	value        func(*compositionValues) any
+	assign       func(*compositionValues, any)
+	defaultValue func(*tools.ToolRegistry) any
 }
 
 // livePortDefinitions is the sole live port representation. Validation,
@@ -378,6 +365,9 @@ func livePortDefinitions() []portDefinition {
 				Type:     reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem(),
 			},
 			value: func(values *compositionValues) any { return values.toolExecutor },
+			defaultValue: func(registry *tools.ToolRegistry) any {
+				return tools.NewRegistryExecutor(registry)
+			},
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.toolExecutor = nil
@@ -392,7 +382,8 @@ func livePortDefinitions() []portDefinition {
 				Required: true,
 				Type:     reflect.TypeOf((*transport.Dialer)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.transportDialer },
+			value:        func(values *compositionValues) any { return values.transportDialer },
+			defaultValue: func(*tools.ToolRegistry) any { return defaultTransportDialer() },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.transportDialer = nil
@@ -407,7 +398,8 @@ func livePortDefinitions() []portDefinition {
 				Required: false,
 				Type:     reflect.TypeOf((*messages.Inferencer)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.inferencer },
+			value:        func(values *compositionValues) any { return values.inferencer },
+			defaultValue: func(*tools.ToolRegistry) any { return nil },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.inferencer = nil
@@ -422,7 +414,8 @@ func livePortDefinitions() []portDefinition {
 				Required: false,
 				Type:     reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.sessionInferencer },
+			value:        func(values *compositionValues) any { return values.sessionInferencer },
+			defaultValue: func(*tools.ToolRegistry) any { return nil },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.sessionInferencer = nil
@@ -437,7 +430,8 @@ func livePortDefinitions() []portDefinition {
 				Required: true,
 				Type:     reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.deviceRegistry },
+			value:        func(values *compositionValues) any { return values.deviceRegistry },
+			defaultValue: func(*tools.ToolRegistry) any { return defaultDeviceRegistry() },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.deviceRegistry = nil
@@ -452,7 +446,8 @@ func livePortDefinitions() []portDefinition {
 				Required: true,
 				Type:     reflect.TypeOf((*AudioSource)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.audioSource },
+			value:        func(values *compositionValues) any { return values.audioSource },
+			defaultValue: func(*tools.ToolRegistry) any { return defaultAudioSource() },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.audioSource = nil
@@ -467,7 +462,8 @@ func livePortDefinitions() []portDefinition {
 				Required: true,
 				Type:     reflect.TypeOf((*AudioSink)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.audioSink },
+			value:        func(values *compositionValues) any { return values.audioSink },
+			defaultValue: func(*tools.ToolRegistry) any { return defaultAudioSink() },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.audioSink = nil
@@ -482,7 +478,8 @@ func livePortDefinitions() []portDefinition {
 				Required: true,
 				Type:     reflect.TypeOf((*Clock)(nil)).Elem(),
 			},
-			value: func(values *compositionValues) any { return values.clockSource },
+			value:        func(values *compositionValues) any { return values.clockSource },
+			defaultValue: func(*tools.ToolRegistry) any { return clock.Ensure(nil) },
 			assign: func(values *compositionValues, value any) {
 				if value == nil {
 					values.clockSource = nil
@@ -514,7 +511,11 @@ func LivePorts() []PortDescriptor {
 func RegisteredPorts() []PortDescriptor { return LivePorts() }
 
 func validateDependencies(values *compositionValues) error {
-	for _, definition := range livePortDefinitions() {
+	return validateDependenciesWithDefinitions(values, livePortDefinitions())
+}
+
+func validateDependenciesWithDefinitions(values *compositionValues, definitions []portDefinition) error {
+	for _, definition := range definitions {
 		if definition.descriptor.Required && isNilPort(definition.value(values)) {
 			return &MissingPortError{Name: definition.descriptor.Name}
 		}
@@ -535,12 +536,29 @@ func applyPortSwap(values *compositionValues, swap PortSwap) error {
 }
 
 func findPortDefinition(name string) (portDefinition, bool) {
-	for _, definition := range livePortDefinitions() {
+	return findPortDefinitionIn(livePortDefinitions(), name)
+}
+
+func findPortDefinitionIn(definitions []portDefinition, name string) (portDefinition, bool) {
+	for _, definition := range definitions {
 		if definition.descriptor.Name == name {
 			return definition, true
 		}
 	}
 	return portDefinition{}, false
+}
+
+func validatePortSwaps(definitions []portDefinition, swaps []PortSwap) error {
+	for _, swap := range swaps {
+		definition, ok := findPortDefinitionIn(definitions, swap.Name)
+		if !ok {
+			return &PortSwapError{Name: swap.Name, Reason: "unknown port", cause: ErrUnknownPort}
+		}
+		if err := validatePortSwap(definition, swap.Value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validatePortSwap(definition portDefinition, value any) error {
