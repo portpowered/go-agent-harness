@@ -53,6 +53,33 @@ func TestDeviceSinkVirtualFramesAndLoss(t *testing.T) {
 	}
 }
 
+func TestDeviceSinkFrameHandleConformance(t *testing.T) {
+	handle := &adapterFrameHandle{direction: DirectionOutput}
+	sink, err := NewDeviceSink(&adapterTestRegistryStub{handle: handle}, "output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sink.Close() }()
+	for i := 1; i <= 3; i++ {
+		frame := make([]int16, FrameSize)
+		frame[0], frame[FrameSize-1] = int16(i), int16(32767-i)
+		if err := sink.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatal(err)
+		}
+		frame[0] = 99
+	}
+	handle.mu.Lock()
+	defer handle.mu.Unlock()
+	if len(handle.writes) != 3 {
+		t.Fatalf("native frame writes=%d, want 3", len(handle.writes))
+	}
+	for i, frame := range handle.writes {
+		if frame[0] != int16(i+1) || frame[FrameSize-1] != int16(32766-i) {
+			t.Fatalf("native frame %d = (%d,%d), want (%d,%d)", i, frame[0], frame[FrameSize-1], i+1, 32766-i)
+		}
+	}
+}
+
 func TestDeviceSinkContractsAndConcurrentClose(t *testing.T) {
 	if _, err := NewDeviceSink(nil, "output"); !errors.Is(err, ErrNilDeviceRegistry) {
 		t.Fatalf("nil registry error = %v", err)
