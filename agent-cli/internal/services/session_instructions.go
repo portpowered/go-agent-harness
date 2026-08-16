@@ -7,7 +7,12 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -33,14 +38,77 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 		return err
 	}
 
-	plan, err := planSessionRuntime(opts)
+	planFactory := defaultSessionRuntimeFactory
+	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
+	if useInitialProviderInstructions {
+		planFactory = sessionRuntimeFactoryWithInstructions(instructions)
+	}
+	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
 	if err != nil {
 		return err
 	}
-	if instructions != "" && plan.inferencer != nil {
+	if instructions != "" && plan.inferencer != nil && !useInitialProviderInstructions {
 		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions)
 	}
 	return plan.run(ctx, out)
+}
+
+// sessionRuntimeFactoryWithInstructions carries resolved instructions into
+// the provider's initial SessionConfig. The generic session adapter remains
+// the fallback for injected session seams, while live providers receive the
+// same value before ConnectSession can send their initial wire update.
+func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFactory {
+	factory := defaultSessionRuntimeFactory
+	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
+	}
+	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
+	}
+	return factory
+}
+
+func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer, instructions string) (messages.SessionInferencer, error) {
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
+	}
+	providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
+	if sessionCfg.BaseURL != "" {
+		providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
+	}
+	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+	if err != nil {
+		return nil, fmt.Errorf("create Grok session gateway: %w", err)
+	}
+	return inference.NewSessionGatewayInferencer(
+		sessionGateway,
+		inference.WithSessionModel(sessionCfg.Model),
+		inference.WithSessionInstructions(instructions),
+	), nil
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer, instructions string) (messages.SessionInferencer, error) {
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
+	}
+	if !isOpenAIRealtimeModel(sessionCfg.Model) {
+		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
+	}
+	providerOpts := []oaiprovider.Option{
+		oaiprovider.WithAPIKey(sessionCfg.APIKey),
+		oaiprovider.WithModel(sessionCfg.Model),
+		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
+		oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(dialer)),
+	}
+	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
+	if err != nil {
+		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+	}
+	return inference.NewSessionGatewayInferencer(
+		sessionGateway,
+		inference.WithSessionModel(sessionCfg.Model),
+		inference.WithSessionInstructions(instructions),
+	), nil
 }
 
 // resolveSessionInstructions delegates prompt selection, AGENTS.md creation,
@@ -63,10 +131,10 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	return instructions, nil
 }
 
-// sessionInstructionsInferencer decorates the existing session seam without
-// changing provider construction. The provider's initial model configuration
-// remains untouched; the instructions are sent as a separate session update
-// after the provider announces that the session is open.
+// sessionInstructionsInferencer decorates caller-owned session seams without
+// changing their provider construction. The provider-aware runtime factory
+// above handles the live provider path; injected sessions receive a generic
+// session update after the provider announces that the session is open.
 type sessionInstructionsInferencer struct {
 	inner        messages.SessionInferencer
 	instructions string

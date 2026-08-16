@@ -3,7 +3,10 @@ package services_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,10 +15,13 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -162,6 +168,10 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected prompt-resolution error")
 				}
+				var pathErr *os.PathError
+				if !errors.As(err, &pathErr) {
+					t.Fatalf("prompt-resolution error = %v, want wrapped *os.PathError", err)
+				}
 				if !strings.Contains(err.Error(), "initialize AGENTS.md") {
 					t.Fatalf("prompt-resolution error = %v, want AGENTS.md initialization context", err)
 				}
@@ -214,6 +224,91 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 		t.Fatalf("--system-prompt help = %q, want path and literal-text contract", flag.Usage)
 	}
 	assertSessionInstructionEvents(t, inferencer, rawInstructionsMarker, 1)
+}
+
+func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	writeFile(t, filepath.Join(workspaceDir, config.ConfigFileName), "model:\n  provider: openai\n")
+	realtimeConn := newRecordingRealtimeTestConn()
+	realtimeDialer := &recordingRealtimeTestDialer{conn: realtimeConn}
+	recordPath := filepath.Join(t.TempDir(), "openai-session.json")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, io.Discard, services.SessionRunOptions{
+		RecordPath:      recordPath,
+		Provider:        config.ProviderOpenAI,
+		Model:           "gpt-realtime",
+		APIKey:          "test-api-key",
+		ConfigDir:       workspaceDir,
+		Prompt:          userTurnMarker,
+		WebSocketDialer: realtimeDialer,
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("LoadSessionCapture: %v", err)
+	}
+	configIndex := -1
+	userIndex := -1
+	configCount := 0
+	userCount := 0
+	gotInstructions := ""
+	gotUserText := ""
+	for index, event := range capture.Records {
+		if event.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		payload := event.Payload
+		if len(payload) == 0 {
+			payload = event.Data
+		}
+		var envelope struct {
+			Type    string `json:"type"`
+			Session struct {
+				Instructions string `json:"instructions"`
+			} `json:"session"`
+			Item struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			t.Fatalf("decode outbound event %q: %v", string(payload), err)
+		}
+		switch envelope.Type {
+		case "session.update":
+			configCount++
+			configIndex = index
+			gotInstructions = envelope.Session.Instructions
+		case "conversation.item.create":
+			userCount++
+			userIndex = index
+			if len(envelope.Item.Content) == 1 {
+				gotUserText = envelope.Item.Content[0].Text
+			}
+		}
+	}
+	if configCount != 1 {
+		t.Fatalf("OpenAI instruction-bearing session.update count = %d, want 1; capture=%#v", configCount, capture.Records)
+	}
+	if gotInstructions != agentsInstructionsMarker {
+		t.Fatalf("OpenAI initial session instructions = %q, want %q", gotInstructions, agentsInstructionsMarker)
+	}
+	if userCount != 1 || gotUserText != userTurnMarker {
+		t.Fatalf("OpenAI first user event = count %d text %q, want count 1 text %q", userCount, gotUserText, userTurnMarker)
+	}
+	if strings.Contains(gotUserText, agentsInstructionsMarker) {
+		t.Fatalf("OpenAI first user event duplicated session instructions: %q", gotUserText)
+	}
+	if configIndex < 0 || userIndex < 0 || configIndex >= userIndex {
+		t.Fatalf("OpenAI session.update index = %d, first user index = %d; capture=%#v", configIndex, userIndex, capture.Records)
+	}
 }
 
 func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(t *testing.T) {
@@ -302,6 +397,63 @@ func formatSessionEvents(events []messages.StreamMessage) string {
 		parts = append(parts, string(event.Type))
 	}
 	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
+}
+
+type recordingRealtimeTestDialer struct {
+	conn *recordingRealtimeTestConn
+}
+
+var _ grok.WebSocketDialer = (*recordingRealtimeTestDialer)(nil)
+
+func (d *recordingRealtimeTestDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+	return d.conn, nil
+}
+
+type recordingRealtimeTestConn struct {
+	mu        sync.Mutex
+	writes    [][]byte
+	inbound   chan []byte
+	closed    chan struct{}
+	closeOnce sync.Once
+}
+
+var _ grok.WebSocketConn = (*recordingRealtimeTestConn)(nil)
+
+func newRecordingRealtimeTestConn() *recordingRealtimeTestConn {
+	c := &recordingRealtimeTestConn{
+		inbound: make(chan []byte, 4),
+		closed:  make(chan struct{}),
+	}
+	c.inbound <- []byte(`{"type":"session.created","session_id":"test-session","model":"gpt-realtime"}`)
+	return c
+}
+
+func (c *recordingRealtimeTestConn) ReadMessage() (int, []byte, error) {
+	select {
+	case payload := <-c.inbound:
+		return 1, payload, nil
+	case <-c.closed:
+		return 0, nil, io.EOF
+	}
+}
+
+func (c *recordingRealtimeTestConn) WriteMessage(_ int, payload []byte) error {
+	c.mu.Lock()
+	c.writes = append(c.writes, append([]byte(nil), payload...))
+	c.mu.Unlock()
+
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err == nil && envelope.Type == "response.create" {
+		c.inbound <- []byte(`{"type":"response.done"}`)
+	}
+	return nil
+}
+
+func (c *recordingRealtimeTestConn) Close() error {
+	c.closeOnce.Do(func() { close(c.closed) })
+	return nil
 }
 
 type sessionInstructionsTestInferencer struct {
