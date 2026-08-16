@@ -47,6 +47,64 @@ func TestVirtualFaults(t *testing.T) {
 	var lost *audio.DeviceLostError
 	require.ErrorAs(t, err, &lost)
 	require.Equal(t, audio.DeviceID("virtual:output"), lost.ID)
+	require.Equal(t, audio.DirectionOutput, lost.Direction)
+	require.ErrorIs(t, err, audio.ErrDeviceLost)
+}
+func TestVirtualProductionConfiguration(t *testing.T) {
+	capability := audio.VirtualCapability{SampleRate: 16000, Channels: 1, BitDepth: 16, Format: "pcm16"}
+	caps := []audio.VirtualCapability{capability}
+	c := audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{
+		{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: caps, LoopbackID: "output"},
+		{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: caps, LoopbackID: "input"},
+	}, Defaults: map[audio.Direction]string{audio.DirectionInput: "input", audio.DirectionOutput: "output"}}
+	production := audio.NewProductionAudioBackendRegistry()
+	require.Equal(t, []string{audio.VirtualBackendName}, production.Names())
+	registry, err := production.New(audio.VirtualBackendName, c)
+	require.NoError(t, err)
+	virtual := registry.(*audio.VirtualRegistry)
+	caps[0].Channels = 9
+	got, err := virtual.Capabilities("virtual:input")
+	require.NoError(t, err)
+	require.Equal(t, []audio.VirtualCapability{capability}, got)
+	got[0].Channels = 8
+	got, err = virtual.Capabilities("virtual:input")
+	require.NoError(t, err)
+	require.Equal(t, capability, got[0])
+	_, err = virtual.Capabilities("virtual:missing")
+	require.ErrorIs(t, err, audio.ErrDeviceNotFound)
+	_, err = production.New("missing", c)
+	require.Error(t, err)
+}
+func TestVirtualValidationAndDefaults(t *testing.T) {
+	base := audio.DefaultVirtualBackendConfig()
+	badPair := base
+	badPair.Devices = []audio.VirtualDeviceConfig{
+		{ID: "input", Name: "Input", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{{Format: "a"}}, LoopbackID: "output"},
+		{ID: "output", Name: "Output", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{{Format: "b"}}, LoopbackID: "input"},
+	}
+	invalid := []audio.VirtualBackendConfig{
+		{},
+		{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "A", Direction: audio.DirectionInput}, {ID: "a", Name: "A", Direction: audio.DirectionInput}}},
+		{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "A", Direction: audio.DirectionInput, LoopbackID: "missing"}}},
+		badPair,
+		{Devices: []audio.VirtualDeviceConfig{{ID: "other:a", Name: "A", Direction: audio.DirectionInput}}},
+		{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "A", Direction: audio.DirectionInput}}, Defaults: map[audio.Direction]string{audio.Direction("bad"): "a"}},
+		{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "A", Direction: audio.DirectionInput}}, Defaults: map[audio.Direction]string{audio.DirectionOutput: "a"}},
+	}
+	for _, c := range invalid {
+		_, err := audio.NewVirtualRegistry(c)
+		require.Error(t, err)
+	}
+	for _, missing := range []audio.Direction{audio.DirectionInput, audio.DirectionOutput} {
+		c := audio.DefaultVirtualBackendConfig()
+		delete(c.Defaults, missing)
+		r, err := audio.NewVirtualRegistry(c)
+		require.NoError(t, err)
+		_, err = r.Default(missing)
+		var noDefault *audio.NoDefaultDeviceError
+		require.ErrorAs(t, err, &noDefault)
+		require.Equal(t, missing, noDefault.Direction)
+	}
 }
 func TestVirtualS8Accounting(t *testing.T) {
 	r, out, in := openPair()
