@@ -427,3 +427,110 @@ func assertCrossingGolden(t *testing.T, got []byte) {
 		t.Fatalf("crossing golden differs; run with -update-crossing-golden only after reviewing the format change\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+const (
+	disabledCrossingAllocBudget = 0
+	enabledCrossingAllocBudget  = 6
+	crossingAllocationRuns      = 100
+)
+
+var benchmarkCrossingEvent = CrossingEvent{
+	Direction: CrossingDirectionOut, Buffer: "model.delta_outbox", MessageType: "StreamMessage",
+	Modality: CrossingModalityAudio, ByteSize: 640, LogicalTick: 17,
+}
+
+type allocationBenchmarkLogger struct {
+	enabled     bool
+	infoRecords int
+}
+
+func (l *allocationBenchmarkLogger) Enabled(level Level) bool {
+	return l.enabled && level == LevelInfo
+}
+
+func (l *allocationBenchmarkLogger) Debug(string, ...Field) {}
+
+func (l *allocationBenchmarkLogger) Info(string, ...Field) {
+	l.infoRecords++
+}
+
+func (l *allocationBenchmarkLogger) Warn(string, ...Field)  {}
+func (l *allocationBenchmarkLogger) Error(string, ...Field) {}
+func (l *allocationBenchmarkLogger) Fatal(string, ...Field) {}
+func (l *allocationBenchmarkLogger) Panic(string, ...Field) {}
+
+func newAllocationBenchmarkSubject(enabled bool) (*CrossingEmitter, *allocationBenchmarkLogger) {
+	logger := &allocationBenchmarkLogger{enabled: enabled}
+	return NewCrossingEmitter(logger), logger
+}
+
+func measureCrossingAllocations(b *testing.B, enabled bool) float64 {
+	b.Helper()
+	emitter, _ := newAllocationBenchmarkSubject(enabled)
+	var emitErr error
+	allocations := testing.AllocsPerRun(crossingAllocationRuns, func() {
+		_, emitErr = emitter.Emit(benchmarkCrossingEvent)
+	})
+	if emitErr != nil {
+		b.Fatalf("%s crossing benchmark call: %v", crossingLevelName(enabled), emitErr)
+	}
+	return allocations
+}
+
+func crossingLevelName(enabled bool) string {
+	if enabled {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func assertCrossingAllocationBudget(b *testing.B, path string, measured float64, budget int) {
+	b.Helper()
+	if measured != float64(budget) {
+		b.Fatalf("%s logging allocations/op = %.0f, budget = %d", path, measured, budget)
+	}
+}
+
+// BenchmarkCrossingEmitterDisabledInfoAllocations guards the real crossing
+// emitter call when its Info level is disabled. The metadata stays fixed and
+// outside the timed loop, while the emitter still validates and sequences each
+// event as production does.
+func BenchmarkCrossingEmitterDisabledInfoAllocations(b *testing.B) {
+	b.ReportAllocs()
+	emitter, logger := newAllocationBenchmarkSubject(false)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.StopTimer()
+
+	if logger.infoRecords != 0 {
+		b.Fatalf("disabled crossing emitted %d info records, want 0", logger.infoRecords)
+	}
+	if got := emitter.LastSequence(); got != uint64(b.N) {
+		b.Fatalf("disabled crossing sequence = %d, want %d", got, b.N)
+	}
+	assertCrossingAllocationBudget(b, "disabled", measureCrossingAllocations(b, false), disabledCrossingAllocBudget)
+}
+
+// BenchmarkCrossingEmitterEnabledInfoAllocations guards the same crossing
+// emitter call with Info enabled. The logger records every emission so a dead
+// or no-op subject cannot satisfy the allocation budget.
+func BenchmarkCrossingEmitterEnabledInfoAllocations(b *testing.B) {
+	b.ReportAllocs()
+	emitter, logger := newAllocationBenchmarkSubject(true)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.StopTimer()
+
+	if logger.infoRecords != b.N {
+		b.Fatalf("enabled crossing info records = %d, want exact count %d", logger.infoRecords, b.N)
+	}
+	assertCrossingAllocationBudget(b, "enabled", measureCrossingAllocations(b, true), enabledCrossingAllocBudget)
+}
