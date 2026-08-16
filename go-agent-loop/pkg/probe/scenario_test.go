@@ -36,9 +36,9 @@ type testCorpus struct {
 	calls []string
 }
 
-func (c *testCorpus) Lookup(id string) (bool, error) {
+func (c *testCorpus) Has(id string) bool {
 	c.calls = append(c.calls, id)
-	return c.ids[id], nil
+	return c.ids[id]
 }
 
 type hasCorpus map[string]bool
@@ -117,7 +117,7 @@ func TestLoadErrorsHaveIdentityAndStableLocation(t *testing.T) {
 	cases := []struct {
 		name    string
 		input   string
-		lookup  any
+		lookup  CorpusLookup
 		want    error
 		loc     string
 		message string
@@ -140,6 +140,7 @@ func TestLoadErrorsHaveIdentityAndStableLocation(t *testing.T) {
 		{"missing advance time", `{"id":"x","steps":[{"type":"advance_to"},{"type":"close"}],"expectations":[{"type":"close"}]}`, nil, ErrMissingField, "steps[0].at", "logical"},
 		{"missing wait duration", `{"id":"x","steps":[{"type":"wait"},{"type":"close"}],"expectations":[{"type":"close"}]}`, nil, ErrMissingField, "steps[0].duration", "duration"},
 		{"mixed step payload", `{"id":"x","steps":[{"type":"send_text","text":"x","corpus_id":"a"},{"type":"close"}],"expectations":[{"type":"close"}]}`, nil, ErrMalformed, "steps[0].corpus_id", "unknown field"},
+		{"mixed expectation payload", `{"id":"x","steps":[{"type":"close"}],"expectations":[{"type":"text","text":"x","corpus_id":"a"}]}`, nil, ErrMalformed, "expectations[0].corpus_id", "unknown field"},
 		{"close not terminal", `{"id":"x","steps":[{"type":"close"},{"type":"send_text","text":"x"}],"expectations":[{"type":"close"}]}`, nil, ErrContradictory, "steps[0]", "terminal"},
 		{"missing close", `{"id":"x","steps":[{"type":"send_text","text":"x"}],"expectations":[{"type":"text","text":"x"}]}`, nil, ErrContradictory, "steps", "close"},
 		{"multiple close", `{"id":"x","steps":[{"type":"close"},{"type":"close"}],"expectations":[{"type":"close"}]}`, nil, ErrContradictory, "steps[1]", "only one"},
@@ -189,17 +190,14 @@ func TestUnknownCorpusIsReportedByLoadAndNamesID(t *testing.T) {
 }
 
 func TestLookupAdaptersAndTypedValidation(t *testing.T) {
-	if _, err := Load(textScenario, func(id string) bool { return id == "unused" }); err != nil {
-		t.Fatalf("function lookup without audio: %v", err)
+	if _, err := Load(textScenario, hasCorpus{"unused": true}); err != nil {
+		t.Fatalf("typed lookup without audio: %v", err)
 	}
-	if _, err := Load(representativeScenario, map[string]struct{}{"greeting-audio": {}}); err != nil {
-		t.Fatalf("map lookup: %v", err)
+	if _, err := Load(representativeScenario, hasCorpus{"greeting-audio": true}); err != nil {
+		t.Fatalf("corpus lookup: %v", err)
 	}
-	if _, err := Load(`{"id":"x","steps":[{"type":"send_audio","corpus_id":"a"},{"type":"close"}],"expectations":[{"type":"audio","corpus_id":"a"}]}`, func(string) (bool, error) { return true, nil }); err != nil {
-		t.Fatalf("error-returning lookup: %v", err)
-	}
-	if _, err := Load(`{"id":"x","steps":[{"type":"send_audio","corpus_id":"a"},{"type":"close"}],"expectations":[{"type":"audio","corpus_id":"a"}]}`, func(string) error { return fmt.Errorf("missing") }); !errors.Is(err, ErrUnknownCorpus) {
-		t.Fatalf("lookup error identity: %v", err)
+	if _, err := Load(`{"id":"x","steps":[{"type":"send_audio","corpus_id":"a"},{"type":"close"}],"expectations":[{"type":"audio","corpus_id":"a"}]}`, hasCorpus{"a": false}); !errors.Is(err, ErrUnknownCorpus) {
+		t.Fatalf("unknown corpus identity: %v", err)
 	}
 
 	valid := Scenario{
@@ -224,6 +222,117 @@ func TestLookupAdaptersAndTypedValidation(t *testing.T) {
 	unknown.Steps = []Step{{Type: StepKind("unknown")}, {Type: StepClose, Kind: StepClose}}
 	if !errors.Is(unknown.Validate(), ErrUnknownVariant) {
 		t.Fatalf("unknown typed variant was accepted")
+	}
+}
+
+func TestMixedExpectationPayloadsAreRejectedPerKind(t *testing.T) {
+	base := `{"id":"x","steps":[{"type":"close"}],"expectations":[%s]}`
+	cases := []struct {
+		name string
+		body string
+		loc  string
+	}{
+		{"text with audio", `{"type":"text","text":"ok","corpus_id":"a"}`, "expectations[0].corpus_id"},
+		{"transcript with tool", `{"type":"transcript","text":"ok","tool_call_id":"c"}`, "expectations[0].tool_call_id"},
+		{"contains with result", `{"type":"contains","text":"ok","result":{}}`, "expectations[0].result"},
+		{"audio with text", `{"type":"audio","corpus_id":"a","text":"ok"}`, "expectations[0].text"},
+		{"tool call with result", `{"type":"tool_call","tool_name":"lookup","result":{}}`, "expectations[0].result"},
+		{"tool result with text", `{"type":"tool_result","tool_call_id":"c","result":{},"text":"ok"}`, "expectations[0].text"},
+		{"close with text", `{"type":"close","text":"unexpected"}`, "expectations[0].text"},
+		{"time with text", `{"type":"time","at":1,"text":"unexpected"}`, "expectations[0].text"},
+		{"event with audio", `{"type":"event","event":"ready","corpus_id":"a"}`, "expectations[0].corpus_id"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Load(fmt.Sprintf(base, test.body))
+			if !errors.Is(err, ErrMalformed) {
+				t.Fatalf("identity: got %v", err)
+			}
+			var scenarioErr *ScenarioError
+			if !errors.As(err, &scenarioErr) || scenarioErr.Category != CategoryMalformed || scenarioErr.Location != test.loc || !strings.Contains(scenarioErr.Message, "unknown field") {
+				t.Fatalf("contract: %#v", scenarioErr)
+			}
+		})
+	}
+}
+
+func TestTypedPayloadsAreRejectedPerVariant(t *testing.T) {
+	stepCases := []struct {
+		name string
+		step Step
+		loc  string
+	}{
+		{"send text with audio", Step{Type: StepSendText, Text: "hello", CorpusID: "a"}, "steps[0].corpus_id"},
+		{"send audio with text", Step{Type: StepSendAudio, CorpusID: "a", Text: "hello"}, "steps[0].text"},
+		{"send tool result with time", Step{Type: StepSendToolResult, ToolCallID: "call", Result: json.RawMessage(`{}`), At: 1}, "steps[0].at"},
+		{"advance with text", Step{Type: StepAdvanceTo, At: 1, Text: "hello"}, "steps[0].text"},
+		{"wait with call ID", Step{Type: StepWait, Duration: 1, ToolCallID: "call"}, "steps[0].tool_call_id"},
+		{"close with duration", Step{Type: StepClose, Duration: 1}, "steps[0].duration"},
+	}
+	for _, test := range stepCases {
+		t.Run(test.name, func(t *testing.T) {
+			scenario := Scenario{ID: "x", Steps: []Step{test.step, {Type: StepClose}}, Expectations: []ExpectedBehavior{{Type: ExpectClose}}}
+			assertTypedPayloadError(t, scenario.Validate(hasCorpus{"a": true}), test.loc)
+		})
+	}
+
+	expectationCases := []struct {
+		name        string
+		expectation ExpectedBehavior
+		loc         string
+	}{
+		{"text with audio", ExpectedBehavior{Type: ExpectText, Text: "ok", CorpusID: "a"}, "expectations[0].corpus_id"},
+		{"audio with text", ExpectedBehavior{Type: ExpectAudio, CorpusID: "a", Text: "ok"}, "expectations[0].text"},
+		{"tool call with result", ExpectedBehavior{Type: ExpectToolCall, ToolName: "lookup", Result: json.RawMessage(`{}`)}, "expectations[0].result"},
+		{"tool result with tool name", ExpectedBehavior{Type: ExpectToolResult, ToolCallID: "call", Result: json.RawMessage(`{}`), ToolName: "lookup"}, "expectations[0].tool_name"},
+		{"close with text", ExpectedBehavior{Type: ExpectClose, Text: "unexpected"}, "expectations[0].text"},
+		{"time with text", ExpectedBehavior{Type: ExpectTime, At: 1, HasAt: true, Text: "unexpected"}, "expectations[0].text"},
+		{"event with audio", ExpectedBehavior{Type: ExpectEvent, Value: "ready", CorpusID: "a"}, "expectations[0].corpus_id"},
+	}
+	for _, test := range expectationCases {
+		t.Run(test.name, func(t *testing.T) {
+			scenario := Scenario{ID: "x", Steps: []Step{{Type: StepClose}}, Expectations: []ExpectedBehavior{test.expectation}}
+			assertTypedPayloadError(t, scenario.Validate(), test.loc)
+		})
+	}
+}
+
+func TestTypedPayloadAliasesMustAgree(t *testing.T) {
+	base := func(step Step) Scenario {
+		return Scenario{ID: "x", Steps: []Step{step, {Type: StepClose}}, Expectations: []ExpectedBehavior{{Type: ExpectClose}}}
+	}
+	cases := []struct {
+		name     string
+		scenario Scenario
+		location string
+	}{
+		{"audio corpus IDs", base(Step{Type: StepSendAudio, CorpusID: "a", Corpus: AudioCorpusReference{CorpusID: "b"}}), "steps[0].corpus_id"},
+		{"tool results", base(Step{Type: StepSendToolResult, ToolCallID: "call", ToolResult: json.RawMessage(`{"a":1}`), Result: json.RawMessage(`{"b":2}`)}), "steps[0].result"},
+		{"step logical time", base(Step{Type: StepAdvanceTo, At: 1, Time: 2}), "steps[0].at"},
+		{"expected logical time", Scenario{ID: "x", Steps: []Step{{Type: StepClose}}, Expectations: []ExpectedBehavior{{Type: ExpectTime, At: 1, Time: 2, HasAt: true}}}, "expectations[0].at"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			assertTypedError(t, test.scenario.Validate(hasCorpus{"a": true}), test.location, "aliases disagree")
+		})
+	}
+	if err := base(Step{Type: StepClose}).Validate(hasCorpus{}, hasCorpus{}); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("multiple typed corpus lookups: %v", err)
+	}
+}
+
+func assertTypedPayloadError(t *testing.T, err error, location string) {
+	assertTypedError(t, err, location, "unexpected payload")
+}
+
+func assertTypedError(t *testing.T, err error, location string, message string) {
+	t.Helper()
+	if !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("identity: got %v", err)
+	}
+	var scenarioErr *ScenarioError
+	if !errors.As(err, &scenarioErr) || scenarioErr.Category != CategoryInvalidField || scenarioErr.Location != location || !strings.Contains(scenarioErr.Message, message) {
+		t.Fatalf("contract: %#v", scenarioErr)
 	}
 }
 
@@ -266,10 +375,10 @@ func TestErrorFormattingAndMarshalAliases(t *testing.T) {
 
 func TestAdditionalDeclarativeShapesAndLookupAdapters(t *testing.T) {
 	input := `{"id":"all","steps":[{"kind":"send_text","payload":{"value":"hello"}},{"kind":"send_audio","payload":{"corpusID":"a"}},{"kind":"send_tool_result","payload":{"toolCallID":"c","toolName":"lookup","tool_result":{"ok":true}}},{"kind":"advance_to","payload":{"logicalTime":"7"}},{"kind":"wait","payload":{"duration":"1ms"}},{"kind":"close"}],"expected":[{"kind":"text","value":"x","count":1},{"kind":"transcript","value":"y"},{"kind":"contains","text":"z"},{"kind":"audio","corpusID":"a"},{"kind":"tool_call","toolName":"lookup"},{"kind":"tool_result","toolCallID":"c","result":{"ok":true}},{"kind":"event","event":"ready"},{"kind":"time","logicalTime":"1ms","step":0,"after_step":0,"before_step":5},{"kind":"close"}]}`
-	if _, err := Load(json.RawMessage(input), map[string]struct{}{"a": {}}); err != nil {
+	if _, err := Load(json.RawMessage(input), hasCorpus{"a": true}); err != nil {
 		t.Fatalf("all declarative aliases: %v", err)
 	}
-	if _, err := Load(textScenario, func(string) (bool, error) { return true, nil }, nil); !errors.Is(err, ErrInvalidField) {
+	if _, err := Load(textScenario, hasCorpus{}, nil); !errors.Is(err, ErrInvalidField) {
 		t.Fatalf("multiple lookups: %v", err)
 	}
 	if _, err := Load(42); !errors.Is(err, ErrMalformed) {
@@ -383,30 +492,6 @@ func TestMalformedFieldTypesAndExpectationContracts(t *testing.T) {
 	}
 }
 
-type methodCorpus struct{ ok bool }
-
-func (c methodCorpus) Has(string) bool { return c.ok }
-
-type resolveCorpus struct{ ok bool }
-
-func (c resolveCorpus) Resolve(string) (bool, error) { return c.ok, nil }
-
-type entryCorpus struct{}
-
-func (entryCorpus) Lookup(string) (entryCorpus, error) { return entryCorpus{}, nil }
-
-type pointerCorpus struct{}
-
-func (pointerCorpus) Contains(string) *entryCorpus { return &entryCorpus{} }
-
-type errorCorpus struct{}
-
-func (errorCorpus) Exists(string) error { return nil }
-
-type unusableCorpus struct{}
-
-func (unusableCorpus) Lookup(int) bool { return true }
-
 func TestExpectationContractErrorTable(t *testing.T) {
 	base := func(expectation string) string {
 		return `{"id":"x","steps":[{"type":"close"}],"expectations":[` + expectation + `]}`
@@ -437,21 +522,6 @@ func TestExpectationContractErrorTable(t *testing.T) {
 	}
 }
 
-func TestCorpusLookupMethodShapes(t *testing.T) {
-	input := `{"id":"x","steps":[{"type":"send_audio","corpus_id":"a"},{"type":"close"}],"expectations":[{"type":"audio","corpus_id":"a"}]}`
-	lookups := []any{methodCorpus{true}, resolveCorpus{true}, entryCorpus{}, pointerCorpus{}, errorCorpus{}}
-	for _, lookup := range lookups {
-		if _, err := Load(input, lookup); err != nil {
-			t.Errorf("lookup %T: %v", lookup, err)
-		}
-	}
-	for _, lookup := range []any{methodCorpus{false}, resolveCorpus{false}, unusableCorpus{}, map[int]bool{1: true}} {
-		if _, err := Load(input, lookup); !errors.Is(err, ErrUnknownCorpus) {
-			t.Errorf("unknown lookup %T: %v", lookup, err)
-		}
-	}
-}
-
 func TestErrorAndFieldEdgeCases(t *testing.T) {
 	if makeError(CategoryInvalidField, "", "bad").Error() != "invalid_field: bad" {
 		t.Fatal("empty error location was not formatted")
@@ -470,7 +540,7 @@ func TestErrorAndFieldEdgeCases(t *testing.T) {
 		`{"id":"x","steps":[{"type":"close"}],"expectations":[{"type":"text","text":"x","step":1.1}]}`,
 	}
 	for _, input := range inputs {
-		if _, err := Load(input, map[string]struct{}{"a": {}}); err == nil {
+		if _, err := Load(input, hasCorpus{"a": true}); err == nil {
 			t.Errorf("edge input unexpectedly succeeded: %s", input)
 		}
 	}

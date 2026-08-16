@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -193,11 +192,12 @@ func (e *ScenarioError) Unwrap() error {
 	}
 }
 
-// CorpusLookup documents the smallest lookup seam. Load also accepts a
-// read-only Has, Lookup, Resolve, Contains, or Exists method/function.
+// CorpusLookup is the read-only corpus identity lookup used by the loader.
+// The audiofixture package is not part of the current baseline, so this is the
+// narrow seam that the eventual audiofixture implementation must satisfy.
 type CorpusLookup interface{ Has(string) bool }
 
-func Load(input any, lookups ...any) (Scenario, error) {
+func Load(input any, lookups ...CorpusLookup) (Scenario, error) {
 	if len(lookups) > 1 {
 		return Scenario{}, makeError(CategoryInvalidField, "corpus_lookup", "only one corpus lookup is permitted")
 	}
@@ -213,7 +213,7 @@ func Load(input any, lookups ...any) (Scenario, error) {
 	if err != nil {
 		return Scenario{}, err
 	}
-	var lookup any
+	var lookup CorpusLookup
 	if len(lookups) == 1 {
 		lookup = lookups[0]
 	}
@@ -222,11 +222,16 @@ func Load(input any, lookups ...any) (Scenario, error) {
 	}
 	return scenario, nil
 }
-func LoadScenario(input any, lookups ...any) (Scenario, error) { return Load(input, lookups...) }
-func Decode(input any, lookups ...any) (Scenario, error)       { return Load(input, lookups...) }
-func (s Scenario) Validate(lookups ...any) error {
-	var lookup any
-	if len(lookups) != 0 {
+func LoadScenario(input any, lookups ...CorpusLookup) (Scenario, error) {
+	return Load(input, lookups...)
+}
+func Decode(input any, lookups ...CorpusLookup) (Scenario, error) { return Load(input, lookups...) }
+func (s Scenario) Validate(lookups ...CorpusLookup) error {
+	if len(lookups) > 1 {
+		return makeError(CategoryInvalidField, "corpus_lookup", "only one corpus lookup is permitted")
+	}
+	var lookup CorpusLookup
+	if len(lookups) == 1 {
 		lookup = lookups[0]
 	}
 	return s.validate(lookup)
@@ -601,6 +606,31 @@ func parseLogical(raw json.RawMessage, location string) (LogicalTime, error) {
 
 var expectationFields = map[string]bool{"type": true, "kind": true, "payload": true, "text": true, "value": true, "message": true, "event": true, "corpus_id": true, "corpusID": true, "tool_call_id": true, "toolCallID": true, "tool_name": true, "toolName": true, "name": true, "result": true, "at": true, "time": true, "logical_time": true, "logicalTime": true, "count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
 
+var expectationModifiers = map[string]bool{"count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
+
+func expectationAllowed(fields ...string) map[string]bool {
+	allowed := make(map[string]bool, len(fields)+len(expectationModifiers))
+	for key := range expectationModifiers {
+		allowed[key] = true
+	}
+	for _, key := range fields {
+		allowed[key] = true
+	}
+	return allowed
+}
+
+var expectationFieldsByKind = map[ExpectationKind]map[string]bool{
+	ExpectText:       expectationAllowed("text", "value", "message"),
+	ExpectTranscript: expectationAllowed("text", "value", "message"),
+	ExpectContains:   expectationAllowed("text", "value", "message"),
+	ExpectAudio:      expectationAllowed("corpus_id", "corpusID"),
+	ExpectToolCall:   expectationAllowed("tool_call_id", "toolCallID", "tool_name", "toolName", "name"),
+	ExpectToolResult: expectationAllowed("tool_call_id", "toolCallID", "result"),
+	ExpectClose:      expectationAllowed(),
+	ExpectTime:       expectationAllowed("at", "time", "logical_time", "logicalTime"),
+	ExpectEvent:      expectationAllowed("event", "value", "message"),
+}
+
 func expectationKind(value string) (ExpectationKind, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "text", "text_output", "assistant_text":
@@ -653,7 +683,7 @@ func parseExpectation(raw json.RawMessage, index int) (ExpectedBehavior, error) 
 	if err != nil {
 		return ExpectedBehavior{}, err
 	}
-	if err := unknown(fields, expectationFields, location); err != nil {
+	if err := unknown(fields, expectationFieldsByKind[kind], location); err != nil {
 		return ExpectedBehavior{}, err
 	}
 	expectation := ExpectedBehavior{Type: kind, Kind: kind, StepIndex: -1, Step: -1}
@@ -756,7 +786,65 @@ func integer(raw json.RawMessage, location string) (int, error) {
 	}
 	return int(value), nil
 }
+
+func expectationTimeValue(value ExpectedBehavior, location string) (LogicalTime, bool, error) {
+	if value.At != 0 && value.Time != 0 && value.At != value.Time {
+		return 0, false, makeError(CategoryInvalidField, location+".at", "at and time aliases disagree")
+	}
+	if value.HasAt {
+		if value.At != 0 {
+			return value.At, true, nil
+		}
+		return value.Time, true, nil
+	}
+	if value.At != 0 {
+		return value.At, true, nil
+	}
+	if value.Time != 0 {
+		return value.Time, true, nil
+	}
+	return 0, false, nil
+}
+
+var typedExpectationFieldsByKind = map[ExpectationKind]map[string]bool{
+	ExpectText:       {"text": true},
+	ExpectTranscript: {"text": true},
+	ExpectContains:   {"text": true},
+	ExpectAudio:      {"corpus_id": true},
+	ExpectToolCall:   {"tool_call_id": true, "tool_name": true},
+	ExpectToolResult: {"tool_call_id": true, "result": true},
+	ExpectClose:      {},
+	ExpectTime:       {"at": true},
+	ExpectEvent:      {"value": true},
+}
+
+func rejectTypedExpectationFields(value ExpectedBehavior, location string, hasAt bool) error {
+	allowed := typedExpectationFieldsByKind[value.Kind]
+	fields := []struct {
+		name      string
+		populated bool
+	}{
+		{"text", value.Text != ""},
+		{"value", value.Value != ""},
+		{"corpus_id", value.CorpusID != ""},
+		{"tool_call_id", value.ToolCallID != ""},
+		{"tool_name", value.ToolName != ""},
+		{"result", len(value.Result) != 0},
+		{"at", hasAt},
+	}
+	for _, field := range fields {
+		if field.populated && !allowed[field.name] {
+			return makeError(CategoryInvalidField, location+"."+field.name, "unexpected payload for %s expectation", value.Kind)
+		}
+	}
+	return nil
+}
+
 func validateExpectationFields(value ExpectedBehavior, location string) error {
+	at, hasAt, err := expectationTimeValue(value, location)
+	if err != nil {
+		return err
+	}
 	if value.HasStep && value.StepIndex < 0 {
 		return makeError(CategoryInvalidField, location+".step", "must not be negative")
 	}
@@ -771,6 +859,9 @@ func validateExpectationFields(value ExpectedBehavior, location string) error {
 	}
 	if value.Count < 0 {
 		return makeError(CategoryInvalidField, location+".count", "must not be negative")
+	}
+	if err := rejectTypedExpectationFields(value, location, hasAt); err != nil {
+		return err
 	}
 	switch value.Kind {
 	case ExpectText, ExpectTranscript, ExpectContains:
@@ -793,10 +884,10 @@ func validateExpectationFields(value ExpectedBehavior, location string) error {
 			return makeError(CategoryMissingField, location+".result", "expected result is required")
 		}
 	case ExpectTime:
-		if !value.HasAt {
+		if !hasAt {
 			return makeError(CategoryMissingField, location+".at", "expected logical time is required")
 		}
-		if value.At <= 0 {
+		if at <= 0 {
 			return makeError(CategoryInvalidField, location+".at", "must be positive")
 		}
 	case ExpectEvent:
@@ -807,7 +898,7 @@ func validateExpectationFields(value ExpectedBehavior, location string) error {
 	return nil
 }
 
-func (s Scenario) validate(lookup any) error {
+func (s Scenario) validate(lookup CorpusLookup) error {
 	if strings.TrimSpace(s.ID) == "" && strings.TrimSpace(s.Name) == "" {
 		return makeError(CategoryMissingField, "scenario.id", "required field is missing")
 	}
@@ -835,13 +926,7 @@ func (s Scenario) validate(lookup any) error {
 		}
 		switch kind {
 		case StepSendAudio:
-			id := step.CorpusID
-			if id == "" {
-				id = step.Corpus.CorpusID
-			}
-			if id == "" {
-				id = step.Corpus.ID
-			}
+			id, _ := stepCorpusID(step, fmt.Sprintf("steps[%d]", index))
 			if lookup == nil {
 				return makeError(CategoryInvalidField, fmt.Sprintf("steps[%d].corpus_id", index), "audio corpus lookup is required")
 			}
@@ -897,6 +982,60 @@ func (s Scenario) validate(lookup any) error {
 	}
 	return nil
 }
+
+func stepCorpusID(step Step, location string) (string, error) {
+	id := ""
+	for _, candidate := range []string{step.CorpusID, step.Corpus.CorpusID, step.Corpus.ID} {
+		if candidate == "" {
+			continue
+		}
+		if strings.TrimSpace(candidate) == "" {
+			return "", makeError(CategoryInvalidField, location+".corpus_id", "must not be empty")
+		}
+		if id != "" && id != candidate {
+			return "", makeError(CategoryInvalidField, location+".corpus_id", "corpus ID aliases disagree")
+		}
+		id = candidate
+	}
+	return id, nil
+}
+
+func stepHasCorpus(step Step) bool {
+	return step.CorpusID != "" || step.Corpus.CorpusID != "" || step.Corpus.ID != ""
+}
+
+func stepResult(step Step, location string) (json.RawMessage, error) {
+	if len(step.ToolResult) != 0 && len(step.Result) != 0 && !bytes.Equal(step.ToolResult, step.Result) {
+		return nil, makeError(CategoryInvalidField, location+".result", "result aliases disagree")
+	}
+	if len(step.ToolResult) != 0 {
+		return step.ToolResult, nil
+	}
+	return step.Result, nil
+}
+
+func stepLogicalTime(step Step, location string) (LogicalTime, error) {
+	if step.At != 0 && step.Time != 0 && step.At != step.Time {
+		return 0, makeError(CategoryInvalidField, location+".at", "at and time aliases disagree")
+	}
+	if step.At != 0 {
+		return step.At, nil
+	}
+	return step.Time, nil
+}
+
+func rejectStepFields(location string, kind StepKind, fields ...struct {
+	name      string
+	populated bool
+}) error {
+	for _, field := range fields {
+		if field.populated {
+			return unexpectedStepField(location, field.name, kind)
+		}
+	}
+	return nil
+}
+
 func validateStep(step Step, kind StepKind, index int) error {
 	location := fmt.Sprintf("steps[%d]", index)
 	switch kind {
@@ -904,45 +1043,206 @@ func validateStep(step Step, kind StepKind, index int) error {
 		if strings.TrimSpace(step.Text) == "" {
 			return makeError(CategoryMissingField, location+".text", "required field is missing")
 		}
-		if step.CorpusID != "" || step.ToolCallID != "" || len(step.ToolResult) != 0 || step.At != 0 || step.Time != 0 || step.Duration != 0 {
-			return makeError(CategoryInvalidField, location, "unexpected payload for send_text")
+		if err := rejectStepFields(location, kind,
+			struct {
+				name      string
+				populated bool
+			}{"corpus_id", stepHasCorpus(step)},
+			struct {
+				name      string
+				populated bool
+			}{"tool_call_id", step.ToolCallID != ""},
+			struct {
+				name      string
+				populated bool
+			}{"tool_name", step.ToolName != ""},
+			struct {
+				name      string
+				populated bool
+			}{"result", len(step.ToolResult) != 0 || len(step.Result) != 0},
+			struct {
+				name      string
+				populated bool
+			}{"at", step.At != 0 || step.Time != 0},
+			struct {
+				name      string
+				populated bool
+			}{"duration", step.Duration != 0},
+		); err != nil {
+			return err
 		}
 	case StepSendAudio:
-		id := step.CorpusID
-		if id == "" {
-			id = step.Corpus.CorpusID
-		}
-		if id == "" {
-			id = step.Corpus.ID
+		id, err := stepCorpusID(step, location)
+		if err != nil {
+			return err
 		}
 		if strings.TrimSpace(id) == "" {
 			return makeError(CategoryMissingField, location+".corpus_id", "required field is missing")
+		}
+		if err := rejectStepFields(location, kind,
+			struct {
+				name      string
+				populated bool
+			}{"text", step.Text != ""},
+			struct {
+				name      string
+				populated bool
+			}{"tool_call_id", step.ToolCallID != ""},
+			struct {
+				name      string
+				populated bool
+			}{"tool_name", step.ToolName != ""},
+			struct {
+				name      string
+				populated bool
+			}{"result", len(step.ToolResult) != 0 || len(step.Result) != 0},
+			struct {
+				name      string
+				populated bool
+			}{"at", step.At != 0 || step.Time != 0},
+			struct {
+				name      string
+				populated bool
+			}{"duration", step.Duration != 0},
+		); err != nil {
+			return err
 		}
 	case StepSendToolResult:
 		if strings.TrimSpace(step.ToolCallID) == "" {
 			return makeError(CategoryMissingField, location+".tool_call_id", "required field is missing")
 		}
-		if len(step.ToolResult) == 0 && len(step.Result) == 0 {
+		if lenResult, err := stepResult(step, location); err != nil {
+			return err
+		} else if len(lenResult) == 0 {
 			return makeError(CategoryMissingField, location+".result", "required field is missing")
 		}
+		if err := rejectStepFields(location, kind,
+			struct {
+				name      string
+				populated bool
+			}{"text", step.Text != ""},
+			struct {
+				name      string
+				populated bool
+			}{"corpus_id", stepHasCorpus(step)},
+			struct {
+				name      string
+				populated bool
+			}{"at", step.At != 0 || step.Time != 0},
+			struct {
+				name      string
+				populated bool
+			}{"duration", step.Duration != 0},
+		); err != nil {
+			return err
+		}
 	case StepAdvanceTo:
-		at := step.At
-		if at == 0 {
-			at = step.Time
+		at, err := stepLogicalTime(step, location)
+		if err != nil {
+			return err
 		}
 		if at <= 0 {
 			return makeError(CategoryInvalidField, location+".at", "must be positive")
+		}
+		if err := rejectStepFields(location, kind,
+			struct {
+				name      string
+				populated bool
+			}{"text", step.Text != ""},
+			struct {
+				name      string
+				populated bool
+			}{"corpus_id", stepHasCorpus(step)},
+			struct {
+				name      string
+				populated bool
+			}{"tool_call_id", step.ToolCallID != ""},
+			struct {
+				name      string
+				populated bool
+			}{"tool_name", step.ToolName != ""},
+			struct {
+				name      string
+				populated bool
+			}{"result", len(step.ToolResult) != 0 || len(step.Result) != 0},
+			struct {
+				name      string
+				populated bool
+			}{"duration", step.Duration != 0},
+		); err != nil {
+			return err
 		}
 	case StepWait:
 		if step.Duration <= 0 {
 			return makeError(CategoryInvalidField, location+".duration", "must be positive")
 		}
+		if err := rejectStepFields(location, kind,
+			struct {
+				name      string
+				populated bool
+			}{"text", step.Text != ""},
+			struct {
+				name      string
+				populated bool
+			}{"corpus_id", stepHasCorpus(step)},
+			struct {
+				name      string
+				populated bool
+			}{"tool_call_id", step.ToolCallID != ""},
+			struct {
+				name      string
+				populated bool
+			}{"tool_name", step.ToolName != ""},
+			struct {
+				name      string
+				populated bool
+			}{"result", len(step.ToolResult) != 0 || len(step.Result) != 0},
+			struct {
+				name      string
+				populated bool
+			}{"at", step.At != 0 || step.Time != 0},
+		); err != nil {
+			return err
+		}
 	case StepClose:
-		if step.Text != "" || step.CorpusID != "" || step.ToolCallID != "" || len(step.ToolResult) != 0 || len(step.Result) != 0 || step.At != 0 || step.Time != 0 || step.Duration != 0 {
-			return makeError(CategoryInvalidField, location, "close accepts no payload")
+		if err := rejectStepFields(location, kind,
+			struct {
+				name      string
+				populated bool
+			}{"text", step.Text != ""},
+			struct {
+				name      string
+				populated bool
+			}{"corpus_id", stepHasCorpus(step)},
+			struct {
+				name      string
+				populated bool
+			}{"tool_call_id", step.ToolCallID != ""},
+			struct {
+				name      string
+				populated bool
+			}{"tool_name", step.ToolName != ""},
+			struct {
+				name      string
+				populated bool
+			}{"result", len(step.ToolResult) != 0 || len(step.Result) != 0},
+			struct {
+				name      string
+				populated bool
+			}{"at", step.At != 0 || step.Time != 0},
+			struct {
+				name      string
+				populated bool
+			}{"duration", step.Duration != 0},
+		); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func unexpectedStepField(location string, field string, kind StepKind) error {
+	return makeError(CategoryInvalidField, location+"."+field, "unexpected payload for %s", kind)
 }
 func satisfiable(value ExpectedBehavior, index int, all []ExpectedBehavior, steps []Step, closeIndex int, finalTime LogicalTime) error {
 	location := fmt.Sprintf("expectations[%d]", index)
@@ -1002,70 +1302,6 @@ func satisfiable(value ExpectedBehavior, index int, all []ExpectedBehavior, step
 	return nil
 }
 
-func lookupCorpus(lookup any, id string) bool {
-	if lookup == nil {
-		return false
-	}
-	if function, ok := lookup.(func(string) bool); ok {
-		return function(id)
-	}
-	if function, ok := lookup.(func(string) (bool, error)); ok {
-		found, _ := function(id)
-		return found
-	}
-	if function, ok := lookup.(func(string) error); ok {
-		return function(id) == nil
-	}
-	value := reflect.ValueOf(lookup)
-	if value.Kind() == reflect.Map && value.Type().Key().Kind() == reflect.String {
-		return value.MapIndex(reflect.ValueOf(id).Convert(value.Type().Key())).IsValid()
-	}
-	if value.Kind() == reflect.Func {
-		return callLookup(value, id)
-	}
-	for _, name := range []string{"Lookup", "Resolve", "Has", "Contains", "Exists"} {
-		if method := value.MethodByName(name); method.IsValid() {
-			return callLookup(method, id)
-		}
-	}
-	return false
-}
-func callLookup(function reflect.Value, id string) bool {
-	typeOfFunction := function.Type()
-	if typeOfFunction.NumIn() != 1 || typeOfFunction.In(0).Kind() != reflect.String {
-		return false
-	}
-	output := function.Call([]reflect.Value{reflect.ValueOf(id).Convert(typeOfFunction.In(0))})
-	if len(output) == 0 {
-		return false
-	}
-	if len(output) > 1 {
-		second := output[1]
-		if second.Kind() == reflect.Bool {
-			return second.Bool()
-		}
-		if second.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-			if !second.IsNil() {
-				return false
-			}
-			if output[0].Kind() == reflect.Bool {
-				return output[0].Bool()
-			}
-			return true
-		}
-	}
-	return resultValue(output[0])
-}
-func resultValue(value reflect.Value) bool {
-	if value.Kind() == reflect.Bool {
-		return value.Bool()
-	}
-	if value.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return value.IsNil()
-	}
-	switch value.Kind() {
-	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func:
-		return !value.IsNil()
-	}
-	return !value.IsZero()
+func lookupCorpus(lookup CorpusLookup, id string) bool {
+	return lookup != nil && lookup.Has(id)
 }
