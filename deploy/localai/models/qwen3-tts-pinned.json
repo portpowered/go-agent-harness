@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "model_id": "qwen3-tts-cpp-pinned",
+  "backend": {
+    "name": "qwen3-tts-cpp",
+    "localai_version": "v4.8.2",
+    "localai_commit": "5ff25d9d145e0a03a5b9a3559c620f1e1204ca6d",
+    "localai_image": "localai/localai@sha256:5bc7df534c906ed6103cd08c2c37e81368d36657433e9f4305c9588932e01ab1",
+    "platform": "linux/amd64",
+    "backend_image": "quay.io/go-skynet/local-ai-backends@sha256:8d60c0c8a2221775f4235c38583af87de8edcad0be780b00fd4b627cde2a4e4b",
+    "upstream": "https://github.com/ServeurpersoCom/qwentts.cpp",
+    "upstream_commit": "0bf4a18b22e8bb8718d95294e9f7f45c0d4270a4"
+  },
+  "gallery": {
+    "name": "qwen3-tts-cpp",
+    "revision": "v4.8.2",
+    "source": "https://raw.githubusercontent.com/mudler/LocalAI/v4.8.2/gallery/index.yaml",
+    "install_command": "local-ai models install qwen3-tts-cpp"
+  },
+  "model": {
+    "gallery_name": "qwen3-tts-cpp",
+    "runtime_name": "qwen3-tts-cpp",
+    "backend": "qwen3-tts-cpp",
+    "talker_filename": "qwen3-tts-cpp/qwen-talker-0.6b-base-Q8_0.gguf",
+    "codec_filename": "qwen3-tts-cpp/qwen-tokenizer-12hz-Q8_0.gguf",
+    "artifacts": [
+      {
+        "role": "talker",
+        "filename": "qwen3-tts-cpp/qwen-talker-0.6b-base-Q8_0.gguf",
+        "uri": "huggingface://Serveurperso/Qwen3-TTS-GGUF/qwen-talker-0.6b-base-Q8_0.gguf",
+        "sha256": "d54dbaf10591421fa764ed630d764efa717ae40cd959bd48c66d4eb1af226426"
+      },
+      {
+        "role": "tokenizer",
+        "filename": "qwen3-tts-cpp/qwen-tokenizer-12hz-Q8_0.gguf",
+        "uri": "huggingface://Serveurperso/Qwen3-TTS-GGUF/qwen-tokenizer-12hz-Q8_0.gguf",
+        "sha256": "1883beeed99348fc35e23dd225e9082f93f6f8c109330a33d935baa8acdbfd94"
+      }
+    ]
+  },
+  "audio": {
+    "container": "wav",
+    "sample_rate_hz": 24000,
+    "channel_count": 1,
+    "sample_format": "s16le",
+    "rms_normalization": "root mean square of signed PCM16 samples divided by 32768",
+    "silence_threshold_rms": 0.001,
+    "expected_duration_seconds": {
+      "min_inclusive": 0.25,
+      "max_inclusive": 8.0
+    }
+  },
+  "probe": {
+    "text": "The local voice pin is stable.",
+    "language": "English",
+    "generation_options": {
+      "seed": 17,
+      "temperature": 0.9,
+      "top_k": 50,
+      "top_p": 1.0,
+      "repetition_penalty": 1.05,
+      "max_new_tokens": 512,
+      "speed": 1.0,
+      "response_format": "wav"
+    },
+    "request": {
+      "model": "qwen3-tts-cpp",
+      "input": "The local voice pin is stable.",
+      "language": "English",
+      "response_format": "wav",
+      "speed": 1.0,
+      "params": {
+        "temperature": "0.9",
+        "top_k": "50",
+        "top_p": "1.0",
+        "repetition_penalty": "1.05",
+        "max_new_tokens": "512",
+        "seed": "17"
+      }
+    }
+  },
+  "verification": {
+    "script": "deploy/localai/models/verify-qwen3-tts-pin.ps1",
+    "endpoint": "http://127.0.0.1:8080",
+    "endpoint_timeout_seconds": 3,
+    "generation_timeout_seconds": 150,
+    "contract_command": "pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode Contract",
+    "compatibility_command": "pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode Compatibility -LegacyArtifactPath C:/Users/andre/.mangaka/models/qwen3-tts-0.6b-f16.gguf -Endpoint http://127.0.0.1:8080",
+    "generation_command": "pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode Live -Endpoint http://127.0.0.1:8080 -ArtifactRoot $env:LOCALAI_MODELS_DIR",
+    "measurement_command": "pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode Measure -AudioPath $env:TTS_OUTPUT",
+    "negative_controls_command": "pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode NegativeControls"
+  },
+  "compatibility": {
+    "legacy_artifact": "C:/Users/andre/.mangaka/models/qwen3-tts-0.6b-f16.gguf",
+    "legacy_gallery_uri": "huggingface://endo5501/qwen3-tts.cpp/qwen3-tts-0.6b-f16.gguf",
+    "legacy_gallery_sha256": "0b89770118463af8f2467d824a8de57d96df6a09f927a9769a3f7b7fffa7087d",
+    "conclusion": "incompatible",
+    "basis": "LocalAI PR #10316 states that the pre-migration endo5501 F16 GGUF is not compatible with qwentts.cpp; this workstation also had no legacy file or reachable LocalAI endpoint.",
+    "migration_required": true,
+    "migration_command": "local-ai models install qwen3-tts-cpp"
+  }
+}
