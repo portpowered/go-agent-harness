@@ -40,8 +40,15 @@ Before submitting new work, inspect the current queue and active sessions.
 Use:
 
 ```sh
-you work list --session {{.Context.SessionID}}
+you work list --server http://localhost:7439 --session {{.Context.SessionID}} --max-results 400
 ```
+
+`--server` is mandatory. The CLI defaults to `http://localhost:7437`, which is a
+DIFFERENT factory (infinite-you); without the flag every command here returns
+`WORK_NOT_FOUND` or `FACTORY_UNREACHABLE` against a factory that does not hold
+this work, and queue reconciliation silently does nothing. `--max-results` is
+also required: the default page size is 50, so a larger board is truncated and
+stranded items past row 50 are never seen.
 
 to see current work items, work types, states, names, and whether previous
 batches are still running, blocked, failed, or ready to be consumed.
@@ -49,7 +56,7 @@ batches are still running, blocked, failed, or ready to be consumed.
 Use:
 
 ```sh
-you session list
+you session list --server http://localhost:7439
 ```
 
 to enumerate active and recent sessions. This helps determine whether work is
@@ -91,8 +98,17 @@ returned to a workstation after a failed or interrupted pass, use the complete
 command form:
 
 ```sh
-you work move <work-id> <state-name> --session {{.Context.SessionID}} --request-id <stable-repair-id>
+you work move <work-id> <state-name> --server http://localhost:7439 --session {{.Context.SessionID}} --request-id <stable-repair-id>
 ```
+
+Again, `--server http://localhost:7439` is mandatory for the reason above. Note
+that `<work-id>` is the TRANSIENT token id (`work-task-368`, `work-plan-489`),
+not the `batch-...` idea id: an idea sitting at `to-complete/PROCESSING` is
+usually waiting on a dead `task` token, and it is that token which must be moved
+back to `init`. Valid state names come from `factory/factory.json`: `task` has
+`init`, `in-review`, `to-complete`, `complete`, `failed`; `plan` and `thoughts`
+have `init`, `complete`, `failed`; `review` has `init`, `complete`, `fin`.
+Moves are rejected while a work item is in an active dispatch.
 
 Use `you work move` to move work deliberately between valid states in
 `factory/factory.json`. Move only the specific work items needed to repair the
