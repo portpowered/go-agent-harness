@@ -23,9 +23,8 @@ func TestSourceConformancePartialFinalFrame(t *testing.T) {
 	samples[len(samples)-1] = 32767
 
 	tests := []struct {
-		name  string
-		open  func(*testing.T) AudioSource
-		close func(*testing.T)
+		name string
+		open func(*testing.T) AudioSource
 	}{
 		{name: "slice", open: func(*testing.T) AudioSource { return NewSliceSource(samples) }},
 	}
@@ -36,9 +35,8 @@ func TestSourceConformancePartialFinalFrame(t *testing.T) {
 		t.Fatalf("write conformance input: %v", err)
 	}
 	tests = append(tests, struct {
-		name  string
-		open  func(*testing.T) AudioSource
-		close func(*testing.T)
+		name string
+		open func(*testing.T) AudioSource
 	}{
 		name: "file",
 		open: func(t *testing.T) AudioSource {

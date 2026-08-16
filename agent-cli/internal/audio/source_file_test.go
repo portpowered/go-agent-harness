@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
@@ -135,6 +137,79 @@ func TestFileSourceEmptyAndTruncatedRaw(t *testing.T) {
 	})
 }
 
+func TestFileSourceUnreadableInput(t *testing.T) {
+	t.Run("directory cannot be read as PCM", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "unreadable.raw")
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		source, err := NewFileSource(path, nil)
+		if err != nil {
+			assertSourceStreamError(t, err, "open", path, "raw PCM16")
+			return
+		}
+		defer func() { _ = source.Close() }()
+
+		err = source.ReadFrame(context.Background(), make([]int16, FrameSize))
+		assertSourceStreamError(t, err, "read", path, "raw PCM16")
+	})
+
+	t.Run("permission denied file", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("permission-denied fixture skipped: Windows does not enforce Unix mode bits")
+		}
+		path := filepath.Join(t.TempDir(), "permission-denied.raw")
+		if err := os.WriteFile(path, pcmBytes([]int16{1}), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, 0); err != nil {
+			t.Fatal(err)
+		}
+
+		source, err := NewFileSource(path, nil)
+		if err == nil {
+			_ = source.Close()
+			t.Skip("permission-denied fixture skipped: this runner can read mode-zero files")
+		}
+		assertSourceStreamError(t, err, "open", path, "raw PCM16")
+	})
+}
+
+func TestFileSourceOwnedHandleRelease(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "owned.raw")
+	if err := os.WriteFile(path, pcmBytes(make([]int16, FrameSize)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	before := processOpenHandleCount(t)
+	source, err := NewFileSource(path, nil)
+	if err != nil {
+		t.Fatalf("NewFileSource() error = %v", err)
+	}
+	t.Cleanup(func() { _ = source.Close() })
+	opened := processOpenHandleCount(t)
+	if opened <= before {
+		t.Fatalf("open-handle count after source open = %d, before = %d; owned handle was not observed", opened, before)
+	}
+
+	if err := source.Close(); err != nil {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	afterFirst := settledProcessOpenHandleCount(t, before)
+	assertHandleCountWithinTolerance(t, afterFirst, before, "source first close")
+
+	if err := source.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	afterSecond := processOpenHandleCount(t)
+	assertHandleCountWithinTolerance(t, afterSecond, afterFirst, "source second close")
+
+	if err := source.ReadFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
+		t.Fatalf("ReadFrame after Close() = %v, want ErrClosed", err)
+	}
+}
+
 func TestFileSourceWAVValidationAndFraming(t *testing.T) {
 	t.Run("canonical WAV and uppercase extension", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "input.WAV")
@@ -216,6 +291,77 @@ func TestFileSourceContextAndFrameErrors(t *testing.T) {
 	}
 }
 
+func TestFileSourceUnderlyingReadError(t *testing.T) {
+	wantErr := errors.New("source read failed")
+	source := &FileSource{path: "input.raw", format: formatRaw, reader: errorReader{err: wantErr}}
+
+	err := source.ReadFrame(context.Background(), make([]int16, FrameSize))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("ReadFrame() = %v, want underlying read error", err)
+	}
+	assertSourceStreamError(t, err, "read", "input.raw", "raw PCM16")
+}
+
+func assertSourceStreamError(t *testing.T, err error, operation, path, format string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("error = nil, want %s error for %q", operation, path)
+	}
+	var streamErr *StreamError
+	if !errors.As(err, &streamErr) {
+		t.Fatalf("error = %v, want StreamError", err)
+	}
+	if streamErr.Operation != operation || streamErr.Path != path || streamErr.Format != format || streamErr.Err == nil {
+		t.Fatalf("StreamError = %+v, want operation=%q path=%q format=%q with underlying detail", streamErr, operation, path, format)
+	}
+}
+
+// Linux exposes the process descriptor table through /proc/self/fd. Other
+// platforms skip S9 because this test package has no portable handle-count
+// API; the adapter still exercises close and idempotence on every platform.
+const processHandleCountSettleTolerance = 1
+
+func processOpenHandleCount(t *testing.T) int {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skipf("S9 open-handle count skipped: /proc/self/fd is unavailable on %s", runtime.GOOS)
+	}
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		t.Skipf("S9 open-handle count skipped: cannot read /proc/self/fd: %v", err)
+	}
+	return len(entries)
+}
+
+func settledProcessOpenHandleCount(t *testing.T, want int) int {
+	t.Helper()
+	last := want
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		last = processOpenHandleCount(t)
+		if withinHandleCountTolerance(last, want) {
+			return last
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return last
+}
+
+func assertHandleCountWithinTolerance(t *testing.T, got, want int, operation string) {
+	t.Helper()
+	if !withinHandleCountTolerance(got, want) {
+		t.Fatalf("open-handle count after %s = %d, want %d +/- %d", operation, got, want, processHandleCountSettleTolerance)
+	}
+}
+
+func withinHandleCountTolerance(got, want int) bool {
+	delta := got - want
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta <= processHandleCountSettleTolerance
+}
+
 type trackingReader struct {
 	Reader io.Reader
 	closed bool
@@ -237,3 +383,7 @@ func (r *countingReader) Read(destination []byte) (int, error) {
 	r.reads++
 	return r.Reader.Read(destination)
 }
+
+type errorReader struct{ err error }
+
+func (r errorReader) Read([]byte) (int, error) { return 0, r.err }

@@ -41,6 +41,94 @@ func TestFileSinkRawOutputAndOwnership(t *testing.T) {
 	}
 }
 
+func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
+	samples := make([]int16, FrameSize*2)
+	for index := range samples {
+		samples[index] = int16(index*5 - 2000)
+	}
+	samples[0], samples[1], samples[2] = -32768, 32767, -1
+
+	tempDir := t.TempDir()
+	inputPath := filepath.Join(tempDir, "input.raw")
+	outputPath := filepath.Join(tempDir, "output.pcm")
+	want := pcmBytes(samples)
+	if err := os.WriteFile(inputPath, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := NewFileSource(inputPath, nil)
+	if err != nil {
+		t.Fatalf("NewFileSource() error = %v", err)
+	}
+	sink, err := NewFileSink(outputPath, nil)
+	if err != nil {
+		_ = source.Close()
+		t.Fatalf("NewFileSink() error = %v", err)
+	}
+
+	for {
+		frame := make([]int16, FrameSize)
+		err := source.ReadFrame(context.Background(), frame)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			_ = source.Close()
+			_ = sink.Close()
+			t.Fatalf("ReadFrame() error = %v", err)
+		}
+		if err := sink.WriteFrame(context.Background(), frame); err != nil {
+			_ = source.Close()
+			_ = sink.Close()
+			t.Fatalf("WriteFrame() error = %v", err)
+		}
+	}
+	if err := source.Close(); err != nil {
+		t.Fatalf("source Close() error = %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("sink Close() error = %v", err)
+	}
+
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("raw source-to-sink bytes = %v, want exact input bytes", got)
+	}
+}
+
+func TestFileSinkOwnedHandleRelease(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "owned.raw")
+	before := processOpenHandleCount(t)
+	sink, err := NewFileSink(path, nil)
+	if err != nil {
+		t.Fatalf("NewFileSink() error = %v", err)
+	}
+	t.Cleanup(func() { _ = sink.Close() })
+	opened := processOpenHandleCount(t)
+	if opened <= before {
+		t.Fatalf("open-handle count after sink open = %d, before = %d; owned handle was not observed", opened, before)
+	}
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	afterFirst := settledProcessOpenHandleCount(t, before)
+	assertHandleCountWithinTolerance(t, afterFirst, before, "sink first close")
+
+	if err := sink.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	afterSecond := processOpenHandleCount(t)
+	assertHandleCountWithinTolerance(t, afterSecond, afterFirst, "sink second close")
+
+	if err := sink.WriteFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
+		t.Fatalf("WriteFrame after Close() = %v, want ErrClosed", err)
+	}
+}
+
 func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	samples := make([]int16, FrameSize*2)
 	for index := range samples {
