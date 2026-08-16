@@ -1,11 +1,13 @@
 package logger
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -38,10 +40,6 @@ type recordingWriteSyncer struct {
 	writeError error
 	errors     []error
 }
-
-type safeTerminalHook struct{}
-
-func (safeTerminalHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {}
 
 func (s *recordingWriteSyncer) Write(p []byte) (int, error) {
 	s.mu.Lock()
@@ -153,7 +151,7 @@ func TestS3FormattedRecordsMatchGolden(t *testing.T) {
 	actual := normalizeFormattedLog(readAgentLog(t, configDir))
 	goldenPath := filepath.Join("testdata", "formatted.golden")
 	want, err := os.ReadFile(goldenPath)
-	if err != nil && !(*updateGolden && os.IsNotExist(err)) {
+	if err != nil && (!*updateGolden || !os.IsNotExist(err)) {
 		t.Fatalf("read golden %s: %v", goldenPath, err)
 	}
 	if *updateGolden {
@@ -291,6 +289,18 @@ func TestS5LoggerLevelThresholds(t *testing.T) {
 func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	sentinel := errors.New("sentinel sink failure")
 	sink := &recordingWriteSyncer{writeError: sentinel}
+	errorOutput := &recordingWriteSyncer{}
+	processStderrPath := filepath.Join(t.TempDir(), "process-stderr")
+	processStderr, err := os.Create(processStderrPath)
+	if err != nil {
+		t.Fatalf("create process stderr capture: %v", err)
+	}
+	previousStderr := os.Stderr
+	os.Stderr = processStderr
+	t.Cleanup(func() {
+		os.Stderr = previousStderr
+		_ = processStderr.Close()
+	})
 	withConsoleWriteSyncer(t, func() zapcore.WriteSyncer { return sink })
 
 	logger, closer, err := NewLoggerWithCloser(LoggerConfig{
@@ -304,6 +314,7 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	if closer != nil {
 		t.Fatal("console logger must not return a closer")
 	}
+	logger = logger.WithOptions(zap.ErrorOutput(errorOutput))
 	logger.Info("failed first")
 	logger.Info("attempted second")
 
@@ -315,6 +326,18 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	}
 	output := sink.String()
 	assertMessagesInOrder(t, output, "failed first", "attempted second")
+	if count := strings.Count(errorOutput.String(), "write error: sentinel sink failure"); count != 2 {
+		t.Fatalf("injected error output received %d reports, want 2; output=%q", count, errorOutput.String())
+	}
+	if err := processStderr.Close(); err != nil {
+		t.Fatalf("close process stderr capture: %v", err)
+	}
+	os.Stderr = previousStderr
+	if output, err := os.ReadFile(processStderrPath); err != nil {
+		t.Fatalf("read process stderr capture: %v", err)
+	} else if len(output) != 0 {
+		t.Fatalf("real process stderr received unexpected output: %q", output)
+	}
 }
 
 func TestS5LoggerRotationIsSkippedWhenTheDefectIsAbsent(t *testing.T) {
@@ -505,24 +528,54 @@ func TestS5AdaptersPreserveLevelsMessagesAndFields(t *testing.T) {
 	})
 }
 
-func TestAdaptersTerminalMethodsWriteWithSafeNoopHooks(t *testing.T) {
-	core, observed := observer.New(zapcore.DebugLevel)
-	terminalSafeLogger := zap.New(
-		core,
-		// Zap's no-op terminal hooks make this an emitted-record contract test
-		// without terminating the test process merely for coverage.
-		zap.WithFatalHook(safeTerminalHook{}),
-		zap.WithPanicHook(safeTerminalHook{}),
-	)
+func TestAdaptersTerminalMethodsInSubprocess(t *testing.T) {
+	const helperEnv = "GO_AGENT_LOGGER_TERMINAL_HELPER"
+	if mode := os.Getenv(helperEnv); mode != "" {
+		runLoggerTerminalHelper(mode)
+		return
+	}
 
-	NewZapAgentLoopAdapter(terminalSafeLogger).Fatal("agent fatal", agentlooplogging.Field{Key: "terminal", Value: "agent"})
-	NewZapAgentLoopAdapter(terminalSafeLogger).Panic("agent panic", agentlooplogging.Field{Key: "terminal", Value: "agent"})
-	NewZapGatewayAdapter(terminalSafeLogger).Fatal("gateway fatal", gatewaylogging.Field{Key: "terminal", Value: "gateway"})
-	NewZapGatewayAdapter(terminalSafeLogger).Panic("gateway panic", gatewaylogging.Field{Key: "terminal", Value: "gateway"})
+	tests := []struct {
+		name    string
+		mode    string
+		message string
+		field   string
+	}{
+		{name: "agent fatal", mode: "agent-fatal", message: "agent fatal", field: `"terminal": "agent"`},
+		{name: "agent panic", mode: "agent-panic", message: "agent panic", field: `"terminal": "agent"`},
+		{name: "gateway fatal", mode: "gateway-fatal", message: "gateway fatal", field: `"terminal": "gateway"`},
+		{name: "gateway panic", mode: "gateway-panic", message: "gateway panic", field: `"terminal": "gateway"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestAdaptersTerminalMethodsInSubprocess$", "-test.count=1")
+			cmd.Env = append(os.Environ(), helperEnv+"="+test.mode)
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				t.Fatalf("terminal helper exited successfully; output=%q", output)
+			}
+			if !bytes.Contains(output, []byte(test.message)) || !bytes.Contains(output, []byte(test.field)) {
+				t.Fatalf("terminal helper output=%q, want message %q and field %q", output, test.message, test.field)
+			}
+		})
+	}
+}
 
-	for _, message := range []string{"agent fatal", "agent panic", "gateway fatal", "gateway panic"} {
-		if entries := observed.FilterMessage(message).All(); len(entries) != 1 {
-			t.Fatalf("terminal message %q produced %d records, want 1", message, len(entries))
-		}
+func runLoggerTerminalHelper(mode string) {
+	terminalLogger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	switch mode {
+	case "agent-fatal":
+		NewZapAgentLoopAdapter(terminalLogger).Fatal("agent fatal", agentlooplogging.Field{Key: "terminal", Value: "agent"})
+	case "agent-panic":
+		NewZapAgentLoopAdapter(terminalLogger).Panic("agent panic", agentlooplogging.Field{Key: "terminal", Value: "agent"})
+	case "gateway-fatal":
+		NewZapGatewayAdapter(terminalLogger).Fatal("gateway fatal", gatewaylogging.Field{Key: "terminal", Value: "gateway"})
+	case "gateway-panic":
+		NewZapGatewayAdapter(terminalLogger).Panic("gateway panic", gatewaylogging.Field{Key: "terminal", Value: "gateway"})
+	default:
+		panic("unknown logger terminal helper mode: " + mode)
 	}
 }
