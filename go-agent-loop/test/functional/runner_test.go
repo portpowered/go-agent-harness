@@ -96,6 +96,35 @@ func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.
 	}
 }
 
+func TestFunctionalSuite_ExternalManifestRejectsUnknownSelectorBeforeFilteredRecursiveInvocation(t *testing.T) {
+	moduleRoot, err := functionalModuleRootPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := writeUnknownSelectorManifest(t)
+	cmd := exec.Command("go", goCommandArgs(
+		"test",
+		"./test/functional/...",
+		"-v",
+		"-run", "^TestBasic_SimpleRequestResponse$",
+		"-count=1",
+	)...)
+	cmd.Dir = moduleRoot
+	cmd.Env = setEnv(os.Environ(), ManifestPathEnv, manifestPath)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("recursive invocation accepted an unknown selector:\n%s", output)
+	}
+
+	text := string(output)
+	if !strings.Contains(text, "does not resolve to a discovered package") {
+		t.Fatalf("recursive invocation did not report the typed unknown-selector error:\n%s", text)
+	}
+	if strings.Contains(text, "--- PASS: TestBasic_SimpleRequestResponse (") {
+		t.Fatalf("recursive invocation ran a test despite the invalid manifest:\n%s", text)
+	}
+}
+
 func writeProofManifest(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "functional-quarantine.json")
@@ -135,6 +164,29 @@ func writeProofManifest(t *testing.T) string {
 	}
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("write external manifest: %v", err)
+	}
+	return path
+}
+
+func writeUnknownSelectorManifest(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "functional-quarantine.json")
+	body, err := json.MarshalIndent(Manifest{
+		Version: ManifestVersion,
+		Suite:   SuiteName,
+		Entries: []Entry{{
+			Package:       "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/typo",
+			Test:          "TestMissing",
+			Bucket:        BucketGenuinelyFailing,
+			Reason:        "the selector is intentionally unknown for the fail-closed proof",
+			ExitCondition: "remove after the proof no longer needs an invalid manifest",
+		}},
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal unknown-selector manifest: %v", err)
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatalf("write unknown-selector manifest: %v", err)
 	}
 	return path
 }

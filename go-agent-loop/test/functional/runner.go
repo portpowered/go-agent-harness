@@ -81,6 +81,7 @@ func listPackageTests(ctx context.Context, moduleRoot, packagePath string) ([]st
 	args := goCommandArgs("test", "-list", "^Test", "-count=1", packagePath)
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = moduleRoot
+	cmd.Env = setEnv(os.Environ(), DiscoveryEnv, "1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("list functional tests in %s: %w", packagePath, commandError(cmd, err, output))
@@ -257,6 +258,25 @@ func RunPackageTests(m *testing.M, packagePath string) {
 		writePackageRunnerError(err)
 		os.Exit(1)
 	}
+	if len(manifest.Entries) == 0 {
+		os.Exit(m.Run())
+	}
+
+	moduleRoot, err := functionalModuleRootPath()
+	if err != nil {
+		writePackageRunnerError(err)
+		os.Exit(1)
+	}
+	inventory, err := DiscoverFunctionalInventory(context.Background(), moduleRoot)
+	if err != nil {
+		writePackageRunnerError(err)
+		os.Exit(1)
+	}
+	if _, err := Select(manifest, inventory); err != nil {
+		writePackageRunnerError(err)
+		os.Exit(1)
+	}
+
 	var localEntries []Entry
 	for _, entry := range manifest.Entries {
 		if entry.Package == packagePath {
@@ -267,14 +287,24 @@ func RunPackageTests(m *testing.M, packagePath string) {
 		os.Exit(m.Run())
 	}
 
-	tests, err := listCurrentPackageTests()
-	if err != nil {
-		writePackageRunnerError(err)
+	var currentPackage InventoryPackage
+	for _, discoveredPackage := range inventory.Packages {
+		if discoveredPackage.Path == packagePath {
+			currentPackage = discoveredPackage
+			break
+		}
+	}
+	if currentPackage.Path == "" {
+		writePackageRunnerError(&ValidationError{
+			Field:    "inventory.packages",
+			Selector: packagePath,
+			Problem:  "does not resolve to the current discovered package",
+		})
 		os.Exit(1)
 	}
 	selection, err := Select(
 		Manifest{Version: manifest.Version, Suite: manifest.Suite, Entries: localEntries},
-		Inventory{Packages: []InventoryPackage{{Path: packagePath, Tests: tests}}},
+		Inventory{Packages: []InventoryPackage{currentPackage}},
 	)
 	if err != nil {
 		writePackageRunnerError(err)
@@ -322,32 +352,6 @@ func RunPackageTests(m *testing.M, packagePath string) {
 		os.Exit(1)
 	}
 	os.Exit(exitCode)
-}
-
-func listCurrentPackageTests() ([]string, error) {
-	executable, err := os.Executable()
-	if err != nil {
-		return nil, fmt.Errorf("locate functional test binary: %w", err)
-	}
-	cmd := exec.Command(executable, "-test.list", "^Test")
-	cmd.Env = setEnv(os.Environ(), DiscoveryEnv, "1")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("list current functional tests: %w", commandError(cmd, err, output))
-	}
-	var tests []string
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	for scanner.Scan() {
-		name := strings.TrimSpace(scanner.Text())
-		if isTopLevelTestName(name) {
-			tests = append(tests, name)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read current functional test listing: %w", err)
-	}
-	sort.Strings(tests)
-	return tests, nil
 }
 
 func packageRunPattern(selected []TestSelector) (string, error) {
