@@ -2,6 +2,7 @@ package localai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
@@ -19,7 +21,11 @@ import (
 )
 
 func TestProviderContractThroughGateway(t *testing.T) {
-	conn := newTestConn(map[string]any{"type": "session.created", "session": map[string]any{"model": WireModel}})
+	audio := []byte{0x10, 0x00, 0x20, 0x00}
+	conn := newTestConn(
+		map[string]any{"type": "session.created", "session": map[string]any{"model": WireModel}},
+		map[string]any{"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16"},
+	)
 	dialer := &testDialer{conn: conn}
 	p := New(WithBaseURL("ws://localai.test/v1/realtime"), WithWebSocketDialer(dialer))
 	if p.Name() != ProviderName || p.Model() != ModelID {
@@ -53,6 +59,22 @@ func TestProviderContractThroughGateway(t *testing.T) {
 	}
 	if len(conn.client) == 0 || json.Unmarshal(conn.client[0], &update) != nil || update.Session.Model != WireModel {
 		t.Fatalf("session update model = %q, want %q", update.Session.Model, WireModel)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for {
+		msg, ok := session.Receive().ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatal("timed out waiting for decoded audio")
+		}
+		if msg.Type != messages.StreamTypeAudioDelta {
+			continue
+		}
+		got, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || string(got.Content) != string(audio) || got.MediaType != "audio/pcm" {
+			t.Fatalf("decoded audio = %#v, want bytes and audio/pcm", msg.Value)
+		}
+		return
 	}
 }
 
@@ -134,20 +156,24 @@ func (d *testDialer) Dial(endpoint string, headers map[string]string) (openai.We
 }
 
 type testConn struct {
-	server    []byte
+	server    [][]byte
 	client    [][]byte
 	wait      chan struct{}
 	closeOnce sync.Once
 }
 
-func newTestConn(event map[string]any) *testConn {
-	data, _ := json.Marshal(event)
-	return &testConn{server: data, wait: make(chan struct{})}
+func newTestConn(events ...map[string]any) *testConn {
+	c := &testConn{wait: make(chan struct{})}
+	for _, event := range events {
+		data, _ := json.Marshal(event)
+		c.server = append(c.server, data)
+	}
+	return c
 }
 func (c *testConn) ReadMessage() (int, []byte, error) {
-	if c.server != nil {
-		data := c.server
-		c.server = nil
+	if len(c.server) > 0 {
+		data := c.server[0]
+		c.server = c.server[1:]
 		return 1, data, nil
 	}
 	<-c.wait
