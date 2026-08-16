@@ -87,7 +87,7 @@ func probe(endpoint string) bool {
 	if err != nil || conn == nil {
 		return false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return false
