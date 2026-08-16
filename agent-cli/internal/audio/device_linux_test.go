@@ -24,13 +24,10 @@ func TestLinuxStableDirectionalIDs(t *testing.T) {
 		}
 		return items, nil
 	})
-	first, err := registry.List()
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := registry.List()
-	if err != nil || !reflect.DeepEqual(first, second) {
-		t.Fatalf("reordered snapshots first=%#v second=%#v err=%v", first, second, err)
+	first, firstErr := registry.List()
+	second, secondErr := registry.List()
+	if firstErr != nil || secondErr != nil || !reflect.DeepEqual(first, second) {
+		t.Fatalf("reordered snapshots first=%#v second=%#v errors=%v,%v", first, second, firstErr, secondErr)
 	}
 	if len(first) != 2 || first[0].ID != "alsa:input:hw:0,0" || first[1].ID != "alsa:output:hw:0,0" {
 		t.Fatalf("stable directional IDs=%#v", first)
@@ -53,7 +50,7 @@ func TestLinuxHardwareAndPositiveAudio(t *testing.T) {
 	if err != nil {
 		t.Skipf("linux: capture source cannot be opened: %v", err)
 	}
-	positive, readErr := readPositiveCapture(opened.(*linuxRegistryHandle).inner.(*MicrophoneSource))
+	positive, readErr := readPositiveCapture(opened.(*linuxOpenedDevice).microphone)
 	closeErr := opened.Close()
 	if readErr != nil || closeErr != nil {
 		t.Fatalf("capture read=%v close=%v", readErr, closeErr)
@@ -66,18 +63,14 @@ func TestLinuxHardwareAndPositiveAudio(t *testing.T) {
 		t.Skipf("linux: render sink cannot be opened: %v", err)
 	}
 	writer := opened.(*linuxOpenedDevice)
+	t.Cleanup(func() { _ = opened.Close() })
 	frame := make([]int16, FrameSize)
 	frame[0] = 1200
 	if err := writer.WriteFrame(context.Background(), frame); err != nil {
-		_ = opened.Close()
 		t.Fatalf("render WriteFrame: %v", err)
 	}
 	if !waitForPositive(writer) {
-		_ = opened.Close()
 		t.Fatal("render sink consumed no positive PCM energy")
-	}
-	if err := opened.Close(); err != nil {
-		t.Fatal(err)
 	}
 }
 func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaulted bool) linuxDeviceRecord {
@@ -86,10 +79,10 @@ func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaul
 }
 func linuxRecord(records []linuxDeviceRecord, direction Direction) *linuxDeviceRecord {
 	i := slices.IndexFunc(records, func(record linuxDeviceRecord) bool { return record.Direction == direction && record.defaulted })
-	if i < 0 {
-		return nil
+	if i >= 0 {
+		return &records[i]
 	}
-	return &records[i]
+	return nil
 }
 func readPositiveCapture(reader *MicrophoneSource) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -109,11 +102,8 @@ func readPositiveCapture(reader *MicrophoneSource) (bool, error) {
 	return false, nil
 }
 func waitForPositive(writer interface{ PositiveAudioEvidence() bool }) bool {
-	for i := 0; i < 100; i++ {
-		if writer.PositiveAudioEvidence() {
-			return true
-		}
+	for i := 0; i < 100 && !writer.PositiveAudioEvidence(); i++ {
 		time.Sleep(20 * time.Millisecond)
 	}
-	return false
+	return writer.PositiveAudioEvidence()
 }
