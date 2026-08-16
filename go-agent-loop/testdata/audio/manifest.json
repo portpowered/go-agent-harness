@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "corpus_byte_total": 7034707,
+  "corpus_byte_total": 7881906,
   "vad_threshold_rms": 300.0,
   "classes": [
     "utt_short",
@@ -34,11 +34,11 @@
       "sample_rate_hz": 16000,
       "channels": 1,
       "bits_per_sample": 16,
-      "sample_count": 384910,
-      "duration_seconds": 24.056875,
-      "rms_energy": 728.7516986154558,
-      "byte_size": 769864,
-      "sha256": "d3499f8edea3b158d9f7bb59cd61f9a47e180ad50bc3793cbee52fa342f328ff"
+      "sample_count": 469660,
+      "duration_seconds": 29.35375,
+      "rms_energy": 659.7381137154641,
+      "byte_size": 939364,
+      "sha256": "63cd3264ec3151644c5799b73fbac48e27e9ffc52f07e0d5c8f2bd4aeef178f2"
     },
     {
       "id": "multi_utt_24k",
@@ -57,11 +57,11 @@
       "sample_rate_hz": 24000,
       "channels": 1,
       "bits_per_sample": 16,
-      "sample_count": 577365,
-      "duration_seconds": 24.056875,
-      "rms_energy": 731.4104290500348,
-      "byte_size": 1154774,
-      "sha256": "77af9b097459b060be3b643de3f81a81b644cba442ecd71e2887153155d59e74"
+      "sample_count": 704490,
+      "duration_seconds": 29.35375,
+      "rms_energy": 662.1450066272619,
+      "byte_size": 1409024,
+      "sha256": "fbe5b39b5c761987ef78d7937ddd42255d03d6fd97c7269588c0740bc2b0abdf"
     },
     {
       "id": "noise_16k",
@@ -128,9 +128,9 @@
       "bits_per_sample": 16,
       "sample_count": 339310,
       "duration_seconds": 21.206875,
-      "rms_energy": 776.1755656365171,
+      "rms_energy": 773.9428603838118,
       "byte_size": 678664,
-      "sha256": "853968be81e110ce0f36561e2ff54ae06c89758eb285d4e1710878f2011f58d6"
+      "sha256": "6023a94c8c441a202fc975a6a59c6bbb9d4dbd9178e705dfec53b437ba5d3e95"
     },
     {
       "id": "overlap_24k",
@@ -151,9 +151,9 @@
       "bits_per_sample": 16,
       "sample_count": 508965,
       "duration_seconds": 21.206875,
-      "rms_energy": 779.0072257925358,
+      "rms_energy": 776.7970813366093,
       "byte_size": 1017974,
-      "sha256": "06ed533a274180fa2e4e71e138fd7d6467e6873855331311a899243af6d5d25a"
+      "sha256": "6e23dca5aa9f69f828952cdf33b9ed72db1ed10b1c328f76f32a8525ea42b8a1"
     },
     {
       "id": "silence_16k",
@@ -345,7 +345,7 @@
       "class": "utt_short",
       "source": "The timer is ready for the next step.",
       "voice": "default",
-      "structure": "complete short utterance",
+      "structure": "complete synthesized short utterance retained without windowing",
       "format": {
         "container": "wav",
         "encoding": "PCM",
@@ -356,11 +356,11 @@
       "sample_rate_hz": 16000,
       "channels": 1,
       "bits_per_sample": 16,
-      "sample_count": 48000,
-      "duration_seconds": 3.0,
-      "rms_energy": 1345.440273123139,
-      "byte_size": 96044,
-      "sha256": "a53fa04fcff325eee5bc2469c8c815b7a6e58ee4f9a3dfcb18c71e017a0a0322"
+      "sample_count": 132750,
+      "duration_seconds": 8.296875,
+      "rms_energy": 809.054207109407,
+      "byte_size": 265544,
+      "sha256": "3ebc3c7466dc8a706d2237818815629ed53eac2cd1913a115462e3af1c603aae"
     },
     {
       "id": "utt_short_24k",
@@ -368,7 +368,7 @@
       "class": "utt_short",
       "source": "The timer is ready for the next step.",
       "voice": "default",
-      "structure": "complete short utterance",
+      "structure": "complete synthesized short utterance retained without windowing",
       "format": {
         "container": "wav",
         "encoding": "PCM",
@@ -379,11 +379,11 @@
       "sample_rate_hz": 24000,
       "channels": 1,
       "bits_per_sample": 16,
-      "sample_count": 72000,
-      "duration_seconds": 3.0,
-      "rms_energy": 1354.6259689486246,
-      "byte_size": 144044,
-      "sha256": "2fbeccc56e4ae5ff4f9b1afe1228645985bc6418ee1568724fdfcfb9fc23e573"
+      "sample_count": 199125,
+      "duration_seconds": 8.296875,
+      "rms_energy": 814.5775773794452,
+      "byte_size": 398294,
+      "sha256": "a0c3ed5e38a04c3dfa1731d415ca1a272e1d3ca6536294bdd6fc03a70000f925"
     }
   ]
 }

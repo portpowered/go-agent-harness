@@ -230,8 +230,10 @@ function Assert-ClassShape($Definition, [int16[]]$Samples, [int]$Rate, [double]$
         if ((Get-NonZeroCount $Samples 0 $offset) -lt 10 -or (Get-NonZeroCount $Samples $offset ([int]($Rate * 0.75))) -lt 10) { Fail "overlap lacks two active regions at ${Rate}Hz" }
     }
     if ($Definition.Class -eq 'multi_utt') {
-        $gapStart = [int][math]::Round($Rate * 3.0)
-        $gapCount = [int][math]::Round($Rate * 0.6)
+        if ($null -eq $Definition.FirstUtteranceSamples -or $null -eq $Definition.GapSamples) { Fail "multi_utt definition is missing its audible boundary at ${Rate}Hz" }
+        $gapStart = [int]$Definition.FirstUtteranceSamples
+        $gapCount = [int]$Definition.GapSamples
+        if ($gapStart -le 0 -or $gapCount -le 0) { Fail "multi_utt has invalid audible boundary at ${Rate}Hz" }
         if ((Get-NonZeroCount $Samples ($gapStart + [int]($gapCount * 0.1)) ([int]($gapCount * 0.8))) -ne 0) { Fail "multi_utt lacks its silent separation at ${Rate}Hz" }
         if ((Get-NonZeroCount $Samples 0 $gapStart) -lt 10 -or (Get-NonZeroCount $Samples ($gapStart + $gapCount) ([int]($Rate * 0.75))) -lt 10) { Fail "multi_utt lacks two audible utterances at ${Rate}Hz" }
     }
@@ -247,9 +249,17 @@ function New-ExpectedFiles($Definitions, [int]$SourceRate, [string]$Staging) {
             $rateLabel = if ($rate -eq 16000) { '16k' } else { '24k' }
             $id = "$($definition.Id)_$rateLabel"
             $samples = Resample $definition.Samples $SourceRate $rate
+            $firstUtteranceSamples = $null
+            $gapSamples = $null
+            if ($null -ne $definition.FirstUtteranceSamples -and $null -ne $definition.GapSamples) {
+                $firstBoundary = [int][math]::Floor($definition.FirstUtteranceSamples * ([double]$rate / $SourceRate))
+                $gapBoundary = [int][math]::Floor(($definition.FirstUtteranceSamples + $definition.GapSamples) * ([double]$rate / $SourceRate))
+                $firstUtteranceSamples = $firstBoundary
+                $gapSamples = $gapBoundary - $firstBoundary
+            }
             $path = Join-Path $Staging "$id.wav"
             Write-Pcm16Wav $path $rate $samples
-            [void]$expected.Add([pscustomobject]@{ Id = $id; Path = "$id.wav"; Class = $definition.Class; Source = $definition.Source; Structure = $definition.Structure; Voice = $definition.Voice; Samples = $samples; Rate = $rate })
+            [void]$expected.Add([pscustomobject]@{ Id = $id; Path = "$id.wav"; Class = $definition.Class; Source = $definition.Source; Structure = $definition.Structure; Voice = $definition.Voice; Samples = $samples; Rate = $rate; FirstUtteranceSamples = $firstUtteranceSamples; GapSamples = $gapSamples })
         }
     }
     return @($expected | Sort-Object Path)
@@ -274,13 +284,17 @@ function New-ManifestEntries($Expected, [string]$Staging) {
     }
     return @($entries)
 }
+function ConvertTo-CanonicalJson($Value) {
+    $json = $Value | ConvertTo-Json -Depth 10
+    return $json.Replace("`r`n", "`n").Replace("`r", "`n")
+}
 function Write-Manifest([string]$Staging, $Entries) {
     $manifestPath = Join-Path $Staging 'manifest.json'
     $manifest = [ordered]@{ schema_version = 1; corpus_byte_total = [int64]0; vad_threshold_rms = [double]$VadThreshold; classes = $RequiredClasses; sample_rates_hz = $RequiredRates; files = $Entries }
     $target = [int64]0
     for ($attempt = 0; $attempt -lt 8; $attempt++) {
         $manifest.corpus_byte_total = $target
-        $json = $manifest | ConvertTo-Json -Depth 10
+        $json = ConvertTo-CanonicalJson $manifest
         [IO.File]::WriteAllText($manifestPath, $json, [Text.UTF8Encoding]::new($false))
         $total = [int64]0
         foreach ($file in @(Get-ChildItem -LiteralPath $Staging -File)) { $total += $file.Length }
@@ -371,15 +385,15 @@ try {
     $toolWav = Invoke-Tts 'tool_request_source' $toolText (Join-Path $sourceRoot 'tool.wav')
     if ($shortWav.SampleRate -ne $longWav.SampleRate -or $shortWav.SampleRate -ne $toolWav.SampleRate) { Fail 'TTS sources have inconsistent sample rates' }
     $sourceRate = $shortWav.SampleRate
-    $shortSamples = Find-LoudestSlice $shortWav.Samples $sourceRate ([int]($sourceRate * 3.0))
+    $shortSamples = $shortWav.Samples
     $truncatedSamples = Find-LoudestSlice $longWav.Samples $sourceRate ([int]($sourceRate * 2.75))
     $definitions = @(
-        [pscustomobject]@{ Id = 'utt_short'; Class = 'utt_short'; Source = $shortText; Structure = 'complete short utterance'; Voice = $Voice; Samples = $shortSamples }
+        [pscustomobject]@{ Id = 'utt_short'; Class = 'utt_short'; Source = $shortText; Structure = 'complete synthesized short utterance retained without windowing'; Voice = $Voice; Samples = $shortSamples }
         [pscustomobject]@{ Id = 'utt_long'; Class = 'utt_long'; Source = $longText; Structure = 'complete utterance longer than ten seconds'; Voice = $Voice; Samples = $longWav.Samples }
         [pscustomobject]@{ Id = 'silence'; Class = 'silence'; Source = 'digital silence: every PCM16 sample is zero'; Structure = 'digital silence'; Voice = $Voice; Samples = New-Silence ([int]($sourceRate * 1.0)) }
         [pscustomobject]@{ Id = 'noise'; Class = 'noise'; Source = 'deterministic low-amplitude noise with fixed seed 17'; Structure = 'low-energy deterministic noise'; Voice = $Voice; Samples = New-Noise ([int]($sourceRate * 1.0)) }
         [pscustomobject]@{ Id = 'overlap'; Class = 'overlap'; Source = "$shortText / $toolText"; Structure = 'two audible clips mixed with 0.75 seconds of simultaneous activity'; Voice = $Voice; Samples = Mix-Samples $shortSamples $toolWav.Samples ([int]($sourceRate * 0.75)) }
-        [pscustomobject]@{ Id = 'multi_utt'; Class = 'multi_utt'; Source = "$shortText / $toolText"; Structure = 'two audible utterances separated by 0.6 seconds of silence'; Voice = $Voice; Samples = Join-Samples @($shortSamples, (New-Silence ([int]($sourceRate * 0.6))), $toolWav.Samples) }
+        [pscustomobject]@{ Id = 'multi_utt'; Class = 'multi_utt'; Source = "$shortText / $toolText"; Structure = 'two audible utterances separated by 0.6 seconds of silence'; Voice = $Voice; Samples = Join-Samples @($shortSamples, (New-Silence ([int]($sourceRate * 0.6))), $toolWav.Samples); FirstUtteranceSamples = $shortSamples.Count; GapSamples = [int]($sourceRate * 0.6) }
         [pscustomobject]@{ Id = 'truncated'; Class = 'truncated'; Source = "cut before the natural end of: $longText"; Structure = 'loudest long-source window cut at 2.75 seconds'; Voice = $Voice; Samples = $truncatedSamples }
         [pscustomobject]@{ Id = 'tool_request'; Class = 'tool_request'; Source = $toolText; Structure = 'audible concrete calendar reminder request'; Voice = $Voice; Samples = $toolWav.Samples }
     )
