@@ -166,8 +166,8 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 }
 
 func TestPortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
-	unknown := applyPortSwap(&compositionValues{}, PortSwap{Name: "scratch-port", Value: &recordingToolExecutor{}})
-	assertPortSwapError(t, unknown, ErrUnknownPort, "scratch-port")
+	unknown := applyPortSwap(&compositionValues{}, PortSwap{Name: "unknown-port", Value: &recordingToolExecutor{}})
+	assertPortSwapError(t, unknown, ErrUnknownPort, "unknown-port")
 
 	incompatible := applyPortSwap(&compositionValues{}, PortSwap{Name: PortInferencer, Value: struct{}{}})
 	assertPortSwapError(t, incompatible, ErrIncompatiblePort, PortInferencer)
