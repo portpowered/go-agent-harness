@@ -25,11 +25,13 @@ The default endpoint is
 absent. When the fixture is running, it opens a second raw WebSocket, waits for
 `session.created`, declares 16 kHz input and PCM16 output, appends a
 deterministic PCM16 utterance in 100 ms chunks, commits it, and sends
-the LocalAI turn. The utterance is checked in as mono 16 kHz PCM16, so the
-test never invokes a TTS binary. It base64-decodes
+the LocalAI turn. LocalAI generates the response from that committed turn.
+The utterance is checked in as mono 16 kHz PCM16, so the test never invokes a
+TTS binary. It base64-decodes
 `response.output_audio.delta`, computes normalized little-endian PCM16 RMS,
 and requires RMS above `0.01`; a socket that accepts TCP but never completes
-the WebSocket protocol fails within the test deadline.
+the WebSocket protocol fails within the test deadline. Dial, read, and write
+operations are bounded to five seconds each, with a 30-second overall limit.
 
 The skipped test names the exact attempted endpoint and start command:
 
