@@ -474,11 +474,11 @@ func (d *recordingRealtimeTestDialer) dialedURL() string {
 }
 
 type recordingRealtimeTestConn struct {
-	mu                       sync.Mutex
-	writes                   [][]byte
-	inbound                  chan []byte
-	closed                   chan struct{}
-	closeOnce                sync.Once
+	mu                        sync.Mutex
+	writes                    [][]byte
+	inbound                   chan []byte
+	closed                    chan struct{}
+	closeOnce                 sync.Once
 	respondToConversationItem bool
 }
 
