@@ -103,13 +103,13 @@ func TestSelectionValidationAndAcquisition(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, got.Close())
 		require.NoError(t, got.Close())
-		require.Equal(t, audio.DeviceRegistryObservations{OpenCount: 2, ReleaseCount: 2}, r.observations())
+		require.Equal(t, audio.DeviceRegistryObservations{ListCalls: 2, OpenCount: 2, ReleaseCount: 2}, r.observations())
 
 		r = newSelectionRegistry(t)
 		r.inUse["virtual:output-choice"] = true
 		_, err = audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{InputSelector: "virtual:input-choice", OutputSelector: "virtual:output-choice"})
 		require.ErrorIs(t, err, audio.ErrDeviceInUse)
-		require.Equal(t, audio.DeviceRegistryObservations{OpenCount: 1, ReleaseCount: 1}, r.observations())
+		require.Equal(t, audio.DeviceRegistryObservations{ListCalls: 2, OpenCount: 1, ReleaseCount: 1}, r.observations())
 	})
 }
 func TestHandleDeviceLossPolicies(t *testing.T) {
