@@ -75,14 +75,6 @@ type operation struct {
 	cancel context.CancelFunc
 	err    error
 }
-type started struct {
-	op  *operation
-	ctx context.Context
-	old Conn
-	run bool
-	err error
-}
-
 type Peer struct {
 	mu          sync.RWMutex
 	state       State
@@ -127,21 +119,21 @@ func (p *Peer) Connect(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	s := p.start(false, nil)
-	if s.err != nil {
-		return s.err
+	op, runCtx, _, run, err := p.start(false, nil)
+	if err != nil {
+		return err
 	}
-	if !s.run {
-		if s.op == nil {
+	if !run {
+		if op == nil {
 			return nil
 		}
-		return waitOperation(ctx, s.op)
+		return waitOperation(ctx, op)
 	}
-	stop := context.AfterFunc(ctx, s.op.cancel)
-	err := p.run(s.ctx)
+	stop := context.AfterFunc(ctx, op.cancel)
+	err = p.run(runCtx)
 	stop()
-	s.op.cancel()
-	p.finish(s.op, err)
+	op.cancel()
+	p.finish(op, err)
 	return err
 }
 
@@ -149,50 +141,50 @@ func (p *Peer) PeerLost(cause error) error {
 	if cause == nil {
 		cause = ErrPeerLost
 	}
-	s := p.start(true, cause)
-	if s.err != nil {
-		return s.err
+	op, runCtx, old, run, err := p.start(true, cause)
+	if err != nil {
+		return err
 	}
-	closeConn(s.old)
-	if s.run {
-		go func() { p.finish(s.op, p.run(s.ctx)); s.op.cancel() }()
+	closeConn(old)
+	if run {
+		go func() { p.finish(op, p.run(runCtx)); op.cancel() }()
 	}
 	return nil
 }
 
-func (p *Peer) start(reconnect bool, cause error) started {
+func (p *Peer) start(reconnect bool, cause error) (*operation, context.Context, Conn, bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
-		return started{err: ErrPeerClosed}
+		return nil, nil, nil, false, ErrPeerClosed
 	}
 	if p.state == StateTerminalFailure {
-		return started{err: p.terminalErr}
+		return nil, nil, nil, false, p.terminalErr
 	}
 	if p.op != nil {
 		if reconnect && p.state != StateReconnecting {
-			return started{err: ErrPeerNotConnected}
+			return nil, nil, nil, false, ErrPeerNotConnected
 		}
-		return started{op: p.op}
+		return p.op, nil, nil, false, nil
 	}
 	if reconnect {
 		if p.state != StateConnected {
-			return started{err: ErrPeerNotConnected}
+			return nil, nil, nil, false, ErrPeerNotConnected
 		}
 		old := p.conn
 		p.conn = nil
 		p.attempts = 0
 		p.transitionLocked(StateReconnecting, cause, 0)
 		op, opCtx := p.newOperationLocked()
-		return started{op: op, ctx: opCtx, old: old, run: true}
+		return op, opCtx, old, true, nil
 	}
 	if p.state == StateConnected {
-		return started{}
+		return nil, nil, nil, false, nil
 	}
 	p.attempts, p.terminalErr = 0, nil
 	p.transitionLocked(StateConnecting, nil, 0)
 	op, opCtx := p.newOperationLocked()
-	return started{op: op, ctx: opCtx, run: true}
+	return op, opCtx, nil, true, nil
 }
 
 func (p *Peer) newOperationLocked() (*operation, context.Context) {
