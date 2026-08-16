@@ -113,8 +113,13 @@ func TestDeviceSinkContractsAndConcurrentClose(t *testing.T) {
 	if err := sink.Close(); err != nil || sink.Close() != nil {
 		t.Fatalf("idempotent sink close: %v", err)
 	}
-	if err := sink.WriteFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
+	var nilContext context.Context
+	if err := sink.WriteFrame(nilContext, make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
 		t.Fatalf("WriteFrame after Close = %v", err)
+	}
+	var nilSink *DeviceSink
+	if nilSink.Close() != nil {
+		t.Fatal("nil sink Close returned an error")
 	}
 
 	blocking := newBlockingDeviceHandle(DirectionOutput)

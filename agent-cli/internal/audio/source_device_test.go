@@ -57,6 +57,67 @@ func TestDeviceSourceConformanceAndValidation(t *testing.T) {
 	}
 }
 
+func TestDeviceSourceEdgeContracts(t *testing.T) {
+	var nilSource *DeviceSource
+	if nilSource.Close() != nil {
+		t.Fatal("nil source Close returned an error")
+	}
+	var nilAdapterError *DeviceAdapterError
+	if nilAdapterError.Error() != "<nil>" {
+		t.Fatalf("nil adapter error = %q", nilAdapterError.Error())
+	}
+
+	openErr := errors.New("open failed")
+	openHandle := &adapterBareHandle{direction: DirectionInput}
+	if _, err := NewDeviceSource(&adapterTestRegistryStub{handle: openHandle, err: openErr}, "input"); !errors.Is(err, openErr) || openHandle.closed != 1 {
+		t.Fatalf("open error=%v close=%d, want preserved error and one cleanup", err, openHandle.closed)
+	}
+	if _, err := NewDeviceSource(&adapterTestRegistryStub{}, "input"); !errors.Is(err, ErrNilOpenedDevice) {
+		t.Fatalf("nil opened handle error=%v", err)
+	}
+	reflectHandle := &adapterReflectHandle{direction: DirectionOutput}
+	if _, err := NewDeviceSource(&adapterTestRegistryStub{handle: reflectHandle}, "input"); !errors.Is(err, ErrDeviceDirectionMismatch) || reflectHandle.closed != 1 {
+		t.Fatalf("reflected direction error=%v close=%d", err, reflectHandle.closed)
+	}
+	noDirection := &adapterNoDirectionHandle{}
+	if _, err := NewDeviceSource(&adapterTestRegistryStub{handle: noDirection}, "input"); !errors.Is(err, ErrDeviceCapabilityMismatch) || noDirection.closed != 1 {
+		t.Fatalf("missing direction/capability error=%v close=%d", err, noDirection.closed)
+	}
+
+	badFrame := &adapterByteHandle{direction: DirectionInput, data: []byte{1}}
+	source, err := NewDeviceSource(&adapterTestRegistryStub{handle: badFrame}, "input")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nilContext context.Context
+	if err := source.ReadFrame(nilContext, make([]int16, FrameSize)); !errors.Is(err, ErrInvalidFrameSize) {
+		t.Fatalf("malformed raw frame error=%v", err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range []struct {
+		name   string
+		err    *DeviceAdapterError
+		want   string
+		target error
+	}{
+		{name: "registry", err: &DeviceAdapterError{ID: "input", Direction: DirectionInput, Err: ErrNilDeviceRegistry}, want: `open input device "input": audio device registry is nil`, target: ErrNilDeviceRegistry},
+		{name: "direction", err: &DeviceAdapterError{ID: "output", Want: DirectionInput, Got: DirectionOutput, Kind: ErrDeviceDirectionMismatch}, want: `device "output" is output; want input`, target: ErrDeviceDirectionMismatch},
+		{name: "capability", err: &DeviceAdapterError{ID: "input", Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}, want: `device "input" has no input capability for read`, target: ErrDeviceCapabilityMismatch},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.err.Error(); got != testCase.want {
+				t.Fatalf("error=%q, want %q", got, testCase.want)
+			}
+			if !errors.Is(testCase.err, testCase.target) {
+				t.Fatalf("error=%v does not expose %v", testCase.err, testCase.target)
+			}
+		})
+	}
+}
+
 func TestDeviceSourceVirtualLossAndConcurrentClose(t *testing.T) {
 	r := adapterTestRegistry(t)
 	source, err := NewDeviceSource(r, "virtual:input")
@@ -125,6 +186,28 @@ type adapterBareHandle struct {
 
 func (h *adapterBareHandle) DeviceDirection() Direction { return h.direction }
 func (h *adapterBareHandle) Close() error               { h.closed++; return nil }
+
+type adapterReflectHandle struct {
+	direction Direction
+	closed    int
+}
+
+func (h *adapterReflectHandle) Close() error { h.closed++; return nil }
+
+type adapterNoDirectionHandle struct{ closed int }
+
+func (h *adapterNoDirectionHandle) Close() error { h.closed++; return nil }
+
+type adapterByteHandle struct {
+	direction Direction
+	data      []byte
+}
+
+func (h *adapterByteHandle) DeviceDirection() Direction { return h.direction }
+func (h *adapterByteHandle) Read(context.Context) ([]byte, error) {
+	return h.data, nil
+}
+func (h *adapterByteHandle) Close() error { return nil }
 
 type adapterReadyContext struct {
 	context.Context
