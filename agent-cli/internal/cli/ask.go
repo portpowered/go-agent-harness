@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/spf13/cobra"
 )
 
@@ -34,11 +37,63 @@ type AskCommand struct {
 	askFlags    *flags.AskFlags
 	loopFlags   *flags.LoopFlags
 	globalFlags *flags.GlobalFlags
+	runAsk      func(context.Context, *agent.Config, agentloop.ExecuteInput, io.Writer) (string, error)
+}
+
+var (
+	errAskExecution     = errors.New("ask execution failed")
+	errAskLoopExecution = errors.New("ask loop execution failed")
+	errAskLoopSummary   = errors.New("ask loop summary write failed")
+	errAskInput         = errors.New("ask input construction failed")
+	errAskFlagConflict  = errors.New("ask flag conflict")
+)
+
+type askCommandError struct {
+	message    string
+	identities []error
+}
+
+func (e *askCommandError) Error() string { return e.message }
+
+func (e *askCommandError) Unwrap() []error { return e.identities }
+
+func newAskCommandError(kind error, message string, cause error) error {
+	identities := []error{kind}
+	if cause != nil {
+		identities = append(identities, cause)
+	}
+	return &askCommandError{message: message, identities: identities}
+}
+
+func wrapAskError(kind error, prefix string, cause error) error {
+	return newAskCommandError(kind, fmt.Sprintf("%s: %v", prefix, cause), cause)
+}
+
+func tagAskError(kind error, cause error) error {
+	return newAskCommandError(kind, cause.Error(), cause)
 }
 
 // NewAskCommand creates the AskCommand with the given dependencies.
 func NewAskCommand(executor *agent.Executor, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, globalFlags *flags.GlobalFlags) *AskCommand {
 	return &AskCommand{executor: executor, askFlags: askFlags, loopFlags: loopFlags, globalFlags: globalFlags}
+}
+
+func validateAskFlags(cmd *cobra.Command, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags) error {
+	if askFlags.RecordCapturePath != "" && askFlags.ReplayCapturePath != "" {
+		return newAskCommandError(errAskFlagConflict, "cannot use --record and --replay together", nil)
+	}
+	if askFlags.SessionID != "" && askFlags.ContinueLastSession {
+		return newAskCommandError(errAskFlagConflict, "cannot use session ID and continue last session together", nil)
+	}
+	if loopFlags.Loop {
+		return nil
+	}
+	for _, flag := range []string{"max-iterations", "stop-word", "context-pressure-threshold", "context-pressure-message", "trace-id"} {
+		if cmd.Flags().Changed(flag) {
+			return newAskCommandError(errAskFlagConflict, fmt.Sprintf("--%s requires --loop", flag), nil)
+		}
+	}
+	return nil
 }
 
 // Generate returns the cobra command for ask.
@@ -49,6 +104,9 @@ func (c *AskCommand) Generate() *cobra.Command {
 		Long:  "One-shot queries. Pass a prompt and optional file paths for multimodal input.\nText can also be piped via stdin: echo \"question\" | agent ask",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateAskFlags(cmd, c.askFlags, c.loopFlags); err != nil {
+				return err
+			}
 			argPrompt, filePaths := input.ParseAskArgs(args)
 
 			var stdinReader io.Reader
@@ -58,7 +116,7 @@ func (c *AskCommand) Generate() *cobra.Command {
 
 			execInput, err := services.BuildExecuteInput(stdinReader, argPrompt, filePaths)
 			if err != nil {
-				return err
+				return tagAskError(errAskInput, err)
 			}
 
 			cfg := services.BuildAgentConfigFromFlags(c.globalFlags, c.askFlags, nil, "")
@@ -78,18 +136,22 @@ func (c *AskCommand) Generate() *cobra.Command {
 				}
 				result, loopErr := c.executor.RunIterativeLoop(cmd.Context(), cfg, loopCfg, execInput, cmd.OutOrStdout())
 				if loopErr != nil {
-					return fmt.Errorf("loop execution failed: %w", loopErr)
+					return wrapAskError(errAskLoopExecution, "loop execution failed", loopErr)
 				}
 				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "\n[Loop complete: %d iteration(s), completed: %v, trace: %s]\n",
 					len(result.Iterations), result.Completed, result.TraceID); err != nil {
-					return fmt.Errorf("write loop summary: %w", err)
+					return wrapAskError(errAskLoopSummary, "write loop summary", err)
 				}
 				return nil
 			}
 
-			_, err = c.executor.RunAsk(cmd.Context(), cfg, execInput, cmd.OutOrStdout())
+			runAsk := c.executor.RunAsk
+			if c.runAsk != nil {
+				runAsk = c.runAsk
+			}
+			_, err = runAsk(cmd.Context(), cfg, execInput, cmd.OutOrStdout())
 			if err != nil {
-				return fmt.Errorf("execution failed: %w", err)
+				return wrapAskError(errAskExecution, "execution failed", err)
 			}
 			return nil
 		},
