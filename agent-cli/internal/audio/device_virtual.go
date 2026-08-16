@@ -12,10 +12,7 @@ import (
 
 const VirtualBackendName = "virtual"
 
-var (
-	ErrDeviceLost        = errors.New("device lost")
-	ErrVirtualNoLoopback = errors.New("virtual device has no loopback")
-)
+var ErrDeviceLost, ErrVirtualNoLoopback = errors.New("device lost"), errors.New("virtual device has no loopback")
 
 type DeviceLostError struct {
 	ID        DeviceID
@@ -46,34 +43,37 @@ type virtualDevice struct {
 	Device
 	caps       []VirtualCapability
 	LoopbackID DeviceID
+	pair       *virtualPair
 	Exclusive  bool
 	opened     int
 }
 
 func bad(id DeviceID, reason string) error { return &InvalidDeviceError{ID: id, Reason: reason} }
 func DefaultVirtualBackendConfig() VirtualBackendConfig {
-	return VirtualBackendConfig{Devices: []VirtualDeviceConfig{
-		{ID: "input", Name: "Virtual Input", Direction: DirectionInput, LoopbackID: "output"},
-		{ID: "output", Name: "Virtual Output", Direction: DirectionOutput, LoopbackID: "input"},
-		{ID: "exclusive", Name: "Virtual Exclusive Output", Direction: DirectionOutput, Exclusive: true},
-	}, Defaults: map[Direction]string{DirectionInput: "input", DirectionOutput: "output"}}
+	return VirtualBackendConfig{
+		Devices: []VirtualDeviceConfig{
+			{ID: "input", Name: "Virtual Input", Direction: DirectionInput, LoopbackID: "output"},
+			{ID: "output", Name: "Virtual Output", Direction: DirectionOutput, LoopbackID: "input"},
+			{ID: "exclusive", Name: "Virtual Exclusive Output", Direction: DirectionOutput, Exclusive: true},
+		},
+		Defaults: map[Direction]string{DirectionInput: "input", DirectionOutput: "output"},
+	}
 }
 func virtualID(ref string) (DeviceID, error) {
 	if strings.ContainsRune(ref, ':') && !strings.HasPrefix(ref, VirtualBackendName+":") {
 		return "", bad("", "invalid virtual device reference")
 	}
-	ref = strings.TrimPrefix(ref, VirtualBackendName+":")
-	return NewDeviceID(VirtualBackendName, ref)
+	return NewDeviceID(VirtualBackendName, strings.TrimPrefix(ref, VirtualBackendName+":"))
 }
 func compatible(a, b []VirtualCapability) bool {
-	return slices.ContainsFunc(a, func(x VirtualCapability) bool { return slices.Contains(b, x) })
+	return slices.ContainsFunc(a, func(c VirtualCapability) bool { return slices.Contains(b, c) })
 }
 func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 	id, err := virtualID(s.ID)
 	if err != nil {
 		return virtualDevice{}, err
 	}
-	d, err := NewDevice(VirtualBackendName, strings.TrimPrefix(string(id), VirtualBackendName+":"), s.Name, s.Direction)
+	d, err := NewDevice(VirtualBackendName, strings.TrimPrefix(s.ID, VirtualBackendName+":"), s.Name, s.Direction)
 	if err != nil {
 		return virtualDevice{}, err
 	}
@@ -92,7 +92,6 @@ func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 }
 
 type virtualPair struct {
-	ids     [2]DeviceID
 	open    [2]int
 	seen    [2]bool
 	queue   [][]byte
@@ -105,7 +104,6 @@ type VirtualRegistry struct {
 	mu           sync.Mutex
 	devices      map[DeviceID]*virtualDevice
 	defaults     map[Direction]DeviceID
-	pairs        map[DeviceID]*virtualPair
 	observations DeviceRegistryObservations
 }
 
@@ -113,7 +111,7 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 	if len(c.Devices) == 0 {
 		return nil, bad("", "virtual backend needs at least one device")
 	}
-	r := &VirtualRegistry{devices: map[DeviceID]*virtualDevice{}, defaults: map[Direction]DeviceID{}, pairs: map[DeviceID]*virtualPair{}}
+	r := &VirtualRegistry{devices: map[DeviceID]*virtualDevice{}, defaults: map[Direction]DeviceID{}}
 	for _, spec := range c.Devices {
 		v, err := makeVirtualDevice(spec)
 		if err != nil {
@@ -125,7 +123,7 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 		r.devices[v.ID] = &v
 	}
 	for id, a := range r.devices {
-		if a.LoopbackID == "" || r.pairs[id] != nil {
+		if a.LoopbackID == "" || a.pair != nil {
 			continue
 		}
 		b := r.devices[a.LoopbackID]
@@ -135,11 +133,9 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 		if a.Direction == b.Direction || !compatible(a.caps, b.caps) {
 			return nil, bad(id, "loopback devices have incompatible directions or capabilities")
 		}
-		p := &virtualPair{ids: [2]DeviceID{a.LoopbackID, id}, changed: make(chan struct{})}
-		if a.Direction == DirectionInput {
-			p.ids[0], p.ids[1] = p.ids[1], p.ids[0]
-		}
-		r.pairs[p.ids[0]], r.pairs[p.ids[1]] = p, p
+		p := &virtualPair{changed: make(chan struct{})}
+		b.LoopbackID = id
+		a.pair, b.pair = p, p
 	}
 	for d, ref := range c.Defaults {
 		if err := ValidateDirection(d); err != nil {
@@ -156,9 +152,6 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 	}
 	return r, nil
 }
-func (r *VirtualRegistry) device(id DeviceID) *virtualDevice {
-	return r.devices[id]
-}
 func (r *VirtualRegistry) List() ([]Device, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -172,7 +165,7 @@ func (r *VirtualRegistry) List() ([]Device, error) {
 func (r *VirtualRegistry) Capabilities(id DeviceID) ([]VirtualCapability, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if v := r.device(id); v != nil {
+	if v := r.devices[id]; v != nil {
 		return append([]VirtualCapability(nil), v.caps...), nil
 	}
 	return nil, NewDeviceNotFoundError(id)
@@ -183,7 +176,7 @@ func (r *VirtualRegistry) Default(d Direction) (Device, error) {
 	if err := ValidateDirection(d); err != nil {
 		return Device{}, err
 	}
-	if v := r.device(r.defaults[d]); v != nil {
+	if v := r.devices[r.defaults[d]]; v != nil {
 		return v.Device, nil
 	}
 	return Device{}, NewNoDefaultDeviceError(d)
@@ -192,7 +185,7 @@ func side(d Direction) int { return map[Direction]int{DirectionOutput: 1}[d] }
 func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	v := r.device(id)
+	v := r.devices[id]
 	if v == nil {
 		return nil, NewDeviceNotFoundError(id)
 	}
@@ -201,13 +194,12 @@ func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	}
 	v.opened++
 	r.observations.OpenCount++
-	p := r.pairs[id]
-	if p != nil {
+	if p := v.pair; p != nil {
 		i := side(v.Direction)
 		p.open[i]++
 		p.seen[i] = true
 	}
-	return &VirtualStream{registry: r, device: v, id: id, direction: v.Direction, pair: p}, nil
+	return &VirtualStream{registry: r, device: v}, nil
 }
 func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 	r.mu.Lock()
@@ -217,59 +209,48 @@ func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 func (r *VirtualRegistry) RemoveDevice(id DeviceID) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	v := r.device(id)
+	v := r.devices[id]
 	if v == nil {
 		return false
 	}
 	delete(r.devices, id)
-	if p := r.pairs[id]; p != nil {
+	if p := v.pair; p != nil {
 		p.signal()
 	}
 	return true
 }
-func (r *VirtualRegistry) streamError(s *VirtualStream, op string) error {
-	if r.device(s.id) == nil {
-		return &DeviceLostError{ID: s.id, Direction: s.direction}
-	}
-	if s.pair == nil {
-		return nil
-	}
-	p, i := s.pair, side(s.direction)
-	other := p.ids[1-i]
-	if r.device(other) == nil {
-		return &DeviceLostError{ID: s.id, Direction: s.direction}
-	}
-	if p.seen[1-i] && p.open[1-i] == 0 {
-		return &ClosedError{Operation: op, Path: string(other)}
-	}
-	return nil
-}
 
 type VirtualStream struct {
-	registry  *VirtualRegistry
-	device    *virtualDevice
-	id        DeviceID
-	direction Direction
-	pair      *virtualPair
-	closed    bool
+	registry *VirtualRegistry
+	device   *virtualDevice
+	closed   bool
 }
 
-func (s *VirtualStream) lock(op string) (*virtualPair, error) {
-	s.registry.mu.Lock()
-	if s.closed {
-		return s.fail(&ClosedError{Operation: op, Path: string(s.id)})
-	}
-	if err := s.registry.streamError(s, op); err != nil {
-		return s.fail(err)
-	}
-	if s.pair == nil {
-		return s.fail(ErrVirtualNoLoopback)
-	}
-	return s.pair, nil
-}
-func (s *VirtualStream) fail(err error) (*virtualPair, error) {
+func (s *VirtualStream) unlock(err error) (*virtualPair, error) {
 	s.registry.mu.Unlock()
 	return nil, err
+}
+func (s *VirtualStream) lock(op string) (*virtualPair, error) {
+	r := s.registry
+	r.mu.Lock()
+	if s.closed {
+		return s.unlock(&ClosedError{Operation: op, Path: string(s.device.ID)})
+	}
+	if r.devices[s.device.ID] == nil {
+		return s.unlock(&DeviceLostError{ID: s.device.ID, Direction: s.device.Direction})
+	}
+	p := s.device.pair
+	if p == nil {
+		return s.unlock(ErrVirtualNoLoopback)
+	}
+	i, other := side(s.device.Direction), s.device.LoopbackID
+	if r.devices[other] == nil {
+		return s.unlock(&DeviceLostError{ID: s.device.ID, Direction: s.device.Direction})
+	}
+	if p.seen[1-i] && p.open[1-i] == 0 {
+		return s.unlock(&ClosedError{Operation: op, Path: string(other)})
+	}
+	return p, nil
 }
 func (s *VirtualStream) Write(ctx context.Context, frame []byte) error {
 	if err := contextError(ctx); err != nil {
@@ -296,7 +277,7 @@ func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(p.queue) != 0 {
+		if len(p.queue) > 0 {
 			frame := append([]byte(nil), p.queue[0]...)
 			p.queue = p.queue[1:]
 			s.registry.mu.Unlock()
@@ -321,8 +302,8 @@ func (s *VirtualStream) Close() error {
 	s.closed = true
 	s.device.opened--
 	r.observations.ReleaseCount++
-	if p := s.pair; p != nil {
-		i := side(s.direction)
+	if p := s.device.pair; p != nil {
+		i := side(s.device.Direction)
 		p.open[i]--
 		p.signal()
 	}
