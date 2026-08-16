@@ -181,6 +181,26 @@ func ErrorClassification(err error) string {
 	}
 }
 
+// IsRetryable reports whether err represents a transient provider failure
+// that callers may retry. Caller deadlines are retryable at the gateway
+// boundary, while caller cancellation and all non-transient taxonomy classes
+// are not.
+func IsRetryable(err error) bool {
+	classification := ErrorClassification(err)
+	if classification == ErrorClassCancellation {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	switch classification {
+	case ErrorClassRateLimited, ErrorClassTransport:
+		return true
+	default:
+		return false
+	}
+}
+
 // NewStreamErrorValue preserves readable stream error text while exposing the
 // public gateway taxonomy classification carried by typed provider errors.
 func NewStreamErrorValue(err error) *messages.ErrorValue {

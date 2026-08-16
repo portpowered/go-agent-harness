@@ -24,6 +24,19 @@ func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 	}
 }
 
+func TestAllCommittedSessionFixturesPassWithExactCount(t *testing.T) {
+	result, err := ValidatePaths(allCommittedFixtureRoots())
+	if err != nil {
+		t.Fatalf("validate all committed session fixture roots: %v", err)
+	}
+	if result.FilesScanned != 8 {
+		t.Fatalf("ValidatePaths scanned %d committed session fixtures, want exact count 8", result.FilesScanned)
+	}
+	if len(result.Errors) != 0 {
+		t.Fatalf("all committed session fixture validation failed:\n%s", formatValidationErrors(result.Errors))
+	}
+}
+
 func TestCommittedSessionFixturesSmokeCheckReportsInvalidFixtureHygiene(t *testing.T) {
 	result, err := ValidatePaths([]string{"testdata/invalid-session-fixtures"})
 	if err != nil {
@@ -84,6 +97,11 @@ func committedFixtureRoots() []string {
 		repoPathFromHere("../../pkg/providers/openai/testdata"),
 		filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")),
 	}
+}
+
+func allCommittedFixtureRoots() []string {
+	roots := committedFixtureRoots()
+	return append(roots, repoPathFromHere("../../../agent-cli/test/integration/testdata"))
 }
 
 func repoPathFromHere(rel string) string {

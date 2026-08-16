@@ -13,6 +13,15 @@ import (
 // log is deprecated - use context-based logging instead
 var log *zap.Logger
 
+// newConsoleWriteSyncer is a behavior-preserving seam for tests that need to
+// observe console routing without replacing process-wide stdout and stderr.
+var newConsoleWriteSyncer = func() zapcore.WriteSyncer {
+	return zapcore.NewMultiWriteSyncer(
+		zapcore.AddSync(os.Stdout),
+		zapcore.AddSync(os.Stderr),
+	)
+}
+
 // LoggerConfig holds configuration for logger initialization.
 type LoggerConfig struct {
 	VerbosityLevel int    // 0 = none, 1 = info, 2+ = debug
@@ -55,10 +64,7 @@ func NewLoggerWithCloser(cfg LoggerConfig) (*zap.Logger, io.Closer, error) {
 	var logFile *os.File
 	if cfg.LogToStdout {
 		// Log to stdout/stderr
-		writeSyncer = zapcore.NewMultiWriteSyncer(
-			zapcore.AddSync(os.Stdout),
-			zapcore.AddSync(os.Stderr),
-		)
+		writeSyncer = newConsoleWriteSyncer()
 	} else {
 		// Log to file in config directory
 		if cfg.ConfigDir == "" {

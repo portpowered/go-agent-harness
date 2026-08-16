@@ -71,7 +71,7 @@ func ValidatePaths(paths []string) (Result, error) {
 
 	result := Result{FilesScanned: len(files)}
 	for _, file := range files {
-		result.Errors = append(result.Errors, gatewaytesting.ValidateSessionCaptureFile(file)...)
+		result.Errors = append(result.Errors, validateSessionFixtureFile(file)...)
 	}
 	return result, nil
 }
