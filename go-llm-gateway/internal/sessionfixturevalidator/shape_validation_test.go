@@ -212,6 +212,31 @@ func TestValidateSessionCaptureShapes_AcceptsExactOutputItemCallID(t *testing.T)
 	}
 }
 
+func TestValidateSessionCaptureShapes_AcceptsPairedStreamToolEvents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "valid-stream-tool-events.session.json")
+	writeCapture(t, path, gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "grok", Model: "grok-realtime"},
+		Session:  gatewaytesting.SessionMetadata{FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic},
+		Records: []gatewaytesting.CapturedSessionEvent{
+			streamRecord("TOOLCALL.START", `{"type":"TOOLCALL.START","tool_call_id":"call-top-level"}`),
+			streamRecord("TOOLCALL.END", `{"type":"TOOLCALL.END","value":{"tool_call_id":"call-top-level"}}`),
+			streamRecord("SYSTEM.FULL_MESSAGE", `{"type":"SYSTEM.FULL_MESSAGE","value":{"message":{"role":"tool","tool_call_id":"call-top-level"}}}`),
+			streamRecord("TOOLCALL.END", `{"type":"TOOLCALL.END","value":{"tool_call_id":"call-direct-value"}}`),
+			streamRecord("TOOLCALL.START", `{"type":"TOOLCALL.START","tool_call_id":"call-direct-value"}`),
+			streamRecord("SYSTEM.FULL_MESSAGE", `{"type":"SYSTEM.FULL_MESSAGE","value":{"role":"TOOL","ToolCallID":"call-direct-value"}}`),
+		},
+	})
+
+	result, err := ValidatePaths([]string{path})
+	if err != nil {
+		t.Fatalf("ValidatePaths returned traversal error: %v", err)
+	}
+	if result.FilesScanned != 1 || len(result.Errors) != 0 {
+		t.Fatalf("ValidatePaths result = %#v, want paired stream tool events to pass", result)
+	}
+}
+
 func TestRun_MultiViolationReportMatchesGolden(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "multi-violation.session.json")
 	writeCapture(t, path, providerRecordedCapture(
