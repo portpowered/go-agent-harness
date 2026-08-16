@@ -222,6 +222,31 @@ const resampleFrameAllocationBudget = 1
 
 var resampleAllocationSink int16
 
+func BenchmarkResampleFrameAllocationBudget(b *testing.B) {
+	frame := resamplePattern(Rate16kHz / 100)
+	b.ReportAllocs()
+
+	measured := testing.AllocsPerRun(100, func() {
+		converted, err := Resample(frame, Rate16kHz, Rate48kHz)
+		if err != nil {
+			b.Fatalf("Resample() error = %v", err)
+		}
+		resampleAllocationSink ^= converted[len(converted)-1]
+	})
+	if !resampleWithinAllocationBudget(measured, resampleFrameAllocationBudget) {
+		b.Fatalf("Resample() allocations/op = %v, want <= committed budget %d", measured, resampleFrameAllocationBudget)
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		converted, err := Resample(frame, Rate16kHz, Rate48kHz)
+		if err != nil {
+			b.Fatalf("Resample() error = %v", err)
+		}
+		resampleAllocationSink ^= converted[len(converted)-1]
+	}
+}
+
 func TestResampleAllocationBudget(t *testing.T) {
 	frame := resamplePattern(Rate16kHz / 100)
 	measured := testing.AllocsPerRun(100, func() {
