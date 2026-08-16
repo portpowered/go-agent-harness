@@ -58,6 +58,9 @@ type Source struct {
 }
 
 func (s *Source) ReadFrame(_ context.Context, buf []int16) error {
+	if len(buf) != FrameSize {
+		return fmt.Errorf("audio fixture frame has %d samples; want exactly %d", len(buf), FrameSize)
+	}
 	if s == nil || s.position >= len(s.samples) {
 		return io.EOF
 	}

@@ -123,6 +123,11 @@ func checkS4Error(t *testing.T, name string, err error) {
 	check(err.Error() != "")
 }
 func assertFrames(t *testing.T, source *Source, samples []int16) {
+	for _, size := range []int{FrameSize - 1, FrameSize + 1} {
+		if err := source.ReadFrame(context.Background(), make([]int16, size)); err == nil {
+			t.Fatalf("ReadFrame() with %d samples succeeded; want exact frame-size error", size)
+		}
+	}
 	for start := 0; start < len(samples); start += FrameSize {
 		buf := make([]int16, FrameSize)
 		for i := range buf {
