@@ -139,7 +139,11 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 			exit 1; \
 			;; \
 	esac; \
-	echo "==> test-factory-scripts executed $$test_count tests from both intended modules"
+	echo "==> test-factory-scripts executed $$test_count tests from both intended modules"; \
+	if [ "$${FACTORY_TEST_CONTRACT_CHILD:-0}" = "0" ]; then \
+		echo "==> test-factory-scripts command contract"; \
+		FACTORY_TEST_CONTRACT_CHILD=1 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_factory_script_target; \
+	fi
 
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \
