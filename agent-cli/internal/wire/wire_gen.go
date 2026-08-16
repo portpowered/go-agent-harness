@@ -19,7 +19,7 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
 	v := provideModelValidation(relaxModelValidation)
