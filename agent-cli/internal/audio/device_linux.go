@@ -6,20 +6,14 @@ package audio
 #include <stdlib.h>
 */
 import "C"
-
 import (
 	"context"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/gen2brain/malgo"
 	"sort"
 	"strings"
 	"sync"
-	"unicode"
-
-	"github.com/gen2brain/malgo"
 )
 
 const (
@@ -27,70 +21,40 @@ const (
 	linuxAlsaBackend  = "alsa"
 )
 
-type linuxBackendSpec struct {
-	name string
-	id   malgo.Backend
-}
-
-func linuxBackendSpecs() []linuxBackendSpec {
-	return []linuxBackendSpec{
-		{name: linuxPulseBackend, id: malgo.BackendPulseaudio},
-		{name: linuxAlsaBackend, id: malgo.BackendAlsa},
-	}
-}
+var linuxBackends = [...]malgo.Backend{malgo.BackendPulseaudio, malgo.BackendAlsa}
+var linuxBackendNames = [...]string{linuxPulseBackend, linuxAlsaBackend}
 
 type linuxDeviceRecord struct {
-	device    Device
+	Device
 	nativeID  malgo.DeviceID
-	backend   linuxBackendSpec
-	isDefault bool
+	backend   malgo.Backend
+	defaulted bool
 }
 
-type linuxEnumerateFunc func() ([]linuxDeviceRecord, error)
-type linuxOpenFunc func(linuxDeviceRecord) (OpenedDevice, error)
-
-// LinuxDeviceRegistry is the Linux ALSA/PulseAudio adapter for DeviceRegistry.
-// Each operation takes a fresh native snapshot, so Open revalidates IDs.
+// LinuxDeviceRegistry adapts ALSA and PulseAudio to DeviceRegistry.
 type LinuxDeviceRegistry struct {
 	mu        sync.Mutex
-	enumerate linuxEnumerateFunc
-	open      linuxOpenFunc
-	inUse     map[DeviceID]bool
+	enumerate func() ([]linuxDeviceRecord, error)
+	inUse     map[DeviceID]struct{}
 }
 
 // NewDeviceRegistry creates a lazy Linux ALSA/PulseAudio registry.
 func NewDeviceRegistry() *LinuxDeviceRegistry {
-	r := newLinuxDeviceRegistry(enumerateLinuxDevices, nil)
-	r.open = r.openNative
-	return r
+	return newLinuxDeviceRegistry(enumerateLinuxDevices)
 }
-
-// NewLinuxDeviceRegistry is the explicit platform-named constructor.
-func NewLinuxDeviceRegistry() *LinuxDeviceRegistry { return NewDeviceRegistry() }
-
-func newLinuxDeviceRegistry(enumerate linuxEnumerateFunc, open linuxOpenFunc) *LinuxDeviceRegistry {
-	r := &LinuxDeviceRegistry{enumerate: enumerate, open: open, inUse: make(map[DeviceID]bool)}
-	return r
+func newLinuxDeviceRegistry(enumerate func() ([]linuxDeviceRecord, error)) *LinuxDeviceRegistry {
+	return &LinuxDeviceRegistry{enumerate: enumerate, inUse: make(map[DeviceID]struct{})}
 }
-
-var _ DeviceRegistry = (*LinuxDeviceRegistry)(nil)
 
 func (r *LinuxDeviceRegistry) List() ([]Device, error) {
-	if r == nil {
-		return nil, errors.New("linux device registry is nil")
-	}
 	records, err := r.snapshot()
 	devices := make([]Device, len(records))
-	for i, record := range records {
-		devices[i] = record.device
+	for i := range records {
+		devices[i] = records[i].Device
 	}
 	return devices, err
 }
-
 func (r *LinuxDeviceRegistry) Default(direction Direction) (Device, error) {
-	if r == nil {
-		return Device{}, errors.New("linux device registry is nil")
-	}
 	if err := ValidateDirection(direction); err != nil {
 		return Device{}, err
 	}
@@ -99,17 +63,13 @@ func (r *LinuxDeviceRegistry) Default(direction Direction) (Device, error) {
 		return Device{}, err
 	}
 	for _, record := range records {
-		if record.device.Direction == direction && record.isDefault {
-			return record.device, nil
+		if record.Direction == direction && record.defaulted {
+			return record.Device, nil
 		}
 	}
 	return Device{}, NewNoDefaultDeviceError(direction)
 }
-
 func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
-	if r == nil {
-		return nil, errors.New("linux device registry is nil")
-	}
 	if _, _, err := ParseDeviceID(id); err != nil {
 		return nil, err
 	}
@@ -117,33 +77,24 @@ func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	if err != nil {
 		return nil, NewDeviceNotFoundError(id)
 	}
-	var record linuxDeviceRecord
-	for _, candidate := range records {
-		if candidate.device.ID == id {
-			record = candidate
+	var record *linuxDeviceRecord
+	for i := range records {
+		if records[i].ID == id {
+			record = &records[i]
 			break
 		}
 	}
-	if record.device.ID == "" {
+	if record == nil {
 		return nil, NewDeviceNotFoundError(id)
 	}
-
 	r.mu.Lock()
-	if r.inUse == nil {
-		r.inUse = make(map[DeviceID]bool)
-	}
-	if r.inUse[id] {
+	if _, ok := r.inUse[id]; ok {
 		r.mu.Unlock()
 		return nil, NewDeviceInUseError(id)
 	}
-	r.inUse[id] = true
-	open := r.open
+	r.inUse[id] = struct{}{}
 	r.mu.Unlock()
-	if open == nil {
-		r.release(id)
-		return nil, errors.New("linux device registry opener is nil")
-	}
-	opened, err := open(record)
+	opened, err := r.openNative(*record)
 	if err != nil || opened == nil {
 		r.release(id)
 		if err == nil {
@@ -151,200 +102,141 @@ func (r *LinuxDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 		}
 		return nil, mapLinuxOpenError(id, err)
 	}
-	if native, ok := opened.(*LinuxOpenedDevice); ok {
-		native.release = func() { r.release(id) }
-		return native, nil
+	if render, ok := opened.(*linuxOpenedDevice); ok {
+		render.release = func() { r.release(id) }
+		return render, nil
 	}
 	return &linuxRegistryHandle{inner: opened, registry: r, id: id}, nil
 }
-
 func (r *LinuxDeviceRegistry) snapshot() ([]linuxDeviceRecord, error) {
-	r.mu.Lock()
-	enumerate := r.enumerate
-	r.mu.Unlock()
-	if enumerate == nil {
-		return nil, errors.New("linux device registry enumerator is nil")
-	}
-	records, err := enumerate()
+	records, err := r.enumerate()
 	return canonicalLinuxRecords(records), err
 }
-
-func (r *LinuxDeviceRegistry) release(id DeviceID) {
-	r.mu.Lock()
-	delete(r.inUse, id)
-	r.mu.Unlock()
-}
-
+func (r *LinuxDeviceRegistry) release(id DeviceID) { r.mu.Lock(); delete(r.inUse, id); r.mu.Unlock() }
 func canonicalLinuxRecords(records []linuxDeviceRecord) []linuxDeviceRecord {
 	records = append([]linuxDeviceRecord(nil), records...)
-	sort.SliceStable(records, func(i, j int) bool {
-		if records[i].device.ID != records[j].device.ID {
-			return records[i].device.ID < records[j].device.ID
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].ID != records[j].ID {
+			return records[i].ID < records[j].ID
 		}
-		if records[i].device.Display() != records[j].device.Display() {
-			return records[i].device.Display() < records[j].device.Display()
-		}
-		return records[i].nativeID.String() < records[j].nativeID.String()
+		return records[i].Display() < records[j].Display()
 	})
 	unique := records[:0]
 	for _, record := range records {
-		if len(unique) > 0 && unique[len(unique)-1].device.ID == record.device.ID {
-			unique[len(unique)-1].isDefault = unique[len(unique)-1].isDefault || record.isDefault
+		if len(unique) > 0 && unique[len(unique)-1].ID == record.ID {
+			unique[len(unique)-1].defaulted = unique[len(unique)-1].defaulted || record.defaulted
 			continue
 		}
 		unique = append(unique, record)
 	}
 	return unique
 }
-
 func enumerateLinuxDevices() ([]linuxDeviceRecord, error) {
-	results := make(map[string][]linuxDeviceRecord)
+	var byBackend [2][]linuxDeviceRecord
 	var errs []error
-	for _, spec := range linuxBackendSpecs() {
-		records, err := enumerateLinuxBackend(spec)
-		results[spec.name] = records
+	for i, backend := range linuxBackends {
+		var err error
+		byBackend[i], err = enumerateLinuxBackend(backend, linuxBackendNames[i])
 		if err != nil {
-			errs = append(errs, fmt.Errorf("linux %s: %w", spec.name, err))
+			errs = append(errs, fmt.Errorf("linux %s: %w", linuxBackendNames[i], err))
 		}
 	}
-	selected := selectLinuxBackendRecords(results)
+	selected := append([]linuxDeviceRecord(nil), byBackend[0]...)
+	for _, record := range byBackend[1] {
+		fallback := true
+		for _, pulse := range byBackend[0] {
+			fallback = fallback && pulse.Direction != record.Direction
+		}
+		if fallback {
+			selected = append(selected, record)
+		}
+	}
 	if len(selected) > 0 {
 		return selected, nil
 	}
-	return selected, errors.Join(errs...)
+	return nil, errors.Join(append(errs, errors.New("no usable ALSA or PulseAudio endpoints"))...)
 }
-
-func selectLinuxBackendRecords(results map[string][]linuxDeviceRecord) []linuxDeviceRecord {
-	var selected []linuxDeviceRecord
-	for _, direction := range []Direction{DirectionInput, DirectionOutput} {
-		pulse := recordsForDirection(results[linuxPulseBackend], direction)
-		if len(pulse) > 0 {
-			selected = append(selected, pulse...)
-		} else {
-			selected = append(selected, recordsForDirection(results[linuxAlsaBackend], direction)...)
-		}
-	}
-	return canonicalLinuxRecords(selected)
-}
-
-func recordsForDirection(records []linuxDeviceRecord, direction Direction) []linuxDeviceRecord {
-	filtered := make([]linuxDeviceRecord, 0, len(records))
-	for _, record := range records {
-		if record.device.Direction == direction {
-			filtered = append(filtered, record)
-		}
-	}
-	return filtered
-}
-
-func enumerateLinuxBackend(spec linuxBackendSpec) ([]linuxDeviceRecord, error) {
-	ctx, err := malgo.InitContext([]malgo.Backend{spec.id}, malgo.ContextConfig{
-		Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1},
-	}, nil)
+func enumerateLinuxBackend(backend malgo.Backend, name string) (records []linuxDeviceRecord, err error) {
+	ctx, err := malgo.InitContext([]malgo.Backend{backend}, malgo.ContextConfig{Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1}}, nil)
 	if err != nil {
 		return nil, err
 	}
-	var records []linuxDeviceRecord
-	var errs []error
+	defer func() { _ = cleanupLinuxContext(ctx) }()
 	for _, request := range []struct {
-		kind malgo.DeviceType
-		dir  Direction
+		kind      malgo.DeviceType
+		direction Direction
 	}{{malgo.Capture, DirectionInput}, {malgo.Playback, DirectionOutput}} {
-		infos, err := ctx.Devices(request.kind)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s enumeration: %w", request.dir, err))
-			continue
+		infos, e := ctx.Devices(request.kind)
+		if e != nil {
+			return records, fmt.Errorf("%s %s enumeration: %w", name, request.direction, e)
 		}
 		for _, info := range infos {
-			record, err := newLinuxDeviceRecord(spec, request.dir, info)
-			if err != nil {
-				errs = append(errs, err)
-				continue
+			record, e := newLinuxDeviceRecord(backend, name, request.direction, info)
+			if e == nil {
+				records = append(records, record)
 			}
-			records = append(records, record)
 		}
 	}
-	if err := cleanupLinuxContext(ctx); err != nil {
-		errs = append(errs, err)
-	}
-	return canonicalLinuxRecords(records), errors.Join(errs...)
+	return records, nil
 }
-
-func newLinuxDeviceRecord(spec linuxBackendSpec, direction Direction, info malgo.DeviceInfo) (linuxDeviceRecord, error) {
-	nativeID, err := linuxNativeIdentifier(info.ID)
-	if err != nil {
-		return linuxDeviceRecord{}, fmt.Errorf("%s %s device: %w", spec.name, direction, err)
+func newLinuxDeviceRecord(backend malgo.Backend, name string, direction Direction, info malgo.DeviceInfo) (linuxDeviceRecord, error) {
+	nativeID := info.ID.String()
+	if nativeID == "00" {
+		return linuxDeviceRecord{}, fmt.Errorf("%s %s device has an empty native ID", name, direction)
 	}
-	name := strings.TrimSpace(info.Name())
-	if name == "" {
-		name = nativeID
+	display := strings.TrimSpace(info.Name())
+	if display == "" {
+		display = nativeID
 	}
-	device, err := NewDevice(spec.name, direction.String()+":"+nativeID, name, direction)
+	device, err := NewDevice(name, direction.String()+":"+nativeID, display, direction)
 	if err != nil {
 		return linuxDeviceRecord{}, err
 	}
-	return linuxDeviceRecord{device: device, nativeID: info.ID, backend: spec, isDefault: info.IsDefault != 0}, nil
+	return linuxDeviceRecord{Device: device, nativeID: info.ID, backend: backend, defaulted: info.IsDefault != 0}, nil
 }
-
-func linuxNativeIdentifier(id malgo.DeviceID) (string, error) {
-	encoded := id.String()
-	decoded, err := hex.DecodeString(encoded)
-	if err != nil {
-		return "", err
-	}
-	name := strings.TrimRight(string(decoded), "\x00")
-	if name != "" && strings.TrimSpace(name) == name && strings.IndexFunc(name, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r)
-	}) < 0 {
-		return name, nil
-	}
-	if encoded == "" || encoded == "00" {
-		return "", errors.New("native ID is empty")
-	}
-	return encoded, nil
-}
-
 func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord) (OpenedDevice, error) {
-	ctx, err := malgo.InitContext([]malgo.Backend{record.backend.id}, malgo.ContextConfig{
-		Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1},
-	}, nil)
+	ctx, err := malgo.InitContext([]malgo.Backend{record.backend}, malgo.ContextConfig{Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1}}, nil)
 	if err != nil {
 		return nil, err
 	}
-	kind := malgo.Playback
-	config := malgo.DefaultDeviceConfig(kind)
-	if record.device.Direction == DirectionInput {
-		kind = malgo.Capture
-		config = malgo.DefaultDeviceConfig(kind)
+	kind, config := malgo.Playback, malgo.DefaultDeviceConfig(malgo.Playback)
+	if record.Direction == DirectionInput {
+		kind, config = malgo.Capture, malgo.DefaultDeviceConfig(malgo.Capture)
 	}
-	config.SampleRate = uint32(SampleRate)
-	config.Alsa.NoMMap = 1
+	config.SampleRate, config.Alsa.NoMMap = uint32(SampleRate), 1
+	nativeID := record.nativeID.Pointer()
+	defer C.free(nativeID)
 	if kind == malgo.Capture {
-		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(Channels)
+		config.Capture.Format, config.Capture.Channels, config.Capture.DeviceID = malgo.FormatS16, uint32(Channels), nativeID
 	} else {
-		config.Playback.Format, config.Playback.Channels = malgo.FormatS16, uint32(Channels)
+		config.Playback.Format, config.Playback.Channels, config.Playback.DeviceID = malgo.FormatS16, uint32(Channels), nativeID
 	}
-	nativeID := record.nativeID
-	nativeIDPointer := nativeID.Pointer()
-	defer C.free(nativeIDPointer)
+	var opened OpenedDevice
+	var handle *linuxOpenedDevice
+	var microphone *MicrophoneSource
+	callbacks := malgo.DeviceCallbacks{}
 	if kind == malgo.Capture {
-		config.Capture.DeviceID = nativeIDPointer
+		microphone = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
+		opened, callbacks.Data = microphone, func(_, input []byte, frames uint32) { microphone.onCapture(input, int(frames)) }
 	} else {
-		config.Playback.DeviceID = nativeIDPointer
+		handle = &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx}
+		opened, callbacks.Data = handle, handle.onData
 	}
-	handle := &LinuxOpenedDevice{id: record.device.ID, direction: record.device.Direction, context: ctx}
-	device, err := malgo.InitDevice(ctx.Context, config, malgo.DeviceCallbacks{Data: handle.onData})
+	device, err := malgo.InitDevice(ctx.Context, config, callbacks)
 	if err != nil {
 		return nil, errors.Join(err, cleanupLinuxContext(ctx))
 	}
-	handle.device, handle.frames = device, make(chan []int16, 64)
-	if err := device.Start(); err != nil {
+	if handle != nil {
+		handle.device = device
+	} else {
+		microphone.device = device
+	}
+	if err = device.Start(); err != nil {
 		device.Uninit()
 		return nil, errors.Join(err, cleanupLinuxContext(ctx))
 	}
-	return handle, nil
+	return opened, nil
 }
-
 func cleanupLinuxContext(ctx *malgo.AllocatedContext) error {
 	if ctx == nil {
 		return nil
@@ -353,102 +245,43 @@ func cleanupLinuxContext(ctx *malgo.AllocatedContext) error {
 	ctx.Free()
 	return err
 }
-
 func mapLinuxOpenError(id DeviceID, err error) error {
-	if errors.Is(err, malgo.ErrBusy) || errors.Is(err, malgo.ErrAlreadyInUse) {
+	switch {
+	case errors.Is(err, malgo.ErrBusy), errors.Is(err, malgo.ErrAlreadyInUse):
 		return NewDeviceInUseError(id)
-	}
-	if errors.Is(err, malgo.ErrNoDevice) || errors.Is(err, malgo.ErrDoesNotExist) || errors.Is(err, malgo.ErrUnavailable) {
+	case errors.Is(err, malgo.ErrNoDevice), errors.Is(err, malgo.ErrDoesNotExist), errors.Is(err, malgo.ErrUnavailable):
 		return NewDeviceNotFoundError(id)
+	default:
+		return fmt.Errorf("open device %q: %w", id, err)
 	}
-	return fmt.Errorf("open device %q: %w", id, err)
 }
 
-// LinuxOpenedDevice is the concrete capture or render handle returned by Open.
-type LinuxOpenedDevice struct {
+type linuxOpenedDevice struct {
 	mu        sync.Mutex
 	closeOnce sync.Once
 	id        DeviceID
 	direction Direction
 	context   *malgo.AllocatedContext
 	device    *malgo.Device
-	frames    chan []int16
-	capture   []int16
 	playback  []int16
 	closed    bool
-	closeErr  error
 	positive  bool
+	closeErr  error
 	release   func()
 }
 
-var (
-	_ OpenedDevice = (*LinuxOpenedDevice)(nil)
-	_ AudioSource  = (*LinuxOpenedDevice)(nil)
-	_ AudioSink    = (*LinuxOpenedDevice)(nil)
-)
-
-func (d *LinuxOpenedDevice) onData(output, input []byte, _ uint32) {
+func (d *linuxOpenedDevice) onData(output, _ []byte, _ uint32) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
 		return
 	}
-	if d.direction == DirectionInput {
-		for i := 0; i+1 < len(input); i += 2 {
-			sample := int16(binary.LittleEndian.Uint16(input[i:]))
-			d.positive = d.positive || sample != 0
-			d.capture = append(d.capture, sample)
-		}
-		for len(d.capture) >= FrameSize {
-			frame := append([]int16(nil), d.capture[:FrameSize]...)
-			d.capture = d.capture[FrameSize:]
-			select {
-			case d.frames <- frame:
-			default:
-				select {
-				case <-d.frames:
-				default:
-				}
-				select {
-				case d.frames <- frame:
-				default:
-				}
-			}
-		}
-		return
-	}
 	clear(output)
 	n := min(len(output)/2, len(d.playback))
-	for i, sample := range d.playback[:n] {
-		binary.LittleEndian.PutUint16(output[i*2:], uint16(sample))
-		d.positive = d.positive || sample != 0
-	}
-	d.playback = d.playback[n:]
+	encodePCM16(output[:n*2], d.playback[:n])
+	d.positive, d.playback = d.positive || n > 0, d.playback[n:]
 }
-
-func (d *LinuxOpenedDevice) ReadFrame(ctx context.Context, buf []int16) error {
-	if d.direction != DirectionInput {
-		return fmt.Errorf("audio device %q is output-only", d.id)
-	}
-	if err := validateFrame("read", buf); err != nil {
-		return err
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	select {
-	case frame, ok := <-d.frames:
-		if !ok {
-			return io.EOF
-		}
-		copy(buf, frame)
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (d *LinuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error {
+func (d *linuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error {
 	if d.direction != DirectionOutput {
 		return fmt.Errorf("audio device %q is input-only", d.id)
 	}
@@ -469,40 +302,31 @@ func (d *LinuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error
 	}
 	return nil
 }
-
-func (d *LinuxOpenedDevice) PositiveAudioEvidence() bool {
+func (d *linuxOpenedDevice) PositiveAudioEvidence() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.positive
 }
-
-func (d *LinuxOpenedDevice) Close() error {
+func (d *linuxOpenedDevice) Close() error {
 	if d == nil {
 		return nil
 	}
 	d.closeOnce.Do(func() {
 		d.mu.Lock()
 		d.closed = true
-		device, ctx, frames, release := d.device, d.context, d.frames, d.release
+		device, ctx := d.device, d.context
 		d.mu.Unlock()
-		d.closeErr = errors.Join(deviceStop(device), cleanupLinuxContext(ctx))
-		if frames != nil {
-			close(frames)
+		var stopErr error
+		if device != nil {
+			stopErr = device.Stop()
+			device.Uninit()
 		}
-		if release != nil {
-			release()
+		d.closeErr = errors.Join(stopErr, cleanupLinuxContext(ctx))
+		if d.release != nil {
+			d.release()
 		}
 	})
 	return d.closeErr
-}
-
-func deviceStop(device *malgo.Device) error {
-	if device == nil {
-		return nil
-	}
-	err := device.Stop()
-	device.Uninit()
-	return err
 }
 
 type linuxRegistryHandle struct {
@@ -514,9 +338,6 @@ type linuxRegistryHandle struct {
 }
 
 func (h *linuxRegistryHandle) Close() error {
-	h.once.Do(func() {
-		h.err = h.inner.Close()
-		h.registry.release(h.id)
-	})
+	h.once.Do(func() { h.err = h.inner.Close(); h.registry.release(h.id) })
 	return h.err
 }
