@@ -168,9 +168,10 @@ func (w *ClientDeviceOutput) Write(source []byte) (int, error) {
 	if w == nil || w.inner == nil {
 		return 0, ErrNilClientBoundary
 	}
+	observed := append([]byte(nil), source...)
 	n, err := w.inner.Write(source)
 	if n > 0 && n <= len(source) {
-		w.capture.observe(DirectionOut, StreamDeviceOut, source[:n], n, err)
+		w.capture.observe(DirectionOut, StreamDeviceOut, observed[:n], n, err)
 	}
 	return n, err
 }
@@ -187,10 +188,11 @@ func (c *ClientWebSocket) WriteMessage(messageType int, payload []byte) error {
 	if c == nil || c.inner == nil {
 		return ErrNilClientBoundary
 	}
+	observed := append([]byte(nil), payload...)
 	if err := c.inner.WriteMessage(messageType, payload); err != nil {
 		return err
 	}
-	c.capture.observe(DirectionOut, StreamWS, payload, 1, nil)
+	c.capture.observe(DirectionOut, StreamWS, observed, 1, nil)
 	return nil
 }
 

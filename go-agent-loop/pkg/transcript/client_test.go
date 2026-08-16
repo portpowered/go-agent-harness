@@ -176,6 +176,35 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 	}
 }
 
+func TestClientCaptureCopiesOutboundPayloadBeforeLiveMutation(t *testing.T) {
+	sink := &clientRecordSink{}
+	capture := NewClientCapture(sink, func() (uint64, time.Time) {
+		return 1, time.Unix(1, 0)
+	})
+
+	devicePayload := []byte{0x10, 0x00, 0xff}
+	deviceWriter := capture.WrapDeviceOutput(mutatingClientWriter{})
+	if n, err := deviceWriter.Write(devicePayload); n != len(devicePayload) || err != nil {
+		t.Fatalf("device Write = (%d, %v), want full success", n, err)
+	}
+
+	webSocketPayload := []byte{0x20, 0x00, 0xfe}
+	webSocket := capture.WrapWebSocket(mutatingWebSocket{})
+	if err := webSocket.WriteMessage(1, webSocketPayload); err != nil {
+		t.Fatalf("websocket WriteMessage: %v", err)
+	}
+
+	if len(sink.records) != 2 {
+		t.Fatalf("captured records = %d, want 2", len(sink.records))
+	}
+	if !bytes.Equal(sink.records[0].Payload, []byte{0x10, 0x00, 0xff}) {
+		t.Fatalf("device payload = %x, want original bytes", sink.records[0].Payload)
+	}
+	if !bytes.Equal(sink.records[1].Payload, []byte{0x20, 0x00, 0xfe}) {
+		t.Fatalf("websocket payload = %x, want original bytes", sink.records[1].Payload)
+	}
+}
+
 type clientRecordSink struct {
 	records []Record
 }
@@ -216,6 +245,15 @@ type scriptedWriter struct {
 	calls int
 }
 
+type mutatingClientWriter struct{}
+
+func (mutatingClientWriter) Write(source []byte) (int, error) {
+	for index := range source {
+		source[index] = 0
+	}
+	return len(source), nil
+}
+
 func (w *scriptedWriter) Write(source []byte) (int, error) {
 	w.calls++
 	w.seen = append(w.seen[:0], source...)
@@ -246,6 +284,19 @@ func (c *scriptedWebSocket) ReadMessage() (int, []byte, error) {
 	payload := c.incoming[0]
 	c.incoming = c.incoming[1:]
 	return 6 + c.receiveCalls, payload, nil
+}
+
+type mutatingWebSocket struct{}
+
+func (mutatingWebSocket) WriteMessage(_ int, payload []byte) error {
+	for index := range payload {
+		payload[index] = 0
+	}
+	return nil
+}
+
+func (mutatingWebSocket) ReadMessage() (int, []byte, error) {
+	return 0, nil, io.EOF
 }
 
 func baselineSendErr(c *scriptedWebSocket) error {
