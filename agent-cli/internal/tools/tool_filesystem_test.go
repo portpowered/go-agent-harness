@@ -13,6 +13,7 @@ import (
 	"image/png"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -579,18 +580,23 @@ func TestFilesystemValidationAndMediaErrorContracts(t *testing.T) {
 	msgs, err = readTool.Execute(ctx, map[string]any{"path": invalidImagePath})
 	requireToolTextContains(t, msgs, err, "read image: decode image")
 
-	wavPath := filepath.Join(workspace, "tone.wav")
-	if err := os.WriteFile(wavPath, minimalWAV(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	msgs, err = readTool.Execute(ctx, map[string]any{"path": wavPath})
-	if err != nil || len(msgs) != 1 || len(msgs[0].ContentParts) != 1 {
-		t.Fatalf("audio read result = %#v, %v", msgs, err)
-	}
-	audio, ok := msgs[0].ContentParts[0].(messages.AudioPart)
-	if !ok || audio.MediaType != "audio/pcm" || len(audio.Bytes) == 0 {
-		t.Fatalf("audio result = %#v; want non-empty PCM audio", msgs[0].ContentParts[0])
-	}
+	t.Run("audio read when ffmpeg is available", func(t *testing.T) {
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			t.Skipf("ffmpeg is required for WAV conversion assertion: %v", err)
+		}
+		wavPath := filepath.Join(workspace, "tone.wav")
+		if err := os.WriteFile(wavPath, minimalWAV(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		msgs, err := readTool.Execute(ctx, map[string]any{"path": wavPath})
+		if err != nil || len(msgs) != 1 || len(msgs[0].ContentParts) != 1 {
+			t.Fatalf("audio read result = %#v, %v", msgs, err)
+		}
+		audio, ok := msgs[0].ContentParts[0].(messages.AudioPart)
+		if !ok || audio.MediaType != "audio/pcm" || len(audio.Bytes) == 0 {
+			t.Fatalf("audio result = %#v; want non-empty PCM audio", msgs[0].ContentParts[0])
+		}
+	})
 
 	writeTool := NewWriteFileTool("", false)
 	msgs, err = writeTool.Execute(ctx, map[string]any{})
@@ -616,7 +622,6 @@ func TestFilesystemValidationAndMediaErrorContracts(t *testing.T) {
 	requireToolTextContains(t, msgs, err, "FILE:")
 	msgs, err = listTool.Execute(ctx, map[string]any{"path": filepath.Join(workspace, "missing-dir")})
 	requireToolTextContains(t, msgs, err, "failed to read directory:")
-
 }
 
 func minimalWAV() []byte {

@@ -74,14 +74,6 @@ func TestS4_EditErrorPathsAndAtomicity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	permissionReady := runtime.GOOS != "windows"
-	if permissionReady {
-		if err := os.Chmod(permissionPath, 0o000); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = os.Chmod(permissionPath, 0o644) })
-	}
-
 	newTextMissing := func() (string, error) {
 		tool := NewEditFileTool("", false)
 		msgs, err := tool.Execute(context.Background(), map[string]any{
@@ -135,7 +127,14 @@ func TestS4_EditErrorPathsAndAtomicity(t *testing.T) {
 		{
 			name: "permission denied",
 			run: func() (string, error) {
+				if err := os.Chmod(permissionPath, 0o000); err != nil {
+					return "", err
+				}
 				err := editFile(&hostFs{}, permissionPath, "NEEDLE", "changed")
+				restoreErr := os.Chmod(permissionPath, 0o644)
+				if err == nil {
+					err = restoreErr
+				}
 				if err == nil {
 					return "", nil
 				}
