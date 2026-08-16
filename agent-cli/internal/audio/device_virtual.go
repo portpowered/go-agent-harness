@@ -19,10 +19,11 @@ type DeviceLostError struct {
 	Direction Direction
 }
 
-func (e *DeviceLostError) Error() string {
-	return fmt.Sprintf("device %q (%s) was lost", e.ID, e.Direction)
+func lostMessage(id DeviceID, direction Direction) string {
+	return fmt.Sprintf("device %q (%s) was lost", id, direction)
 }
-func (*DeviceLostError) Unwrap() error { return ErrDeviceLost }
+func (e *DeviceLostError) Error() string { return lostMessage(e.ID, e.Direction) }
+func (*DeviceLostError) Unwrap() error   { return ErrDeviceLost }
 
 type VirtualCapability struct {
 	SampleRate, Channels, BitDepth int
@@ -41,11 +42,9 @@ type VirtualBackendConfig struct {
 }
 type virtualDevice struct {
 	Device
-	caps       []VirtualCapability
-	LoopbackID DeviceID
-	pair       *virtualPair
-	Exclusive  bool
-	opened     int
+	spec   VirtualDeviceConfig
+	pair   *virtualPair
+	opened int
 }
 
 func bad(id DeviceID, reason string) error { return &InvalidDeviceError{ID: id, Reason: reason} }
@@ -88,7 +87,8 @@ func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 			return virtualDevice{}, bad(id, err.Error())
 		}
 	}
-	return virtualDevice{Device: d, caps: caps, LoopbackID: loopback, Exclusive: s.Exclusive}, nil
+	s.Capabilities, s.LoopbackID = caps, loopback
+	return virtualDevice{Device: d, spec: s}, nil
 }
 
 type virtualPair struct {
@@ -122,19 +122,19 @@ func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
 		}
 		r.devices[v.ID] = &v
 	}
-	for id, a := range r.devices {
-		if a.LoopbackID == "" || a.pair != nil {
+	for _, a := range r.devices {
+		if a.spec.LoopbackID == "" || a.pair != nil {
 			continue
 		}
-		b := r.devices[a.LoopbackID]
+		b := r.devices[a.spec.LoopbackID]
 		if b == nil {
-			return nil, bad(id, fmt.Sprintf("loopback device %q is outside the topology", a.LoopbackID))
+			return nil, bad(a.ID, fmt.Sprintf("loopback device %q is outside the topology", a.spec.LoopbackID))
 		}
-		if a.Direction == b.Direction || !compatible(a.caps, b.caps) {
-			return nil, bad(id, "loopback devices have incompatible directions or capabilities")
+		if a.Direction == b.Direction || !compatible(a.spec.Capabilities, b.spec.Capabilities) {
+			return nil, bad(a.ID, "loopback devices have incompatible directions or capabilities")
 		}
 		p := &virtualPair{changed: make(chan struct{})}
-		b.LoopbackID = id
+		b.spec.LoopbackID = a.ID
 		a.pair, b.pair = p, p
 	}
 	for d, ref := range c.Defaults {
@@ -166,7 +166,7 @@ func (r *VirtualRegistry) Capabilities(id DeviceID) ([]VirtualCapability, error)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if v := r.devices[id]; v != nil {
-		return append([]VirtualCapability(nil), v.caps...), nil
+		return append([]VirtualCapability(nil), v.spec.Capabilities...), nil
 	}
 	return nil, NewDeviceNotFoundError(id)
 }
@@ -181,7 +181,8 @@ func (r *VirtualRegistry) Default(d Direction) (Device, error) {
 	}
 	return Device{}, NewNoDefaultDeviceError(d)
 }
-func side(d Direction) int { return map[Direction]int{DirectionOutput: 1}[d] }
+func side(d Direction) int                                 { return map[Direction]int{DirectionOutput: 1}[d] }
+func fail(mu *sync.Mutex, err error) (*virtualPair, error) { mu.Unlock(); return nil, err }
 func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -189,7 +190,7 @@ func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	if v == nil {
 		return nil, NewDeviceNotFoundError(id)
 	}
-	if v.Exclusive && v.opened != 0 {
+	if v.spec.Exclusive && v.opened != 0 {
 		return nil, NewDeviceInUseError(id)
 	}
 	v.opened++
@@ -226,29 +227,25 @@ type VirtualStream struct {
 	closed   bool
 }
 
-func (s *VirtualStream) unlock(err error) (*virtualPair, error) {
-	s.registry.mu.Unlock()
-	return nil, err
-}
 func (s *VirtualStream) lock(op string) (*virtualPair, error) {
 	r := s.registry
 	r.mu.Lock()
 	if s.closed {
-		return s.unlock(&ClosedError{Operation: op, Path: string(s.device.ID)})
+		return fail(&r.mu, &ClosedError{Operation: op, Path: string(s.device.ID)})
 	}
 	if r.devices[s.device.ID] == nil {
-		return s.unlock(&DeviceLostError{ID: s.device.ID, Direction: s.device.Direction})
+		return fail(&r.mu, &DeviceLostError{ID: s.device.ID, Direction: s.device.Direction})
 	}
 	p := s.device.pair
 	if p == nil {
-		return s.unlock(ErrVirtualNoLoopback)
+		return fail(&r.mu, ErrVirtualNoLoopback)
 	}
-	i, other := side(s.device.Direction), s.device.LoopbackID
+	i, other := side(s.device.Direction), s.device.spec.LoopbackID
 	if r.devices[other] == nil {
-		return s.unlock(&DeviceLostError{ID: s.device.ID, Direction: s.device.Direction})
+		return fail(&r.mu, &DeviceLostError{ID: s.device.ID, Direction: s.device.Direction})
 	}
 	if p.seen[1-i] && p.open[1-i] == 0 {
-		return s.unlock(&ClosedError{Operation: op, Path: string(other)})
+		return fail(&r.mu, &ClosedError{Operation: op, Path: string(other)})
 	}
 	return p, nil
 }

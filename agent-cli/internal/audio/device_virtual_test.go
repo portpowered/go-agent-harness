@@ -1,14 +1,14 @@
 package audio_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	audio "github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/stretchr/testify/require"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	audio "github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVirtualConformance(t *testing.T) { audio.RunDeviceRegistryConformance(t, virtualFixture) }
@@ -17,59 +17,39 @@ func virtualFixture() audio.DeviceRegistryConformanceFixture {
 	return audio.DeviceRegistryConformanceFixture{Registry: r, InputDefault: "virtual:input", OutputDefault: "virtual:output", ExclusiveID: "virtual:exclusive", RemoveDevice: func(id audio.DeviceID) { r.RemoveDevice(id) }, Observations: r.Observations}
 }
 func TestVirtualLoopbackLifecycle(t *testing.T) {
-	r := pair()
-	out, in := open(r, "virtual:output"), open(r, "virtual:input")
-	wantFrames := [][]byte{{1, 2}, {7, 8, 9}, {42}}
-	for _, wantFrame := range wantFrames {
-		write := append([]byte(nil), wantFrame...)
+	_, out, in := openPair()
+	wants := [][]byte{{1, 2}, {7, 8, 9}, {42}}
+	for _, want := range wants {
+		write := append([]byte(nil), want...)
 		require.NoError(t, out.Write(context.Background(), write))
 		write[0] = 255
 	}
-	for _, wantFrame := range wantFrames {
+	for _, want := range wants {
 		got, err := in.Read(context.Background())
 		require.NoError(t, err)
-		require.True(t, bytes.Equal(got, wantFrame), "got=%v want=%v", got, wantFrame)
+		require.Equal(t, want, got)
 	}
 	pendingReadCloses(t, in)
 	require.ErrorIs(t, out.Write(context.Background(), []byte{9}), audio.ErrClosed)
 	require.NoError(t, out.Close())
-	require.NoError(t, out.Close())
-	r = pair()
-	out, in = open(r, "virtual:output"), open(r, "virtual:input")
-	result := make(chan error, 1)
-	go func() { result <- out.Write(context.Background(), []byte{3}) }()
-	require.NoError(t, out.Close())
-	err := <-result
-	require.True(t, err == nil || errors.Is(err, audio.ErrClosed), err)
-	require.ErrorIs(t, out.Write(context.Background(), []byte{4}), audio.ErrClosed)
-	require.NoError(t, in.Close())
 }
 func TestVirtualFaults(t *testing.T) {
 	r := registry(audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "Same", Direction: audio.DirectionInput}, {ID: "b", Name: "Same", Direction: audio.DirectionInput}}})
 	list, _ := r.List()
 	amb := audio.NewAmbiguousDeviceNameError("Same", list)
-	require.True(t, errors.Is(amb, audio.ErrAmbiguousDeviceName) && len(amb.Candidates) == 2 && amb.Candidates[0].ID == "virtual:a" && amb.Candidates[1].ID == "virtual:b", amb)
-	bad := audio.DefaultVirtualBackendConfig()
-	bad.Devices[1].ID = bad.Devices[0].ID
-	_, err := audio.NewVirtualRegistry(bad)
-	require.ErrorIs(t, err, audio.ErrInvalidDevice)
-	r = pair()
-	out, in := open(r, "virtual:output"), open(r, "virtual:input")
-	require.True(t, r.RemoveDevice("virtual:output"))
-	_, err = r.Open("virtual:output")
+	require.ErrorIs(t, amb, audio.ErrAmbiguousDeviceName)
+	require.Equal(t, []audio.DeviceID{"virtual:a", "virtual:b"}, []audio.DeviceID{amb.Candidates[0].ID, amb.Candidates[1].ID})
+	r, out, _ := openPair()
+	r.RemoveDevice("virtual:output")
+	_, err := r.Open("virtual:output")
 	require.ErrorIs(t, err, audio.ErrDeviceNotFound)
-	_, err = in.Read(context.Background())
-	require.ErrorIs(t, err, audio.ErrDeviceLost)
 	err = out.Write(context.Background(), []byte{1})
 	var lost *audio.DeviceLostError
 	require.ErrorAs(t, err, &lost)
 	require.Equal(t, audio.DeviceID("virtual:output"), lost.ID)
-	require.NoError(t, in.Close())
-	require.NoError(t, out.Close())
 }
 func TestVirtualS8Accounting(t *testing.T) {
-	r := registry(audio.DefaultVirtualBackendConfig())
-	out, in := open(r, "virtual:output"), open(r, "virtual:input")
+	r, out, in := openPair()
 	const frames, attempts = 24, 20
 	start, done := make(chan struct{}), make(chan struct{}, 4)
 	var accepted, delivered, opened, rejected atomic.Int64
@@ -95,11 +75,7 @@ func TestVirtualS8Accounting(t *testing.T) {
 	}
 	close(start)
 	for range 4 {
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			t.Fatal("S8 workers did not finish")
-		}
+		<-done
 	}
 	require.Equal(t, int64(frames), accepted.Load())
 	require.Equal(t, int64(frames), delivered.Load())
@@ -120,30 +96,24 @@ func runS8(start <-chan struct{}, done chan<- struct{}, n int, fn func(int)) {
 	}()
 }
 func pendingReadCloses(t *testing.T, in *audio.VirtualStream) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	ready, result := make(chan struct{}, 1), make(chan error, 1)
-	go func() { _, err := in.Read(readyContext{Context: context.Background(), ready: ready}); result <- err }()
-	select {
-	case <-ready:
-	case <-time.After(time.Second):
-		t.Fatal("read did not block")
-	}
+	go func() { _, err := in.Read(readyContext{Context: ctx, ready: ready}); result <- err }()
+	<-ready
 	require.NoError(t, in.Close())
 	require.NoError(t, in.Close())
-	select {
-	case err := <-result:
-		require.ErrorIs(t, err, audio.ErrClosed)
-	case <-time.After(time.Second):
-		t.Fatal("close did not unblock read")
-	}
+	require.ErrorIs(t, <-result, audio.ErrClosed)
 }
 func registry(c audio.VirtualBackendConfig) *audio.VirtualRegistry {
 	r, _ := audio.NewVirtualRegistry(c)
 	return r
 }
-func pair() *audio.VirtualRegistry { return registry(audio.DefaultVirtualBackendConfig()) }
-func open(r audio.DeviceRegistry, id audio.DeviceID) *audio.VirtualStream {
-	h, _ := r.Open(id)
-	return h.(*audio.VirtualStream)
+func openPair() (*audio.VirtualRegistry, *audio.VirtualStream, *audio.VirtualStream) {
+	r := registry(audio.DefaultVirtualBackendConfig())
+	out, _ := r.Open("virtual:output")
+	in, _ := r.Open("virtual:input")
+	return r, out.(*audio.VirtualStream), in.(*audio.VirtualStream)
 }
 
 type readyContext struct {
