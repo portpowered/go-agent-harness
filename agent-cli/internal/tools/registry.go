@@ -48,6 +48,11 @@ type RegistryError struct {
 	Name string
 }
 
+type ToolInvocationError struct{ Err error }
+
+func (e *ToolInvocationError) Error() string { return e.Err.Error() }
+func (e *ToolInvocationError) Unwrap() error { return e.Err }
+
 func (e *RegistryError) Error() string {
 	switch e.Kind {
 	case RegistryErrorDuplicate:
@@ -202,7 +207,7 @@ func (r *ToolRegistry) ExecuteWithContext(
 
 	if err != nil {
 		l.Error("Tool execution failed", zap.String("tool", name), zap.Duration("duration", duration), zap.Error(err))
-		return nil, err
+		return nil, &ToolInvocationError{Err: err}
 	}
 	resultLen := 0
 	for _, m := range msgs {

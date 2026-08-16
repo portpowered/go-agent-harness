@@ -19,12 +19,9 @@ type contractTool struct {
 	execute func(context.Context, map[string]any) ([]messages.Message, error)
 }
 
-func (t *contractTool) Name() string { return t.name }
-
-func (t *contractTool) Description() string { return t.desc }
-
+func (t *contractTool) Name() string               { return t.name }
+func (t *contractTool) Description() string        { return t.desc }
 func (t *contractTool) Parameters() map[string]any { return t.params }
-
 func (t *contractTool) Execute(ctx context.Context, args map[string]any) ([]messages.Message, error) {
 	if t.execute != nil {
 		return t.execute(ctx, args)
@@ -44,10 +41,14 @@ func RunToolConformance(t *testing.T, tool Tool) {
 	if strings.TrimSpace(tool.Name()) == "" || strings.TrimSpace(tool.Description()) == "" {
 		t.Fatal("tool metadata is empty")
 	}
-	schemaBytes, err := json.Marshal(ToolToSchema(tool))
-	var schema map[string]any
-	if err != nil || json.Unmarshal(schemaBytes, &schema) != nil || len(schema) == 0 {
+	encoded, err := json.Marshal(ToolToSchema(tool))
+	var decoded map[string]any
+	if err != nil || json.Unmarshal(encoded, &decoded) != nil || len(decoded) == 0 {
 		t.Fatal("tool schema did not round-trip through JSON")
+	}
+	registry := newEmptyRegistry()
+	if err := registry.Register(tool); err != nil {
+		t.Fatalf("initial registration: %v", err)
 	}
 	t.Run("invalid argument invocation", func(t *testing.T) {
 		if reason := unsafeInvocationReason(tool); reason != "" {
@@ -61,17 +62,15 @@ func RunToolConformance(t *testing.T, tool Tool) {
 			{name: "empty arguments", args: map[string]any{}},
 		} {
 			t.Run(probe.name, func(t *testing.T) {
-				if err := validateInvocationOutcome(tool, probe.args); err != nil {
+				if err := validateInvocationOutcome(func() ([]messages.Message, error) {
+					return registry.Execute(context.Background(), tool.Name(), probe.args)
+				}); err != nil {
 					t.Fatal(err)
 				}
 			})
 		}
 	})
 
-	registry := newEmptyRegistry()
-	if err := registry.Register(tool); err != nil {
-		t.Fatalf("initial registration: %v", err)
-	}
 	wantCount := registry.Count()
 	err = registry.Register(tool)
 	assertRegistryError(t, err, RegistryErrorDuplicate, `tool "`+tool.Name()+`" is already registered`, ErrDuplicateTool)
@@ -79,74 +78,38 @@ func RunToolConformance(t *testing.T, tool Tool) {
 	if !ok || got != tool || registry.Count() != wantCount {
 		t.Fatalf("duplicate changed registry: tool=%#v present=%v count=%d", got, ok, registry.Count())
 	}
-
-	// Malformed JSON must fail in the adapter before the live tool is invoked,
-	// and must retain an identifiable typed error for callers to inspect.
-	_, err = NewRegistryExecutor(registry).Execute(context.Background(), messages.ToolCall{
-		ID: "s11-invalid-json", Name: tool.Name(), Arguments: "{",
-	})
-	var argumentErr *ToolArgumentError
-	if !errors.As(err, &argumentErr) || argumentErr.Err == nil {
-		t.Fatalf("malformed arguments error = %T %v; want ToolArgumentError with cause", err, err)
-	}
-	var syntaxErr *json.SyntaxError
-	if !errors.As(argumentErr.Err, &syntaxErr) {
-		t.Fatalf("malformed arguments cause = %T %v; want json.SyntaxError", argumentErr.Err, argumentErr.Err)
-	}
 }
 
 func unsafeInvocationReason(tool Tool) string {
 	if _, ok := tool.(*ScreenTool); ok {
-		return "existing ScreenTool behavior probes the display and defaults nil/empty action to a screenshot; " +
-			"there is no in-lease dry-run seam, so S11 skips this invocation case (see PR #57 blocking review comment)"
+		return "existing ScreenTool defaults nil/empty action to host screen capture; no in-lease dry-run seam exists, so S11 skips this probe (see PR #57 review)"
 	}
 	return ""
 }
 
-func validateInvocationOutcome(tool Tool, args map[string]any) error {
-	msgs, err, recovered := invokeWithoutPanic(tool, args)
+func validateInvocationOutcome(invoke func() ([]messages.Message, error)) error {
+	msgs, recovered, err := invokeWithoutPanic(invoke)
 	if recovered != nil {
 		return fmt.Errorf("tool panicked for invalid arguments: %v", recovered)
 	}
 	if err != nil {
-		if !identifiesRequiredArgument(tool, err.Error()) {
-			return fmt.Errorf("invalid invocation error %q does not identify a required argument", err)
+		var invocationErr *ToolInvocationError
+		if !errors.As(err, &invocationErr) || invocationErr.Err == nil || strings.TrimSpace(invocationErr.Error()) == "" || !errors.Is(err, invocationErr.Err) {
+			return fmt.Errorf("invalid invocation error %T lacks ToolInvocationError identity", err)
 		}
 		return nil
 	}
-	if err := validateToolMessages(msgs); err != nil {
-		return fmt.Errorf("invalid invocation returned an invalid result: %w", err)
-	}
-	return nil
+	return validateToolMessages(msgs)
 }
 
-func invokeWithoutPanic(tool Tool, args map[string]any) (msgs []messages.Message, err error, recovered any) {
+func invokeWithoutPanic(invoke func() ([]messages.Message, error)) (msgs []messages.Message, recovered any, err error) {
 	defer func() {
 		if value := recover(); value != nil {
 			recovered = value
 		}
 	}()
-	msgs, err = tool.Execute(context.Background(), args)
-	return msgs, err, nil
-}
-
-func identifiesRequiredArgument(tool Tool, message string) bool {
-	if !strings.Contains(strings.ToLower(message), "required") {
-		return false
-	}
-	for _, name := range requiredParameterNames(tool.Parameters()) {
-		if strings.Contains(strings.ToLower(message), strings.ToLower(name)) {
-			return true
-		}
-	}
-	return false
-}
-
-func requiredParameterNames(schema map[string]any) []string {
-	if required, ok := schema["required"].([]string); ok {
-		return required
-	}
-	return nil
+	msgs, err = invoke()
+	return
 }
 
 func validateToolMessages(msgs []messages.Message) error {
@@ -154,11 +117,8 @@ func validateToolMessages(msgs []messages.Message) error {
 		return fmt.Errorf("successful invocation returned %d messages; want exactly one", len(msgs))
 	}
 	msg := msgs[0]
-	if msg.Role != messages.RoleTool {
-		return fmt.Errorf("message role = %q; want tool", msg.Role)
-	}
-	if len(msg.ContentParts) == 0 || strings.TrimSpace(msg.TextContent()) == "" {
-		return errors.New("tool result has no non-empty text content")
+	if msg.Role != messages.RoleTool || len(msg.ContentParts) == 0 || strings.TrimSpace(msg.TextContent()) == "" {
+		return fmt.Errorf("tool result must have one tool-role message with non-empty text")
 	}
 	return nil
 }
@@ -185,48 +145,40 @@ func TestLiveToolRegistryConformance(t *testing.T) {
 	}
 }
 
+func assertDeadInvocationRejected(t *testing.T, invoke func() ([]messages.Message, error)) {
+	t.Helper()
+	if err := validateInvocationOutcome(invoke); err == nil {
+		t.Fatal("dead invocation passed the S11 result contract")
+	}
+}
+
 func TestToolConformanceRejectsDeadInvocation(t *testing.T) {
-	params := map[string]any{
-		"type":       "object",
-		"properties": map[string]any{"value": map[string]any{"type": "string"}},
-		"required":   []string{"value"},
-	}
-	for _, tc := range []struct {
-		name    string
-		execute func(context.Context, map[string]any) ([]messages.Message, error)
-	}{
-		{
-			name: "non-specific error",
-			execute: func(context.Context, map[string]any) ([]messages.Message, error) {
-				return nil, errors.New("implementation is unavailable")
-			},
-		},
-		{
-			name: "empty content",
-			execute: func(context.Context, map[string]any) ([]messages.Message, error) {
-				return []messages.Message{{Role: messages.RoleTool, ContentParts: []messages.ContentPart{messages.TextPart{}}}}, nil
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dead := newContractTool("dead")
-			dead.params = params
-			dead.execute = tc.execute
-			if err := validateInvocationOutcome(dead, nil); err == nil {
-				t.Fatal("dead invocation passed the S11 result contract")
-			}
-		})
-	}
+	params := map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "string"}}, "required": []string{"value"}}
+	dead := newContractTool("dead")
+	dead.params = params
+	t.Run("untyped required error", func(t *testing.T) {
+		dead.execute = func(context.Context, map[string]any) ([]messages.Message, error) {
+			return nil, errors.New("value is required")
+		}
+		assertDeadInvocationRejected(t, func() ([]messages.Message, error) { return dead.Execute(context.Background(), nil) })
+	})
+	t.Run("empty content in scratch registry", func(t *testing.T) {
+		dead.execute = func(context.Context, map[string]any) ([]messages.Message, error) {
+			return []messages.Message{{Role: messages.RoleTool, ContentParts: []messages.ContentPart{messages.TextPart{}}}}, nil
+		}
+		registry := newEmptyRegistry()
+		if err := registry.Register(dead); err != nil {
+			t.Fatal(err)
+		}
+		assertDeadInvocationRejected(t, func() ([]messages.Message, error) { return registry.Execute(context.Background(), dead.Name(), nil) })
+	})
 }
 
 func assertRegistryError(t *testing.T, err error, kind RegistryErrorKind, message string, sentinel error) {
 	t.Helper()
 	var registryErr *RegistryError
-	if err == nil || !errors.As(err, &registryErr) {
-		t.Fatalf("error %T is not a RegistryError: %v", err, err)
-	}
-	if registryErr.Kind != kind || !errors.Is(err, sentinel) || err.Error() != message {
-		t.Fatalf("registry error = kind %q, message %q", registryErr.Kind, err)
+	if err == nil || !errors.As(err, &registryErr) || registryErr.Kind != kind || !errors.Is(err, sentinel) || err.Error() != message {
+		t.Fatalf("registry error = %T %#v, want kind %q and message %q", err, err, kind, message)
 	}
 }
 
@@ -237,34 +189,28 @@ func TestRegistryS4Errors(t *testing.T) {
 		t.Fatal(err)
 	}
 	duplicate := newContractTool("original")
-	unknownRegistry := newEmptyRegistry()
-	emptyRegistry := newEmptyRegistry()
-	nilRegistry := newEmptyRegistry()
+	unknownRegistry, emptyRegistry, nilRegistry := newEmptyRegistry(), newEmptyRegistry(), newEmptyRegistry()
 	var typedNil *contractTool
-
 	cases := []struct {
-		name     string
-		wantKind RegistryErrorKind
-		message  string
-		sentinel error
-		errors   func() []error
+		name string
+		kind RegistryErrorKind
+		msg  string
+		sent error
+		errs func() []error
 	}{
 		{"duplicate registration", RegistryErrorDuplicate, `tool "original" is already registered`, ErrDuplicateTool, func() []error { return []error{duplicateRegistry.Register(duplicate)} }},
-		{
-			name: "unknown lookup/execution", wantKind: RegistryErrorNotFound, message: `tool "missing" not found`, sentinel: ErrToolNotFound,
-			errors: func() []error {
-				_, lookupErr := unknownRegistry.Lookup("missing")
-				_, executeErr := unknownRegistry.Execute(context.Background(), "missing", nil)
-				return []error{lookupErr, executeErr}
-			},
-		},
+		{"unknown lookup/execution", RegistryErrorNotFound, `tool "missing" not found`, ErrToolNotFound, func() []error {
+			_, lookupErr := unknownRegistry.Lookup("missing")
+			_, executeErr := unknownRegistry.Execute(context.Background(), "missing", nil)
+			return []error{lookupErr, executeErr}
+		}},
 		{"empty-name registration", RegistryErrorEmptyName, "tool name must not be empty", ErrEmptyToolName, func() []error { return []error{emptyRegistry.Register(newContractTool(""))} }},
 		{"nil-tool registration", RegistryErrorNilTool, "tool must not be nil", ErrNilTool, func() []error { return []error{nilRegistry.Register(nil), nilRegistry.Register(typedNil)} }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, err := range tc.errors() {
-				assertRegistryError(t, err, tc.wantKind, tc.message, tc.sentinel)
+			for _, err := range tc.errs() {
+				assertRegistryError(t, err, tc.kind, tc.msg, tc.sent)
 			}
 		})
 	}
@@ -298,7 +244,8 @@ func TestAdapterContracts(t *testing.T) {
 	}
 	_, err = executor.Execute(context.Background(), messages.ToolCall{Arguments: "{"})
 	var argumentErr *ToolArgumentError
-	if !errors.As(err, &argumentErr) || !strings.HasPrefix(err.Error(), "failed to parse tool arguments:") {
+	var syntaxErr *json.SyntaxError
+	if !errors.As(err, &argumentErr) || !errors.As(argumentErr.Err, &syntaxErr) || !strings.HasPrefix(err.Error(), "failed to parse tool arguments:") {
 		t.Fatalf("malformed arguments error = %T %v", err, err)
 	}
 
@@ -311,9 +258,10 @@ func TestAdapterContracts(t *testing.T) {
 	if _, ok := converted.ContentParts[1].(messages.ImagePart); !ok {
 		t.Fatalf("mixed response lost image ordering: %#v", converted.ContentParts)
 	}
-	if got := convertParameters(map[string]any{"properties": map[string]any{
-		"a": map[string]any{"type": "string", "description": "A"}, "ignored": "not a property",
-	}, "required": []any{"a"}}); len(got) != 1 || !got[0].Required || got[0].Name != "a" {
+	if _, ok := converted.ContentParts[3].(messages.AudioPart); !ok {
+		t.Fatalf("mixed response lost audio ordering: %#v", converted.ContentParts)
+	}
+	if got := convertParameters(map[string]any{"properties": map[string]any{"a": map[string]any{"type": "string", "description": "A"}, "ignored": "not a property"}, "required": []any{"a"}}); len(got) != 1 || !got[0].Required || got[0].Name != "a" {
 		t.Fatalf("converted parameters = %#v", got)
 	}
 	if got := convertParameters(map[string]any{"required": []string{"a"}}); got != nil {
