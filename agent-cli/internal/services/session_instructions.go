@@ -137,14 +137,29 @@ func (s *sessionInstructionsSession) relay() {
 
 func (s *sessionInstructionsSession) forward(msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeSessionCreated {
+		var configureErr error
 		s.configureOnce.Do(func() {
-			s.inner.Send(s.ctx, messages.StreamMessage{
+			outcome := messages.SendSessionWithOutcome(s.ctx, s.inner, messages.StreamMessage{
 				Type: messages.StreamTypeSessionUpdate,
 				Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
 					Instructions: s.instructions,
 				}),
 			})
+			if !outcome.OK() {
+				configureErr = fmt.Errorf("send session instructions: %s", outcome.Status)
+				if outcome.Err != nil {
+					configureErr = fmt.Errorf("%w: %v", configureErr, outcome.Err)
+				}
+			}
 		})
+		if configureErr != nil {
+			s.receive.Write(s.ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeError,
+				Value: messages.NewErrorValueWithError(configureErr),
+			})
+			_ = s.inner.Close()
+			return false
+		}
 	}
 	return s.receive.Write(s.ctx, msg)
 }

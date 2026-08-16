@@ -216,6 +216,33 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 	assertSessionInstructionEvents(t, inferencer, rawInstructionsMarker, 1)
 }
 
+func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	inferencer := newSessionInstructionsTestInferencerRejectingUpdates()
+	var out bytes.Buffer
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, &out, services.SessionRunOptions{
+		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+		ConfigDir:         workspaceDir,
+		Prompt:            userTurnMarker,
+		SessionInferencer: inferencer,
+	}, "")
+	if err == nil {
+		t.Fatal("expected session configuration send failure")
+	}
+	if !strings.Contains(err.Error(), "send session instructions") {
+		t.Fatalf("session configuration send error = %v, want typed send context", err)
+	}
+	for _, event := range inferencer.sentEvents() {
+		if event.Type == messages.StreamTypeTextDelta {
+			t.Fatal("user turn was sent after session configuration failed")
+		}
+	}
+}
+
 func assertSessionInstructionEvents(t *testing.T, inferencer *sessionInstructionsTestInferencer, wantInstructions string, wantConfigCount int) {
 	t.Helper()
 	events := inferencer.sentEvents()
@@ -278,19 +305,24 @@ func formatSessionEvents(events []messages.StreamMessage) string {
 }
 
 type sessionInstructionsTestInferencer struct {
-	mu        sync.Mutex
-	connected bool
-	session   *sessionInstructionsTestSession
+	mu                   sync.Mutex
+	connected            bool
+	rejectSessionUpdates bool
+	session              *sessionInstructionsTestSession
 }
 
 func newSessionInstructionsTestInferencer() *sessionInstructionsTestInferencer {
 	return &sessionInstructionsTestInferencer{}
 }
 
+func newSessionInstructionsTestInferencerRejectingUpdates() *sessionInstructionsTestInferencer {
+	return &sessionInstructionsTestInferencer{rejectSessionUpdates: true}
+}
+
 func (i *sessionInstructionsTestInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.mu.Lock()
 	i.connected = true
-	i.session = newSessionInstructionsTestSession()
+	i.session = newSessionInstructionsTestSession(i.rejectSessionUpdates)
 	session := i.session
 	i.mu.Unlock()
 	go func() {
@@ -319,25 +351,31 @@ func (i *sessionInstructionsTestInferencer) sentEvents() []messages.StreamMessag
 }
 
 type sessionInstructionsTestSession struct {
-	mu           sync.Mutex
-	receive      *messages.TypedBuffer[messages.StreamMessage]
-	sent         []messages.StreamMessage
-	done         chan struct{}
-	closeOnce    sync.Once
-	responseOnce sync.Once
+	mu                   sync.Mutex
+	receive              *messages.TypedBuffer[messages.StreamMessage]
+	sent                 []messages.StreamMessage
+	done                 chan struct{}
+	closeOnce            sync.Once
+	responseOnce         sync.Once
+	rejectSessionUpdates bool
 }
 
-func newSessionInstructionsTestSession() *sessionInstructionsTestSession {
+func newSessionInstructionsTestSession(rejectSessionUpdates bool) *sessionInstructionsTestSession {
 	return &sessionInstructionsTestSession{
-		receive: messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:    make(chan struct{}),
+		receive:              messages.NewTypedBuffer[messages.StreamMessage](32),
+		done:                 make(chan struct{}),
+		rejectSessionUpdates: rejectSessionUpdates,
 	}
 }
 
 func (s *sessionInstructionsTestSession) Send(ctx context.Context, event messages.StreamMessage) bool {
 	s.mu.Lock()
 	s.sent = append(s.sent, event)
+	rejectSessionUpdate := s.rejectSessionUpdates && event.Type == messages.StreamTypeSessionUpdate
 	s.mu.Unlock()
+	if rejectSessionUpdate {
+		return false
+	}
 	if event.Type == messages.StreamTypeTextDelta {
 		s.responseOnce.Do(func() {
 			s.receive.Write(ctx, messages.StreamMessage{
