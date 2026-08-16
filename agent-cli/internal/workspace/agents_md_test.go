@@ -92,6 +92,24 @@ func TestAgentsMDWorkspace_FilesystemSandbox(t *testing.T) {
 		}
 	})
 
+	t.Run("large existing file is preserved byte-for-byte", func(t *testing.T) {
+		workspaceDir := t.TempDir()
+		want := strings.Repeat("deterministic instruction payload\n", 8192) + "END-OF-LARGE-AGENTS-MD\n"
+		writeAgentsMD(t, workspaceDir, want)
+
+		if err := EnsureAgentsMD(workspaceDir, representativeToolDefinitions()); err != nil {
+			t.Fatalf("EnsureAgentsMD: %v", err)
+		}
+
+		got := readAgentsMD(t, workspaceDir)
+		if got != want {
+			t.Fatalf("large AGENTS.md changed: got %d bytes, want %d", len(got), len(want))
+		}
+		if len(got) != len(want) || !strings.HasSuffix(got, "END-OF-LARGE-AGENTS-MD\n") {
+			t.Fatalf("large AGENTS.md lost bytes or terminal marker: length=%d, want=%d", len(got), len(want))
+		}
+	})
+
 	t.Run("multiple depths and declared boundary", func(t *testing.T) {
 		root := t.TempDir()
 		boundary := filepath.Join(root, "declared-workspace")
