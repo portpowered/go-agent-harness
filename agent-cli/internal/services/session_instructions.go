@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -206,7 +207,7 @@ func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, di
 		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
 	providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey), grok.WithWebSocketDialer(dialer)}
-	if sessionCfg.BaseURL != "" {
+	if strings.TrimSpace(sessionCfg.BaseURL) != "" {
 		providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
 	}
 	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))

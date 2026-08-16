@@ -329,6 +329,41 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	}
 }
 
+func TestRunSessionWithInstructions_GrokWhitespaceBaseURLUsesDefaultEndpoint(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	writeFile(t, filepath.Join(workspaceDir, config.ConfigFileName), `
+model:
+  provider: grok
+  grok:
+    model: grok-3-mini
+    api_key: file-api-key
+    base_url: "   "
+`)
+	conn := newRecordingRealtimeTestConn()
+	conn.respondToConversationItem = true
+	dialer := &recordingRealtimeTestDialer{conn: conn}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, io.Discard, services.SessionRunOptions{
+		RecordPath:      filepath.Join(t.TempDir(), "grok-session.json"),
+		Provider:        config.ProviderGrok,
+		Model:           "grok-3-mini",
+		APIKey:          "test-api-key",
+		ConfigDir:       workspaceDir,
+		Prompt:          userTurnMarker,
+		WebSocketDialer: dialer,
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	if got := dialer.dialedURL(); got != "https://api.x.ai/v1/realtime" {
+		t.Fatalf("Grok dial URL with whitespace-only BaseURL = %q, want default endpoint", got)
+	}
+}
+
 func TestRunSessionWithInstructions_ConfigurationSendFailureStopsBeforeUserTurn(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
@@ -418,21 +453,33 @@ func formatSessionEvents(events []messages.StreamMessage) string {
 }
 
 type recordingRealtimeTestDialer struct {
+	mu   sync.Mutex
 	conn *recordingRealtimeTestConn
+	url  string
 }
 
 var _ grok.WebSocketDialer = (*recordingRealtimeTestDialer)(nil)
 
-func (d *recordingRealtimeTestDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+func (d *recordingRealtimeTestDialer) Dial(url string, _ map[string]string) (grok.WebSocketConn, error) {
+	d.mu.Lock()
+	d.url = url
+	d.mu.Unlock()
 	return d.conn, nil
 }
 
+func (d *recordingRealtimeTestDialer) dialedURL() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.url
+}
+
 type recordingRealtimeTestConn struct {
-	mu        sync.Mutex
-	writes    [][]byte
-	inbound   chan []byte
-	closed    chan struct{}
-	closeOnce sync.Once
+	mu                       sync.Mutex
+	writes                   [][]byte
+	inbound                  chan []byte
+	closed                   chan struct{}
+	closeOnce                sync.Once
+	respondToConversationItem bool
 }
 
 var _ grok.WebSocketConn = (*recordingRealtimeTestConn)(nil)
@@ -463,7 +510,7 @@ func (c *recordingRealtimeTestConn) WriteMessage(_ int, payload []byte) error {
 	var envelope struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(payload, &envelope); err == nil && envelope.Type == "response.create" {
+	if err := json.Unmarshal(payload, &envelope); err == nil && (envelope.Type == "response.create" || (c.respondToConversationItem && envelope.Type == "conversation.item.create")) {
 		c.inbound <- []byte(`{"type":"response.done"}`)
 	}
 	return nil
