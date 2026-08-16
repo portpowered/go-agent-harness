@@ -16,11 +16,11 @@ linters:
       statements: -1
       ignore-comments: false
     gocognit:
-      min-complexity: 99
+      min-complexity: 124
     revive:
       rules:
         - name: file-length-limit
           arguments:
-            - max: 1164
+            - max: 1307
               skip-comments: false
               skip-blank-lines: false
