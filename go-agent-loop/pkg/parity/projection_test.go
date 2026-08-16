@@ -216,6 +216,10 @@ func assertNormalizationError(t *testing.T, err error, interfaceName, field, rea
 	if normalizationErr.Interface != interfaceName || normalizationErr.Field != field || !strings.Contains(normalizationErr.Reason, reasonPart) {
 		t.Fatalf("normalization error = %+v, want interface %q, field %q, reason containing %q", normalizationErr, interfaceName, field, reasonPart)
 	}
+	wantMessage := interfaceName + " observation " + field + ": " + normalizationErr.Reason
+	if err.Error() != wantMessage {
+		t.Fatalf("normalization error message = %q, want %q", err.Error(), wantMessage)
+	}
 	if !errors.Is(err, ErrNormalization) {
 		t.Fatal("normalization error does not wrap ErrNormalization")
 	}
