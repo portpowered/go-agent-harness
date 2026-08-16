@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -82,6 +83,230 @@ func (t realSessionDurationTimer) Stop() bool {
 	return t.timer.Stop()
 }
 
+const sessionDurationAdmissionBufferCapacity = 1024
+
+// sessionDurationAdmission is the single admission boundary for provider
+// events. Closing it prevents a provider event from entering the loop after
+// the logical deadline while preserving events accepted before the close.
+type sessionDurationAdmission struct {
+	mu     sync.Mutex
+	closed bool
+	done   chan struct{}
+	once   sync.Once
+}
+
+func newSessionDurationAdmission() *sessionDurationAdmission {
+	return &sessionDurationAdmission{done: make(chan struct{})}
+}
+
+func (a *sessionDurationAdmission) close() {
+	a.closeWithDrain(nil, nil)
+}
+
+func (a *sessionDurationAdmission) closeWithDrain(receive, source *messages.TypedBuffer[messages.StreamMessage]) {
+	a.once.Do(func() {
+		a.mu.Lock()
+		if receive != nil && source != nil {
+			for {
+				msg, ok := source.Read()
+				if !ok || !receive.Write(context.Background(), msg) {
+					break
+				}
+			}
+		}
+		a.closed = true
+		a.mu.Unlock()
+		close(a.done)
+	})
+}
+
+func (a *sessionDurationAdmission) admit(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return false
+	}
+	return receive.Write(context.Background(), msg)
+}
+
+// sessionDurationAdmissionInferencer inserts the admission boundary between
+// the provider session and the agent loop. The public Session interface exposes
+// a concrete receive buffer, so the wrapper forwards through its own buffer and
+// can stop admitting provider events without changing the shared interface.
+type sessionDurationAdmissionInferencer struct {
+	inner      messages.SessionInferencer
+	admission  *sessionDurationAdmission
+	mu         sync.Mutex
+	runtimeErr error
+	closeErr   error
+	connected  bool
+	session    *sessionDurationAdmissionSession
+	closeDone  chan struct{}
+	closeOnce  sync.Once
+}
+
+func (i *sessionDurationAdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session, err := i.inner.ConnectSession(ctx)
+	if err != nil {
+		i.mu.Lock()
+		i.runtimeErr = err
+		i.mu.Unlock()
+		return nil, err
+	}
+	i.mu.Lock()
+	i.connected = true
+	wrapped := newSessionDurationAdmissionSession(ctx, session, i.admission, i.recordCloseError)
+	i.session = wrapped
+	i.mu.Unlock()
+	return wrapped, nil
+}
+
+func (i *sessionDurationAdmissionInferencer) recordCloseError(err error) {
+	i.mu.Lock()
+	i.closeErr = err
+	i.mu.Unlock()
+	if i.closeDone != nil {
+		i.closeOnce.Do(func() { close(i.closeDone) })
+	}
+}
+
+func (i *sessionDurationAdmissionInferencer) closeError() error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.closeErr
+}
+
+func (i *sessionDurationAdmissionInferencer) runtimeError() error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.runtimeErr
+}
+
+func (i *sessionDurationAdmissionInferencer) waitForClose() {
+	i.mu.Lock()
+	connected := i.connected
+	closeDone := i.closeDone
+	i.mu.Unlock()
+	if connected && closeDone != nil {
+		<-closeDone
+	}
+}
+
+func (i *sessionDurationAdmissionInferencer) closeAdmission() {
+	i.mu.Lock()
+	session := i.session
+	i.mu.Unlock()
+	if session != nil {
+		session.closeAdmission()
+		return
+	}
+	i.admission.close()
+}
+
+type sessionDurationAdmissionSession struct {
+	inner     messages.Session
+	admission *sessionDurationAdmission
+	receive   *messages.TypedBuffer[messages.StreamMessage]
+	done      chan struct{}
+	doneOnce  sync.Once
+	closeOnce sync.Once
+	closeMu   sync.Mutex
+	closeErr  error
+	onClose   func(error)
+}
+
+func newSessionDurationAdmissionSession(ctx context.Context, inner messages.Session, admission *sessionDurationAdmission, onClose func(error)) *sessionDurationAdmissionSession {
+	s := &sessionDurationAdmissionSession{
+		inner:     inner,
+		admission: admission,
+		receive:   messages.NewTypedBuffer[messages.StreamMessage](sessionDurationAdmissionBufferCapacity),
+		done:      make(chan struct{}),
+		onClose:   onClose,
+	}
+	go s.forward(ctx)
+	return s
+}
+
+func (s *sessionDurationAdmissionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.inner.Send(ctx, msg)
+}
+
+func (s *sessionDurationAdmissionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *sessionDurationAdmissionSession) Done() <-chan struct{} {
+	return s.done
+}
+
+func (s *sessionDurationAdmissionSession) Close() error {
+	s.closeOnce.Do(func() {
+		s.closeAdmission()
+		err := s.inner.Close()
+		s.closeMu.Lock()
+		s.closeErr = err
+		s.closeMu.Unlock()
+		if s.onClose != nil {
+			s.onClose(err)
+		}
+	})
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	return s.closeErr
+}
+
+func (s *sessionDurationAdmissionSession) closeAdmission() {
+	s.admission.closeWithDrain(s.receive, s.inner.Receive())
+}
+
+func (s *sessionDurationAdmissionSession) forward(ctx context.Context) {
+	source := s.inner.Receive()
+	sourceCh := source.Chan()
+	admissionDone := s.admission.done
+	for {
+		select {
+		case <-s.inner.Done():
+			s.drainSource(source)
+			s.closeDone()
+			return
+		case <-ctx.Done():
+			s.closeDone()
+			return
+		case <-admissionDone:
+			// The deadline closes admission, but the provider session must stay
+			// alive long enough to receive the graceful close request. Disable
+			// source forwarding and wait for the provider/session lifecycle.
+			admissionDone = nil
+			sourceCh = nil
+		case msg, ok := <-sourceCh:
+			if !ok {
+				s.closeDone()
+				return
+			}
+			if !s.admission.admit(s.receive, msg) {
+				admissionDone = nil
+				sourceCh = nil
+			}
+		}
+	}
+}
+
+func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		msg, ok := source.Read()
+		if !ok || !s.admission.admit(s.receive, msg) {
+			return
+		}
+	}
+}
+
+func (s *sessionDurationAdmissionSession) closeDone() {
+	s.doneOnce.Do(func() { close(s.done) })
+}
+
+var _ messages.SessionInferencer = (*sessionDurationAdmissionInferencer)(nil)
+var _ messages.Session = (*sessionDurationAdmissionSession)(nil)
+
 // RunSessionWithMaxDuration runs a session with an optional graceful duration
 // bound. A zero duration disables the controller; a positive duration requests
 // a session close and drains the accepted output before finalization.
@@ -156,7 +381,13 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 		return runAgentLoopSession(ctx, out, sessionInferencer, opts)
 	}
 
-	observedInferencer := newObservedSessionInferencer(sessionInferencer)
+	admission := newSessionDurationAdmission()
+	admittedInferencer := &sessionDurationAdmissionInferencer{
+		inner:     sessionInferencer,
+		admission: admission,
+		closeDone: make(chan struct{}),
+	}
+	observedInferencer := newObservedSessionInferencer(admittedInferencer)
 	loop, err := agentloop.New(
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(observedInferencer),
@@ -174,8 +405,10 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 
 	timer := durationClock.NewTimer(maxDuration)
 	if timer == nil {
+		admittedInferencer.closeAdmission()
 		cancel()
 		<-runErrCh
+		admittedInferencer.waitForClose()
 		return errors.New("session duration clock returned a nil timer")
 	}
 	defer timer.Stop()
@@ -187,13 +420,32 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 	durationTerminalWritten := false
 
 	finish := func(planned bool, preferredErr error) error {
+		var preCancelDrainErr error
+		if preferredErr == nil {
+			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten)
+		}
 		cancel()
 		runErr := <-runErrCh
+		admittedInferencer.waitForClose()
 		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten); drainErr != nil {
 			return drainErr
 		}
+		runtimeErr := admittedInferencer.runtimeError()
+		closeErr := admittedInferencer.closeError()
 		if preferredErr != nil {
+			if runtimeErr != nil || closeErr != nil {
+				return errors.Join(preferredErr, sessionDurationLifecycleError(runtimeErr, closeErr))
+			}
 			return preferredErr
+		}
+		if preCancelDrainErr != nil {
+			return preCancelDrainErr
+		}
+		if runtimeErr != nil {
+			return wrapSessionPhaseError("session runtime", runtimeErr)
+		}
+		if closeErr != nil {
+			return wrapSessionPhaseError("close session", closeErr)
 		}
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {
 			return fmt.Errorf("session error: %w", runErr)
@@ -212,6 +464,7 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 		}
 		durationExpired = true
 		timerCh = nil
+		admittedInferencer.closeAdmission()
 		if closeSent {
 			return nil
 		}
@@ -240,6 +493,12 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 				return err
 			}
 			return ctx.Err()
+		case <-opts.Done:
+			doneErr := error(nil)
+			if opts.DoneErr != nil {
+				doneErr = opts.DoneErr()
+			}
+			return finish(durationExpired && doneErr == nil, doneErr)
 		case <-observedInferencer.Done():
 			doneErr := error(nil)
 			if opts.DoneErr != nil {
@@ -247,8 +506,15 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 			}
 			return finish(durationExpired && doneErr == nil, doneErr)
 		case err := <-runErrCh:
+			admittedInferencer.waitForClose()
 			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten); drainErr != nil {
 				return drainErr
+			}
+			if runtimeErr := admittedInferencer.runtimeError(); runtimeErr != nil {
+				return wrapSessionPhaseError("session runtime", runtimeErr)
+			}
+			if closeErr := admittedInferencer.closeError(); closeErr != nil {
+				return wrapSessionPhaseError("close session", closeErr)
 			}
 			if err != nil && !errors.Is(err, context.Canceled) {
 				return fmt.Errorf("session error: %w", err)
@@ -324,6 +590,34 @@ func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, 
 	}
 }
 
+func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool) error {
+	timer := time.NewTimer(sessionReplayDoneDrainIdleDelay)
+	defer timer.Stop()
+	for {
+		select {
+		case msg, ok := <-loop.Deltas().Chan():
+			if !ok {
+				return nil
+			}
+			if planned && msg.Type == messages.StreamTypeSessionClose {
+				msg, *terminalWritten = maxDurationTerminalMessage(msg)
+			}
+			if err := writeSessionReplayMessage(out, msg); err != nil {
+				return err
+			}
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(sessionReplayDoneDrainIdleDelay)
+		case <-timer.C:
+			return nil
+		}
+	}
+}
+
 func maxDurationTerminalMessage(msg messages.StreamMessage) (messages.StreamMessage, bool) {
 	value, ok := msg.Value.(*messages.SessionCloseValue)
 	if !ok {
@@ -351,6 +645,17 @@ func writeMaxDurationTerminal(out io.Writer) error {
 			messages.TerminalOutputNotApplicable,
 		),
 	})
+}
+
+func sessionDurationLifecycleError(runtimeErr, closeErr error) error {
+	var lifecycleErrs []error
+	if runtimeErr != nil {
+		lifecycleErrs = append(lifecycleErrs, wrapSessionPhaseError("session runtime", runtimeErr))
+	}
+	if closeErr != nil {
+		lifecycleErrs = append(lifecycleErrs, wrapSessionPhaseError("close session", closeErr))
+	}
+	return errors.Join(lifecycleErrs...)
 }
 
 var _ SessionDurationClock = realSessionDurationClock{}
