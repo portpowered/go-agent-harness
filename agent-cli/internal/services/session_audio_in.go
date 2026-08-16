@@ -399,8 +399,6 @@ func runAgentLoopSessionWithAudioInput(ctx context.Context, out io.Writer, sessi
 	source.bindContext(runCtx)
 	runErrCh := make(chan error, 1)
 	go func() { runErrCh <- loop.Run(runCtx) }()
-	audioErrCh := make(chan error, 1)
-	go func() { audioErrCh <- streamSessionAudioInput(runCtx, loop, source) }()
 
 	var runErr error
 	runDone := false
@@ -411,7 +409,15 @@ func runAgentLoopSessionWithAudioInput(ctx context.Context, out io.Writer, sessi
 		}
 		return runErr
 	}
-	var audioCh <-chan error = audioErrCh
+	var audioCh <-chan error
+	startAudio := func() {
+		if audioCh != nil {
+			return
+		}
+		audioErrCh := make(chan error, 1)
+		audioCh = audioErrCh
+		go func() { audioErrCh <- streamSessionAudioInput(runCtx, loop, source) }()
+	}
 	waitAudio := func() error {
 		if audioCh == nil {
 			return nil
@@ -510,6 +516,7 @@ func runAgentLoopSessionWithAudioInput(ctx context.Context, out io.Writer, sessi
 						return errors.Join(err, stop())
 					}
 				}
+				startAudio()
 			}
 			if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
 				closeSent = true
