@@ -5,8 +5,10 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestDeviceSourceVirtualFramesLossAndClose(t *testing.T) {
@@ -46,11 +48,11 @@ func TestDeviceSourceVirtualFramesLossAndClose(t *testing.T) {
 		err := source.ReadFrame(readyContext, frame)
 		result <- err
 	}()
-	<-ready
+	waitDeviceSignal(t, ready)
 	if !r.RemoveDevice("virtual:input") {
 		t.Fatal("RemoveDevice(input) = false")
 	}
-	lost := <-result
+	lost := waitDeviceError(t, result)
 	var lostErr *DeviceLostError
 	if !errors.As(lost, &lostErr) || lostErr.ID != "virtual:input" || lostErr.Direction != DirectionInput || !errors.Is(lost, ErrDeviceLost) {
 		t.Fatalf("pending read error = %v, want typed input loss", lost)
@@ -77,10 +79,62 @@ func TestDeviceSourceVirtualFramesLossAndClose(t *testing.T) {
 	go func() {
 		result <- source.ReadFrame(&readyContextForDevice{Context: context.Background(), ready: ready}, make([]int16, FrameSize))
 	}()
-	<-ready
-	closeErr, readErr := source.Close(), <-result
+	waitDeviceSignal(t, ready)
+	closeErr := source.Close()
+	readErr := waitDeviceError(t, result)
 	if closeErr != nil || !errors.Is(readErr, ErrClosed) {
 		t.Fatalf("close pending read: close=%v read=%v", closeErr, readErr)
+	}
+}
+
+func TestDeviceSourceS11Conformance(t *testing.T) {
+	samples := make([]int16, FrameSize*2)
+	for i := range samples {
+		samples[i] = int16(i - 700)
+	}
+	samples[0], samples[FrameSize] = -32768, 32767
+	handle := &adapterFrameHandle{
+		direction: DirectionInput,
+		frames:    [][]int16{append([]int16(nil), samples[:FrameSize]...), append([]int16(nil), samples[FrameSize:]...)},
+	}
+	source, err := NewDeviceSource(&adapterTestRegistryStub{handle: handle}, "input")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = source.Close() }()
+	var contract AudioSource = source
+	assertSourceFrames(t, contract, samples)
+}
+
+func TestDeviceSourceS8ConcurrentReadClose(t *testing.T) {
+	r := adapterTestRegistry(t)
+	source, err := NewDeviceSource(r, "virtual:input")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = source.Close() }()
+	ready, readDone := make(chan struct{}), make(chan error, 1)
+	go func() {
+		readDone <- source.ReadFrame(&readyContextForDevice{Context: context.Background(), ready: ready}, make([]int16, FrameSize))
+	}()
+	waitDeviceSignal(t, ready)
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- source.Close() }()
+	select {
+	case err := <-readDone:
+		if !errors.Is(err, ErrClosed) {
+			t.Fatalf("concurrent read after close = %v, want ErrClosed", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("concurrent read did not unblock")
+	}
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatalf("concurrent Close() = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("concurrent Close() did not finish")
 	}
 }
 
@@ -212,6 +266,44 @@ type adapterRawHandle struct {
 	write     func(context.Context, []byte) error
 }
 
+type adapterFrameHandle struct {
+	mu        sync.Mutex
+	direction Direction
+	frames    [][]int16
+	writes    [][]int16
+	closed    bool
+}
+
+func (h *adapterFrameHandle) DeviceDirection() Direction { return h.direction }
+func (h *adapterFrameHandle) ReadFrame(_ context.Context, frame []int16) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return ErrClosed
+	}
+	if len(h.frames) == 0 {
+		return io.EOF
+	}
+	copy(frame, h.frames[0])
+	h.frames = h.frames[1:]
+	return nil
+}
+func (h *adapterFrameHandle) WriteFrame(_ context.Context, frame []int16) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return ErrClosed
+	}
+	h.writes = append(h.writes, append([]int16(nil), frame...))
+	return nil
+}
+func (h *adapterFrameHandle) Close() error {
+	h.mu.Lock()
+	h.closed = true
+	h.mu.Unlock()
+	return nil
+}
+
 func (h *adapterRawHandle) DeviceDirection() Direction               { return h.direction }
 func (h *adapterRawHandle) Close() error                             { return nil }
 func (h *adapterRawHandle) Read(ctx context.Context) ([]byte, error) { return h.read(ctx) }
@@ -225,3 +317,35 @@ func (h *adapterRawHandle) Write(ctx context.Context, frame []byte) error {
 type adapterNoDirectionHandle struct{ closed int }
 
 func (h *adapterNoDirectionHandle) Close() error { h.closed++; return nil }
+
+func waitDeviceSignal(t *testing.T, signal <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(time.Second):
+		t.Fatal("operation did not reach its synchronization point")
+	}
+}
+
+func waitDeviceError(t *testing.T, result <-chan error) error {
+	t.Helper()
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(time.Second):
+		t.Fatal("operation did not finish")
+		return nil
+	}
+}
+
+const goroutineCountSettleTolerance = 2
+
+func settledDeviceGoroutineCount(want int) int {
+	deadline := time.Now().Add(500 * time.Millisecond)
+	got := runtime.NumGoroutine()
+	for got > want+goroutineCountSettleTolerance && time.Now().Before(deadline) {
+		runtime.Gosched()
+		got = runtime.NumGoroutine()
+	}
+	return got
+}
