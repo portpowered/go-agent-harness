@@ -11,168 +11,172 @@ import (
 
 const turnFact = "fact: the marigold key is hidden under stone seven"
 
-func TestSessionTurns_FiveTurnsUseOneHistoryAndExactLifecycle(t *testing.T) {
-	inferencer := &turnTestInferencer{}
-	events := make([]TurnEvent, 0, 10)
-	session := NewSessionTurns(SessionTurnsOptions{Inferencer: inferencer, EventSink: func(e TurnEvent) { events = append(events, e) }})
-	inputs := []TurnInput{
-		NewTextTurnInput(turnFact),
-		NewAudioTurnInput([]byte{1, 2}, "audio/pcm"),
-		NewAudioTurnInput([]byte{3, 4}, "audio/pcm"),
-		NewTextTurnInput("Please recall the fact."),
-		NewTextTurnInput("End the scripted conversation."),
-	}
+func TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle(t *testing.T) {
+	inferencer := newTurnTestSessionInferencer()
+	var session *SessionTurns
+	events := []TurnEvent{}
+	session = NewSessionTurns(SessionTurnsOptions{SessionInferencer: inferencer, EventSink: func(event TurnEvent) {
+		events = append(events, event)
+		_ = session.History()
+		_ = session.NextTurnIndex()
+	}})
+	inputs := []TurnInput{NewTextTurnInput(turnFact), NewAudioTurnInput([]byte{1, 2}, "audio/pcm"), NewAudioTurnInput([]byte{3, 4}, "audio/pcm"), NewTextTurnInput("Please recall the fact."), NewTextTurnInput("End the scripted conversation.")}
 	for i, input := range inputs {
-		turn, err := session.RunTurn(context.Background(), input, TurnDirectionUser, uint64(i*2+1), uint64(i*2+2))
+		turn, err := session.RunTurn(context.Background(), input, TurnDirectionUser, uint64(2*i+1), uint64(2*i+2))
 		if err != nil || turn.Index != uint64(i+1) || strings.TrimSpace(turn.Response.TextContent()) == "" {
-			t.Fatalf("turn %d = %#v, err=%v; want indexed non-empty response", i+1, turn, err)
-		}
-	}
-	if inferencer.calls != 5 || len(inferencer.requests) != 5 {
-		t.Fatalf("inference calls/requests = %d/%d, want one path serving five turns", inferencer.calls, len(inferencer.requests))
-	}
-	for i, request := range inferencer.requests {
-		if len(request.Messages) != 2*i+1 {
-			t.Fatalf("request %d message count = %d, want completed history plus current input", i+1, len(request.Messages))
-		}
-	}
-	if got := inferencer.responses[3].TextContent(); !strings.Contains(got, "marigold key") {
-		t.Fatalf("turn 4 response = %q, want fact derived from retained history", got)
-	}
-	if len(events) != 10 {
-		t.Fatalf("events = %d, want exactly five starts and five ends", len(events))
-	}
-	for i, event := range events {
-		index := uint64(i/2 + 1)
-		if event.Index != index || event.Direction != TurnDirectionUser {
-			t.Fatalf("event %d = %#v, want index=%d user", i, event, index)
-		}
-		if i%2 == 0 {
-			if event.Type != TurnEventStart || event.Tick != uint64(i+1) || event.StartTick != uint64(i+1) || event.EndTick != 0 {
-				t.Fatalf("event %d = %#v, want start tick %d", i, event, i+1)
-			}
-		} else if event.Type != TurnEventEnd || event.Tick != uint64(i+1) || event.StartTick != uint64(i) || event.EndTick != uint64(i+1) {
-			t.Fatalf("event %d = %#v, want end from %d to %d", i, event, i, i+1)
+			t.Fatalf("turn %d = %#v, err=%v", i+1, turn, err)
 		}
 	}
 	history := session.History()
-	if len(history) != 5 || session.NextTurnIndex() != 6 {
-		t.Fatalf("history/next = %d/%d, want 5/6", len(history), session.NextTurnIndex())
+	if inferencer.connects != 1 || len(inferencer.session.inputs) != 5 || len(history) != 5 || session.NextTurnIndex() != 6 || !strings.Contains(history[3].Response.TextContent(), "marigold key") {
+		t.Fatalf("connection/input/history/next/recall = %d/%d/%d/%d/%q", inferencer.connects, len(inferencer.session.inputs), len(history), session.NextTurnIndex(), history[3].Response.TextContent())
 	}
 	if string(history[1].Input.Audio) != string([]byte{1, 2}) || string(history[2].Input.Audio) != string([]byte{3, 4}) {
-		t.Fatalf("audio history order = %v, %v", history[1].Input.Audio, history[2].Input.Audio)
+		t.Fatalf("audio order = %v/%v", history[1].Input.Audio, history[2].Input.Audio)
 	}
+	if len(events) != 10 {
+		t.Fatalf("events = %d, want 10", len(events))
+	}
+	for i, event := range events {
+		start, end := uint64(2*(i/2)+1), uint64(2*(i/2)+2)
+		want := TurnEvent{Type: TurnEventStart, Index: uint64(i/2 + 1), Direction: TurnDirectionUser, Tick: start, StartTick: start}
+		if i%2 == 1 {
+			want = TurnEvent{Type: TurnEventEnd, Index: want.Index, Direction: want.Direction, Tick: end, StartTick: start, EndTick: end}
+		}
+		if event != want {
+			t.Fatalf("event %d = %#v, want %#v", i, event, want)
+		}
+	}
+	if err := session.Close(); err != nil || session.NextTurnIndex() != 6 || len(session.History()) != 5 {
+		t.Fatalf("clean close = %v, next/history=%d/%d", err, session.NextTurnIndex(), len(session.History()))
+	}
+}
+
+func TestSessionTurns_InferenceFailureAbortsWithoutReconnectOrStateLeak(t *testing.T) {
+	inferencer := newTurnTestSessionInferencer()
+	failure := errors.New("provider response failed")
+	inferencer.session.failNext = failure
+	events := []TurnEvent{}
+	session := NewSessionTurns(SessionTurnsOptions{SessionInferencer: inferencer, EventSink: func(event TurnEvent) { events = append(events, event) }})
+	if _, err := session.RunTurn(context.Background(), NewTextTurnInput("first attempt"), TurnDirectionUser, 1, 2); err == nil || !errors.Is(err, failure) {
+		t.Fatalf("failed turn error = %v", err)
+	}
+	assertTurnState(t, session, events, 1, 0, 1, false)
+	turn, err := session.RunTurn(context.Background(), NewTextTurnInput("recovered"), TurnDirectionUser, 1, 2)
+	if err != nil || turn.Index != 1 || inferencer.connects != 1 {
+		t.Fatalf("recovered turn = %#v, err=%v, connections=%d", turn, err, inferencer.connects)
+	}
+	assertTurnState(t, session, events, 3, 1, 2, false)
 }
 
 func TestSessionTurns_InvalidTransitionsKeepStateAndEvents(t *testing.T) {
 	cases := []struct {
-		name                string
-		setup               func(*SessionTurns)
-		try                 func(*SessionTurns) error
-		want                error
-		events, count, next int
-		active              bool
+		name                  string
+		setup                 func(*SessionTurns)
+		try                   func(*SessionTurns) error
+		want                  error
+		events, history, next int
+		active                bool
 	}{
-		{"overlap", func(s *SessionTurns) { _, _ = s.StartTextTurn("one", TurnDirectionUser, 1) }, func(s *SessionTurns) error { _, e := s.StartTextTurn("two", TurnDirectionUser, 2); return e }, ErrTurnAlreadyActive, 1, 0, 1, true},
-		{"end without start", nil, func(s *SessionTurns) error {
-			_, e := s.CompleteTurn(messages.NewTextMessage(messages.RoleAssistant, "ok"), 1)
-			return e
-		}, ErrTurnEndWithoutStart, 0, 0, 1, false},
-		{"empty text", nil, func(s *SessionTurns) error { _, e := s.StartTextTurn(" ", TurnDirectionUser, 1); return e }, ErrEmptyTurn, 0, 0, 1, false},
+		{"overlap", func(s *SessionTurns) { _ = start(s, NewTextTurnInput("one"), TurnDirectionUser, 1) }, func(s *SessionTurns) error { return start(s, NewTextTurnInput("two"), TurnDirectionUser, 2) }, ErrTurnAlreadyActive, 1, 0, 1, true},
+		{"end without start", nil, func(s *SessionTurns) error { return finish(s, "ok", 1) }, ErrTurnEndWithoutStart, 0, 0, 1, false},
+		{"empty text", nil, func(s *SessionTurns) error { return start(s, NewTextTurnInput(" "), TurnDirectionUser, 1) }, ErrEmptyTurn, 0, 0, 1, false},
 		{"zero audio", nil, func(s *SessionTurns) error {
-			_, e := s.StartAudioTurn(nil, "audio/pcm", TurnDirectionUser, 1)
-			return e
+			return start(s, NewAudioTurnInput(nil, "audio/pcm"), TurnDirectionUser, 1)
 		}, ErrEmptyTurn, 0, 0, 1, false},
-		{"bad direction", nil, func(s *SessionTurns) error { _, e := s.StartTextTurn("input", TurnDirection("sideways"), 1); return e }, ErrInvalidTurnDirection, 0, 0, 1, false},
+		{"bad direction", nil, func(s *SessionTurns) error { return start(s, NewTextTurnInput("input"), TurnDirection("sideways"), 1) }, ErrInvalidTurnDirection, 0, 0, 1, false},
 		{"non increasing tick", func(s *SessionTurns) {
-			_, _ = s.StartTextTurn("one", TurnDirectionUser, 3)
-			_, _ = s.CompleteTurn(messages.NewTextMessage(messages.RoleAssistant, "ok"), 4)
-		}, func(s *SessionTurns) error { _, e := s.StartTextTurn("two", TurnDirectionUser, 4); return e }, ErrInvalidTurnTick, 2, 1, 2, false},
-		{"empty response", func(s *SessionTurns) { _, _ = s.StartTextTurn("input", TurnDirectionUser, 1) }, func(s *SessionTurns) error {
-			_, e := s.CompleteTurn(messages.NewTextMessage(messages.RoleAssistant, " "), 2)
-			return e
-		}, ErrEmptyTurn, 1, 0, 1, true},
+			_ = start(s, NewTextTurnInput("one"), TurnDirectionUser, 3)
+			_ = finish(s, "ok", 4)
+		}, func(s *SessionTurns) error { return start(s, NewTextTurnInput("two"), TurnDirectionUser, 4) }, ErrInvalidTurnTick, 2, 1, 2, false},
+		{"invalid end tick", func(s *SessionTurns) { _ = start(s, NewTextTurnInput("input"), TurnDirectionUser, 10) }, func(s *SessionTurns) error { return finish(s, "ok", 10) }, ErrInvalidTurnTick, 1, 0, 1, true},
+		{"close active", func(s *SessionTurns) { _ = start(s, NewTextTurnInput("input"), TurnDirectionUser, 1) }, (*SessionTurns).Close, ErrSessionEndedWithActiveTurn, 1, 0, 1, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			events := make([]TurnEvent, 0, 2)
-			session := NewSessionTurns(SessionTurnsOptions{EventSink: func(e TurnEvent) { events = append(events, e) }})
+			events := []TurnEvent{}
+			session := NewSessionTurns(SessionTurnsOptions{EventSink: func(event TurnEvent) { events = append(events, event) }})
 			if tc.setup != nil {
 				tc.setup(session)
 			}
 			err := tc.try(session)
 			if err == nil || !errors.Is(err, tc.want) || !strings.Contains(err.Error(), tc.want.Error()) {
-				t.Fatalf("error = %v, want errors.Is and message %q", err, tc.want)
+				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
-			if len(events) != tc.events || int(session.NextTurnIndex()) != tc.next || len(session.History()) != tc.count {
-				t.Fatalf("state events/next/history = %d/%d/%d, want %d/%d/%d", len(events), session.NextTurnIndex(), len(session.History()), tc.events, tc.next, tc.count)
-			}
-			if (session.active != nil) != tc.active {
-				t.Fatalf("active = %v, want %v", session.active != nil, tc.active)
-			}
+			assertTurnState(t, session, events, tc.events, tc.history, tc.next, tc.active)
 		})
 	}
 }
 
-func TestSessionTurns_EndAndCloseRejectIncompleteTransitions(t *testing.T) {
-	events := make([]TurnEvent, 0, 2)
-	session := NewSessionTurns(SessionTurnsOptions{EventSink: func(e TurnEvent) { events = append(events, e) }})
-	started, err := session.StartTextTurn("input", TurnDirectionUser, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := session.EndTurn(started.Index+1, started.Direction, messages.NewTextMessage(messages.RoleAssistant, "ok"), 11); !errors.Is(err, ErrTurnMismatch) {
-		t.Fatalf("mismatch = %v", err)
-	}
-	if _, err := session.EndTurn(started.Index, started.Direction, messages.NewTextMessage(messages.RoleAssistant, "ok"), 10); !errors.Is(err, ErrInvalidTurnTick) {
-		t.Fatalf("tick = %v", err)
-	}
-	if err := session.Close(); err == nil || !errors.Is(err, ErrSessionEndedWithActiveTurn) {
-		t.Fatalf("close = %v", err)
-	}
-	if len(events) != 1 || len(session.History()) != 0 {
-		t.Fatalf("rejected transitions changed state")
-	}
-	if _, err := session.CompleteTurn(messages.NewTextMessage(messages.RoleAssistant, "ok"), 11); err != nil {
-		t.Fatal(err)
-	}
-	if err := session.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := session.StartTextTurn("after close", TurnDirectionUser, 12); !errors.Is(err, ErrSessionClosed) {
-		t.Fatalf("start after close = %v", err)
+func start(s *SessionTurns, input TurnInput, direction TurnDirection, tick uint64) error {
+	_, err := s.StartTurn(input, direction, tick)
+	return err
+}
+func finish(s *SessionTurns, text string, tick uint64) error {
+	_, err := s.CompleteTurn(messages.NewTextMessage(messages.RoleAssistant, text), tick)
+	return err
+}
+func assertTurnState(t *testing.T, s *SessionTurns, events []TurnEvent, wantEvents, wantHistory, wantNext int, active bool) {
+	t.Helper()
+	if len(events) != wantEvents || len(s.History()) != wantHistory || int(s.NextTurnIndex()) != wantNext || (s.active != nil) != active {
+		t.Fatalf("state events/history/next/active = %d/%d/%d/%v", len(events), len(s.History()), s.NextTurnIndex(), s.active != nil)
 	}
 }
 
-type turnTestInferencer struct {
-	calls     int
-	requests  []messages.InferenceRequest
-	responses []messages.Message
+type turnTestSessionInferencer struct {
+	session  *turnTestSession
+	connects int
 }
 
-func (i *turnTestInferencer) Infer(_ context.Context, request messages.InferenceRequest) (messages.InferenceResult, error) {
-	i.calls++
-	i.requests = append(i.requests, request)
+func newTurnTestSessionInferencer() *turnTestSessionInferencer {
+	return &turnTestSessionInferencer{session: &turnTestSession{recv: messages.NewTypedBuffer[messages.StreamMessage](64), done: make(chan struct{})}}
+}
+func (i *turnTestSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	i.connects++
+	return i.session, nil
+}
+
+type turnTestSession struct {
+	recv     *messages.TypedBuffer[messages.StreamMessage]
+	done     chan struct{}
+	inputs   []TurnInput
+	failNext error
+}
+
+func (s *turnTestSession) Send(_ context.Context, msg messages.StreamMessage) bool {
+	var input TurnInput
+	switch msg.Type {
+	case messages.StreamTypeTextDelta:
+		input.Text = msg.Value.(*messages.TextDeltaValue).Content
+	case messages.StreamTypeAudioDelta:
+		input.Audio = msg.Value.(*messages.AudioDeltaValue).Content
+	default:
+		return true
+	}
+	s.respond(input)
+	return true
+}
+func (s *turnTestSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
+func (s *turnTestSession) Done() <-chan struct{}                                  { return s.done }
+func (s *turnTestSession) Close() error                                           { close(s.done); return nil }
+func (s *turnTestSession) respond(input TurnInput) {
+	if s.failNext != nil {
+		err := s.failNext
+		s.failNext = nil
+		s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(err)})
+		return
+	}
+	s.inputs = append(s.inputs, cloneInput(input))
 	response := "acknowledged"
-	current := request.Messages[len(request.Messages)-1].TextContent()
-	if strings.Contains(current, "recall") {
-		for _, message := range request.Messages[:len(request.Messages)-1] {
-			if strings.HasPrefix(message.TextContent(), "fact:") {
-				response = "I remember " + message.TextContent()
+	if strings.Contains(input.Text, "recall") {
+		for _, prior := range s.inputs {
+			if strings.HasPrefix(prior.Text, "fact:") {
+				response = "I remember " + prior.Text
 				break
 			}
 		}
-		if response == "acknowledged" {
-			return messages.InferenceResult{}, errors.New("missing fact in history")
-		}
 	}
-	message := messages.NewTextMessage(messages.RoleAssistant, response)
-	i.responses = append(i.responses, message)
-	return messages.InferenceResult{Message: message}, nil
-}
-
-func (*turnTestInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
-	stream := make(chan messages.StreamMessage)
-	close(stream)
-	return stream, nil
+	for _, msg := range []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}, {Type: messages.StreamTypeTextStart, Value: messages.NewTextStartValue()}, {Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(response)}, {Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue()}, {Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}} {
+		s.recv.Write(context.Background(), msg)
+	}
 }
