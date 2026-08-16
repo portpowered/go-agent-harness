@@ -1,0 +1,7 @@
+{"message":"typed_buffer_crossing","direction":"in","buffer":"model.inbox","type":"InferenceRequest","modality":"text","byte_size":128,"sequence":1,"logical_tick":4}
+{"message":"typed_buffer_crossing","direction":"out","buffer":"model.delta_outbox","type":"StreamMessage","modality":"text","byte_size":42,"sequence":2,"logical_tick":4}
+{"message":"typed_buffer_crossing","direction":"in","buffer":"tool.inbox","type":"ToolBatchRequest","modality":"tool","byte_size":256,"sequence":3,"logical_tick":5}
+{"message":"typed_buffer_crossing","direction":"out","buffer":"tool.delta_outbox","type":"StreamMessage","modality":"audio","byte_size":640,"sequence":4,"logical_tick":5}
+{"message":"typed_buffer_crossing","direction":"in","buffer":"user.inbox","type":"UserRequest","modality":"text","byte_size":7,"sequence":5,"logical_tick":6}
+{"message":"typed_buffer_crossing","direction":"out","buffer":"user.outbox","type":"UserResponse","modality":"text","byte_size":18,"sequence":6,"logical_tick":6}
+{"message":"typed_buffer_crossing","direction":"in","buffer":"kernel.delta_inbox","type":"KernelDeltaRequest","modality":"data","byte_size":1024,"sequence":7,"logical_tick":7}
