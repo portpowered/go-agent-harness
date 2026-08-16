@@ -1,0 +1,56 @@
+model:
+    provider: local
+    openai: null
+    claude: null
+    openrouter:
+        model: z-ai/glm-4.7
+        api_key: ""
+        base_url: https://openrouter.ai/api/v1
+    local:
+        model: llama3
+        api_key: ""
+        base_url: <local-server>
+    fal: null
+    grok: null
+    continuation_nudge_enabled: false
+    continuation_nudge_message: ""
+    repetition_penalty: 0
+tools:
+    web:
+        brave:
+            enabled: false
+            api_key: ""
+            max_results: 0
+        duckduckgo:
+            enabled: false
+            max_results: 0
+    cron:
+        exec_timeout_minutes: 0
+    exec:
+        enable_deny_patterns: false
+        custom_deny_patterns: []
+    list:
+        - id: exec
+          enabled: true
+        - id: read_file
+          enabled: true
+        - id: write_file
+          enabled: true
+        - id: edit_file
+          enabled: true
+        - id: append_file
+          enabled: true
+        - id: list_dir
+          enabled: true
+        - id: web_fetch
+          enabled: true
+        - id: web_search
+          enabled: true
+        - id: show
+          enabled: true
+        - id: mouse
+          enabled: true
+        - id: load_skill
+          enabled: true
+        - id: sleep
+          enabled: true

@@ -1,0 +1,6 @@
+{"Action":"start","Package":"example.com/z"}
+{"Action":"pass","Package":"example.com/z","Elapsed":30}
+{"Action":"start","Package":"example.com/a"}
+{"Action":"pass","Package":"example.com/a","Elapsed":30}
+{"Action":"start","Package":"example.com/slow"}
+{"Action":"pass","Package":"example.com/slow","Elapsed":1.5}

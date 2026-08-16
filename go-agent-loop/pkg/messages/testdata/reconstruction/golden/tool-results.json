@@ -1,0 +1,54 @@
+{
+  "name": "tool-results",
+  "messages": [
+    {
+      "role": "tool",
+      "content_parts": [
+        {
+          "type": "text",
+          "text": "tool output"
+        },
+        {
+          "type": "image",
+          "bytes": "EAA=",
+          "media_type": "image/png"
+        },
+        {
+          "type": "audio",
+          "bytes": "IAA=",
+          "media_type": "audio/pcm"
+        },
+        {
+          "type": "video",
+          "bytes": "MAA=",
+          "media_type": "video/mp4"
+        },
+        {
+          "type": "file",
+          "bytes": "QAA=",
+          "media_type": "application/pdf",
+          "name": "result.pdf"
+        },
+        {
+          "type": "embedding",
+          "bytes": "UAA=",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "refusal": "",
+      "tool_calls": null,
+      "tool_call_id": "tool-first"
+    },
+    {
+      "role": "tool",
+      "content_parts": [
+        {
+          "type": "text"
+        }
+      ],
+      "refusal": "",
+      "tool_calls": null,
+      "tool_call_id": "tool-second"
+    }
+  ]
+}

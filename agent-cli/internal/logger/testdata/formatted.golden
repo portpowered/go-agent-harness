@@ -1,0 +1,4 @@
+<timestamp>	debug	<caller>	debug record	{"kind": "debug", "sequence": 1}
+<timestamp>	info	<caller>	info record	{"kind": "info", "sequence": 2}
+<timestamp>	warn	<caller>	warn record	{"kind": "warn", "sequence": 3}
+<timestamp>	error	<caller>	error record	{"kind": "error", "sequence": 4}
