@@ -3,6 +3,9 @@ package transcript
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -102,6 +105,77 @@ func TestTeeSupportsByteOrientedLiveWriter(t *testing.T) {
 	}
 }
 
+func TestTeeRotationPreservesLiveResultAndTranscript(t *testing.T) {
+	const (
+		total      = 24
+		maxBackups = 4
+	)
+	inputs := make([]Record, 0, total)
+	for index := 0; index < total; index++ {
+		peer := PeerClient
+		direction := DirectionIn
+		if index%2 == 1 {
+			peer = PeerAgent
+			direction = DirectionOut
+		}
+		inputs = append(inputs, NewRecord(uint64(index+1), time.Unix(int64(index+1), 0),
+			peer, direction, StreamRTCData,
+			bytes.Repeat([]byte{byte(index), 0x00, 0xff}, 80)))
+	}
+	liveError := errors.New("live consumer sentinel")
+	results := make([]consumerResult, total)
+	for index := range results {
+		results[index] = consumerResult{count: 1}
+	}
+	results[6] = consumerResult{err: liveError}
+	results[13] = consumerResult{count: 2, err: liveError}
+
+	baselineLive := &scriptedByteConsumer{results: results}
+	teeLive := &scriptedByteConsumer{results: results}
+	path := filepath.Join(t.TempDir(), "tee-rolling.jsonl")
+	writer, err := NewWriter(path, WithSegmentSize(8*1024), WithMaxBackups(maxBackups))
+	if err != nil {
+		t.Fatalf("NewWriter: %v", err)
+	}
+	tee := NewTee(teeLive, writer)
+	var expectedTranscript []Record
+	for index, input := range inputs {
+		wantCount, wantErr := baselineLive.Write(input)
+		gotCount, gotErr := tee.Write(input)
+		if gotCount != wantCount || gotErr != wantErr {
+			t.Fatalf("input %d result = (%d, %v), want (%d, %v)", index, gotCount, gotErr, wantCount, wantErr)
+		}
+		if wantCount > 0 {
+			expectedTranscript = append(expectedTranscript, input)
+		}
+	}
+	if baselineLive.calls != total || teeLive.calls != total {
+		t.Fatalf("live calls = (%d, %d), want (%d, %d)", baselineLive.calls, teeLive.calls, total, total)
+	}
+	if !bytes.Equal(teeLive.buffer.Bytes(), baselineLive.buffer.Bytes()) {
+		t.Fatalf("teed live bytes differ from baseline")
+	}
+	if writer.AcceptedCount() != uint64(len(expectedTranscript)) {
+		t.Fatalf("transcript accepted count = %d, want %d", writer.AcceptedCount(), len(expectedTranscript))
+	}
+	if err := tee.Close(); err != nil {
+		t.Fatalf("Tee.Close: %v", err)
+	}
+	if _, err := os.Stat(BackupPath(path, 1)); err != nil {
+		t.Fatalf("forced rotation backup: %v", err)
+	}
+
+	gotTranscript := readRecordsFromSegments(t, path, maxBackups)
+	if len(gotTranscript) != len(expectedTranscript) {
+		t.Fatalf("transcript records = %d, want %d", len(gotTranscript), len(expectedTranscript))
+	}
+	for index := range expectedTranscript {
+		if !recordsEqual(gotTranscript[index], expectedTranscript[index]) {
+			t.Fatalf("transcript record %d = %+v, want %+v", index, gotTranscript[index], expectedTranscript[index])
+		}
+	}
+}
+
 type capturingConsumer struct {
 	records []Record
 	results []consumerResult
@@ -140,6 +214,28 @@ func (s *capturingSink) Write(record Record) error {
 type errorSink struct{ err error }
 
 func (s *errorSink) Write(Record) error { return s.err }
+
+type scriptedByteConsumer struct {
+	buffer  bytes.Buffer
+	results []consumerResult
+	calls   int
+}
+
+func (c *scriptedByteConsumer) Write(record Record) (int, error) {
+	encoded, err := Encode(record)
+	if err != nil {
+		return 0, fmt.Errorf("encode scripted live record: %w", err)
+	}
+	if _, err := c.buffer.Write(encoded); err != nil {
+		return 0, err
+	}
+	if c.calls >= len(c.results) {
+		return 0, errors.New("scripted live consumer called too many times")
+	}
+	result := c.results[c.calls]
+	c.calls++
+	return result.count, result.err
+}
 
 func cloneRecord(record Record) Record {
 	record.Payload = append([]byte(nil), record.Payload...)
