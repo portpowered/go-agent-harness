@@ -18,13 +18,15 @@ func TestResolveSelectionRows(t *testing.T) {
 		{"output only", "", "virtual:output-choice", "virtual:input-default", "virtual:output-choice", 1, 1},
 		{"both names", "desk", "MONITOR", "virtual:input-choice", "virtual:output-choice", 2, 0},
 		{"exact ID", "virtual:input-exact", "", "virtual:input-exact", "virtual:output-default", 1, 1},
+		{"file input skips input device", "", "", "", "virtual:output-default", 0, 1},
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
 			r := newSelectionRegistry(t)
-			got, err := audio.ResolveDeviceSelection(r, audio.DeviceSelectionRequest{InputSelector: row.input, OutputSelector: row.output})
+			got, err := audio.ResolveDeviceSelection(r, audio.DeviceSelectionRequest{InputSelector: row.input, OutputSelector: row.output, AudioInConfigured: row.wantInput == ""})
 			require.NoError(t, err)
-			require.True(t, got.InputSelected && got.OutputSelected)
+			require.Equal(t, row.wantInput != "", got.InputSelected)
+			require.True(t, got.OutputSelected)
 			require.Equal(t, row.wantInput, got.Input.ID)
 			require.Equal(t, row.wantOutput, got.Output.ID)
 			require.Equal(t, audio.DeviceLossPolicyFail, got.LossPolicy)
@@ -95,6 +97,20 @@ func TestSelectionValidationAndAcquisition(t *testing.T) {
 			}
 		})
 	}
+	t.Run("open closes idempotently and cleans partial acquisition", func(t *testing.T) {
+		r := newSelectionRegistry(t)
+		got, err := audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{InputSelector: "virtual:input-choice", OutputSelector: "virtual:output-choice"})
+		require.NoError(t, err)
+		require.NoError(t, got.Close())
+		require.NoError(t, got.Close())
+		require.Equal(t, audio.DeviceRegistryObservations{OpenCount: 2, ReleaseCount: 2}, r.observations())
+
+		r = newSelectionRegistry(t)
+		r.inUse["virtual:output-choice"] = true
+		_, err = audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{InputSelector: "virtual:input-choice", OutputSelector: "virtual:output-choice"})
+		require.ErrorIs(t, err, audio.ErrDeviceInUse)
+		require.Equal(t, audio.DeviceRegistryObservations{OpenCount: 1, ReleaseCount: 1}, r.observations())
+	})
 }
 func TestHandleDeviceLossPolicies(t *testing.T) {
 	for _, tc := range []struct {
@@ -194,9 +210,9 @@ type staleDefaultRegistry struct {
 
 func (r *staleDefaultRegistry) Default(direction audio.Direction) (audio.Device, error) {
 	if r.device.Direction == direction {
-		r.fixtureRegistry.mu.Lock()
-		r.fixtureRegistry.defaultCalls++
-		r.fixtureRegistry.mu.Unlock()
+		r.mu.Lock()
+		r.defaultCalls++
+		r.mu.Unlock()
 		return r.device, nil
 	}
 	return r.fixtureRegistry.Default(direction)
