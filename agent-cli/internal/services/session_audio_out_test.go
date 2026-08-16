@@ -160,7 +160,7 @@ func TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas(t *testing.T
 }
 
 func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *testing.T) {
-	first := sessionAudioFrame(1200)
+	first := []int16{1200, 1201, 1202}
 	second := sessionAudioFrame(-1400)
 	release := make(chan struct{})
 	released := false
@@ -328,7 +328,7 @@ func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *t
 }
 
 func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
-	first := sessionAudioFrame(1200)
+	first := []int16{1200, 1201, 1202}
 	second := sessionAudioFrame(-1400)
 	firstBytes := pcm16Bytes(first)
 	release := make(chan struct{})

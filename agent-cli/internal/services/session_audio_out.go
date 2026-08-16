@@ -98,7 +98,6 @@ type sessionAudioOutput struct {
 
 	mu        sync.Mutex
 	closed    bool
-	pending   []int16
 	closeOnce sync.Once
 	closeErr  error
 }
@@ -157,8 +156,10 @@ func newSessionAudioSink(path string, out io.Writer) (audio.AudioSink, error) {
 	return sink, nil
 }
 
-// sessionAudioSink is an AudioSink-backed stream. Complete frames go through
-// the established audio sink; only a final partial frame uses WriteSamples.
+// sessionAudioSink is an AudioSink-backed stream. Session deltas use
+// WriteSamples so every sample becomes observable before the delta returns;
+// the frame-oriented AudioSink API remains available for the established sink
+// contract.
 // WAV headers are rewritten in place after each write, so the file grows and
 // remains readable throughout the session without retaining the response.
 type sessionAudioSink struct {
@@ -356,34 +357,21 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte) err
 	if o.closed {
 		return audio.ErrClosed
 	}
-	o.pending = append(o.pending, samples...)
-	for len(o.pending) >= audio.FrameSize {
-		frame := append([]int16(nil), o.pending[:audio.FrameSize]...)
-		o.pending = o.pending[audio.FrameSize:]
-		if err := o.sink.WriteFrame(ctx, frame); err != nil {
-			return err
-		}
+	writer, ok := o.sink.(sessionAudioSamplesWriter)
+	if !ok {
+		return fmt.Errorf("PCM16 audio output cannot stream a %d-sample delta", len(samples))
 	}
-	return nil
+	return writer.WriteSamples(ctx, samples)
 }
 
 func (o *sessionAudioOutput) close() error {
 	o.closeOnce.Do(func() {
 		o.mu.Lock()
 		o.closed = true
-		var pendingErr error
-		if len(o.pending) != 0 {
-			writer, ok := o.sink.(sessionAudioSamplesWriter)
-			if !ok {
-				pendingErr = fmt.Errorf("PCM16 audio output cannot write a trailing %d-sample fragment", len(o.pending))
-			} else {
-				pendingErr = writer.WriteSamples(context.Background(), o.pending)
-			}
-		}
 		sinkErr := o.sink.Close()
 		o.mu.Unlock()
 		o.mu.Lock()
-		o.closeErr = errors.Join(pendingErr, sinkErr)
+		o.closeErr = sinkErr
 		o.mu.Unlock()
 	})
 	o.mu.Lock()
