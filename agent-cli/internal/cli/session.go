@@ -77,12 +77,12 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Present: cmd.Flags().Changed("prompt"),
 			}
 			if cmd.Flags().Changed("audio-in") {
-				return services.RunSessionWithAudioInputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, maxDuration, seed, services.SessionAudioInput{
+				return services.RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, maxDuration, seed, services.SessionAudioInput{
 					Path:          audioIn,
 					Stdin:         cmd.InOrStdin(),
 					Present:       true,
 					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-				})
+				}, c.askFlags.SystemPrompt)
 			}
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
