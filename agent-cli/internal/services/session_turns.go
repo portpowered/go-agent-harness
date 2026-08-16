@@ -12,15 +12,11 @@ import (
 
 type TurnDirection string
 
-const TurnDirectionUser TurnDirection = "user"
-const TurnDirectionAssistant TurnDirection = "assistant"
-const TurnDirectionClientToServer TurnDirection = "client_to_server"
-const TurnDirectionServerToClient TurnDirection = "server_to_client"
+const TurnDirectionUser, TurnDirectionAssistant, TurnDirectionClientToServer, TurnDirectionServerToClient TurnDirection = "user", "assistant", "client_to_server", "server_to_client"
 
 type TurnEventType string
 
-const TurnEventStart TurnEventType = "turn-start"
-const TurnEventEnd TurnEventType = "turn-end"
+const TurnEventStart, TurnEventEnd TurnEventType = "turn-start", "turn-end"
 
 type TurnEvent struct {
 	Type                     TurnEventType
@@ -35,11 +31,9 @@ type TurnInput struct {
 	MediaType string
 }
 
-func NewTextTurnInput(text string) TurnInput { return TurnInput{Text: text} }
-func NewAudioTurnInput(audio []byte, mediaType string) TurnInput {
-	return TurnInput{Audio: append([]byte(nil), audio...), MediaType: mediaType}
-}
-func (in TurnInput) Empty() bool { return strings.TrimSpace(in.Text) == "" && len(in.Audio) == 0 }
+func NewTextTurnInput(text string) TurnInput         { return TurnInput{Text: text} }
+func NewAudioTurnInput(a []byte, m string) TurnInput { return TurnInput{"", append(a[:0:0], a...), m} }
+func (in TurnInput) Empty() bool                     { return strings.TrimSpace(in.Text) == "" && len(in.Audio) == 0 }
 
 type SessionTurn struct {
 	Index              uint64
@@ -63,15 +57,13 @@ type SessionTurns struct {
 	closed            bool
 }
 
-var ErrTurnAlreadyActive = errors.New("turn start while another turn is active")
-var ErrTurnEndWithoutStart = errors.New("turn end without start: no active turn")
-var ErrEmptyTurn = errors.New("turn content must not be empty")
-var ErrInvalidTurnDirection = errors.New("turn direction is invalid")
-var ErrInvalidTurnTick = errors.New("turn tick must be strictly increasing")
-var ErrSessionEndedWithActiveTurn = errors.New("session ended with active turn")
-var ErrSessionClosed = errors.New("session is closed")
-var ErrTurnMismatch = errors.New("turn does not match the active turn")
-var ErrMissingTurnInferencer = errors.New("session turn inferencer is not configured")
+var (
+	ErrTurnAlreadyActive, ErrTurnEndWithoutStart      = errors.New("turn start while another turn is active"), errors.New("turn end without start: no active turn")
+	ErrEmptyTurn, ErrInvalidTurnDirection             = errors.New("turn content must not be empty"), errors.New("turn direction is invalid")
+	ErrInvalidTurnTick, ErrSessionEndedWithActiveTurn = errors.New("turn tick must be strictly increasing"), errors.New("session ended with active turn")
+	ErrSessionClosed, ErrTurnMismatch                 = errors.New("session is closed"), errors.New("turn does not match the active turn")
+	ErrMissingTurnInferencer                          = errors.New("session turn inferencer is not configured")
+)
 
 func transitionError(op string, cause error) error { return fmt.Errorf("%s turn: %w", op, cause) }
 func NewSessionTurns(opts SessionTurnsOptions) *SessionTurns {
@@ -93,7 +85,7 @@ func (s *SessionTurns) StartTurn(input TurnInput, direction TurnDirection, tick 
 	case len(s.history) != 0 && tick <= s.history[len(s.history)-1].EndTick:
 		return SessionTurn{}, transitionError("start", ErrInvalidTurnTick)
 	}
-	turn = SessionTurn{Index: s.nextIndex, Direction: direction, Input: cloneInput(input), StartTick: tick}
+	turn = SessionTurn{Index: s.nextIndex, Direction: direction, Input: copyInput(input), StartTick: tick}
 	s.active = &turn
 	event = TurnEvent{Type: TurnEventStart, Index: turn.Index, Direction: direction, Tick: tick, StartTick: tick}
 	return cloneTurn(turn), nil
@@ -112,7 +104,7 @@ func (s *SessionTurns) EndTurn(index uint64, direction TurnDirection, response m
 	switch {
 	case (index != 0 && index != active.Index) || (direction != "" && direction != active.Direction):
 		return SessionTurn{}, transitionError("end", ErrTurnMismatch)
-	case !messageHasContent(response):
+	case strings.TrimSpace(response.TextContent()) == "" && response.Refusal == "" && len(response.ToolCalls) == 0 && len(response.ContentParts) == 0:
 		return SessionTurn{}, transitionError("end", ErrEmptyTurn)
 	case tick <= active.StartTick:
 		return SessionTurn{}, transitionError("end", ErrInvalidTurnTick)
@@ -153,8 +145,8 @@ func (s *SessionTurns) History() []SessionTurn {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]SessionTurn, len(s.history))
-	for i := range s.history {
-		out[i] = cloneTurn(s.history[i])
+	for i, turn := range s.history {
+		out[i] = cloneTurn(turn)
 	}
 	return out
 }
@@ -226,10 +218,7 @@ func sendTurnInput(ctx context.Context, session messages.Session, input TurnInpu
 	return nil
 }
 func sendError(ctx context.Context, operation string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return fmt.Errorf("%s turn input: session rejected message", operation)
+	return errors.Join(ctx.Err(), fmt.Errorf("%s turn input: session rejected message", operation))
 }
 func readTurnResponse(ctx context.Context, session messages.Session) (messages.Message, error) {
 	buffer := session.Receive()
@@ -247,8 +236,6 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 			return messages.Message{}, transitionError("read", ErrSessionClosed)
 		}
 		switch msg.Type {
-		case messages.StreamTypeSessionOpen, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeUsageInfo, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped:
-			continue
 		case messages.StreamTypeError:
 			value, _ := msg.Value.(*messages.ErrorValue)
 			if value != nil && value.Err != nil {
@@ -266,17 +253,8 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 			continue
 		}
 		response := messages.ReconstructModelMessageFromDeltas(deltas)
-		if !messageHasContent(response) {
-			return messages.Message{}, transitionError("end", ErrEmptyTurn)
-		}
 		return response, nil
 	}
 }
-func messageHasContent(message messages.Message) bool {
-	return strings.TrimSpace(message.TextContent()) != "" || message.Refusal != "" || len(message.ToolCalls) != 0 || len(message.ContentParts) != 0
-}
-func cloneInput(input TurnInput) TurnInput {
-	input.Audio = append([]byte(nil), input.Audio...)
-	return input
-}
-func cloneTurn(turn SessionTurn) SessionTurn { turn.Input = cloneInput(turn.Input); return turn }
+func copyInput(in TurnInput) TurnInput       { in.Audio = append([]byte(nil), in.Audio...); return in }
+func cloneTurn(turn SessionTurn) SessionTurn { turn.Input = copyInput(turn.Input); return turn }

@@ -14,7 +14,7 @@ const turnFact = "fact: the marigold key is hidden under stone seven"
 var noTurnSetup = func(*SessionTurns) {}
 
 func TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle(t *testing.T) {
-	inferencer := newTurnTestSessionInferencer()
+	inferencer := &turnTestSession{scriptedSession: newScriptedSession()}
 	var session *SessionTurns
 	events := []TurnEvent{}
 	session = NewSessionTurns(SessionTurnsOptions{SessionInferencer: inferencer, EventSink: func(event TurnEvent) {
@@ -37,8 +37,8 @@ func TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle(t *testi
 		}
 	}
 	history := session.History()
-	if inferencer.connects != 1 || len(inferencer.inputs) != 5 || len(history) != 5 || len(events) != 10 || session.NextTurnIndex() != 6 || !strings.Contains(history[3].Response.TextContent(), "marigold key") || string(history[1].Input.Audio) != string([]byte{1, 2}) || string(history[2].Input.Audio) != string([]byte{3, 4}) {
-		t.Fatalf("connection/input/history/events/next/recall/audio = %d/%d/%d/%d/%d/%q/%v/%v", inferencer.connects, len(inferencer.inputs), len(history), len(events), session.NextTurnIndex(), history[3].Response.TextContent(), history[1].Input.Audio, history[2].Input.Audio)
+	if inferencer.connects != 1 || len(history) != 5 || len(events) != 10 || session.NextTurnIndex() != 6 || !strings.Contains(history[3].Response.TextContent(), "marigold key") || string(history[1].Input.Audio) != string([]byte{1, 2}) || string(history[2].Input.Audio) != string([]byte{3, 4}) {
+		t.Fatalf("connection/history/events/next/recall/audio = %d/%d/%d/%d/%q/%v/%v", inferencer.connects, len(history), len(events), session.NextTurnIndex(), history[3].Response.TextContent(), history[1].Input.Audio, history[2].Input.Audio)
 	}
 	for i, event := range events {
 		tick, start := uint64(i+1), i%2 == 0
@@ -96,7 +96,6 @@ func finish(s *SessionTurns, x string, n uint64) (err error) {
 	return
 }
 func assertTurnState(t *testing.T, s *SessionTurns, events []TurnEvent, wantEvents, wantHistory, wantNext int, active bool) {
-	t.Helper()
 	history, next, gotActive := s.History(), s.NextTurnIndex(), s.active != nil
 	if len(events) != wantEvents || len(history) != wantHistory || int(next) != wantNext || gotActive != active {
 		t.Fatalf("state events/history/next/active = %d/%d/%d/%v", len(events), len(history), next, gotActive)
@@ -105,46 +104,34 @@ func assertTurnState(t *testing.T, s *SessionTurns, events []TurnEvent, wantEven
 
 type turnTestSession struct {
 	*scriptedSession
-	inputs   []TurnInput
 	failNext error
 	fact     string
 	connects int
 }
 
-func newTurnTestSessionInferencer() *turnTestSession {
-	return &turnTestSession{scriptedSession: newScriptedSession()}
-}
 func (s *turnTestSession) ConnectSession(context.Context) (messages.Session, error) {
 	s.connects++
 	return s, nil
 }
-
 func (s *turnTestSession) Send(_ context.Context, msg messages.StreamMessage) bool {
-	var input TurnInput
 	switch value := msg.Value.(type) {
 	case *messages.TextDeltaValue:
-		input.Text = value.Content
+		s.respond(NewTextTurnInput(value.Content))
 	case *messages.AudioDeltaValue:
-		input.Audio = value.Content
-	default:
-		return true
+		s.respond(NewAudioTurnInput(value.Content, ""))
 	}
-	s.respond(input)
 	return true
 }
 func (s *turnTestSession) respond(input TurnInput) {
 	if s.failNext != nil {
-		err := s.failNext
+		s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(s.failNext)})
 		s.failNext = nil
-		s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(err)})
 		return
 	}
-	s.inputs = append(s.inputs, input)
 	response := "acknowledged"
 	if strings.HasPrefix(input.Text, "fact:") {
 		s.fact = input.Text
-	}
-	if s.fact != "" && strings.Contains(input.Text, "recall") {
+	} else if s.fact != "" && strings.Contains(input.Text, "recall") {
 		response = "I remember " + s.fact
 	}
 	s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(response)})
