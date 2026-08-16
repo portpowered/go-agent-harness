@@ -186,10 +186,14 @@ func ErrorClassification(err error) string {
 // boundary, while caller cancellation and all non-transient taxonomy classes
 // are not.
 func IsRetryable(err error) bool {
+	classification := ErrorClassification(err)
+	if classification == ErrorClassCancellation {
+		return false
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
-	switch ErrorClassification(err) {
+	switch classification {
 	case ErrorClassRateLimited, ErrorClassTransport:
 		return true
 	default:

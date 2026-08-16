@@ -415,6 +415,7 @@ func TestS4RetryabilityPolicyMatrix(t *testing.T) {
 		{name: "unsupported request", err: ErrUnsupportedRequest, class: ErrorClassUnsupportedRequest, retryable: false},
 		{name: "provider rejected", err: ErrProviderRejected, class: ErrorClassProviderRejected, retryable: false},
 		{name: "wrapped deadline", err: fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", context.DeadlineExceeded)), class: ErrorClassUnknown, retryable: true},
+		{name: "joined cancellation and deadline", err: errors.Join(context.Canceled, context.DeadlineExceeded), class: ErrorClassCancellation, retryable: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
