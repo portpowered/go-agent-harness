@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strconv"
 	"sync"
@@ -40,14 +41,16 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 	// delivered exactly as supplied.
 	wirePrompt := nextSessionTextWirePrompt()
 	plan.loop.Prompt = wirePrompt
+	output := &sessionTextOutput{writer: out}
 	if plan.inferencer != nil {
 		plan.inferencer = &sessionTextSeedInferencer{
 			inner:      plan.inferencer,
 			wirePrompt: wirePrompt,
 			value:      seed.Value,
+			audioOut:   output,
 		}
 	}
-	return plan.run(ctx, out)
+	return errors.Join(plan.run(ctx, output), output.errorValue())
 }
 
 var sessionTextWireSequence uint64
@@ -63,6 +66,7 @@ type sessionTextSeedInferencer struct {
 	inner      messages.SessionInferencer
 	wirePrompt string
 	value      string
+	audioOut   *sessionTextOutput
 }
 
 var _ messages.SessionInferencer = (*sessionTextSeedInferencer)(nil)
@@ -72,17 +76,23 @@ func (i *sessionTextSeedInferencer) ConnectSession(ctx context.Context) (message
 	if err != nil {
 		return nil, err
 	}
-	return &sessionTextSeedSession{
+	wrapped := &sessionTextSeedSession{
 		Session:    session,
 		wirePrompt: i.wirePrompt,
 		value:      i.value,
-	}, nil
+		audioOut:   i.audioOut,
+		receive:    messages.NewTypedBuffer[messages.StreamMessage](256),
+	}
+	go wrapped.forwardIncoming()
+	return wrapped, nil
 }
 
 type sessionTextSeedSession struct {
 	messages.Session
 	wirePrompt string
 	value      string
+	audioOut   *sessionTextOutput
+	receive    *messages.TypedBuffer[messages.StreamMessage]
 
 	mu       sync.Mutex
 	seedSent bool
@@ -95,6 +105,29 @@ func (s *sessionTextSeedSession) Send(ctx context.Context, msg messages.StreamMe
 		msg.Value = messages.NewTextDeltaValue(s.value)
 	}
 	return s.Session.Send(ctx, msg)
+}
+
+func (s *sessionTextSeedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *sessionTextSeedSession) forwardIncoming() {
+	for {
+		msg, ok := s.Session.Receive().ReadBlocking(s.Session.Done())
+		if !ok {
+			return
+		}
+		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok {
+			if err := s.audioOut.writeAudio(value.Content); err != nil {
+				_ = s.Session.Close()
+				return
+			}
+		}
+		if !s.receive.Write(context.Background(), msg) {
+			_ = s.Session.Close()
+			return
+		}
+	}
 }
 
 func (s *sessionTextSeedSession) replaceSeed(msg messages.StreamMessage) bool {
@@ -113,4 +146,42 @@ func (s *sessionTextSeedSession) replaceSeed(msg messages.StreamMessage) bool {
 	}
 	s.seedSent = true
 	return true
+}
+
+type sessionTextOutput struct {
+	writer io.Writer
+
+	mu       sync.Mutex
+	writeErr error
+}
+
+func (o *sessionTextOutput) Write(data []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.writeErr != nil {
+		return 0, o.writeErr
+	}
+
+	n, err := o.writer.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		o.writeErr = err
+	}
+	return n, err
+}
+
+func (o *sessionTextOutput) writeAudio(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	_, err := o.Write(data)
+	return err
+}
+
+func (o *sessionTextOutput) errorValue() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.writeErr
 }
