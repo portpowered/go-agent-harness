@@ -16,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/spf13/cobra"
 )
 
 type chatTestToolExecutor struct{}
@@ -42,11 +41,6 @@ func (m *chatTestInferencer) Infer(context.Context, messages.InferenceRequest) (
 func (m *chatTestInferencer) InferStream(context.Context, messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	return nil, errors.New("streaming not used by chat coverage tests")
 }
-
-type flagParseError struct{ cause error }
-
-func (e *flagParseError) Error() string { return e.cause.Error() }
-func (e *flagParseError) Unwrap() error { return e.cause }
 
 type chatRun struct {
 	err      error
@@ -79,9 +73,6 @@ func executeRootWithMicrophone(t *testing.T, agentCLI *AgentCLI, args []string, 
 	root.SetIn(strings.NewReader(input))
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
-	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return &flagParseError{cause: err}
-	})
 	root.SetArgs(args)
 	err := root.ExecuteContext(context.Background())
 	code := 0
@@ -93,10 +84,17 @@ func executeRootWithMicrophone(t *testing.T, agentCLI *AgentCLI, args []string, 
 
 func newTestAgentCLI(t *testing.T, inferencer messages.Inferencer) *AgentCLI {
 	t.Helper()
-	return newTestAgentCLIAt(t, inferencer, t.TempDir())
+	agentCLI, _, _ := newTestAgentCLIAtWithFlags(t, inferencer, t.TempDir())
+	return agentCLI
 }
 
 func newTestAgentCLIAt(t *testing.T, inferencer messages.Inferencer, configDir string) *AgentCLI {
+	t.Helper()
+	agentCLI, _, _ := newTestAgentCLIAtWithFlags(t, inferencer, configDir)
+	return agentCLI
+}
+
+func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, configDir string) (*AgentCLI, *flags.ChatFlags, *flags.LoopFlags) {
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = configDir
@@ -122,7 +120,7 @@ func newTestAgentCLIAt(t *testing.T, inferencer messages.Inferencer, configDir s
 		NewConfigCommand(),
 		NewConfigAddLocalCommand(globalFlags),
 	)
-	return NewAgentCLI(router)
+	return NewAgentCLI(router), chatFlags, loopFlags
 }
 
 func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
@@ -191,9 +189,9 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			if got.err == nil || !strings.Contains(got.err.Error(), tt.wantErr) {
 				t.Fatalf("error = %v, want substring %q", got.err, tt.wantErr)
 			}
-			var typed *flagParseError
+			var typed *chatFlagParseError
 			if !errors.As(got.err, &typed) {
-				t.Fatalf("error type = %T, want *flagParseError", got.err)
+				t.Fatalf("error type = %T, want *chatFlagParseError", got.err)
 			}
 		})
 	}
@@ -237,12 +235,18 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 		wantOutputParts []string
 		wantErrorPart   string
 		wantInferCalls  int
+		checkFlags      func(*testing.T, *flags.ChatFlags, *flags.LoopFlags)
 	}{
 		{
 			name:       "activate audio input alone",
 			args:       []string{"chat", "--activate-audio-in"},
 			wantExit:   0,
 			wantOutput: audioEOFOutput,
+			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, _ *flags.LoopFlags) {
+				if !chatFlags.ActivateAudioIn {
+					t.Fatal("ActivateAudioIn = false, want true")
+				}
+			},
 		},
 		{
 			name:       "activate audio output alone",
@@ -250,6 +254,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			input:      "\x03",
 			wantExit:   0,
 			wantOutput: textCancelOutput,
+			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, _ *flags.LoopFlags) {
+				if !chatFlags.ActivateAudioOut {
+					t.Fatal("ActivateAudioOut = false, want true")
+				}
+			},
 		},
 		{
 			name:            "loop alone",
@@ -258,6 +267,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			wantExit:        0,
 			wantOutputParts: []string{"Port OS Agent Loop Chat (up to 5 iterations)", "Loop complete: 5 iteration(s)"},
 			wantInferCalls:  5,
+			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if !loopFlags.Loop || loopFlags.MaxIterations != 5 {
+					t.Fatalf("loop flags = %+v, want Loop=true MaxIterations=5", *loopFlags)
+				}
+			},
 		},
 		{
 			name:       "max iterations alone",
@@ -265,6 +279,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			input:      "\x03",
 			wantExit:   0,
 			wantOutput: textCancelOutput,
+			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if loopFlags.MaxIterations != 2 {
+					t.Fatalf("MaxIterations = %d, want 2", loopFlags.MaxIterations)
+				}
+			},
 		},
 		{
 			name:       "stop word alone",
@@ -272,6 +291,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			input:      "\x03",
 			wantExit:   0,
 			wantOutput: textCancelOutput,
+			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if loopFlags.StopWord != "DONE" {
+					t.Fatalf("StopWord = %q, want %q", loopFlags.StopWord, "DONE")
+				}
+			},
 		},
 		{
 			name:       "context pressure threshold alone",
@@ -279,6 +303,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			input:      "\x03",
 			wantExit:   0,
 			wantOutput: textCancelOutput,
+			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if loopFlags.ContextPressureThreshold != 0.4 {
+					t.Fatalf("ContextPressureThreshold = %v, want 0.4", loopFlags.ContextPressureThreshold)
+				}
+			},
 		},
 		{
 			name:       "context pressure message alone",
@@ -286,6 +315,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			input:      "\x03",
 			wantExit:   0,
 			wantOutput: textCancelOutput,
+			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if loopFlags.ContextPressureMessage != "warning" {
+					t.Fatalf("ContextPressureMessage = %q, want %q", loopFlags.ContextPressureMessage, "warning")
+				}
+			},
 		},
 		{
 			name:       "trace id alone",
@@ -293,6 +327,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			input:      "\x03",
 			wantExit:   0,
 			wantOutput: textCancelOutput,
+			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if loopFlags.TraceID != "ignored-trace" {
+					t.Fatalf("TraceID = %q, want %q", loopFlags.TraceID, "ignored-trace")
+				}
+			},
 		},
 		{
 			name:            "loop takes precedence over audio input",
@@ -301,6 +340,11 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 			wantExit:        0,
 			wantOutputParts: []string{"Port OS Agent Loop Chat (up to 1 iterations)", "Loop complete: 1 iteration(s)"},
 			wantInferCalls:  1,
+			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				if !chatFlags.ActivateAudioIn || !loopFlags.Loop || loopFlags.MaxIterations != 1 {
+					t.Fatalf("flags = chat=%+v loop=%+v, want audio input, loop, max iterations 1", *chatFlags, *loopFlags)
+				}
+			},
 		},
 		{
 			name:          "boolean audio input rejects wrong type",
@@ -355,7 +399,8 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inf := &chatTestInferencer{response: "matrix response"}
-			got := executeChat(t, tt.args, tt.input, inf)
+			agentCLI, chatFlags, loopFlags := newTestAgentCLIAtWithFlags(t, inf, t.TempDir())
+			got := executeRoot(t, agentCLI, tt.args, tt.input)
 			if got.exitCode != tt.wantExit {
 				t.Fatalf("exit code = %d, want %d (err=%v)", got.exitCode, tt.wantExit, got.err)
 			}
@@ -377,15 +422,18 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 				if tt.wantInferCalls >= 0 && inf.calls != tt.wantInferCalls {
 					t.Fatalf("inferencer calls = %d, want %d", inf.calls, tt.wantInferCalls)
 				}
+				if tt.checkFlags != nil {
+					tt.checkFlags(t, chatFlags, loopFlags)
+				}
 				return
 			}
 
 			if got.err == nil || !strings.Contains(got.err.Error(), tt.wantErrorPart) {
 				t.Fatalf("error = %v, want substring %q", got.err, tt.wantErrorPart)
 			}
-			var typed *flagParseError
+			var typed *chatFlagParseError
 			if !errors.As(got.err, &typed) {
-				t.Fatalf("error type = %T, want *flagParseError", got.err)
+				t.Fatalf("error type = %T, want *chatFlagParseError", got.err)
 			}
 			if !strings.Contains(got.stdout, "Usage:\n  agent chat [flags]") {
 				t.Fatalf("stdout = %q, want Cobra usage on flag failure", got.stdout)
@@ -563,9 +611,6 @@ func executeChatWithWriters(t *testing.T, agentCLI *AgentCLI, args []string, inp
 	root.SetIn(strings.NewReader(input))
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return &flagParseError{cause: err}
-	})
 	root.SetArgs(args)
 	return root.ExecuteContext(context.Background())
 }
