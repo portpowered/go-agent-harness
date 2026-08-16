@@ -64,7 +64,7 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 	if conn == nil {
 		return proof, errors.New("realtime WebSocket dial returned a nil connection")
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := waitForRealtimeEvent(ctx, conn, "session.created"); err != nil {
 		return proof, fmt.Errorf("wait for session.created: %w", err)

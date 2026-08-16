@@ -12,7 +12,7 @@ func TestVerifyRealtimeAudioRejectsNonSpeakingListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen for non-speaking endpoint: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	accepted := make(chan net.Conn, 1)
 	acceptDone := make(chan struct{})
