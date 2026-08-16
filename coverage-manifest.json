@@ -25,8 +25,10 @@
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages", "minimum": 55.60},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants", "minimum": 67.60},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state", "minimum": 100.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems", "minimum": 80.70},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional", "minimum": 87.70},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/test_logging", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/cmd/session-fixture-validator", "minimum": 0.00},
@@ -42,6 +44,8 @@
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini", "minimum": 78.00},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok", "minimum": 63.60},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai", "minimum": 82.10},
-    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing", "minimum": 59.00}
+    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing", "minimum": 59.00},
+    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing/localai", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio", "minimum": 0.00}
   ]
 }
