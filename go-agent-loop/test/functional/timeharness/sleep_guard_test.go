@@ -11,7 +11,7 @@ import (
 func TestDiagnosticsChild(t *testing.T) {
 	switch os.Getenv("TIMEHARNESS_CHILD") {
 	case "sleep":
-		s := NewScenario(t, time.Unix(0, 0).UTC(), time.Millisecond)
+		s := testScenario(t, time.Unix(0, 0).UTC(), time.Millisecond)
 		sleeper, observer := register(t, s, "sleeper"), register(t, s, "observer")
 		sleeper.Run(func() { time.Sleep(time.Hour) })
 		observer.Run(func() { _, _ = observer.Observe(1); observer.Complete() })
@@ -20,7 +20,7 @@ func TestDiagnosticsChild(t *testing.T) {
 		}
 		t.Fatal("sleeping participant unexpectedly crossed the barrier")
 	case "stuck":
-		s := NewScenario(t, time.Unix(0, 0).UTC(), time.Millisecond)
+		s := testScenario(t, time.Unix(0, 0).UTC(), time.Millisecond)
 		register(t, s, "stuck-peer")
 		if _, err := s.AdvanceTo(3); err != nil {
 			t.Fatal(err)

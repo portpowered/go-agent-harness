@@ -8,8 +8,8 @@ import (
 
 func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 	base := time.Date(2026, time.August, 16, 10, 11, 12, 13, time.UTC)
-	s := NewScenario(t, base, 7*time.Millisecond)
-	if s.CurrentTick() != 0 || s.Clock() == nil {
+	s := testScenario(t, base, 7*time.Millisecond)
+	if s.Clock().Tick() != 0 || s.Clock() == nil {
 		t.Fatal("scenario did not start at tick zero")
 	}
 	left, right := register(t, s, "left"), register(t, s, "right")
@@ -24,7 +24,7 @@ func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 		p := p
 		p.Run(func() { runTicks(p, nil, observations, observations) })
 	}
-	tick, err := s.ExpectWithinTicks("both peers reached tick two", 3, func() bool { return left.LastTick() == 2 })
+	tick, err := s.ExpectWithinTicks("both peers reached tick two", 3, func() bool { return s.Clock().Tick() == 2 })
 	if err != nil || tick != 2 {
 		t.Fatalf("success: tick=%d err=%v", tick, err)
 	}
@@ -47,7 +47,7 @@ func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 	}
 }
 func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
-	s := NewScenario(t, time.Unix(50, 0).UTC(), time.Millisecond)
+	s := testScenario(t, time.Unix(50, 0).UTC(), time.Millisecond)
 	participants := make([]*Participant, 8)
 	for i := range participants {
 		participants[i] = register(t, s, "peer-"+string(rune('a'+i)))
@@ -59,7 +59,7 @@ func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
 		p.Run(func() {
 			started <- struct{}{}
 			var wait <-chan struct{}
-			if p.Name() == "peer-h" {
+			if p.name == "peer-h" {
 				wait = hold
 			}
 			runTicks(p, wait, events, events)
@@ -102,6 +102,12 @@ func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+func testScenario(t *testing.T, base time.Time, tickDuration time.Duration) *Scenario {
+	t.Helper()
+	s := New(base, tickDuration)
+	t.Cleanup(s.Close)
+	return s
 }
 func register(t *testing.T, s *Scenario, name string) *Participant {
 	t.Helper()

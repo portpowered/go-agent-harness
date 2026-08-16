@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -87,16 +86,7 @@ func New(base time.Time, tickDuration time.Duration) *Scenario {
 	s.cond = sync.NewCond(&s.mu)
 	return s
 }
-func NewScenario(t testing.TB, base time.Time, tickDuration time.Duration) *Scenario {
-	s := New(base, tickDuration)
-	if t != nil {
-		t.Helper()
-		t.Cleanup(s.Close)
-	}
-	return s
-}
 func (s *Scenario) Clock() *clock.Deterministic { return s.clock }
-func (s *Scenario) CurrentTick() uint64         { return s.clock.Tick() }
 func (s *Scenario) Register(name string) (*Participant, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -114,13 +104,6 @@ func (s *Scenario) Register(name string) (*Participant, error) {
 	s.participants[name] = p
 	s.activeParticipants++
 	return p, nil
-}
-func (p *Participant) Name() string { return p.name }
-func (p *Participant) LastTick() uint64 {
-	s := p.scenario
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return p.lastTick
 }
 func (p *Participant) Run(fn func()) {
 	go func() {
@@ -223,7 +206,7 @@ func (s *Scenario) AdvanceTo(target uint64) (uint64, error) {
 	return s.clock.Tick(), nil
 }
 func (s *Scenario) ExpectWithinTicks(expectation string, allowed uint64, condition func() bool) (uint64, error) {
-	start := s.CurrentTick()
+	start := s.clock.Tick()
 	for step := uint64(0); ; step++ {
 		if condition != nil && condition() {
 			return start + step, nil
@@ -232,10 +215,10 @@ func (s *Scenario) ExpectWithinTicks(expectation string, allowed uint64, conditi
 			break
 		}
 		if _, err := s.AdvanceTo(start + step + 1); err != nil {
-			return s.CurrentTick(), err
+			return s.clock.Tick(), err
 		}
 	}
-	final := s.CurrentTick()
+	final := s.clock.Tick()
 	return final, &HarnessError{Kind: FailureExpectation, Expectation: expectation, StartingTick: start, AllowedTicks: allowed, FinalTick: final}
 }
 func (s *Scenario) Close() {
