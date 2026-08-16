@@ -75,15 +75,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
-			if audioOutPath != "" {
-				return services.RunSessionWithAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed)
-			}
-			return services.RunSessionWithTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, maxDuration, seed)
+			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Seed the realtime session with text")
+	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
 	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")
 	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
