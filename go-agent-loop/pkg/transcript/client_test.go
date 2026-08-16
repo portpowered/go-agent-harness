@@ -124,9 +124,9 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 	reports := make([]error, 0, 1)
 	capture := NewClientCapture(&errorClientRecordSink{err: recordingErr}, func() (uint64, time.Time) {
 		return 17, time.Unix(17, 0)
-	}, WithClientReporter(func(err error) {
+	}, func(err error) {
 		reports = append(reports, err)
-	}))
+	})
 
 	readPayload := []byte{0x01, 0xff, 0x00}
 	baselineReader := &scriptedReader{chunks: [][]byte{readPayload}, err: liveReadErr}
@@ -159,9 +159,11 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 	baselineConnection := baselineTransport
 	capturedConnection := capture.WrapWebSocket(capturedTransport)
 	sendPayload := []byte{0x04, 0xfc}
-	if capturedErr = capturedConnection.WriteMessage(9, sendPayload); capturedErr != baselineConnection.WriteMessage(9, sendPayload) ||
+	baselineSendErr := baselineConnection.WriteMessage(9, sendPayload)
+	capturedErr = capturedConnection.WriteMessage(9, sendPayload)
+	if capturedErr != baselineSendErr ||
 		!errors.Is(capturedErr, liveSendErr) || capturedTransport.sendCalls != baselineTransport.sendCalls {
-		t.Fatalf("websocket send changed: captured=(%v,%d), baseline=(%v,%d)", capturedErr, capturedTransport.sendCalls, baselineSendErr(baselineTransport), baselineTransport.sendCalls)
+		t.Fatalf("websocket send changed: captured=(%v,%d), baseline=(%v,%d)", capturedErr, capturedTransport.sendCalls, baselineSendErr, baselineTransport.sendCalls)
 	}
 	gotType, gotPayload, capturedErr := capturedConnection.ReadMessage()
 	wantType, wantPayload, baselineErr := baselineConnection.ReadMessage()
@@ -297,8 +299,4 @@ func (mutatingWebSocket) WriteMessage(_ int, payload []byte) error {
 
 func (mutatingWebSocket) ReadMessage() (int, []byte, error) {
 	return 0, nil, io.EOF
-}
-
-func baselineSendErr(c *scriptedWebSocket) error {
-	return c.sendErr
 }
