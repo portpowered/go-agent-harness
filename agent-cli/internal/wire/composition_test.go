@@ -405,6 +405,12 @@ func TestCompositionConstruction_IsInert(t *testing.T) {
 	inferencer := &recordingInferencer{response: "unused"}
 	sessionInferencer := &recordingSessionInferencer{}
 	fileSentinel := t.TempDir()
+	// Route every platform temp-dir lookup through the sentinel. The removed
+	// construction path used os.MkdirTemp("", ...), so this makes the test
+	// fail if that filesystem side effect is reintroduced.
+	t.Setenv("TMPDIR", fileSentinel)
+	t.Setenv("TMP", fileSentinel)
+	t.Setenv("TEMP", fileSentinel)
 	beforeFiles := directoryEntries(t, fileSentinel)
 	dialer := &recordingDialer{}
 	// Composition has no file or network ports. The sentinel catches the old
