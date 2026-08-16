@@ -2,15 +2,20 @@ package services
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // SessionMaxDurationReason is the stable terminal reason for a planned
@@ -63,6 +68,272 @@ type SessionDurationTimer interface {
 // SessionDurationClock creates one timer for a positive session bound.
 type SessionDurationClock interface {
 	NewTimer(time.Duration) SessionDurationTimer
+}
+
+// SessionDurationArtifactLifecycle receives the stream messages that crossed
+// the duration admission boundary and owns their finalization. Callers can
+// attach the existing audio/transcript resources through the context without
+// making the CLI responsible for session cleanup.
+type SessionDurationArtifactLifecycle interface {
+	Accept(messages.StreamMessage) error
+	Flush() error
+	Close() error
+}
+
+type sessionDurationArtifactsContextKey struct{}
+
+// WithSessionDurationArtifacts attaches production-owned output resources to a
+// duration run. The duration controller flushes and closes them after the
+// accepted loop output has drained, including the synthesized terminal record.
+func WithSessionDurationArtifacts(ctx context.Context, artifacts SessionDurationArtifactLifecycle) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, sessionDurationArtifactsContextKey{}, artifacts)
+}
+
+func sessionDurationArtifactsFromContext(ctx context.Context) SessionDurationArtifactLifecycle {
+	if ctx == nil {
+		return nil
+	}
+	artifacts, _ := ctx.Value(sessionDurationArtifactsContextKey{}).(SessionDurationArtifactLifecycle)
+	return artifacts
+}
+
+// SessionDurationAudioSink accepts PCM16 samples and owns their final WAV
+// encoding. It deliberately accepts a partial final frame so a cutoff between
+// audio frames remains an exact, playable artifact.
+type SessionDurationAudioSink interface {
+	WriteSamples([]int16) error
+	Flush() error
+	Close() error
+}
+
+// SessionDurationTranscriptSink is the lifecycle subset implemented by the
+// shared transcript.Writer.
+type SessionDurationTranscriptSink interface {
+	Write(transcript.Record) error
+	Flush() error
+	Close() error
+}
+
+// SessionDurationArtifactSet adapts the shared audio and transcript primitives
+// to the ordered duration finalization boundary.
+type SessionDurationArtifactSet struct {
+	audio      SessionDurationAudioSink
+	transcript SessionDurationTranscriptSink
+
+	mu       sync.Mutex
+	sequence uint64
+	closed   bool
+	closeErr error
+}
+
+// NewSessionDurationArtifactSet opens the WAV and JSONL resources used by a
+// duration run. The returned set owns both resources and closes them exactly
+// once when the duration controller finishes.
+func NewSessionDurationArtifactSet(audioPath, transcriptPath string) (*SessionDurationArtifactSet, error) {
+	audioSink, err := newSessionDurationWAVSink(audioPath)
+	if err != nil {
+		return nil, err
+	}
+	transcriptSink, err := transcript.NewWriter(transcriptPath)
+	if err != nil {
+		_ = audioSink.Close()
+		return nil, err
+	}
+	return NewSessionDurationArtifactSetWithSinks(audioSink, transcriptSink), nil
+}
+
+// NewSessionDurationArtifactSetWithSinks builds the same production lifecycle
+// around caller-provided resources. It is useful for non-filesystem sinks and
+// for preserving underlying flush/close error identity.
+func NewSessionDurationArtifactSetWithSinks(audioSink SessionDurationAudioSink, transcriptSink SessionDurationTranscriptSink) *SessionDurationArtifactSet {
+	return &SessionDurationArtifactSet{audio: audioSink, transcript: transcriptSink}
+}
+
+type sessionDurationTranscriptEvent struct {
+	Type  messages.StreamMessageType  `json:"type"`
+	Role  messages.Role               `json:"role,omitempty"`
+	Value messages.StreamMessageValue `json:"value,omitempty"`
+}
+
+func (a *SessionDurationArtifactSet) Accept(msg messages.StreamMessage) error {
+	if a == nil {
+		return nil
+	}
+	// LOOP.END is an internal agent-loop lifecycle marker emitted after the
+	// session terminal record; it is not provider output and must not trail the
+	// finalized transcript's terminal record.
+	if msg.Type == messages.StreamTypeLoopEnd {
+		return nil
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return errors.New("session duration artifacts are closed")
+	}
+
+	if audioValue, ok := msg.Value.(*messages.AudioDeltaValue); ok && a.audio != nil {
+		samples, err := sessionDurationPCM16Samples(audioValue.Content)
+		if err != nil {
+			return err
+		}
+		if err := a.audio.WriteSamples(samples); err != nil {
+			return fmt.Errorf("write duration audio: %w", err)
+		}
+	}
+
+	if a.transcript == nil {
+		return nil
+	}
+	payload, err := json.Marshal(sessionDurationTranscriptEvent{
+		Type:  msg.Type,
+		Role:  msg.Role,
+		Value: msg.Value,
+	})
+	if err != nil {
+		return fmt.Errorf("encode duration transcript event: %w", err)
+	}
+	sequence := a.sequence + 1
+	record := transcript.NewRecord(
+		sequence,
+		time.Unix(0, int64(sequence)),
+		transcript.PeerAgent,
+		transcript.DirectionIn,
+		transcript.StreamWebSocket,
+		payload,
+	)
+	if err := a.transcript.Write(record); err != nil {
+		return fmt.Errorf("write duration transcript: %w", err)
+	}
+	a.sequence = sequence
+	return nil
+}
+
+func (a *SessionDurationArtifactSet) Flush() error {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return a.closeErr
+	}
+	var flushErrs []error
+	if a.audio != nil {
+		if err := a.audio.Flush(); err != nil {
+			flushErrs = append(flushErrs, fmt.Errorf("flush duration audio: %w", err))
+		}
+	}
+	if a.transcript != nil {
+		if err := a.transcript.Flush(); err != nil {
+			flushErrs = append(flushErrs, fmt.Errorf("flush duration transcript: %w", err))
+		}
+	}
+	return errors.Join(flushErrs...)
+}
+
+func (a *SessionDurationArtifactSet) Close() error {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return a.closeErr
+	}
+	a.closed = true
+
+	var closeErrs []error
+	if a.audio != nil {
+		if err := a.audio.Close(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("close duration audio: %w", err))
+		}
+	}
+	if a.transcript != nil {
+		if err := a.transcript.Close(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("close duration transcript: %w", err))
+		}
+	}
+	a.closeErr = errors.Join(closeErrs...)
+	return a.closeErr
+}
+
+func sessionDurationPCM16Samples(content []byte) ([]int16, error) {
+	if len(content)%2 != 0 {
+		return nil, fmt.Errorf("duration audio has odd PCM16 byte count %d", len(content))
+	}
+	samples := make([]int16, len(content)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(content[index*2:]))
+	}
+	return samples, nil
+}
+
+type sessionDurationWAVSink struct {
+	mu       sync.Mutex
+	path     string
+	file     *os.File
+	samples  []int16
+	closed   bool
+	closeErr error
+}
+
+func newSessionDurationWAVSink(path string) (*sessionDurationWAVSink, error) {
+	if path == "" {
+		return nil, errors.New("duration audio path is empty")
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open duration audio %q: %w", path, err)
+	}
+	return &sessionDurationWAVSink{path: path, file: file}, nil
+}
+
+func (s *sessionDurationWAVSink) WriteSamples(samples []int16) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return errors.New("duration audio sink is closed")
+	}
+	s.samples = append(s.samples, samples...)
+	return nil
+}
+
+func (s *sessionDurationWAVSink) Flush() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return s.closeErr
+	}
+	if s.file == nil {
+		return nil
+	}
+	return s.file.Sync()
+}
+
+func (s *sessionDurationWAVSink) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return s.closeErr
+	}
+	s.closed = true
+	var closeErrs []error
+	if s.file != nil {
+		if err := wavio.Write(s.file, wavio.Rate16kHz, s.samples); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("write duration audio %q: %w", s.path, err))
+		} else if err := s.file.Sync(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("flush duration audio %q: %w", s.path, err))
+		}
+		if err := s.file.Close(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("close duration audio %q: %w", s.path, err))
+		}
+	}
+	s.closeErr = errors.Join(closeErrs...)
+	return s.closeErr
 }
 
 type realSessionDurationClock struct{}
@@ -389,9 +660,10 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 }
 
 func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
+	artifacts := sessionDurationArtifactsFromContext(ctx)
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
-			return err
+			return wrapSessionRuntimeError(plan, errors.Join(err, finalizeSessionDurationArtifacts(artifacts)))
 		}
 	}
 
@@ -399,17 +671,24 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	if plan.loopOut != nil {
 		loopOut = plan.loopOut
 	}
+	var runErr error
 	if plan.inferencer != nil {
-		if err := runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer); err != nil {
-			if plan.flushCapture != nil {
-				flushErr := plan.flushCapture()
-				return wrapSessionRuntimeError(plan, errors.Join(
-					wrapSessionPhaseError("run session loop", err),
-					wrapSessionPhaseError("flush capture", flushErr),
-				))
-			}
-			return wrapSessionRuntimeError(plan, err)
+		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
+	}
+
+	artifactErr := finalizeSessionDurationArtifacts(artifacts)
+	if runErr != nil {
+		runErrs := []error{wrapSessionPhaseError("run session loop", runErr)}
+		if artifactErr != nil {
+			runErrs = append(runErrs, artifactErr)
 		}
+		if plan.flushCapture != nil {
+			runErrs = append(runErrs, wrapSessionPhaseError("flush capture", plan.flushCapture()))
+		}
+		return wrapSessionRuntimeError(plan, errors.Join(runErrs...))
+	}
+	if artifactErr != nil {
+		return wrapSessionRuntimeError(plan, artifactErr)
 	}
 
 	if plan.flushCapture != nil {
@@ -423,6 +702,16 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		}
 	}
 	return nil
+}
+
+func finalizeSessionDurationArtifacts(artifacts SessionDurationArtifactLifecycle) error {
+	if artifacts == nil {
+		return nil
+	}
+	return errors.Join(
+		wrapSessionPhaseError("flush duration artifacts", artifacts.Flush()),
+		wrapSessionPhaseError("close duration artifacts", artifacts.Close()),
+	)
 }
 
 func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
@@ -473,16 +762,17 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 	closeSent := false
 	durationExpired := false
 	durationTerminalWritten := false
+	artifacts := sessionDurationArtifactsFromContext(ctx)
 
 	finish := func(planned bool, preferredErr error) error {
 		var preCancelDrainErr error
 		if preferredErr == nil {
-			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten)
+			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts)
 		}
 		cancel()
 		runErr := <-runErrCh
 		admittedInferencer.waitForClose()
-		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten); drainErr != nil {
+		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts); drainErr != nil {
 			return drainErr
 		}
 		runtimeErr := admittedInferencer.runtimeError()
@@ -562,7 +852,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 			return finish(durationExpired && doneErr == nil, doneErr)
 		case err := <-runErrCh:
 			admittedInferencer.waitForClose()
-			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten); drainErr != nil {
+			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten, artifacts); drainErr != nil {
 				return drainErr
 			}
 			if runtimeErr := admittedInferencer.runtimeError(); runtimeErr != nil {
@@ -587,7 +877,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 			if durationExpired && msg.Type == messages.StreamTypeSessionClose {
 				msg, durationTerminalWritten = maxDurationTerminalMessage(msg)
 			}
-			if err := writeSessionReplayMessage(out, msg); err != nil {
+			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return finish(false, err)
 			}
 			if msg.Type == messages.StreamTypeSessionOpen && !durationExpired {
@@ -630,7 +920,16 @@ func sessionDurationTimerReady(timerCh <-chan time.Time) bool {
 	}
 }
 
-func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool) error {
+func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage, artifacts SessionDurationArtifactLifecycle) error {
+	if artifacts != nil {
+		if err := artifacts.Accept(msg); err != nil {
+			return wrapSessionPhaseError("write duration artifacts", err)
+		}
+	}
+	return writeSessionReplayMessage(out, msg)
+}
+
+func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle) error {
 	for {
 		msg, ok := loop.Deltas().Read()
 		if !ok {
@@ -639,13 +938,13 @@ func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, 
 		if planned && msg.Type == messages.StreamTypeSessionClose {
 			msg, *terminalWritten = maxDurationTerminalMessage(msg)
 		}
-		if err := writeSessionReplayMessage(out, msg); err != nil {
+		if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 			return err
 		}
 	}
 }
 
-func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool) error {
+func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle) error {
 	timer := time.NewTimer(sessionReplayDoneDrainIdleDelay)
 	defer timer.Stop()
 	for {
@@ -657,7 +956,7 @@ func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.A
 			if planned && msg.Type == messages.StreamTypeSessionClose {
 				msg, *terminalWritten = maxDurationTerminalMessage(msg)
 			}
-			if err := writeSessionReplayMessage(out, msg); err != nil {
+			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return err
 			}
 			if !timer.Stop() {

@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -241,6 +242,18 @@ func durationOutputEvents() []messages.StreamMessage {
 	}
 }
 
+func durationArtifactEvents() []messages.StreamMessage {
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("duration-session", "test")},
+		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0})},
+		{Type: messages.StreamTypeTranscriptStart, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("hello")},
+		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("hello")},
+		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("artifact-ready")},
+	}
+}
+
 func durationNaturalEvents() []messages.StreamMessage {
 	return append(durationOutputEvents(), messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
@@ -290,7 +303,6 @@ type durationTestInferencer struct {
 	session          *durationTestSession
 	connectErr       error
 	sessionCloseErr  error
-	openFile         *os.File
 }
 
 func (i *durationTestInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -300,7 +312,6 @@ func (i *durationTestInferencer) ConnectSession(ctx context.Context) (messages.S
 	i.connected = true
 	session := newDurationTestSession()
 	session.closeErr = i.sessionCloseErr
-	session.openFile = i.openFile
 	i.session = session
 	if i.connectedCh != nil {
 		close(i.connectedCh)
@@ -317,18 +328,20 @@ func (i *durationTestInferencer) ConnectSession(ctx context.Context) (messages.S
 }
 
 type durationTestSession struct {
-	receive    *messages.TypedBuffer[messages.StreamMessage]
-	done       chan struct{}
-	once       sync.Once
-	closeErr   error
-	closeCount int
-	openFile   *os.File
+	receive       *messages.TypedBuffer[messages.StreamMessage]
+	done          chan struct{}
+	closeCh       chan struct{}
+	once          sync.Once
+	closeCallOnce sync.Once
+	closeErr      error
+	closeCount    int
 }
 
 func newDurationTestSession() *durationTestSession {
 	return &durationTestSession{
 		receive: messages.NewTypedBuffer[messages.StreamMessage](16),
 		done:    make(chan struct{}),
+		closeCh: make(chan struct{}),
 	}
 }
 
@@ -342,11 +355,8 @@ func (s *durationTestSession) Done() <-chan struct{} { return s.done }
 
 func (s *durationTestSession) Close() error {
 	s.closeCount++
+	s.closeCallOnce.Do(func() { close(s.closeCh) })
 	s.end()
-	if s.openFile != nil {
-		s.closeErr = errors.Join(s.closeErr, s.openFile.Close())
-		s.openFile = nil
-	}
 	return s.closeErr
 }
 
@@ -421,67 +431,65 @@ func TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput(t *tes
 	}
 }
 
-func TestSessionDurationAdmission_FinalizesPlayableArtifactsAndRejectsLateFrame(t *testing.T) {
-	admission := newSessionDurationAdmission()
-	source := newDurationTestSession()
-	wrapped := newSessionDurationAdmissionSession(context.Background(), source, admission, nil)
-	accepted := []messages.StreamMessage{
-		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
-		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0})},
-		{Type: messages.StreamTypeTranscriptStart, Value: messages.NewTranscriptStartValue()},
-		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("hello")},
-		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("hello")},
-		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *testing.T) {
+	artifactDir := t.TempDir()
+	wavPath := filepath.Join(artifactDir, "cutoff.wav")
+	transcriptPath := filepath.Join(artifactDir, "cutoff.jsonl")
+	artifacts, err := NewSessionDurationArtifactSet(wavPath, transcriptPath)
+	if err != nil {
+		t.Fatalf("open production duration artifacts: %v", err)
 	}
-	for _, event := range accepted {
-		if !source.receive.Write(context.Background(), event) {
-			t.Fatalf("write accepted event %s", event.Type)
-		}
-	}
-	waitForDurationBufferLen(t, wrapped.Receive(), len(accepted))
+	t.Cleanup(func() { _ = artifacts.Close() })
 
-	// This is the deterministic equivalent of the timer firing. The late audio
-	// delta is still present on the provider buffer, but cannot cross the gate.
-	wrapped.closeAdmission()
-	if !source.receive.Write(context.Background(), messages.StreamMessage{
+	clock := &durationTestClock{}
+	inferencer := &durationTestInferencer{
+		events: durationArtifactEvents(),
+	}
+	writer := newDurationTestWriter()
+	runErrCh := make(chan error, 1)
+	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
+	go func() {
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{
+			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
+			SessionInferencer: inferencer,
+		}, time.Nanosecond, clock)
+	}()
+
+	// The ready marker is emitted only after the production artifact lifecycle
+	// has accepted every preceding audio/transcript message.
+	writer.waitFor(t, "artifact-ready")
+	clock.fire()
+	if inferencer.session == nil {
+		t.Fatal("duration session was not connected")
+	}
+	select {
+	case <-inferencer.session.closeCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("duration cutoff did not close provider session")
+	}
+
+	// The provider close call occurs after the admission boundary is closed, so
+	// this frame is deterministically late even though the fake provider buffer
+	// itself can still accept it.
+	_ = inferencer.session.receive.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeAudioDelta,
 		Value: messages.NewAudioDeltaValue([]byte{3, 0}),
-	}) {
-		t.Fatal("write late provider frame")
+	})
+	if err := <-runErrCh; err != nil {
+		t.Fatalf("duration cutoff: %v", err)
 	}
-	source.end()
-	select {
-	case <-wrapped.Done():
-	case <-time.After(2 * time.Second):
-		t.Fatal("admission session did not release after provider close")
+	if got := writer.String(); !strings.Contains(got, "terminal_reason=max_duration") {
+		t.Fatalf("duration output missing max_duration: %q", got)
 	}
 
-	artifact := &durationArtifact{}
-	for {
-		event, ok := wrapped.Receive().Read()
-		if !ok {
-			break
-		}
-		artifact.accept(event)
-	}
-	artifact.addTerminal()
-	wavBytes, transcriptBytes, err := artifact.finalize()
-	if err != nil {
-		t.Fatalf("finalize artifacts: %v", err)
-	}
-
-	wavPath := filepath.Join(t.TempDir(), "cutoff.wav")
-	if err := os.WriteFile(wavPath, wavBytes, 0600); err != nil {
-		t.Fatalf("write WAV artifact: %v", err)
-	}
 	wavFile, err := os.Open(wavPath)
 	if err != nil {
-		t.Fatalf("reopen WAV artifact: %v", err)
+		t.Fatalf("reopen finalized WAV artifact: %v", err)
 	}
-	rate, samples, err := wavio.Read(wavFile)
+	rate, samples, readErr := wavio.Read(wavFile)
 	closeErr := wavFile.Close()
-	if err != nil {
-		t.Fatalf("read finalized WAV artifact: %v", err)
+	if readErr != nil {
+		t.Fatalf("read finalized WAV artifact: %v", readErr)
 	}
 	if closeErr != nil {
 		t.Fatalf("close reopened WAV artifact: %v", closeErr)
@@ -493,41 +501,90 @@ func TestSessionDurationAdmission_FinalizesPlayableArtifactsAndRejectsLateFrame(
 		t.Fatalf("WAV sample count = %d, want 2 and shorter than one frame (%d)", len(samples), audio.FrameSize)
 	}
 	if samples[0] != 1 || samples[1] != 2 {
-		t.Fatalf("WAV samples = %v, want [1 2]", samples)
+		t.Fatalf("WAV samples = %v, want [1 2] and no late frame", samples)
 	}
 
-	transcriptPath := filepath.Join(t.TempDir(), "cutoff.jsonl")
-	if err := os.WriteFile(transcriptPath, transcriptBytes, 0600); err != nil {
-		t.Fatalf("write transcript artifact: %v", err)
-	}
 	transcriptData, err := os.ReadFile(transcriptPath)
 	if err != nil {
-		t.Fatalf("reopen transcript artifact: %v", err)
+		t.Fatalf("reopen finalized transcript artifact: %v", err)
 	}
 	if !bytes.HasSuffix(transcriptData, []byte("\n")) {
 		t.Fatal("finalized transcript is missing its trailing JSONL newline")
 	}
-	file := bytes.NewReader(transcriptData)
-	scanner := bufio.NewScanner(file)
-	var payloads []string
+	scanner := bufio.NewScanner(bytes.NewReader(transcriptData))
+	var eventTypes []messages.StreamMessageType
+	var terminalPayload []byte
 	for scanner.Scan() {
 		record, err := transcript.Decode(scanner.Bytes())
 		if err != nil {
 			t.Fatalf("decode transcript JSONL record: %v", err)
 		}
-		payloads = append(payloads, string(record.Payload))
+		var event struct {
+			Type messages.StreamMessageType `json:"type"`
+		}
+		if err := json.Unmarshal(record.Payload, &event); err != nil {
+			t.Fatalf("decode transcript event payload: %v", err)
+		}
+		eventTypes = append(eventTypes, event.Type)
+		if event.Type == messages.StreamTypeSessionClose {
+			terminalPayload = append([]byte(nil), record.Payload...)
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scan transcript JSONL: %v", err)
 	}
-	wantPayloads := []string{"start", "delta:hello", "end:hello", "terminal:max_duration"}
-	if len(payloads) != len(wantPayloads) {
-		t.Fatalf("transcript records = %v, want %v", payloads, wantPayloads)
+	wantTypes := []messages.StreamMessageType{
+		messages.StreamTypeSessionOpen,
+		messages.StreamTypeAudioStart,
+		messages.StreamTypeAudioDelta,
+		messages.StreamTypeTranscriptStart,
+		messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeSessionClose,
 	}
-	for index, want := range wantPayloads {
-		if payloads[index] != want {
-			t.Fatalf("transcript record %d = %q, want %q", index, payloads[index], want)
-		}
+	if !reflect.DeepEqual(eventTypes, wantTypes) {
+		t.Fatalf("transcript event order = %v, want %v", eventTypes, wantTypes)
+	}
+	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
+		t.Fatalf("transcript terminal record = %s, want max_duration", terminalPayload)
+	}
+}
+
+func TestRunSessionWithMaxDuration_PreservesArtifactFlushAndCloseIdentity(t *testing.T) {
+	flushErr := errors.New("artifact flush failed")
+	closeErr := errors.New("artifact close failed")
+	for _, testCase := range []struct {
+		name     string
+		flushErr error
+		closeErr error
+		wantErr  error
+	}{
+		{name: "flush", flushErr: flushErr, wantErr: flushErr},
+		{name: "close", closeErr: closeErr, wantErr: closeErr},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			lifecycle := &durationArtifactLifecycleProbe{
+				flushErr: testCase.flushErr,
+				closeErr: testCase.closeErr,
+			}
+			err := RunSessionWithMaxDurationClock(
+				WithSessionDurationArtifacts(context.Background(), lifecycle),
+				io.Discard,
+				SessionRunOptions{
+					ReplayPath:        "artifact-failure.session.json",
+					SessionInferencer: &durationTestInferencer{events: durationNaturalEvents(), closeAfterEvents: true},
+				},
+				time.Hour,
+				&durationTestClock{},
+			)
+			if !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("artifact lifecycle error = %v, want %v", err, testCase.wantErr)
+			}
+			if lifecycle.accepted == 0 || !lifecycle.closed {
+				t.Fatalf("artifact lifecycle accepted=%d closed=%v, want accepted output and close", lifecycle.accepted, lifecycle.closed)
+			}
+		})
 	}
 }
 
@@ -605,24 +662,30 @@ func TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures(t *testing.T) 
 	}
 }
 
-func TestRunAgentLoopSessionWithDuration_ReleasesTimerSessionAndFileResources(t *testing.T) {
+func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t *testing.T) {
 	baselineGoroutines := runtime.NumGoroutine()
-	path := filepath.Join(t.TempDir(), "session-resource")
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	artifactDir := t.TempDir()
+	wavPath := filepath.Join(artifactDir, "session-resource.wav")
+	transcriptPath := filepath.Join(artifactDir, "session-resource.jsonl")
+	artifacts, err := NewSessionDurationArtifactSet(wavPath, transcriptPath)
 	if err != nil {
-		t.Fatalf("open resource probe: %v", err)
+		t.Fatalf("open production resource probe: %v", err)
 	}
+	t.Cleanup(func() { _ = artifacts.Close() })
 	clock := &durationTestClock{}
 	inferencer := &durationTestInferencer{
-		events:   durationOutputEvents(),
-		openFile: file,
+		events: durationArtifactEvents(),
 	}
 	writer := newDurationTestWriter()
 	runErrCh := make(chan error, 1)
+	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
 	go func() {
-		runErrCh <- runAgentLoopSessionWithDurationClock(context.Background(), writer, inferencer, sessionLoopOptions{}, time.Hour, clock)
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{
+			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
+			SessionInferencer: inferencer,
+		}, time.Nanosecond, clock)
 	}()
-	writer.waitFor(t, "accepted output")
+	writer.waitFor(t, "artifact-ready")
 	clock.fire()
 	if err := <-runErrCh; err != nil {
 		t.Fatalf("resource cutoff: %v", err)
@@ -634,66 +697,16 @@ func TestRunAgentLoopSessionWithDuration_ReleasesTimerSessionAndFileResources(t 
 		t.Fatal("duration timer was not stopped")
 	}
 
-	renamed := path + ".closed"
-	if err := os.Rename(path, renamed); err != nil {
-		t.Fatalf("resource file remained open after cutoff: %v", err)
-	}
-	if err := os.Remove(renamed); err != nil {
-		t.Fatalf("remove closed resource probe: %v", err)
+	for _, path := range []string{wavPath, transcriptPath} {
+		renamed := path + ".closed"
+		if err := os.Rename(path, renamed); err != nil {
+			t.Fatalf("resource file %s remained open after cutoff: %v", path, err)
+		}
+		if err := os.Remove(renamed); err != nil {
+			t.Fatalf("remove closed resource probe: %v", err)
+		}
 	}
 	waitForDurationGoroutines(t, baselineGoroutines+4)
-}
-
-type durationArtifact struct {
-	samples            []int16
-	transcriptPayloads []string
-}
-
-func (a *durationArtifact) accept(event messages.StreamMessage) {
-	switch value := event.Value.(type) {
-	case *messages.AudioDeltaValue:
-		for index := 0; index+1 < len(value.Content); index += 2 {
-			a.samples = append(a.samples, int16(binary.LittleEndian.Uint16(value.Content[index:])))
-		}
-	case *messages.TranscriptStartValue:
-		a.transcriptPayloads = append(a.transcriptPayloads, "start")
-	case *messages.TranscriptDeltaValue:
-		a.transcriptPayloads = append(a.transcriptPayloads, "delta:"+value.Text)
-	case *messages.TranscriptEndValue:
-		a.transcriptPayloads = append(a.transcriptPayloads, "end:"+value.FullText)
-	}
-}
-
-func (a *durationArtifact) addTerminal() {
-	a.transcriptPayloads = append(a.transcriptPayloads, "terminal:max_duration")
-}
-
-func (a *durationArtifact) finalize() ([]byte, []byte, error) {
-	var wav bytes.Buffer
-	if err := wavio.Write(&wav, wavio.Rate16kHz, a.samples); err != nil {
-		return nil, nil, err
-	}
-	var jsonl bytes.Buffer
-	for index, payload := range a.transcriptPayloads {
-		record := transcript.NewRecord(uint64(index+1), time.Unix(0, int64(index+1)), transcript.PeerAgent, transcript.DirectionIn, transcript.StreamWebSocket, []byte(payload))
-		encoded, err := transcript.Encode(record)
-		if err != nil {
-			return nil, nil, err
-		}
-		jsonl.Write(encoded)
-	}
-	return wav.Bytes(), jsonl.Bytes(), nil
-}
-
-func waitForDurationBufferLen(t *testing.T, buffer *messages.TypedBuffer[messages.StreamMessage], want int) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for buffer.Len() < want && time.Now().Before(deadline) {
-		runtime.Gosched()
-	}
-	if buffer.Len() < want {
-		t.Fatalf("admission buffer length = %d, want at least %d", buffer.Len(), want)
-	}
 }
 
 func waitForDurationGoroutines(t *testing.T, maximum int) {
@@ -711,7 +724,27 @@ type failingDurationWriter struct{ err error }
 
 func (w failingDurationWriter) Write([]byte) (int, error) { return 0, w.err }
 
+type durationArtifactLifecycleProbe struct {
+	accepted int
+	flushErr error
+	closeErr error
+	closed   bool
+}
+
+func (p *durationArtifactLifecycleProbe) Accept(messages.StreamMessage) error {
+	p.accepted++
+	return nil
+}
+
+func (p *durationArtifactLifecycleProbe) Flush() error { return p.flushErr }
+
+func (p *durationArtifactLifecycleProbe) Close() error {
+	p.closed = true
+	return p.closeErr
+}
+
 var _ messages.SessionInferencer = (*durationTestInferencer)(nil)
 var _ messages.Session = (*durationTestSession)(nil)
 var _ SessionDurationClock = (*durationTestClock)(nil)
 var _ SessionDurationTimer = (*durationTestTimer)(nil)
+var _ SessionDurationArtifactLifecycle = (*durationArtifactLifecycleProbe)(nil)
