@@ -15,8 +15,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -622,11 +622,11 @@ func assertManifestArtifacts(t *testing.T, destination string, manifest transcri
 }
 
 type sessionRecordingRunnerInferencer struct {
-	events       []messages.StreamMessage
-	waitForInput bool
+	events        []messages.StreamMessage
+	waitForInput  bool
 	waitForPrompt bool
-	connects     int
-	sessions     []*sessionRecordingRunnerSession
+	connects      int
+	sessions      []*sessionRecordingRunnerSession
 }
 
 func newSessionRecordingRunnerInferencer(events []messages.StreamMessage, waitForInput, waitForPrompt bool) *sessionRecordingRunnerInferencer {
@@ -640,9 +640,9 @@ func newSessionRecordingRunnerInferencer(events []messages.StreamMessage, waitFo
 func (i *sessionRecordingRunnerInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.connects++
 	session := &sessionRecordingRunnerSession{
-		receive:   messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:      make(chan struct{}),
-		inputSeen: make(chan struct{}),
+		receive:    messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:       make(chan struct{}),
+		inputSeen:  make(chan struct{}),
 		promptSeen: make(chan struct{}),
 	}
 	i.sessions = append(i.sessions, session)
@@ -679,13 +679,13 @@ type sessionRecordingRunnerSession struct {
 	done    chan struct{}
 	once    sync.Once
 
-	inputSeen chan struct{}
-	inputOnce sync.Once
+	inputSeen  chan struct{}
+	inputOnce  sync.Once
 	promptSeen chan struct{}
 	promptOnce sync.Once
-	sentMu    sync.Mutex
-	sent      []messages.StreamMessage
-	sendHook  func(context.Context, messages.StreamMessage)
+	sentMu     sync.Mutex
+	sent       []messages.StreamMessage
+	sendHook   func(context.Context, messages.StreamMessage)
 }
 
 func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
