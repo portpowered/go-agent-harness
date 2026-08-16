@@ -21,6 +21,27 @@ type Logger interface {
 	Panic(msg string, fields ...Field)
 }
 
+// Level identifies a logger method's severity. A Logger may optionally
+// implement LevelEnabler so hot-path callers can skip constructing fields for
+// disabled levels while keeping the Logger interface backwards compatible.
+type Level uint8
+
+const (
+	LevelDebug Level = iota
+	LevelInfo
+	LevelWarn
+	LevelError
+	LevelFatal
+	LevelPanic
+)
+
+// LevelEnabler is an optional logger capability. Loggers that do not implement
+// it are treated as enabled at every level for compatibility with existing
+// Logger implementations.
+type LevelEnabler interface {
+	Enabled(level Level) bool
+}
+
 type Field struct {
 	Key   string
 	Value any
@@ -147,8 +168,9 @@ func NewCrossingEmitter(logger Logger) *CrossingEmitter {
 }
 
 // Emit validates event metadata, assigns or validates its sequence, and emits
-// one canonical payload-free record. The returned event is the exact metadata
-// sent to the logger, including the assigned sequence.
+// one canonical payload-free record when Info is enabled. The returned event
+// is the exact metadata that would be sent to the logger, including the
+// assigned sequence.
 func (e *CrossingEmitter) Emit(event CrossingEvent) (CrossingEvent, error) {
 	if e == nil {
 		return CrossingEvent{}, fmt.Errorf("%w: nil emitter", ErrInvalidCrossingEvent)
@@ -172,8 +194,15 @@ func (e *CrossingEmitter) Emit(event CrossingEvent) (CrossingEvent, error) {
 
 	event.Sequence = sequence
 	e.nextSequence = sequence
-	e.logger.Info(CrossingLogMessage, crossingFields(event)...)
+	if loggerLevelEnabled(e.logger, LevelInfo) {
+		e.logger.Info(CrossingLogMessage, crossingFields(event)...)
+	}
 	return event, nil
+}
+
+func loggerLevelEnabled(logger Logger, level Level) bool {
+	enabler, ok := logger.(LevelEnabler)
+	return !ok || enabler.Enabled(level)
 }
 
 // LastSequence returns the latest sequence emitted by e. It is useful to
@@ -223,6 +252,10 @@ func (d *dummyLogger) Fatal(msg string, fields ...Field) {
 }
 
 func (d *dummyLogger) Panic(msg string, fields ...Field) {
+}
+
+func (d *dummyLogger) Enabled(Level) bool {
+	return false
 }
 
 // Ensure dummyLogger implements Logger.
