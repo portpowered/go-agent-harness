@@ -48,6 +48,7 @@
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai", "minimum": 82.10},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing", "minimum": 59.00},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing/localai", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest", "minimum": 71.40},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio", "minimum": 0.00}
   ]
 }
