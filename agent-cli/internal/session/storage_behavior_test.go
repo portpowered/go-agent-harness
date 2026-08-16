@@ -295,6 +295,17 @@ func TestStorage_ErrorPaths(t *testing.T) {
 			},
 		},
 		{
+			name: "latest_list_failure",
+			run: func(t *testing.T) {
+				st := storageWithInvalidSessionsPath(t)
+				latest, err := st.Latest()
+				if latest != "" {
+					t.Fatalf("Latest result: got %q, want empty on error", latest)
+				}
+				requirePathError(t, err, "list sessions:")
+			},
+		},
+		{
 			name: "non_directory_root_delete_session",
 			run: func(t *testing.T) {
 				st := storageWithInvalidSessionsPath(t)
@@ -505,7 +516,7 @@ func TestStorage_ConcurrentSameIDWriters(t *testing.T) {
 	if err != nil {
 		var syntaxErr *json.SyntaxError
 		if errors.As(err, &syntaxErr) {
-			t.Skip("defect: concurrent Save calls can leave interleaved or otherwise corrupt JSON because writes are not atomic")
+			t.Fatalf("concurrent Save produced corrupt JSON: %v", err)
 		}
 		if len(writeErrors) > 0 {
 			var pathErr *os.PathError
