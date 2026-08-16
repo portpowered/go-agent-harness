@@ -1,0 +1,3 @@
+coverage gate found coverage floor violations:
+- example/alpha: expected minimum 80.00%, actual 60.00%, delta -20.00%
+- example/zeta: expected minimum 90.00%, actual 80.00%, delta -10.00%
