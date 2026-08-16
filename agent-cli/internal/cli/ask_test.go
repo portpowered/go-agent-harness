@@ -136,6 +136,7 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 		stdin       io.Reader
 		response    string
 		wantOutput  string
+		wantSummary string
 		wantCalls   int
 		wantStreams int
 		wantErr     string
@@ -144,7 +145,7 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 		{name: "one-shot prompt", args: []string{"summarize this"}, response: "one-shot answer", wantOutput: "one-shot answer\n", wantCalls: 1},
 		{name: "piped context plus prompt", args: []string{"answer from context"}, stdin: strings.NewReader("context text"), response: "context answer", wantOutput: "context answer\n", wantCalls: 1},
 		{name: "stream mode", args: []string{"--stream", "stream it"}, response: "stream answer", wantOutput: "stream answer", wantCalls: 1, wantStreams: 1},
-		{name: "loop mode", args: []string{"--loop", "--max-iterations", "2", "--stop-word", "DONE", "iterate"}, response: "DONE", wantOutput: "Trace ID:", wantCalls: 1},
+		{name: "loop mode", args: []string{"--loop", "--max-iterations", "2", "--stop-word", "DONE", "iterate"}, response: "DONE", wantOutput: "Trace ID:", wantSummary: "[Loop complete: 1 iteration(s), completed: true, trace: ", wantCalls: 1},
 		{name: "loop-only flag without loop", args: []string{"--stop-word", "DONE", "prompt"}, wantErr: "--stop-word requires --loop", wantIs: errAskFlagConflict},
 		{name: "record and replay conflict", args: []string{"--record", "capture", "--replay", "replay", "prompt"}, wantErr: "cannot use --record and --replay together", wantIs: errAskFlagConflict},
 		{name: "malformed numeric flag", args: []string{"--loop", "--max-iterations", "not-a-number", "prompt"}, wantErr: `invalid argument "not-a-number" for "--max-iterations"`},
@@ -173,6 +174,24 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 			}
 			if tc.wantOutput != "" && !strings.Contains(stdout.String(), tc.wantOutput) {
 				t.Fatalf("stdout = %q, want substring %q", stdout.String(), tc.wantOutput)
+			}
+			if tc.wantSummary != "" {
+				output := stdout.String()
+				start := strings.Index(output, tc.wantSummary)
+				if start < 0 {
+					t.Fatalf("stdout = %q, want loop summary prefix %q", output, tc.wantSummary)
+				}
+				summaryLine := strings.SplitN(output[start:], "\n", 2)[0]
+				if !strings.HasSuffix(summaryLine, "]") {
+					t.Fatalf("loop summary = %q, want closing bracket", summaryLine)
+				}
+				traceID := strings.TrimSuffix(strings.TrimPrefix(summaryLine, tc.wantSummary), "]")
+				if traceID == "" {
+					t.Fatal("loop summary did not include a trace ID")
+				}
+				if !strings.Contains(output, "Trace ID: "+traceID+"\n") {
+					t.Errorf("stdout = %q, want summary trace ID %q to match trace banner", output, traceID)
+				}
 			}
 			inf.mu.Lock()
 			calls, streams := inf.inferCalls, inf.streamCalls
@@ -238,22 +257,75 @@ func TestAskCommandS4ErrorTable(t *testing.T) {
 }
 
 func TestAskCommandPropagatesPromptAndFlags(t *testing.T) {
-	inf := &askTestInferencer{responses: []messages.InferenceResult{textInference("answer")}}
-	cmd, stdout, _ := newAskTestCommand(t, inf)
-	cmd.SetArgs([]string{"--system-prompt", "none", "question"})
+	inf := &askTestInferencer{}
+	subject, cmd, stdout, stderr := newAskTestSubject(t, inf)
+	subject.globalFlags.VerboseMode = 2
+	subject.globalFlags.LogToStdout = true
+	const (
+		wantSystemPrompt = "custom system prompt"
+		wantModel        = "test-model"
+		wantProvider     = "test-provider"
+		wantAPIKey       = "test-api-key"
+		wantBaseURL      = "https://provider.test/v1"
+		wantModality     = "audio"
+		wantModelConfig  = `{"temperature":0.2}`
+	)
+	cmd.SetArgs([]string{
+		"--system-prompt", wantSystemPrompt,
+		"--model", wantModel,
+		"--provider", wantProvider,
+		"--api-key", wantAPIKey,
+		"--base-url", wantBaseURL,
+		"--stream",
+		"--output-json",
+		"--output-reasoning-tokens",
+		"--output-modality", wantModality,
+		"--model-config", wantModelConfig,
+		"question",
+	})
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	var gotCfg *agent.Config
+	var gotInput agentloop.ExecuteInput
+	subject.runAsk = func(_ context.Context, cfg *agent.Config, input agentloop.ExecuteInput, out io.Writer) (string, error) {
+		gotCfg = cfg
+		gotInput = input
+		_, err := io.WriteString(out, "answer")
+		return "answer", err
+	}
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("execute ask: %v", err)
 	}
-	if stdout.Len() == 0 {
-		t.Fatal("ask produced no output")
+	if gotCfg == nil {
+		t.Fatal("ask execution seam was not called")
 	}
-	inf.mu.Lock()
-	defer inf.mu.Unlock()
-	if len(inf.requests) != 1 {
-		t.Fatalf("requests = %d, want 1", len(inf.requests))
+	if gotCfg.SystemPrompt != wantSystemPrompt {
+		t.Errorf("system prompt = %q, want %q", gotCfg.SystemPrompt, wantSystemPrompt)
 	}
-	if got := inf.requests[0].Messages[len(inf.requests[0].Messages)-1].TextContent(); got != "question" {
-		t.Errorf("last request message = %q, want question", got)
+	if gotCfg.Model != wantModel || gotCfg.Provider != wantProvider {
+		t.Errorf("model/provider = %q/%q, want %q/%q", gotCfg.Model, gotCfg.Provider, wantModel, wantProvider)
+	}
+	if gotCfg.APIKey != wantAPIKey || gotCfg.BaseURL != wantBaseURL {
+		t.Errorf("API key/base URL = %q/%q, want %q/%q", gotCfg.APIKey, gotCfg.BaseURL, wantAPIKey, wantBaseURL)
+	}
+	if !gotCfg.Stream || !gotCfg.OutputJSON || !gotCfg.OutputReasoningTokens {
+		t.Errorf("output flags = stream:%v json:%v reasoning:%v, want all true", gotCfg.Stream, gotCfg.OutputJSON, gotCfg.OutputReasoningTokens)
+	}
+	if gotCfg.OutputModality != wantModality || gotCfg.ModelConfig != wantModelConfig {
+		t.Errorf("modality/model config = %q/%q, want %q/%q", gotCfg.OutputModality, gotCfg.ModelConfig, wantModality, wantModelConfig)
+	}
+	if !gotCfg.Verbose || gotCfg.VerbosityLevel != 2 || !gotCfg.LogToStdout {
+		t.Errorf("global config = verbose:%v level:%d log-to-stdout:%v, want true/2/true", gotCfg.Verbose, gotCfg.VerbosityLevel, gotCfg.LogToStdout)
+	}
+	if gotCfg.ConfigDir != subject.globalFlags.ConfigDir() {
+		t.Errorf("config dir = %q, want %q", gotCfg.ConfigDir, subject.globalFlags.ConfigDir())
+	}
+	if gotInput.Message != "question" || len(gotInput.ContentParts) != 0 {
+		t.Errorf("execute input = %#v, want text-only question", gotInput)
+	}
+	if stdout.String() != "answer" {
+		t.Errorf("stdout = %q, want answer from execution seam", stdout.String())
 	}
 }
 
