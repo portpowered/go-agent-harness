@@ -5,6 +5,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -47,8 +49,33 @@ func fakeDarwinDesktop(t *testing.T) string {
 	return dir
 }
 
+func assertDarwinCliclickLog(t *testing.T, path string, want []string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotText := strings.TrimSpace(string(data))
+	wantText := strings.Join(want, "\n")
+	if gotText != wantText {
+		t.Fatalf("cliclick log = %q, want %q", gotText, wantText)
+	}
+}
+
+func expectedDarwinDragLog(fromX, fromY, toX, toY int) []string {
+	lines := []string{fmt.Sprintf("p:%d,%d", fromX, fromY)}
+	const steps = 20
+	for i := 1; i <= steps; i++ {
+		ix := fromX + (toX-fromX)*i/steps
+		iy := fromY + (toY-fromY)*i/steps
+		lines = append(lines, fmt.Sprintf("m:%d,%d", ix, iy))
+	}
+	return append(lines, fmt.Sprintf("r:%d,%d", toX, toY))
+}
+
 func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
 	dir := fakeDarwinDesktop(t)
+	logPath := filepath.Join(dir, "cliclick.log")
 	tool := NewScreenTool()
 	if got := screenDisplayCount(); got != 2 {
 		t.Fatalf("screenDisplayCount = %d, want 2", got)
@@ -72,25 +99,30 @@ func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
 	if err != nil || msgs[0].ContentParts[1].(messages.ImagePart).MediaType != "image/gif" {
 		t.Fatalf("recording result = %#v, err = %v", msgs, err)
 	}
+	mousetool := NewMouseTool()
 	for _, tt := range []struct {
-		name string
-		call func() error
+		name    string
+		args    map[string]any
+		want    string
+		wantLog []string
 	}{
-		{"move", func() error { return mouseMove(1, 2) }},
-		{"click", func() error { return mouseClick(1, 2, "right") }},
-		{"double", func() error { return mouseDoubleClick(1, 2, "middle") }},
-		{"down", func() error { return mouseButtonDown(1, 2, "left") }},
-		{"up", func() error { return mouseButtonUp(1, 2, "left") }},
-		{"drag", func() error { return mouseDrag(1, 2, 3, 4, "left") }},
+		{"move", map[string]any{"action": "move", "x": float64(1), "y": float64(2)}, "Mouse moved to (1, 2)", []string{"m:1,2"}},
+		{"click", map[string]any{"action": "click", "x": float64(1), "y": float64(2), "button": "right"}, "right click at (1, 2)", []string{"rc:1,2"}},
+		{"double", map[string]any{"action": "double_click", "x": float64(1), "y": float64(2), "button": "middle"}, "middle double-click at (1, 2)", []string{"mC:1,2"}},
+		{"down", map[string]any{"action": "down", "x": float64(1), "y": float64(2)}, "left button held at (1, 2)", []string{"p:1,2"}},
+		{"up", map[string]any{"action": "up", "x": float64(1), "y": float64(2)}, "left button released at (1, 2)", []string{"r:1,2"}},
+		{"drag", map[string]any{"action": "drag", "x": float64(1), "y": float64(2), "to_x": float64(3), "to_y": float64(4)}, "left drag from (1, 2) to (3, 4)", expectedDarwinDragLog(1, 2, 3, 4)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.call(); err != nil {
+			if err := os.WriteFile(logPath, nil, 0o644); err != nil {
 				t.Fatal(err)
 			}
+			msgs, err := mousetool.Execute(context.Background(), tt.args)
+			if err != nil || len(msgs) != 1 || msgs[0].TextContent() != tt.want {
+				t.Fatalf("mouse result = %#v, err = %v; want %q", msgs, err, tt.want)
+			}
+			assertDarwinCliclickLog(t, logPath, tt.wantLog)
 		})
-	}
-	if data, err := os.ReadFile(filepath.Join(dir, "cliclick.log")); err != nil || !strings.Contains(string(data), "r:1,2") || !strings.Contains(string(data), "m:1,2") {
-		t.Fatalf("cliclick log = %q, err = %v", data, err)
 	}
 
 	bad := filepath.Join(dir, "bad.png")
@@ -118,6 +150,32 @@ func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
 	}
 }
 
+func TestS4DarwinCliclickErrors(t *testing.T) {
+	failDir := t.TempDir()
+	writeDarwinCommand(t, failDir, "cliclick", `printf 'command failed\n' >&2; exit 7`)
+	t.Setenv("PATH", failDir)
+	if err := mouseClick(1, 2, "left"); err == nil || !strings.Contains(err.Error(), "cliclick [c:1,2]") || !strings.Contains(err.Error(), "command failed") {
+		t.Fatalf("cliclick command error = %v", err)
+	}
+	if err := mouseDrag(1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag start") {
+		t.Fatalf("drag start error = %v", err)
+	}
+
+	stepDir := t.TempDir()
+	stepLog := filepath.Join(stepDir, "cliclick.log")
+	t.Setenv("GO_AGENT_HARNESS_CLICLICK_LOG", stepLog)
+	writeDarwinCommand(t, stepDir, "cliclick", `printf '%s\n' "$*" >> "$GO_AGENT_HARNESS_CLICLICK_LOG"; case "$1" in p:*) exit 0 ;; *) exit 7 ;; esac`)
+	t.Setenv("PATH", stepDir)
+	if err := mouseDrag(1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag step 1") {
+		t.Fatalf("drag step error = %v", err)
+	}
+
+	t.Setenv("PATH", t.TempDir())
+	if err := mouseMove(1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
+		t.Fatalf("missing cliclick error = %v", err)
+	}
+}
+
 func TestS12DarwinRealCapabilities(t *testing.T) {
 	for _, command := range []string{"screencapture", "cliclick"} {
 		if _, err := exec.LookPath(command); err != nil {
@@ -132,7 +190,75 @@ func TestS12DarwinRealCapabilities(t *testing.T) {
 	if part.MediaType != "image/jpeg" || len(part.Bytes) == 0 {
 		t.Fatalf("live screenshot did not produce non-empty JPEG: %#v", part)
 	}
-	if err := mouseMove(1, 1); err != nil {
-		t.Skipf("%s: unavailable capability: cursor input (%v)", runtime.GOOS, err)
+
+	bounds := screenDisplayBounds(0)
+	if bounds.Dx() < 16 || bounds.Dy() < 16 {
+		t.Skipf("%s: unavailable capability: usable display bounds (%v)", runtime.GOOS, bounds)
 	}
+	originalX, originalY, err := darwinCursorPosition()
+	if err != nil {
+		t.Skipf("%s: unavailable capability: cursor position query (%v)", runtime.GOOS, err)
+	}
+	t.Cleanup(func() {
+		if err := mouseButtonUp(originalX, originalY, "left"); err != nil {
+			t.Logf("%s: cursor cleanup release failed: %v", runtime.GOOS, err)
+		}
+		if err := mouseMove(originalX, originalY); err != nil {
+			t.Logf("%s: cursor cleanup restore failed: %v", runtime.GOOS, err)
+		}
+	})
+
+	baseX := bounds.Min.X + bounds.Dx()/2
+	baseY := bounds.Min.Y + bounds.Dy()/2
+	operations := []struct {
+		name         string
+		wantX, wantY int
+		call         func() error
+	}{
+		{"move", baseX, baseY, func() error { return mouseMove(baseX, baseY) }},
+		{"click", baseX + 1, baseY + 1, func() error { return mouseClick(baseX+1, baseY+1, "left") }},
+		{"double-click", baseX + 2, baseY + 2, func() error { return mouseDoubleClick(baseX+2, baseY+2, "left") }},
+		{"button-down", baseX + 3, baseY + 3, func() error { return mouseButtonDown(baseX+3, baseY+3, "left") }},
+		{"button-up", baseX + 4, baseY + 4, func() error { return mouseButtonUp(baseX+4, baseY+4, "left") }},
+		{"drag", baseX + 7, baseY + 7, func() error { return mouseDrag(baseX+5, baseY+5, baseX+7, baseY+7, "left") }},
+	}
+	for _, operation := range operations {
+		t.Run(operation.name, func(t *testing.T) {
+			if err := operation.call(); err != nil {
+				t.Skipf("%s: unavailable capability: cursor input (%v)", runtime.GOOS, err)
+			}
+			gotX, gotY, err := darwinCursorPosition()
+			if err != nil {
+				t.Skipf("%s: unavailable capability: cursor position query after %s (%v)", runtime.GOOS, operation.name, err)
+			}
+			if gotX != operation.wantX || gotY != operation.wantY {
+				t.Fatalf("cursor after %s = (%d, %d), want (%d, %d)", operation.name, gotX, gotY, operation.wantX, operation.wantY)
+			}
+		})
+	}
+}
+
+func darwinCursorPosition() (int, int, error) {
+	out, err := exec.Command("cliclick", "p").CombinedOutput()
+	if err != nil {
+		return 0, 0, fmt.Errorf("cliclick p: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	output := strings.TrimSpace(string(out))
+	if output == "" {
+		return 0, 0, fmt.Errorf("cliclick returned an empty position")
+	}
+	lines := strings.Split(output, "\n")
+	parts := strings.Split(strings.TrimSpace(lines[len(lines)-1]), ",")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("unexpected cliclick position %q", output)
+	}
+	x, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse cliclick x: %w", err)
+	}
+	y, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse cliclick y: %w", err)
+	}
+	return x, y, nil
 }

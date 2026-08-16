@@ -38,7 +38,7 @@ func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	}
 	procReleaseDC.Call(0, h)
 	bounds := screenDisplayBounds(0)
-	if bounds.Dx() < 2 || bounds.Dy() < 2 {
+	if bounds.Dx() < 64 || bounds.Dy() < 64 {
 		t.Skipf("%s: unavailable capability: usable display bounds (%v)", runtime.GOOS, bounds)
 	}
 	return bounds
@@ -85,7 +85,10 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 	if err != nil {
 		t.Skipf("%s: unavailable capability: cursor position query (%v)", runtime.GOOS, err)
 	}
-	t.Cleanup(func() { _ = mouseMove(originalX, originalY) })
+	t.Cleanup(func() {
+		_ = mouseButtonUp(originalX, originalY, "left")
+		_ = mouseMove(originalX, originalY)
+	})
 	targetX, targetY := bounds.Min.X+bounds.Dx()/2, bounds.Min.Y+bounds.Dy()/2
 	if err := mouseMove(targetX, targetY); err != nil {
 		t.Skipf("%s: unavailable capability: cursor input (%v)", runtime.GOOS, err)
@@ -100,17 +103,28 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 			t.Fatalf("buttonFlags(%q) = (%#x, %#x)", button, down, up)
 		}
 	}
-	for _, tt := range []struct {
-		name string
-		args map[string]any
-		want string
+	points := []struct{ x, y int }{
+		{targetX + 4, targetY + 4},
+		{targetX + 8, targetY + 8},
+		{targetX + 12, targetY + 12},
+		{targetX + 16, targetY + 16},
+		{targetX + 20, targetY + 20},
+	}
+	operations := []struct {
+		name        string
+		args        map[string]any
+		want        string
+		wantCursorX int
+		wantCursorY int
 	}{
-		{"click", map[string]any{"action": "click", "x": float64(targetX), "y": float64(targetY)}, "left click at (" + strconv.Itoa(targetX) + ", " + strconv.Itoa(targetY) + ")"},
-		{"double-click", map[string]any{"action": "double_click", "x": float64(targetX), "y": float64(targetY)}, "left double-click at (" + strconv.Itoa(targetX) + ", " + strconv.Itoa(targetY) + ")"},
-		{"down", map[string]any{"action": "down", "x": float64(targetX), "y": float64(targetY)}, "left button held at (" + strconv.Itoa(targetX) + ", " + strconv.Itoa(targetY) + ")"},
-		{"up", map[string]any{"action": "up", "x": float64(targetX), "y": float64(targetY)}, "left button released at (" + strconv.Itoa(targetX) + ", " + strconv.Itoa(targetY) + ")"},
-		{"drag", map[string]any{"action": "drag", "x": float64(targetX), "y": float64(targetY), "to_x": float64(targetX + 1), "to_y": float64(targetY + 1)}, "left drag from (" + strconv.Itoa(targetX) + ", " + strconv.Itoa(targetY) + ") to (" + strconv.Itoa(targetX+1) + ", " + strconv.Itoa(targetY+1) + ")"},
-	} {
+		{"click", map[string]any{"action": "click", "x": float64(points[0].x), "y": float64(points[0].y)}, "left click at (" + strconv.Itoa(points[0].x) + ", " + strconv.Itoa(points[0].y) + ")", points[0].x, points[0].y},
+		{"double-click", map[string]any{"action": "double_click", "x": float64(points[1].x), "y": float64(points[1].y)}, "left double-click at (" + strconv.Itoa(points[1].x) + ", " + strconv.Itoa(points[1].y) + ")", points[1].x, points[1].y},
+		{"down", map[string]any{"action": "down", "x": float64(points[2].x), "y": float64(points[2].y)}, "left button held at (" + strconv.Itoa(points[2].x) + ", " + strconv.Itoa(points[2].y) + ")", points[2].x, points[2].y},
+		{"up", map[string]any{"action": "up", "x": float64(points[3].x), "y": float64(points[3].y)}, "left button released at (" + strconv.Itoa(points[3].x) + ", " + strconv.Itoa(points[3].y) + ")", points[3].x, points[3].y},
+		{"drag", map[string]any{"action": "drag", "x": float64(points[4].x), "y": float64(points[4].y), "to_x": float64(points[4].x + 4), "to_y": float64(points[4].y + 4)}, "left drag from (" + strconv.Itoa(points[4].x) + ", " + strconv.Itoa(points[4].y) + ") to (" + strconv.Itoa(points[4].x+4) + ", " + strconv.Itoa(points[4].y+4) + ")", points[4].x + 4, points[4].y + 4},
+	}
+	lastX, lastY := targetX, targetY
+	for _, tt := range operations {
 		t.Run(tt.name, func(t *testing.T) {
 			msgs, err := tool.Execute(context.Background(), tt.args)
 			if err != nil {
@@ -119,6 +133,17 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 			if len(msgs) != 1 || msgs[0].TextContent() != tt.want {
 				t.Fatalf("result = %#v, want %q", msgs, tt.want)
 			}
+			x, y, err := windowsCursorPosition()
+			if err != nil {
+				t.Skipf("%s: unavailable capability: cursor position query after %s (%v)", runtime.GOOS, tt.name, err)
+			}
+			if x < tt.wantCursorX-1 || x > tt.wantCursorX+1 || y < tt.wantCursorY-1 || y > tt.wantCursorY+1 {
+				t.Fatalf("cursor after %s = (%d, %d), want (%d, %d) within one pixel", tt.name, x, y, tt.wantCursorX, tt.wantCursorY)
+			}
+			if x == lastX && y == lastY {
+				t.Fatalf("cursor did not move for %s; still at (%d, %d)", tt.name, x, y)
+			}
+			lastX, lastY = x, y
 		})
 	}
 }

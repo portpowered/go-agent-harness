@@ -5,6 +5,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
@@ -126,19 +127,23 @@ func TestS12LinuxMouseFakeOperations(t *testing.T) {
 	_, logPath := fakeLinuxDesktop(t, tinyPNG(t))
 	tool := NewMouseTool()
 	cases := []struct {
-		action string
-		args   map[string]any
-		want   string
+		action  string
+		args    map[string]any
+		want    string
+		wantLog []string
 	}{
-		{"move", map[string]any{"action": "move", "x": float64(2), "y": float64(3)}, "Mouse moved to (2, 3)"},
-		{"click", map[string]any{"action": "click", "x": float64(2), "y": float64(3), "button": "right"}, "right click at (2, 3)"},
-		{"double", map[string]any{"action": "double_click", "x": float64(2), "y": float64(3), "button": "middle"}, "middle double-click at (2, 3)"},
-		{"down", map[string]any{"action": "down", "x": float64(2), "y": float64(3)}, "left button held at (2, 3)"},
-		{"up", map[string]any{"action": "up", "x": float64(2), "y": float64(3)}, "left button released at (2, 3)"},
-		{"drag", map[string]any{"action": "drag", "x": float64(2), "y": float64(3), "to_x": float64(6), "to_y": float64(7)}, "left drag from (2, 3) to (6, 7)"},
+		{"move", map[string]any{"action": "move", "x": float64(2), "y": float64(3)}, "Mouse moved to (2, 3)", []string{"mousemove 2 3"}},
+		{"click", map[string]any{"action": "click", "x": float64(2), "y": float64(3), "button": "right"}, "right click at (2, 3)", []string{"mousemove 2 3 click 3"}},
+		{"double", map[string]any{"action": "double_click", "x": float64(2), "y": float64(3), "button": "middle"}, "middle double-click at (2, 3)", []string{"mousemove 2 3 click 2", "mousemove 2 3 click 2"}},
+		{"down", map[string]any{"action": "down", "x": float64(2), "y": float64(3)}, "left button held at (2, 3)", []string{"mousemove 2 3", "mousedown 1"}},
+		{"up", map[string]any{"action": "up", "x": float64(2), "y": float64(3)}, "left button released at (2, 3)", []string{"mousemove 2 3", "mouseup 1"}},
+		{"drag", map[string]any{"action": "drag", "x": float64(2), "y": float64(3), "to_x": float64(6), "to_y": float64(7)}, "left drag from (2, 3) to (6, 7)", expectedLinuxDragLog(2, 3, 6, 7)},
 	}
 	for _, tt := range cases {
 		t.Run(tt.action, func(t *testing.T) {
+			if err := os.WriteFile(logPath, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
 			msgs, err := tool.Execute(context.Background(), tt.args)
 			if err != nil {
 				t.Fatal(err)
@@ -146,18 +151,26 @@ func TestS12LinuxMouseFakeOperations(t *testing.T) {
 			if len(msgs) != 1 || msgs[0].TextContent() != tt.want {
 				t.Fatalf("result = %#v, want %q", msgs, tt.want)
 			}
+			data, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.TrimSpace(string(data)); got != strings.Join(tt.wantLog, "\n") {
+				t.Fatalf("xdotool log = %q, want %q", got, strings.Join(tt.wantLog, "\n"))
+			}
 		})
 	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
+}
+
+func expectedLinuxDragLog(fromX, fromY, toX, toY int) []string {
+	lines := []string{fmt.Sprintf("mousemove %d %d", fromX, fromY), "mousedown 1"}
+	const steps = 20
+	for i := 1; i <= steps; i++ {
+		ix := fromX + (toX-fromX)*i/steps
+		iy := fromY + (toY-fromY)*i/steps
+		lines = append(lines, fmt.Sprintf("mousemove %d %d", ix, iy))
 	}
-	if lines := strings.Count(strings.TrimSpace(string(data)), "\n") + 1; lines < 25 {
-		t.Fatalf("fake xdotool observed %d calls, want drag and all actions", lines)
-	}
-	if !strings.Contains(string(data), "click 3") || !strings.Contains(string(data), "click 2") {
-		t.Fatalf("button mapping was not observed in xdotool log: %s", data)
-	}
+	return append(lines, "mouseup 1")
 }
 
 func TestS12LinuxHelpersAndCapabilityErrors(t *testing.T) {
