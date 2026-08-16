@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
 // PortName is the stable name used to identify a composition dependency.
@@ -23,12 +24,24 @@ const (
 	PortInferencer = "inferencer"
 	// PortSessionInferencer is the optional bidirectional session override.
 	PortSessionInferencer = "session-inferencer"
+	// PortDeviceRegistry is the required audio-device registry seam.
+	PortDeviceRegistry = "device-registry"
+	// PortAudioSource is the required PCM input seam.
+	PortAudioSource = "audio-source"
+	// PortAudioSink is the required PCM output seam.
+	PortAudioSink = "audio-sink"
+	// PortClock is the required time source after defaulting.
+	PortClock = "clock"
 
 	// The *PortName constants make the port contract discoverable to callers
 	// that prefer a name-oriented vocabulary.
 	ToolExecutorPortName      = PortToolExecutor
 	InferencerPortName        = PortInferencer
 	SessionInferencerPortName = PortSessionInferencer
+	DeviceRegistryPortName    = PortDeviceRegistry
+	AudioSourcePortName       = PortAudioSource
+	AudioSinkPortName         = PortAudioSink
+	ClockPortName             = PortClock
 )
 
 var (
@@ -147,10 +160,18 @@ func WithStrictModelValidation() CompositionOption {
 	}
 }
 
-// ComposeAgentCLI constructs the singular CLI root from the required tool
-// executor. Optional capabilities are supplied through CompositionOption.
-// Validation runs before any graph constructor is called.
-func ComposeAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionOption) (*cli.AgentCLI, error) {
+// ComposeAgentCLI constructs the singular CLI root from the required tool and
+// audio-side ports. An omitted clock is normalized to clock.Real. Optional
+// inference capabilities are supplied through CompositionOption. Validation
+// runs before any graph constructor is called.
+func ComposeAgentCLI(
+	toolExecutor messages.ToolExecutor,
+	deviceRegistry DeviceRegistry,
+	audioSource AudioSource,
+	audioSink AudioSink,
+	clockSource Clock,
+	options ...CompositionOption,
+) (*cli.AgentCLI, error) {
 	compositionOptions, err := applyCompositionOptions(options)
 	if err != nil {
 		return nil, err
@@ -158,9 +179,14 @@ func ComposeAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionO
 
 	values := compositionValues{
 		toolExecutor:      toolExecutor,
+		deviceRegistry:    deviceRegistry,
+		audioSource:       audioSource,
+		audioSink:         audioSink,
+		clockSource:       clockSource,
 		inferencer:        compositionOptions.inferencer,
 		sessionInferencer: compositionOptions.sessionInferencer,
 	}
+	normalizeClock(&values)
 	if err := validateDependencies(&values); err != nil {
 		return nil, err
 	}
@@ -170,6 +196,10 @@ func ComposeAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionO
 	registry := tools.NewToolRegistry()
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.deviceRegistry,
+		values.audioSource,
+		values.audioSink,
+		values.clockSource,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -181,12 +211,22 @@ func ComposeAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionO
 // executor. It shares the same explicit assembly helper as all test paths.
 func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	registry := tools.NewToolRegistry()
-	values := compositionValues{toolExecutor: tools.NewRegistryExecutor(registry)}
+	values := compositionValues{
+		toolExecutor:   tools.NewRegistryExecutor(registry),
+		deviceRegistry: defaultDeviceRegistry(),
+		audioSource:    defaultAudioSource(),
+		audioSink:      defaultAudioSink(),
+		clockSource:    clock.Ensure(nil),
+	}
 	if err := validateDependencies(&values); err != nil {
 		return nil, err
 	}
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.deviceRegistry,
+		values.audioSource,
+		values.audioSink,
+		values.clockSource,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -199,7 +239,13 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 // port definitions used by required-port validation.
 func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
 	registry := tools.NewToolRegistry()
-	values := compositionValues{toolExecutor: tools.NewRegistryExecutor(registry)}
+	values := compositionValues{
+		toolExecutor:   tools.NewRegistryExecutor(registry),
+		deviceRegistry: defaultDeviceRegistry(),
+		audioSource:    defaultAudioSource(),
+		audioSink:      defaultAudioSink(),
+		clockSource:    clock.Ensure(nil),
+	}
 	for _, swap := range swaps {
 		if err := applyPortSwap(&values, swap); err != nil {
 			return nil, err
@@ -210,6 +256,10 @@ func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
 	}
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.deviceRegistry,
+		values.audioSource,
+		values.audioSink,
+		values.clockSource,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -238,6 +288,10 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
 	values := compositionValues{
 		toolExecutor:      toolExecutor,
+		deviceRegistry:    defaultDeviceRegistry(),
+		audioSource:       defaultAudioSource(),
+		audioSink:         defaultAudioSink(),
+		clockSource:       clock.Ensure(nil),
 		inferencer:        inferencer,
 		sessionInferencer: sessionInferencer,
 	}
@@ -247,6 +301,10 @@ func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer mess
 	registry := tools.NewToolRegistry()
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.deviceRegistry,
+		values.audioSource,
+		values.audioSink,
+		values.clockSource,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -269,6 +327,10 @@ func applyCompositionOptions(options []CompositionOption) (compositionOptions, e
 
 type compositionValues struct {
 	toolExecutor      messages.ToolExecutor
+	deviceRegistry    DeviceRegistry
+	audioSource       AudioSource
+	audioSink         AudioSink
+	clockSource       Clock
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
 }
@@ -328,7 +390,73 @@ func livePortDefinitions() []portDefinition {
 				values.sessionInferencer = value.(messages.SessionInferencer)
 			},
 		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortDeviceRegistry,
+				Required: true,
+				Type:     reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
+			},
+			value: func(values *compositionValues) any { return values.deviceRegistry },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.deviceRegistry = nil
+					return
+				}
+				values.deviceRegistry = value.(DeviceRegistry)
+			},
+		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortAudioSource,
+				Required: true,
+				Type:     reflect.TypeOf((*AudioSource)(nil)).Elem(),
+			},
+			value: func(values *compositionValues) any { return values.audioSource },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.audioSource = nil
+					return
+				}
+				values.audioSource = value.(AudioSource)
+			},
+		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortAudioSink,
+				Required: true,
+				Type:     reflect.TypeOf((*AudioSink)(nil)).Elem(),
+			},
+			value: func(values *compositionValues) any { return values.audioSink },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.audioSink = nil
+					return
+				}
+				values.audioSink = value.(AudioSink)
+			},
+		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortClock,
+				Required: true,
+				Type:     reflect.TypeOf((*Clock)(nil)).Elem(),
+			},
+			value: func(values *compositionValues) any { return values.clockSource },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.clockSource = nil
+					return
+				}
+				values.clockSource = value.(Clock)
+			},
+		},
 	}
+}
+
+// normalizeClock is called only by composition entry points. Named swaps are
+// validated first, so an explicit nil clock replacement cannot be defaulted.
+func normalizeClock(values *compositionValues) {
+	values.clockSource = clock.Ensure(values.clockSource)
 }
 
 // LivePorts returns the authoritative live port list in deterministic order.
