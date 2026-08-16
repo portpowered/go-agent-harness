@@ -64,7 +64,7 @@ func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	}
 	sink, err := NewFileSink(outputPath, nil)
 	if err != nil {
-		source.Close()
+		_ = source.Close()
 		t.Fatal(err)
 	}
 	for {
@@ -131,7 +131,7 @@ func TestFileSinkStandardStreamAndValidation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer sink.Close()
+		defer func() { _ = sink.Close() }()
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		if err := sink.WriteFrame(ctx, make([]int16, FrameSize)); !errors.Is(err, context.Canceled) {

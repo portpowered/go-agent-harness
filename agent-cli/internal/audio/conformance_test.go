@@ -53,7 +53,7 @@ func TestSourceConformancePartialFinalFrame(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			source := test.open(t)
-			defer source.Close()
+			defer func() { _ = source.Close() }()
 			assertSourceFrames(t, source, samples)
 		})
 	}

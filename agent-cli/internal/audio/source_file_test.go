@@ -110,7 +110,7 @@ func TestFileSourceEmptyAndTruncatedRaw(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 		if err := source.ReadFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, io.EOF) {
 			t.Fatalf("ReadFrame() = %v, want io.EOF", err)
 		}
@@ -126,7 +126,7 @@ func TestFileSourceEmptyAndTruncatedRaw(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 		readErr := source.ReadFrame(context.Background(), make([]int16, FrameSize))
 		var truncErr *TruncatedPCMError
 		if !errors.As(readErr, &truncErr) || !errors.Is(readErr, ErrTruncatedPCM) || truncErr.Bytes != 1 {
@@ -151,7 +151,7 @@ func TestFileSourceWAVValidationAndFraming(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 		assertSourceFrames(t, source, samples)
 	})
 
@@ -196,7 +196,7 @@ func TestFileSourceContextAndFrameErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
