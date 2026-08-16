@@ -46,6 +46,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ReplayPath:        c.askFlags.ReplayCapturePath,
 				Provider:          c.askFlags.Provider,
 				Model:             c.askFlags.Model,
+				ModelProvided:     cmd.Flags().Changed("model"),
 				APIKey:            c.askFlags.APIKey,
 				BaseURL:           c.askFlags.BaseURL,
 				ConfigDir:         c.globalFlags.ConfigDir(),

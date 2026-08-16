@@ -1,0 +1,6 @@
+# These IDs are resolved through the v4.8.2 LocalAI gallery pinned in
+# docker-compose.yml. The downloaded artifacts are kept in localai-model-cache.
+- id: silero-vad-ggml
+- id: whisper-base
+- id: qwen3-1.7b
+- id: vits-piper-en_US-amy-sherpa
