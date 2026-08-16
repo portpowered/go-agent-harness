@@ -126,7 +126,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 	} else {
 		// dispatch_agent requires the inferencer, so it is registered after the inferencer is built.
 		if loadedCfg.Tools.ToolEnabled("dispatch_agent") {
-			registry.Register(tools.NewDispatchAgentTool(inf, registry))
+			_ = registry.Register(tools.NewDispatchAgentTool(inf, registry))
 		}
 		loopExecutor = tools.NewRegistryExecutor(registry)
 		loopToolDefs = registry.ToAgentLoopDefs()

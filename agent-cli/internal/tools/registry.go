@@ -2,7 +2,10 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +18,65 @@ import (
 type ToolRegistry struct {
 	tools map[string]Tool
 	mu    sync.RWMutex
+}
+
+type RegistryErrorKind string
+
+const (
+	RegistryErrorDuplicate RegistryErrorKind = "duplicate"
+	RegistryErrorNotFound  RegistryErrorKind = "not_found"
+	RegistryErrorEmptyName RegistryErrorKind = "empty_name"
+	RegistryErrorNilTool   RegistryErrorKind = "nil_tool"
+)
+
+var (
+	ErrDuplicateTool = errors.New("tool already registered")
+	ErrToolNotFound  = errors.New("tool not found")
+	ErrEmptyToolName = errors.New("tool name is empty")
+	ErrNilTool       = errors.New("tool is nil")
+)
+
+var registryErrorSentinels = map[RegistryErrorKind]error{
+	RegistryErrorDuplicate: ErrDuplicateTool,
+	RegistryErrorNotFound:  ErrToolNotFound,
+	RegistryErrorEmptyName: ErrEmptyToolName,
+	RegistryErrorNilTool:   ErrNilTool,
+}
+
+type RegistryError struct {
+	Kind RegistryErrorKind
+	Name string
+}
+
+func (e *RegistryError) Error() string {
+	switch e.Kind {
+	case RegistryErrorDuplicate:
+		return fmt.Sprintf("tool %q is already registered", e.Name)
+	case RegistryErrorNotFound:
+		return fmt.Sprintf("tool %q not found", e.Name)
+	case RegistryErrorEmptyName:
+		return "tool name must not be empty"
+	case RegistryErrorNilTool:
+		return "tool must not be nil"
+	default:
+		return fmt.Sprintf("registry error: %s", e.Kind)
+	}
+}
+
+func (e *RegistryError) Unwrap() error {
+	return registryErrorSentinels[e.Kind]
+}
+
+func newRegistryError(kind RegistryErrorKind, name string) *RegistryError {
+	return &RegistryError{Kind: kind, Name: name}
+}
+
+func isNilTool(tool Tool) bool {
+	if tool == nil {
+		return true
+	}
+	v := reflect.ValueOf(tool)
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 func NewToolRegistry() *ToolRegistry {
@@ -35,53 +97,65 @@ func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
 
 	if enabled("exec") {
 		if cfg != nil {
-			registry.Register(NewExecToolWithConfig("", false, cfg))
+			_ = registry.Register(NewExecToolWithConfig("", false, cfg))
 		} else {
-			registry.Register(NewExecTool("", false))
+			_ = registry.Register(NewExecTool("", false))
 		}
 	}
 	if enabled("read_file") {
-		registry.Register(NewReadFileTool("", false))
+		_ = registry.Register(NewReadFileTool("", false))
 	}
 	if enabled("write_file") {
-		registry.Register(NewWriteFileTool("", false))
+		_ = registry.Register(NewWriteFileTool("", false))
 	}
 	if enabled("edit_file") {
-		registry.Register(NewEditFileTool("", false))
+		_ = registry.Register(NewEditFileTool("", false))
 	}
 	if enabled("append_file") {
-		registry.Register(NewAppendFileTool("", false))
+		_ = registry.Register(NewAppendFileTool("", false))
 	}
 	if enabled("list_dir") {
-		registry.Register(NewListDirTool("", false))
+		_ = registry.Register(NewListDirTool("", false))
 	}
 	if enabled("web_fetch") {
-		registry.Register(NewWebFetchTool(0))
+		_ = registry.Register(NewWebFetchTool(0))
 	}
 	if enabled("web_search") {
 		if searchTool := NewWebSearchTool(WebSearchToolOptions{DuckDuckGoEnabled: true}); searchTool != nil {
-			registry.Register(searchTool)
+			_ = registry.Register(searchTool)
 		}
 	}
 	if enabled("show") {
-		registry.Register(NewScreenTool())
+		_ = registry.Register(NewScreenTool())
 	}
 	if enabled("mouse") {
-		registry.Register(NewMouseTool())
+		_ = registry.Register(NewMouseTool())
 	}
 	if enabled("load_skill") {
-		registry.Register(NewLoadSkillTool())
+		_ = registry.Register(NewLoadSkillTool())
 	}
 	if enabled("sleep") {
-		registry.Register(NewSleepTool())
+		_ = registry.Register(NewSleepTool())
 	}
 	return registry
 }
 
-func (r *ToolRegistry) Register(tool Tool) {
+func (r *ToolRegistry) Register(tool Tool) error {
+	if isNilTool(tool) {
+		return newRegistryError(RegistryErrorNilTool, "")
+	}
+	name := tool.Name()
+	if strings.TrimSpace(name) == "" {
+		return newRegistryError(RegistryErrorEmptyName, name)
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.tools[tool.Name()] = tool
+	if _, exists := r.tools[name]; exists {
+		return newRegistryError(RegistryErrorDuplicate, name)
+	}
+	r.tools[name] = tool
+	return nil
 }
 
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
@@ -89,6 +163,15 @@ func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	defer r.mu.RUnlock()
 	tool, ok := r.tools[name]
 	return tool, ok
+}
+
+// Lookup returns a registered tool or a typed not-found error.
+func (r *ToolRegistry) Lookup(name string) (Tool, error) {
+	tool, ok := r.Get(name)
+	if !ok {
+		return nil, newRegistryError(RegistryErrorNotFound, name)
+	}
+	return tool, nil
 }
 
 func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string]any) ([]messages.Message, error) {
@@ -107,10 +190,10 @@ func (r *ToolRegistry) ExecuteWithContext(
 	l := logger.GetRequestLoggerFromContext(ctx)
 	l.Info("Tool execution started", zap.String("tool", name), zap.Any("args", args))
 
-	tool, ok := r.Get(name)
-	if !ok {
+	tool, err := r.Lookup(name)
+	if err != nil {
 		l.Error("Tool not found", zap.String("tool", name))
-		return nil, fmt.Errorf("tool %q not found", name)
+		return nil, err
 	}
 
 	start := time.Now()

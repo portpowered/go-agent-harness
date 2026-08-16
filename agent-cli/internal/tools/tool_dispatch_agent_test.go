@@ -211,7 +211,7 @@ func TestDispatchAgentTool_ImplementsAsyncTool(t *testing.T) {
 func TestDispatchAgentTool_RegistrableInRegistry(t *testing.T) {
 	inf := &dispatchMockInferencer{response: "done"}
 	registry := NewToolRegistry()
-	registry.Register(NewDispatchAgentTool(inf, registry))
+	_ = registry.Register(NewDispatchAgentTool(inf, registry))
 
 	tool, ok := registry.Get("dispatch_agent")
 	if !ok {

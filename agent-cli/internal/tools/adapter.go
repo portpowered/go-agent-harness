@@ -15,6 +15,16 @@ type RegistryExecutor struct {
 	registry *ToolRegistry
 }
 
+type ToolArgumentError struct {
+	Err error
+}
+
+func (e *ToolArgumentError) Error() string {
+	return fmt.Sprintf("failed to parse tool arguments: %v", e.Err)
+}
+
+func (e *ToolArgumentError) Unwrap() error { return e.Err }
+
 // NewRegistryExecutor creates a ToolExecutor backed by the given ToolRegistry.
 func NewRegistryExecutor(registry *ToolRegistry) *RegistryExecutor {
 	return &RegistryExecutor{registry: registry}
@@ -25,7 +35,7 @@ func (re *RegistryExecutor) Execute(ctx context.Context, call messages.ToolCall)
 	var args map[string]any
 	if call.Arguments != "" {
 		if err := json.Unmarshal([]byte(call.Arguments), &args); err != nil {
-			return messages.ToolCallResponse{}, fmt.Errorf("failed to parse tool arguments: %w", err)
+			return messages.ToolCallResponse{}, &ToolArgumentError{Err: err}
 		}
 	}
 
@@ -42,12 +52,11 @@ func messagesToToolCallResponse(toolCallID string, msgs []messages.Message) mess
 	var content strings.Builder
 	var contentParts []messages.ContentPart
 	for _, m := range msgs {
-		if m.HasText() {
-			text := m.TextContent()
-			content.WriteString(text)
-			contentParts = append(contentParts, messages.NewTextPart(text))
-		} else {
-			contentParts = append(contentParts, m.ContentParts...)
+		for _, part := range m.ContentParts {
+			if textPart, ok := part.(messages.TextPart); ok {
+				content.WriteString(textPart.Text)
+			}
+			contentParts = append(contentParts, part)
 		}
 	}
 	resp := messages.ToolCallResponse{ToolCallID: toolCallID}
