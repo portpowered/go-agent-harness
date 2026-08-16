@@ -265,3 +265,37 @@ release: release-check ## Run validation and publish the GitHub release for RELE
 
 clean: ## Remove root-generated build and coverage outputs.
 	rm -rf "$(COVERAGE_DIR)" "$(AGENT_CLI_OUTPUT)" dist
+
+test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
+	@set -euo pipefail; \
+	timingate_input="$$(mktemp)"; \
+	trap 'rm -f "$$timingate_input"' EXIT; \
+	run_budget_test() { \
+		module="$$1"; \
+		shift; \
+		echo "==> test-budget $$module $$*"; \
+		run_budget_output="$$(mktemp)"; \
+		if (cd "$$module" && CGO_ENABLED=0 $(GO) test "$$@" -json -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)") >"$$run_budget_output" 2>&1; then \
+			cat "$$run_budget_output" >> "$$timingate_input"; \
+			rm -f "$$run_budget_output"; \
+		else \
+			status=$$?; \
+			cat "$$run_budget_output"; \
+			rm -f "$$run_budget_output"; \
+			return $$status; \
+		fi; \
+	}; \
+	run_budget_unit() { \
+		module="$$1"; \
+		packages="$$(cd "$$module" && CGO_ENABLED=0 $(GO) list ./... | grep -v '/test/')"; \
+		run_budget_test "$$module" $$packages; \
+	}; \
+	run_budget_unit agent-cli; \
+	run_budget_unit go-agent-loop; \
+	run_budget_unit go-llm-gateway; \
+	run_budget_test agent-cli ./test/integration; \
+	run_budget_test go-agent-loop ./test/functional; \
+	run_budget_test agent-cli ./test/integration -run '$(AGENT_CLI_REGRESSION_TESTS)'; \
+	run_budget_test go-llm-gateway $(GO_LLM_GATEWAY_REGRESSION_PACKAGES); \
+	echo "==> test-budget evaluating package timing"; \
+	(cd tools/timingate && GOWORK=off $(GO) run . < "$$timingate_input")
