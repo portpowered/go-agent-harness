@@ -51,7 +51,6 @@ func TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle(t *testi
 		t.Fatalf("clean close = %v, next/history=%d/%d", err, session.NextTurnIndex(), len(session.History()))
 	}
 }
-
 func TestSessionTurns_InferenceFailureAbortsWithoutReconnectOrStateLeak(t *testing.T) {
 	inferencer := newTurnTestSessionInferencer()
 	failure := errors.New("provider response failed")
@@ -68,7 +67,6 @@ func TestSessionTurns_InferenceFailureAbortsWithoutReconnectOrStateLeak(t *testi
 	}
 	assertTurnState(t, session, events, 3, 1, 2, false)
 }
-
 func TestSessionTurns_InvalidTransitionsKeepStateAndEvents(t *testing.T) {
 	cases := []struct {
 		name                  string
@@ -107,7 +105,6 @@ func TestSessionTurns_InvalidTransitionsKeepStateAndEvents(t *testing.T) {
 		})
 	}
 }
-
 func start(s *SessionTurns, input TurnInput, direction TurnDirection, tick uint64) error {
 	_, err := s.StartTurn(input, direction, tick)
 	return err
