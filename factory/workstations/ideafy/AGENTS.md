@@ -50,6 +50,28 @@ this work, and queue reconciliation silently does nothing. `--max-results` is
 also required: the default page size is 50, so a larger board is truncated and
 stranded items past row 50 are never seen.
 
+RETRY ON TIMEOUT. Under load this endpoint costs a fixed ~20s per request
+regardless of filters or page size (measured 2026-08-16: `maxResults=5` took
+19.7s while `maxResults=400` took 22.3s), and the CLI's client timeout is
+around 10s. So `context deadline exceeded (Client.Timeout exceeded while
+awaiting headers)` is EXPECTED under load and does NOT mean the factory is
+down or that the queue is empty. Retry the command; if it keeps timing out,
+fall back to the HTTP endpoint directly, which honours a longer timeout:
+
+```sh
+curl -s --max-time 300 "http://localhost:7439/factory-sessions/~default/work?maxResults=400"
+```
+
+Never treat a timed-out or empty response as "nothing to reconcile" — that
+reading is what let 16 failed tokens and 7 stranded ideas sit untouched for
+about 3.5 hours. Also note the CLI exits 0 on this error, so check for output,
+not just the exit code.
+
+The same applies to `you work move`: a client-side timeout does NOT mean the
+move was rejected. The server usually applies it anyway. Re-read the work item
+before retrying, and always pass `--request-id` so a repeat is idempotent
+(a repeated id returns 409 without a second mutation).
+
 to see current work items, work types, states, names, and whether previous
 batches are still running, blocked, failed, or ready to be consumed.
 
