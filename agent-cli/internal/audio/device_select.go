@@ -6,12 +6,9 @@ import (
 	"strings"
 )
 
-var (
-	ErrInvalidDeviceLossPolicy = errors.New("invalid device loss policy")
-	ErrDeviceSelectionConflict = errors.New("device selection conflict")
-)
+var ErrInvalidDeviceLossPolicy, ErrDeviceSelectionConflict = errors.New("invalid device loss policy"), errors.New("device selection conflict")
 
-// DeviceLossPolicy controls what happens after a selected device disappears.
+// DeviceLossPolicy controls behavior after a selected device disappears.
 type DeviceLossPolicy string
 
 const (
@@ -21,7 +18,7 @@ const (
 	DefaultDeviceLossPolicy                  = DeviceLossPolicyFail
 )
 
-// InvalidDeviceLossPolicyError identifies an unsupported on-device-loss value.
+// InvalidDeviceLossPolicyError identifies an unsupported loss-policy value.
 type InvalidDeviceLossPolicyError struct{ Policy DeviceLossPolicy }
 
 func (e *InvalidDeviceLossPolicyError) Error() string {
@@ -29,7 +26,7 @@ func (e *InvalidDeviceLossPolicyError) Error() string {
 }
 func (e *InvalidDeviceLossPolicyError) Unwrap() error { return ErrInvalidDeviceLossPolicy }
 
-// DeviceSelectionConflictError identifies mutually exclusive file and device inputs.
+// DeviceSelectionConflictError identifies mutually exclusive input options.
 type DeviceSelectionConflictError struct{ FileOption, DeviceOption string }
 
 func (e *DeviceSelectionConflictError) Error() string {
@@ -39,13 +36,12 @@ func (e *DeviceSelectionConflictError) Unwrap() error { return ErrDeviceSelectio
 
 // DeviceSelectionRequest describes directional selectors and optional file input.
 type DeviceSelectionRequest struct {
-	InputSelector, OutputSelector string
-	AudioInFile                   string
-	AudioInConfigured             bool
-	OnDeviceLoss                  DeviceLossPolicy
+	InputSelector, OutputSelector, AudioInFile string
+	AudioInConfigured                          bool
+	OnDeviceLoss                               DeviceLossPolicy
 }
 
-// DeviceSelection contains concrete devices and any handles acquired for them.
+// DeviceSelection contains concrete devices and any acquired handles.
 type DeviceSelection struct {
 	Input, Output                 Device
 	InputSelected, OutputSelected bool
@@ -53,11 +49,11 @@ type DeviceSelection struct {
 	LossPolicy                    DeviceLossPolicy
 }
 
-func closeDevice(h OpenedDevice) error {
-	if h == nil {
+func closeDevice(handle OpenedDevice) error {
+	if handle == nil {
 		return nil
 	}
-	return h.Close()
+	return handle.Close()
 }
 
 // Close releases acquired handles and is safe to repeat.
@@ -65,7 +61,7 @@ func (s DeviceSelection) Close() error {
 	return errors.Join(closeDevice(s.InputHandle), closeDevice(s.OutputHandle))
 }
 
-// ResolveDeviceSelection resolves input before output without acquiring devices.
+// ResolveDeviceSelection resolves both directions without acquiring devices.
 func ResolveDeviceSelection(registry DeviceRegistry, request DeviceSelectionRequest) (DeviceSelection, error) {
 	policy, fileInput, err := validateSelectionRequest(request)
 	if err != nil {
@@ -73,41 +69,36 @@ func ResolveDeviceSelection(registry DeviceRegistry, request DeviceSelectionRequ
 	}
 	selection := DeviceSelection{LossPolicy: policy}
 	if !fileInput {
-		selection.Input, err = resolveDevice(registry, DirectionInput, request.InputSelector)
-		if err != nil {
+		if selection.Input, err = resolveDevice(registry, DirectionInput, request.InputSelector); err != nil {
 			return DeviceSelection{}, err
 		}
 		selection.InputSelected = true
 	}
-	selection.Output, err = resolveDevice(registry, DirectionOutput, request.OutputSelector)
-	if err != nil {
+	if selection.Output, err = resolveDevice(registry, DirectionOutput, request.OutputSelector); err != nil {
 		return DeviceSelection{}, err
 	}
 	selection.OutputSelected = true
 	return selection, nil
 }
 
-// OpenDeviceSelection resolves and opens every required direction, cleaning up
-// earlier acquisitions when a later open fails.
+// OpenDeviceSelection resolves and opens every required direction.
 func OpenDeviceSelection(registry DeviceRegistry, request DeviceSelectionRequest) (DeviceSelection, error) {
 	selection, err := ResolveDeviceSelection(registry, request)
 	if err != nil {
 		return DeviceSelection{}, err
 	}
 	if selection.InputSelected {
-		selection.InputHandle, err = openDevice(registry, selection.Input)
-		if err != nil {
+		if selection.InputHandle, err = openDevice(registry, selection.Input); err != nil {
 			return DeviceSelection{}, err
 		}
 	}
-	selection.OutputHandle, err = openDevice(registry, selection.Output)
-	if err != nil {
+	if selection.OutputHandle, err = openDevice(registry, selection.Output); err != nil {
 		return DeviceSelection{}, errors.Join(err, selection.Close())
 	}
 	return selection, nil
 }
 
-// DeviceLossOutcome distinguishes failure, default replacement, and clean stop.
+// DeviceLossOutcome distinguishes failure, replacement, and clean stop.
 type DeviceLossOutcome string
 
 const (
@@ -123,10 +114,10 @@ type DeviceLossResult struct {
 	Handle       OpenedDevice
 }
 
+// Close releases a replacement handle.
 func (r DeviceLossResult) Close() error { return closeDevice(r.Handle) }
 
-// HandleDeviceLoss applies one policy. Default opens one different, current
-// same-direction default and never retries or substitutes a null sink.
+// HandleDeviceLoss applies one loss policy without silently using a null sink.
 func HandleDeviceLoss(registry DeviceRegistry, lost Device, policy DeviceLossPolicy) (DeviceLossResult, error) {
 	result := DeviceLossResult{Lost: lost, Outcome: DeviceLossOutcomeFailed}
 	policy, err := normalizeDeviceLossPolicy(policy)
@@ -153,8 +144,7 @@ func HandleDeviceLoss(registry DeviceRegistry, lost Device, policy DeviceLossPol
 		if replacement.ID == lost.ID {
 			return result, &DeviceLostError{ID: lost.ID, Direction: lost.Direction}
 		}
-		result.Handle, err = openDevice(registry, replacement)
-		if err != nil {
+		if result.Handle, err = openDevice(registry, replacement); err != nil {
 			return result, err
 		}
 		result.Outcome, result.Device = DeviceLossOutcomeDefaulted, replacement
@@ -162,7 +152,6 @@ func HandleDeviceLoss(registry DeviceRegistry, lost Device, policy DeviceLossPol
 	}
 	return result, &InvalidDeviceLossPolicyError{Policy: policy}
 }
-
 func validateSelectionRequest(request DeviceSelectionRequest) (DeviceLossPolicy, bool, error) {
 	fileInput := request.AudioInFile != "" || request.AudioInConfigured
 	if fileInput && request.InputSelector != "" {
@@ -171,7 +160,6 @@ func validateSelectionRequest(request DeviceSelectionRequest) (DeviceLossPolicy,
 	policy, err := normalizeDeviceLossPolicy(request.OnDeviceLoss)
 	return policy, fileInput, err
 }
-
 func normalizeDeviceLossPolicy(policy DeviceLossPolicy) (DeviceLossPolicy, error) {
 	if policy == "" {
 		return DefaultDeviceLossPolicy, nil
@@ -183,7 +171,6 @@ func normalizeDeviceLossPolicy(policy DeviceLossPolicy) (DeviceLossPolicy, error
 		return "", &InvalidDeviceLossPolicyError{Policy: policy}
 	}
 }
-
 func resolveDevice(registry DeviceRegistry, direction Direction, selector string) (Device, error) {
 	if selector == "" {
 		device, err := registry.Default(direction)
@@ -201,7 +188,7 @@ func resolveDevice(registry DeviceRegistry, direction Direction, selector string
 			return device, validateSelectedDevice(device, direction)
 		}
 	}
-	query, matches := strings.ToLower(selector), make([]Device, 0, 1)
+	query, matches := strings.ToLower(selector), make([]Device, 0, 2)
 	for _, device := range devices {
 		if device.Direction == direction && strings.Contains(strings.ToLower(device.Display()), query) {
 			matches = append(matches, device)
@@ -216,7 +203,6 @@ func resolveDevice(registry DeviceRegistry, direction Direction, selector string
 		return Device{}, NewAmbiguousDeviceNameError(selector, matches)
 	}
 }
-
 func validateSelectedDevice(device Device, direction Direction) error {
 	if device.Direction != direction {
 		return &InvalidDeviceError{ID: device.ID, Reason: fmt.Sprintf("device direction is %s, want %s", device.Direction, direction)}
@@ -226,7 +212,6 @@ func validateSelectedDevice(device Device, direction Direction) error {
 	}
 	return nil
 }
-
 func openDevice(registry DeviceRegistry, device Device) (OpenedDevice, error) {
 	handle, err := registry.Open(device.ID)
 	if err != nil {

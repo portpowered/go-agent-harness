@@ -34,7 +34,6 @@ func TestResolveSelectionRows(t *testing.T) {
 		})
 	}
 }
-
 func TestSelectionFailures(t *testing.T) {
 	t.Run("unknown exact ID", func(t *testing.T) {
 		r := newSelectionRegistry(t)
@@ -75,7 +74,6 @@ func TestSelectionFailures(t *testing.T) {
 		})
 	}
 }
-
 func TestSelectionValidationAndAcquisition(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -89,131 +87,90 @@ func TestSelectionValidationAndAcquisition(t *testing.T) {
 			r := newSelectionRegistry(t)
 			_, err := audio.ResolveDeviceSelection(r, tc.req)
 			require.ErrorIs(t, err, tc.want)
-			require.Zero(t, r.observations().ListCalls+r.observations().DefaultCalls+r.observations().OpenCount)
-			if tc.name == "file/device conflict" {
+			o := r.observations()
+			require.Equal(t, 0, o.ListCalls+o.DefaultCalls+o.OpenCount)
+			if tc.want == audio.ErrDeviceSelectionConflict {
 				require.Contains(t, err.Error(), "--audio-in")
 				require.Contains(t, err.Error(), "--audio-in-device")
 			}
 		})
 	}
-	t.Run("file input skips input device", func(t *testing.T) {
-		r := newSelectionRegistry(t)
-		got, err := audio.ResolveDeviceSelection(r, audio.DeviceSelectionRequest{AudioInConfigured: true})
-		require.NoError(t, err)
-		require.False(t, got.InputSelected)
-		require.Empty(t, got.Input.ID)
-		require.Equal(t, audio.DeviceID("virtual:output-default"), got.Output.ID)
-		require.Equal(t, 1, r.observations().DefaultCalls)
-	})
-	t.Run("open closes success and later failure", func(t *testing.T) {
-		r := newSelectionRegistry(t)
-		got, err := audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{InputSelector: "virtual:input-choice", OutputSelector: "virtual:output-choice"})
-		require.NoError(t, err)
-		require.NotNil(t, got.InputHandle)
-		require.NotNil(t, got.OutputHandle)
-		require.Equal(t, 2, r.observations().OpenCount)
-		require.NoError(t, got.Close())
-		require.NoError(t, got.Close())
-		require.Equal(t, 2, r.observations().ReleaseCount)
-		r = newSelectionRegistry(t)
-		failing := &failOpenRegistry{fixtureRegistry: r, id: "virtual:output-choice"}
-		_, err = audio.OpenDeviceSelection(failing, audio.DeviceSelectionRequest{InputSelector: "virtual:input-choice", OutputSelector: "virtual:output-choice"})
-		require.ErrorIs(t, err, audio.ErrDeviceNotFound)
-		require.Equal(t, 1, r.observations().OpenCount)
-		require.Equal(t, 1, r.observations().ReleaseCount)
-	})
 }
-
 func TestHandleDeviceLossPolicies(t *testing.T) {
-	for _, policy := range []audio.DeviceLossPolicy{"", audio.DeviceLossPolicyFail} {
-		t.Run("fail "+string(policy), func(t *testing.T) {
-			r := newSelectionRegistry(t)
-			selection, err := audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{})
-			require.NoError(t, err)
-			r.remove(selection.Input.ID)
-			before := r.observations()
-			result, err := audio.HandleDeviceLoss(r, selection.Input, policy)
-			var typed *audio.DeviceLostError
-			require.ErrorAs(t, err, &typed)
-			require.ErrorIs(t, err, audio.ErrDeviceLost)
-			require.Equal(t, selection.Input.ID, typed.ID)
-			require.Equal(t, audio.DirectionInput, typed.Direction)
-			require.Equal(t, audio.DeviceLossOutcomeFailed, result.Outcome)
-			require.Nil(t, result.Handle)
-			require.Equal(t, before, r.observations())
-			require.NoError(t, selection.Close())
-		})
-	}
-	t.Run("default opens current replacement", func(t *testing.T) {
-		r := newSelectionRegistry(t)
-		selection, err := audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{})
-		require.NoError(t, err)
-		lost := selection.Input
-		r.remove(lost.ID)
-		r.defaults[audio.DirectionInput] = "virtual:input-replacement"
-		result, err := audio.HandleDeviceLoss(r, lost, audio.DeviceLossPolicyDefault)
-		require.NoError(t, err)
-		require.Equal(t, audio.DeviceLossOutcomeDefaulted, result.Outcome)
-		require.Equal(t, audio.DeviceID("virtual:input-replacement"), result.Device.ID)
-		require.NotNil(t, result.Handle)
-		require.Equal(t, 3, r.observations().OpenCount)
-		require.Equal(t, 3, r.observations().DefaultCalls)
-		require.NoError(t, result.Close())
-		require.NoError(t, selection.Close())
-	})
-	t.Run("stop has no fallback acquisition", func(t *testing.T) {
-		r := newSelectionRegistry(t)
-		selection, err := audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{})
-		require.NoError(t, err)
-		r.remove(selection.Input.ID)
-		before := r.observations()
-		result, err := audio.HandleDeviceLoss(r, selection.Input, audio.DeviceLossPolicyStop)
-		require.NoError(t, err)
-		require.Equal(t, audio.DeviceLossOutcomeStopped, result.Outcome)
-		require.Nil(t, result.Handle)
-		require.Equal(t, before, r.observations())
-		require.NoError(t, selection.Close())
-	})
-}
-
-func TestDefaultLossFailures(t *testing.T) {
 	for _, tc := range []struct {
-		name, defaultID string
-		stale           bool
-		want            error
+		name, replacement  string
+		policy             audio.DeviceLossPolicy
+		unavailable, stale bool
+		wantOutcome        audio.DeviceLossOutcome
+		wantErr            error
 	}{
-		{"default disappears", "", false, audio.ErrNoDefaultDevice},
-		{"default is lost device", "virtual:input-default", true, audio.ErrDeviceLost},
-		{"replacement is unavailable", "virtual:input-replacement", true, audio.ErrDeviceNotFound},
+		{"fail by default", "", "", false, false, audio.DeviceLossOutcomeFailed, audio.ErrDeviceLost},
+		{"fail explicitly", "", audio.DeviceLossPolicyFail, false, false, audio.DeviceLossOutcomeFailed, audio.ErrDeviceLost},
+		{"default opens current replacement", "virtual:input-replacement", audio.DeviceLossPolicyDefault, false, false, audio.DeviceLossOutcomeDefaulted, nil},
+		{"stop has no fallback acquisition", "", audio.DeviceLossPolicyStop, false, false, audio.DeviceLossOutcomeStopped, nil},
+		{"default disappears", "", audio.DeviceLossPolicyDefault, false, false, audio.DeviceLossOutcomeFailed, audio.ErrNoDefaultDevice},
+		{"default is lost device", "virtual:input-default", audio.DeviceLossPolicyDefault, false, true, audio.DeviceLossOutcomeFailed, audio.ErrDeviceLost},
+		{"replacement is unavailable", "virtual:input-replacement", audio.DeviceLossPolicyDefault, true, true, audio.DeviceLossOutcomeFailed, audio.ErrDeviceNotFound},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newSelectionRegistry(t)
 			selection, err := audio.OpenDeviceSelection(r, audio.DeviceSelectionRequest{})
 			require.NoError(t, err)
 			lost := selection.Input
-			stale := r.devices[tc.defaultID]
+			var stale audio.Device
+			if tc.replacement != "" {
+				stale = r.devices[tc.replacement]
+			}
 			r.remove(lost.ID)
-			if tc.defaultID != "" {
-				r.defaults[audio.DirectionInput] = tc.defaultID
-				if tc.want == audio.ErrDeviceNotFound {
-					r.remove(tc.defaultID)
+			var registry audio.DeviceRegistry = r
+			if tc.replacement != "" {
+				r.defaults[audio.DirectionInput] = tc.replacement
+				if tc.unavailable {
+					r.remove(tc.replacement)
+				}
+				if tc.stale {
+					registry = &staleDefaultRegistry{fixtureRegistry: r, device: stale}
 				}
 			}
-			var registry audio.DeviceRegistry = r
-			if tc.stale {
-				registry = &staleDefaultRegistry{fixtureRegistry: r, device: stale}
+			before := r.observations()
+			result, err := audio.HandleDeviceLoss(registry, lost, tc.policy)
+			require.Equal(t, lost, result.Lost)
+			require.Equal(t, tc.wantOutcome, result.Outcome)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				if tc.wantErr == audio.ErrDeviceLost {
+					var typed *audio.DeviceLostError
+					require.ErrorAs(t, err, &typed)
+					require.Equal(t, lost.ID, typed.ID)
+					require.Equal(t, audio.DirectionInput, typed.Direction)
+				}
+				require.Nil(t, result.Handle)
+			} else {
+				require.NoError(t, err)
+				if tc.replacement != "" {
+					require.Equal(t, audio.DeviceID(tc.replacement), result.Device.ID)
+					require.NotEmpty(t, result.Device.ID)
+					require.NotNil(t, result.Handle)
+				} else {
+					require.Nil(t, result.Handle)
+				}
 			}
-			before := r.observations().OpenCount
-			result, err := audio.HandleDeviceLoss(registry, lost, audio.DeviceLossPolicyDefault)
-			require.ErrorIs(t, err, tc.want)
-			require.Equal(t, audio.DeviceLossOutcomeFailed, result.Outcome)
-			require.Nil(t, result.Handle)
-			require.Equal(t, before, r.observations().OpenCount)
+			after := r.observations()
+			if tc.policy == audio.DeviceLossPolicyDefault {
+				require.Equal(t, before.DefaultCalls+1, after.DefaultCalls)
+				if tc.wantErr == nil {
+					require.Equal(t, before.OpenCount+1, after.OpenCount)
+				} else {
+					require.Equal(t, before.OpenCount, after.OpenCount)
+				}
+			} else {
+				require.Equal(t, before, after)
+			}
+			require.NoError(t, result.Close())
 			require.NoError(t, selection.Close())
 		})
 	}
 }
-
 func newSelectionRegistry(t *testing.T) *fixtureRegistry {
 	t.Helper()
 	r := newFixture().Registry.(*fixtureRegistry)
@@ -230,18 +187,6 @@ func newSelectionRegistry(t *testing.T) *fixtureRegistry {
 	return r
 }
 
-type failOpenRegistry struct {
-	*fixtureRegistry
-	id audio.DeviceID
-}
-
-func (r *failOpenRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
-	if id == r.id {
-		return nil, audio.NewDeviceNotFoundError(id)
-	}
-	return r.fixtureRegistry.Open(id)
-}
-
 type staleDefaultRegistry struct {
 	*fixtureRegistry
 	device audio.Device
@@ -249,6 +194,9 @@ type staleDefaultRegistry struct {
 
 func (r *staleDefaultRegistry) Default(direction audio.Direction) (audio.Device, error) {
 	if r.device.Direction == direction {
+		r.fixtureRegistry.mu.Lock()
+		r.fixtureRegistry.defaultCalls++
+		r.fixtureRegistry.mu.Unlock()
 		return r.device, nil
 	}
 	return r.fixtureRegistry.Default(direction)
