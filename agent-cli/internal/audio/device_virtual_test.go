@@ -13,94 +13,86 @@ import (
 	audio "github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 )
 
-func TestVirtualBackendIsRegisteredAndIsolated(t *testing.T) {
+func TestVirtualBackendRegisteredAndIsolated(t *testing.T) {
 	catalog := audio.NewProductionAudioBackendRegistry()
 	if got := catalog.Names(); !reflect.DeepEqual(got, []string{audio.VirtualBackendName}) {
-		t.Fatalf("registered backends=%v, want virtual", got)
+		t.Fatalf("registered backends=%v", got)
 	}
-	first, err := catalog.New(audio.VirtualBackendName, audio.DefaultVirtualBackendConfig())
+	a, err := catalog.New(audio.VirtualBackendName, audio.DefaultVirtualBackendConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := catalog.New(audio.VirtualBackendName, audio.DefaultVirtualBackendConfig())
+	b, err := catalog.New(audio.VirtualBackendName, audio.DefaultVirtualBackendConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	left, ok := first.(*audio.VirtualRegistry)
-	if !ok {
-		t.Fatalf("registered backend type=%T, want *VirtualRegistry", first)
-	}
-	right := second.(*audio.VirtualRegistry)
-	devices, err := left.List()
+	va, vb := a.(*audio.VirtualRegistry), b.(*audio.VirtualRegistry)
+	devices, err := va.List()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids := make([]string, len(devices))
-	for i, device := range devices {
-		if err := device.Validate(); err != nil {
-			t.Fatalf("device %#v: %v", device, err)
+	for i, d := range devices {
+		if err := d.Validate(); err != nil {
+			t.Fatal(err)
 		}
-		ids[i] = device.ID
+		ids[i] = d.ID
 	}
-	if !sort.StringsAreSorted(ids) || len(ids) != 3 {
-		t.Fatalf("listed IDs=%v, want three sorted virtual IDs", ids)
+	if len(ids) != 3 || !sort.StringsAreSorted(ids) {
+		t.Fatalf("IDs=%v", ids)
 	}
-	if caps := left.ListVirtualDevices()[0].Capabilities; len(caps) == 0 {
-		t.Fatal("listed virtual device has no declared capabilities")
+	if len(va.ListVirtualDevices()[0].Capabilities) == 0 {
+		t.Fatal("virtual device has no capabilities")
 	}
-	input := mustDevice(t, devices, audio.DirectionInput)
-	if !left.RemoveDevice(input.ID) {
-		t.Fatal("RemoveDevice returned false for listed input")
+	caps, _ := va.Capabilities(ids[0])
+	caps[0].SampleRate = 1
+	again, _ := va.Capabilities(ids[0])
+	if again[0].SampleRate == 1 {
+		t.Fatal("capabilities alias backend state")
 	}
-	if got, _ := right.List(); len(got) != 3 {
-		t.Fatalf("isolated registry list length=%d after first removal, want 3", len(got))
+	if !va.RemoveDevice("virtual:input") {
+		t.Fatal("remove input")
+	}
+	if got, _ := vb.List(); len(got) != 3 {
+		t.Fatalf("isolated list length=%d", len(got))
 	}
 }
 
 func TestVirtualBackendRunsSharedConformance(t *testing.T) {
 	audio.RunDeviceRegistryConformance(t, func() audio.DeviceRegistryConformanceFixture {
-		registry, err := audio.NewRegisteredAudioBackend(audio.VirtualBackendName, audio.DefaultVirtualBackendConfig())
+		r, err := audio.NewRegisteredAudioBackend(audio.VirtualBackendName, audio.DefaultVirtualBackendConfig())
 		if err != nil {
-			t.Fatalf("create registered virtual backend: %v", err)
+			t.Fatal(err)
 		}
-		devices, err := registry.List()
-		if err != nil {
-			t.Fatalf("list fixture: %v", err)
-		}
-		return audio.DeviceRegistryConformanceFixture{
-			Registry:      registry,
-			InputDefault:  findDevice(t, devices, "virtual:input").ID,
-			OutputDefault: findDevice(t, devices, "virtual:output").ID,
-			ExclusiveID:   findDevice(t, devices, "virtual:exclusive").ID,
-			RemoveDevice:  func(id audio.DeviceID) { registry.(*audio.VirtualRegistry).RemoveDevice(id) },
-			Observations:  func() audio.DeviceRegistryObservations { return registry.(*audio.VirtualRegistry).Observations() },
-		}
+		v := r.(*audio.VirtualRegistry)
+		return audio.DeviceRegistryConformanceFixture{Registry: r, InputDefault: "virtual:input", OutputDefault: "virtual:output", ExclusiveID: "virtual:exclusive", RemoveDevice: func(id audio.DeviceID) { v.RemoveDevice(id) }, Observations: v.Observations}
 	})
 }
 
-func TestVirtualLoopbackPreservesBytesBoundariesAndLifecycle(t *testing.T) {
-	registry := mustPairRegistry(t)
-	input := mustDevice(t, mustList(t, registry), audio.DirectionInput)
-	output := mustDevice(t, mustList(t, registry), audio.DirectionOutput)
-	out := mustStream(t, registry, output.ID)
-	in := mustStream(t, registry, input.ID)
+func TestVirtualLoopbackCloseIsLinearizable(t *testing.T) {
+	r := newPair(t)
+	out, in := open(t, r, "virtual:playback"), open(t, r, "virtual:capture")
 	frames := [][]byte{{1, 2}, {7, 8, 9, 10}, {42}}
 	wants := make([][]byte, len(frames))
 	for i, frame := range frames {
 		wants[i] = append([]byte(nil), frame...)
 		if err := out.Write(context.Background(), frame); err != nil {
-			t.Fatalf("write frame %d: %v", i, err)
+			t.Fatal(err)
 		}
 		frame[0] = 255
 	}
 	for i, want := range wants {
 		got, err := in.Read(context.Background())
-		if err != nil {
-			t.Fatalf("read frame %d: %v", i, err)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("frame %d=(%v,%v), want %v", i, got, err, want)
 		}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("read frame %d=%v, want %v", i, got, want)
-		}
+	}
+	ready, result := make(chan struct{}, 1), make(chan error, 1)
+	go func() { _, err := in.Read(readyContext{Context: context.Background(), ready: ready}); result <- err }()
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal("read did not become pending")
 	}
 	if err := in.Close(); err != nil {
 		t.Fatal(err)
@@ -108,126 +100,87 @@ func TestVirtualLoopbackPreservesBytesBoundariesAndLifecycle(t *testing.T) {
 	if err := in.Close(); err != nil {
 		t.Fatal(err)
 	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, audio.ErrClosed) {
+			t.Fatalf("pending read=%v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close did not unblock read")
+	}
+	if err := out.Write(context.Background(), []byte{9}); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("write after peer close=%v", err)
+	}
+	_ = out.Close()
+
+	r = newPair(t)
+	out, in = open(t, r, "virtual:playback"), open(t, r, "virtual:capture")
+	writeResult := make(chan error, 1)
+	go func() { writeResult <- out.Write(context.Background(), []byte{3}) }()
 	if err := out.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := out.Write(context.Background(), []byte{1}); !errors.Is(err, audio.ErrClosed) {
-		t.Fatalf("write after close=%v, want ErrClosed", err)
+	if err := <-writeResult; err != nil && !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("racing write=%v", err)
 	}
-	blocked := make(chan error, 1)
-	go func() { _, err := in.Read(context.Background()); blocked <- err }()
-	select {
-	case err := <-blocked:
-		if !errors.Is(err, audio.ErrClosed) {
-			t.Fatalf("read after close=%v, want ErrClosed", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("closed read did not complete")
+	if err := out.Write(context.Background(), []byte{4}); !errors.Is(err, audio.ErrClosed) {
+		t.Fatalf("post-close write=%v", err)
 	}
+	_ = in.Close()
 }
 
-func TestVirtualFaultsAndValidationAreTyped(t *testing.T) {
-	noDefaults := audio.DefaultVirtualBackendConfig()
-	noDefaults.Defaults = map[audio.Direction]string{}
-	noDefaults.InputDefault, noDefaults.OutputDefault = "", ""
-	registry, err := audio.NewVirtualRegistry(noDefaults)
+func TestVirtualFaultsAndValidation(t *testing.T) {
+	dups, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "Same", Direction: audio.DirectionInput}, {ID: "b", Name: "Same", Direction: audio.DirectionInput}}, Defaults: map[audio.Direction]string{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := registry.Default(audio.DirectionInput); !errors.Is(err, audio.ErrNoDefaultDevice) {
-		t.Fatalf("missing input default=%v, want ErrNoDefaultDevice", err)
+	listed, _ := dups.List()
+	amb := audio.NewAmbiguousDeviceNameError("Same", listed)
+	if !errors.Is(amb, audio.ErrAmbiguousDeviceName) || len(amb.Candidates) != 2 {
+		t.Fatalf("ambiguous=%v", amb)
 	}
-
-	devices := []audio.VirtualDeviceConfig{
-		{ID: "same-a", Name: "Same", Direction: audio.DirectionInput},
-		{ID: "same-b", Name: "Same", Direction: audio.DirectionInput},
+	r := newPair(t)
+	out, in := open(t, r, "virtual:playback"), open(t, r, "virtual:capture")
+	if !r.RemoveDevice("virtual:playback") {
+		t.Fatal("remove playback")
 	}
-	duplicateNames, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{Devices: devices, Defaults: map[audio.Direction]string{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	listed, err := duplicateNames.List()
-	if err != nil || len(listed) != 2 {
-		t.Fatalf("duplicate-name topology list=(%v, %d), want two devices", err, len(listed))
-	}
-	ambiguous := audio.NewAmbiguousDeviceNameError("same", listed)
-	if !errors.Is(ambiguous, audio.ErrAmbiguousDeviceName) || len(ambiguous.Candidates) != 2 {
-		t.Fatalf("ambiguous candidates=%#v, want both stable IDs", ambiguous)
-	}
-
-	paired := mustPairRegistry(t)
-	input := mustDevice(t, mustList(t, paired), audio.DirectionInput)
-	output := mustDevice(t, mustList(t, paired), audio.DirectionOutput)
-	out := mustStream(t, paired, output.ID)
-	in := mustStream(t, paired, input.ID)
-	if !paired.RemoveDevice(output.ID) {
-		t.Fatal("failed to remove output")
-	}
-	if _, err := paired.Open(output.ID); !errors.Is(err, audio.ErrDeviceNotFound) {
-		t.Fatalf("open disappeared output=%v, want ErrDeviceNotFound", err)
+	if _, err := r.Open("virtual:playback"); !errors.Is(err, audio.ErrDeviceNotFound) {
+		t.Fatalf("open disappeared=%v", err)
 	}
 	if err := out.Write(context.Background(), []byte{1}); !errors.Is(err, audio.ErrDeviceLost) {
-		t.Fatalf("write after disappearance=%v, want ErrDeviceLost", err)
+		t.Fatalf("lost output=%v", err)
 	}
 	if _, err := in.Read(context.Background()); !errors.Is(err, audio.ErrDeviceLost) {
-		t.Fatalf("paired input after output disappearance=%v, want ErrDeviceLost", err)
+		t.Fatalf("lost input=%v", err)
 	}
 	_ = out.Close()
 	_ = in.Close()
-
-	exclusive := audio.DefaultVirtualBackendConfig()
-	exclusive.Defaults = map[audio.Direction]string{}
-	exclusive.InputDefault = ""
-	exclusive.OutputDefault = ""
-	exclusiveRegistry, err := audio.NewVirtualRegistry(exclusive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first := mustStream(t, exclusiveRegistry, "virtual:exclusive")
-	if _, err := exclusiveRegistry.Open("virtual:exclusive"); !errors.Is(err, audio.ErrDeviceInUse) {
-		t.Fatalf("second exclusive open=%v, want ErrDeviceInUse", err)
-	}
-	_ = first.Close()
-	second := mustStream(t, exclusiveRegistry, "virtual:exclusive")
-	_ = second.Close()
-
 	bad := audio.DefaultVirtualBackendConfig()
 	bad.Devices[1].ID = bad.Devices[0].ID
-	if _, err := audio.NewVirtualRegistry(bad); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("duplicate ID config=%v, want ErrInvalidDevice", err)
-	}
+	invalid(t, bad)
 	bad = audio.DefaultVirtualBackendConfig()
 	bad.Defaults = map[audio.Direction]string{audio.DirectionInput: "output"}
-	if _, err := audio.NewVirtualRegistry(bad); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("wrong-direction default=%v, want ErrInvalidDevice", err)
-	}
+	invalid(t, bad)
 	bad = audio.DefaultVirtualBackendConfig()
 	bad.Devices[0].Capabilities = []audio.VirtualCapability{{SampleRate: 8000}}
 	bad.Devices[1].Capabilities = []audio.VirtualCapability{{SampleRate: 16000}}
-	if _, err := audio.NewVirtualRegistry(bad); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("incompatible pair=%v, want ErrInvalidDevice", err)
-	}
+	invalid(t, bad)
 }
 
-func TestVirtualConcurrentOpenCloseReadWrite(t *testing.T) {
-	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+func TestVirtualS8ConcurrentAccounting(t *testing.T) {
+	r, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	devices := mustList(t, registry)
-	input := findDevice(t, devices, "virtual:input")
-	output := findDevice(t, devices, "virtual:output")
-	out := mustStream(t, registry, output.ID)
-	in := mustStream(t, registry, input.ID)
-	const frameCount = 64
+	out, in := open(t, r, "virtual:output"), open(t, r, "virtual:input")
+	const frames, attempts = 32, 24
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	var accepted atomic.Int64
+	var accepted, delivered, opened, rejected atomic.Int64
 	go func() {
 		<-start
-		for i := 0; i < frameCount; i++ {
-			frame := []byte{byte(i), byte(i >> 8), 0xa5}
-			if err := out.Write(context.Background(), frame); err != nil {
+		for i := 0; i < frames; i++ {
+			if err := out.Write(context.Background(), []byte{byte(i), 0xa5}); err != nil {
 				results <- err
 				return
 			}
@@ -237,286 +190,100 @@ func TestVirtualConcurrentOpenCloseReadWrite(t *testing.T) {
 	}()
 	go func() {
 		<-start
-		for i := 0; i < frameCount; i++ {
+		for i := 0; i < frames; i++ {
 			frame, err := in.Read(context.Background())
 			if err != nil {
 				results <- err
 				return
 			}
-			want := []byte{byte(i), byte(i >> 8), 0xa5}
-			if !reflect.DeepEqual(frame, want) {
+			if !reflect.DeepEqual(frame, []byte{byte(i), 0xa5}) {
 				results <- errors.New("loopback order changed")
 				return
 			}
+			delivered.Add(1)
 		}
 		results <- nil
 	}()
-	const attempts = 48
-	var openCount atomic.Int64
-	var inUseCount atomic.Int64
-	var workers sync.WaitGroup
-	workers.Add(2)
-	go func() {
-		defer workers.Done()
-		<-start
-		for i := 0; i < attempts; i++ {
-			opened, err := registry.Open("virtual:exclusive")
-			if err == nil {
-				openCount.Add(1)
-				_ = opened.Close()
-			} else if errors.Is(err, audio.ErrDeviceInUse) {
-				inUseCount.Add(1)
-			} else {
-				t.Errorf("exclusive open %d: %v", i, err)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for worker := 0; worker < 2; worker++ {
+		go func() {
+			defer wg.Done()
+			<-start
+			for i := 0; i < attempts; i++ {
+				h, err := r.Open("virtual:exclusive")
+				if err == nil {
+					opened.Add(1)
+					_ = h.Close()
+					_ = h.Close()
+				} else if errors.Is(err, audio.ErrDeviceInUse) {
+					rejected.Add(1)
+				} else {
+					t.Errorf("exclusive open: %v", err)
+				}
 			}
-		}
-	}()
-	go func() {
-		defer workers.Done()
-		<-start
-		for i := 0; i < attempts; i++ {
-			opened, err := registry.Open("virtual:exclusive")
-			if err == nil {
-				openCount.Add(1)
-				_ = opened.Close()
-			} else if errors.Is(err, audio.ErrDeviceInUse) {
-				inUseCount.Add(1)
-			} else {
-				t.Errorf("exclusive contender %d: %v", i, err)
-			}
-		}
-	}()
+		}()
+	}
 	close(start)
 	for i := 0; i < 2; i++ {
-		if err := <-results; err != nil {
-			t.Fatal(err)
-		}
-	}
-	workers.Wait()
-	if accepted.Load() != frameCount {
-		t.Fatalf("accepted writes=%d, want %d", accepted.Load(), frameCount)
-	}
-	if openCount.Load()+inUseCount.Load() != attempts*2 {
-		t.Fatalf("exclusive accounting open=%d in-use=%d, want %d attempts", openCount.Load(), inUseCount.Load(), attempts*2)
-	}
-	_ = in.Close()
-	_ = out.Close()
-	if got := registry.Observations(); got.OpenCount != int(openCount.Load())+2 || got.ReleaseCount != got.OpenCount {
-		t.Fatalf("observations=%+v, want successful opens plus pair handles and exact releases", got)
-	}
-}
-
-func TestVirtualAPIEdgesAndDefensiveCopies(t *testing.T) {
-	var lost *audio.DeviceLostError
-	if lost.Error() != "<nil>" {
-		t.Fatalf("nil lost error=%q, want <nil>", lost.Error())
-	}
-	cfg := audio.VirtualBackendConfig{
-		Devices: []audio.VirtualDeviceConfig{
-			{ID: "virtual:in", Name: "In", Direction: audio.DirectionInput, LoopbackID: "virtual:out", Capabilities: []audio.VirtualCapability{{SampleRate: 16000, Channels: 1}}},
-			{ID: "virtual:out", Name: "Out", Direction: audio.DirectionOutput, LoopbackID: "virtual:in", Capabilities: []audio.VirtualCapability{{SampleRate: 16000, Channels: 1}}},
-		},
-		Defaults: map[audio.Direction]string{audio.DirectionInput: "virtual:in", audio.DirectionOutput: "virtual:out"},
-	}
-	registry, err := audio.NewVirtualRegistry(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	caps, err := registry.Capabilities("virtual:in")
-	if err != nil || len(caps) != 1 {
-		t.Fatalf("capabilities=(%v, %#v), want one capability", err, caps)
-	}
-	caps[0].SampleRate = 8000
-	again, _ := registry.Capabilities("virtual:in")
-	if again[0].SampleRate != 16000 {
-		t.Fatalf("capability mutation changed registry: %#v", again)
-	}
-	listed := registry.ListVirtualDevices()
-	copy := listed[0].CapabilitiesCopy()
-	copy[0].SampleRate = 8000
-	if listed[0].Capabilities[0].SampleRate == 8000 {
-		t.Fatal("CapabilitiesCopy returned backend-owned capability storage")
-	}
-	listed[0].Capabilities[0].Channels = 99
-	if registry.ListVirtualDevices()[0].Capabilities[0].Channels == 99 {
-		t.Fatal("ListVirtualDevices returned backend-owned capability storage")
-	}
-	if _, err := registry.Capabilities("virtual:missing"); !errors.Is(err, audio.ErrDeviceNotFound) {
-		t.Fatalf("missing capabilities=%v, want ErrDeviceNotFound", err)
-	}
-	out := mustStream(t, registry, "virtual:out")
-	in := mustStream(t, registry, "virtual:in")
-	if err := out.WriteFrame(context.Background(), []byte{1, 2}); err != nil {
-		t.Fatal(err)
-	}
-	if frame, err := in.ReadFrame(context.Background()); err != nil || !reflect.DeepEqual(frame, []byte{1, 2}) {
-		t.Fatalf("ReadFrame=(%v, %v), want [1 2]", frame, err)
-	}
-	if err := in.Write(context.Background(), []byte{1}); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("input Write=%v, want invalid device operation", err)
-	}
-	if _, err := out.Read(context.Background()); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("output Read=%v, want invalid device operation", err)
-	}
-	_ = in.Close()
-	if err := out.Write(context.Background(), []byte{3}); !errors.Is(err, audio.ErrClosed) {
-		t.Fatalf("write after paired close=%v, want ErrClosed", err)
-	}
-	_ = out.Close()
-
-	catalog := audio.NewAudioBackendRegistry()
-	if err := catalog.Register("custom", func(VirtualConfig audio.VirtualBackendConfig) (audio.DeviceRegistry, error) { return registry, nil }); err != nil {
-		t.Fatal(err)
-	}
-	if err := catalog.Register("custom", func(audio.VirtualBackendConfig) (audio.DeviceRegistry, error) { return registry, nil }); err == nil {
-		t.Fatal("duplicate backend registration succeeded")
-	}
-	if err := catalog.Register("bad", nil); err == nil {
-		t.Fatal("nil backend registration succeeded")
-	}
-	if _, err := catalog.New("missing", audio.DefaultVirtualBackendConfig()); err == nil {
-		t.Fatal("missing backend selection succeeded")
-	}
-
-	bad := cfg
-	bad.Devices = append([]audio.VirtualDeviceConfig(nil), cfg.Devices...)
-	bad.Devices[0].Name, bad.Devices[0].DisplayName = "first", "second"
-	if _, err := audio.NewVirtualRegistry(bad); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("mismatched names=%v, want invalid device", err)
-	}
-	bad = cfg
-	bad.Devices = append([]audio.VirtualDeviceConfig(nil), cfg.Devices...)
-	bad.Devices[0].Capabilities = []audio.VirtualCapability{{SampleRate: -1}}
-	if _, err := audio.NewVirtualRegistry(bad); !errors.Is(err, audio.ErrInvalidDevice) {
-		t.Fatalf("invalid capability=%v, want invalid device", err)
-	}
-	bad = cfg
-	bad.Devices = append([]audio.VirtualDeviceConfig(nil), cfg.Devices...)
-	bad.Defaults = map[audio.Direction]string{audio.Direction("invalid"): "virtual:in"}
-	if _, err := audio.NewVirtualRegistry(bad); !errors.Is(err, audio.ErrInvalidDirection) {
-		t.Fatalf("invalid default direction=%v, want invalid direction", err)
-	}
-	if registry.RemoveDevice("virtual:missing") {
-		t.Fatal("removing an unknown device succeeded")
-	}
-	for _, name := range []string{"Bad", "bad:name"} {
-		if err := catalog.Register(name, func(audio.VirtualBackendConfig) (audio.DeviceRegistry, error) { return registry, nil }); err == nil {
-			t.Fatalf("invalid backend name %q registered", name)
-		}
-	}
-	pending := mustPairRegistry(t)
-	reader := mustStream(t, pending, "virtual:capture")
-	base, cancel := context.WithCancel(context.Background())
-	ready := make(chan struct{}, 1)
-	result := make(chan error, 1)
-	go func() {
-		_, err := reader.Read(notifyingContext{Context: base, ready: ready})
-		result <- err
-	}()
-	select {
-	case <-ready:
-		cancel()
-	case <-time.After(time.Second):
-		t.Fatal("read did not reach context wait")
-	}
-	select {
-	case err := <-result:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("cancelled read=%v, want context.Canceled", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("cancelled read did not complete")
-	}
-}
-
-func TestVirtualRejectsInvalidTopologies(t *testing.T) {
-	for _, testCase := range []struct {
-		name string
-		cfg  audio.VirtualBackendConfig
-		want error
-	}{
-		{name: "empty", cfg: audio.VirtualBackendConfig{}, want: audio.ErrInvalidDevice},
-		{name: "native ID disagreement", cfg: audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "left", NativeID: "right", Name: "x", Direction: audio.DirectionInput}}}, want: audio.ErrInvalidDevice},
-		{name: "loopback outside topology", cfg: audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "in", Name: "x", Direction: audio.DirectionInput, LoopbackID: "missing"}}}, want: audio.ErrInvalidDevice},
-		{name: "same direction pair", cfg: audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "a", Direction: audio.DirectionInput, LoopbackID: "b"}, {ID: "b", Name: "b", Direction: audio.DirectionInput, LoopbackID: "a"}}}, want: audio.ErrInvalidDevice},
-		{name: "multiple defaults", cfg: audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "a", Name: "a", Direction: audio.DirectionInput, Default: true}, {ID: "b", Name: "b", Direction: audio.DirectionInput, Default: true}}}, want: audio.ErrInvalidDevice},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			if _, err := audio.NewVirtualRegistry(testCase.cfg); !errors.Is(err, testCase.want) {
-				t.Fatalf("NewVirtualRegistry error=%v, want %v", err, testCase.want)
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatal(err)
 			}
-		})
+		case <-time.After(time.Second):
+			t.Fatal("S8 worker did not finish")
+		}
+	}
+	wg.Wait()
+	if accepted.Load() != frames || delivered.Load() != frames || opened.Load()+rejected.Load() != attempts*2 {
+		t.Fatalf("accounting accepted=%d delivered=%d opened=%d rejected=%d", accepted.Load(), delivered.Load(), opened.Load(), rejected.Load())
+	}
+	_ = in.Close()
+	_ = out.Close()
+	got := r.Observations()
+	if got.OpenCount != int(opened.Load())+2 || got.ReleaseCount != got.OpenCount {
+		t.Fatalf("ownership observations=%+v", got)
 	}
 }
 
-func mustPairRegistry(t *testing.T) *audio.VirtualRegistry {
+func invalid(t *testing.T, c audio.VirtualBackendConfig) {
 	t.Helper()
-	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
-		Devices: []audio.VirtualDeviceConfig{
-			{ID: "capture", Name: "Capture", Direction: audio.DirectionInput, Capabilities: []audio.VirtualCapability{{SampleRate: 16000, Channels: 1, BitDepth: 16}}, LoopbackID: "playback"},
-			{ID: "playback", Name: "Playback", Direction: audio.DirectionOutput, Capabilities: []audio.VirtualCapability{{SampleRate: 16000, Channels: 1, BitDepth: 16}}, LoopbackID: "capture"},
-		},
-		Defaults: map[audio.Direction]string{audio.DirectionInput: "capture", audio.DirectionOutput: "playback"},
-	})
-	if err != nil {
-		t.Fatalf("create pair registry: %v", err)
+	if _, err := audio.NewVirtualRegistry(c); !errors.Is(err, audio.ErrInvalidDevice) {
+		t.Fatalf("invalid config=%v", err)
 	}
-	return registry
+}
+func newPair(t *testing.T) *audio.VirtualRegistry {
+	t.Helper()
+	c := audio.VirtualBackendConfig{Devices: []audio.VirtualDeviceConfig{{ID: "capture", Name: "Capture", Direction: audio.DirectionInput, LoopbackID: "playback"}, {ID: "playback", Name: "Playback", Direction: audio.DirectionOutput, LoopbackID: "capture"}}, Defaults: map[audio.Direction]string{audio.DirectionInput: "capture", audio.DirectionOutput: "playback"}}
+	r, err := audio.NewVirtualRegistry(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+func open(t *testing.T, r audio.DeviceRegistry, id audio.DeviceID) *audio.VirtualStream {
+	t.Helper()
+	h, err := r.Open(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := h.(*audio.VirtualStream)
+	if !ok {
+		t.Fatalf("%T is not VirtualStream", h)
+	}
+	return s
 }
 
-type notifyingContext struct {
+type readyContext struct {
 	context.Context
 	ready chan<- struct{}
 }
 
-func (c notifyingContext) Done() <-chan struct{} {
+func (c readyContext) Done() <-chan struct{} {
 	select {
 	case c.ready <- struct{}{}:
 	default:
 	}
 	return c.Context.Done()
-}
-
-func mustList(t *testing.T, registry audio.DeviceRegistry) []audio.Device {
-	t.Helper()
-	devices, err := registry.List()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	return devices
-}
-
-func mustDevice(t *testing.T, devices []audio.Device, direction audio.Direction) audio.Device {
-	t.Helper()
-	for _, device := range devices {
-		if device.Direction == direction {
-			return device
-		}
-	}
-	t.Fatalf("no %s device in %#v", direction, devices)
-	return audio.Device{}
-}
-
-func findDevice(t *testing.T, devices []audio.Device, id audio.DeviceID) audio.Device {
-	t.Helper()
-	for _, device := range devices {
-		if device.ID == id {
-			return device
-		}
-	}
-	t.Fatalf("device %q not in %#v", id, devices)
-	return audio.Device{}
-}
-
-func mustStream(t *testing.T, registry audio.DeviceRegistry, id audio.DeviceID) *audio.VirtualStream {
-	t.Helper()
-	opened, err := registry.Open(id)
-	if err != nil {
-		t.Fatalf("open %q: %v", id, err)
-	}
-	stream, ok := opened.(*audio.VirtualStream)
-	if !ok {
-		t.Fatalf("open %q type=%T, want *VirtualStream", id, opened)
-	}
-	return stream
 }

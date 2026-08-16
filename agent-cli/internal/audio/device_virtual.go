@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 const VirtualBackendName = "virtual"
@@ -19,8 +18,6 @@ var (
 	ErrVirtualEmptyFrame = errors.New("virtual audio frame is empty")
 )
 
-// DeviceLostError identifies a device that disappeared after it was opened.
-// Direction is retained so callers can report which half of a pair failed.
 type DeviceLostError struct {
 	ID        DeviceID
 	Direction Direction
@@ -32,180 +29,81 @@ func (e *DeviceLostError) Error() string {
 	}
 	return fmt.Sprintf("device %q (%s) was lost", e.ID, e.Direction)
 }
-
-func (e *DeviceLostError) Unwrap() error { return ErrDeviceLost }
+func (*DeviceLostError) Unwrap() error { return ErrDeviceLost }
 
 type VirtualDeviceLostError = DeviceLostError
 
-// VirtualCapability describes one format a virtual endpoint accepts. The
-// values are metadata only: the loopback moves the caller's bytes unchanged.
 type VirtualCapability struct {
-	SampleRate   int
-	Channels     int
-	BitDepth     int
-	SampleFormat string
-	Format       string
+	SampleRate, Channels, BitDepth int
+	SampleFormat, Format           string
 }
-
 type VirtualAudioCapability = VirtualCapability
 type VirtualAudioFormat = VirtualCapability
-
-// VirtualDeviceConfig is the immutable input used to construct one endpoint.
-// ID may be a native ID or a complete virtual:<native-id> ID; NativeID is an
-// explicit spelling for callers that want to avoid that distinction.
 type VirtualDeviceConfig struct {
-	ID           string
-	NativeID     string
-	Name         string
-	DisplayName  string
-	Direction    Direction
-	Capabilities []VirtualCapability
-	Default      bool
-	Exclusive    bool
-	LoopbackID   string
-	PairID       string
+	ID, NativeID, Name, DisplayName string
+	Direction                       Direction
+	Capabilities                    []VirtualCapability
+	Default, Exclusive              bool
+	LoopbackID, PairID              string
 }
-
 type VirtualDeviceSpec = VirtualDeviceConfig
-
-// VirtualBackendConfig describes a complete isolated backend instance. A
-// non-nil Defaults map is authoritative, including when it is empty. With a
-// nil map, Default flags are used and otherwise the first endpoint per
-// direction becomes the default for convenience.
 type VirtualBackendConfig struct {
-	Devices       []VirtualDeviceConfig
-	Defaults      map[Direction]string
-	InputDefault  string
-	OutputDefault string
+	Devices                     []VirtualDeviceConfig
+	Defaults                    map[Direction]string
+	InputDefault, OutputDefault string
 }
-
 type VirtualConfig = VirtualBackendConfig
-
-// VirtualDevice is the capability-bearing view of a listed Device.
 type VirtualDevice struct {
 	Device
 	Capabilities []VirtualCapability
 	Exclusive    bool
 	LoopbackID   DeviceID
+	present      bool
+	opened       int
 }
 
 func (d VirtualDevice) CapabilitiesCopy() []VirtualCapability {
-	return cloneVirtualCapabilities(d.Capabilities)
+	return append([]VirtualCapability(nil), d.Capabilities...)
 }
 
-// DefaultVirtualBackendConfig is hardware-independent and suitable for the
-// production registration path and registry conformance fixture.
 func DefaultVirtualBackendConfig() VirtualBackendConfig {
-	capability := VirtualCapability{SampleRate: SampleRate, Channels: Channels, BitDepth: 16, SampleFormat: "pcm16", Format: "pcm16"}
-	return VirtualBackendConfig{
-		Devices: []VirtualDeviceConfig{
-			{ID: "input", Name: "Virtual Input", Direction: DirectionInput, Capabilities: []VirtualCapability{capability}, Default: true, LoopbackID: "output"},
-			{ID: "output", Name: "Virtual Output", Direction: DirectionOutput, Capabilities: []VirtualCapability{capability}, Default: true, LoopbackID: "input"},
-			{ID: "exclusive", Name: "Virtual Exclusive Output", Direction: DirectionOutput, Capabilities: []VirtualCapability{capability}, Exclusive: true},
-		},
-	}
+	c := VirtualCapability{SampleRate: SampleRate, Channels: Channels, BitDepth: 16, SampleFormat: "pcm16", Format: "pcm16"}
+	return VirtualBackendConfig{Devices: []VirtualDeviceConfig{{ID: "input", Name: "Virtual Input", Direction: DirectionInput, Capabilities: []VirtualCapability{c}, Default: true, LoopbackID: "output"}, {ID: "output", Name: "Virtual Output", Direction: DirectionOutput, Capabilities: []VirtualCapability{c}, Default: true, LoopbackID: "input"}, {ID: "exclusive", Name: "Virtual Exclusive Output", Direction: DirectionOutput, Capabilities: []VirtualCapability{c}, Exclusive: true}}}
 }
-
-func normalizeVirtualCapability(cap VirtualCapability) (VirtualCapability, error) {
-	if cap.SampleRate == 0 {
-		cap.SampleRate = SampleRate
-	}
-	if cap.Channels == 0 {
-		cap.Channels = Channels
-	}
-	if cap.BitDepth == 0 {
-		cap.BitDepth = 16
-	}
-	if cap.SampleFormat == "" {
-		cap.SampleFormat = cap.Format
-	}
-	if cap.SampleFormat == "" {
-		cap.SampleFormat = "pcm16"
-	}
-	cap.Format = cap.SampleFormat
-	if cap.SampleRate <= 0 || cap.Channels <= 0 || cap.BitDepth <= 0 || strings.TrimSpace(cap.SampleFormat) == "" {
-		return VirtualCapability{}, fmt.Errorf("invalid virtual audio capability")
-	}
-	return cap, nil
-}
-
-func normalizeVirtualCapabilities(caps []VirtualCapability) ([]VirtualCapability, error) {
-	if len(caps) == 0 {
-		caps = []VirtualCapability{{SampleRate: SampleRate, Channels: Channels, BitDepth: 16, SampleFormat: "pcm16", Format: "pcm16"}}
-	}
-	result := make([]VirtualCapability, len(caps))
-	seen := make(map[VirtualCapability]struct{}, len(caps))
-	for i, cap := range caps {
-		cap, err := normalizeVirtualCapability(cap)
-		if err != nil {
-			return nil, err
+func virtualRef(v string) (DeviceID, error) {
+	if strings.HasPrefix(v, VirtualBackendName+":") {
+		b, n, err := ParseDeviceID(v)
+		if err != nil || b != VirtualBackendName {
+			return "", &InvalidDeviceError{Reason: fmt.Sprintf("invalid virtual device reference %q", v)}
 		}
-		if _, exists := seen[cap]; exists {
-			return nil, fmt.Errorf("duplicate virtual audio capability")
+		return NewDeviceID(b, n)
+	}
+	return NewDeviceID(VirtualBackendName, v)
+}
+func virtualCaps(in []VirtualCapability) ([]VirtualCapability, error) {
+	if len(in) == 0 {
+		in = []VirtualCapability{{SampleRate: SampleRate, Channels: Channels, BitDepth: 16, SampleFormat: "pcm16", Format: "pcm16"}}
+	}
+	out := make([]VirtualCapability, len(in))
+	for i, c := range in {
+		if c.SampleFormat == "" {
+			c.SampleFormat = c.Format
 		}
-		seen[cap] = struct{}{}
-		result[i] = cap
-	}
-	return result, nil
-}
-
-func cloneVirtualCapabilities(caps []VirtualCapability) []VirtualCapability {
-	result := make([]VirtualCapability, len(caps))
-	copy(result, caps)
-	return result
-}
-
-func virtualReference(value string) (DeviceID, error) {
-	if strings.HasPrefix(value, VirtualBackendName+":") {
-		backend, nativeID, err := ParseDeviceID(value)
-		if err != nil || backend != VirtualBackendName {
-			return "", &InvalidDeviceError{Reason: fmt.Sprintf("invalid virtual device reference %q", value)}
+		if c.SampleFormat == "" {
+			c.SampleFormat = "pcm16"
 		}
-		return NewDeviceID(VirtualBackendName, nativeID)
-	}
-	return NewDeviceID(VirtualBackendName, value)
-}
-
-func virtualConfigNativeID(spec VirtualDeviceConfig) (string, error) {
-	nativeID := spec.NativeID
-	if nativeID == "" {
-		nativeID = spec.ID
-	}
-	if strings.HasPrefix(nativeID, VirtualBackendName+":") {
-		_, parsedNativeID, err := ParseDeviceID(nativeID)
-		if err != nil {
-			return "", err
+		c.Format = c.SampleFormat
+		if c.SampleRate <= 0 || c.Channels <= 0 || c.BitDepth <= 0 || strings.TrimSpace(c.SampleFormat) == "" {
+			return nil, fmt.Errorf("invalid virtual audio capability")
 		}
-		nativeID = parsedNativeID
+		out[i] = c
 	}
-	if spec.ID != "" && spec.NativeID != "" && spec.ID != spec.NativeID && spec.ID != VirtualBackendName+":"+spec.NativeID {
-		return "", &InvalidDeviceError{Reason: fmt.Sprintf("ID %q and NativeID %q disagree", spec.ID, spec.NativeID)}
-	}
-	return nativeID, nil
+	return out, nil
 }
-
-func virtualPairReference(spec VirtualDeviceConfig) string {
-	if spec.LoopbackID != "" {
-		return spec.LoopbackID
-	}
-	return spec.PairID
-}
-
-func virtualDisplayName(spec VirtualDeviceConfig) (string, error) {
-	name := spec.DisplayName
-	if name == "" {
-		name = spec.Name
-	}
-	if spec.Name != "" && spec.DisplayName != "" && spec.Name != spec.DisplayName {
-		return "", &InvalidDeviceError{Reason: "Name and DisplayName must match"}
-	}
-	return name, nil
-}
-
-func virtualCapabilitiesCompatible(left, right []VirtualCapability) bool {
-	for _, a := range left {
-		for _, b := range right {
-			if a == b {
+func compatible(a, b []VirtualCapability) bool {
+	for _, x := range a {
+		for _, y := range b {
+			if x == y {
 				return true
 			}
 		}
@@ -213,39 +111,19 @@ func virtualCapabilitiesCompatible(left, right []VirtualCapability) bool {
 	return false
 }
 
-type virtualDeviceState struct {
-	info    VirtualDevice
-	present bool
-	opened  int
-}
-
 type virtualPair struct {
-	mu                    sync.Mutex
-	input                 DeviceID
-	output                DeviceID
+	input, output         DeviceID
 	inputOpen, outputOpen int
 	inputSeen, outputSeen bool
 	queue                 [][]byte
 	changed               chan struct{}
 }
 
-func newVirtualPair(input, output DeviceID) *virtualPair {
-	return &virtualPair{input: input, output: output, changed: make(chan struct{})}
-}
+func signal(p *virtualPair) { close(p.changed); p.changed = make(chan struct{}) }
 
-func (p *virtualPair) signal() {
-	p.mu.Lock()
-	close(p.changed)
-	p.changed = make(chan struct{})
-	p.mu.Unlock()
-}
-
-// VirtualRegistry is a production DeviceRegistry backed only by synchronized
-// memory. Each constructor call owns its topology, queues, defaults, and
-// fault state.
 type VirtualRegistry struct {
 	mu           sync.Mutex
-	devices      map[DeviceID]*virtualDeviceState
+	devices      map[DeviceID]*VirtualDevice
 	defaults     map[Direction]DeviceID
 	pairs        map[DeviceID]*virtualPair
 	observations DeviceRegistryObservations
@@ -253,497 +131,378 @@ type VirtualRegistry struct {
 
 var _ DeviceRegistry = (*VirtualRegistry)(nil)
 
-// NewVirtualRegistry validates and defensively copies cfg before returning a
-// usable backend. No host audio APIs or CGO-backed dependencies are touched.
-func NewVirtualRegistry(cfg VirtualBackendConfig) (*VirtualRegistry, error) {
-	if len(cfg.Devices) == 0 {
+func makeVirtualDevice(s VirtualDeviceConfig) (VirtualDevice, error) {
+	if err := ValidateDirection(s.Direction); err != nil {
+		return VirtualDevice{}, err
+	}
+	n := s.ID
+	if n == "" {
+		n = s.NativeID
+	}
+	if strings.HasPrefix(n, VirtualBackendName+":") {
+		var err error
+		_, n, err = ParseDeviceID(n)
+		if err != nil {
+			return VirtualDevice{}, err
+		}
+	}
+	name := s.Name
+	if s.DisplayName != "" {
+		name = s.DisplayName
+	}
+	d, err := NewDevice(VirtualBackendName, n, name, s.Direction)
+	if err != nil {
+		return VirtualDevice{}, err
+	}
+	caps, err := virtualCaps(s.Capabilities)
+	if err != nil {
+		return VirtualDevice{}, &InvalidDeviceError{ID: d.ID, Reason: err.Error()}
+	}
+	return VirtualDevice{Device: d, Capabilities: caps, Exclusive: s.Exclusive, present: true}, nil
+}
+func NewVirtualRegistry(c VirtualBackendConfig) (*VirtualRegistry, error) {
+	if len(c.Devices) == 0 {
 		return nil, &InvalidDeviceError{Reason: "virtual backend needs at least one device"}
 	}
-	r := &VirtualRegistry{devices: make(map[DeviceID]*virtualDeviceState), defaults: make(map[Direction]DeviceID), pairs: make(map[DeviceID]*virtualPair)}
-	defaultsByDirection := make(map[Direction][]DeviceID)
-	refs := make(map[DeviceID]string)
-	for _, spec := range cfg.Devices {
-		if err := ValidateDirection(spec.Direction); err != nil {
-			return nil, err
-		}
-		nativeID, err := virtualConfigNativeID(spec)
+	r := &VirtualRegistry{devices: map[DeviceID]*VirtualDevice{}, defaults: map[Direction]DeviceID{}, pairs: map[DeviceID]*virtualPair{}}
+	refs := map[DeviceID]string{}
+	for _, spec := range c.Devices {
+		v, err := makeVirtualDevice(spec)
 		if err != nil {
 			return nil, err
 		}
-		name, err := virtualDisplayName(spec)
-		if err != nil {
-			return nil, err
+		if _, ok := r.devices[v.ID]; ok {
+			return nil, &InvalidDeviceError{ID: v.ID, Reason: "duplicate virtual device ID"}
 		}
-		device, err := NewDevice(VirtualBackendName, nativeID, name, spec.Direction)
-		if err != nil {
-			return nil, err
+		r.devices[v.ID] = &v
+		if c.Defaults == nil && spec.Default {
+			if r.defaults[v.Direction] != "" {
+				return nil, &InvalidDeviceError{Reason: fmt.Sprintf("multiple virtual defaults for %s", v.Direction)}
+			}
+			r.defaults[v.Direction] = v.ID
 		}
-		if _, exists := r.devices[device.ID]; exists {
-			return nil, &InvalidDeviceError{ID: device.ID, Reason: "duplicate virtual device ID"}
-		}
-		caps, err := normalizeVirtualCapabilities(spec.Capabilities)
-		if err != nil {
-			return nil, &InvalidDeviceError{ID: device.ID, Reason: err.Error()}
-		}
-		info := VirtualDevice{Device: device, Capabilities: caps, Exclusive: spec.Exclusive}
-		r.devices[device.ID] = &virtualDeviceState{info: info, present: true}
-		if spec.Default {
-			defaultsByDirection[spec.Direction] = append(defaultsByDirection[spec.Direction], device.ID)
-		}
-		if ref := virtualPairReference(spec); ref != "" {
-			refs[device.ID] = ref
+		if spec.LoopbackID != "" {
+			refs[v.ID] = spec.LoopbackID
+		} else if spec.PairID != "" {
+			refs[v.ID] = spec.PairID
 		}
 	}
-
-	pairIDs := make(map[DeviceID]DeviceID)
 	for id, ref := range refs {
-		other, err := virtualReference(ref)
+		other, err := virtualRef(ref)
 		if err != nil {
-			return nil, &InvalidDeviceError{ID: id, Reason: fmt.Sprintf("invalid loopback reference: %v", err)}
+			return nil, &InvalidDeviceError{ID: id, Reason: err.Error()}
 		}
-		otherState, ok := r.devices[other]
-		if !ok {
+		a, b := r.devices[id], r.devices[other]
+		if b == nil {
 			return nil, &InvalidDeviceError{ID: id, Reason: fmt.Sprintf("loopback device %q is outside the topology", other)}
 		}
-		if otherState.info.Direction == r.devices[id].info.Direction {
+		if a.Direction == b.Direction {
 			return nil, &InvalidDeviceError{ID: id, Reason: "loopback devices must have opposite directions"}
 		}
-		if previous, exists := pairIDs[id]; exists && previous != other {
-			return nil, &InvalidDeviceError{ID: id, Reason: "loopback device is paired more than once"}
+		if !compatible(a.Capabilities, b.Capabilities) {
+			return nil, &InvalidDeviceError{ID: id, Reason: "loopback devices have incompatible capabilities"}
 		}
-		if previous, exists := pairIDs[other]; exists && previous != id {
-			return nil, &InvalidDeviceError{ID: id, Reason: "loopback device is paired more than once"}
-		}
-		pairIDs[id] = other
-		pairIDs[other] = id
-	}
-	for id, other := range pairIDs {
-		if !virtualCapabilitiesCompatible(r.devices[id].info.Capabilities, r.devices[other].info.Capabilities) {
-			return nil, &InvalidDeviceError{ID: id, Reason: fmt.Sprintf("loopback device %q has incompatible capabilities", other)}
-		}
-	}
-	createdPairs := make(map[string]*virtualPair)
-	for id, other := range pairIDs {
-		left, right := string(id), string(other)
-		if left > right {
-			left, right = right, left
-		}
-		key := left + "\x00" + right
-		pair := createdPairs[key]
-		if pair == nil {
-			if r.devices[id].info.Direction == DirectionInput {
-				pair = newVirtualPair(id, other)
+		p := r.pairs[other]
+		if p == nil {
+			p = &virtualPair{changed: make(chan struct{})}
+			if a.Direction == DirectionInput {
+				p.input, p.output = id, other
 			} else {
-				pair = newVirtualPair(other, id)
+				p.input, p.output = other, id
 			}
-			createdPairs[key] = pair
 		}
-		r.pairs[id] = pair
-		r.devices[id].info.LoopbackID = other
+		r.pairs[id], r.pairs[other] = p, p
+		a.LoopbackID, b.LoopbackID = other, id
 	}
-
-	if cfg.Defaults == nil {
-		for direction, ids := range defaultsByDirection {
-			if len(ids) > 1 {
-				return nil, &InvalidDeviceError{Reason: fmt.Sprintf("multiple virtual defaults for %s", direction)}
-			}
-			if len(ids) == 1 {
-				r.defaults[direction] = ids[0]
-			}
+	for d, id := range c.Defaults {
+		if err := r.setDefault(d, id); err != nil {
+			return nil, err
 		}
-		for _, direction := range []Direction{DirectionInput, DirectionOutput} {
-			if _, exists := r.defaults[direction]; exists {
-				continue
-			}
-			ids := make([]DeviceID, 0, len(r.devices))
-			for id, state := range r.devices {
-				if state.info.Direction == direction {
-					ids = append(ids, id)
-				}
-			}
-			sort.Strings(ids)
-			if len(ids) > 0 {
-				r.defaults[direction] = ids[0]
-			}
-		}
-	} else {
-		for direction, ref := range cfg.Defaults {
-			if err := r.setVirtualDefault(direction, ref); err != nil {
+	}
+	for d, id := range map[Direction]string{DirectionInput: c.InputDefault, DirectionOutput: c.OutputDefault} {
+		if id != "" {
+			if err := r.setDefault(d, id); err != nil {
 				return nil, err
 			}
 		}
 	}
-	for direction, ref := range map[Direction]string{DirectionInput: cfg.InputDefault, DirectionOutput: cfg.OutputDefault} {
-		if ref == "" {
-			continue
-		}
-		if err := r.setVirtualDefault(direction, ref); err != nil {
-			return nil, err
-		}
-	}
 	return r, nil
 }
-
-func (r *VirtualRegistry) setVirtualDefault(direction Direction, ref string) error {
-	if err := ValidateDirection(direction); err != nil {
+func (r *VirtualRegistry) setDefault(d Direction, ref string) error {
+	if err := ValidateDirection(d); err != nil {
 		return err
 	}
-	id, err := virtualReference(ref)
+	id, err := virtualRef(ref)
 	if err != nil {
 		return err
 	}
-	state, ok := r.devices[id]
-	if !ok {
-		return &InvalidDeviceError{ID: id, Reason: "default is outside the topology"}
+	v := r.devices[id]
+	if v == nil || v.Direction != d {
+		return &InvalidDeviceError{ID: id, Reason: "default is outside the topology or has the wrong direction"}
 	}
-	if state.info.Direction != direction {
-		return &InvalidDeviceError{ID: id, Reason: fmt.Sprintf("default has direction %s, want %s", state.info.Direction, direction)}
-	}
-	r.defaults[direction] = id
+	r.defaults[d] = id
 	return nil
 }
-
+func (r *VirtualRegistry) snapshot() []VirtualDevice {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]VirtualDevice, 0, len(r.devices))
+	for _, v := range r.devices {
+		if v.present {
+			c := *v
+			c.Capabilities = append([]VirtualCapability(nil), v.Capabilities...)
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
 func (r *VirtualRegistry) List() ([]Device, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.observations.ListCalls++
-	devices := make([]Device, 0, len(r.devices))
-	for _, state := range r.devices {
-		if state.present {
-			devices = append(devices, state.info.Device)
-		}
+	in := r.snapshot()
+	out := make([]Device, len(in))
+	for i := range in {
+		out[i] = in[i].Device
 	}
-	sort.Slice(devices, func(i, j int) bool { return devices[i].ID < devices[j].ID })
-	return devices, nil
+	return out, nil
 }
-
-func (r *VirtualRegistry) ListVirtualDevices() []VirtualDevice {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	devices := make([]VirtualDevice, 0, len(r.devices))
-	for _, state := range r.devices {
-		if state.present {
-			copy := state.info
-			copy.Capabilities = cloneVirtualCapabilities(copy.Capabilities)
-			devices = append(devices, copy)
-		}
-	}
-	sort.Slice(devices, func(i, j int) bool { return devices[i].ID < devices[j].ID })
-	return devices
-}
-
+func (r *VirtualRegistry) ListVirtualDevices() []VirtualDevice { return r.snapshot() }
 func (r *VirtualRegistry) Capabilities(id DeviceID) ([]VirtualCapability, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	state, ok := r.devices[id]
-	if !ok || !state.present {
+	v := r.devices[id]
+	if v == nil || !v.present {
 		return nil, NewDeviceNotFoundError(id)
 	}
-	return cloneVirtualCapabilities(state.info.Capabilities), nil
+	return append([]VirtualCapability(nil), v.Capabilities...), nil
 }
-
-func (r *VirtualRegistry) Default(direction Direction) (Device, error) {
+func (r *VirtualRegistry) Default(d Direction) (Device, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.observations.DefaultCalls++
-	if err := ValidateDirection(direction); err != nil {
+	if err := ValidateDirection(d); err != nil {
 		return Device{}, err
 	}
-	id, ok := r.defaults[direction]
-	if !ok {
-		return Device{}, NewNoDefaultDeviceError(direction)
+	v := r.devices[r.defaults[d]]
+	if v == nil || !v.present {
+		return Device{}, NewNoDefaultDeviceError(d)
 	}
-	state, ok := r.devices[id]
-	if !ok || !state.present || state.info.Direction != direction {
-		return Device{}, NewNoDefaultDeviceError(direction)
-	}
-	return state.info.Device, nil
+	return v.Device, nil
 }
-
 func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	state, ok := r.devices[id]
-	if !ok || !state.present {
+	v := r.devices[id]
+	if v == nil || !v.present {
 		return nil, NewDeviceNotFoundError(id)
 	}
-	if state.info.Exclusive && state.opened != 0 {
+	if v.Exclusive && v.opened > 0 {
 		return nil, NewDeviceInUseError(id)
 	}
-	state.opened++
+	v.opened++
 	r.observations.OpenCount++
-	pair := r.pairs[id]
-	if pair != nil {
-		pair.mu.Lock()
-		if state.info.Direction == DirectionInput {
-			pair.inputOpen++
-			pair.inputSeen = true
+	p := r.pairs[id]
+	if p != nil {
+		if v.Direction == DirectionInput {
+			p.inputOpen++
+			p.inputSeen = true
 		} else {
-			pair.outputOpen++
-			pair.outputSeen = true
+			p.outputOpen++
+			p.outputSeen = true
 		}
-		pair.mu.Unlock()
 	}
-	return &VirtualStream{registry: r, id: id, direction: state.info.Direction, pair: pair, done: make(chan struct{})}, nil
+	return &VirtualStream{registry: r, id: id, direction: v.Direction, pair: p, done: make(chan struct{})}, nil
 }
-
 func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.observations
 }
-
-// RemoveDevice makes a configured endpoint disappear and wakes its streams.
 func (r *VirtualRegistry) RemoveDevice(id DeviceID) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	state, ok := r.devices[id]
-	if !ok || !state.present {
+	v := r.devices[id]
+	if v == nil || !v.present {
 		return false
 	}
-	state.present = false
-	if pair := r.pairs[id]; pair != nil {
-		pair.signal()
+	v.present = false
+	if p := r.pairs[id]; p != nil {
+		signal(p)
 	}
 	return true
 }
-
-func (r *VirtualRegistry) release(id DeviceID, direction Direction, pair *virtualPair) {
-	r.mu.Lock()
-	if state := r.devices[id]; state != nil && state.opened > 0 {
-		state.opened--
-		r.observations.ReleaseCount++
+func (r *VirtualRegistry) streamError(s *VirtualStream, op string) error {
+	v := r.devices[s.id]
+	if v == nil || !v.present {
+		return &DeviceLostError{ID: s.id, Direction: s.direction}
 	}
-	if pair != nil {
-		pair.mu.Lock()
-		if direction == DirectionInput && pair.inputOpen > 0 {
-			pair.inputOpen--
-		}
-		if direction == DirectionOutput && pair.outputOpen > 0 {
-			pair.outputOpen--
-		}
-		pair.mu.Unlock()
-	}
-	r.mu.Unlock()
-	if pair != nil {
-		pair.signal()
-	}
-}
-
-func (r *VirtualRegistry) streamErrorLocked(id DeviceID, direction Direction, pair *virtualPair, operation string) error {
-	state := r.devices[id]
-	if state == nil || !state.present {
-		return &DeviceLostError{ID: id, Direction: direction}
-	}
-	if pair == nil {
+	p := s.pair
+	if p == nil {
 		return nil
 	}
-	other := pair.input
-	if id == pair.input {
-		other = pair.output
+	other := p.input
+	if other == s.id {
+		other = p.output
 	}
-	otherState := r.devices[other]
-	if otherState == nil || !otherState.present {
-		return &DeviceLostError{ID: id, Direction: direction}
+	peer := r.devices[other]
+	if peer == nil || !peer.present {
+		return &DeviceLostError{ID: s.id, Direction: s.direction}
 	}
-	pair.mu.Lock()
-	if direction == DirectionInput && pair.outputSeen && pair.outputOpen == 0 {
-		pair.mu.Unlock()
-		return &ClosedError{Operation: operation, Path: string(other)}
+	if (s.direction == DirectionInput && p.outputSeen && p.outputOpen == 0) || (s.direction == DirectionOutput && p.inputSeen && p.inputOpen == 0) {
+		return &ClosedError{Operation: op, Path: string(other)}
 	}
-	if direction == DirectionOutput && pair.inputSeen && pair.inputOpen == 0 {
-		pair.mu.Unlock()
-		return &ClosedError{Operation: operation, Path: string(other)}
-	}
-	pair.mu.Unlock()
 	return nil
 }
 
-// VirtualStream is the byte-preserving endpoint returned by Open. Read and
-// Write each operate on one caller-defined frame, retaining queue boundaries.
 type VirtualStream struct {
 	registry  *VirtualRegistry
 	id        DeviceID
 	direction Direction
 	pair      *virtualPair
 	done      chan struct{}
-	closed    atomic.Bool
+	closed    bool
 }
 
 var _ OpenedDevice = (*VirtualStream)(nil)
 
-func (s *VirtualStream) closedError(operation string) error {
-	return &ClosedError{Operation: operation, Path: string(s.id)}
-}
-
-func (s *VirtualStream) operationError(operation string, direction Direction) error {
-	if s.closed.Load() {
-		return s.closedError(operation)
+func (s *VirtualStream) check(op string, d Direction) error {
+	if s.closed {
+		return &ClosedError{Operation: op, Path: string(s.id)}
 	}
-	if s.direction != direction {
-		return &InvalidDeviceError{ID: s.id, Reason: fmt.Sprintf("cannot %s %s device", operation, s.direction)}
+	if s.direction != d {
+		return &InvalidDeviceError{ID: s.id, Reason: fmt.Sprintf("cannot %s %s device", op, s.direction)}
 	}
-	return nil
+	return s.registry.streamError(s, op)
 }
-
+func (s *VirtualStream) begin(op string, d Direction) (*virtualPair, error) {
+	s.registry.mu.Lock()
+	if err := s.check(op, d); err != nil {
+		s.registry.mu.Unlock()
+		return nil, err
+	}
+	return s.pair, nil
+}
 func (s *VirtualStream) Write(ctx context.Context, frame []byte) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
-	if err := s.operationError("write", DirectionOutput); err != nil {
+	p, err := s.begin("write", DirectionOutput)
+	if err != nil {
 		return err
 	}
+	defer s.registry.mu.Unlock()
 	if len(frame) == 0 {
 		return ErrVirtualEmptyFrame
 	}
-	if s.pair == nil {
+	if p == nil {
 		return ErrVirtualNoLoopback
 	}
-	s.registry.mu.Lock()
-	if err := s.registry.streamErrorLocked(s.id, s.direction, s.pair, "write"); err != nil {
-		s.registry.mu.Unlock()
-		return err
-	}
-	s.pair.mu.Lock()
-	s.pair.queue = append(s.pair.queue, append([]byte(nil), frame...))
-	close(s.pair.changed)
-	s.pair.changed = make(chan struct{})
-	s.pair.mu.Unlock()
-	s.registry.mu.Unlock()
+	p.queue = append(p.queue, append([]byte(nil), frame...))
+	signal(p)
 	return nil
 }
-
 func (s *VirtualStream) WriteFrame(ctx context.Context, frame []byte) error {
 	return s.Write(ctx, frame)
 }
-
 func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	if err := s.operationError("read", DirectionInput); err != nil {
-		return nil, err
-	}
-	if s.pair == nil {
-		return nil, ErrVirtualNoLoopback
-	}
 	for {
 		if err := contextError(ctx); err != nil {
 			return nil, err
 		}
-		if s.closed.Load() {
-			return nil, s.closedError("read")
-		}
-		s.registry.mu.Lock()
-		if err := s.registry.streamErrorLocked(s.id, s.direction, s.pair, "read"); err != nil {
-			s.registry.mu.Unlock()
+		p, err := s.begin("read", DirectionInput)
+		if err != nil {
 			return nil, err
 		}
-		s.pair.mu.Lock()
-		if len(s.pair.queue) > 0 {
-			frame := append([]byte(nil), s.pair.queue[0]...)
-			copy(s.pair.queue, s.pair.queue[1:])
-			s.pair.queue[len(s.pair.queue)-1] = nil
-			s.pair.queue = s.pair.queue[:len(s.pair.queue)-1]
-			s.pair.mu.Unlock()
+		if p == nil {
+			s.registry.mu.Unlock()
+			return nil, ErrVirtualNoLoopback
+		}
+		if len(p.queue) > 0 {
+			frame := append([]byte(nil), p.queue[0]...)
+			p.queue = p.queue[1:]
 			s.registry.mu.Unlock()
 			return frame, nil
 		}
-		changed := s.pair.changed
-		s.pair.mu.Unlock()
+		changed := p.changed
 		s.registry.mu.Unlock()
 		select {
 		case <-ctxDone(ctx):
 			return nil, contextError(ctx)
 		case <-s.done:
-			return nil, s.closedError("read")
+			return nil, &ClosedError{Operation: "read", Path: string(s.id)}
 		case <-changed:
 		}
 	}
 }
-
-func (s *VirtualStream) ReadFrame(ctx context.Context) ([]byte, error) {
-	return s.Read(ctx)
-}
-
+func (s *VirtualStream) ReadFrame(ctx context.Context) ([]byte, error) { return s.Read(ctx) }
 func ctxDone(ctx context.Context) <-chan struct{} {
 	if ctx == nil {
 		return nil
 	}
 	return ctx.Done()
 }
-
 func (s *VirtualStream) Close() error {
-	if s.closed.Swap(true) {
+	s.registry.mu.Lock()
+	defer s.registry.mu.Unlock()
+	if s.closed {
 		return nil
 	}
+	s.closed = true
 	close(s.done)
-	s.registry.release(s.id, s.direction, s.pair)
+	if v := s.registry.devices[s.id]; v != nil && v.opened > 0 {
+		v.opened--
+		s.registry.observations.ReleaseCount++
+	}
+	if p := s.pair; p != nil {
+		if s.direction == DirectionInput && p.inputOpen > 0 {
+			p.inputOpen--
+		}
+		if s.direction == DirectionOutput && p.outputOpen > 0 {
+			p.outputOpen--
+		}
+		signal(p)
+	}
 	return nil
 }
 
-// AudioBackendFactory is the production registration shape. Factories receive
-// a value configuration and must return a fresh isolated DeviceRegistry.
 type AudioBackendFactory func(VirtualBackendConfig) (DeviceRegistry, error)
-
-// AudioBackendRegistry is a catalog of backend factories. New catalogs are
-// cheap and carry no device or stream state.
 type AudioBackendRegistry struct {
-	mu        sync.RWMutex
 	factories map[string]AudioBackendFactory
 }
 
 func NewAudioBackendRegistry() *AudioBackendRegistry {
-	r := &AudioBackendRegistry{factories: make(map[string]AudioBackendFactory)}
-	_ = r.Register(VirtualBackendName, func(cfg VirtualBackendConfig) (DeviceRegistry, error) { return NewVirtualRegistry(cfg) })
+	r := &AudioBackendRegistry{factories: map[string]AudioBackendFactory{}}
+	_ = r.Register(VirtualBackendName, func(c VirtualBackendConfig) (DeviceRegistry, error) { return NewVirtualRegistry(c) })
 	return r
 }
-
 func NewProductionAudioBackendRegistry() *AudioBackendRegistry { return NewAudioBackendRegistry() }
-
-func (r *AudioBackendRegistry) Register(name string, factory AudioBackendFactory) error {
-	if r == nil || factory == nil {
+func (r *AudioBackendRegistry) Register(name string, f AudioBackendFactory) error {
+	if f == nil {
 		return fmt.Errorf("audio backend factory is nil")
 	}
 	if _, err := NewDeviceID(name, "registration"); err != nil {
 		return err
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, exists := r.factories[name]; exists {
+	if _, ok := r.factories[name]; ok {
 		return fmt.Errorf("audio backend %q is already registered", name)
 	}
-	r.factories[name] = factory
+	r.factories[name] = f
 	return nil
 }
-
-func (r *AudioBackendRegistry) New(name string, cfg VirtualBackendConfig) (DeviceRegistry, error) {
-	if r == nil {
-		return nil, fmt.Errorf("audio backend registry is nil")
-	}
-	r.mu.RLock()
-	factory := r.factories[name]
-	r.mu.RUnlock()
-	if factory == nil {
+func (r *AudioBackendRegistry) New(name string, c VirtualBackendConfig) (DeviceRegistry, error) {
+	f := r.factories[name]
+	if f == nil {
 		return nil, fmt.Errorf("audio backend %q is not registered", name)
 	}
-	return factory(cfg)
+	return f(c)
 }
-
 func (r *AudioBackendRegistry) Names() []string {
-	if r == nil {
-		return nil
+	out := make([]string, 0, len(r.factories))
+	for n := range r.factories {
+		out = append(out, n)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	names := make([]string, 0, len(r.factories))
-	for name := range r.factories {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	sort.Strings(out)
+	return out
 }
-
-func NewRegisteredAudioBackend(name string, cfg VirtualBackendConfig) (DeviceRegistry, error) {
-	return NewAudioBackendRegistry().New(name, cfg)
+func NewRegisteredAudioBackend(name string, c VirtualBackendConfig) (DeviceRegistry, error) {
+	return NewAudioBackendRegistry().New(name, c)
 }
