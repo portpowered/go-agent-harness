@@ -60,19 +60,16 @@ func TestSessionTurns_InvalidTransitionsKeepStateAndEvents(t *testing.T) {
 		events, history, next int
 		active                bool
 	}{
-		{"overlap", func(s *SessionTurns) { _ = start(s, NewTextTurnInput("one"), TurnDirectionUser, 1) }, func(s *SessionTurns) error { return start(s, NewTextTurnInput("two"), TurnDirectionUser, 2) }, ErrTurnAlreadyActive, 1, 0, 1, true},
-		{"end without start", noTurnSetup, func(s *SessionTurns) error { return finish(s, "ok", 1) }, ErrTurnEndWithoutStart, 0, 0, 1, false},
-		{"empty text", noTurnSetup, func(s *SessionTurns) error { return start(s, NewTextTurnInput(" "), TurnDirectionUser, 1) }, ErrEmptyTurn, 0, 0, 1, false},
-		{"zero audio", noTurnSetup, func(s *SessionTurns) error {
-			return start(s, NewAudioTurnInput(nil, "audio/pcm"), TurnDirectionUser, 1)
-		}, ErrEmptyTurn, 0, 0, 1, false},
-		{"bad direction", noTurnSetup, func(s *SessionTurns) error { return start(s, NewTextTurnInput("input"), TurnDirection("sideways"), 1) }, ErrInvalidTurnDirection, 0, 0, 1, false},
-		{"non increasing tick", func(s *SessionTurns) {
-			_ = start(s, NewTextTurnInput("one"), TurnDirectionUser, 3)
-			_ = finish(s, "ok", 4)
-		}, func(s *SessionTurns) error { return start(s, NewTextTurnInput("two"), TurnDirectionUser, 4) }, ErrInvalidTurnTick, 2, 1, 2, false},
-		{"invalid end tick", func(s *SessionTurns) { _ = start(s, NewTextTurnInput("input"), TurnDirectionUser, 10) }, func(s *SessionTurns) error { return finish(s, "ok", 10) }, ErrInvalidTurnTick, 1, 0, 1, true},
-		{"close active", func(s *SessionTurns) { _ = start(s, NewTextTurnInput("input"), TurnDirectionUser, 1) }, (*SessionTurns).Close, ErrSessionEndedWithActiveTurn, 1, 0, 1, true},
+		{"overlap", setupText("one", 1), tryStart(NewTextTurnInput("two"), TurnDirectionUser, 2), ErrTurnAlreadyActive, 1, 0, 1, true},
+		{"end without start", noTurnSetup, tryText("ok", 1), ErrTurnEndWithoutStart, 0, 0, 1, false},
+		{"empty text", noTurnSetup, tryStart(NewTextTurnInput(" "), TurnDirectionUser, 1), ErrEmptyTurn, 0, 0, 1, false},
+		{"zero audio", noTurnSetup, tryStart(NewAudioTurnInput(nil, "audio/pcm"), TurnDirectionUser, 1), ErrEmptyTurn, 0, 0, 1, false},
+		{"bad direction", noTurnSetup, tryStart(NewTextTurnInput("input"), TurnDirection("sideways"), 1), ErrInvalidTurnDirection, 0, 0, 1, false},
+		{"non increasing tick", setupComplete("one", 3, 4), tryStart(NewTextTurnInput("two"), TurnDirectionUser, 4), ErrInvalidTurnTick, 2, 1, 2, false},
+		{"invalid end tick", setupText("input", 10), tryText("ok", 10), ErrInvalidTurnTick, 1, 0, 1, true},
+		{"empty response text part", setupText("input", 1), tryMessage(messages.Message{ContentParts: []messages.ContentPart{messages.TextPart{Text: " "}}}, 2), ErrEmptyTurn, 1, 0, 1, true},
+		{"empty response audio part", setupText("input", 1), tryMessage(messages.Message{ContentParts: []messages.ContentPart{messages.AudioPart{}}}, 2), ErrEmptyTurn, 1, 0, 1, true},
+		{"close active", setupText("input", 1), (*SessionTurns).Close, ErrSessionEndedWithActiveTurn, 1, 0, 1, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,13 +89,69 @@ func start(s *SessionTurns, in TurnInput, d TurnDirection, n uint64) (err error)
 	return
 }
 func finish(s *SessionTurns, x string, n uint64) (err error) {
-	_, err = s.EndTurn(0, "", messages.NewTextMessage(messages.RoleAssistant, x), n)
+	return finishMessage(s, messages.NewTextMessage(messages.RoleAssistant, x), n)
+}
+func finishMessage(s *SessionTurns, message messages.Message, n uint64) (err error) {
+	_, err = s.EndTurn(0, "", message, n)
 	return
+}
+func setupText(text string, tick uint64) func(*SessionTurns) {
+	return func(s *SessionTurns) { _ = start(s, NewTextTurnInput(text), TurnDirectionUser, tick) }
+}
+func setupComplete(text string, startTick, endTick uint64) func(*SessionTurns) {
+	return func(s *SessionTurns) {
+		_ = start(s, NewTextTurnInput(text), TurnDirectionUser, startTick)
+		_ = finish(s, "ok", endTick)
+	}
+}
+func tryStart(in TurnInput, d TurnDirection, tick uint64) func(*SessionTurns) error {
+	return func(s *SessionTurns) error { return start(s, in, d, tick) }
+}
+func tryText(text string, tick uint64) func(*SessionTurns) error {
+	return func(s *SessionTurns) error { return finish(s, text, tick) }
+}
+func tryMessage(message messages.Message, tick uint64) func(*SessionTurns) error {
+	return func(s *SessionTurns) error { return finishMessage(s, message, tick) }
 }
 func assertTurnState(t *testing.T, s *SessionTurns, events []TurnEvent, wantEvents, wantHistory, wantNext int, active bool) {
 	history, next, gotActive := s.History(), s.NextTurnIndex(), s.active != nil
 	if len(events) != wantEvents || len(history) != wantHistory || int(next) != wantNext || gotActive != active {
 		t.Fatalf("state events/history/next/active = %d/%d/%d/%v", len(events), len(history), next, gotActive)
+	}
+}
+
+func TestSessionTurns_SerializesBlockedEventPublication(t *testing.T) {
+	events := make(chan TurnEvent, 2)
+	startEntered, releaseStart := make(chan struct{}), make(chan struct{})
+	s := NewSessionTurns(SessionTurnsOptions{EventSink: func(event TurnEvent) {
+		if event.Type == TurnEventStart {
+			close(startEntered)
+			<-releaseStart
+		}
+		events <- event
+	}})
+	startDone := make(chan error, 1)
+	go func() { _, err := s.StartTurn(NewTextTurnInput("input"), TurnDirectionUser, 1); startDone <- err }()
+	<-startEntered
+	endDone := make(chan error, 1)
+	go func() {
+		_, err := s.EndTurn(1, TurnDirectionUser, messages.NewTextMessage(messages.RoleAssistant, "response"), 2)
+		endDone <- err
+	}()
+	if s.transitionMu.TryLock() {
+		s.transitionMu.Unlock()
+		t.Fatal("transition publication was not serialized")
+	}
+	close(releaseStart)
+	if err := <-startDone; err != nil {
+		t.Fatalf("start error = %v", err)
+	}
+	if err := <-endDone; err != nil {
+		t.Fatalf("end error = %v", err)
+	}
+	first, second := <-events, <-events
+	if first.Type != TurnEventStart || second.Type != TurnEventEnd {
+		t.Fatalf("events = %#v, %#v, want start then end", first, second)
 	}
 }
 

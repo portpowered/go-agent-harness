@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -47,6 +48,7 @@ type SessionTurnsOptions struct {
 	EventSink         TurnEventSink
 }
 type SessionTurns struct {
+	transitionMu      sync.Mutex
 	mu                sync.RWMutex
 	sessionInferencer messages.SessionInferencer
 	session           messages.Session
@@ -70,9 +72,10 @@ func NewSessionTurns(opts SessionTurnsOptions) *SessionTurns {
 	return &SessionTurns{sessionInferencer: opts.SessionInferencer, sink: opts.EventSink, nextIndex: 1}
 }
 func (s *SessionTurns) StartTurn(input TurnInput, direction TurnDirection, tick uint64) (turn SessionTurn, err error) {
+	s.transitionMu.Lock()
 	s.mu.Lock()
 	var event TurnEvent
-	defer func() { s.unlockEmit(event, err) }()
+	defer func() { s.finishTransition(event, err) }()
 	switch {
 	case s.closed:
 		return SessionTurn{}, transitionError("start", ErrSessionClosed)
@@ -91,9 +94,10 @@ func (s *SessionTurns) StartTurn(input TurnInput, direction TurnDirection, tick 
 	return cloneTurn(turn), nil
 }
 func (s *SessionTurns) EndTurn(index uint64, direction TurnDirection, response messages.Message, tick uint64) (turn SessionTurn, err error) {
+	s.transitionMu.Lock()
 	s.mu.Lock()
 	var event TurnEvent
-	defer func() { s.unlockEmit(event, err) }()
+	defer func() { s.finishTransition(event, err) }()
 	if s.closed {
 		return SessionTurn{}, transitionError("end", ErrSessionClosed)
 	}
@@ -104,7 +108,7 @@ func (s *SessionTurns) EndTurn(index uint64, direction TurnDirection, response m
 	switch {
 	case (index != 0 && index != active.Index) || (direction != "" && direction != active.Direction):
 		return SessionTurn{}, transitionError("end", ErrTurnMismatch)
-	case strings.TrimSpace(response.TextContent()) == "" && response.Refusal == "" && len(response.ToolCalls) == 0 && len(response.ContentParts) == 0:
+	case strings.TrimSpace(response.TextContent()) == "" && strings.TrimSpace(response.Refusal) == "" && len(response.ToolCalls) == 0 && !hasAudio(response.ContentParts):
 		return SessionTurn{}, transitionError("end", ErrEmptyTurn)
 	case tick <= active.StartTick:
 		return SessionTurn{}, transitionError("end", ErrInvalidTurnTick)
@@ -191,8 +195,9 @@ func (s *SessionTurns) sessionFor(ctx context.Context) (messages.Session, error)
 	s.session = session
 	return session, nil
 }
-func (s *SessionTurns) unlockEmit(event TurnEvent, err error) {
+func (s *SessionTurns) finishTransition(event TurnEvent, err error) {
 	s.mu.Unlock()
+	defer s.transitionMu.Unlock()
 	if err == nil && s.sink != nil {
 		s.sink(event)
 	}
@@ -258,3 +263,9 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 }
 func copyInput(in TurnInput) TurnInput       { in.Audio = append([]byte(nil), in.Audio...); return in }
 func cloneTurn(turn SessionTurn) SessionTurn { turn.Input = copyInput(turn.Input); return turn }
+func hasAudio(parts []messages.ContentPart) bool {
+	return slices.ContainsFunc(parts, func(part messages.ContentPart) bool {
+		audio, ok := part.(messages.AudioPart)
+		return ok && (strings.TrimSpace(audio.URL) != "" || len(audio.Bytes) != 0)
+	})
+}
