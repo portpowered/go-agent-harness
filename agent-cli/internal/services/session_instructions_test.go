@@ -226,6 +226,24 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 	assertSessionInstructionEvents(t, inferencer, rawInstructionsMarker, 1)
 }
 
+func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	inferencer := newSessionInstructionsTestInferencer()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, io.Discard, services.SessionRunOptions{
+		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+		ConfigDir:         workspaceDir,
+		SessionInferencer: inferencer,
+	}, "", 0, services.SessionTextSeed{Value: userTurnMarker, Present: true}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration: %v", err)
+	}
+	assertSessionInstructionEvents(t, inferencer, agentsInstructionsMarker, 1)
+}
+
 func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)

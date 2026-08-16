@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -38,6 +40,137 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 		return err
 	}
 
+	plan, err := planSessionWithResolvedInstructions(opts, instructions)
+	if err != nil {
+		return err
+	}
+	return plan.run(ctx, out)
+}
+
+// RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration preserves the
+// session command's audio, explicit text-seed, and duration behavior while
+// carrying the selected or default workspace instructions into provider
+// construction.
+func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string) (runErr error) {
+	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
+	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
+		return RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioPath, maxDuration, seed)
+	}
+	if seed.Present {
+		opts.Prompt = seed.Value
+	}
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	instructions, err := resolveSessionInstructions(opts, systemPrompt)
+	if err != nil {
+		return err
+	}
+	plan, err := planSessionWithResolvedInstructions(opts, instructions)
+	if err != nil {
+		return err
+	}
+
+	if audioPath == "" {
+		if seed.Present {
+			wirePrompt := nextSessionTextWirePrompt()
+			plan.loop.Prompt = wirePrompt
+			output := &sessionTextOutput{writer: out}
+			if maxDuration == 0 {
+				if plan.inferencer != nil {
+					plan.inferencer = &sessionTextSeedInferencer{
+						inner:      plan.inferencer,
+						wirePrompt: wirePrompt,
+						value:      seed.Value,
+						audioOut:   output,
+					}
+				}
+				return errors.Join(plan.run(ctx, output), output.errorValue())
+			}
+			durationCtx, err := prepareSessionDurationArtifacts(ctx)
+			if err != nil {
+				return err
+			}
+			admission := newSessionDurationAdmission()
+			admittedInferencer := &sessionDurationAdmissionInferencer{
+				inner:     plan.inferencer,
+				admission: admission,
+				closeDone: make(chan struct{}),
+			}
+			if plan.inferencer != nil {
+				plan.inferencer = &sessionTextSeedInferencer{
+					inner:      admittedInferencer,
+					wirePrompt: wirePrompt,
+					value:      seed.Value,
+					audioOut:   output,
+				}
+			}
+			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
+			return errors.Join(runErr, output.errorValue())
+		}
+		if maxDuration == 0 {
+			return plan.run(ctx, out)
+		}
+		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		if err != nil {
+			return err
+		}
+		return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+	}
+
+	if seed.Present {
+		plan.loop.Prompt = nextSessionTextWirePrompt()
+	}
+	sink, err := newSessionAudioSink(audioPath, out)
+	if err != nil {
+		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
+	}
+	audioOut := &sessionAudioOutput{sink: sink}
+	defer func() {
+		if closeErr := audioOut.close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, closeErr))
+		}
+	}()
+
+	sessionOut := out
+	if audioPath == "-" {
+		sessionOut = io.Discard
+	}
+	if plan.inferencer != nil {
+		wirePrompt := ""
+		if seed.Present {
+			wirePrompt = plan.loop.Prompt
+		}
+		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
+		plan.inferencer = wrapped
+		if maxDuration == 0 {
+			runErr = plan.run(ctx, sessionOut)
+		} else {
+			durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
+			if durationErr != nil {
+				return durationErr
+			}
+			runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
+		}
+		wrapped.wait()
+		if outputErr := wrapped.err(); outputErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, outputErr))
+		}
+		return runErr
+	}
+	if maxDuration == 0 {
+		return plan.run(ctx, sessionOut)
+	}
+	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+	return runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
+}
+
+func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	planFactory := defaultSessionRuntimeFactory
 	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
 	if useInitialProviderInstructions {
@@ -45,12 +178,12 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 	}
 	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
 	if err != nil {
-		return err
+		return sessionRuntimePlan{}, err
 	}
 	if instructions != "" && plan.inferencer != nil && !useInitialProviderInstructions {
 		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions)
 	}
-	return plan.run(ctx, out)
+	return plan, nil
 }
 
 // sessionRuntimeFactoryWithInstructions carries resolved instructions into
