@@ -54,6 +54,20 @@ function Require-String([object]$Config, [string]$Path, [string]$Pattern = '') {
     return $value
 }
 
+function Assert-Posted-NumericParam([object]$Config, [string]$Name, [object]$Expected) {
+    $path = "probe.request.params.$Name"
+    $actual = Require-String $Config $path
+    $parsed = 0.0
+    $styles = [System.Globalization.NumberStyles]::Float
+    $culture = [System.Globalization.CultureInfo]::InvariantCulture
+    if (-not [double]::TryParse($actual, $styles, $culture, [ref]$parsed)) {
+        Fail "$path must be an invariant-culture numeric string"
+    }
+    if ($parsed -ne [double]$Expected) {
+        Fail "$path must equal probe.generation_options.$Name ($Expected), actual '$actual'"
+    }
+}
+
 function Require-Integer([object]$Config, [string]$Path, [int64]$Minimum = [int64]::MinValue) {
     $value = Get-Field $Config $Path
     $integerTypes = @([byte], [sbyte], [int16], [uint16], [int32], [uint32], [int64], [uint64])
@@ -192,13 +206,26 @@ function Assert-Contract([object]$Config) {
     [void](Require-String $Config 'probe.generation_options.response_format' '^wav$')
     [void](Require-String $Config 'probe.request.model' '^[a-z0-9][a-z0-9-]+$')
     [void](Require-String $Config 'probe.request.input')
+    [void](Require-String $Config 'probe.request.language')
     [void](Require-String $Config 'probe.request.response_format' '^wav$')
     [void](Require-Number $Config 'probe.request.speed' 0.000001)
+    foreach ($parameterName in @('temperature', 'top_k', 'top_p', 'repetition_penalty', 'max_new_tokens', 'seed')) {
+        Assert-Posted-NumericParam $Config $parameterName (Get-Field $Config "probe.generation_options.$parameterName")
+    }
     if ((Get-Field $Config 'probe.request.input') -ne (Get-Field $Config 'probe.text')) {
         Fail 'probe.request.input must equal probe.text'
     }
     if ((Get-Field $Config 'probe.request.model') -ne (Get-Field $Config 'model.runtime_name')) {
         Fail 'probe.request.model must equal model.runtime_name'
+    }
+    if ((Get-Field $Config 'probe.request.language') -ne (Get-Field $Config 'probe.language')) {
+        Fail 'probe.request.language must equal probe.language'
+    }
+    if ((Get-Field $Config 'probe.request.response_format') -ne (Get-Field $Config 'probe.generation_options.response_format')) {
+        Fail 'probe.request.response_format must equal probe.generation_options.response_format'
+    }
+    if ([double](Get-Field $Config 'probe.request.speed') -ne [double](Get-Field $Config 'probe.generation_options.speed')) {
+        Fail 'probe.request.speed must equal probe.generation_options.speed'
     }
 
     [void](Require-String $Config 'verification.script' '\.ps1$')

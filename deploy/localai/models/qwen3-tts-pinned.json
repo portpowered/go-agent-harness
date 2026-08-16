@@ -66,8 +66,17 @@
     "request": {
       "model": "qwen3-tts-cpp",
       "input": "The local voice pin is stable.",
+      "language": "English",
       "response_format": "wav",
-      "speed": 1.0
+      "speed": 1.0,
+      "params": {
+        "temperature": "0.9",
+        "top_k": "50",
+        "top_p": "1.0",
+        "repetition_penalty": "1.05",
+        "max_new_tokens": "512",
+        "seed": "17"
+      }
     }
   },
   "verification": {

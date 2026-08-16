@@ -80,7 +80,11 @@ the old F16 talker under the new backend name.
 - A valid clip has RMS strictly greater than `0.001`.
 - A valid clip has duration in the inclusive range `0.25` through `8.0` seconds.
 - Probe text: `The local voice pin is stable.`
-- Fixed model option: `seed:17`; request speed is `1.0`, response format is `wav`.
+- Probe language: `English`.
+- Fixed sampling options: `temperature:0.9`, `top_k:50`, `top_p:1.0`,
+  `repetition_penalty:1.05`, `max_new_tokens:512`, and `seed:17`.
+- Request speed is `1.0`, response format is `wav`, and the request carries the
+  sampling options as string-valued `params`.
 
 The validator checks the contract field by field and hashes only the exact
 configured relative filenames. If a configured artifact is missing, S1 reports
@@ -113,10 +117,13 @@ The exact bounded live command is:
 pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode Live -Endpoint http://127.0.0.1:8080 -ArtifactRoot $env:LOCALAI_MODELS_DIR -OutputPath $env:TTS_OUTPUT
 ```
 
-The script posts the `probe.request` object from the JSON pin to
-`/v1/audio/speech`, writes a WAV, decodes it, measures RMS and duration, and
-fails on silence, malformed audio, or an out-of-range duration. The separate
-measurement command is:
+The script posts the exact `probe.request` object from the JSON pin, including
+the top-level language and string-valued sampling `params`, to
+`/v1/audio/speech`. The contract check proves that every posted language,
+sampling, speed, and response-format value equals the declared pin. The script
+writes a WAV, decodes it, measures RMS and duration, and fails on silence,
+malformed audio, or an out-of-range duration. The separate measurement command
+is:
 
 ```powershell
 pwsh -NoProfile -File deploy/localai/models/verify-qwen3-tts-pin.ps1 -Mode Measure -AudioPath $env:TTS_OUTPUT
@@ -137,18 +144,20 @@ NEGATIVE_CONTROL=PASS name=zero_length_file reason=TTS_PIN_FAIL: audio file is z
 NEGATIVE_CONTROLS=PASS silent_clip=failed-validation zero_length_file=failed-validation
 ```
 
-The exact pinned live run completed after the gallery migration installed both
-selected files and the pinned `v4.8.2-cpu-qwen3-tts-cpp` backend image:
+The corrected exact pinned live run completed after the gallery migration
+installed both selected files and the pinned `v4.8.2-cpu-qwen3-tts-cpp` backend
+image. This run posted the language and all six declared sampling parameters:
 
 ```text
 CONTRACT=PASS fields=all-required-fields
 ARTIFACT_HASH=PASS role=talker sha256=d54dbaf10591421fa764ed630d764efa717ae40cd959bd48c66d4eb1af226426
 ARTIFACT_HASH=PASS role=tokenizer sha256=1883beeed99348fc35e23dd225e9082f93f6f8c109330a33d935baa8acdbfd94
-LIVE_PASS endpoint=http://127.0.0.1:8080 output=<temporary wav> rms=0.089762 duration_seconds=2.080000
+LIVE_PASS endpoint=http://127.0.0.1:8080 output=<temporary wav> rms=0.053458 duration_seconds=2.000000
+AUDIO_PASS path=<temporary wav> rms=0.053458 duration_seconds=2.000000 threshold=0.001000 range=[0.250000,8.000000]
 ```
 
 The measured RMS is strictly above the `0.001` silence threshold and the
-2.08-second duration is inside the inclusive `[0.25, 8.0]` second range. The
+2.00-second duration is inside the inclusive `[0.25, 8.0]` second range. The
 same run used the exact `qwen3-tts-cpp` base model, not the separate custom-voice
 Q4 model that was present before migration.
 
