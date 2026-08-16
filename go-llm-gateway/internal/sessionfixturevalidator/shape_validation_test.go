@@ -126,6 +126,92 @@ func TestValidateSessionCaptureShapes_RejectsEmptyProviderAudioPayload(t *testin
 	requireShapeValidationError(t, invalidResult.Errors, invalidPath, "records[0].payload.delta", "non-empty audio payload")
 }
 
+func TestValidateSessionCaptureShapes_RequiresExactPersistedCallIDs(t *testing.T) {
+	tests := []struct {
+		name       string
+		call       gatewaytesting.CapturedSessionEvent
+		result     gatewaytesting.CapturedSessionEvent
+		fieldPath  string
+		reasonPart string
+	}{
+		{
+			name:       "output item id is not call id",
+			call:       providerRecord("response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","id":"call-fallback"}}`),
+			result:     providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-fallback","output":"orphan"}}`),
+			fieldPath:  "records[0].payload.item.call_id",
+			reasonPart: "requires a non-empty persisted call identifier",
+		},
+		{
+			name:       "output item id-like field is not call id",
+			call:       providerRecord("response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","item_id":"call-fallback"}}`),
+			result:     providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-fallback","output":"orphan"}}`),
+			fieldPath:  "records[0].payload.item.call_id",
+			reasonPart: "requires a non-empty persisted call identifier",
+		},
+		{
+			name:       "function arguments item call id is not top level call id",
+			call:       providerRecord("response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","item":{"call_id":"call-fallback"}}`),
+			result:     providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-fallback","output":"orphan"}}`),
+			fieldPath:  "records[0].payload.call_id",
+			reasonPart: "requires a non-empty persisted call identifier",
+		},
+		{
+			name:       "function arguments item id-like field is not top level call id",
+			call:       providerRecord("response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","item_id":"call-fallback"}`),
+			result:     providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-fallback","output":"orphan"}}`),
+			fieldPath:  "records[0].payload.call_id",
+			reasonPart: "requires a non-empty persisted call identifier",
+		},
+		{
+			name:       "empty output item call id does not fall back",
+			call:       providerRecord("response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"","id":"call-fallback"}}`),
+			result:     providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-fallback","output":"orphan"}}`),
+			fieldPath:  "records[0].payload.item.call_id",
+			reasonPart: "requires a non-empty persisted call identifier",
+		},
+		{
+			name:       "mismatched persisted call ids do not pair",
+			call:       providerRecord("response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"call-one"}`),
+			result:     providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-two","output":"mismatch"}}`),
+			fieldPath:  "records[0].payload.call_id",
+			reasonPart: "no matching tool result",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "invalid-call-id.session.json")
+			writeCapture(t, path, providerRecordedCapture(test.call, test.result, providerRecord("response.done", `{"type":"response.done"}`)))
+
+			result, err := ValidatePaths([]string{path})
+			if err != nil {
+				t.Fatalf("ValidatePaths returned traversal error: %v", err)
+			}
+			if len(result.Errors) == 0 {
+				t.Fatalf("ValidatePaths result = %#v, want exact-call-ID validation errors", result)
+			}
+			requireShapeValidationError(t, result.Errors, path, test.fieldPath, test.reasonPart)
+		})
+	}
+}
+
+func TestValidateSessionCaptureShapes_AcceptsExactOutputItemCallID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "valid-output-item-call.session.json")
+	writeCapture(t, path, providerRecordedCapture(
+		providerRecord("response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"call-exact"}}`),
+		providerRecord("conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"call-exact","output":"matched"}}`),
+		providerRecord("response.done", `{"type":"response.done"}`),
+	))
+
+	result, err := ValidatePaths([]string{path})
+	if err != nil {
+		t.Fatalf("ValidatePaths returned traversal error: %v", err)
+	}
+	if result.FilesScanned != 1 || len(result.Errors) != 0 {
+		t.Fatalf("ValidatePaths result = %#v, want one valid exact-call-ID fixture", result)
+	}
+}
+
 func TestRun_MultiViolationReportMatchesGolden(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "multi-violation.session.json")
 	writeCapture(t, path, providerRecordedCapture(

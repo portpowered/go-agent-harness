@@ -187,11 +187,11 @@ func recognizedToolObservation(record gatewaytesting.CapturedSessionEvent, recor
 			if !ok || !hasStringValue(item, "type", "function_call") {
 				return toolObservation{}, false
 			}
-			id, fieldPath := firstStringField(item, base+".item.call_id", "call_id", "item_id", "id")
-			return toolObservation{kind: "tool call", id: id, fieldPath: fieldPath, recordIdx: recordIndex, eventType: record.Type}, true
+			id, _ := stringField(item, "call_id")
+			return toolObservation{kind: "tool call", id: id, fieldPath: base + ".item.call_id", recordIdx: recordIndex, eventType: record.Type}, true
 		case "response.function_call_arguments.done":
-			id, fieldPath := firstStringField(payload, base+".call_id", "call_id", "item.call_id", "item_id")
-			return toolObservation{kind: "tool call", id: id, fieldPath: fieldPath, recordIdx: recordIndex, eventType: record.Type}, true
+			id, _ := stringField(payload, "call_id")
+			return toolObservation{kind: "tool call", id: id, fieldPath: base + ".call_id", recordIdx: recordIndex, eventType: record.Type}, true
 		case "conversation.item.create":
 			item, ok := objectField(payload, "item")
 			if !ok || !hasStringValue(item, "type", "function_call_output") {
