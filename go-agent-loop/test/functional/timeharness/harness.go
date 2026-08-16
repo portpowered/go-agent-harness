@@ -11,21 +11,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
-const (
-	defaultWatchdogTimeout  = 500 * time.Millisecond
-	defaultWatchdogInterval = 5 * time.Millisecond
-)
-
-type FailureKind string
-
-const (
-	FailureStuck       FailureKind = "stuck participant"
-	FailureSleep       FailureKind = "forbidden sleep"
-	FailureExpectation FailureKind = "expectation"
-)
+const defaultWatchdogTimeout = 500 * time.Millisecond
 
 type HarnessError struct {
-	Kind                                  FailureKind
+	Kind                                  string
 	TargetTick                            uint64
 	Missing, Sleeping                     []string
 	Expectation                           string
@@ -33,41 +22,37 @@ type HarnessError struct {
 }
 
 func (e *HarnessError) Error() string {
-	switch e.Kind {
-	case FailureExpectation:
+	if e.Kind == "expectation" {
 		return fmt.Sprintf("expectation %q was not met within %d logical ticks (starting tick %d; final tick %d)", e.Expectation, e.AllowedTicks, e.StartingTick, e.FinalTick)
-	case FailureSleep:
-		return fmt.Sprintf("time.Sleep is forbidden in a sequenced scenario: participant(s) %s blocked in time.Sleep at target tick %d; missing participants: %s", names(e.Sleeping), e.TargetTick, names(e.Missing))
-	default:
-		return fmt.Sprintf("timeharness watchdog: target tick %d did not complete; missing participants: %s", e.TargetTick, names(e.Missing))
 	}
+	if e.Kind == "forbidden sleep" {
+		return fmt.Sprintf("time.Sleep is forbidden in a sequenced scenario: participant(s) %s blocked in time.Sleep at target tick %d; missing participants: %s", names(e.Sleeping), e.TargetTick, names(e.Missing))
+	}
+	return fmt.Sprintf("timeharness watchdog: target tick %d did not complete; missing participants: %s", e.TargetTick, names(e.Missing))
 }
 
 type generation struct {
 	tick      uint64
 	arrived   map[string]bool
 	remaining int
-	started   time.Time
 }
 type Scenario struct {
-	mu                 sync.Mutex
-	cond               *sync.Cond
-	clock              *clock.Deterministic
-	base               time.Time
-	tickDuration       time.Duration
-	participants       map[string]*Participant
-	activeParticipants int
-	closed             bool
-	completed          uint64
-	active             *generation
-	failure            error
-	advanceCalls       int
-	watchdogDone       chan struct{}
+	mu           sync.Mutex
+	cond         *sync.Cond
+	clock        *clock.Deterministic
+	base         time.Time
+	tickDuration time.Duration
+	participants map[string]*Participant
+	completed    uint64
+	active       *generation
+	failure      error
+	advanceCalls int
+	started      bool
+	watchdog     *time.Timer
 }
 type Participant struct {
 	scenario *Scenario
 	name     string
-	lastTick uint64
 	complete bool
 	gid      atomic.Uint64
 }
@@ -79,98 +64,63 @@ func New(base time.Time, tickDuration time.Duration) *Scenario {
 	if tickDuration <= 0 {
 		tickDuration = time.Millisecond
 	}
-	s := &Scenario{
-		clock: clock.NewDeterministic(base, tickDuration), base: base, tickDuration: tickDuration,
-		participants: make(map[string]*Participant),
-	}
+	s := &Scenario{clock: clock.NewDeterministic(base, tickDuration), base: base, tickDuration: tickDuration, participants: map[string]*Participant{}}
 	s.cond = sync.NewCond(&s.mu)
 	return s
 }
 func (s *Scenario) Clock() *clock.Deterministic { return s.clock }
+
 func (s *Scenario) Register(name string) (*Participant, error) {
 	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, fmt.Errorf("timeharness participant name cannot be empty")
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.watchdogDone != nil {
-		return nil, fmt.Errorf("timeharness participant %q registered after the first advance", name)
-	}
-	if _, ok := s.participants[name]; ok {
-		return nil, fmt.Errorf("timeharness participant %q is already registered", name)
+	if name == "" || s.failure != nil || s.started || s.participants[name] != nil {
+		return nil, fmt.Errorf("timeharness participant %q cannot be registered", name)
 	}
 	p := &Participant{scenario: s, name: name}
 	s.participants[name] = p
-	s.activeParticipants++
 	return p, nil
 }
-func (p *Participant) Run(fn func()) {
-	go func() {
-		p.bind()
-		fn()
-	}()
-}
-func (p *Participant) Complete() {
-	s := p.scenario
-	s.mu.Lock()
-	if !p.complete {
-		p.complete = true
-		s.activeParticipants--
-		if s.active != nil && !s.active.arrived[p.name] {
-			s.active.remaining--
-		}
-		if s.active != nil && s.active.remaining == 0 {
-			s.finishLocked()
-		}
-		s.cond.Broadcast()
-	}
-	s.mu.Unlock()
-}
+
+func (p *Participant) Run(fn func()) { go func() { p.bind(); fn() }() }
+
+func (p *Participant) Complete() { s := p.scenario; s.mu.Lock(); p.complete = true; s.mu.Unlock() }
+
 func (p *Participant) Observe(target uint64) (Observation, error) {
-	p.bind()
 	s := p.scenario
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for s.failure == nil && !s.closed {
+	for {
+		if err := s.failure; err != nil {
+			return Observation{}, err
+		}
 		if p.complete {
 			return Observation{}, fmt.Errorf("timeharness participant %q is complete", p.name)
-		}
-		if target < p.lastTick {
-			return Observation{}, fmt.Errorf("participant %q observed tick %d after tick %d", p.name, target, p.lastTick)
 		}
 		if target <= s.completed {
 			return p.observation(target), nil
 		}
-		if s.active == nil {
-			s.cond.Wait()
-			continue
-		}
-		if target != s.active.tick {
-			if target < s.active.tick {
-				return Observation{}, fmt.Errorf("participant %q requested tick %d after generation %d started", p.name, target, s.active.tick)
+		g := s.active
+		if g == nil || target != g.tick {
+			if g != nil && target < g.tick {
+				return Observation{}, fmt.Errorf("participant %q requested tick %d after generation %d started", p.name, target, g.tick)
 			}
 			s.cond.Wait()
 			continue
 		}
-		if !s.active.arrived[p.name] {
-			s.active.arrived[p.name], s.active.remaining = true, s.active.remaining-1
+		if !g.arrived[p.name] {
+			g.arrived[p.name], g.remaining = true, g.remaining-1
+			s.cond.Broadcast()
 		}
-		s.cond.Broadcast()
-		if s.active.remaining == 0 {
+		if g.remaining == 0 {
 			s.finishLocked()
-			continue
+		} else {
+			s.cond.Wait()
 		}
-		s.cond.Wait()
 	}
-	if s.failure != nil {
-		return Observation{}, s.failure
-	}
-	return Observation{}, fmt.Errorf("timeharness scenario is closed")
 }
 func (p *Participant) observation(target uint64) Observation {
-	p.lastTick = target
-	return Observation{p.name, target, p.scenario.base.Add(time.Duration(target) * p.scenario.tickDuration)}
+	return Observation{Participant: p.name, Tick: target, Time: p.scenario.base.Add(time.Duration(target) * p.scenario.tickDuration)}
 }
 
 type Observation struct {
@@ -182,17 +132,12 @@ type Observation struct {
 func (s *Scenario) AdvanceTo(target uint64) (uint64, error) {
 	s.mu.Lock()
 	s.advanceCalls++
+	s.cond.Broadcast()
 	defer func() { s.advanceCalls--; s.cond.Broadcast(); s.mu.Unlock() }()
-	if s.failure != nil {
-		return s.clock.Tick(), s.failure
+	if err := s.failure; err != nil {
+		return s.clock.Tick(), err
 	}
-	if s.closed {
-		return s.clock.Tick(), fmt.Errorf("timeharness scenario is closed")
-	}
-	if s.watchdogDone == nil {
-		s.watchdogDone = make(chan struct{})
-		go s.watchdog(s.watchdogDone)
-	}
+	s.started = true
 	for s.failure == nil && s.completed < target {
 		if s.active == nil {
 			s.startLocked(target)
@@ -200,14 +145,12 @@ func (s *Scenario) AdvanceTo(target uint64) (uint64, error) {
 		}
 		s.cond.Wait()
 	}
-	if s.failure != nil {
-		return s.clock.Tick(), s.failure
-	}
-	return s.clock.Tick(), nil
+	return s.clock.Tick(), s.failure
 }
+
 func (s *Scenario) ExpectWithinTicks(expectation string, allowed uint64, condition func() bool) (uint64, error) {
 	start := s.clock.Tick()
-	for step := uint64(0); ; step++ {
+	for step := uint64(0); step <= allowed; step++ {
 		if condition != nil && condition() {
 			return start + step, nil
 		}
@@ -219,101 +162,88 @@ func (s *Scenario) ExpectWithinTicks(expectation string, allowed uint64, conditi
 		}
 	}
 	final := s.clock.Tick()
-	return final, &HarnessError{Kind: FailureExpectation, Expectation: expectation, StartingTick: start, AllowedTicks: allowed, FinalTick: final}
+	return final, &HarnessError{Kind: "expectation", Expectation: expectation, StartingTick: start, AllowedTicks: allowed, FinalTick: final}
 }
+
 func (s *Scenario) Close() {
 	s.mu.Lock()
-	s.closed = true
-	s.cond.Broadcast()
-	done := s.watchdogDone
-	s.mu.Unlock()
-	if done != nil {
-		<-done
+	if s.failure == nil {
+		s.failure = fmt.Errorf("timeharness scenario is closed")
 	}
+	if s.watchdog != nil {
+		s.watchdog.Stop()
+		s.watchdog = nil
+	}
+	s.cond.Broadcast()
+	s.mu.Unlock()
 }
 func (s *Scenario) startLocked(target uint64) {
 	s.clock.AdvanceTo(target)
-	s.active = &generation{tick: target, arrived: make(map[string]bool), remaining: s.activeParticipants, started: time.Now()}
+	active := 0
+	for _, p := range s.participants {
+		if !p.complete {
+			active++
+		}
+	}
+	s.active = &generation{tick: target, arrived: map[string]bool{}, remaining: active}
 	if s.active.remaining == 0 {
 		s.finishLocked()
+	} else {
+		s.watchdog = time.AfterFunc(defaultWatchdogTimeout, func() { s.checkWatchdog(target) })
 	}
 	s.cond.Broadcast()
 }
 func (s *Scenario) finishLocked() {
-	for name := range s.active.arrived {
-		s.participants[name].lastTick = s.active.tick
+	if s.watchdog != nil {
+		s.watchdog.Stop()
+		s.watchdog = nil
 	}
 	s.completed, s.active = s.active.tick, nil
 	s.cond.Broadcast()
 }
-func (s *Scenario) missingLocked() []string {
-	if s.active == nil {
-		return nil
+func (s *Scenario) checkWatchdog(target uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil || s.active == nil || s.active.tick != target {
+		return
 	}
-	missing := make([]string, 0)
+	ids, sleeping := sleepingGoroutines(), []string{}
 	for name, p := range s.participants {
-		if !p.complete && !s.active.arrived[name] {
-			missing = append(missing, name)
+		if id := p.gid.Load(); !p.complete && id != 0 && ids[id] {
+			sleeping = append(sleeping, name)
 		}
 	}
-	return missing
-}
-func (s *Scenario) watchdog(done chan<- struct{}) {
-	defer close(done)
-	ticker := time.NewTicker(defaultWatchdogInterval)
-	defer ticker.Stop()
-	for range ticker.C {
-		s.mu.Lock()
-		if s.closed || s.failure != nil {
-			s.mu.Unlock()
-			return
+	if len(sleeping) > 0 {
+		s.failure = &HarnessError{Kind: "forbidden sleep", TargetTick: target, Sleeping: sleeping}
+	} else {
+		missing := []string{}
+		for name, p := range s.participants {
+			if !p.complete && !s.active.arrived[name] {
+				missing = append(missing, name)
+			}
 		}
-		var failure *HarnessError
-		if sleeping := s.sleepingLocked(); len(sleeping) > 0 {
-			failure = &HarnessError{Kind: FailureSleep, TargetTick: s.clock.Tick(), Missing: s.missingLocked(), Sleeping: sleeping}
-		} else if s.active != nil && time.Since(s.active.started) >= defaultWatchdogTimeout {
-			failure = &HarnessError{Kind: FailureStuck, TargetTick: s.active.tick, Missing: s.missingLocked()}
-		}
-		if failure != nil {
-			s.failure = failure
-			s.cond.Broadcast()
-			s.mu.Unlock()
-			return
-		}
-		s.mu.Unlock()
+		s.failure = &HarnessError{Kind: "stuck participant", TargetTick: target, Missing: missing}
 	}
-}
-func (s *Scenario) sleepingLocked() []string {
-	ids, result := sleepingGoroutines(), []string{}
-	for name, p := range s.participants {
-		if !p.complete && p.gid.Load() != 0 && ids[p.gid.Load()] {
-			result = append(result, name)
-		}
-	}
-	return result
+	s.cond.Broadcast()
 }
 func (p *Participant) bind() {
 	var stack [64]byte
 	n := runtime.Stack(stack[:], false)
 	var id uint64
-	_, _ = fmt.Sscanf(string(stack[:n]), "goroutine %d ", &id)
-	if p.gid.Load() == 0 && id != 0 {
-		p.gid.Store(id)
-	}
+	fmt.Sscanf(string(stack[:n]), "goroutine %d ", &id)
+	p.gid.CompareAndSwap(0, id)
 }
 func sleepingGoroutines() map[uint64]bool {
 	buffer := make([]byte, 128*1024)
 	n := runtime.Stack(buffer, true)
-	result := make(map[uint64]bool)
+	result := map[uint64]bool{}
 	for _, block := range strings.Split(string(buffer[:n]), "\n\n") {
 		if !strings.Contains(block, "[sleep]") || !strings.Contains(block, "time.Sleep(") {
 			continue
 		}
 		var id uint64
-		_, _ = fmt.Sscanf(block, "goroutine %d ", &id)
-		if id != 0 {
-			result[id] = true
-		}
+		fmt.Sscanf(block, "goroutine %d ", &id)
+		result[id] = true
 	}
 	return result
 }

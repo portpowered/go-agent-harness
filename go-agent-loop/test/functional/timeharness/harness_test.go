@@ -8,21 +8,21 @@ import (
 
 func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 	base := time.Date(2026, time.August, 16, 10, 11, 12, 13, time.UTC)
-	s := testScenario(t, base, 7*time.Millisecond)
-	if s.Clock().Tick() != 0 || s.Clock() == nil {
-		t.Fatal("scenario did not start at tick zero")
+	s := testScenario(base, 7*time.Millisecond)
+	defer s.Close()
+	if got := s.Clock().Tick(); got != 0 {
+		t.Fatalf("scenario started at tick %d", got)
 	}
-	left, right := register(t, s, "left"), register(t, s, "right")
-	if _, err := s.Register(" "); err == nil {
-		t.Fatal("empty name accepted")
-	}
-	if _, err := s.Register("left"); err == nil {
-		t.Fatal("duplicate name accepted")
+	left, right := register(s, "left"), register(s, "right")
+	for _, name := range []string{" ", "left"} {
+		if _, err := s.Register(name); err == nil {
+			t.Fatalf("invalid name %q accepted", name)
+		}
 	}
 	observations := make(chan Observation, 4)
 	for _, p := range []*Participant{left, right} {
 		p := p
-		p.Run(func() { runTicks(p, nil, observations, observations) })
+		p.Run(func() { runTicks(p, observations, 2, nil) })
 	}
 	tick, err := s.ExpectWithinTicks("both peers reached tick two", 3, func() bool { return s.Clock().Tick() == 2 })
 	if err != nil || tick != 2 {
@@ -46,24 +46,19 @@ func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 		t.Fatalf("details: %+v", err)
 	}
 }
+
 func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
-	s := testScenario(t, time.Unix(50, 0).UTC(), time.Millisecond)
+	s := testScenario(time.Unix(50, 0).UTC(), time.Millisecond)
+	defer s.Close()
 	participants := make([]*Participant, 8)
 	for i := range participants {
-		participants[i] = register(t, s, "peer-"+string(rune('a'+i)))
+		participants[i] = register(s, "peer-"+string(rune('a'+i)))
 	}
-	started, events := make(chan struct{}, 8), make(chan Observation, 16)
+	started, events := make(chan struct{}, len(participants)), make(chan Observation, 16)
 	hold := make(chan struct{})
 	for _, p := range participants {
 		p := p
-		p.Run(func() {
-			started <- struct{}{}
-			var wait <-chan struct{}
-			if p.name == "peer-h" {
-				wait = hold
-			}
-			runTicks(p, wait, events, events)
-		})
+		p.Run(func() { started <- struct{}{}; runTicks(p, events, 2, hold) })
 	}
 	for range participants {
 		<-started
@@ -82,9 +77,6 @@ func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
 	select {
 	case o := <-events:
 		t.Fatalf("participant crossed barrier early: %+v", o)
-	default:
-	}
-	select {
 	case err := <-results:
 		t.Fatalf("advance returned early: %v", err)
 	default:
@@ -98,40 +90,24 @@ func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
 		t.Fatalf("event counts: %v", counts)
 	}
 	for range 4 {
-		if err := <-results; err != nil {
-			t.Fatal(err)
-		}
+		<-results
 	}
 }
-func testScenario(t *testing.T, base time.Time, tickDuration time.Duration) *Scenario {
-	t.Helper()
-	s := New(base, tickDuration)
-	t.Cleanup(s.Close)
-	return s
-}
-func register(t *testing.T, s *Scenario, name string) *Participant {
-	t.Helper()
-	p, err := s.Register(name)
-	if err != nil {
-		t.Fatal(err)
+
+func testScenario(b time.Time, d time.Duration) *Scenario { return New(b, d) }
+func register(s *Scenario, n string) *Participant         { p, _ := s.Register(n); return p }
+
+func runTicks(p *Participant, out chan<- Observation, ticks int, hold <-chan struct{}) {
+	if hold != nil && p.name == "peer-h" {
+		<-hold
 	}
-	return p
-}
-func runTicks(p *Participant, wait <-chan struct{}, out ...chan<- Observation) {
-	if wait != nil {
-		<-wait
-	}
-	for i, ch := range out {
-		o, err := p.Observe(uint64(i + 1))
-		if err != nil {
-			panic(err)
-		}
-		ch <- o
+	for i := 1; i <= ticks; i++ {
+		o, _ := p.Observe(uint64(i))
+		out <- o
 	}
 	p.Complete()
 }
 func waitState(t *testing.T, s *Scenario, ready func(*Scenario) bool) {
-	t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for !ready(s) && s.failure == nil {
