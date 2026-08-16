@@ -49,6 +49,10 @@ var CliSet = wire.NewSet(
 // hide a dependency behind a bag or locator.
 func assembleAgentCLI(
 	toolExecutor messages.ToolExecutor,
+	deviceRegistry DeviceRegistry,
+	audioSource AudioSource,
+	audioSink AudioSink,
+	clockSource Clock,
 	toolDefs []messages.ToolDefinition,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,

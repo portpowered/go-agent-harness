@@ -18,6 +18,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
 type recordingToolExecutor struct {
@@ -28,6 +29,43 @@ func (e *recordingToolExecutor) Execute(_ context.Context, call messages.ToolCal
 	e.calls++
 	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "tool result"}, nil
 }
+
+type recordingDeviceRegistry struct {
+	lookups int
+}
+
+func (r *recordingDeviceRegistry) ListDevices() []string {
+	r.lookups++
+	return []string{"recording-device"}
+}
+
+type recordingAudioSource struct {
+	reads int
+}
+
+func (s *recordingAudioSource) ReadFrame(context.Context, []int16) error {
+	s.reads++
+	return io.EOF
+}
+
+func (s *recordingAudioSource) Close() error { return nil }
+
+type recordingAudioSink struct {
+	writes int
+}
+
+func (s *recordingAudioSink) WriteFrame(context.Context, []int16) error {
+	s.writes++
+	return nil
+}
+
+func (s *recordingAudioSink) Close() error { return nil }
+
+type recordingClock struct {
+	now time.Time
+}
+
+func (c *recordingClock) Now() time.Time { return c.now }
 
 type recordingInferencer struct {
 	calls    int
@@ -98,8 +136,29 @@ func (d *recordingDialer) DialContext(context.Context, string, string) (net.Conn
 	return nil, errors.New("composition test network dial")
 }
 
+func validCompositionValues() compositionValues {
+	return compositionValues{
+		toolExecutor:   &recordingToolExecutor{},
+		deviceRegistry: &recordingDeviceRegistry{},
+		audioSource:    &recordingAudioSource{},
+		audioSink:      &recordingAudioSink{},
+		clockSource:    &recordingClock{now: time.Unix(123, 0)},
+	}
+}
+
+func composeTestAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionOption) (*cli.AgentCLI, error) {
+	return ComposeAgentCLI(
+		toolExecutor,
+		&recordingDeviceRegistry{},
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		&recordingClock{now: time.Unix(123, 0)},
+		options...,
+	)
+}
+
 func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
-	root, err := ComposeAgentCLI(&recordingToolExecutor{})
+	root, err := composeTestAgentCLI(&recordingToolExecutor{})
 	if err != nil {
 		t.Fatalf("ComposeAgentCLI returned error: %v", err)
 	}
@@ -111,6 +170,38 @@ func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
 	}
 }
 
+func TestCompositionClock_DefaultsThroughEnsureAndPreservesSuppliedIdentity(t *testing.T) {
+	values := validCompositionValues()
+	values.clockSource = nil
+	normalizeClock(&values)
+
+	defaultClock, ok := values.clockSource.(clock.Real)
+	if !ok {
+		t.Fatalf("omitted clock = %T, want clock.Real", values.clockSource)
+	}
+	if defaultClock.Now().IsZero() {
+		t.Fatal("default clock returned a zero timestamp")
+	}
+
+	supplied := &recordingClock{now: time.Unix(789, 0)}
+	values.clockSource = supplied
+	normalizeClock(&values)
+	if values.clockSource != supplied {
+		t.Fatalf("supplied clock identity changed: got %p want %p", values.clockSource, supplied)
+	}
+
+	root, err := ComposeAgentCLI(
+		&recordingToolExecutor{},
+		&recordingDeviceRegistry{},
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		nil,
+	)
+	if err != nil || root == nil {
+		t.Fatalf("ComposeAgentCLI with omitted clock: root=%v err=%v", root, err)
+	}
+}
+
 func TestValidateDependencies_RejectsEveryRequiredLivePortByName(t *testing.T) {
 	requiredCount := 0
 	for _, definition := range livePortDefinitions() {
@@ -119,7 +210,7 @@ func TestValidateDependencies_RejectsEveryRequiredLivePortByName(t *testing.T) {
 		}
 		requiredCount++
 
-		values := compositionValues{toolExecutor: &recordingToolExecutor{}}
+		values := validCompositionValues()
 		definition.assign(&values, nil)
 		err := validateDependencies(&values)
 		if err == nil {
@@ -145,9 +236,19 @@ func TestValidateDependencies_RejectsEveryRequiredLivePortByName(t *testing.T) {
 	}
 
 	var typedNil *recordingToolExecutor
-	err := validateDependencies(&compositionValues{toolExecutor: typedNil})
+	values := validCompositionValues()
+	values.toolExecutor = typedNil
+	err := validateDependencies(&values)
 	if err == nil || !errors.Is(err, ErrMissingRequiredPort) {
 		t.Fatalf("typed nil required port was accepted: %v", err)
+	}
+
+	var typedNilSource *recordingAudioSource
+	values = validCompositionValues()
+	values.audioSource = typedNilSource
+	err = validateDependencies(&values)
+	if err == nil || !errors.Is(err, ErrMissingRequiredPort) || !strings.Contains(err.Error(), PortAudioSource) {
+		t.Fatalf("typed nil audio source was accepted or unnamed: %v", err)
 	}
 }
 
@@ -215,6 +316,22 @@ func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 				if got := replacement.(*recordingSessionInferencer).connects; got != 1 {
 					t.Fatalf("selected %q replacement connects = %d, want exactly 1", definition.descriptor.Name, got)
 				}
+			case reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
+				reflect.TypeOf((*AudioSource)(nil)).Elem(),
+				reflect.TypeOf((*AudioSink)(nil)).Elem(),
+				reflect.TypeOf((*Clock)(nil)).Elem():
+				values := validCompositionValues()
+				if err := applyPortSwap(&values, swaps[0]); err != nil {
+					t.Fatalf("applyPortSwap(%q): %v", definition.descriptor.Name, err)
+				}
+				if got := definition.value(&values); got != replacement {
+					t.Fatalf("selected %q replacement identity was not retained", definition.descriptor.Name)
+				}
+				if definition.descriptor.Name == PortClock {
+					if _, ok := definition.value(&values).(Clock); !ok {
+						t.Fatalf("selected %q replacement lost its clock contract", definition.descriptor.Name)
+					}
+				}
 			default:
 				t.Fatalf("no root-level observation for live port type %v", definition.descriptor.Type)
 			}
@@ -243,6 +360,14 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 		return &recordingInferencer{response: "swapped"}
 	case portType == reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
 		return &recordingSessionInferencer{}
+	case portType == reflect.TypeOf((*DeviceRegistry)(nil)).Elem():
+		return &recordingDeviceRegistry{}
+	case portType == reflect.TypeOf((*AudioSource)(nil)).Elem():
+		return &recordingAudioSource{}
+	case portType == reflect.TypeOf((*AudioSink)(nil)).Elem():
+		return &recordingAudioSink{}
+	case portType == reflect.TypeOf((*Clock)(nil)).Elem():
+		return &recordingClock{now: time.Unix(456, 0)}
 	default:
 		t.Fatalf("no recording replacement for live port type %v", portType)
 		return nil
@@ -256,10 +381,25 @@ func TestPortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
 	incompatible := applyPortSwap(&compositionValues{}, PortSwap{Name: PortInferencer, Value: struct{}{}})
 	assertPortSwapError(t, incompatible, ErrIncompatiblePort, PortInferencer)
 
-	requiredNil := applyPortSwap(&compositionValues{toolExecutor: &recordingToolExecutor{}}, PortSwap{Name: PortToolExecutor, Value: nil})
+	toolValues := validCompositionValues()
+	requiredNil := applyPortSwap(&toolValues, PortSwap{Name: PortToolExecutor, Value: nil})
 	assertPortSwapError(t, requiredNil, ErrInvalidPortSwap, PortToolExecutor)
 
-	values := compositionValues{toolExecutor: &recordingToolExecutor{}, inferencer: &recordingInferencer{}}
+	for _, definition := range livePortDefinitions() {
+		if !definition.descriptor.Required || definition.descriptor.Name == PortToolExecutor {
+			continue
+		}
+		values := validCompositionValues()
+		err := applyPortSwap(&values, PortSwap{Name: definition.descriptor.Name, Value: nil})
+		assertPortSwapError(t, err, ErrInvalidPortSwap, definition.descriptor.Name)
+
+		values = validCompositionValues()
+		err = applyPortSwap(&values, PortSwap{Name: definition.descriptor.Name, Value: struct{}{}})
+		assertPortSwapError(t, err, ErrIncompatiblePort, definition.descriptor.Name)
+	}
+
+	values := validCompositionValues()
+	values.inferencer = &recordingInferencer{}
 	if err := applyPortSwap(&values, PortSwap{Name: PortInferencer, Value: nil}); err != nil {
 		t.Fatalf("optional nil swap failed: %v", err)
 	}
@@ -290,7 +430,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 	if err != nil || strict.relaxModelValidation {
 		t.Fatalf("strict option did not override relaxed option: %#v, %v", strict, err)
 	}
-	if _, err := ComposeAgentCLI(&recordingToolExecutor{}, nil); err == nil || !strings.Contains(err.Error(), "option 0") {
+	if _, err := composeTestAgentCLI(&recordingToolExecutor{}, nil); err == nil || !strings.Contains(err.Error(), "option 0") {
 		t.Fatalf("nil composition option was not rejected: %v", err)
 	}
 
@@ -302,7 +442,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 			switch definition.descriptor.Type {
 			case reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
 				t.Run("unavailable_without_option", func(t *testing.T) {
-					root, err := ComposeAgentCLI(&recordingToolExecutor{})
+					root, err := composeTestAgentCLI(&recordingToolExecutor{})
 					if err != nil || root == nil {
 						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
 					}
@@ -313,7 +453,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 				})
 				t.Run("available_with_option", func(t *testing.T) {
 					inferencer := &recordingInferencer{response: "option"}
-					root, err := ComposeAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
+					root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
 					if err != nil || root == nil {
 						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 					}
@@ -326,7 +466,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 				})
 			case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
 				t.Run("unavailable_without_option", func(t *testing.T) {
-					root, err := ComposeAgentCLI(&recordingToolExecutor{})
+					root, err := composeTestAgentCLI(&recordingToolExecutor{})
 					if err != nil || root == nil {
 						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
 					}
@@ -337,7 +477,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 				})
 				t.Run("available_with_option", func(t *testing.T) {
 					sessionInferencer := &recordingSessionInferencer{}
-					root, err := ComposeAgentCLI(&recordingToolExecutor{}, WithSessionInferencer(sessionInferencer))
+					root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithSessionInferencer(sessionInferencer))
 					if err != nil || root == nil {
 						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 					}
@@ -357,7 +497,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 
 func TestComposeAgentCLI_OptionalInferencerIsObservedAtRuntime(t *testing.T) {
 	inferencer := &recordingInferencer{response: "exact replacement"}
-	root, err := ComposeAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
+	root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
 	if err != nil {
 		t.Fatalf("ComposeAgentCLI: %v", err)
 	}
@@ -423,7 +563,7 @@ func TestCompositionConstruction_IsInert(t *testing.T) {
 	}()
 	before := runtime.NumGoroutine()
 
-	root, err := ComposeAgentCLI(
+	root, err := composeTestAgentCLI(
 		toolExecutor,
 		WithInferencer(inferencer),
 		WithSessionInferencer(sessionInferencer),
