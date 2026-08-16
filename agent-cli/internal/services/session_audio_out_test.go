@@ -183,7 +183,7 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 		}, path)
 	}()
 
-	data := waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	data := waitForSessionAudioWAVSamples(t, path, first)
 	rate, samples, err := wavio.Read(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("read streaming WAV before session completion: %v", err)
@@ -588,6 +588,28 @@ func waitForSessionAudioFileGrowth(t *testing.T, path string, wantSize int) []by
 		select {
 		case <-deadline.C:
 			t.Fatalf("audio output %q did not grow to %d bytes", path, wantSize)
+		case <-ticker.C:
+		}
+	}
+}
+
+func waitForSessionAudioWAVSamples(t *testing.T, path string, want []int16) []byte {
+	t.Helper()
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		data, err := os.ReadFile(path)
+		if err == nil && len(data) >= sessionAudioWAVHeaderSize+len(want)*2 {
+			_, samples, readErr := wavio.Read(bytes.NewReader(data))
+			if readErr == nil && equalInt16(samples, want) {
+				return data
+			}
+		}
+		select {
+		case <-deadline.C:
+			t.Fatalf("audio output %q did not expose %d parseable samples", path, len(want))
 		case <-ticker.C:
 		}
 	}
