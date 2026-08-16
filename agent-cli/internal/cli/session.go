@@ -31,6 +31,7 @@ func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags,
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
+	var maxDuration time.Duration
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
@@ -39,10 +40,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
+				return err
+			}
 			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" {
 				return cmd.Help()
 			}
-			return services.RunSessionWithTextSeed(cmd.Context(), cmd.OutOrStdout(), services.SessionRunOptions{
+			return services.RunSessionWithMaxDuration(cmd.Context(), cmd.OutOrStdout(), services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
 				ReplayPath:        c.askFlags.ReplayCapturePath,
 				Provider:          c.askFlags.Provider,
@@ -53,16 +57,14 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
-			}, services.SessionTextSeed{
-				Value:   prompt,
-				Present: cmd.Flags().Changed("prompt"),
-			})
+			}, maxDuration)
 		},
 	}
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Seed the realtime session with text")
 	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")
+	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
