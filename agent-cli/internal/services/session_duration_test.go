@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -25,7 +26,13 @@ import (
 
 func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 	inferencer := &durationTestInferencer{}
-	err := RunSessionWithMaxDuration(context.Background(), io.Discard, SessionRunOptions{
+	artifactDir := t.TempDir()
+	wavPath := filepath.Join(artifactDir, "negative.wav")
+	transcriptPath := filepath.Join(artifactDir, "negative.jsonl")
+	err := RunSessionWithMaxDuration(WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+		AudioPath:      wavPath,
+		TranscriptPath: transcriptPath,
+	}), io.Discard, SessionRunOptions{
 		SessionInferencer: inferencer,
 	}, -time.Millisecond)
 	if err == nil {
@@ -40,6 +47,12 @@ func TestRunSessionWithMaxDuration_RejectsNegativeBeforePlanning(t *testing.T) {
 	}
 	if inferencer.connected {
 		t.Fatal("negative duration started the injected session")
+	}
+	if _, statErr := os.Stat(wavPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("negative duration opened WAV artifact: %v", statErr)
+	}
+	if _, statErr := os.Stat(transcriptPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("negative duration opened transcript artifact: %v", statErr)
 	}
 }
 
@@ -435,11 +448,6 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 	artifactDir := t.TempDir()
 	wavPath := filepath.Join(artifactDir, "cutoff.wav")
 	transcriptPath := filepath.Join(artifactDir, "cutoff.jsonl")
-	artifacts, err := NewSessionDurationArtifactSet(wavPath, transcriptPath)
-	if err != nil {
-		t.Fatalf("open production duration artifacts: %v", err)
-	}
-	t.Cleanup(func() { _ = artifacts.Close() })
 
 	clock := &durationTestClock{}
 	inferencer := &durationTestInferencer{
@@ -447,7 +455,10 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 	}
 	writer := newDurationTestWriter()
 	runErrCh := make(chan error, 1)
-	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
+	ctx := WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+		AudioPath:      wavPath,
+		TranscriptPath: transcriptPath,
+	})
 	go func() {
 		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
@@ -548,6 +559,98 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 	}
 	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
 		t.Fatalf("transcript terminal record = %s, want max_duration", terminalPayload)
+	}
+}
+
+func TestRunSessionWithMaxDuration_FinalizesZeroSampleArtifactsBeforeFirstAudio(t *testing.T) {
+	artifactDir := t.TempDir()
+	wavPath := filepath.Join(artifactDir, "zero.wav")
+	transcriptPath := filepath.Join(artifactDir, "zero.jsonl")
+	clock := &durationTestClock{}
+	inferencer := &durationTestInferencer{
+		connectedCh: make(chan struct{}),
+	}
+	var out bytes.Buffer
+	runErrCh := make(chan error, 1)
+	ctx := WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+		AudioPath:      wavPath,
+		TranscriptPath: transcriptPath,
+	})
+	go func() {
+		runErrCh <- RunSessionWithMaxDurationClock(ctx, &out, SessionRunOptions{
+			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),
+			SessionInferencer: inferencer,
+		}, time.Nanosecond, clock)
+	}()
+	select {
+	case <-inferencer.connectedCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("zero-sample session did not connect")
+	}
+	clock.fire()
+	if err := <-runErrCh; err != nil {
+		t.Fatalf("zero-sample duration cutoff: %v", err)
+	}
+	if !strings.Contains(out.String(), "terminal_reason=max_duration") {
+		t.Fatalf("zero-sample output missing max_duration: %q", out.String())
+	}
+
+	wavFile, err := os.Open(wavPath)
+	if err != nil {
+		t.Fatalf("reopen zero-sample WAV artifact: %v", err)
+	}
+	wavData, err := io.ReadAll(wavFile)
+	closeErr := wavFile.Close()
+	if err != nil {
+		t.Fatalf("read zero-sample WAV artifact: %v", err)
+	}
+	if closeErr != nil {
+		t.Fatalf("close reopened zero-sample WAV artifact: %v", closeErr)
+	}
+	if len(wavData) != 44 || string(wavData[0:4]) != "RIFF" || string(wavData[8:12]) != "WAVE" {
+		t.Fatalf("zero-sample WAV header = %q, want canonical 44-byte RIFF/WAVE", wavData)
+	}
+	if binary.LittleEndian.Uint32(wavData[4:8]) != 36 || string(wavData[36:40]) != "data" || binary.LittleEndian.Uint32(wavData[40:44]) != 0 {
+		t.Fatalf("zero-sample WAV header has unexpected sizes: %v", wavData)
+	}
+
+	transcriptData, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatalf("reopen zero-sample transcript artifact: %v", err)
+	}
+	if !bytes.HasSuffix(transcriptData, []byte("\n")) {
+		t.Fatal("zero-sample transcript is missing its trailing JSONL newline")
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(transcriptData))
+	var eventTypes []messages.StreamMessageType
+	var terminalPayload []byte
+	for scanner.Scan() {
+		record, err := transcript.Decode(scanner.Bytes())
+		if err != nil {
+			t.Fatalf("decode zero-sample transcript record: %v", err)
+		}
+		var event struct {
+			Type messages.StreamMessageType `json:"type"`
+		}
+		if err := json.Unmarshal(record.Payload, &event); err != nil {
+			t.Fatalf("decode zero-sample transcript payload: %v", err)
+		}
+		eventTypes = append(eventTypes, event.Type)
+		if event.Type == messages.StreamTypeSessionClose {
+			terminalPayload = append([]byte(nil), record.Payload...)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan zero-sample transcript: %v", err)
+	}
+	wantTypes := []messages.StreamMessageType{
+		messages.StreamTypeSessionClose,
+	}
+	if !reflect.DeepEqual(eventTypes, wantTypes) {
+		t.Fatalf("zero-sample transcript event order = %v, want %v", eventTypes, wantTypes)
+	}
+	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
+		t.Fatalf("zero-sample terminal record = %s, want max_duration", terminalPayload)
 	}
 }
 
@@ -667,18 +770,16 @@ func TestRunSessionWithMaxDuration_ReleasesTimerSessionAndProductionArtifacts(t 
 	artifactDir := t.TempDir()
 	wavPath := filepath.Join(artifactDir, "session-resource.wav")
 	transcriptPath := filepath.Join(artifactDir, "session-resource.jsonl")
-	artifacts, err := NewSessionDurationArtifactSet(wavPath, transcriptPath)
-	if err != nil {
-		t.Fatalf("open production resource probe: %v", err)
-	}
-	t.Cleanup(func() { _ = artifacts.Close() })
 	clock := &durationTestClock{}
 	inferencer := &durationTestInferencer{
 		events: durationArtifactEvents(),
 	}
 	writer := newDurationTestWriter()
 	runErrCh := make(chan error, 1)
-	ctx := WithSessionDurationArtifacts(context.Background(), artifacts)
+	ctx := WithSessionDurationArtifactPaths(context.Background(), SessionDurationArtifactPaths{
+		AudioPath:      wavPath,
+		TranscriptPath: transcriptPath,
+	})
 	go func() {
 		runErrCh <- RunSessionWithMaxDurationClock(ctx, writer, SessionRunOptions{
 			ReplayPath:        filepath.Join(artifactDir, "fixture.session.json"),

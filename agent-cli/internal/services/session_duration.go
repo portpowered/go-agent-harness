@@ -82,6 +82,17 @@ type SessionDurationArtifactLifecycle interface {
 
 type sessionDurationArtifactsContextKey struct{}
 
+// SessionDurationArtifactPaths identifies the production-owned files that a
+// positive duration run should finalize. The CLI supplies these paths while
+// the services layer retains ownership of opening, flushing, and closing the
+// resources.
+type SessionDurationArtifactPaths struct {
+	AudioPath      string
+	TranscriptPath string
+}
+
+type sessionDurationArtifactPathsContextKey struct{}
+
 // WithSessionDurationArtifacts attaches production-owned output resources to a
 // duration run. The duration controller flushes and closes them after the
 // accepted loop output has drained, including the synthesized terminal record.
@@ -98,6 +109,43 @@ func sessionDurationArtifactsFromContext(ctx context.Context) SessionDurationArt
 	}
 	artifacts, _ := ctx.Value(sessionDurationArtifactsContextKey{}).(SessionDurationArtifactLifecycle)
 	return artifacts
+}
+
+// WithSessionDurationArtifactPaths asks the duration entry point to create
+// the production-owned WAV and JSONL resources after validation and runtime
+// planning. Existing lifecycle values take precedence, which keeps injected
+// sinks useful for tests and other callers that already own their resources.
+func WithSessionDurationArtifactPaths(ctx context.Context, paths SessionDurationArtifactPaths) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, sessionDurationArtifactPathsContextKey{}, paths)
+}
+
+func sessionDurationArtifactPathsFromContext(ctx context.Context) (SessionDurationArtifactPaths, bool) {
+	if ctx == nil {
+		return SessionDurationArtifactPaths{}, false
+	}
+	paths, ok := ctx.Value(sessionDurationArtifactPathsContextKey{}).(SessionDurationArtifactPaths)
+	return paths, ok
+}
+
+func prepareSessionDurationArtifacts(ctx context.Context) (context.Context, error) {
+	if sessionDurationArtifactsFromContext(ctx) != nil {
+		return ctx, nil
+	}
+	paths, ok := sessionDurationArtifactPathsFromContext(ctx)
+	if !ok || (paths.AudioPath == "" && paths.TranscriptPath == "") {
+		return ctx, nil
+	}
+	if paths.AudioPath == "" || paths.TranscriptPath == "" {
+		return nil, errors.New("session duration artifacts require both audio and transcript paths")
+	}
+	artifacts, err := NewSessionDurationArtifactSet(paths.AudioPath, paths.TranscriptPath)
+	if err != nil {
+		return nil, fmt.Errorf("open session duration artifacts: %w", err)
+	}
+	return WithSessionDurationArtifacts(ctx, artifacts), nil
 }
 
 // SessionDurationAudioSink accepts PCM16 samples and owns their final WAV
@@ -137,12 +185,25 @@ func NewSessionDurationArtifactSet(audioPath, transcriptPath string) (*SessionDu
 	if err != nil {
 		return nil, err
 	}
-	transcriptSink, err := transcript.NewWriter(transcriptPath)
+	transcriptSink, err := newSessionDurationTranscriptSink(transcriptPath)
 	if err != nil {
 		_ = audioSink.Close()
 		return nil, err
 	}
 	return NewSessionDurationArtifactSetWithSinks(audioSink, transcriptSink), nil
+}
+
+func newSessionDurationTranscriptSink(path string) (*transcript.Writer, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open duration transcript %q: %w", path, err)
+	}
+	writer, err := transcript.NewWriterOn(file)
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("create duration transcript %q: %w", path, err)
+	}
+	return writer, nil
 }
 
 // NewSessionDurationArtifactSetWithSinks builds the same production lifecycle
@@ -323,7 +384,7 @@ func (s *sessionDurationWAVSink) Close() error {
 	s.closed = true
 	var closeErrs []error
 	if s.file != nil {
-		if err := wavio.Write(s.file, wavio.Rate16kHz, s.samples); err != nil {
+		if err := writeSessionDurationWAV(s.file, s.samples); err != nil {
 			closeErrs = append(closeErrs, fmt.Errorf("write duration audio %q: %w", s.path, err))
 		} else if err := s.file.Sync(); err != nil {
 			closeErrs = append(closeErrs, fmt.Errorf("flush duration audio %q: %w", s.path, err))
@@ -334,6 +395,48 @@ func (s *sessionDurationWAVSink) Close() error {
 	}
 	s.closeErr = errors.Join(closeErrs...)
 	return s.closeErr
+}
+
+// writeSessionDurationWAV preserves a valid, playable WAV container even when
+// the logical deadline precedes the first audio delta. wavio.Write rejects an
+// empty sample slice because it is normally used for non-empty recordings;
+// planned duration cutoffs still need a canonical zero-sample artifact.
+func writeSessionDurationWAV(w io.Writer, samples []int16) error {
+	if len(samples) > 0 {
+		return wavio.Write(w, wavio.Rate16kHz, samples)
+	}
+
+	var header [44]byte
+	copy(header[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(header[4:8], 36)
+	copy(header[8:12], "WAVE")
+	copy(header[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(header[16:20], 16)
+	binary.LittleEndian.PutUint16(header[20:22], 1)
+	binary.LittleEndian.PutUint16(header[22:24], 1)
+	binary.LittleEndian.PutUint32(header[24:28], wavio.Rate16kHz)
+	binary.LittleEndian.PutUint32(header[28:32], wavio.Rate16kHz*2)
+	binary.LittleEndian.PutUint16(header[32:34], 2)
+	binary.LittleEndian.PutUint16(header[34:36], 16)
+	copy(header[36:40], "data")
+	return writeSessionDurationBytes(w, header[:])
+}
+
+func writeSessionDurationBytes(w io.Writer, data []byte) error {
+	for len(data) > 0 {
+		written, err := w.Write(data)
+		if written < 0 || written > len(data) {
+			return fmt.Errorf("%w: writer returned invalid byte count %d", io.ErrShortWrite, written)
+		}
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[written:]
+	}
+	return nil
 }
 
 type realSessionDurationClock struct{}
@@ -604,10 +707,14 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	if maxDuration == 0 {
 		return plan.run(ctx, out)
 	}
+	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	if err != nil {
+		return err
+	}
 	if durationClock == nil {
 		durationClock = realSessionDurationClock{}
 	}
-	return runSessionDurationPlan(ctx, out, plan, maxDuration, durationClock)
+	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, durationClock)
 }
 
 // RunSessionWithTextSeedAndMaxDuration preserves the explicit --prompt seed
@@ -633,6 +740,10 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	if err != nil {
 		return err
 	}
+	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	if err != nil {
+		return err
+	}
 
 	wirePrompt := nextSessionTextWirePrompt()
 	plan.loop.Prompt = wirePrompt
@@ -651,7 +762,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 			audioOut:   output,
 		}
 	}
-	err = runSessionDurationPlanWithAdmission(ctx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
+	err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
 	return errors.Join(err, output.errorValue())
 }
 
@@ -796,7 +907,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 			return fmt.Errorf("session error: %w", runErr)
 		}
 		if planned && !durationTerminalWritten {
-			if err := writeMaxDurationTerminal(out); err != nil {
+			if err := writeMaxDurationTerminal(out, artifacts); err != nil {
 				return err
 			}
 		}
@@ -865,7 +976,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 				return fmt.Errorf("session error: %w", err)
 			}
 			if durationExpired && !durationTerminalWritten {
-				if err := writeMaxDurationTerminal(out); err != nil {
+				if err := writeMaxDurationTerminal(out, artifacts); err != nil {
 					return err
 				}
 			}
@@ -987,8 +1098,8 @@ func maxDurationTerminalMessage(msg messages.StreamMessage) (messages.StreamMess
 	return msg, true
 }
 
-func writeMaxDurationTerminal(out io.Writer) error {
-	return writeSessionReplayMessage(out, messages.StreamMessage{
+func writeMaxDurationTerminal(out io.Writer, artifacts SessionDurationArtifactLifecycle) error {
+	return writeDurationSessionReplayMessage(out, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
@@ -998,7 +1109,7 @@ func writeMaxDurationTerminal(out io.Writer) error {
 			messages.TerminalProvenanceLoop,
 			messages.TerminalOutputNotApplicable,
 		),
-	})
+	}, artifacts)
 }
 
 func sessionDurationLifecycleError(runtimeErr, closeErr error) error {

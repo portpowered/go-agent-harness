@@ -46,7 +46,19 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" {
 				return cmd.Help()
 			}
-			return services.RunSessionWithTextSeedAndMaxDuration(cmd.Context(), cmd.OutOrStdout(), services.SessionRunOptions{
+			sessionContext := cmd.Context()
+			if maxDuration > 0 {
+				capturePath := c.askFlags.RecordCapturePath
+				if capturePath == "" {
+					capturePath = c.askFlags.ReplayCapturePath
+				}
+				artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
+				sessionContext = services.WithSessionDurationArtifactPaths(sessionContext, services.SessionDurationArtifactPaths{
+					AudioPath:      artifactBase + ".wav",
+					TranscriptPath: artifactBase + ".jsonl",
+				})
+			}
+			return services.RunSessionWithTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
 				ReplayPath:        c.askFlags.ReplayCapturePath,
 				Provider:          c.askFlags.Provider,
