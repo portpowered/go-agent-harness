@@ -58,54 +58,40 @@ func (e *SessionImageCapabilityError) Error() string {
 
 func (*SessionImageCapabilityError) Unwrap() error { return ErrSessionImageCapability }
 
-type sessionImagePathError struct {
-	Path  string
-	Err   error
-	Kind  error
-	State string
-}
-
-func (e *sessionImagePathError) Error() string {
-	return fmt.Sprintf("session image %q %s: %v", e.Path, e.State, e.Err)
-}
-
-func (e *sessionImagePathError) Unwrap() []error { return []error{e.Kind, e.Err} }
-
-// SessionImageMissingFileError reports a path that does not exist.
-type SessionImageMissingFileError struct{ *sessionImagePathError }
-
-// SessionImageUnreadableFileError reports a path that exists but cannot be read.
-type SessionImageUnreadableFileError struct{ *sessionImagePathError }
-
-type sessionImageMIMEError struct {
+type sessionImageError struct {
 	Path          string
 	DetectedMIME  string
 	SupportedMIME []string
 	Err           error
-	Kind          error
-	State         string
+	kind          error
+	text          string
 }
 
-func (e *sessionImageMIMEError) Error() string {
-	if e.State == "invalid" {
-		return fmt.Sprintf("session image %q is not valid %s content: %v", e.Path, e.DetectedMIME, e.Err)
-	}
-	return fmt.Sprintf("session image %q has unsupported MIME type %q (supported: %s)", e.Path, e.DetectedMIME, strings.Join(e.SupportedMIME, ", "))
+func (e *sessionImageError) Error() string   { return e.text }
+func (e *sessionImageError) Unwrap() []error { return []error{e.kind, e.Err} }
+func newSessionImageError(kind error, path, detected, text string, supported []string, err error) *sessionImageError {
+	return &sessionImageError{Path: path, DetectedMIME: detected, SupportedMIME: supported, Err: err, kind: kind, text: text}
 }
 
-func (e *sessionImageMIMEError) Unwrap() []error { return []error{e.Kind, e.Err} }
+// SessionImageMissingFileError reports a path that does not exist.
+type SessionImageMissingFileError struct{ *sessionImageError }
+
+// SessionImageUnreadableFileError reports a path that exists but cannot be read.
+type SessionImageUnreadableFileError struct{ *sessionImageError }
 
 // SessionImageUnsupportedMIMEError reports a MIME type outside the model contract.
-type SessionImageUnsupportedMIMEError struct{ *sessionImageMIMEError }
+type SessionImageUnsupportedMIMEError struct{ *sessionImageError }
 
 // SessionImageInvalidContentError reports bytes that are not a decodable image.
-type SessionImageInvalidContentError struct{ *sessionImageMIMEError }
+type SessionImageInvalidContentError struct{ *sessionImageError }
 
 // SessionImageEmptyFileError reports a successfully read zero-byte file.
 type SessionImageEmptyFileError struct{ Path string }
 
-func (e *SessionImageEmptyFileError) Error() string { return fmt.Sprintf("session image %q is empty", e.Path) }
-func (*SessionImageEmptyFileError) Unwrap() error   { return ErrSessionImageEmptyFile }
+func (e *SessionImageEmptyFileError) Error() string {
+	return fmt.Sprintf("session image %q is empty", e.Path)
+}
+func (*SessionImageEmptyFileError) Unwrap() error { return ErrSessionImageEmptyFile }
 
 // SessionImageMessageSender is an optional seam for a complete multimodal user message.
 type SessionImageMessageSender interface {
@@ -176,9 +162,10 @@ func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities)
 			return nil, unsupportedSessionImage(path, mediaType, supported)
 		}
 		if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
-			return nil, &SessionImageInvalidContentError{&sessionImageMIMEError{
-				Path: path, DetectedMIME: mediaType, Err: err, Kind: ErrSessionImageInvalidContent, State: "invalid",
-			}}
+			return nil, &SessionImageInvalidContentError{newSessionImageError(
+				ErrSessionImageInvalidContent, path, mediaType,
+				fmt.Sprintf("session image %q is not valid %s content: %v", path, mediaType, err), nil, err,
+			)}
 		}
 		parts = append(parts, messages.ImagePart{Bytes: append([]byte(nil), data...), MediaType: mediaType})
 	}
@@ -186,17 +173,19 @@ func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities)
 }
 
 func missingSessionImage(path string, err error) error {
-	return &SessionImageMissingFileError{&sessionImagePathError{Path: path, Err: err, Kind: ErrSessionImageMissingFile, State: "is missing"}}
+	return &SessionImageMissingFileError{newSessionImageError(ErrSessionImageMissingFile, path, "", fmt.Sprintf("session image %q is missing: %v", path, err), nil, err)}
 }
 
 func unreadableSessionImage(path string, err error) error {
-	return &SessionImageUnreadableFileError{&sessionImagePathError{Path: path, Err: err, Kind: ErrSessionImageUnreadableFile, State: "cannot be read"}}
+	return &SessionImageUnreadableFileError{newSessionImageError(ErrSessionImageUnreadableFile, path, "", fmt.Sprintf("session image %q cannot be read: %v", path, err), nil, err)}
 }
 
 func unsupportedSessionImage(path, mediaType string, supported []string) error {
-	return &SessionImageUnsupportedMIMEError{&sessionImageMIMEError{
-		Path: path, DetectedMIME: mediaType, SupportedMIME: append([]string(nil), supported...), Kind: ErrSessionImageUnsupportedMIME,
-	}}
+	return &SessionImageUnsupportedMIMEError{newSessionImageError(
+		ErrSessionImageUnsupportedMIME, path, mediaType,
+		fmt.Sprintf("session image %q has unsupported MIME type %q (supported: %s)", path, mediaType, strings.Join(supported, ", ")),
+		append([]string(nil), supported...), nil,
+	)}
 }
 
 func sessionImageContent(content messages.ContentPart) (data []byte, mediaType string, isImage bool) {

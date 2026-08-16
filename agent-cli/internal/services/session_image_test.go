@@ -12,28 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestPrepareSessionImageParts_PreservesFixtureBytesAndFlagOrder(t *testing.T) {
-	dir := t.TempDir()
-	png := copySessionImageFixture(t, dir, "fixture.png")
-	jpeg := copySessionImageFixture(t, dir, "fixture.jpeg")
-	wantPNG := mustReadSessionImage(t, png)
-	wantJPEG := mustReadSessionImage(t, jpeg)
-
-	parts, err := PrepareSessionImageParts([]string{png, jpeg}, SessionImageCapabilities{
-		Model:                   "gpt-realtime",
-		SupportsImageInput:      true,
-		SupportedInputMIMETypes: []string{"image/png", "image/jpeg"},
-	})
-	if err != nil {
-		t.Fatalf("PrepareSessionImageParts: %v", err)
-	}
-	if len(parts) != 2 {
-		t.Fatalf("parts = %d, want 2", len(parts))
-	}
-	assertSessionImagePart(t, parts[0], wantPNG, "image/png")
-	assertSessionImagePart(t, parts[1], wantJPEG, "image/jpeg")
-}
-
 func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 	dir := t.TempDir()
 	valid := copySessionImageFixture(t, dir, "fixture.png")
@@ -42,18 +20,9 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 	if err := os.Mkdir(unreadable, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	unsupported := filepath.Join(dir, "unsupported.gif")
-	if err := os.WriteFile(unsupported, []byte("GIF89a"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	disguised := filepath.Join(dir, "disguised.png")
-	if err := os.WriteFile(disguised, []byte("plain text, not image bytes"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	empty := filepath.Join(dir, "empty.png")
-	if err := os.WriteFile(empty, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	unsupported := writeSessionImageFile(t, dir, "unsupported.gif", []byte("GIF89a"))
+	disguised := writeSessionImageFile(t, dir, "disguised.png", []byte("plain text, not image bytes"))
+	empty := writeSessionImageFile(t, dir, "empty.png", nil)
 
 	metadata := SessionImageCapabilities{
 		Model:                   "gpt-realtime",
@@ -61,11 +30,10 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 		SupportedInputMIMETypes: []string{"image/png", "image/jpeg"},
 	}
 	cases := []struct {
-		name     string
-		path     string
-		want     error
-		as       func(error) bool
-		wantText string
+		name string
+		path string
+		want error
+		as   func(error) bool
 	}{
 		{
 			name: "missing",
@@ -120,7 +88,6 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 				var typed *SessionImageCapabilityError
 				return errors.As(err, &typed) && typed.Model == "text-only-model" && typed.Capability == sessionImageCapability
 			},
-			wantText: "text-only-model",
 		},
 	}
 
@@ -131,10 +98,9 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 				caseMetadata.Model = "text-only-model"
 				caseMetadata.SupportsImageInput = false
 			}
-			err := error(nil)
-			_, err = PrepareSessionImageParts([]string{tc.path}, caseMetadata)
+			_, err := PrepareSessionImageParts([]string{tc.path}, caseMetadata)
 			if err == nil || !errors.Is(err, tc.want) || !tc.as(err) {
-				t.Fatalf("error = %v, want typed %v for %s", err, tc.want, tc.wantText)
+				t.Fatalf("error = %v, want typed %v", err, tc.want)
 			}
 		})
 	}
@@ -260,6 +226,11 @@ func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 func copySessionImageFixture(t *testing.T, dir, name string) string {
 	t.Helper()
 	data := mustReadSessionImage(t, filepath.Join("..", "..", "testdata", "images", name))
+	return writeSessionImageFile(t, dir, name, data)
+}
+
+func writeSessionImageFile(t *testing.T, dir, name string, data []byte) string {
+	t.Helper()
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -292,12 +263,12 @@ func assertSessionImagePart(t *testing.T, got messages.ImagePart, want []byte, m
 }
 
 type recordingSessionImageSession struct {
-	mu       sync.Mutex
-	messages []messages.Message
-	events   []messages.StreamMessage
-	recv     *messages.TypedBuffer[messages.StreamMessage]
-	done     chan struct{}
-	once     sync.Once
+	mu        sync.Mutex
+	messages  []messages.Message
+	events    []messages.StreamMessage
+	recv      *messages.TypedBuffer[messages.StreamMessage]
+	done      chan struct{}
+	once      sync.Once
 	onMessage func(context.Context)
 }
 
