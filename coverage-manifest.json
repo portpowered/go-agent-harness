@@ -25,6 +25,7 @@
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine", "minimum": 70.40},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages", "minimum": 55.60},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics", "minimum": 90.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants", "minimum": 67.60},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe", "minimum": 91.70},
