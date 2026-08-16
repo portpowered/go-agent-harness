@@ -128,13 +128,17 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 		status=$$?; \
 	fi; \
 	printf '%s\n' "$$output"; \
+	test_count="$$(printf '%s\n' "$$output" | sed -nE 's/^Ran ([0-9]+) tests? in .*/\1/p' | tail -n 1)"; \
+	if [ "$$test_count" = "0" ]; then \
+		echo "test-factory-scripts selected zero tests from $(FACTORY_TEST_MODULES)." >&2; \
+		exit 1; \
+	fi; \
 	if [ "$$status" -ne 0 ]; then \
 		echo "test-factory-scripts failed while loading or executing the selected modules." >&2; \
 		exit "$$status"; \
 	fi; \
-	test_count="$$(printf '%s\n' "$$output" | sed -nE 's/^Ran ([0-9]+) tests? in .*/\1/p' | tail -n 1)"; \
 	case "$$test_count" in \
-		''|0) \
+		'') \
 			echo "test-factory-scripts selected zero tests from $(FACTORY_TEST_MODULES)." >&2; \
 			exit 1; \
 			;; \
