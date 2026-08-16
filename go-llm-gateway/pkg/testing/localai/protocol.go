@@ -18,8 +18,8 @@ const (
 	// realtimeOverallTimeout bounds one complete live protocol proof. The
 	// endpoint helper has a shorter readiness timeout; a running local model may
 	// still need several seconds to generate its first response.
-	realtimeOverallTimeout   = 30 * time.Second
-	realtimeOperationTimeout = 5 * time.Second
+	realtimeOverallTimeout   = 60 * time.Second
+	realtimeOperationTimeout = 15 * time.Second
 
 	pcmSampleRate       = 16000
 	pcmOutputSampleRate = 22050

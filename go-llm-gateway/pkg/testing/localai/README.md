@@ -31,7 +31,8 @@ TTS binary. It base64-decodes
 `response.output_audio.delta`, computes normalized little-endian PCM16 RMS,
 and requires RMS above `0.01`; a socket that accepts TCP but never completes
 the WebSocket protocol fails within the test deadline. Dial, read, and write
-operations are bounded to five seconds each, with a 30-second overall limit.
+operations are bounded to 15 seconds each, with a 60-second overall limit to
+allow a ready fixture to rehydrate its component backends once.
 
 The skipped test names the exact attempted endpoint and start command:
 
