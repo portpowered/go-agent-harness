@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // PortName is the stable name used to identify a composition dependency.
@@ -20,6 +21,8 @@ type PortName = string
 const (
 	// PortToolExecutor is the required executor used by the agent CLI.
 	PortToolExecutor = "tool-executor"
+	// PortTransportDialer is the required provider-neutral transport seam.
+	PortTransportDialer = "transport-dialer"
 	// PortInferencer is the optional one-shot inference override.
 	PortInferencer = "inferencer"
 	// PortSessionInferencer is the optional bidirectional session override.
@@ -36,6 +39,7 @@ const (
 	// The *PortName constants make the port contract discoverable to callers
 	// that prefer a name-oriented vocabulary.
 	ToolExecutorPortName      = PortToolExecutor
+	TransportDialerPortName   = PortTransportDialer
 	InferencerPortName        = PortInferencer
 	SessionInferencerPortName = PortSessionInferencer
 	DeviceRegistryPortName    = PortDeviceRegistry
@@ -90,6 +94,18 @@ func (e *PortSwapError) Error() string {
 }
 
 func (e *PortSwapError) Unwrap() error { return e.cause }
+
+// inertTransportDialer satisfies the required production port without
+// starting transport work during composition. Transport consumers can replace
+// it through InitializeMockAgentCLIWithPorts until a runtime transport owner
+// is threaded into the CLI graph.
+type inertTransportDialer struct{}
+
+func (inertTransportDialer) Dial(string, map[string]string) (transport.Conn, error) {
+	return nil, errors.New("transport dialer is not configured")
+}
+
+func defaultTransportDialer() transport.Dialer { return inertTransportDialer{} }
 
 // PortDescriptor is the public, read-only description of a live composition
 // port. LivePorts returns a fresh slice so callers cannot mutate composition
@@ -161,11 +177,12 @@ func WithStrictModelValidation() CompositionOption {
 }
 
 // ComposeAgentCLI constructs the singular CLI root from the required tool and
-// audio-side ports. An omitted clock is normalized to clock.Real. Optional
-// inference capabilities are supplied through CompositionOption. Validation
-// runs before any graph constructor is called.
+// transport and audio-side ports. An omitted clock is normalized to clock.Real.
+// Optional inference capabilities are supplied through CompositionOption.
+// Validation runs before any graph constructor is called.
 func ComposeAgentCLI(
 	toolExecutor messages.ToolExecutor,
+	transportDialer transport.Dialer,
 	deviceRegistry DeviceRegistry,
 	audioSource AudioSource,
 	audioSink AudioSink,
@@ -179,6 +196,7 @@ func ComposeAgentCLI(
 
 	values := compositionValues{
 		toolExecutor:      toolExecutor,
+		transportDialer:   transportDialer,
 		deviceRegistry:    deviceRegistry,
 		audioSource:       audioSource,
 		audioSink:         audioSink,
@@ -196,6 +214,7 @@ func ComposeAgentCLI(
 	registry := tools.NewToolRegistry()
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.transportDialer,
 		values.deviceRegistry,
 		values.audioSource,
 		values.audioSink,
@@ -212,17 +231,19 @@ func ComposeAgentCLI(
 func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	registry := tools.NewToolRegistry()
 	values := compositionValues{
-		toolExecutor:   tools.NewRegistryExecutor(registry),
-		deviceRegistry: defaultDeviceRegistry(),
-		audioSource:    defaultAudioSource(),
-		audioSink:      defaultAudioSink(),
-		clockSource:    clock.Ensure(nil),
+		toolExecutor:    tools.NewRegistryExecutor(registry),
+		transportDialer: defaultTransportDialer(),
+		deviceRegistry:  defaultDeviceRegistry(),
+		audioSource:     defaultAudioSource(),
+		audioSink:       defaultAudioSink(),
+		clockSource:     clock.Ensure(nil),
 	}
 	if err := validateDependencies(&values); err != nil {
 		return nil, err
 	}
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.transportDialer,
 		values.deviceRegistry,
 		values.audioSource,
 		values.audioSink,
@@ -240,11 +261,12 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
 	registry := tools.NewToolRegistry()
 	values := compositionValues{
-		toolExecutor:   tools.NewRegistryExecutor(registry),
-		deviceRegistry: defaultDeviceRegistry(),
-		audioSource:    defaultAudioSource(),
-		audioSink:      defaultAudioSink(),
-		clockSource:    clock.Ensure(nil),
+		toolExecutor:    tools.NewRegistryExecutor(registry),
+		transportDialer: defaultTransportDialer(),
+		deviceRegistry:  defaultDeviceRegistry(),
+		audioSource:     defaultAudioSource(),
+		audioSink:       defaultAudioSink(),
+		clockSource:     clock.Ensure(nil),
 	}
 	for _, swap := range swaps {
 		if err := applyPortSwap(&values, swap); err != nil {
@@ -256,6 +278,7 @@ func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
 	}
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.transportDialer,
 		values.deviceRegistry,
 		values.audioSource,
 		values.audioSink,
@@ -288,6 +311,7 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
 	values := compositionValues{
 		toolExecutor:      toolExecutor,
+		transportDialer:   defaultTransportDialer(),
 		deviceRegistry:    defaultDeviceRegistry(),
 		audioSource:       defaultAudioSource(),
 		audioSink:         defaultAudioSink(),
@@ -301,6 +325,7 @@ func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer mess
 	registry := tools.NewToolRegistry()
 	return assembleAgentCLI(
 		values.toolExecutor,
+		values.transportDialer,
 		values.deviceRegistry,
 		values.audioSource,
 		values.audioSink,
@@ -327,6 +352,7 @@ func applyCompositionOptions(options []CompositionOption) (compositionOptions, e
 
 type compositionValues struct {
 	toolExecutor      messages.ToolExecutor
+	transportDialer   transport.Dialer
 	deviceRegistry    DeviceRegistry
 	audioSource       AudioSource
 	audioSink         AudioSink
@@ -358,6 +384,21 @@ func livePortDefinitions() []portDefinition {
 					return
 				}
 				values.toolExecutor = value.(messages.ToolExecutor)
+			},
+		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortTransportDialer,
+				Required: true,
+				Type:     reflect.TypeOf((*transport.Dialer)(nil)).Elem(),
+			},
+			value: func(values *compositionValues) any { return values.transportDialer },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.transportDialer = nil
+					return
+				}
+				values.transportDialer = value.(transport.Dialer)
 			},
 		},
 		{

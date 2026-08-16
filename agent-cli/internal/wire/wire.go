@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func provideModelValidation(relaxModelValidation bool) []bool {
@@ -49,6 +50,7 @@ var CliSet = wire.NewSet(
 // hide a dependency behind a bag or locator.
 func assembleAgentCLI(
 	toolExecutor messages.ToolExecutor,
+	transportDialer transport.Dialer,
 	deviceRegistry DeviceRegistry,
 	audioSource AudioSource,
 	audioSink AudioSink,
