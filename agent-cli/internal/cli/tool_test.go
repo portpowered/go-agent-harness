@@ -168,7 +168,7 @@ func testToolRegistry(testTools ...*cliTestTool) *tools.ToolRegistry {
 	}
 	registry := tools.NewToolRegistryFromConfig(&config.Config{Tools: config.ToolsConfig{List: entries}})
 	for _, testTool := range testTools {
-		registry.Register(testTool)
+		_ = registry.Register(testTool)
 	}
 	return registry
 }
