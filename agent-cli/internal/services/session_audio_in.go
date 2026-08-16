@@ -120,30 +120,12 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
-	source, err := openSessionAudioInput(input)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := source.Close(); closeErr != nil {
-			runErr = errors.Join(runErr, closeErr)
+	return runSessionAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+		if err := validateSessionRunOptions(opts); err != nil {
+			return sessionRuntimePlan{}, err
 		}
-	}()
-
-	if err := validateSessionRunOptions(opts); err != nil {
-		return err
-	}
-	plan, err := planSessionRuntime(opts)
-	if err != nil {
-		return err
-	}
-	if input.MaxDuration > 0 {
-		plan.loop.MaxDuration = input.MaxDuration
-	}
-	// A finite audio source is the input lifetime. Do not close immediately on
-	// SESSION.OPEN; allow every source frame to reach the loop first.
-	plan.loop.CloseAfterOpen = false
-	return runSessionPlanWithAudioInput(ctx, out, plan, source)
+		return planSessionRuntime(opts)
+	})
 }
 
 // RunSessionWithAudioInputAndTextSeed composes the session text-seed and audio
@@ -172,6 +154,66 @@ func RunSessionWithAudioInputAndTextSeedAndMaxDuration(ctx context.Context, out 
 	}
 	input.MaxDuration = maxDuration
 	return RunSessionWithAudioInputAndTextSeed(ctx, out, opts, seed, input)
+}
+
+// RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration composes
+// the instructions, text-seed, duration, and audio-input extensions. The
+// no-audio path remains on the established instructions entry point so its
+// replay and duration artifact behavior stays unchanged.
+func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) error {
+	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
+	if !input.Present && input.Path == "" {
+		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, systemPrompt)
+	}
+	if systemPrompt == "" {
+		return RunSessionWithAudioInputAndTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed, input)
+	}
+	input.MaxDuration = maxDuration
+	if seed.Present {
+		opts.Prompt = seed.Value
+	}
+	if err := validateSessionAudioInput(input); err != nil {
+		return err
+	}
+	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
+		return RunSessionWithAudioInput(ctx, out, opts, input)
+	}
+	return runSessionAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+		if err := validateSessionRunOptions(opts); err != nil {
+			return sessionRuntimePlan{}, err
+		}
+		instructions, err := resolveSessionInstructions(opts, systemPrompt)
+		if err != nil {
+			return sessionRuntimePlan{}, err
+		}
+		return planSessionWithResolvedInstructions(opts, instructions)
+	})
+}
+
+func runSessionAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
+	source, err := openSessionAudioInput(input)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := source.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}()
+
+	plan, err := planFactory()
+	if err != nil {
+		return err
+	}
+	if input.MaxDuration > 0 {
+		plan.loop.MaxDuration = input.MaxDuration
+	}
+	// A finite audio source is the input lifetime. Do not close immediately on
+	// SESSION.OPEN; allow every source frame to reach the loop first.
+	plan.loop.CloseAfterOpen = false
+	return runSessionPlanWithAudioInput(ctx, out, plan, source)
 }
 
 func validateSessionAudioInput(input SessionAudioInput) error {
