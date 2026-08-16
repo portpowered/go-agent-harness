@@ -3,10 +3,40 @@ package probe
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 )
+
+func init() {
+	if err := RegisterScenario(Scenario{
+		ID:   "live-probe-suite-smoke",
+		Name: "live probe suite smoke",
+		Steps: []Step{
+			{Type: StepSendText, Text: "probe input"},
+			{Type: StepSendAudio, CorpusID: "probe-audio"},
+			{Type: StepClose},
+		},
+		Expectations: []ExpectedBehavior{
+			{Type: ExpectTranscriptContains, Text: "expected response"},
+			{Type: ExpectAudioEnergy},
+		},
+	}); err != nil {
+		panic(err)
+	}
+}
+
+func TestDeadSessionGuardCoversLiveRegistry(t *testing.T) {
+	entries := LiveScenarioRegistry().Entries()
+	if len(entries) == 0 {
+		t.Fatal("live probe registry is empty; the guard would be vacuously green")
+	}
+
+	result, err := RunDeadSessionGuard(context.Background())
+	if err != nil {
+		t.Fatalf("live registry guard failed: %v", err)
+	}
+	assertGuardRunsForEntries(t, result, entries)
+}
 
 func TestDeadSessionGuardRunsEveryApplicableControlOnceWithFreshSubjects(t *testing.T) {
 	registry := NewScenarioRegistry()
@@ -81,38 +111,36 @@ func TestDeadSessionGuardRunsEveryApplicableControlOnceWithFreshSubjects(t *test
 }
 
 func TestDeadSessionGuardReadsLiveRegistryAtExecutionTime(t *testing.T) {
-	ResetScenarioRegistry()
-	t.Cleanup(ResetScenarioRegistry)
 	guard := NewDeadSessionGuard()
 
 	first := terminalScenario("first-live-entry")
 	if err := RegisterScenario(first); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { UnregisterScenario(first.ID) })
+	firstSnapshot := LiveScenarioRegistry().Entries()
 	result, err := guard.Run(context.Background())
 	if err != nil {
 		t.Fatalf("first live snapshot failed: %v", err)
 	}
-	if got, want := result.RunCount(), 1; got != want {
-		t.Fatalf("first snapshot run count: got %d, want %d", got, want)
-	}
-	if result.Runs[0].ScenarioID != first.ID {
-		t.Fatalf("first snapshot scenario: got %q, want %q", result.Runs[0].ScenarioID, first.ID)
+	assertGuardRunsForEntries(t, result, firstSnapshot)
+	if !containsScenarioID(result.Runs, first.ID) {
+		t.Fatalf("first snapshot did not execute newly registered scenario %q", first.ID)
 	}
 
 	second := terminalScenario("second-live-entry")
 	if err := RegisterScenario(second); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { UnregisterScenario(second.ID) })
+	secondSnapshot := LiveScenarioRegistry().Entries()
 	result, err = guard.Run(context.Background())
 	if err != nil {
 		t.Fatalf("second live snapshot failed: %v", err)
 	}
-	if got, want := result.RunCount(), 2; got != want {
-		t.Fatalf("second snapshot run count: got %d, want %d", got, want)
-	}
-	if got := []string{result.Runs[0].ScenarioID, result.Runs[1].ScenarioID}; fmt.Sprint(got) != "[first-live-entry second-live-entry]" {
-		t.Fatalf("stable live snapshot order: got %v", got)
+	assertGuardRunsForEntries(t, result, secondSnapshot)
+	if !containsScenarioID(result.Runs, second.ID) {
+		t.Fatalf("second snapshot did not execute newly registered scenario %q", second.ID)
 	}
 }
 
@@ -291,24 +319,29 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry.Clear()
+	if err := registry.Register(terminalScenario("options-entry")); err != nil {
+		t.Fatal(err)
+	}
 
 	if LiveScenarioRegistry() != LiveRegistry || LiveScenarioRegistry() != DefaultScenarioRegistry {
 		t.Fatal("live registry aliases diverged")
 	}
-	ResetScenarioRegistry()
-	t.Cleanup(ResetScenarioRegistry)
 	if err := RegisterScenario(terminalScenario("global-entry")); err != nil {
 		t.Fatal(err)
 	}
-	if got := Scenarios(); len(got) != 1 || got[0].ID != "global-entry" {
-		t.Fatalf("global scenarios: %#v", got)
+	t.Cleanup(func() { UnregisterScenario("global-entry") })
+	if got := Scenarios(); len(got) == 0 || !containsScenario(got, "global-entry") {
+		t.Fatalf("global scenarios did not retain the live suite entries: %#v", got)
 	}
 	UnregisterScenario("global-entry")
-	if got := Scenarios(); len(got) != 0 {
-		t.Fatalf("global unregister: %#v", got)
+	if got := Scenarios(); len(got) == 0 || containsScenario(got, "global-entry") {
+		t.Fatalf("global unregister changed the wrong live entries: %#v", got)
 	}
+	entries := LiveScenarioRegistry().Entries()
 	if result, err := RunDeadSessionGuard(context.Background()); err != nil || !result.Passed() {
 		t.Fatalf("top-level guard run: result=%#v err=%v", result, err)
+	} else {
+		assertGuardRunsForEntries(t, result, entries)
 	}
 	if err := CheckDeadSessionGuard(context.Background()); err != nil {
 		t.Fatalf("top-level guard check: %v", err)
@@ -357,6 +390,19 @@ func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 		if _, err := subject.Snapshot(canceled); !errors.Is(err, context.Canceled) {
 			t.Errorf("canceled subject snapshot: %v", err)
 		}
+	}
+}
+
+func TestDeadSessionGuardRejectsEmptyRegistry(t *testing.T) {
+	result, err := NewDeadSessionGuard(NewScenarioRegistry()).Run(context.Background())
+	if err == nil {
+		t.Fatal("empty registry unexpectedly passed")
+	}
+	if !errors.Is(err, ErrNoRegisteredScenarios) || !errors.Is(err, ErrDeadSessionExecution) {
+		t.Fatalf("empty registry error identity: %v", err)
+	}
+	if result.RunCount() != 0 || len(result.Findings) != 1 {
+		t.Fatalf("empty registry result: %#v", result)
 	}
 }
 
@@ -459,4 +505,59 @@ func terminalScenario(id string) Scenario {
 		Steps:        []Step{{Type: StepClose}},
 		Expectations: []ExpectedBehavior{{Type: ExpectTerminalReason, Value: "complete"}},
 	}
+}
+
+func assertGuardRunsForEntries(t *testing.T, result DeadSessionGuardResult, entries []RegisteredScenario) {
+	t.Helper()
+	type expectedRun struct {
+		id               string
+		control          DeadSessionControl
+		expectationCount int
+	}
+	expected := make([]expectedRun, 0)
+	for _, entry := range entries {
+		for _, control := range entry.Controls {
+			expected = append(expected, expectedRun{
+				id:               entry.Scenario.ID,
+				control:          control,
+				expectationCount: len(entry.Scenario.expectedValues()),
+			})
+		}
+	}
+	if got, want := result.RunCount(), len(expected); got != want {
+		t.Fatalf("guard run count: got %d, want %d for live snapshot %#v", got, want, entries)
+	}
+	if len(result.Findings) != 0 {
+		t.Fatalf("guard findings: %#v", result.Findings)
+	}
+	for index, run := range result.Runs {
+		want := expected[index]
+		if run.ScenarioID != want.id || run.Control != want.control {
+			t.Errorf("run %d identity: got %s/%s, want %s/%s", index, run.ScenarioID, run.Control, want.id, want.control)
+		}
+		if run.Status != DeadSessionExpectedFailure || run.Outcome != DeadSessionExpectedFailure {
+			t.Errorf("run %d status: got %s/%s, want %s", index, run.Status, run.Outcome, DeadSessionExpectedFailure)
+		}
+		if len(run.ExpectationResults) != want.expectationCount {
+			t.Errorf("run %d expectation evidence: got %d, want %d", index, len(run.ExpectationResults), want.expectationCount)
+		}
+	}
+}
+
+func containsScenarioID(runs []DeadSessionRun, id string) bool {
+	for _, run := range runs {
+		if run.ScenarioID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func containsScenario(scenarios []Scenario, id string) bool {
+	for _, scenario := range scenarios {
+		if scenario.ID == id {
+			return true
+		}
+	}
+	return false
 }

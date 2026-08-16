@@ -50,6 +50,7 @@ var (
 	ErrDeadSessionExecution        = errors.New("dead-session guard execution failed")
 	ErrDeadSessionExpectation      = errors.New("dead-session scenario expectation failed")
 	ErrNoExpectationEvidence       = errors.New("scenario produced no expectation evidence")
+	ErrNoRegisteredScenarios       = errors.New("dead-session guard has no registered scenarios")
 	ErrInvalidScenarioRegistration = errors.New("invalid probe scenario registration")
 )
 
@@ -422,10 +423,13 @@ func (e *DeadSessionGuardError) Is(target error) bool {
 	if target == ErrDeadSessionGuard {
 		return true
 	}
-	if target != ErrDeadSessionUnexpectedPass && target != ErrDeadSessionExecution {
+	if target != ErrDeadSessionUnexpectedPass && target != ErrDeadSessionExecution && target != ErrNoRegisteredScenarios {
 		return false
 	}
 	for _, finding := range e.Findings {
+		if errors.Is(finding.Err, target) {
+			return true
+		}
 		if target == ErrDeadSessionUnexpectedPass && finding.Status == DeadSessionUnexpectedPass {
 			return true
 		}
@@ -453,6 +457,15 @@ func (g *DeadSessionGuard) Run(ctx context.Context) (DeadSessionGuardResult, err
 		ctx = context.Background()
 	}
 	entries := g.registry.Entries()
+	if len(entries) == 0 {
+		finding := DeadSessionFinding{
+			ScenarioID: "registry", ScenarioName: "registry", Control: ControlNull,
+			Status: DeadSessionExecutionFailure, Outcome: DeadSessionExecutionFailure,
+			Err: ErrNoRegisteredScenarios,
+		}
+		result.Findings = []DeadSessionFinding{finding}
+		return result, &DeadSessionGuardError{Findings: result.Findings}
+	}
 	for _, entry := range entries {
 		for _, control := range entry.Controls {
 			run := g.runOne(ctx, entry.Scenario, control)
