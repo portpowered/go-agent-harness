@@ -61,6 +61,7 @@ func executeGeneratedCLI(ctx context.Context, configDir string, args ...string) 
 }
 
 func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
+	configSummaryPath := filepath.Join("<config-dir>", config.ConfigFileName)
 	tests := []struct {
 		name       string
 		baseURL    func(string) string
@@ -80,7 +81,7 @@ func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 			},
 			model: "llama3",
 			wantStdout: "Server reachable at <local-server>/models\n" +
-				"Local provider added to <config-dir>\\config.yaml\n" +
+				"Local provider added to " + configSummaryPath + "\n" +
 				"  provider: local\n  base_url: <local-server>\n  model: llama3\n",
 			wantPaths: []string{"/models"},
 		},
@@ -93,7 +94,7 @@ func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 			seed:  nonDefaultConfig,
 			model: "custom-local-model",
 			wantStdout: "Server reachable at <local-server>/v1/models\n" +
-				"Local provider added to <config-dir>\\config.yaml\n" +
+				"Local provider added to " + configSummaryPath + "\n" +
 				"  provider: local\n  base_url: <local-server>/v1\n  model: custom-local-model\n",
 			wantPaths: []string{"/v1/models"},
 		},
@@ -105,7 +106,7 @@ func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 				"/v1/models": http.StatusServiceUnavailable,
 			},
 			model:      "offline-model",
-			wantStdout: "Local provider added to <config-dir>\\config.yaml\n  provider: local\n  base_url: <local-server>\n  model: offline-model\n",
+			wantStdout: "Local provider added to " + configSummaryPath + "\n  provider: local\n  base_url: <local-server>\n  model: offline-model\n",
 			wantStderr: "Warning: could not reach server at <local-server> (server may not be running yet)\n",
 			wantPaths:  []string{"/models", "/v1/models"},
 		},
@@ -203,6 +204,7 @@ func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 
 func TestConfigAddLocalUsesIsolatedDefaultHome(t *testing.T) {
 	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	server := newProbeServer(t, map[string]int{"/models": http.StatusOK})
 	defer server.Close()
@@ -212,6 +214,10 @@ func TestConfigAddLocalUsesIsolatedDefaultHome(t *testing.T) {
 		t.Fatalf("execute config with default home: %v", got.err)
 	}
 	configPath := filepath.Join(home, config.ConfigDirName, config.ConfigFileName)
+	rel, err := filepath.Rel(home, configPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		t.Fatalf("config path escaped isolated home: %q", configPath)
+	}
 	if _, err := os.Stat(configPath); err != nil {
 		t.Fatalf("config was not written below isolated home: %v", err)
 	}
@@ -285,9 +291,9 @@ func TestConfigRenderingRedactsEnvironmentAPIKey(t *testing.T) {
 	}
 	rendered := got.stdout + got.stderr + string(data)
 	if strings.Contains(rendered, sentinel) {
-		t.Skip("known product defect: config add-local persists an AGENT_MODEL__* API key verbatim instead of rendering <redacted>")
+		t.Fatalf("rendered config must omit environment secret %q", sentinel)
 	}
-	if strings.Contains(rendered, sentinel) || !strings.Contains(rendered, "<redacted>") {
+	if !strings.Contains(rendered, redactedAPIKey) {
 		t.Fatalf("rendered config must omit the environment secret and include <redacted>")
 	}
 }
