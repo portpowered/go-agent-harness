@@ -12,11 +12,12 @@ func TestS11SourceConformance(t *testing.T) {
 	deterministic := NewDeterministic(base, 10*time.Millisecond)
 
 	tests := []struct {
-		name   string
-		source Source
+		name          string
+		source        Source
+		deterministic *Deterministic
 	}{
 		{name: "real", source: Real{}},
-		{name: "deterministic", source: deterministic},
+		{name: "deterministic", source: deterministic, deterministic: deterministic},
 	}
 
 	for _, test := range tests {
@@ -30,8 +31,27 @@ func TestS11SourceConformance(t *testing.T) {
 				t.Fatalf("source moved backward: first=%v second=%v", first, second)
 			}
 
-			if test.name == "deterministic" && second != base {
+			if test.deterministic == nil {
+				return
+			}
+			if second != base {
 				t.Fatalf("initial deterministic time: got %v, want %v", second, base)
+			}
+
+			const advancedTick = uint64(3)
+			if got := test.deterministic.AdvanceTo(advancedTick); got != advancedTick {
+				t.Fatalf("deterministic AdvanceTo: got %d, want %d", got, advancedTick)
+			}
+			advanced := test.source.Now()
+			want := base.Add(time.Duration(advancedTick) * 10 * time.Millisecond)
+			if advanced != want {
+				t.Fatalf("advanced deterministic time: got %v, want %v", advanced, want)
+			}
+			if advanced.Before(second) {
+				t.Fatalf("deterministic source moved backward: first=%v second=%v", second, advanced)
+			}
+			if got := test.deterministic.Tick(); got != advancedTick {
+				t.Fatalf("deterministic tick: got %d, want %d", got, advancedTick)
 			}
 		})
 	}
@@ -144,13 +164,28 @@ func FuzzS7DeterministicMapping(f *testing.F) {
 		modelTick := uint64(0)
 		for index, value := range sequence {
 			target := uint64(value) + uint64(index)
+			var returnedTick uint64
 			switch value % 3 {
 			case 0:
-				modelTick = clock.Advance()
+				if modelTick < math.MaxUint64 {
+					modelTick++
+				}
+				returnedTick = clock.Advance()
 			case 1:
-				modelTick = clock.AdvanceTo(target)
+				if target > modelTick {
+					modelTick = target
+				}
+				returnedTick = clock.AdvanceTo(target)
 			case 2:
-				modelTick = clock.AdvanceTo(target / 2)
+				target /= 2
+				if target > modelTick {
+					modelTick = target
+				}
+				returnedTick = clock.AdvanceTo(target)
+			}
+
+			if returnedTick != modelTick {
+				t.Fatalf("step %d: returned tick got %d, want %d", index, returnedTick, modelTick)
 			}
 
 			if got := clock.Tick(); got != modelTick {
