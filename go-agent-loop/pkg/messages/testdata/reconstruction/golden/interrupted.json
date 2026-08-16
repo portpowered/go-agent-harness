@@ -1,0 +1,17 @@
+{
+  "name": "interrupted",
+  "messages": [
+    {
+      "role": "assistant",
+      "content_parts": [
+        {
+          "type": "text",
+          "text": "partial output before interruption"
+        }
+      ],
+      "refusal": "",
+      "tool_calls": null,
+      "tool_call_id": ""
+    }
+  ]
+}
