@@ -1,0 +1,4 @@
+multi-violation.session.json: records[0].payload.delta: recognized audio event "response.output_audio.delta" requires a non-empty audio payload
+multi-violation.session.json: records[1].payload.call_id: tool call "call-missing-result" has no matching tool result with the same exact non-empty call identifier
+multi-violation.session.json: records[2].payload.item.call_id: tool result "result-without-call" has no matching tool call with the same exact non-empty call identifier
+multi-violation.session.json: records[*].type: provider-recorded fixture requires a recognized success or error terminal event (response.done, MESSAGE.END, or error)

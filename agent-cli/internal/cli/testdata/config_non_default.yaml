@@ -1,0 +1,37 @@
+model:
+    provider: local
+    openai: null
+    claude: null
+    openrouter:
+        model: seeded-model
+        api_key: ""
+        base_url: https://example.test/v1
+    local:
+        model: custom-local-model
+        api_key: ""
+        base_url: <local-server>/v1
+    fal: null
+    grok: null
+    continuation_nudge_enabled: true
+    continuation_nudge_message: continue now
+    repetition_penalty: 1.25
+tools:
+    web:
+        brave:
+            enabled: false
+            api_key: ""
+            max_results: 0
+        duckduckgo:
+            enabled: false
+            max_results: 0
+    cron:
+        exec_timeout_minutes: 0
+    exec:
+        enable_deny_patterns: false
+        custom_deny_patterns:
+            - seeded-pattern
+    list:
+        - id: exec
+          enabled: false
+        - id: sleep
+          enabled: true
