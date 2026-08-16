@@ -1,7 +1,10 @@
 package probe
 
 import (
+	"encoding/binary"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -35,21 +38,50 @@ func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
 
 func TestAudioEnergyIsStrictlyAboveThresholdAndRejectsEmptyAudio(t *testing.T) {
 	e := expect(ExpectAudioEnergy, "", 0)
-	for _, test := range []struct {
-		name string
-		data []int16
-		pass bool
-	}{{"silence", []int16{0, 0}, false}, {"threshold", []int16{300, -300}, false}, {"utterance", []int16{301, -301}, true}} {
-		t.Run(test.name, func(t *testing.T) {
-			err := Evaluate(e, ObservationSnapshot{PCM16Samples: test.data})
-			if (err == nil) != test.pass {
-				t.Fatalf("pass=%v, err=%v", test.pass, err)
-			}
-		})
+	utterance := corpusPCM16(t, "utt_short_16k.wav")
+	silence := corpusPCM16(t, "silence_16k.wav")
+	if err := Evaluate(e, ObservationSnapshot{PCM16Samples: utterance}); err != nil {
+		t.Fatalf("utterance corpus failed: %v", err)
+	}
+	err := Evaluate(e, ObservationSnapshot{PCM16Samples: silence})
+	var mismatch *ExpectationMismatchError
+	if !errors.As(err, &mismatch) || mismatch.Actual != float64(0) {
+		t.Fatalf("silence corpus diagnostic: %v", err)
+	}
+	if err := Evaluate(e, ObservationSnapshot{PCM16Samples: []int16{300}}); err == nil {
+		t.Fatal("RMS equal to the threshold unexpectedly passed")
 	}
 	if err := Evaluate(e, ObservationSnapshot{}); err == nil {
 		t.Fatal("empty PCM16 audio unexpectedly passed")
 	}
+}
+
+func corpusPCM16(t *testing.T, name string) []int16 {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "audio", name))
+	if err != nil {
+		t.Fatalf("read audio corpus %q: %v", name, err)
+	}
+	for offset := 12; offset+8 <= len(data); {
+		size := int(binary.LittleEndian.Uint32(data[offset+4 : offset+8]))
+		end := offset + 8 + size
+		if end > len(data) {
+			t.Fatalf("audio corpus %q has truncated chunk", name)
+		}
+		if string(data[offset:offset+4]) == "data" {
+			if size == 0 || size%2 != 0 {
+				t.Fatalf("audio corpus %q has invalid PCM16 data size %d", name, size)
+			}
+			samples := make([]int16, size/2)
+			for index := range samples {
+				samples[index] = int16(binary.LittleEndian.Uint16(data[offset+8+index*2 : offset+10+index*2]))
+			}
+			return samples
+		}
+		offset = end + size%2
+	}
+	t.Fatalf("audio corpus %q has no data chunk", name)
+	return nil
 }
 
 func TestS4MismatchDiagnosticsCoverEveryKind(t *testing.T) {
