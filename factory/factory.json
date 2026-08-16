@@ -382,7 +382,7 @@
       "name": "executor-slot"
     },
     {
-      "capacity": 1,
+      "capacity": 8,
       "id": "concurrent-planners",
       "name": "concurrent-planners"
     }
