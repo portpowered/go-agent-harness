@@ -40,3 +40,26 @@ jobs:
 
       - name: Run root CI pipeline
         run: make ci
+
+  hermetic:
+    name: CI (hermetic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.2"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
+      - name: Run hermetic test pipeline
+        run: make test-hermetic

@@ -307,3 +307,10 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 	run_budget_test go-llm-gateway $(GO_LLM_GATEWAY_REGRESSION_PACKAGES); \
 	echo "==> test-budget evaluating package timing"; \
 	(cd tools/timingate && GOWORK=off $(GO) run . < "$$timingate_input")
+
+test-hermetic: ## Run all Go tests with CGO disabled and the microphone stub.
+	@set -euo pipefail; \
+	for module in $(MODULES); do \
+		echo "==> test-hermetic $$module (CGO_ENABLED=0, tags=nomicrophone)"; \
+		(cd "$$module" && CGO_ENABLED=0 $(GO) test ./... -tags=nomicrophone -timeout $(GO_TEST_TIMEOUT)); \
+	done
