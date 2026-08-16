@@ -207,7 +207,7 @@ function Assert-Contract([object]$Config) {
     if ($endpointTimeout -ne [math]::Floor($endpointTimeout)) {
         Fail 'verification.endpoint_timeout_seconds must be a whole number of seconds'
     }
-    [void](Require-Number $Config 'verification.generation_timeout_seconds' 1.0 20.0)
+    [void](Require-Number $Config 'verification.generation_timeout_seconds' 1.0 180.0)
     foreach ($commandPath in @('contract_command', 'compatibility_command', 'generation_command', 'measurement_command', 'negative_controls_command')) {
         [void](Require-String $Config "verification.$commandPath")
     }
@@ -449,7 +449,7 @@ switch ($Mode) {
         if ([string]::IsNullOrWhiteSpace($AudioPath)) {
             Fail 'Measure requires -AudioPath'
         }
-        [void](Assert-Audio $AudioPath $config)
+        Assert-Audio $AudioPath $config
         exit 0
     }
     'Compatibility' {

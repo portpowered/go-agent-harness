@@ -137,20 +137,32 @@ NEGATIVE_CONTROL=PASS name=zero_length_file reason=TTS_PIN_FAIL: audio file is z
 NEGATIVE_CONTROLS=PASS silent_clip=failed-validation zero_length_file=failed-validation
 ```
 
-No real clip RMS or duration is recorded here because the pinned base Q8 model
-was not present in the verification workstation's LocalAI model volume. The
-live command therefore must remain a skip until that exact pair is installed;
-an observed clip from the concurrently running custom-voice Q4 model would not
-be evidence for this pin.
+The exact pinned live run completed after the gallery migration installed both
+selected files and the pinned `v4.8.2-cpu-qwen3-tts-cpp` backend image:
+
+```text
+CONTRACT=PASS fields=all-required-fields
+ARTIFACT_HASH=PASS role=talker sha256=d54dbaf10591421fa764ed630d764efa717ae40cd959bd48c66d4eb1af226426
+ARTIFACT_HASH=PASS role=tokenizer sha256=1883beeed99348fc35e23dd225e9082f93f6f8c109330a33d935baa8acdbfd94
+LIVE_PASS endpoint=http://127.0.0.1:8080 output=<temporary wav> rms=0.089762 duration_seconds=2.080000
+```
+
+The measured RMS is strictly above the `0.001` silence threshold and the
+2.08-second duration is inside the inclusive `[0.25, 8.0]` second range. The
+same run used the exact `qwen3-tts-cpp` base model, not the separate custom-voice
+Q4 model that was present before migration.
 
 ## Bounded live behavior
 
 The readiness probe uses a 3-second timeout. Synthesis uses a separate
-20-second timeout. If `readyz` is unreachable, the live command exits
-successfully with `LIVE_SKIP reason=localai-endpoint-unreachable ...`. If the
+150-second timeout. The pinned Q8 CPU backend took 118.3 seconds for the
+probe on the verification workstation, so the larger synthesis bound covers
+that real cold-start/runtime while remaining finite. If `readyz` is unreachable,
+the live command exits successfully with
+`LIVE_SKIP reason=localai-endpoint-unreachable ...`. If the
 endpoint is ready but `LOCALAI_MODELS_DIR` or either selected GGUF is absent, it
 exits successfully with a named `LIVE_SKIP` reason. A live LocalAI process and
-the 1.8 GB-class model pair are therefore not CI prerequisites.
+the 1.3 GB-class model pair are therefore not CI prerequisites.
 
 ## Corpus handoff and licensing
 
