@@ -31,6 +31,7 @@ func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags,
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
+	audioOutPath := ""
 	var maxDuration time.Duration
 	cmd := &cobra.Command{
 		Use:   "session [message]",
@@ -58,7 +59,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					TranscriptPath: artifactBase + ".jsonl",
 				})
 			}
-			return services.RunSessionWithTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), services.SessionRunOptions{
+			sessionOptions := services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
 				ReplayPath:        c.askFlags.ReplayCapturePath,
 				Provider:          c.askFlags.Provider,
@@ -69,10 +70,15 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
-			}, maxDuration, services.SessionTextSeed{
+			}
+			seed := services.SessionTextSeed{
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
-			})
+			}
+			if audioOutPath != "" {
+				return services.RunSessionWithAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed)
+			}
+			return services.RunSessionWithTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, maxDuration, seed)
 		},
 	}
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
@@ -82,6 +88,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
+	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	return cmd
 }
