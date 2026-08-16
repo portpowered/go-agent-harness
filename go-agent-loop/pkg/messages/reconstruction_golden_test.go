@@ -425,7 +425,7 @@ func goldenMessage(msg Message) (reconstructionGoldenMessage, error) {
 	if msg.ToolCalls != nil {
 		golden.ToolCalls = make([]reconstructionGoldenToolCall, len(msg.ToolCalls))
 		for i, call := range msg.ToolCalls {
-			golden.ToolCalls[i] = reconstructionGoldenToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments}
+			golden.ToolCalls[i] = reconstructionGoldenToolCall(call)
 		}
 	}
 	return golden, nil
