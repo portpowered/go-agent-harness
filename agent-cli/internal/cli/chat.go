@@ -28,6 +28,10 @@ type ChatCommand struct {
 	globalFlags *flags.GlobalFlags
 }
 
+// newMicrophoneSource keeps audio-input command tests hardware-free; production
+// uses the real microphone constructor by default.
+var newMicrophoneSource = audio.NewMicrophoneSource
+
 // NewChatCommand creates the ChatCommand with the given dependencies.
 func NewChatCommand(executor *agent.Executor, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, globalFlags *flags.GlobalFlags) *ChatCommand {
 	return &ChatCommand{executor: executor, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags}
@@ -44,7 +48,7 @@ func (c *ChatCommand) Generate() *cobra.Command {
 				return c.runLoopChat(cmd)
 			}
 			if c.chatFlags.ActivateAudioIn {
-				src, err := audio.NewMicrophoneSource()
+				src, err := newMicrophoneSource()
 				if err != nil {
 					return fmt.Errorf("open microphone: %w", err)
 				}
