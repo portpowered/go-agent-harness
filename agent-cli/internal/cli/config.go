@@ -126,10 +126,6 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 }
 
 func redactEnvironmentAPIKeys(cfg *config.Config) {
-	if cfg == nil {
-		return
-	}
-
 	redact := func(envName string, apiKey *string) {
 		value, ok := os.LookupEnv(envName)
 		if ok && value != "" && apiKey != nil && *apiKey == value {

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"net/http"
 	"net/http/httptest"
@@ -276,7 +277,16 @@ func TestConfigRenderingS3Goldens(t *testing.T) {
 
 func TestConfigRenderingRedactsEnvironmentAPIKey(t *testing.T) {
 	const sentinel = "s2s-config-redaction-sentinel-20260816"
-	t.Setenv("AGENT_MODEL__OPENROUTER__API_KEY", sentinel)
+	for _, envName := range []string{
+		"AGENT_MODEL__OPENAI__API_KEY",
+		"AGENT_MODEL__CLAUDE__API_KEY",
+		"AGENT_MODEL__OPENROUTER__API_KEY",
+		"AGENT_MODEL__LOCAL__API_KEY",
+		"AGENT_MODEL__FAL__API_KEY",
+		"AGENT_MODEL__GROK__API_KEY",
+	} {
+		t.Setenv(envName, sentinel)
+	}
 	configDir := t.TempDir()
 	server := newProbeServer(t, map[string]int{"/models": http.StatusOK})
 	defer server.Close()
@@ -295,6 +305,50 @@ func TestConfigRenderingRedactsEnvironmentAPIKey(t *testing.T) {
 	}
 	if !strings.Contains(rendered, redactedAPIKey) {
 		t.Fatalf("rendered config must omit the environment secret and include <redacted>")
+	}
+}
+
+type failOnWrite struct {
+	failAt int
+	writes int
+	err    error
+}
+
+func (w *failOnWrite) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes == w.failAt {
+		return 0, w.err
+	}
+	return len(p), nil
+}
+
+func TestConfigAddLocalSummaryWriteFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		failAt int
+	}{
+		{name: "provider summary", failAt: 3},
+		{name: "base URL summary", failAt: 4},
+		{name: "model summary", failAt: 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newProbeServer(t, map[string]int{"/models": http.StatusOK})
+			defer server.Close()
+
+			globalFlags := flags.NewGlobalFlags()
+			globalFlags.ConfigDirPath = t.TempDir()
+			cmd := &cobra.Command{}
+			cmd.SetOut(&failOnWrite{failAt: tc.failAt, err: errors.New("summary write failed")})
+			cmd.SetErr(&bytes.Buffer{})
+
+			configCmd := NewConfigAddLocalCommand(globalFlags)
+			configCmd.baseURL = server.URL
+			configCmd.model = "test-model"
+			err := configCmd.run(cmd)
+			if err == nil || !strings.Contains(err.Error(), "write config summary") {
+				t.Fatalf("run error = %v, want write config summary context", err)
+			}
+		})
 	}
 }
 
