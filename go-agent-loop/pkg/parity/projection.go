@@ -13,26 +13,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
-// RecordKind is the semantic kind carried by a transcript record payload.
-// Payloads may use either kind or type; the reducer maps supported spellings
-// to these canonical values before reducing them.
-type RecordKind string
-
-const (
-	RecordKindTurnStart  RecordKind = "turn.start"
-	RecordKindTurnEnd    RecordKind = "turn.end"
-	RecordKindAudioFrame RecordKind = "audio.frame"
-	RecordKindTranscript RecordKind = "transcript"
-	RecordKindToolCall   RecordKind = "tool.call"
-	RecordKindToolResult RecordKind = "tool.result"
-	RecordKindInterrupt  RecordKind = "interrupt"
-	RecordKindTerminal   RecordKind = "terminal"
-	RecordKindIgnored    RecordKind = "ignored"
-)
-
 // Projection is the complete, ordered, transport-independent speech-to-speech
-// evidence retained by normalization. A successful reduction returns all
-// slices initialized, including when the corresponding fact is absent.
+// evidence retained by normalization. A successful reduction initializes all
+// slices, including when the corresponding fact is absent.
 type Projection struct {
 	Turns         []TurnBoundary     `json:"turns"`
 	Audio         AudioSummary       `json:"audio"`
@@ -53,11 +36,6 @@ type TurnBoundary struct {
 	Role     string `json:"role,omitempty"`
 	Payload  []byte `json:"payload"`
 }
-
-// Turn and TurnFact are descriptive aliases for callers that prefer shorter
-// or fact-oriented names.
-type Turn = TurnBoundary
-type TurnFact = TurnBoundary
 
 // AudioSummary contains every retained logical audio frame and its aggregate
 // byte count. Frame order is source order; it is never sorted by timestamp.
@@ -85,13 +63,10 @@ type TranscriptFact struct {
 	Payload []byte `json:"payload"`
 }
 
-// Transcript is a descriptive alias for TranscriptFact.
-type Transcript = TranscriptFact
-
 // ToolCallFact correlates a call and its result by ID. A recording may end
 // while a call is pending, so either payload may be absent. Arguments and
-// Result retain the semantic value bytes; the CallPayload and ResultPayload
-// fields retain each complete source payload exactly.
+// Result contain the exact JSON value bytes from their source fields, while
+// CallPayload and ResultPayload retain each complete source payload exactly.
 type ToolCallFact struct {
 	Order         int    `json:"order"`
 	ID            string `json:"id"`
@@ -104,9 +79,6 @@ type ToolCallFact struct {
 	ResultPayload []byte `json:"resultPayload,omitempty"`
 }
 
-// ToolCall is a descriptive alias for ToolCallFact.
-type ToolCall = ToolCallFact
-
 // InterruptionFact records an ordered semantic interruption point.
 type InterruptionFact struct {
 	Order      int    `json:"order"`
@@ -116,9 +88,6 @@ type InterruptionFact struct {
 	Payload    []byte `json:"payload"`
 }
 
-// Interruption is a descriptive alias for InterruptionFact.
-type Interruption = InterruptionFact
-
 // TerminalOutcome records the terminal reason and the layer that authored it.
 type TerminalOutcome struct {
 	Tick       uint64 `json:"tick"`
@@ -126,9 +95,6 @@ type TerminalOutcome struct {
 	Provenance string `json:"provenance"`
 	Payload    []byte `json:"payload"`
 }
-
-// Terminal is a descriptive alias for TerminalOutcome.
-type Terminal = TerminalOutcome
 
 // ErrNormalization is the sentinel wrapped by every NormalizationError.
 var ErrNormalization = errors.New("parity normalization failed")
@@ -169,38 +135,32 @@ func Normalize(interfaceName string, records []transcript.Record) (Projection, e
 	return projection, nil
 }
 
-// Reduce is an equivalent verb for Normalize.
-func Reduce(interfaceName string, records []transcript.Record) (Projection, error) {
-	return Normalize(interfaceName, records)
-}
+type recordKind string
 
-// NormalizeRecords is an explicit name for callers normalizing a record list.
-func NormalizeRecords(interfaceName string, records []transcript.Record) (Projection, error) {
-	return Normalize(interfaceName, records)
-}
-
-// Project uses record-first argument order for callers that treat projection
-// as the primary operation.
-func Project(records []transcript.Record, interfaceName string) (Projection, error) {
-	return Normalize(interfaceName, records)
-}
+const (
+	kindTurnStart  recordKind = "turn.start"
+	kindTurnEnd    recordKind = "turn.end"
+	kindAudioFrame recordKind = "audio.frame"
+	kindTranscript recordKind = "transcript"
+	kindToolCall   recordKind = "tool.call"
+	kindToolResult recordKind = "tool.result"
+	kindInterrupt  recordKind = "interrupt"
+	kindTerminal   recordKind = "terminal"
+	kindTransport  recordKind = "transport"
+)
 
 type parsedRecord struct {
-	record transcript.Record
-	kind   RecordKind
-	fields map[string]json.RawMessage
-	raw    []byte
-	// audioBytes is populated for audio frames after payload validation.
+	record     transcript.Record
+	kind       recordKind
+	raw        []byte
 	audioBytes []byte
-	// semanticValue is the exact value bytes for transcript, tool, and terminal
-	// fields that have a value separate from the complete raw payload.
-	semanticValue []byte
-	id            string
-	name          string
-	text          string
-	reason        string
-	provenance    string
-	arguments     []byte
+	semantic   []byte
+	id         string
+	name       string
+	text       string
+	reason     string
+	provenance string
+	arguments  []byte
 }
 
 func emptyProjection() Projection {
@@ -230,149 +190,151 @@ func validateRecord(interfaceName string, index int, record transcript.Record) (
 	if !knownStream(record.Stream) {
 		return parsedRecord{}, newNormalizationError(interfaceName, field("stream"), fmt.Sprintf("unknown stream %q", record.Stream))
 	}
-	if len(bytes.TrimSpace(record.Payload)) == 0 {
+	if len(record.Payload) == 0 {
 		return parsedRecord{}, newNormalizationError(interfaceName, field("payload"), "is required")
 	}
 
+	// Timestamp is derived wall-clock arrival data. Peer and Direction identify
+	// the recorder viewpoint, while Stream identifies a transport channel; all
+	// three are validated above but are intentionally absent from Projection.
 	raw := clone(record.Payload)
-	fields, kindText, err := decodePayload(raw)
+	fields, kind, err := decodePayload(raw)
 	if err != nil {
-		// A raw audio record is the one captured form whose payload is not a
-		// JSON envelope. Its stream identifies the audio evidence; all other
-		// non-JSON payloads are malformed record content.
+		// Raw audio is the only supported non-JSON form. Its stream identifies the
+		// audio evidence, so the bytes and logical tick remain comparable.
 		if isAudioStream(record.Stream) && !json.Valid(raw) {
-			return parsedRecord{record: record, kind: RecordKindAudioFrame, raw: raw, audioBytes: raw}, nil
+			return parsedRecord{record: record, kind: kindAudioFrame, raw: raw, audioBytes: raw}, nil
 		}
 		return parsedRecord{}, newNormalizationError(interfaceName, field("payload"), err.Error())
 	}
-	kind, ok := canonicalKind(kindText, fields)
-	if !ok {
-		if kindText == "" {
-			return parsedRecord{}, newNormalizationError(interfaceName, field("kind"), "is required")
-		}
-		return parsedRecord{}, newNormalizationError(interfaceName, field("kind"), fmt.Sprintf("unknown record kind %q", kindText))
+	if kind == "" {
+		return parsedRecord{}, newNormalizationError(interfaceName, field("kind"), "is required")
 	}
-	parsed := parsedRecord{record: record, kind: kind, fields: fields, raw: raw}
-	if kind == RecordKindIgnored {
-		return parsed, nil
+	if isTransportMechanicKind(kind) {
+		return parsedRecord{record: record, kind: kindTransport, raw: raw}, nil
 	}
 
-	// The timestamp is derived wall-clock arrival data. Logical Tick is the
-	// deterministic sequencing fact and is retained instead of Timestamp.
-	// Peer, Direction, and Stream identify recorder viewpoint or transport;
-	// they are validated above and intentionally do not enter the projection.
-
+	parsed := parsedRecord{record: record, raw: raw}
 	switch kind {
-	case RecordKindTurnStart, RecordKindTurnEnd:
-		parsed.id, err = optionalString(fields, "id", "turn_id", "turnId")
+	case string(kindTurnStart), string(kindTurnEnd):
+		parsed.kind = recordKind(kind)
+		parsed.id, err = optionalString(fields, "id")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.id"), err.Error())
 		}
-		parsed.name, err = optionalString(fields, "role", "speaker", "actor")
+		parsed.name, err = optionalString(fields, "role")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.role"), err.Error())
 		}
-	case RecordKindAudioFrame:
+	case string(kindAudioFrame):
+		parsed.kind = kindAudioFrame
 		parsed.audioBytes, err = audioValue(fields)
 		if err != nil {
-			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.audio"), err.Error())
+			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.bytes"), err.Error())
 		}
-	case RecordKindTranscript:
-		parsed.text, parsed.semanticValue, err = requiredStringValue(fields, "text", "content", "transcript", "value")
+	case string(kindTranscript):
+		parsed.kind = kindTranscript
+		parsed.text, _, err = requiredStringValue(fields, "text", "value")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.text"), err.Error())
 		}
-	case RecordKindToolCall:
-		parsed.id, err = requiredString(fields, "id", "tool_call_id", "toolCallId", "call_id")
+	case string(kindToolCall):
+		parsed.kind = kindToolCall
+		parsed.id, err = requiredString(fields, "id")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.id"), err.Error())
 		}
-		parsed.name, err = optionalString(fields, "name", "tool_name", "toolName")
+		parsed.name, err = optionalString(fields, "name")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.name"), err.Error())
 		}
-		parsed.arguments = semanticField(fields, "arguments", "args", "input", "parameters")
-	case RecordKindToolResult:
-		parsed.id, err = requiredString(fields, "id", "tool_call_id", "toolCallId", "call_id")
+		parsed.arguments = optionalRawValue(fields, "arguments")
+	case string(kindToolResult):
+		parsed.kind = kindToolResult
+		parsed.id, err = requiredString(fields, "id")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.id"), err.Error())
 		}
-		parsed.semanticValue = semanticField(fields, "result", "output", "content", "value")
-		if parsed.semanticValue == nil {
+		parsed.semantic = optionalRawValue(fields, "result", "value")
+		if parsed.semantic == nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.result"), "is required")
 		}
-	case RecordKindInterrupt:
-		parsed.reason, err = requiredString(fields, "reason", "interruption_reason", "interrupt_reason")
+	case string(kindInterrupt):
+		parsed.kind = kindInterrupt
+		parsed.reason, err = requiredString(fields, "reason")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.reason"), err.Error())
 		}
-		parsed.provenance, err = optionalString(fields, "provenance", "interrupt_provenance", "source")
+		parsed.provenance, err = optionalString(fields, "provenance")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.provenance"), err.Error())
 		}
-	case RecordKindTerminal:
-		parsed.reason, err = requiredString(fields, "reason", "terminal_reason", "terminalReason")
+	case string(kindTerminal):
+		parsed.kind = kindTerminal
+		parsed.reason, err = requiredString(fields, "reason")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.reason"), err.Error())
 		}
-		parsed.provenance, err = requiredString(fields, "provenance", "terminal_provenance", "terminalProvenance", "source")
+		parsed.provenance, err = requiredString(fields, "provenance")
 		if err != nil {
 			return parsedRecord{}, newNormalizationError(interfaceName, field("payload.provenance"), err.Error())
 		}
+	default:
+		return parsedRecord{}, newNormalizationError(interfaceName, field("kind"), fmt.Sprintf("unknown record kind %q (unsupported)", kind))
 	}
 	return parsed, nil
 }
 
 func reduceRecord(projection *Projection, toolSlots map[string][]int, index int, record parsedRecord) error {
 	switch record.kind {
-	case RecordKindIgnored:
-		// Transport framing and derived lifecycle chatter do not describe a
-		// comparable conversation fact; their mechanics are intentionally
-		// omitted here, while every semantic record is retained below.
+	case kindTransport:
+		// These explicitly enumerated records carry only transport identity or
+		// packet/frame segmentation. Those mechanics vary between recordings and
+		// cannot be compared; no semantic payload is discarded by this case.
 		return nil
-	case RecordKindTurnStart, RecordKindTurnEnd:
+	case kindTurnStart, kindTurnEnd:
 		boundary := "start"
-		if record.kind == RecordKindTurnEnd {
+		if record.kind == kindTurnEnd {
 			boundary = "end"
 		}
 		projection.Turns = append(projection.Turns, TurnBoundary{
 			Order: len(projection.Turns) + 1, Tick: record.record.Tick, Kind: string(record.kind), Boundary: boundary,
 			ID: record.id, Role: record.name, Payload: clone(record.raw),
 		})
-	case RecordKindAudioFrame:
+	case kindAudioFrame:
 		projection.Audio.Frames = append(projection.Audio.Frames, AudioFrame{
 			Tick: record.record.Tick, Bytes: clone(record.audioBytes), Payload: clone(record.raw),
 		})
 		projection.Audio.FrameCount++
 		projection.Audio.TotalBytes += len(record.audioBytes)
-	case RecordKindTranscript:
+	case kindTranscript:
 		projection.Transcripts = append(projection.Transcripts, TranscriptFact{
 			Order: len(projection.Transcripts) + 1, Tick: record.record.Tick, Text: record.text, Payload: clone(record.raw),
 		})
-	case RecordKindToolCall:
+	case kindToolCall:
 		toolIndex := findToolSlot(toolSlots, projection.ToolCalls, record.id, false)
 		if toolIndex < 0 {
 			projection.ToolCalls = append(projection.ToolCalls, ToolCallFact{Order: len(projection.ToolCalls) + 1, ID: record.id})
 			toolIndex = len(projection.ToolCalls) - 1
+			toolSlots[record.id] = append(toolSlots[record.id], toolIndex)
 		}
 		tool := &projection.ToolCalls[toolIndex]
 		tool.Name, tool.Arguments, tool.CallTick, tool.CallPayload = record.name, clone(record.arguments), record.record.Tick, clone(record.raw)
-		toolSlots[record.id] = appendIfMissing(toolSlots[record.id], toolIndex)
-	case RecordKindToolResult:
+	case kindToolResult:
 		toolIndex := findToolSlot(toolSlots, projection.ToolCalls, record.id, true)
 		if toolIndex < 0 {
 			projection.ToolCalls = append(projection.ToolCalls, ToolCallFact{Order: len(projection.ToolCalls) + 1, ID: record.id})
 			toolIndex = len(projection.ToolCalls) - 1
+			toolSlots[record.id] = append(toolSlots[record.id], toolIndex)
 		}
 		tool := &projection.ToolCalls[toolIndex]
-		tool.Result, tool.ResultTick, tool.ResultPayload = clone(record.semanticValue), record.record.Tick, clone(record.raw)
-		toolSlots[record.id] = appendIfMissing(toolSlots[record.id], toolIndex)
-	case RecordKindInterrupt:
+		tool.Result, tool.ResultTick, tool.ResultPayload = clone(record.semantic), record.record.Tick, clone(record.raw)
+	case kindInterrupt:
 		projection.Interruptions = append(projection.Interruptions, InterruptionFact{
 			Order: len(projection.Interruptions) + 1, Tick: record.record.Tick, Reason: record.reason,
 			Provenance: record.provenance, Payload: clone(record.raw),
 		})
-	case RecordKindTerminal:
+	case kindTerminal:
 		if projection.Terminal != nil {
 			return &NormalizationError{Field: fmt.Sprintf("records[%d].kind", index), Reason: "contains more than one terminal outcome"}
 		}
@@ -385,28 +347,15 @@ func reduceRecord(projection *Projection, toolSlots map[string][]int, index int,
 
 func findToolSlot(slots map[string][]int, calls []ToolCallFact, id string, lookingForResult bool) int {
 	for _, index := range slots[id] {
-		if index >= len(calls) {
-			continue
-		}
 		call := calls[index]
-		if lookingForResult {
-			if call.ResultPayload == nil {
-				return index
-			}
-		} else if call.CallPayload == nil {
+		if lookingForResult && call.ResultPayload == nil {
+			return index
+		}
+		if !lookingForResult && call.CallPayload == nil {
 			return index
 		}
 	}
 	return -1
-}
-
-func appendIfMissing(values []int, value int) []int {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	return append(values, value)
 }
 
 func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
@@ -417,24 +366,19 @@ func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
 	if fields == nil {
 		return nil, "", errors.New("must be a JSON object")
 	}
-	kind, present, err := firstString(fields, "kind", "record_kind", "recordKind", "event_type", "eventType")
+
+	kind, present, err := firstString(fields, "kind", "type")
 	if err != nil {
 		return nil, "", fmt.Errorf("kind %s", err)
 	}
-	if !present {
-		kind, present, err = firstString(fields, "type")
-		if err != nil {
-			return nil, "", fmt.Errorf("kind %s", err)
-		}
-	}
-	if nested, ok := objectField(fields, "value", "event", "payload"); ok {
+	if nested, ok := objectField(fields, "value"); ok {
 		for key, value := range nested {
 			if _, exists := fields[key]; !exists {
 				fields[key] = value
 			}
 		}
-		if !present || isGenericKind(kind) {
-			kind, _, err = firstString(nested, "kind", "record_kind", "recordKind", "event_type", "eventType", "type")
+		if !present {
+			kind, _, err = firstString(fields, "kind", "type")
 			if err != nil {
 				return nil, "", fmt.Errorf("kind %s", err)
 			}
@@ -443,42 +387,14 @@ func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
 	return fields, kind, nil
 }
 
-func isGenericKind(kind string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(kind))
-	return normalized == "event" || normalized == "stream.event" || normalized == "stream_event"
-}
-
-func canonicalKind(value string, fields map[string]json.RawMessage) (RecordKind, bool) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	normalized = strings.NewReplacer("_", ".", "-", ".", "/", ".", " ", ".").Replace(normalized)
-	switch normalized {
-	case "turn.start", "turn.begin", "turn.started", "turn.open", "message.start", "message.begin", "message.started", "message.open":
-		return RecordKindTurnStart, true
-	case "turn.end", "turn.finish", "turn.finished", "turn.complete", "turn.completed":
-		return RecordKindTurnEnd, true
-	case "message.end", "message.finish", "message.finished":
-		if hasField(fields, "reason", "terminal.reason", "terminal_reason", "terminalReason", "provenance", "terminal_provenance", "terminalProvenance") {
-			return RecordKindTerminal, true
-		}
-		return RecordKindTurnEnd, true
-	case "audio.frame", "audio", "audio.delta", "audio.chunk", "audio.packet", "audio.data", "delta.audio", "delta.audio.frame":
-		return RecordKindAudioFrame, true
-	case "transcript", "transcript.delta", "transcript.final", "transcript.text", "text", "text.delta", "text.final", "delta.text":
-		return RecordKindTranscript, true
-	case "tool.call", "tool.use", "toolcall", "toolcall.end", "tool.use.end":
-		return RecordKindToolCall, true
-	case "tool.result", "tool.response", "tool_result", "toolresult":
-		return RecordKindToolResult, true
-	case "interrupt", "interruption", "response.cancel", "response.canceled", "cancel":
-		return RecordKindInterrupt, true
-	case "terminal", "session.close", "session.closed", "loop.end", "error":
-		return RecordKindTerminal, true
-	case "audio.start", "audio.end", "text.start", "text.end", "toolcall.start", "toolcall.delta", "message.delta",
-		"session.open", "session.created", "session.updated", "session.update", "usage.info", "pong", "ping",
-		"vad.speech.started", "vad.speech.stopped", "image.start", "image.delta", "image.end", "video.start", "video.delta", "video.end":
-		return RecordKindIgnored, true
+// Only these payload kinds are intentionally omitted. Each names concrete
+// transport identity or packet/frame segmentation, never a conversation fact.
+func isTransportMechanicKind(kind string) bool {
+	switch kind {
+	case "transport.id", "transport.identifier", "transport.packet", "transport.frame", "transport.segment":
+		return true
 	default:
-		return "", false
+		return false
 	}
 }
 
@@ -495,19 +411,28 @@ func isAudioStream(stream transcript.Stream) bool {
 	return stream == transcript.StreamRTCAudio || stream == transcript.StreamDeviceIn || stream == transcript.StreamDeviceOut
 }
 
-func firstString(fields map[string]json.RawMessage, names ...string) (string, bool, error) {
+func firstRaw(fields map[string]json.RawMessage, names ...string) (json.RawMessage, bool) {
 	for _, name := range names {
-		raw, ok := fields[name]
-		if !ok {
-			continue
+		if raw, ok := fields[name]; ok {
+			return raw, true
 		}
-		var value string
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return "", true, errors.New("must be a string")
-		}
-		return value, true, nil
 	}
-	return "", false, nil
+	return nil, false
+}
+
+func firstString(fields map[string]json.RawMessage, names ...string) (string, bool, error) {
+	raw, present := firstRaw(fields, names...)
+	if !present {
+		return "", false, nil
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return "", true, errors.New("must be a string")
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", true, errors.New("must be a string")
+	}
+	return value, true, nil
 }
 
 func requiredString(fields map[string]json.RawMessage, names ...string) (string, error) {
@@ -533,86 +458,66 @@ func optionalString(fields map[string]json.RawMessage, names ...string) (string,
 }
 
 func requiredStringValue(fields map[string]json.RawMessage, names ...string) (string, []byte, error) {
-	for _, name := range names {
-		raw, ok := fields[name]
-		if !ok {
-			continue
-		}
-		var value string
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return "", nil, errors.New("must be a string")
-		}
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return "", nil, errors.New("is required")
-		}
-		return value, clone(raw), nil
+	raw, present := firstRaw(fields, names...)
+	if !present || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return "", nil, errors.New("is required")
 	}
-	return "", nil, errors.New("is required")
-}
-
-func semanticField(fields map[string]json.RawMessage, names ...string) []byte {
-	for _, name := range names {
-		if raw, ok := fields[name]; ok {
-			return semanticBytes(raw)
-		}
-	}
-	return nil
-}
-
-func semanticBytes(raw json.RawMessage) []byte {
 	var value string
-	if json.Unmarshal(raw, &value) == nil {
-		return []byte(value)
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", nil, errors.New("must be a string")
+	}
+	return value, clone(raw), nil
+}
+
+func optionalRawValue(fields map[string]json.RawMessage, names ...string) []byte {
+	raw, ok := firstRaw(fields, names...)
+	if !ok {
+		return nil
 	}
 	return clone(raw)
 }
 
 func audioValue(fields map[string]json.RawMessage) ([]byte, error) {
-	for _, name := range []string{"bytes", "audio", "content", "data", "payload"} {
-		if raw, ok := fields[name]; ok {
-			return decodeAudioBytes(raw)
-		}
+	raw, ok := firstRaw(fields, "bytes")
+	if !ok {
+		return nil, errors.New("is required")
 	}
-	return nil, errors.New("is required")
+	return decodeAudioBytes(raw)
 }
 
 func decodeAudioBytes(raw json.RawMessage) ([]byte, error) {
-	var array []byte
-	if len(raw) > 0 && raw[0] == '[' {
-		if err := json.Unmarshal(raw, &array); err != nil {
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("null")) {
+		return nil, errors.New("must contain byte values or a base64 string")
+	}
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var values []byte
+		if err := json.Unmarshal(trimmed, &values); err != nil {
 			return nil, errors.New("must contain byte values")
 		}
-		return clone(array), nil
+		return clone(values), nil
 	}
 	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return nil, errors.New("must contain bytes or a base64 string")
+	if err := json.Unmarshal(trimmed, &value); err != nil {
+		return nil, errors.New("must contain byte values or a base64 string")
 	}
-	if decoded, err := base64.StdEncoding.DecodeString(value); err == nil {
-		return decoded, nil
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return nil, errors.New("must contain byte values or a base64 string")
 	}
-	return []byte(value), nil
+	return decoded, nil
 }
 
-func objectField(fields map[string]json.RawMessage, names ...string) (map[string]json.RawMessage, bool) {
-	for _, name := range names {
-		if raw, ok := fields[name]; ok {
-			var nested map[string]json.RawMessage
-			if json.Unmarshal(raw, &nested) == nil && nested != nil {
-				return nested, true
-			}
-		}
+func objectField(fields map[string]json.RawMessage, name string) (map[string]json.RawMessage, bool) {
+	raw, ok := fields[name]
+	if !ok {
+		return nil, false
 	}
-	return nil, false
-}
-
-func hasField(fields map[string]json.RawMessage, names ...string) bool {
-	for _, name := range names {
-		if _, ok := fields[name]; ok {
-			return true
-		}
+	var nested map[string]json.RawMessage
+	if json.Unmarshal(raw, &nested) != nil || nested == nil {
+		return nil, false
 	}
-	return false
+	return nested, true
 }
 
 func clone(value []byte) []byte {
