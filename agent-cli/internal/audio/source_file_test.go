@@ -198,12 +198,17 @@ func TestFileSourceOwnedHandleRelease(t *testing.T) {
 	}
 	afterFirst := settledProcessOpenHandleCount(t, before)
 	assertHandleCountWithinTolerance(t, afterFirst, before, "source first close")
+	if afterFirst >= opened {
+		t.Fatalf("open-handle count after source first close = %d, opened = %d; owned handle was not released", afterFirst, opened)
+	}
 
 	if err := source.Close(); err != nil {
 		t.Fatalf("second Close() error = %v", err)
 	}
-	afterSecond := processOpenHandleCount(t)
-	assertHandleCountWithinTolerance(t, afterSecond, afterFirst, "source second close")
+	afterSecond := settledProcessOpenHandleCount(t, afterFirst)
+	if afterSecond != afterFirst {
+		t.Fatalf("open-handle count after source second close = %d, first close = %d; idempotent close changed the count", afterSecond, afterFirst)
+	}
 
 	if err := source.ReadFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
 		t.Fatalf("ReadFrame after Close() = %v, want ErrClosed", err)

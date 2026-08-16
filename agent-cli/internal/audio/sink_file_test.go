@@ -117,12 +117,17 @@ func TestFileSinkOwnedHandleRelease(t *testing.T) {
 	}
 	afterFirst := settledProcessOpenHandleCount(t, before)
 	assertHandleCountWithinTolerance(t, afterFirst, before, "sink first close")
+	if afterFirst >= opened {
+		t.Fatalf("open-handle count after sink first close = %d, opened = %d; owned handle was not released", afterFirst, opened)
+	}
 
 	if err := sink.Close(); err != nil {
 		t.Fatalf("second Close() error = %v", err)
 	}
-	afterSecond := processOpenHandleCount(t)
-	assertHandleCountWithinTolerance(t, afterSecond, afterFirst, "sink second close")
+	afterSecond := settledProcessOpenHandleCount(t, afterFirst)
+	if afterSecond != afterFirst {
+		t.Fatalf("open-handle count after sink second close = %d, first close = %d; idempotent close changed the count", afterSecond, afterFirst)
+	}
 
 	if err := sink.WriteFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
 		t.Fatalf("WriteFrame after Close() = %v, want ErrClosed", err)
