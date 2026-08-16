@@ -93,6 +93,84 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	return plan.run(ctx, sessionOut)
 }
 
+// RunSessionWithAudioOutAndTextSeedAndMaxDuration combines assistant audio
+// output with the session duration controller. The audio wrapper is placed
+// inside the duration admission plan so accepted deltas are written before
+// the sink is finalized, including clean duration cutoffs.
+func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
+	if path == "" {
+		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
+	}
+	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
+	if seed.Present {
+		opts.Prompt = seed.Value
+	}
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	plan, err := planSessionRuntime(opts)
+	if err != nil {
+		return err
+	}
+
+	sink, err := newSessionAudioSink(path, out)
+	if err != nil {
+		return fmt.Errorf("--audio-out %q: %w", path, err)
+	}
+	audioOut := &sessionAudioOutput{sink: sink}
+	defer func() {
+		if closeErr := audioOut.close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
+		}
+	}()
+
+	if plan.inferencer != nil {
+		wirePrompt := ""
+		if seed.Present {
+			wirePrompt = nextSessionTextWirePrompt()
+			plan.loop.Prompt = wirePrompt
+		}
+		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
+		plan.inferencer = wrapped
+
+		// A binary stdout stream cannot also carry session text, announcements,
+		// or terminal decorations. File output keeps the established text path.
+		sessionOut := out
+		if path == "-" {
+			sessionOut = io.Discard
+		}
+		if maxDuration == 0 {
+			runErr = plan.run(ctx, sessionOut)
+		} else {
+			durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
+			if durationErr != nil {
+				return durationErr
+			}
+			runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
+		}
+		wrapped.wait()
+		if outputErr := wrapped.err(); outputErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, outputErr))
+		}
+		return runErr
+	}
+
+	sessionOut := out
+	if path == "-" {
+		sessionOut = io.Discard
+	}
+	if maxDuration == 0 {
+		return plan.run(ctx, sessionOut)
+	}
+	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+	return runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
+}
+
 type sessionAudioOutput struct {
 	sink audio.AudioSink
 

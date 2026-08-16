@@ -424,11 +424,22 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 		release: release,
 	}
 
-	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{
-		ReplayPath:        "synthetic.json",
-		SessionInferencer: inf,
-	}, path); err != nil {
-		t.Fatalf("max-duration session: %v", err)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunSessionWithAudioOutAndTextSeedAndMaxDuration(context.Background(), io.Discard, SessionRunOptions{
+			ReplayPath:        "synthetic.json",
+			SessionInferencer: inf,
+		}, path, 50*time.Millisecond, SessionTextSeed{})
+	}()
+
+	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("max-duration session: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("max-duration session did not finalize")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
