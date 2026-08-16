@@ -13,11 +13,10 @@ import (
 const VirtualBackendName = "virtual"
 
 var (
-	ErrDeviceLost           = errors.New("device lost")
-	ErrVirtualDeviceLost    = ErrDeviceLost
-	ErrVirtualNoLoopback    = errors.New("virtual device has no loopback")
-	ErrVirtualEmptyFrame    = errors.New("virtual audio frame is empty")
-	ErrVirtualFrameTooSmall = errors.New("virtual audio frame buffer is too small")
+	ErrDeviceLost        = errors.New("device lost")
+	ErrVirtualDeviceLost = ErrDeviceLost
+	ErrVirtualNoLoopback = errors.New("virtual device has no loopback")
+	ErrVirtualEmptyFrame = errors.New("virtual audio frame is empty")
 )
 
 // DeviceLostError identifies a device that disappeared after it was opened.
@@ -404,14 +403,6 @@ func (r *VirtualRegistry) setVirtualDefault(direction Direction, ref string) err
 	return nil
 }
 
-func NewVirtualBackend(cfg VirtualBackendConfig) (*VirtualRegistry, error) {
-	return NewVirtualRegistry(cfg)
-}
-
-func NewVirtualAudioBackend(cfg VirtualBackendConfig) (*VirtualRegistry, error) {
-	return NewVirtualRegistry(cfg)
-}
-
 func (r *VirtualRegistry) List() ([]Device, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -496,22 +487,6 @@ func (r *VirtualRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	return &VirtualStream{registry: r, id: id, direction: state.info.Direction, pair: pair, done: make(chan struct{})}, nil
 }
 
-func (r *VirtualRegistry) OpenDirection(id DeviceID, direction Direction) (*VirtualStream, error) {
-	if err := ValidateDirection(direction); err != nil {
-		return nil, err
-	}
-	opened, err := r.Open(id)
-	if err != nil {
-		return nil, err
-	}
-	stream := opened.(*VirtualStream)
-	if stream.direction != direction {
-		_ = stream.Close()
-		return nil, &InvalidDeviceError{ID: id, Reason: fmt.Sprintf("device direction is %s, want %s", stream.direction, direction)}
-	}
-	return stream, nil
-}
-
 func (r *VirtualRegistry) Observations() DeviceRegistryObservations {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -527,22 +502,6 @@ func (r *VirtualRegistry) RemoveDevice(id DeviceID) bool {
 		return false
 	}
 	state.present = false
-	if pair := r.pairs[id]; pair != nil {
-		pair.signal()
-	}
-	return true
-}
-
-func (r *VirtualRegistry) MarkDeviceDisappeared(id DeviceID) bool { return r.RemoveDevice(id) }
-
-func (r *VirtualRegistry) RestoreDevice(id DeviceID) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	state, ok := r.devices[id]
-	if !ok || state.present {
-		return false
-	}
-	state.present = true
 	if pair := r.pairs[id]; pair != nil {
 		pair.signal()
 	}
@@ -707,18 +666,6 @@ func (s *VirtualStream) ReadFrame(ctx context.Context) ([]byte, error) {
 	return s.Read(ctx)
 }
 
-func (s *VirtualStream) ReadInto(ctx context.Context, buffer []byte) error {
-	frame, err := s.Read(ctx)
-	if err != nil {
-		return err
-	}
-	if len(buffer) < len(frame) {
-		return ErrVirtualFrameTooSmall
-	}
-	copy(buffer, frame)
-	return nil
-}
-
 func ctxDone(ctx context.Context) <-chan struct{} {
 	if ctx == nil {
 		return nil
@@ -799,8 +746,4 @@ func (r *AudioBackendRegistry) Names() []string {
 
 func NewRegisteredAudioBackend(name string, cfg VirtualBackendConfig) (DeviceRegistry, error) {
 	return NewAudioBackendRegistry().New(name, cfg)
-}
-
-func NewRegisteredDeviceRegistry(name string, cfg VirtualBackendConfig) (DeviceRegistry, error) {
-	return NewRegisteredAudioBackend(name, cfg)
 }
