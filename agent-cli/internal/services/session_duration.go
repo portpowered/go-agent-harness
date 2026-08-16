@@ -339,7 +339,56 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 	return runSessionDurationPlan(ctx, out, plan, maxDuration, durationClock)
 }
 
+// RunSessionWithTextSeedAndMaxDuration preserves the explicit --prompt seed
+// behavior while applying the duration admission boundary before the seed
+// wrapper's audio sink. A zero duration delegates to the existing text-seed
+// path so omitted-duration behavior remains unchanged.
+func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed) error {
+	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
+	if !seed.Present {
+		return RunSessionWithMaxDuration(ctx, out, opts, maxDuration)
+	}
+	if maxDuration == 0 {
+		return RunSessionWithTextSeed(ctx, out, opts, seed)
+	}
+
+	opts.Prompt = seed.Value
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
+	}
+	plan, err := planSessionRuntime(opts)
+	if err != nil {
+		return err
+	}
+
+	wirePrompt := nextSessionTextWirePrompt()
+	plan.loop.Prompt = wirePrompt
+	output := &sessionTextOutput{writer: out}
+	admission := newSessionDurationAdmission()
+	admittedInferencer := &sessionDurationAdmissionInferencer{
+		inner:     plan.inferencer,
+		admission: admission,
+		closeDone: make(chan struct{}),
+	}
+	if plan.inferencer != nil {
+		plan.inferencer = &sessionTextSeedInferencer{
+			inner:      admittedInferencer,
+			wirePrompt: wirePrompt,
+			value:      seed.Value,
+			audioOut:   output,
+		}
+	}
+	err = runSessionDurationPlanWithAdmission(ctx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
+	return errors.Join(err, output.errorValue())
+}
+
 func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock) error {
+	return runSessionDurationPlanWithAdmission(ctx, out, plan, maxDuration, durationClock, nil)
+}
+
+func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
 			return err
@@ -351,7 +400,7 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 		loopOut = plan.loopOut
 	}
 	if plan.inferencer != nil {
-		if err := runAgentLoopSessionWithDurationClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock); err != nil {
+		if err := runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer); err != nil {
 			if plan.flushCapture != nil {
 				flushErr := plan.flushCapture()
 				return wrapSessionRuntimeError(plan, errors.Join(
@@ -377,15 +426,21 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 }
 
 func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
+	return runAgentLoopSessionWithDurationAdmissionClock(ctx, out, sessionInferencer, opts, maxDuration, durationClock, nil)
+}
+
+func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
 	if maxDuration <= 0 {
 		return runAgentLoopSession(ctx, out, sessionInferencer, opts)
 	}
 
-	admission := newSessionDurationAdmission()
-	admittedInferencer := &sessionDurationAdmissionInferencer{
-		inner:     sessionInferencer,
-		admission: admission,
-		closeDone: make(chan struct{}),
+	if admittedInferencer == nil {
+		admission := newSessionDurationAdmission()
+		admittedInferencer = &sessionDurationAdmissionInferencer{
+			inner:     sessionInferencer,
+			admission: admission,
+			closeDone: make(chan struct{}),
+		}
 	}
 	observedInferencer := newObservedSessionInferencer(admittedInferencer)
 	loop, err := agentloop.New(

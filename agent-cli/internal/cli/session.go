@@ -46,7 +46,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" {
 				return cmd.Help()
 			}
-			return services.RunSessionWithMaxDuration(cmd.Context(), cmd.OutOrStdout(), services.SessionRunOptions{
+			return services.RunSessionWithTextSeedAndMaxDuration(cmd.Context(), cmd.OutOrStdout(), services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
 				ReplayPath:        c.askFlags.ReplayCapturePath,
 				Provider:          c.askFlags.Provider,
@@ -57,7 +57,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
-			}, maxDuration)
+			}, maxDuration, services.SessionTextSeed{
+				Value:   prompt,
+				Present: cmd.Flags().Changed("prompt"),
+			})
 		},
 	}
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
