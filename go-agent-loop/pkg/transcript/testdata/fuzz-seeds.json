@@ -1,0 +1,7 @@
+[
+  {"name":"invalid-utf8-and-nul","payload":"//4A"},
+  {"name":"audio-like-binary","payload":"UklGRgABgP8Afw=="},
+  {"name":"unknown-json-field","payload":"eyJ6ZXRhIjoxLCJ1bmtub3duIjp7Im5lc3RlZCI6dHJ1ZX0sImEiOjJ9"},
+  {"name":"reordered-json-keys","payload":"eyJiIjoyLCJhIjoxfQ=="},
+  {"name":"whitespace-variant-json","payload":"eyAKICAiYSIgOiAxLCAiYiIgOiBbdHJ1ZSwgbnVsbF0gCX0="}
+]
