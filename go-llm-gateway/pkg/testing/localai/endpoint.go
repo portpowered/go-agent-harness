@@ -20,7 +20,10 @@ const (
 	DefaultEndpoint = "ws://localhost:8080/v1/realtime?model=gpt-realtime"
 
 	realtimeEndpointEnv = "LOCALAI_REALTIME_URL"
-	probeTimeout        = 2 * time.Second
+	// LocalAI may rehydrate one pipeline backend when a fresh realtime
+	// connection is opened. Keep discovery bounded in the low seconds without
+	// making a ready fixture look absent during that warm-up.
+	probeTimeout = 5 * time.Second
 )
 
 var failedEndpoints = struct {
