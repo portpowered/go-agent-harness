@@ -304,7 +304,7 @@ func TestLivePorts_ReturnsStableIndependentDescriptors(t *testing.T) {
 	}
 }
 
-func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
+func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 	for _, definition := range livePortDefinitions() {
 		t.Run(definition.descriptor.Name, func(t *testing.T) {
 			replacement := replacementForPortType(t, definition.descriptor.Type)
@@ -464,7 +464,7 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 	}
 }
 
-func TestPortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
+func TestS4_PortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
 	unknownRoot, unknownErr := InitializeMockAgentCLIWithPorts(PortSwap{Name: "unknown-port", Value: &recordingToolExecutor{}})
 	if unknownRoot != nil {
 		t.Fatal("unknown swap unexpectedly returned a root")
