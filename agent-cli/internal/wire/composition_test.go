@@ -1,12 +1,18 @@
 package wire
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"net"
+	"net/http"
+	"os"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,18 +24,24 @@ type recordingToolExecutor struct {
 	calls int
 }
 
-func (e *recordingToolExecutor) Execute(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
+func (e *recordingToolExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	e.calls++
-	return messages.ToolCallResponse{}, nil
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "tool result"}, nil
 }
 
 type recordingInferencer struct {
 	calls    int
 	response string
+	results  []messages.InferenceResult
 }
 
 func (e *recordingInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {
 	e.calls++
+	if len(e.results) > 0 {
+		result := e.results[0]
+		e.results = e.results[1:]
+		return result, nil
+	}
 	return messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, e.response)}, nil
 }
 
@@ -38,10 +50,16 @@ func (e *recordingInferencer) InferStream(ctx context.Context, request messages.
 	if err != nil {
 		return nil, err
 	}
-	stream := make(chan messages.StreamMessage, 4)
+	stream := make(chan messages.StreamMessage, 5+2*len(result.ToolCalls))
 	stream <- messages.StreamMessage{Type: messages.StreamTypeTextStart, ActorProvidedIndex: 0, Value: messages.NewTextStartValue()}
-	stream <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, ActorProvidedIndex: 0, Value: messages.NewTextDeltaValue(result.Message.TextContent())}
+	if result.Message.HasText() {
+		stream <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, ActorProvidedIndex: 0, Value: messages.NewTextDeltaValue(result.Message.TextContent())}
+	}
 	stream <- messages.StreamMessage{Type: messages.StreamTypeTextEnd, ActorProvidedIndex: 0, Value: messages.NewTextEndValue()}
+	for _, toolCall := range result.ToolCalls {
+		stream <- messages.StreamMessage{Type: messages.StreamTypeToolCallStart, ActorProvidedIndex: 0, Value: messages.NewToolCallStartValue(toolCall.ID, toolCall.Name)}
+		stream <- messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: 0, Value: messages.NewToolCallEndValue(toolCall.ID, toolCall.Name, toolCall.Arguments)}
+	}
 	stream <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ActorProvidedIndex: 0, Value: messages.NewMessageEndValue(result.TokenUsage)}
 	close(stream)
 	return stream, nil
@@ -53,7 +71,31 @@ type recordingSessionInferencer struct {
 
 func (e *recordingSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	e.connects++
-	return nil, errors.New("recording session should not be connected during construction")
+	done := make(chan struct{})
+	close(done)
+	return &recordingSession{receive: messages.NewTypedBuffer[messages.StreamMessage](4), done: done}, nil
+}
+
+type recordingSession struct {
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    <-chan struct{}
+}
+
+func (s *recordingSession) Send(context.Context, messages.StreamMessage) bool { return true }
+
+func (s *recordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.receive }
+
+func (s *recordingSession) Done() <-chan struct{} { return s.done }
+
+func (s *recordingSession) Close() error { return nil }
+
+type recordingDialer struct {
+	dials atomic.Int64
+}
+
+func (d *recordingDialer) DialContext(context.Context, string, string) (net.Conn, error) {
+	d.dials.Add(1)
+	return nil, errors.New("composition test network dial")
 }
 
 func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
@@ -131,22 +173,64 @@ func TestLivePorts_ReturnsStableIndependentDescriptors(t *testing.T) {
 
 func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 	for _, definition := range livePortDefinitions() {
-		replacement := replacementForPortType(t, definition.descriptor.Type)
-		values := compositionValues{toolExecutor: &recordingToolExecutor{}}
-		if err := applyPortSwap(&values, PortSwap{Name: definition.descriptor.Name, Value: replacement}); err != nil {
-			t.Fatalf("applyPortSwap(%q): %v", definition.descriptor.Name, err)
-		}
-		if got := definition.value(&values); got != replacement {
-			t.Fatalf("swap for %q installed %T, want exact replacement %T", definition.descriptor.Name, got, replacement)
-		}
+		t.Run(definition.descriptor.Name, func(t *testing.T) {
+			replacement := replacementForPortType(t, definition.descriptor.Type)
+			swaps := []PortSwap{{Name: definition.descriptor.Name, Value: replacement}}
+			var fixtureInferencer *recordingInferencer
+			if definition.descriptor.Type == reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem() {
+				fixtureInferencer = toolCallingInferencer()
+				swaps = append([]PortSwap{{Name: PortInferencer, Value: fixtureInferencer}}, swaps...)
+			}
 
-		root, err := InitializeMockAgentCLIWithPorts(PortSwap{Name: definition.descriptor.Name, Value: replacement})
-		if err != nil {
-			t.Fatalf("InitializeMockAgentCLIWithPorts(%q): %v", definition.descriptor.Name, err)
-		}
-		if root == nil {
-			t.Fatalf("InitializeMockAgentCLIWithPorts(%q) returned nil root", definition.descriptor.Name)
-		}
+			root, err := InitializeMockAgentCLIWithPorts(swaps...)
+			if err != nil {
+				t.Fatalf("InitializeMockAgentCLIWithPorts(%q): %v", definition.descriptor.Name, err)
+			}
+			if root == nil {
+				t.Fatalf("InitializeMockAgentCLIWithPorts(%q) returned nil root", definition.descriptor.Name)
+			}
+
+			switch definition.descriptor.Type {
+			case reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem():
+				if err := executeAskCommand(t, root); err != nil {
+					t.Fatalf("root ask for %q: %v", definition.descriptor.Name, err)
+				}
+				if got := replacement.(*recordingToolExecutor).calls; got != 1 {
+					t.Fatalf("selected %q replacement calls = %d, want exactly 1", definition.descriptor.Name, got)
+				}
+				if fixtureInferencer.calls != 2 {
+					t.Fatalf("fixture inferencer calls = %d, want the tool turn and final turn", fixtureInferencer.calls)
+				}
+			case reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
+				if err := executeAskCommand(t, root); err != nil {
+					t.Fatalf("root ask for %q: %v", definition.descriptor.Name, err)
+				}
+				if got := replacement.(*recordingInferencer).calls; got != 1 {
+					t.Fatalf("selected %q replacement calls = %d, want exactly 1", definition.descriptor.Name, got)
+				}
+			case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
+				if err := executeSessionCommand(t, root, true); err != nil {
+					t.Fatalf("root session for %q: %v", definition.descriptor.Name, err)
+				}
+				if got := replacement.(*recordingSessionInferencer).connects; got != 1 {
+					t.Fatalf("selected %q replacement connects = %d, want exactly 1", definition.descriptor.Name, got)
+				}
+			default:
+				t.Fatalf("no root-level observation for live port type %v", definition.descriptor.Type)
+			}
+		})
+	}
+}
+
+func toolCallingInferencer() *recordingInferencer {
+	return &recordingInferencer{
+		results: []messages.InferenceResult{
+			{
+				Message:   messages.NewTextMessage(messages.RoleAssistant, "use tool"),
+				ToolCalls: []messages.ToolCall{{ID: "composition-swap", Name: "sleep", Arguments: `{"duration":"0s"}`}},
+			},
+			{Message: messages.NewTextMessage(messages.RoleAssistant, "tool complete")},
+		},
 	}
 }
 
@@ -202,28 +286,6 @@ func assertPortSwapError(t *testing.T, err error, sentinel error, name string) {
 }
 
 func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
-	without, err := applyCompositionOptions(nil)
-	if err != nil {
-		t.Fatalf("apply empty options: %v", err)
-	}
-	if without.inferencer != nil || without.sessionInferencer != nil {
-		t.Fatal("optional ports should be unavailable by default")
-	}
-
-	inferencer := &recordingInferencer{response: "option"}
-	sessionInferencer := &recordingSessionInferencer{}
-	with, err := applyCompositionOptions([]CompositionOption{
-		WithInferencer(inferencer),
-		WithSessionInferencer(sessionInferencer),
-		WithRelaxedModelValidation(),
-	})
-	if err != nil {
-		t.Fatalf("apply optional options: %v", err)
-	}
-	if with.inferencer != inferencer || with.sessionInferencer != sessionInferencer || !with.relaxModelValidation {
-		t.Fatal("optional composition options were not installed exactly")
-	}
-
 	strict, err := applyCompositionOptions([]CompositionOption{WithRelaxedModelValidation(), WithStrictModelValidation()})
 	if err != nil || strict.relaxModelValidation {
 		t.Fatalf("strict option did not override relaxed option: %#v, %v", strict, err)
@@ -232,9 +294,64 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 		t.Fatalf("nil composition option was not rejected: %v", err)
 	}
 
-	root, err := ComposeAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer), WithSessionInferencer(sessionInferencer))
-	if err != nil || root == nil {
-		t.Fatalf("ComposeAgentCLI with optional ports failed: root=%v err=%v", root, err)
+	for _, definition := range livePortDefinitions() {
+		if definition.descriptor.Required {
+			continue
+		}
+		t.Run(definition.descriptor.Name, func(t *testing.T) {
+			switch definition.descriptor.Type {
+			case reflect.TypeOf((*messages.Inferencer)(nil)).Elem():
+				t.Run("unavailable_without_option", func(t *testing.T) {
+					root, err := ComposeAgentCLI(&recordingToolExecutor{})
+					if err != nil || root == nil {
+						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
+					}
+					err = executeAskCommand(t, root)
+					if err == nil || !strings.Contains(err.Error(), "API key") {
+						t.Fatalf("ask without %q did not report the unavailable capability: %v", definition.descriptor.Name, err)
+					}
+				})
+				t.Run("available_with_option", func(t *testing.T) {
+					inferencer := &recordingInferencer{response: "option"}
+					root, err := ComposeAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
+					if err != nil || root == nil {
+						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
+					}
+					if err := executeAskCommand(t, root); err != nil {
+						t.Fatalf("ask with %q: %v", definition.descriptor.Name, err)
+					}
+					if inferencer.calls != 1 {
+						t.Fatalf("supplied %q calls = %d, want exactly 1", definition.descriptor.Name, inferencer.calls)
+					}
+				})
+			case reflect.TypeOf((*messages.SessionInferencer)(nil)).Elem():
+				t.Run("unavailable_without_option", func(t *testing.T) {
+					root, err := ComposeAgentCLI(&recordingToolExecutor{})
+					if err != nil || root == nil {
+						t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
+					}
+					err = executeSessionCommand(t, root, false)
+					if err == nil || !strings.Contains(err.Error(), "requires --provider grok") {
+						t.Fatalf("session without %q did not report the unavailable capability: %v", definition.descriptor.Name, err)
+					}
+				})
+				t.Run("available_with_option", func(t *testing.T) {
+					sessionInferencer := &recordingSessionInferencer{}
+					root, err := ComposeAgentCLI(&recordingToolExecutor{}, WithSessionInferencer(sessionInferencer))
+					if err != nil || root == nil {
+						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
+					}
+					if err := executeSessionCommand(t, root, true); err != nil {
+						t.Fatalf("session with %q: %v", definition.descriptor.Name, err)
+					}
+					if sessionInferencer.connects != 1 {
+						t.Fatalf("supplied %q connects = %d, want exactly 1", definition.descriptor.Name, sessionInferencer.connects)
+					}
+				})
+			default:
+				t.Fatalf("no runtime optional-capability observation for %v", definition.descriptor.Type)
+			}
+		})
 	}
 }
 
@@ -257,10 +374,47 @@ func TestComposeAgentCLI_OptionalInferencerIsObservedAtRuntime(t *testing.T) {
 	}
 }
 
+func executeAskCommand(t *testing.T, root *cli.AgentCLI) error {
+	t.Helper()
+	command := root.Generate()
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+	command.SetArgs([]string{"--config-dir", t.TempDir(), "ask", "--no-system-information", "hello"})
+	return command.ExecuteContext(context.Background())
+}
+
+func executeSessionCommand(t *testing.T, root *cli.AgentCLI, provider bool) error {
+	t.Helper()
+	configDir := t.TempDir()
+	args := []string{
+		"--config-dir", configDir,
+		"session", "--record", "capture.json",
+	}
+	if provider {
+		args = append(args, "--provider", "grok", "--model", "test-model", "--api-key", "test-key")
+	}
+	command := root.Generate()
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(io.Discard)
+	command.SetArgs(args)
+	return command.ExecuteContext(context.Background())
+}
+
 func TestCompositionConstruction_IsInert(t *testing.T) {
 	toolExecutor := &recordingToolExecutor{}
 	inferencer := &recordingInferencer{response: "unused"}
 	sessionInferencer := &recordingSessionInferencer{}
+	fileSentinel := t.TempDir()
+	beforeFiles := directoryEntries(t, fileSentinel)
+	dialer := &recordingDialer{}
+	// Composition has no file or network ports. The sentinel catches the old
+	// construction-time config-file path, while the default transport hook
+	// catches an accidental HTTP client dial without making a real connection.
+	previousTransport := http.DefaultTransport
+	http.DefaultTransport = &http.Transport{DialContext: dialer.DialContext}
+	defer func() {
+		http.DefaultTransport = previousTransport
+	}()
 	before := runtime.NumGoroutine()
 
 	root, err := ComposeAgentCLI(
@@ -282,6 +436,26 @@ func TestCompositionConstruction_IsInert(t *testing.T) {
 	if toolExecutor.calls != 0 || inferencer.calls != 0 || sessionInferencer.connects != 0 {
 		t.Fatalf("construction called a dependency: tool=%d inferencer=%d session=%d", toolExecutor.calls, inferencer.calls, sessionInferencer.connects)
 	}
+	if got := directoryEntries(t, fileSentinel); !reflect.DeepEqual(got, beforeFiles) {
+		t.Fatalf("construction changed the sentinel filesystem: before=%v after=%v", beforeFiles, got)
+	}
+	if got := dialer.dials.Load(); got != 0 {
+		t.Fatalf("construction performed %d recorded network dials", got)
+	}
+}
+
+func directoryEntries(t *testing.T, directory string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("read sentinel directory: %v", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	sort.Strings(names)
+	return names
 }
 
 func TestLegacyInitializersForwardToExplicitComposition(t *testing.T) {
