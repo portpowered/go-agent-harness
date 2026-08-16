@@ -1,0 +1,66 @@
+[
+  {
+    "name": "empty-content",
+    "controls": "",
+    "text": "",
+    "payload": "",
+    "tools": 1,
+    "interrupted": false
+  },
+  {
+    "name": "single-chunk",
+    "controls": "",
+    "text": "single chunk",
+    "payload": "AAECAwQ=",
+    "tools": 1,
+    "interrupted": false
+  },
+  {
+    "name": "every-byte-splits",
+    "controls": "AQEBAQEBAQEBAQE=",
+    "text": "bytewise",
+    "payload": "AAEAAwQF",
+    "tools": 1,
+    "interrupted": false
+  },
+  {
+    "name": "unicode-text",
+    "controls": "AAECAwQFBgcICQ==",
+    "text": "héllo 🌍世界",
+    "payload": "AQIDAA==",
+    "tools": 1,
+    "interrupted": false
+  },
+  {
+    "name": "binary-zero-bytes",
+    "controls": "AAECAw==",
+    "text": "binary",
+    "payload": "AAEAAwAA",
+    "tools": 1,
+    "interrupted": false
+  },
+  {
+    "name": "adjacent-and-end-boundaries",
+    "controls": "AAAA/w==",
+    "text": "boundaries",
+    "payload": "AP8QIA==",
+    "tools": 1,
+    "interrupted": false
+  },
+  {
+    "name": "interrupted-input",
+    "controls": "AQIDBAU=",
+    "text": "partial stream",
+    "payload": "Cg0Q",
+    "tools": 1,
+    "interrupted": true
+  },
+  {
+    "name": "multiple-tools",
+    "controls": "AAECAw==",
+    "text": "two tool results",
+    "payload": "AQIDBA==",
+    "tools": 2,
+    "interrupted": false
+  }
+]

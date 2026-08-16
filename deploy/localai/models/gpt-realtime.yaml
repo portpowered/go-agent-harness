@@ -1,0 +1,13 @@
+name: gpt-realtime
+
+pipeline:
+  vad: silero-vad-ggml
+  transcription: whisper-base
+  llm: qwen3-1.7b
+  tts: vits-piper-en_US-amy-sherpa
+  streaming:
+    llm: true
+    tts: true
+    transcription: true
+    clause_chunking: true
+  disable_thinking: true

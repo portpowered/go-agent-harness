@@ -599,3 +599,91 @@ If you believe a rule here is wrong, or your lane cannot proceed without
 touching a surface another lane owns, say so plainly in a PR comment and stop
 on that item — finish everything else in your lane first. Do not silently widen
 your lease.
+
+## 9. LocalAI, the local realtime tier, and the licence rule
+
+Added 2026-08-16, alongside the `operator-s2s-localai-20260816` addendum batch
+(six `s2s-lai-*` lanes). That batch runs concurrently with this one and carries
+no `DEPENDS_ON` edges into it, because a dependency target must live in the same
+batch. Cross-batch coupling is recorded in each payload's `contention` field
+instead.
+
+### 9.1 Why a third tier exists
+
+Every realtime test we have today is one of two things. A hermetic replay
+against a recorded fixture is fast and free and proves nothing about the live
+protocol. A live call to OpenAI `gpt-realtime-2.1-mini` proves everything and
+costs money, needs credentials, cannot run in CI, and is rate-limited exactly
+when a blind-probe fleet wants twenty sessions back to back.
+
+LocalAI closes the gap. It serves an OpenAI-compatible realtime WebSocket at
+`ws://localhost:8080/v1/realtime?model=gpt-realtime` — the same URL shape
+`agent-cli` already builds for `api.openai.com`, against a `--base-url` flag
+that already exists.
+
+| Tier | Endpoint | Cost | May gate |
+|---|---|---|---|
+| T1 replay | recorded fixtures | free | wire-level and transport behaviour |
+| T2 LocalAI | local WebSocket | free | audio round trip, multi-turn, VAD and barge-in, function calling |
+| T3 OpenAI | `gpt-realtime-2.1-mini` | metered | everything T2 gates, plus whatever T2 provably cannot serve |
+
+**T2's boundary is measured, not assumed.** LocalAI's realtime pipeline is
+composed (`vad → transcription → llm → tts`), so image content parts may or may
+not reach the LLM even when the configured LLM is itself vision-capable.
+`s2s-lai-local-tier-conformance` answers that empirically and writes the result
+into `docs/architecture/s2s-local-tier-conformance.md`. Until that table exists,
+no lane may claim a milestone is gated locally. **T2 supplements the acceptance
+gate; it never retires it.** The blind-probe acceptance run in §0 is still a T3
+run.
+
+### 9.2 Licences — the one rule that can invalidate a diff
+
+| Upstream | Licence | What you may do |
+|---|---|---|
+| `github.com/mudler/LocalAI` | MIT | run it, depend on it |
+| `github.com/WqyJh/go-openai-realtime` | MIT | import as a normal Go module |
+| `github.com/gen2brain/malgo` | Unlicense | already our audio dependency |
+| **`github.com/localai-org/localai-realtime-demo`** | **none — the API reports `license: null`** | **read it; imitate its design; copy nothing** |
+
+The demo repository has no licence file, so default copyright applies and all
+rights are reserved. You may read it and imitate its *design* — the arrangement
+of concerns, the stage vocabulary, the fact that a supervisor retries a list of
+endpoints — because architecture is not the copyrightable part. You may **not**
+copy, paste, vendor, `go get`, or translate line-by-line any of its code, YAML,
+comments or test data. A diff containing a block recognisable as lifted from
+that repository has failed regardless of whether its tests pass.
+
+Record the licence of every third-party module you add, one line each, in your
+PR description.
+
+### 9.3 Surfaces the addendum touches
+
+| Path | Owner |
+|---|---|
+| `deploy/localai/**` | `s2s-lai-realtime-server-fixture` (TTS model config: `s2s-lai-tts-gguf-format-check`) |
+| `go-llm-gateway/pkg/testing/localai/**` | `s2s-lai-realtime-server-fixture` |
+| `go-llm-gateway` LocalAI provider + its one registration site | `s2s-lai-gateway-localai-provider` |
+| `test/localai/**`, `docs/architecture/s2s-local-tier-conformance.md` | `s2s-lai-local-tier-conformance` |
+| `test/probe/localtier/**` | `s2s-lai-blind-probe-local-tier` |
+| `docs/architecture/s2s-tts-pinning.md` | `s2s-lai-tts-gguf-format-check` |
+
+Two cross-batch collisions are live and are handled by contention notes, not by
+edges. `agent-cli/internal/services/session.go` belongs to
+`s2s-b0-realtime-model-allowlist`; no `s2s-lai-*` lane may edit it, and the
+gateway provider lane lands its unit-level work and reports the end-to-end item
+as blocked if the allowlist has not generalised by its final rebase. Corpus
+generation belongs to `s2s-b2-audio-corpus-generator`;
+`s2s-lai-tts-gguf-format-check` establishes and pins the facts it depends on and
+posts them, but regenerates nothing.
+
+### 9.4 Upstream change to be aware of
+
+LocalAI PR #10316 migrated the `qwen3-tts-cpp` backend to `qwentts.cpp` **and
+changed the GGUF format**, telling users to reinstall the model from the gallery
+when upgrading. Our corpus artifact is
+`C:/Users/andre/.mangaka/models/qwen3-tts-0.6b-f16.gguf`, and the locked decision
+for this program is that all test audio comes from local `qwen3-tts.cpp` only.
+Corpus audio is the input side of nearly every test here, so if it changes shape
+underneath us the failures surface in lanes with nothing to do with TTS.
+`s2s-lai-tts-gguf-format-check` resolves and pins it.
+

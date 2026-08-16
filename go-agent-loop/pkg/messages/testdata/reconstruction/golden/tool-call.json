@@ -1,0 +1,23 @@
+{
+  "name": "tool-call",
+  "messages": [
+    {
+      "role": "assistant",
+      "content_parts": [
+        {
+          "type": "text",
+          "text": "I will inspect the file."
+        }
+      ],
+      "refusal": "",
+      "tool_calls": [
+        {
+          "id": "call-42",
+          "name": "read_file",
+          "arguments": "{\"path\":\"report.txt\",\"line\":7}"
+        }
+      ],
+      "tool_call_id": ""
+    }
+  ]
+}
