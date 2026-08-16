@@ -1,115 +1,76 @@
 {
-  "requestId": "phase-1-default-site-batch-001",
+  "requestId": "planner-docs-live-session-example-20260620",
   "type": "FACTORY_REQUEST_BATCH",
   "works": [
     {
-      "name": "site-app-scaffold",
+      "name": "planner-docs-overview-live-loop",
       "workTypeName": "idea",
-      "payload": "Phase 1: create the initial Next.js App Router, Fumadocs, Tailwind, shadcn/ui, Bun, Biome, and Makefile scaffold for the AI model reference website. Include CI-oriented local commands and static docs routing placeholders."
+      "payload": {
+        "title": "Rewrite planner overview for the live ideafy loop",
+        "sourcePath": "docs/temp/customer-ask.md",
+        "currentProgress": [
+          "factory/docs/overview.md still described an unrelated Awesome-list factory.",
+          "Planner state guidance pointed at obsolete docs/internal paths instead of docs/temp/*.",
+          "Session and queue inspection commands were missing from the factory-local overview."
+        ],
+        "requestedOutcome": "Rewrite factory/docs/overview.md around this repository's ideafy planner loop, live docs/temp state files, and session-scoped queue inspection guidance."
+      }
     },
     {
-      "name": "content-registry-validation",
+      "name": "planner-docs-batch-input-example",
       "workTypeName": "idea",
-      "payload": "Phase 1: implement the minimum structured content baseline needed for one canonical module page and one basic glossary page, including TypeScript/Zod schemas, registry loaders, one grouped-query attention module record, one token glossary/concept record, one attention tag record, one citation record, colocated message loading, colocated asset loading, and validation."
+      "payload": {
+        "title": "Add a checked-in FACTORY_REQUEST_BATCH example",
+        "sourcePath": "factory/docs/batch-inputs.md",
+        "currentProgress": [
+          "factory/docs/overview.md and ideafy AGENTS.md reference factory/docs/batch-input-example.json.",
+          "The example file did not exist, so planners had to repair docs before copying a batch pattern.",
+          "Dry-run validation is the narrow proof that the example matches the batch parser contract."
+        ],
+        "requestedOutcome": "Add factory/docs/batch-input-example.json with idea items plus a thoughts loopback connected through DEPENDS_ON relations, and validate it with you submit batch --dry-run."
+      }
     },
     {
-      "name": "docs-template-rendering",
+      "name": "planner-docs-reference-alignment",
       "workTypeName": "idea",
-      "payload": "Phase 1: implement canonical docs rendering for the grouped-query attention module page using localized message keys, resolved asset references, tag pills, citations, and a minimal derived related-documents section."
+      "payload": {
+        "title": "Align nearby factory-local planner references",
+        "sourcePath": "factory/docs/batch-inputs.md",
+        "currentProgress": [
+          "Factory-local docs still mixed obsolete planner-state paths with the live docs/temp contract.",
+          "Verification guidance did not consistently point at the checked-in batch example.",
+          "Ideafy passes had to reconcile conflicting paths before moving from docs to validation."
+        ],
+        "requestedOutcome": "Update directly related factory-local references so they consistently use docs/temp/progress.md, docs/temp/checklist.md, docs/temp/meta.md, and factory/docs/batch-input-example.json, and preserve a narrow doc-path smoke plus batch dry-run verification recipe."
+      }
     },
     {
-      "name": "basic-token-glossary-page",
-      "workTypeName": "idea",
-      "payload": "Phase 1: implement one basic glossary page for token using the same message-key, registry-backed, colocated asset/message pattern. Ensure it renders at its docs route, appears in the glossary index, and is searchable by title/body text without adding broader Phase 2 glossary coverage."
-    },
-    {
-      "name": "default-pages-search-tags",
-      "workTypeName": "idea",
-      "payload": "Phase 1: implement the default site pages and discovery surfaces: home/reference entry page, search entry, architecture index, glossary index, tags index, one attention tag landing page, and basic Fumadocs Orama search for the sample docs and glossary pages. Search must find the sample grouped-query attention page by GQA, attention, and KV cache."
-    },
-    {
-      "name": "ideafy-loopback-phase-1-default-site-batch-001",
+      "name": "planner-docs-live-session-loopback",
       "workTypeName": "thoughts",
-      "payload": "Review the completed Phase 1 default-site ideas, update docs/internal progress and checklist state, wait for manual confirmation if needed, and prepare the next coherent phase batch."
+      "payload": {
+        "title": "Meta-planner follow-up after planner docs alignment batch",
+        "sourcePath": "factory/docs/batch-input-example.json",
+        "requestedOutcome": "Review the queued planner-docs ideas after their plans are generated and decide whether to submit the next dependency-aware implementation batch."
+      }
     }
   ],
   "relations": [
     {
       "type": "DEPENDS_ON",
-      "sourceWorkName": "ideafy-loopback-phase-1-default-site-batch-001",
-      "targetWorkName": "site-app-scaffold",
+      "sourceWorkName": "planner-docs-live-session-loopback",
+      "targetWorkName": "planner-docs-overview-live-loop",
       "requiredState": "complete"
     },
     {
       "type": "DEPENDS_ON",
-      "sourceWorkName": "content-registry-validation",
-      "targetWorkName": "site-app-scaffold",
+      "sourceWorkName": "planner-docs-live-session-loopback",
+      "targetWorkName": "planner-docs-batch-input-example",
       "requiredState": "complete"
     },
     {
       "type": "DEPENDS_ON",
-      "sourceWorkName": "ideafy-loopback-phase-1-default-site-batch-001",
-      "targetWorkName": "content-registry-validation",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "docs-template-rendering",
-      "targetWorkName": "content-registry-validation",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "ideafy-loopback-phase-1-default-site-batch-001",
-      "targetWorkName": "docs-template-rendering",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "docs-template-rendering",
-      "targetWorkName": "site-app-scaffold",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "basic-token-glossary-page",
-      "targetWorkName": "content-registry-validation",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "basic-token-glossary-page",
-      "targetWorkName": "docs-template-rendering",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "ideafy-loopback-phase-1-default-site-batch-001",
-      "targetWorkName": "basic-token-glossary-page",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "ideafy-loopback-phase-1-default-site-batch-001",
-      "targetWorkName": "default-pages-search-tags",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "default-pages-search-tags",
-      "targetWorkName": "site-app-scaffold",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "default-pages-search-tags",
-      "targetWorkName": "docs-template-rendering",
-      "requiredState": "complete"
-    },
-    {
-      "type": "DEPENDS_ON",
-      "sourceWorkName": "default-pages-search-tags",
-      "targetWorkName": "basic-token-glossary-page",
+      "sourceWorkName": "planner-docs-live-session-loopback",
+      "targetWorkName": "planner-docs-reference-alignment",
       "requiredState": "complete"
     }
   ]

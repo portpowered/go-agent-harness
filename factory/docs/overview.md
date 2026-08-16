@@ -1,9 +1,13 @@
 # Factory Overview
 
-This factory coordinates autonomous work for the AI model reference website.
-The ideafy workstation is the meta-planner. It chooses phase-scoped batches,
-submits ideas, and records progress. Executors implement PRD stories in
-worktrees. Review gates the resulting PRs.
+This factory coordinates autonomous work for **you-agent-factory**: the Go,
+OpenAPI, and React system for scheduling and orchestrating concurrent AI workers
+through the `you` CLI, backend runtime, and dashboard. The **ideafy**
+workstation is the meta-planner. It inspects live factory state, submits batches
+of `idea` work, records planner state, and schedules a `thoughts` loopback so
+planning resumes after each batch completes. The **plan** workstation turns each
+idea into a PRD. **process** and **review** executors implement and gate work in
+isolated worktrees.
 
 ## Read First
 
@@ -11,28 +15,42 @@ Before submitting work, read:
 
 * `factory/factory.json`
 * `factory/workstations/ideafy/AGENTS.md`
-* `docs/internal/customer-ask.md`
-* `docs/internal/checklist.md`
-* `docs/internal/progress.txt`
-* `docs/documentation-site-pages-needed.md`
+* `docs/temp/customer-ask.md` — current customer authorization and goals
+* `docs/temp/progress.md`, `docs/temp/checklist.md`, and `docs/temp/meta.md` —
+  live planner state files (local, not checked in)
+* `factory/docs/batch-inputs.md`
+* `factory/docs/batch-input-example.json`
+* `factory/docs/decision-envelope.md`
 * `you docs agents`
 * `you docs batch-inputs`
 
-## Phase Control
+Repository context that shapes planner batches:
 
-Current phase authorization lives in:
+* root `AGENTS.md` — architecture, package map, and verification expectations
+* `docs/architecture/data-model.md` — public vocabulary (`Factory`, `Factory
+  Session`, `Work`, `Work Request`)
+* `docs/reference/` — packaged `you docs <topic>` contracts
 
-```txt
-docs/internal/customer-ask.md
+## Planner Loop
+
+The meta-planner operates the work queue rather than implementing every feature
+directly:
+
+1. Read the customer ask, factory state, project docs, and codebase.
+2. Maintain direction in `docs/temp/*` state files.
+3. Submit a batch of concrete `idea` work items.
+4. Add a `thoughts` loopback item that depends on those ideas so ideafy runs
+   again after the batch completes.
+5. Append planner progress and update the checklist after submission.
+
+Always dry-run a batch before real submission:
+
+```sh
+you submit batch --dry-run <path> --session <session_id>
 ```
 
-The meta-planner may dry-run batches during planning. It must not submit a real
-batch unless `customer-ask.md` sets `realSubmissionAuthorized: true` or the
-customer explicitly authorizes submission in the current conversation.
-
-Phase work is review-gated through Phase 10. After Phase 10, long-tail backfill
-may run mostly autonomously in small batches, still with batch summaries and
-review.
+Do not submit a real batch until the customer ask, checklist, and live queue
+state agree the next slice of work is ready.
 
 ## Work Types
 
@@ -61,20 +79,25 @@ task:in-review -> review -> task:to-complete
 idea:to-complete + task:to-complete with the same name -> consume
 ```
 
+Executor and review workstations run in worktrees under
+`.claude/worktrees/<work-item-name>/`, created by
+`factory/scripts/setup-workspace.py`.
+
 ## Batch Submission
 
 Use the canonical `FACTORY_REQUEST_BATCH` shape from `you docs batch-inputs`.
+Human-readable notes live in `factory/docs/batch-inputs.md`.
 
 For a running factory, prefer:
 
 ```sh
-you submit batch <path>
+you submit batch <path> --session <session_id>
 ```
 
 Always dry-run first:
 
 ```sh
-you submit batch --dry-run <path>
+you submit batch --dry-run <path> --session <session_id>
 ```
 
 For watched-folder operator ingress, use:
@@ -89,116 +112,82 @@ The checked-in example is:
 factory/docs/batch-input-example.json
 ```
 
+Each batch should include several concrete `idea` items plus one `thoughts`
+loopback item connected through `DEPENDS_ON` relations so the meta-planner
+re-enters after the ideas complete.
+
 ## State Inspection
+
+Before submitting new work, inspect the current queue and active sessions.
 
 Use:
 
 ```sh
-you work list
+you work list --session <session_id>
+```
+
+to see current work items, work types, states, names, and whether previous
+batches are still running, blocked, failed, or ready to be consumed.
+
+Use:
+
+```sh
 you session list
 ```
 
-`you work list` shows durable work state. `you session list` shows active or
-recent runtime sessions. Check both before deciding that work is stuck or before
-submitting a new batch.
+to enumerate active and recent factory sessions. Check both commands before
+deciding that work is stuck or before submitting a new batch. Session list
+answers whether the runtime is alive; work list answers what the queue is doing
+inside a session.
+
+Replace `<session_id>` with a live id from `you session list` (for example
+`c803e7f7-1361-4ba6-bb2b-b5c9cfeb2754` on a long-running host).
 
 ## Repair
 
 Use:
 
 ```sh
-you work move
+you work move --session <session_id>
 ```
 
 only for deliberate workflow repair. Record every manual move in
-`docs/internal/progress.txt` with the work item, old state, new state, reason,
-and expected next workstation. Do not use work moves to skip implementation,
+`docs/temp/progress.md` with the work item, old state, new state, reason, and
+expected next workstation. Do not use work moves to skip implementation,
 review, or validation.
 
 ## Local State Files
 
+Planner-owned state under `docs/temp/`:
+
 ```txt
-docs/internal/customer-ask.md  current phase and submission authorization
-docs/internal/checklist.md     high-level phase and customer ask tracking
-docs/internal/progress.txt     append-only meta-planner progress log
+docs/temp/customer-ask.md  current customer authorization and goals
+docs/temp/progress.md      append-only meta-planner progress log
+docs/temp/checklist.md     high-level customer-ask and phase tracking
+docs/temp/meta.md          lightweight world-state notes for long-running passes
 ```
 
-## Setup Workspace Ownership Contract
+These files are local planner state. Keep them out of version control when
+possible. The meta-planner creates and maintains them during planning passes.
+Task executors append to the worktree `progress.txt` at the repository root
+during implementation batches.
 
-`setup-workspace` owns only per-work-item worktree resolution: it reads the PRD,
-chooses the branch/worktree path, creates or reuses that worktree, and copies
-the task artifacts into the ready checkout.
+## Quality Gates
 
-It does not own routine root-checkout `git pull` or root `git worktree prune`.
-Those are shared-root maintenance operations, so running them inside a
-high-frequency concurrent setup path creates avoidable contention against other
-setup runs and planner-owned root state.
-
-This ownership split is the current factory contract for `CTRL-FAC-01` and
-`CTRL-FAC-02`. It preserves the observable setup outcome of returning a ready
-worktree for the requested PRD branch while removing the shared-root mutation
-that previously stranded `plan:init` work on setup races such as
-`fatal: Cannot rebase onto multiple branches.`.
-
-When overlapping setup runs target the same PRD branch, the losing setup run
-should observe the registered worktree created by the winner and return that
-same ready path as a reuse instead of retrying shared-root sync or failing the
-queue item. Setup still fails explicitly when the target path resolves to a
-different registered branch or another unsafe worktree state.
-
-Planner-owned root dirtiness is part of that contract. Routine changes in
-`docs/internal/checklist.md` and `docs/internal/progress.txt` are tolerated
-during setup and reuse because they are operational planner state, not
-worktree-selection inputs. Submitted planner batch request artifacts matching
-`docs/internal/*-batch-*.json` are also tolerated because they record durable
-factory submissions and can remain staged while downstream setup runs. The
-requested `tasks/todo/<prd-name>.json` and optional `.md` are also tolerated as
-direct setup inputs. Other root dirty state still fails explicitly so the
-factory does not silently treat unrelated checkout drift as safe.
-
-## Verification
-
-Reviewers can verify the repaired setup path with committed runtime coverage:
+Before opening or merging reconciliation PRs, run from the repository root:
 
 ```sh
-python3 factory/scripts/validate_worktree_hygiene_convergence.py \
-  --write-report docs/internal/phase-2-factory-worktree-hygiene-convergence-report.md
-make test-factory-scripts
-make typecheck
-make test
+make verify-fast   # dashboard typecheck, short UI/unit tests, short Go tests
+make lint          # broader repository lint when touching shared surfaces
 ```
 
-`make test-factory-scripts` runs the setup-workspace runtime suite with
-`PYTHONDONTWRITEBYTECODE=1` and `python3 -B` so the verification path does not
-write `__pycache__` artifacts into the root checkout.
+For higher-risk runtime, API, or UI changes, use `make verify-pr` or the
+focused targets described in root `AGENTS.md`.
 
-The convergence validator command above regenerates the reviewer-facing report
-from the current repository state, reruns the deterministic `setup-workspace`
-runtime suite as direct evidence, and inspects live durable queue state instead
-of relying on a stale checked-in queue snapshot.
+When changing factory-local planner docs or the checked-in batch example, also
+run the narrow verification recipe documented in `factory/docs/batch-inputs.md`:
 
-The Python runtime suite covers the queue-facing setup contract directly:
-
-- setup does not issue shared-root `git pull` or `git worktree prune`
-- overlapping setup runs reuse the winner's registered worktree instead of
-  stranding `plan:init` on `fatal: Cannot rebase onto multiple branches.`
-- planner-owned dirty state in `docs/internal/checklist.md` and
-  `docs/internal/progress.txt`, plus bounded submitted batch request artifacts
-  under `docs/internal/*-batch-*.json`, is tolerated for both first-time setup
-  and worktree reuse
-- unrelated root dirtiness still fails with an explicit unsafe-state error
-
-## Resolved Symptoms
-
-This repair addresses the currently observed queue symptoms:
-
-- concurrent or repeated `setup-workspace` runs no longer compete on shared
-  root `git pull` / `git worktree prune` behavior, so new `plan:init` work does
-  not fail with the reproduced rebase race
-- planner-owned dirty root state in `docs/internal/checklist.md` and
-  `docs/internal/progress.txt` no longer blocks ready-worktree creation or reuse
-
-This repair does not auto-repair queue items that were already stranded before
-the code fix landed. Any existing stuck tokens still require deliberate
-operator follow-up with `you work list`, `you session list`, and, if needed,
-manual `you work move` repair recorded in `docs/internal/progress.txt`.
+```sh
+go test ./pkg/services/workers/prompting -run TestPromptRenderer_ResolvesCheckedInPlannerFactoryDocs -count=1
+go test ./pkg/transports/cli/submit -run TestSubmitBatch_DryRunFactoryDocsBatchInputExample -count=1
+```

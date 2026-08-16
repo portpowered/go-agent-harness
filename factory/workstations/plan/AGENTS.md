@@ -22,6 +22,33 @@ Every plan must reflect these quality expectations:
 - readability and maintainability
 - direct test evidence for changed behavior
 - no broad unrelated cleanup inside a narrow behavior lane
+- an explicit delivery loop that continues through implementation, review,
+  required CI, conflict/shared-file reconciliation, and actual PR merge
+
+Every Markdown PRD must include a `Delivery Loop` section stating that the
+worker/reviewer cycle continues until required CI is terminal and passing, all
+blocking PR conversation feedback is explicitly addressed, merge conflicts are
+resolved, and the PR is merged. A PR that is merely opened, green, approved, or
+ready to merge is not complete.
+
+That contract belongs to the lane as a whole, and the `Delivery Loop` section
+must attribute its two halves to the two stages that actually own them:
+
+- The **implementation stage** finishes when it has pushed its final head, the
+  PR is open, CI has started, and all blocking review feedback is addressed.
+- The **review stage** owns driving CI to terminal-and-passing and owns the
+  merge itself.
+
+Never phrase an acceptance criterion so that the implementation stage owns
+"CI is green" or "the PR is merged". The implementer cannot merge, so a
+criterion worded that way makes it wait on an outcome it does not control: it
+re-runs CI for hours and commits progress notes about the run it is watching.
+Each such commit creates a new head, which invalidates the very run it just
+recorded, and the loop restarts. This has cost tens of agent-hours on a single
+lane.
+
+For the same reason, every plan must state that evidence about a CI run goes in
+a PR comment and never in a commit.
 
 When the ask touches backend, plan for clear package ownership, explicit state,
 isolated side effects, aligned contracts, and direct verification at the right
@@ -65,8 +92,25 @@ The JSON file must be implementation-ready and contain:
 - `context.customerAsk`
 - `context.problem`
 - `context.solution`
-- `acceptanceCriteria` with 3-7 project-level criteria plus a final quality-gate
-  criterion for typecheck, lint, and tests
+- `acceptanceCriteria` with 3-7 project-level criteria, a final quality-gate
+  criterion for typecheck, lint, and tests, and a delivery criterion that keeps
+  the lane's implementation/review loop going until the PR is actually merged.
+  The delivery criterion must assign stage ownership explicitly: the
+  implementation stage finishes after its final head is pushed, the PR is open,
+  CI has started, and all blocking review feedback is addressed; the review
+  stage owns driving CI to terminal-and-passing, resolving merge conflicts, and
+  merging the PR. Terminal-and-passing CI, conflict resolution, and merge are
+  review-stage outcomes, not implementation-stage responsibilities, even though
+  merge remains the lane-wide completion boundary. After the implementation
+  finish line, implementation must not poll or re-check CI because every
+  redispatch consumes one of the 12 process visits. Put CI-run evidence in a PR
+  comment and never in a commit. Phrase the lint criterion as "no NEW lint
+  violations relative to current main, and the gates green on main
+  (backend-size, pkg-maint, pkg-file-count, pkg-structure, vet) stay green" —
+  NOT as a blanket "make lint passes": `make lint` cannot pass end-to-end on
+  main while the pkg-boundary target carries pre-existing
+  packaged-service-structure migration debt (recorded 2026-08-08), and an
+  unsatisfiable criterion stalls the review loop.
 - `userStories` with sequential  ids, title, description,
   acceptanceCriteria, priority, `passes: false`, and empty `notes`
 - Ids for storeis should be shaped like {{ (index .Inputs 0).Name }}-001, 002, etc. 
@@ -99,7 +143,7 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 
 ## User Stories
 
-### US-001: Add priority field to database
+### <SOME_SHORT_NAME>-001: Add priority field to database
 **Description:** As a developer, I need to store task priority so it persists across sessions.
 
 **Acceptance Criteria:**
@@ -107,7 +151,7 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Generate and run migration successfully
 - [ ] Typecheck passes
 
-### US-002: Display priority indicator on task cards
+### <SOME_SHORT_NAME>-002: Display priority indicator on task cards
 **Description:** As a user, I want to see task priority at a glance so I know what needs attention first.
 
 **Acceptance Criteria:**
@@ -116,7 +160,7 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Typecheck passes
 - [ ] Verify in browser using dev-browser skill
 
-### US-003: Add priority selector to task edit
+### <SOME_SHORT_NAME>-003: Add priority selector to task edit
 **Description:** As a user, I want to change a task's priority when editing it.
 
 **Acceptance Criteria:**
@@ -126,7 +170,7 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - [ ] Typecheck passes
 - [ ] Verify in browser using dev-browser skill
 
-### US-004: Filter tasks by priority
+### <SOME_SHORT_NAME>-004: Filter tasks by priority
 **Description:** As a user, I want to filter the task list to see only high-priority items when I'm focused.
 
 **Acceptance Criteria:**
@@ -168,6 +212,10 @@ Add priority levels to tasks so users can focus on what matters most. Tasks can 
 - Should we add keyboard shortcuts for priority changes?
 ```
 
+### Dev browser skill
+
+The requirement to use the dev browser skill can be any form of browser whether its the built in one, playwright or whatever. 
+If no dev browser skill is available then its okay to move forward without it. 
 ## Output JSON Format
 
 ```json

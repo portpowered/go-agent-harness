@@ -17,6 +17,7 @@ coverage.*
 *.coverprofile
 profile.cov
 
+factory/scripts/__pycache__/
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
