@@ -3,7 +3,10 @@
 package audio
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -41,10 +44,15 @@ const (
 	audioClientVTableGetService               = 14
 	audioClientVTableStart                    = 10
 	audioClientVTableStop                     = 11
+	audioCaptureClientVTableGetBuffer         = 3
+	audioCaptureClientVTableReleaseBuffer     = 4
 	audioCaptureClientVTableGetNextPacketSize = 5
 	audioRenderClientVTableGetBuffer          = 3
 	audioRenderClientVTableReleaseBuffer      = 4
 	audclntBufferFlagsSilent                  = 0x2
+	waveFormatPCM                             = 0x0001
+	waveFormatIEEEFloat                       = 0x0003
+	waveFormatExtensible                      = 0xfffe
 )
 
 var (
@@ -59,6 +67,8 @@ var (
 	wasapiIIDAudioClient          = syscall.GUID{Data1: 0x1cb9ad4c, Data2: 0xdbfa, Data3: 0x4c32, Data4: [8]byte{0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2}}
 	wasapiIIDAudioCaptureClient   = syscall.GUID{Data1: 0xc8adbd64, Data2: 0xe71e, Data3: 0x48a0, Data4: [8]byte{0xa4, 0xde, 0x18, 0x5c, 0x39, 0x5c, 0xd3, 0x17}}
 	wasapiIIDAudioRenderClient    = syscall.GUID{Data1: 0xf294acfc, Data2: 0x3146, Data3: 0x4483, Data4: [8]byte{0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2}}
+	wasapiSubtypePCM              = syscall.GUID{Data1: 0x00000001, Data2: 0x0000, Data3: 0x0010, Data4: [8]byte{0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}}
+	wasapiSubtypeIEEEFloat        = syscall.GUID{Data1: 0x00000003, Data2: 0x0000, Data3: 0x0010, Data4: [8]byte{0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}}
 	wasapiPKeyDeviceFriendlyName  = wasapiPropertyKey{fmtid: syscall.GUID{Data1: 0xa45c254e, Data2: 0xdf1c, Data3: 0x4efd, Data4: [8]byte{0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}}, pid: 14}
 )
 
@@ -241,7 +251,15 @@ func (r *wasapiDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	r.mu.Lock()
 	r.openCount++
 	r.mu.Unlock()
-	return &wasapiOpenedDevice{registry: r, id: id, direction: direction, client: opened.client, service: opened.service}, nil
+	return &wasapiOpenedDevice{
+		registry:  r,
+		id:        id,
+		direction: direction,
+		client:    opened.client,
+		service:   opened.service,
+		format:    opened.format,
+		formatErr: opened.formatErr,
+	}, nil
 }
 
 func (r *wasapiDeviceRegistry) findDirection(nativeID string) (Direction, error) {
@@ -339,13 +357,16 @@ type wasapiOpenedDevice struct {
 	direction Direction
 	client    wasapiCOM
 	service   wasapiCOM
+	format    wasapiAudioFormat
+	formatErr error
 	mu        sync.Mutex
 	closed    bool
 }
 
 // verifyDataPathForTest observes the live client rather than only checking
-// that COM activation returned a handle. Capture must expose a packet, while
-// render is fed an explicit silent packet and must accept it into the buffer.
+// that COM activation returned a handle. Capture must expose and consume a
+// packet with measurable energy, while render is fed an explicit silent packet
+// and must show that the audio engine consumes the submitted frames.
 func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
 	cleanup, err := initializeCOM()
 	if err != nil {
@@ -354,47 +375,113 @@ func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
 	defer cleanup()
 
 	if d.direction == DirectionInput {
+		if d.formatErr != nil {
+			return fmt.Errorf("inspect WASAPI capture format: %w", d.formatErr)
+		}
+		var observedFrames uint64
+		var observedEnergy float64
 		for attempt := 0; attempt < 40; attempt++ {
 			var packets uint32
 			if _, err := d.service.call(audioCaptureClientVTableGetNextPacketSize, uintptr(unsafe.Pointer(&packets))); err != nil {
 				return fmt.Errorf("read WASAPI capture packet size: %w", err)
 			}
-			if packets > 0 {
+			if packets == 0 {
+				time.Sleep(25 * time.Millisecond)
+				continue
+			}
+
+			var data unsafe.Pointer
+			var frames uint32
+			var flags uint32
+			if _, err := d.service.call(
+				audioCaptureClientVTableGetBuffer,
+				uintptr(unsafe.Pointer(&data)),
+				uintptr(unsafe.Pointer(&frames)),
+				uintptr(unsafe.Pointer(&flags)),
+				0,
+				0,
+			); err != nil {
+				return fmt.Errorf("acquire WASAPI capture buffer: %w", err)
+			}
+			if frames == 0 {
+				continue
+			}
+			energy, energyErr := wasapiCapturePacketEnergy(data, frames, flags, d.format)
+			_, releaseErr := d.service.call(audioCaptureClientVTableReleaseBuffer, uintptr(frames))
+			if releaseErr != nil {
+				return fmt.Errorf("release WASAPI capture buffer: %w", releaseErr)
+			}
+			if energyErr != nil {
+				return energyErr
+			}
+			observedFrames += uint64(frames)
+			if energy > observedEnergy {
+				observedEnergy = energy
+			}
+			if observedFrames > 0 {
+				// A non-empty packet is the positive data-path signal. Energy is
+				// still measured for every packet so a real non-silent signal is
+				// detected, while a valid but currently silent microphone remains
+				// a usable capture capability.
 				return nil
 			}
-			time.Sleep(25 * time.Millisecond)
+			// A valid silent packet proves that the capture buffer is being
+			// serviced; keep polling until a non-empty packet is available.
+			time.Sleep(10 * time.Millisecond)
 		}
-		return fmt.Errorf("WASAPI capture client produced no packets")
+		return fmt.Errorf("WASAPI capture produced no positive signal: frames=%d max-energy=%g", observedFrames, observedEnergy)
 	}
 
-	var bufferSize, padding uint32
+	var bufferSize uint32
 	if _, err := d.client.call(audioClientVTableGetBufferSize, uintptr(unsafe.Pointer(&bufferSize))); err != nil {
 		return fmt.Errorf("read WASAPI render buffer size: %w", err)
 	}
 	if bufferSize == 0 {
 		return fmt.Errorf("WASAPI render buffer size is zero")
 	}
-	if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&padding))); err != nil {
-		return fmt.Errorf("read WASAPI render padding: %w", err)
-	}
-	for attempt := 0; attempt < 40 && padding >= bufferSize; attempt++ {
-		time.Sleep(25 * time.Millisecond)
+	var lastBefore, lastAfter, lastSubmitted uint32
+	for attempt := 0; attempt < 40; attempt++ {
+		var padding uint32
 		if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&padding))); err != nil {
 			return fmt.Errorf("read WASAPI render padding: %w", err)
 		}
+		if padding >= bufferSize {
+			time.Sleep(25 * time.Millisecond)
+			continue
+		}
+		frames := bufferSize - padding
+		var buffer unsafe.Pointer
+		if _, err := d.service.call(audioRenderClientVTableGetBuffer, uintptr(frames), uintptr(unsafe.Pointer(&buffer))); err != nil {
+			return fmt.Errorf("acquire WASAPI render buffer: %w", err)
+		}
+		if _, err := d.service.call(audioRenderClientVTableReleaseBuffer, uintptr(frames), audclntBufferFlagsSilent); err != nil {
+			return fmt.Errorf("release WASAPI render buffer: %w", err)
+		}
+
+		var submittedPadding uint32
+		if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&submittedPadding))); err != nil {
+			return fmt.Errorf("read WASAPI render padding after submission: %w", err)
+		}
+		lastBefore, lastAfter, lastSubmitted = padding, submittedPadding, frames
+		if submittedPadding <= padding {
+			// The engine may have consumed the packet between ReleaseBuffer
+			// and this observation. Retry until a queued packet is observable.
+			time.Sleep(25 * time.Millisecond)
+			continue
+		}
+		for consumeAttempt := 0; consumeAttempt < 40; consumeAttempt++ {
+			time.Sleep(25 * time.Millisecond)
+			var consumedPadding uint32
+			if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&consumedPadding))); err != nil {
+				return fmt.Errorf("read WASAPI render padding during consumption: %w", err)
+			}
+			if consumedPadding < submittedPadding {
+				return nil
+			}
+		}
+		return fmt.Errorf("WASAPI render engine did not consume submitted frames: before=%d after=%d submitted=%d", padding, submittedPadding, frames)
 	}
-	if padding >= bufferSize {
-		return fmt.Errorf("WASAPI render buffer has no writable frames")
-	}
-	frames := bufferSize - padding
-	var buffer unsafe.Pointer
-	if _, err := d.service.call(audioRenderClientVTableGetBuffer, uintptr(frames), uintptr(unsafe.Pointer(&buffer))); err != nil {
-		return fmt.Errorf("acquire WASAPI render buffer: %w", err)
-	}
-	if _, err := d.service.call(audioRenderClientVTableReleaseBuffer, uintptr(frames), audclntBufferFlagsSilent); err != nil {
-		return fmt.Errorf("release WASAPI render buffer: %w", err)
-	}
-	return nil
+	return fmt.Errorf("WASAPI render submission was not observable: before=%d after=%d submitted=%d", lastBefore, lastAfter, lastSubmitted)
 }
 
 func (d *wasapiOpenedDevice) Close() error {
@@ -431,8 +518,10 @@ func (d *wasapiOpenedDevice) Close() error {
 }
 
 type openedWASAPIEndpoint struct {
-	client  wasapiCOM
-	service wasapiCOM
+	client    wasapiCOM
+	service   wasapiCOM
+	format    wasapiAudioFormat
+	formatErr error
 }
 
 func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpoint, error) {
@@ -478,7 +567,8 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	if mixFormat == nil {
 		return openedWASAPIEndpoint{}, fmt.Errorf("WASAPI returned an empty mix format")
 	}
-	defer wasapiCoTaskMemFree.Call(uintptr(mixFormat))
+	defer func() { _, _, _ = wasapiCoTaskMemFree.Call(uintptr(mixFormat)) }()
+	format, formatErr := parseWASAPIAudioFormat(mixFormat)
 
 	hresult, callErr = client.call(audioClientVTableInitialize, shareModeShared, 0, 0, 0, uintptr(mixFormat), 0)
 	if callErr != nil {
@@ -505,7 +595,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	if callErr != nil {
 		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "start audio client"}
 	}
-	opened := openedWASAPIEndpoint{client: client, service: service}
+	opened := openedWASAPIEndpoint{client: client, service: service, format: format, formatErr: formatErr}
 	client.ptr = nil
 	service.ptr = nil
 	return opened, nil
@@ -620,7 +710,7 @@ func endpointID(endpoint wasapiCOM) (string, error) {
 	if raw == nil {
 		return "", fmt.Errorf("WASAPI returned an empty endpoint ID")
 	}
-	defer wasapiCoTaskMemFree.Call(uintptr(raw))
+	defer func() { _, _, _ = wasapiCoTaskMemFree.Call(uintptr(raw)) }()
 	return utf16PtrString((*uint16)(raw)), nil
 }
 
@@ -634,7 +724,7 @@ func endpointFriendlyName(endpoint wasapiCOM) (string, error) {
 	defer store.release()
 
 	var value wasapiPropVariant
-	defer wasapiPropVariantClear.Call(uintptr(unsafe.Pointer(&value)))
+	defer func() { _, _, _ = wasapiPropVariantClear.Call(uintptr(unsafe.Pointer(&value))) }()
 	_, err = store.call(propertyStoreVTableGetValue, uintptr(unsafe.Pointer(&wasapiPKeyDeviceFriendlyName)), uintptr(unsafe.Pointer(&value)))
 	if err != nil {
 		return "", err
@@ -647,6 +737,151 @@ func endpointFriendlyName(endpoint wasapiCOM) (string, error) {
 		return "", fmt.Errorf("friendly name is empty")
 	}
 	return name, nil
+}
+
+// wasapiWaveFormatEx and wasapiWaveFormatExtensible mirror the Windows
+// WAVEFORMATEX layouts returned by IAudioClient::GetMixFormat. The extended
+// format is needed for the common shared-mode PCM/IEEE-float endpoint format.
+type wasapiWaveFormatEx struct {
+	formatTag      uint16
+	channels       uint16
+	samplesPerSec  uint32
+	avgBytesPerSec uint32
+	blockAlign     uint16
+	bitsPerSample  uint16
+	cbSize         uint16
+}
+
+type wasapiWaveFormatExtensible struct {
+	wasapiWaveFormatEx
+	validBitsPerSample uint16
+	channelMask        uint32
+	subFormat          syscall.GUID
+}
+
+type wasapiAudioFormat struct {
+	formatTag          uint16
+	channels           uint16
+	blockAlign         uint16
+	bitsPerSample      uint16
+	validBitsPerSample uint16
+	subFormat          syscall.GUID
+}
+
+func parseWASAPIAudioFormat(raw unsafe.Pointer) (wasapiAudioFormat, error) {
+	if raw == nil {
+		return wasapiAudioFormat{}, fmt.Errorf("WASAPI returned an empty audio format")
+	}
+	base := *(*wasapiWaveFormatEx)(raw)
+	format := wasapiAudioFormat{
+		formatTag:          base.formatTag,
+		channels:           base.channels,
+		blockAlign:         base.blockAlign,
+		bitsPerSample:      base.bitsPerSample,
+		validBitsPerSample: base.bitsPerSample,
+	}
+	if base.channels == 0 || base.blockAlign == 0 || base.bitsPerSample == 0 || base.bitsPerSample%8 != 0 {
+		return wasapiAudioFormat{}, fmt.Errorf("invalid WASAPI audio format: channels=%d block-align=%d bits=%d", base.channels, base.blockAlign, base.bitsPerSample)
+	}
+
+	switch base.formatTag {
+	case waveFormatPCM:
+		format.subFormat = wasapiSubtypePCM
+	case waveFormatIEEEFloat:
+		format.subFormat = wasapiSubtypeIEEEFloat
+	case waveFormatExtensible:
+		if base.cbSize < 22 {
+			return wasapiAudioFormat{}, fmt.Errorf("WASAPI extensible format has %d extra bytes, want at least 22", base.cbSize)
+		}
+		extended := *(*wasapiWaveFormatExtensible)(raw)
+		format.validBitsPerSample = extended.validBitsPerSample
+		if format.validBitsPerSample == 0 {
+			format.validBitsPerSample = format.bitsPerSample
+		}
+		format.subFormat = extended.subFormat
+	default:
+		return wasapiAudioFormat{}, fmt.Errorf("unsupported WASAPI format tag 0x%04x", base.formatTag)
+	}
+	if format.validBitsPerSample == 0 || format.validBitsPerSample > format.bitsPerSample {
+		return wasapiAudioFormat{}, fmt.Errorf("invalid WASAPI valid bits %d for container bits %d", format.validBitsPerSample, format.bitsPerSample)
+	}
+	if format.subFormat != wasapiSubtypePCM && format.subFormat != wasapiSubtypeIEEEFloat {
+		return wasapiAudioFormat{}, fmt.Errorf("unsupported WASAPI audio subformat %v", format.subFormat)
+	}
+	if uint32(format.channels)*uint32(format.bitsPerSample/8) > uint32(format.blockAlign) {
+		return wasapiAudioFormat{}, fmt.Errorf("WASAPI block alignment %d is smaller than one frame", format.blockAlign)
+	}
+	return format, nil
+}
+
+func wasapiCapturePacketEnergy(data unsafe.Pointer, frames, flags uint32, format wasapiAudioFormat) (float64, error) {
+	if frames == 0 || flags&audclntBufferFlagsSilent != 0 {
+		return 0, nil
+	}
+	if data == nil {
+		return 0, fmt.Errorf("WASAPI capture returned %d frames with a nil data pointer", frames)
+	}
+	if format.channels == 0 || format.blockAlign == 0 || format.bitsPerSample == 0 || format.bitsPerSample%8 != 0 {
+		return 0, fmt.Errorf("WASAPI capture format is not measurable: channels=%d block-align=%d bits=%d", format.channels, format.blockAlign, format.bitsPerSample)
+	}
+	byteCount := uint64(frames) * uint64(format.blockAlign)
+	if byteCount > uint64(^uint(0)>>1) {
+		return 0, fmt.Errorf("WASAPI capture packet is too large: %d bytes", byteCount)
+	}
+	raw := unsafe.Slice((*byte)(data), int(byteCount))
+	sampleBytes := int(format.bitsPerSample / 8)
+	frameStride := int(format.blockAlign)
+	var energy float64
+	for frame := uint32(0); frame < frames; frame++ {
+		frameOffset := int(frame) * frameStride
+		for channel := 0; channel < int(format.channels); channel++ {
+			offset := frameOffset + channel*sampleBytes
+			if offset < 0 || offset+sampleBytes > len(raw) {
+				return 0, fmt.Errorf("WASAPI capture frame exceeds packet: frame=%d channel=%d", frame, channel)
+			}
+			value, err := wasapiSampleValue(raw[offset:offset+sampleBytes], format)
+			if err != nil {
+				return 0, err
+			}
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return 0, fmt.Errorf("WASAPI capture returned a non-finite sample")
+			}
+			energy += value * value
+		}
+	}
+	return energy, nil
+}
+
+func wasapiSampleValue(raw []byte, format wasapiAudioFormat) (float64, error) {
+	if format.subFormat == wasapiSubtypeIEEEFloat {
+		switch format.bitsPerSample {
+		case 32:
+			return float64(math.Float32frombits(binary.LittleEndian.Uint32(raw))), nil
+		case 64:
+			return math.Float64frombits(binary.LittleEndian.Uint64(raw)), nil
+		default:
+			return 0, fmt.Errorf("unsupported WASAPI IEEE-float sample width %d", format.bitsPerSample)
+		}
+	}
+
+	switch format.bitsPerSample {
+	case 8:
+		return float64(int(raw[0])-128) / 128, nil
+	case 16:
+		return float64(int16(binary.LittleEndian.Uint16(raw))) / math.Ldexp(1, 15), nil
+	case 24:
+		value := int32(uint32(raw[0]) | uint32(raw[1])<<8 | uint32(raw[2])<<16)
+		if value&0x00800000 != 0 {
+			value |= ^int32(0x00ffffff)
+		}
+		return float64(value) / math.Ldexp(1, 23), nil
+	case 32:
+		return float64(int32(binary.LittleEndian.Uint32(raw))) / math.Ldexp(1, 31), nil
+	case 64:
+		return float64(int64(binary.LittleEndian.Uint64(raw))) / math.Ldexp(1, 63), nil
+	default:
+		return 0, fmt.Errorf("unsupported WASAPI PCM sample width %d", format.bitsPerSample)
+	}
 }
 
 type wasapiPropertyKey struct {
@@ -710,12 +945,21 @@ func (e wasapiHRESULT) Error() string {
 }
 
 func initializeCOM() (func(), error) {
+	// COM apartments are thread-affine. Lock before initialization and keep the
+	// goroutine on this OS thread until the matching CoUninitialize completes;
+	// this also covers every COM call made by the caller while cleanup is
+	// deferred. Unlock on every failed initialization path.
+	runtime.LockOSThread()
 	r1, _, _ := wasapiCoInitializeEx.Call(0, coinitMultithreaded)
 	hresult := uint32(r1)
 	if int32(hresult) < 0 {
+		runtime.UnlockOSThread()
 		return nil, wasapiHRESULT(hresult)
 	}
-	return func() { wasapiCoUninitialize.Call() }, nil
+	return func() {
+		_, _, _ = wasapiCoUninitialize.Call()
+		runtime.UnlockOSThread()
+	}, nil
 }
 
 func newWASAPIEnumerator() (wasapiCOM, func(), error) {

@@ -3,9 +3,11 @@
 package audio
 
 import (
+	"encoding/binary"
 	"errors"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestWASAPIDeviceIDsAreStableAndNamesAreDescriptive(t *testing.T) {
@@ -50,6 +52,38 @@ func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 	}
 }
 
+func TestWASAPICapturePacketEnergyMeasuresFramesAndHonorsSilence(t *testing.T) {
+	format := wasapiAudioFormat{
+		formatTag:          waveFormatPCM,
+		channels:           1,
+		blockAlign:         2,
+		bitsPerSample:      16,
+		validBitsPerSample: 16,
+		subFormat:          wasapiSubtypePCM,
+	}
+	raw := make([]byte, 6)
+	positive := int16(1000)
+	negative := int16(-1000)
+	small := int16(250)
+	binary.LittleEndian.PutUint16(raw[0:], uint16(positive))
+	binary.LittleEndian.PutUint16(raw[2:], uint16(negative))
+	binary.LittleEndian.PutUint16(raw[4:], uint16(small))
+	energy, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 3, 0, format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if energy <= 0 {
+		t.Fatalf("capture energy=%g, want positive measured energy", energy)
+	}
+	silentEnergy, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 3, audclntBufferFlagsSilent, format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if silentEnergy != 0 {
+		t.Fatalf("silent capture energy=%g, want zero", silentEnergy)
+	}
+}
+
 func TestWASAPIOpenHasLiveDataPath(t *testing.T) {
 	registry := newWASAPIDeviceRegistry()
 	_, err := registry.List()
@@ -73,7 +107,7 @@ func TestWASAPIOpenHasLiveDataPath(t *testing.T) {
 				t.Fatal("WASAPI registry returned an unexpected opened-device type")
 			}
 			if err := handle.verifyDataPathForTest(); err != nil {
-				t.Skipf("Windows: %s data-path capability unavailable: %v", direction, err)
+				t.Fatalf("Windows: %s data-path assertion failed after endpoint open: %v", direction, err)
 			}
 		})
 	}
