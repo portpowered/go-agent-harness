@@ -1,10 +1,14 @@
-package transport
+// Package transporttest provides a reusable behavioral conformance suite for
+// implementations of package transport.
+package transporttest
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // Message is an expected message used by the S11 conformance suite.
@@ -30,7 +34,7 @@ type Observer interface {
 // FailureCase supplies a fresh dialer and the error expected from one
 // operation. MatchErr may additionally assert a typed error with errors.As.
 type FailureCase struct {
-	New      func() Dialer
+	New      func() transport.Dialer
 	WantErr  error
 	MatchErr func(error) bool
 }
@@ -43,7 +47,7 @@ type ConformanceHarness struct {
 	Headers      map[string]string
 	Inbound      []Message
 	Outbound     []Message
-	NewValid     func() (Dialer, Observer)
+	NewValid     func() (transport.Dialer, Observer)
 	DialFailure  FailureCase
 	ReadFailure  FailureCase
 	WriteFailure FailureCase

@@ -1,9 +1,11 @@
-package transport
+package transporttest
 
 import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func TestRunS11(t *testing.T) {
@@ -16,10 +18,10 @@ func TestRunS11(t *testing.T) {
 		Inbound:  []Message{{Type: 7, Payload: []byte{0, 1, 2}}, {Type: -4, Payload: []byte("inbound-2")}},
 		Outbound: []Message{{Type: 3, Payload: []byte{9, 0, 8}}, {Type: 11, Payload: []byte("outbound-2")}},
 	}
-	h.NewValid = func() (Dialer, Observer) { return newFixture(h.Inbound, nil, nil, nil) }
-	h.DialFailure = FailureCase{New: func() Dialer { return newFailureFixture(dialErr, nil, nil) }, WantErr: dialErr}
-	h.ReadFailure = FailureCase{New: func() Dialer { return newFailureFixture(nil, readErr, nil) }, WantErr: readErr}
-	h.WriteFailure = FailureCase{New: func() Dialer { return newFailureFixture(nil, nil, writeErr) }, WantErr: writeErr}
+	h.NewValid = func() (transport.Dialer, Observer) { return newFixture(h.Inbound, nil, nil, nil) }
+	h.DialFailure = FailureCase{New: func() transport.Dialer { return newFailureFixture(dialErr, nil, nil) }, WantErr: dialErr}
+	h.ReadFailure = FailureCase{New: func() transport.Dialer { return newFailureFixture(nil, readErr, nil) }, WantErr: readErr}
+	h.WriteFailure = FailureCase{New: func() transport.Dialer { return newFailureFixture(nil, nil, writeErr) }, WantErr: writeErr}
 	RunS11(t, h)
 }
 
@@ -39,17 +41,17 @@ type fixtureDialer struct {
 	dialErr, readErr, writeErr error
 }
 
-func newFixture(inbound []Message, dialErr, readErr, writeErr error) (Dialer, Observer) {
+func newFixture(inbound []Message, dialErr, readErr, writeErr error) (transport.Dialer, Observer) {
 	o := &fixtureObserver{}
 	return &fixtureDialer{observer: o, inbound: inbound, dialErr: dialErr, readErr: readErr, writeErr: writeErr}, o
 }
 
-func newFailureFixture(dialErr, readErr, writeErr error) Dialer {
+func newFailureFixture(dialErr, readErr, writeErr error) transport.Dialer {
 	dialer, _ := newFixture(nil, dialErr, readErr, writeErr)
 	return dialer
 }
 
-func (d *fixtureDialer) Dial(endpoint string, headers map[string]string) (Conn, error) {
+func (d *fixtureDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
 	if d.dialErr != nil {
 		return nil, fmt.Errorf("fixture dial: %w", d.dialErr)
 	}
