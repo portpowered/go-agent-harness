@@ -277,6 +277,37 @@ func TestRecordingBundleRejectsUnsafeCredentialInputs(t *testing.T) {
 			t.Fatalf("destination stat error = %v, want absent", statErr)
 		}
 	})
+
+	t.Run("credential never reaches injected writer", func(t *testing.T) {
+		destination := filepath.Join(t.TempDir(), "recording")
+		firstSecret := "input-pcm-secret"
+		secondSecret := "output-pcm-secret"
+		config := testRecordingConfig(destination)
+		config.Credentials = []string{firstSecret, secondSecret}
+		config.InputSegments = [][]byte{[]byte(firstSecret)}
+		config.OutputSegments = [][]byte{[]byte(secondSecret)}
+		var callbackSawCredential bool
+		config.WriteFile = func(path string, data []byte, mode os.FileMode) (int, error) {
+			if bytes.Contains(data, []byte(firstSecret)) || bytes.Contains(data, []byte(secondSecret)) {
+				callbackSawCredential = true
+			}
+			if err := os.WriteFile(path, data, mode); err != nil {
+				return 0, err
+			}
+			return len(data), nil
+		}
+
+		err := WriteRecordingBundle(config)
+		if !errors.Is(err, ErrRecordingUnsafeArtifact) {
+			t.Fatalf("error = %v, want ErrRecordingUnsafeArtifact", err)
+		}
+		if callbackSawCredential {
+			t.Fatal("injected writer observed a configured credential")
+		}
+		if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("destination stat error = %v, want absent", statErr)
+		}
+	})
 }
 
 func TestRecordingWriter(t *testing.T) {

@@ -247,6 +247,15 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	}
 	writeFile := normalized.writeFile
 	write := func(relative string, data []byte) error {
+		if containsCredential(data, redactor.values) {
+			return recordingError(
+				ErrRecordingUnsafeArtifact,
+				"verify credential redaction",
+				filepath.Join(destination, filepath.FromSlash(relative)),
+				errors.New("credential found in artifact"),
+				redactor,
+			)
+		}
 		path := filepath.Join(staging, filepath.FromSlash(relative))
 		n, writeErr := writeFile(path, data, 0o644)
 		if writeErr == nil && n != len(data) {
@@ -447,6 +456,15 @@ func redactBytes(value []byte, secrets [][]byte) []byte {
 		redacted = bytes.ReplaceAll(redacted, secret, []byte(RecordingRedactionMarker))
 	}
 	return redacted
+}
+
+func containsCredential(value []byte, secrets [][]byte) bool {
+	for _, secret := range secrets {
+		if bytes.Contains(value, secret) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r credentialRedactor) string(value string) string {
@@ -685,14 +703,12 @@ func scanForCredentials(root string, secrets [][]byte) error {
 		if err != nil {
 			return err
 		}
-		for _, secret := range secrets {
-			if bytes.Contains(data, secret) {
-				relative, relErr := filepath.Rel(root, path)
-				if relErr != nil {
-					return relErr
-				}
-				return fmt.Errorf("credential found in %s", filepath.ToSlash(relative))
+		if containsCredential(data, secrets) {
+			relative, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				return relErr
 			}
+			return fmt.Errorf("credential found in %s", filepath.ToSlash(relative))
 		}
 		return nil
 	})
