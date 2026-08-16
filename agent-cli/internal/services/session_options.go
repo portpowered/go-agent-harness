@@ -18,20 +18,21 @@ import (
 const (
 	sessionProviderGrok   = config.ProviderGrok
 	sessionProviderOpenAI = config.ProviderOpenAI
-	openAIRealtimeModel   = "gpt-realtime"
+	openAIRealtimeModel   = openAIRealtimeDefaultModel
 	openAIRealtimeBaseURL = "wss://api.openai.com/v1/realtime"
 )
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
-	RecordPath string
-	ReplayPath string
-	Provider   string
-	Model      string
-	APIKey     string
-	BaseURL    string
-	ConfigDir  string
-	Prompt     string
+	RecordPath    string
+	ReplayPath    string
+	Provider      string
+	Model         string
+	ModelProvided bool
+	APIKey        string
+	BaseURL       string
+	ConfigDir     string
+	Prompt        string
 
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   grok.WebSocketDialer
@@ -117,6 +118,10 @@ func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error)
 }
 
 func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAIConfig, error) {
+	if opts.ModelProvided && opts.Model == "" {
+		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(opts.Model)
+	}
+
 	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
 	if err != nil {
 		return config.OpenAIConfig{}, fmt.Errorf("failed to initialize config: %w", err)
@@ -141,20 +146,28 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 	if err != nil {
 		return config.OpenAIConfig{}, err
 	}
+	if !opts.ModelProvided && opts.Model == "" && loadedCfg.Model.OpenAI == nil {
+		active.Model = openAIRealtimeModel
+	}
 	if strings.TrimSpace(active.APIKey) == "" {
 		return config.OpenAIConfig{}, fmt.Errorf("OpenAI API key is required for live realtime session mode (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure model.openai.api_key in %s)", config.ConfigFileName)
 	}
 	if strings.TrimSpace(active.Model) == "" {
-		return config.OpenAIConfig{}, fmt.Errorf("OpenAI realtime model is required for live session mode (set AGENT_MODEL__OPENAI__MODEL, pass --model, or configure model.openai.model in %s)", config.ConfigFileName)
+		if active.Model == "" && !opts.ModelProvided && opts.Model == "" {
+			active.Model = openAIRealtimeModel
+		} else {
+			return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(active.Model)
+		}
 	}
 	if !isOpenAIRealtimeModel(active.Model) {
-		return config.OpenAIConfig{}, fmt.Errorf("OpenAI model %q is not realtime-capable for agent session; use %q or a supported realtime model alias", active.Model, openAIRealtimeModel)
+		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(active.Model)
 	}
 	return *active, nil
 }
 
 func isOpenAIRealtimeModel(model string) bool {
-	return strings.EqualFold(strings.TrimSpace(model), openAIRealtimeModel)
+	_, ok := LookupOpenAIRealtimeModel(model)
+	return ok
 }
 
 // NewGrokSessionInferencer builds the session-capable Grok realtime inferencer.
@@ -187,7 +200,7 @@ func NewOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig) (message
 // NewOpenAIRealtimeSessionInferencerWithOptions builds the OpenAI realtime inferencer.
 func NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg config.OpenAIConfig, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
 	if !isOpenAIRealtimeModel(sessionCfg.Model) {
-		return nil, fmt.Errorf("OpenAI model %q is not realtime-capable for agent session; use %q or a supported realtime model alias", sessionCfg.Model, openAIRealtimeModel)
+		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
 	}
 	providerOpts := []oaiprovider.Option{
 		oaiprovider.WithAPIKey(sessionCfg.APIKey),
