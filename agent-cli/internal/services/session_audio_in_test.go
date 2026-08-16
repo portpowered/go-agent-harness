@@ -36,7 +36,14 @@ func TestSessionCommandHelpExposesAudioInput(t *testing.T) {
 		t.Fatalf("session --help: %v", err)
 	}
 	help := out.String()
-	if !strings.Contains(help, "--audio-in string") || !strings.Contains(help, "raw PCM16 standard input") || strings.Contains(help, ".wav") {
+	audioInHelp := ""
+	for _, line := range strings.Split(help, "\n") {
+		if strings.Contains(line, "--audio-in string") {
+			audioInHelp = line
+			break
+		}
+	}
+	if !strings.Contains(audioInHelp, "--audio-in string") || !strings.Contains(audioInHelp, "raw PCM16 standard input") || strings.Contains(audioInHelp, ".wav") {
 		t.Fatalf("session help does not describe --audio-in path and stdin behavior:\n%s", help)
 	}
 	if strings.Index(help, "--api-key") > strings.Index(help, "--audio-in") || strings.Index(help, "--audio-in") > strings.Index(help, "--base-url") {
