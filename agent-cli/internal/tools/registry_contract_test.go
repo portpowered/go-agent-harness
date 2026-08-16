@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -48,16 +49,24 @@ func RunToolConformance(t *testing.T, tool Tool) {
 	if err != nil || json.Unmarshal(schemaBytes, &schema) != nil || len(schema) == 0 {
 		t.Fatal("tool schema did not round-trip through JSON")
 	}
-	for _, args := range []map[string]any{nil, {}} {
-		msgs, err := invokeWithoutPanic(t, tool, args)
-		if err != nil {
-			if strings.TrimSpace(err.Error()) == "" {
-				t.Fatal("invalid invocation returned an empty error")
-			}
-			continue
+	t.Run("invalid argument invocation", func(t *testing.T) {
+		if reason := unsafeInvocationReason(tool); reason != "" {
+			t.Skip(reason)
 		}
-		assertToolMessages(t, msgs)
-	}
+		for _, probe := range []struct {
+			name string
+			args map[string]any
+		}{
+			{name: "nil arguments", args: nil},
+			{name: "empty arguments", args: map[string]any{}},
+		} {
+			t.Run(probe.name, func(t *testing.T) {
+				if err := validateInvocationOutcome(tool, probe.args); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	})
 
 	registry := newEmptyRegistry()
 	if err := registry.Register(tool); err != nil {
@@ -70,28 +79,88 @@ func RunToolConformance(t *testing.T, tool Tool) {
 	if !ok || got != tool || registry.Count() != wantCount {
 		t.Fatalf("duplicate changed registry: tool=%#v present=%v count=%d", got, ok, registry.Count())
 	}
+
+	// Malformed JSON must fail in the adapter before the live tool is invoked,
+	// and must retain an identifiable typed error for callers to inspect.
+	_, err = NewRegistryExecutor(registry).Execute(context.Background(), messages.ToolCall{
+		ID: "s11-invalid-json", Name: tool.Name(), Arguments: "{",
+	})
+	var argumentErr *ToolArgumentError
+	if !errors.As(err, &argumentErr) || argumentErr.Err == nil {
+		t.Fatalf("malformed arguments error = %T %v; want ToolArgumentError with cause", err, err)
+	}
+	var syntaxErr *json.SyntaxError
+	if !errors.As(argumentErr.Err, &syntaxErr) {
+		t.Fatalf("malformed arguments cause = %T %v; want json.SyntaxError", argumentErr.Err, argumentErr.Err)
+	}
 }
 
-func invokeWithoutPanic(t *testing.T, tool Tool, args map[string]any) (msgs []messages.Message, err error) {
-	t.Helper()
+func unsafeInvocationReason(tool Tool) string {
+	if _, ok := tool.(*ScreenTool); ok {
+		return "existing ScreenTool behavior probes the display and defaults nil/empty action to a screenshot; " +
+			"there is no in-lease dry-run seam, so S11 skips this invocation case (see PR #57 blocking review comment)"
+	}
+	return ""
+}
+
+func validateInvocationOutcome(tool Tool, args map[string]any) error {
+	msgs, err, recovered := invokeWithoutPanic(tool, args)
+	if recovered != nil {
+		return fmt.Errorf("tool panicked for invalid arguments: %v", recovered)
+	}
+	if err != nil {
+		if !identifiesRequiredArgument(tool, err.Error()) {
+			return fmt.Errorf("invalid invocation error %q does not identify a required argument", err)
+		}
+		return nil
+	}
+	if err := validateToolMessages(msgs); err != nil {
+		return fmt.Errorf("invalid invocation returned an invalid result: %w", err)
+	}
+	return nil
+}
+
+func invokeWithoutPanic(tool Tool, args map[string]any) (msgs []messages.Message, err error, recovered any) {
 	defer func() {
-		if recovered := recover(); recovered != nil {
-			t.Fatalf("tool panicked for invalid arguments: %v", recovered)
+		if value := recover(); value != nil {
+			recovered = value
 		}
 	}()
-	return tool.Execute(context.Background(), args)
+	msgs, err = tool.Execute(context.Background(), args)
+	return msgs, err, nil
 }
 
-func assertToolMessages(t *testing.T, msgs []messages.Message) {
-	t.Helper()
-	if len(msgs) == 0 {
-		t.Fatal("successful invocation returned no messages")
+func identifiesRequiredArgument(tool Tool, message string) bool {
+	if !strings.Contains(strings.ToLower(message), "required") {
+		return false
 	}
-	for i, msg := range msgs {
-		if msg.Role != messages.RoleTool || len(msg.ContentParts) == 0 {
-			t.Errorf("message[%d] = role %q, parts %d; want tool with content", i, msg.Role, len(msg.ContentParts))
+	for _, name := range requiredParameterNames(tool.Parameters()) {
+		if strings.Contains(strings.ToLower(message), strings.ToLower(name)) {
+			return true
 		}
 	}
+	return false
+}
+
+func requiredParameterNames(schema map[string]any) []string {
+	if required, ok := schema["required"].([]string); ok {
+		return required
+	}
+	return nil
+}
+
+func validateToolMessages(msgs []messages.Message) error {
+	if len(msgs) != 1 {
+		return fmt.Errorf("successful invocation returned %d messages; want exactly one", len(msgs))
+	}
+	msg := msgs[0]
+	if msg.Role != messages.RoleTool {
+		return fmt.Errorf("message role = %q; want tool", msg.Role)
+	}
+	if len(msg.ContentParts) == 0 || strings.TrimSpace(msg.TextContent()) == "" {
+		return errors.New("tool result has no non-empty text content")
+	}
+	return nil
 }
 
 func TestLiveToolRegistryConformance(t *testing.T) {
@@ -113,6 +182,40 @@ func TestLiveToolRegistryConformance(t *testing.T) {
 	}
 	for _, tool := range resolved {
 		t.Run(tool.Name(), func(t *testing.T) { RunToolConformance(t, tool) })
+	}
+}
+
+func TestToolConformanceRejectsDeadInvocation(t *testing.T) {
+	params := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"value": map[string]any{"type": "string"}},
+		"required":   []string{"value"},
+	}
+	for _, tc := range []struct {
+		name    string
+		execute func(context.Context, map[string]any) ([]messages.Message, error)
+	}{
+		{
+			name: "non-specific error",
+			execute: func(context.Context, map[string]any) ([]messages.Message, error) {
+				return nil, errors.New("implementation is unavailable")
+			},
+		},
+		{
+			name: "empty content",
+			execute: func(context.Context, map[string]any) ([]messages.Message, error) {
+				return []messages.Message{{Role: messages.RoleTool, ContentParts: []messages.ContentPart{messages.TextPart{}}}}, nil
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dead := newContractTool("dead")
+			dead.params = params
+			dead.execute = tc.execute
+			if err := validateInvocationOutcome(dead, nil); err == nil {
+				t.Fatal("dead invocation passed the S11 result contract")
+			}
+		})
 	}
 }
 
