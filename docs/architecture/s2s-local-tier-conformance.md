@@ -19,48 +19,50 @@ The behavior assertions are:
 | Model-chosen function call | Exactly one output function call has name `lookup_weather` | The identical prompt with no tools yields zero calls and fails the positive assertion |
 | Image input | The reply contains `ORBIT`, printed only in the generated image fixture | The same question without the image fails the positive assertion |
 
-## Attempted measurement: 2026-08-16
+## Measurements: 2026-08-16
 
-The code and negative-control proofs were validated on 2026-08-16 with Go
-1.24.2. No live measurement was completed on this workstation: LocalAI was
-not listening on the configured endpoint, Docker Desktop was unavailable, and
-no `AGENT_MODEL__OPENAI__API_KEY` was present. Therefore every live row below
-is intentionally **UNMEASURED**, with no tier assignment. This is not evidence
-that either provider serves or does not serve the behavior.
+The code and negative-control proofs were validated with Go 1.24.2. The pinned
+LocalAI fixture was reachable at
+`ws://localhost:8080/v1/realtime?model=gpt-realtime` after Docker Engine
+27.4.0 started `localai/localai:v4.8.2`. The five LocalAI behavior cases ran
+against that image. The live command exits non-zero for the two reachable
+behaviors whose positive assertions reject the subject; those failures are the
+measured **NOT SERVED** evidence below, not skipped or inferred results.
 
-The LocalAI fixture configuration pins the image tag to
-`localai/localai:v4.8.2`; that tag is an environment identity, not a substitute
-for a completed run.
+OpenAI was credential-gated and did not run because
+`AGENT_MODEL__OPENAI__API_KEY` was absent. Its rows remain **UNMEASURED**;
+there is no OpenAI tier conclusion from this run.
 
 | Measurement date | Provider / endpoint tier | Behavior | Result | Latency | Observed evidence | Divergence / gating conclusion |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-08-16 | LocalAI / T2 | Audio round trip | **UNMEASURED** — named endpoint-unavailable skip | — | No `session.created` live proof | No conclusion; rerun with the pinned fixture |
-| 2026-08-16 | LocalAI / T2 | Three-turn context | **UNMEASURED** — named endpoint-unavailable skip | — | No live conversation | No conclusion; rerun with the pinned fixture |
-| 2026-08-16 | LocalAI / T2 | VAD/barge-in | **UNMEASURED** — named endpoint-unavailable skip | — | No live VAD/cancellation sequence | No conclusion; rerun with the pinned fixture |
-| 2026-08-16 | LocalAI / T2 | Model-chosen function call | **UNMEASURED** — named endpoint-unavailable skip | — | No live tool event | No conclusion; rerun with the pinned fixture |
-| 2026-08-16 | LocalAI / T2 | Image input | **UNMEASURED** — named endpoint-unavailable skip | — | No live image response or no-image control | No conclusion; rerun with the pinned fixture |
-| 2026-08-16 | OpenAI / T3 | Audio round trip | **UNMEASURED** — credential-gated skip | — | No live request; credential value was absent and not logged | No conclusion; rerun with `AGENT_MODEL__OPENAI__API_KEY` |
-| 2026-08-16 | OpenAI / T3 | Three-turn context | **UNMEASURED** — credential-gated skip | — | No live conversation | No conclusion; rerun with `AGENT_MODEL__OPENAI__API_KEY` |
-| 2026-08-16 | OpenAI / T3 | VAD/barge-in | **UNMEASURED** — credential-gated skip | — | No live VAD/cancellation sequence | No conclusion; rerun with `AGENT_MODEL__OPENAI__API_KEY` |
-| 2026-08-16 | OpenAI / T3 | Model-chosen function call | **UNMEASURED** — credential-gated skip | — | No live tool event | No conclusion; rerun with `AGENT_MODEL__OPENAI__API_KEY` |
-| 2026-08-16 | OpenAI / T3 | Image input | **UNMEASURED** — credential-gated skip | — | No live image response or no-image control | No conclusion; rerun with `AGENT_MODEL__OPENAI__API_KEY` |
+| 2026-08-16 | LocalAI / T2 | Audio round trip | **SERVED** — passing live assertion | 2.540s | 2 audio deltas, 71,680 decoded PCM bytes, RMS `0.092849` | T2 may gate audio replay/round-trip work; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Three-turn context | **NOT SERVED** — positive assertion rejected | 1.177s | Replies were `READY`, `READY`, then `UNKNOWN`; retained fact `cobalt-17` was absent | T2 cannot gate retained context; T3 OpenAI measurement is required |
+| 2026-08-16 | LocalAI / T2 | VAD/barge-in | **SERVED** — passing live assertion | 2.236s | `speech_started=true`, cancellation=true, playback flush=true, 1 audio delta before cancellation | T2 may gate VAD/barge-in work; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Model-chosen function call | **SERVED** — passing live assertion | 5.464s | Exactly one `lookup_weather` call; no-tools control observed 0 calls | T2 may gate model-chosen tool dispatch; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Image input | **NOT SERVED** — positive request rejected | 55ms | `image input is not supported` with `prediction_failed`; backend advised that an `mmproj` is required | T2 cannot gate vision; OpenAI is the only remaining live tier that can establish the vision gate |
+| 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Audio round trip | **UNMEASURED** — credential-gated skip | — | No live request; credential value was absent and not logged | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
+| 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Three-turn context | **UNMEASURED** — credential-gated skip | — | No live conversation | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
+| 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | VAD/barge-in | **UNMEASURED** — credential-gated skip | — | No live VAD/cancellation sequence | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
+| 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Model-chosen function call | **UNMEASURED** — credential-gated skip | — | No live tool event | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
+| 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Image input | **UNMEASURED** — credential-gated skip | — | No live image response or no-image control | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
 
 ## Tier ownership
 
-Until a completed run fills the table, the only safe ownership statement is:
+The current measured ownership boundary is:
 
 * T1 replay may gate hermetic transport and wire behavior already covered by
   replay fixtures.
-* T2 LocalAI may gate only a behavior later recorded as **SERVED** by a passing
-  LocalAI case on the pinned image.
-* T3 OpenAI remains the gate for every behavior LocalAI is later measured as
-  **NOT SERVED**, and remains the independent live reference for served
-  behaviors.
+* T2 LocalAI may gate audio round trip, VAD/barge-in, and model-chosen function
+  calling because those rows are **SERVED** by passing cases on the pinned image.
+* T2 cannot gate retained context or vision because those rows are **NOT
+  SERVED**. T3 OpenAI remains the required live gate for those behaviors, with
+  its measurements still pending.
+* OpenAI remains the independent live reference for the LocalAI-served rows.
 * **UNMEASURED** and skipped cases gate nothing.
 
-When a live run is available, replace the affected rows with the exact run
-date, endpoint tier, elapsed latency, observed event/output evidence, and the
-provider divergence. Do not infer a result from model metadata or a failed
+When another live run is available, replace only the affected rows with the
+exact run date, endpoint tier, elapsed latency, observed event/output evidence,
+and provider divergence. Do not infer a result from model metadata or a failed
 connection.
 
 ## Reproducibility and licensing
@@ -73,7 +75,7 @@ docker compose -f deploy/localai/docker-compose.yml up -d
 
 Run the suite from `test/localai` with `GOWORK=off`; OpenAI cases use only the
 `AGENT_MODEL__*` environment configuration and never read the repository
-`credentials` file. The suite adds no new third-party module to the workspace;
-its nested test module uses the already-present `github.com/gorilla/websocket`
-v1.5.3 dependency (BSD-3-Clause). The checked-in test and image fixture code
-is original and does not copy from `localai-org/localai-realtime-demo`.
+`credentials` file. The nested test module uses
+`github.com/gorilla/websocket` v1.5.3 (BSD-3-Clause). The checked-in PCM16
+speech and image fixtures are in-lease and do not copy from the unlicensed
+`localai-org/localai-realtime-demo`.

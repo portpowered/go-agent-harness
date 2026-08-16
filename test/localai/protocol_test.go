@@ -2,6 +2,7 @@ package localai
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -30,15 +32,23 @@ const (
 	silenceRMSThreshold   = 0.01
 )
 
+// conformanceSpeechPCM16Base64 is a checked-in mono 16 kHz speech fixture.
+// It exercises transcription and server VAD without invoking a TTS or audio
+// binary during the test.
+//
+//go:embed testdata/utterance.pcm.b64
+var conformanceSpeechPCM16Base64 string
+
 type endpointConfig struct {
-	name       string
-	url        string
-	model      string
-	apiKey     string
-	inputRate  int
-	outputRate int
-	available  bool
-	skipReason string
+	name                 string
+	url                  string
+	model                string
+	apiKey               string
+	inputRate            int
+	outputRate           int
+	manualResponseCreate bool
+	available            bool
+	skipReason           string
 }
 
 type sessionSettings struct {
@@ -193,11 +203,10 @@ func sessionUpdateEvent(endpoint endpointConfig, settings sessionSettings) map[s
 				"type":                "server_vad",
 				"prefix_padding_ms":   200,
 				"silence_duration_ms": 500,
-				// The behavior sends response.create explicitly after the
-				// initial committed turn. VAD still owns interruption for the
-				// second turn, but cannot race that explicit trigger.
-				"create_response":     false,
-				"interrupt_response":  true,
+				// VAD owns both the initial response and the interruption for
+				// the second speech segment.
+				"create_response":    true,
+				"interrupt_response": true,
 			}
 		} else {
 			input["turn_detection"] = nil
@@ -357,8 +366,11 @@ func upsertToolCall(observation *responseObservation, indexes map[string]int, ca
 	observation.calls = append(observation.calls, call)
 }
 
-func appendAudio(ctx context.Context, conn *websocket.Conn, audio []byte) error {
-	const chunkBytes = audioInputRate / 10 * 2
+func appendAudio(ctx context.Context, conn *websocket.Conn, audio []byte, sampleRate int) error {
+	chunkBytes, err := audioChunkBytes(sampleRate)
+	if err != nil {
+		return err
+	}
 	for offset := 0; offset < len(audio); offset += chunkBytes {
 		end := offset + chunkBytes
 		if end > len(audio) {
@@ -374,18 +386,130 @@ func appendAudio(ctx context.Context, conn *websocket.Conn, audio []byte) error 
 	return nil
 }
 
-func responseCreate(ctx context.Context, conn *websocket.Conn) error {
-	return writeEvent(ctx, conn, map[string]any{"type": "response.create"})
+func audioChunkBytes(sampleRate int) (int, error) {
+	if sampleRate <= 0 {
+		return 0, fmt.Errorf("audio input rate must be positive, got %d", sampleRate)
+	}
+	chunkBytes := sampleRate / 10 * 2
+	if chunkBytes == 0 {
+		return 0, fmt.Errorf("audio input rate %d produces no chunk bytes", sampleRate)
+	}
+	return chunkBytes, nil
 }
 
-func tonePCM16(sampleRate, durationMs int) []byte {
-	samples := sampleRate * durationMs / 1000
-	audio := make([]byte, samples*2)
-	for i := 0; i < samples; i++ {
-		value := int16(math.Sin(2*math.Pi*440*float64(i)/float64(sampleRate)) * 0.25 * math.MaxInt16)
-		binary.LittleEndian.PutUint16(audio[i*2:], uint16(value))
+func TestAudioChunkBytesUsesProviderRate(t *testing.T) {
+	tests := []struct {
+		name       string
+		sampleRate int
+		wantBytes  int
+	}{
+		{name: "localai", sampleRate: audioInputRate, wantBytes: 3200},
+		{name: "openai", sampleRate: openAIInputRate(), wantBytes: 4800},
 	}
-	return audio
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := audioChunkBytes(test.sampleRate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.wantBytes {
+				t.Fatalf("audio chunk bytes for %d Hz = %d, want %d", test.sampleRate, got, test.wantBytes)
+			}
+		})
+	}
+}
+
+func speechPCM16(sampleRate int) ([]byte, error) {
+	if sampleRate <= 0 {
+		return nil, fmt.Errorf("speech fixture sample rate must be positive, got %d", sampleRate)
+	}
+	encoded := strings.Join(strings.Fields(conformanceSpeechPCM16Base64), "")
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decode speech fixture: %w", err)
+	}
+	if len(audio) == 0 || len(audio)%2 != 0 {
+		return nil, fmt.Errorf("speech fixture has invalid PCM16 byte count %d", len(audio))
+	}
+	if sampleRate == audioInputRate {
+		return audio, nil
+	}
+	return resamplePCM16(audio, audioInputRate, sampleRate)
+}
+
+func silencePCM16(sampleRate, durationMs int) ([]byte, error) {
+	if sampleRate <= 0 || durationMs <= 0 {
+		return nil, fmt.Errorf("silence fixture dimensions must be positive, got %d Hz for %d ms", sampleRate, durationMs)
+	}
+	samples := sampleRate * durationMs / 1000
+	if samples == 0 {
+		return nil, fmt.Errorf("silence fixture duration is too short for %d Hz", sampleRate)
+	}
+	return make([]byte, samples*2), nil
+}
+
+func resamplePCM16(audio []byte, inputRate, outputRate int) ([]byte, error) {
+	if inputRate <= 0 || outputRate <= 0 {
+		return nil, fmt.Errorf("PCM16 resample rates must be positive, got %d to %d", inputRate, outputRate)
+	}
+	if len(audio) == 0 || len(audio)%2 != 0 {
+		return nil, fmt.Errorf("PCM16 resample input has invalid byte count %d", len(audio))
+	}
+	if inputRate == outputRate {
+		return audio, nil
+	}
+	inputSamples := len(audio) / 2
+	outputSamples := int(math.Round(float64(inputSamples) * float64(outputRate) / float64(inputRate)))
+	if outputSamples == 0 {
+		return nil, fmt.Errorf("PCM16 resample output is empty for %d input samples", inputSamples)
+	}
+	resampled := make([]byte, outputSamples*2)
+	for outputIndex := 0; outputIndex < outputSamples; outputIndex++ {
+		sourcePosition := float64(outputIndex) * float64(inputRate) / float64(outputRate)
+		leftIndex := int(sourcePosition)
+		if leftIndex >= inputSamples-1 {
+			leftIndex = inputSamples - 1
+		}
+		rightIndex := leftIndex
+		fraction := 0.0
+		if leftIndex < inputSamples-1 {
+			rightIndex++
+			fraction = sourcePosition - float64(leftIndex)
+		}
+		left := float64(int16(binary.LittleEndian.Uint16(audio[leftIndex*2:])))
+		right := float64(int16(binary.LittleEndian.Uint16(audio[rightIndex*2:])))
+		value := int(math.Round(left + (right-left)*fraction))
+		if value > math.MaxInt16 {
+			value = math.MaxInt16
+		} else if value < math.MinInt16 {
+			value = math.MinInt16
+		}
+		binary.LittleEndian.PutUint16(resampled[outputIndex*2:], uint16(int16(value)))
+	}
+	return resampled, nil
+}
+
+func TestSpeechPCM16FixtureSupportsProviderRates(t *testing.T) {
+	for _, sampleRate := range []int{audioInputRate, openAIInputRate()} {
+		audio, err := speechPCM16(sampleRate)
+		if err != nil {
+			t.Fatalf("speech fixture at %d Hz: %v", sampleRate, err)
+		}
+		if len(audio) == 0 || len(audio)%2 != 0 {
+			t.Fatalf("speech fixture at %d Hz has invalid PCM16 byte count %d", sampleRate, len(audio))
+		}
+		rms, err := pcm16RMS(audio)
+		if err != nil {
+			t.Fatalf("speech fixture RMS at %d Hz: %v", sampleRate, err)
+		}
+		if rms <= silenceRMSThreshold {
+			t.Fatalf("speech fixture RMS at %d Hz = %.6f, want above %.6f", sampleRate, rms, silenceRMSThreshold)
+		}
+	}
+}
+
+func responseCreate(ctx context.Context, conn *websocket.Conn) error {
+	return writeEvent(ctx, conn, map[string]any{"type": "response.create"})
 }
 
 func pcm16RMS(audio []byte) (float64, error) {
@@ -445,16 +569,46 @@ func safeEndpoint(raw string) string {
 }
 
 func eventErrorMessage(data map[string]any) string {
-	if message := stringAt(data, "error.message"); message != "" {
-		return message
+	message := firstString(data, "error.message", "message")
+	kind := firstString(data, "error.type")
+	code := firstString(data, "error.code")
+	param := firstString(data, "error.param")
+	if message == "" {
+		message = firstString(data, "error.type", "error.code")
 	}
-	if message := stringAt(data, "message"); message != "" {
-		return message
+	if message == "" {
+		return "unknown realtime error"
 	}
-	if kind := firstString(data, "error.type", "error.code"); kind != "" {
-		return kind
+	details := make([]string, 0, 3)
+	if kind != "" && kind != message {
+		details = append(details, kind)
 	}
-	return "unknown realtime error"
+	if code != "" && code != message && code != kind {
+		details = append(details, "code="+code)
+	}
+	if param != "" {
+		details = append(details, "param="+param)
+	}
+	if len(details) > 0 {
+		message += " (" + strings.Join(details, ", ") + ")"
+	}
+	return message
+}
+
+func TestEventErrorMessageIncludesProviderDetails(t *testing.T) {
+	got := eventErrorMessage(map[string]any{
+		"type": "error",
+		"error": map[string]any{
+			"type":    "invalid_request_error",
+			"code":    "audio_format_not_supported",
+			"param":   "session.audio.input.format",
+			"message": "input audio format is not supported",
+		},
+	})
+	want := "input audio format is not supported (invalid_request_error, code=audio_format_not_supported, param=session.audio.input.format)"
+	if got != want {
+		t.Fatalf("event error = %q, want %q", got, want)
+	}
 }
 
 func mapAt(data map[string]any, path ...string) map[string]any {

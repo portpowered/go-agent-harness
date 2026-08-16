@@ -26,5 +26,11 @@ that fails a behavior is a test failure. The four assertion controls run
 without live services and intentionally log their expected rejection: silent
 PCM, withheld history, no tools, and no image.
 
+The audio cases use the checked-in mono PCM16 speech fixture so transcription
+and VAD are exercised; the shared body resamples it to each provider's input
+rate. Manual turns commit audio and use the provider's response-creation rule;
+server-VAD turns let VAD create and interrupt the response and append a trailing
+silence segment to close the initial utterance.
+
 The dated measurement boundary is maintained in
 `docs/architecture/s2s-local-tier-conformance.md`.

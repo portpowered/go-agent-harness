@@ -39,9 +39,13 @@ func TestLiveRealtimeTierConformance(t *testing.T) {
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), behaviorTimeout)
 					defer cancel()
+					behaviorStarted := time.Now()
 					observation, err := behavior.run(t, ctx, endpoint)
+					if observation.latency == 0 {
+						observation.latency = time.Since(behaviorStarted)
+					}
 					if err != nil {
-						t.Fatalf("%s endpoint=%s: %v", behavior.name, endpoint.name, err)
+						t.Fatalf("%s endpoint=%s latency=%s evidence=%s: %v", behavior.name, endpoint.name, observation.latency, observation.evidence, err)
 					}
 					t.Logf("behavior=%s provider=%s model=%s latency=%s evidence=%s", behavior.name, endpoint.name, endpoint.model, observation.latency, observation.evidence)
 				})
@@ -59,11 +63,12 @@ func configuredEndpoints(t *testing.T) []endpointConfig {
 	}
 	localURL, localErr := endpointURL(localRaw, localAIRealtimeModel)
 	local := endpointConfig{
-		name:       "localai",
-		url:        localURL,
-		model:      localAIRealtimeModel,
-		inputRate:  audioInputRate,
-		outputRate: localAudioOutputRate,
+		name:                 "localai",
+		url:                  localURL,
+		model:                localAIRealtimeModel,
+		inputRate:            audioInputRate,
+		outputRate:           localAudioOutputRate,
+		manualResponseCreate: false,
 	}
 	if localErr != nil {
 		local.skipReason = "localai-endpoint-unavailable: invalid endpoint configuration"
@@ -79,12 +84,13 @@ func configuredEndpoints(t *testing.T) []endpointConfig {
 	}
 	openAIURL, openAIErr := endpointURL(openAIRaw, openAIRealtimeModel)
 	openAI := endpointConfig{
-		name:       "openai",
-		url:        openAIURL,
-		model:      openAIRealtimeModel,
-		apiKey:     envFirst("AGENT_MODEL__OPENAI__API_KEY"),
-		inputRate:  openAIInputRate(),
-		outputRate: openAIAudioOutputRate,
+		name:                 "openai",
+		url:                  openAIURL,
+		model:                openAIRealtimeModel,
+		apiKey:               envFirst("AGENT_MODEL__OPENAI__API_KEY"),
+		inputRate:            openAIInputRate(),
+		outputRate:           openAIAudioOutputRate,
+		manualResponseCreate: true,
 	}
 	switch {
 	case openAIErr != nil:
@@ -114,14 +120,20 @@ func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfi
 		return behaviorObservation{}, err
 	}
 	defer func() { _ = conn.Close() }()
-	if err := appendAudio(ctx, conn, tonePCM16(endpoint.inputRate, 500)); err != nil {
+	audio, err := speechPCM16(endpoint.inputRate)
+	if err != nil {
+		return behaviorObservation{}, err
+	}
+	if err := appendAudio(ctx, conn, audio, endpoint.inputRate); err != nil {
 		return behaviorObservation{}, fmt.Errorf("append input audio: %w", err)
 	}
 	if err := writeEvent(ctx, conn, map[string]any{"type": "input_audio_buffer.commit"}); err != nil {
 		return behaviorObservation{}, fmt.Errorf("commit input audio: %w", err)
 	}
-	if err := responseCreate(ctx, conn); err != nil {
-		return behaviorObservation{}, err
+	if endpoint.manualResponseCreate {
+		if err := responseCreate(ctx, conn); err != nil {
+			return behaviorObservation{}, err
+		}
 	}
 	response, err := readResponse(ctx, conn)
 	if err != nil {
@@ -151,16 +163,20 @@ func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointCon
 		"What is the exact launch code from turn one? Reply with the code.",
 	}
 	var final responseObservation
-	for _, turn := range turns {
+	for turnIndex, turn := range turns {
 		final, err = sendTextTurn(ctx, conn, []map[string]any{{"type": "input_text", "text": turn}})
 		if err != nil {
 			_ = conn.Close()
 			return behaviorObservation{}, fmt.Errorf("context turn: %w", err)
 		}
+		t.Logf("context turn=%d reply=%q", turnIndex+1, final.text)
 	}
 	_ = conn.Close()
 	if err := requireContextFact(final.text, contextFact); err != nil {
-		return behaviorObservation{}, err
+		return behaviorObservation{
+			latency:  time.Since(started),
+			evidence: fmt.Sprintf("turn1=READY turn2=READY turn3=%q", final.text),
+		}, err
 	}
 
 	// The same assertion is deliberately exercised without the first two
@@ -190,7 +206,7 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	started := time.Now()
 	conn, err := endpoint.connect(ctx, sessionSettings{
 		modalities:   []string{"audio"},
-		instructions: "Speak a sentence slowly enough that an interruption can arrive while audio is playing.",
+		instructions: "Count slowly from one to twenty so playback remains in flight long enough for an interruption.",
 		audio:        true,
 		serverVAD:    true,
 	})
@@ -198,14 +214,19 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		return behaviorObservation{}, err
 	}
 	defer func() { _ = conn.Close() }()
-	if err := appendAudio(ctx, conn, tonePCM16(endpoint.inputRate, 600)); err != nil {
+	audio, err := speechPCM16(endpoint.inputRate)
+	if err != nil {
+		return behaviorObservation{}, err
+	}
+	if err := appendAudio(ctx, conn, audio, endpoint.inputRate); err != nil {
 		return behaviorObservation{}, fmt.Errorf("append initial VAD audio: %w", err)
 	}
-	if err := writeEvent(ctx, conn, map[string]any{"type": "input_audio_buffer.commit"}); err != nil {
-		return behaviorObservation{}, fmt.Errorf("commit initial VAD audio: %w", err)
-	}
-	if err := responseCreate(ctx, conn); err != nil {
+	silence, err := silencePCM16(endpoint.inputRate, 700)
+	if err != nil {
 		return behaviorObservation{}, err
+	}
+	if err := appendAudio(ctx, conn, silence, endpoint.inputRate); err != nil {
+		return behaviorObservation{}, fmt.Errorf("append initial VAD silence: %w", err)
 	}
 
 	var observation responseObservation
@@ -218,17 +239,10 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		if err != nil {
 			return behaviorObservation{}, fmt.Errorf("read barge-in event: %w", err)
 		}
-		observation.events = append(observation.events, event.typeName)
+		observation.events = append(observation.events, fmt.Sprintf("%s@%s", event.typeName, time.Since(started).Round(time.Millisecond)))
 		switch event.typeName {
 		case "error":
 			return behaviorObservation{}, fmt.Errorf("server error during barge-in: %s", eventErrorMessage(event.data))
-		case "response.created":
-			if !bargeSent {
-				if err := appendAudio(ctx, conn, tonePCM16(endpoint.inputRate, 350)); err != nil {
-					return behaviorObservation{}, fmt.Errorf("append barge-in audio: %w", err)
-				}
-				bargeSent = true
-			}
 		case "input_audio_buffer.speech_started":
 			if bargeSent {
 				vadStarted = true
@@ -245,6 +259,12 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 				observation.audioDeltasBeforeCancel++
 			}
 			observation.audio = append(observation.audio, chunk...)
+			if !bargeSent {
+				if err := appendAudio(ctx, conn, audio, endpoint.inputRate); err != nil {
+					return behaviorObservation{}, fmt.Errorf("append barge-in audio: %w", err)
+				}
+				bargeSent = true
+			}
 		case "response.cancelled":
 			cancelled = true
 		case "response.output_audio.done", "response.audio.done":
@@ -261,7 +281,7 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 				flushObserved = true
 			}
 			if !bargeSent || !vadStarted || !cancelled || !flushObserved || observation.audioDeltasBeforeCancel == 0 || observation.audioDeltasAfterCancel != 0 {
-				return behaviorObservation{}, fmt.Errorf("barge-in assertion failed: barge_audio=%t vad_started=%t cancelled=%t flush=%t audio_before_cancel=%d audio_after_cancel=%d", bargeSent, vadStarted, cancelled, flushObserved, observation.audioDeltasBeforeCancel, observation.audioDeltasAfterCancel)
+				return behaviorObservation{}, fmt.Errorf("barge-in assertion failed: barge_audio=%t vad_started=%t cancelled=%t flush=%t audio_before_cancel=%d audio_after_cancel=%d events=%v", bargeSent, vadStarted, cancelled, flushObserved, observation.audioDeltasBeforeCancel, observation.audioDeltasAfterCancel, observation.events)
 			}
 			return behaviorObservation{
 				latency:  time.Since(started),
@@ -344,7 +364,10 @@ func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	})
 	_ = conn.Close()
 	if err != nil {
-		return behaviorObservation{}, fmt.Errorf("image response: %w", err)
+		return behaviorObservation{
+			latency:  time.Since(started),
+			evidence: fmt.Sprintf("positive_error=%v", err),
+		}, fmt.Errorf("image response: %w", err)
 	}
 	if err := requireImageFact(positive.text, imageFact); err != nil {
 		return behaviorObservation{}, err
