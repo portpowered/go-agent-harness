@@ -19,6 +19,8 @@ var excludedDirs = map[string]bool{
 	"__pycache__":  true,
 }
 
+// updateFileAutocomplete checks the current input for an @ prefix and activates
+// file autocomplete suggestions if appropriate.
 func (m *ChatModel) updateFileAutocomplete() {
 	prefix := extractAtPrefix(m.input.Value())
 	if prefix == "" && !strings.HasSuffix(m.input.Value(), "@") {
