@@ -23,6 +23,9 @@ import (
 type SessionAudioInput struct {
 	Path  string
 	Stdin io.Reader
+	// MaxDuration bounds an audio-enabled session when the shared duration
+	// wrapper cannot own this parallel audio runner.
+	MaxDuration time.Duration
 	// Source and SendAudioInput are optional deterministic service-test seams.
 	// CLI callers leave them nil so paths use FileSource and frames use the
 	// AgentLoop's SendAudioInput method.
@@ -134,6 +137,9 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err != nil {
 		return err
 	}
+	if input.MaxDuration > 0 {
+		plan.loop.MaxDuration = input.MaxDuration
+	}
 	// A finite audio source is the input lifetime. Do not close immediately on
 	// SESSION.OPEN; allow every source frame to reach the loop first.
 	plan.loop.CloseAfterOpen = false
@@ -152,6 +158,20 @@ func RunSessionWithAudioInputAndTextSeed(ctx context.Context, out io.Writer, opt
 		opts.Prompt = seed.Value
 	}
 	return RunSessionWithAudioInput(ctx, out, opts, input)
+}
+
+// RunSessionWithAudioInputAndTextSeedAndMaxDuration preserves the merged
+// session duration behavior when audio input is absent and applies the same
+// bound to the audio runner when the audio extension is selected.
+func RunSessionWithAudioInputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput) error {
+	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
+		return err
+	}
+	if !input.Present && input.Path == "" {
+		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
+	}
+	input.MaxDuration = maxDuration
+	return RunSessionWithAudioInputAndTextSeed(ctx, out, opts, seed, input)
 }
 
 func validateSessionAudioInput(input SessionAudioInput) error {
