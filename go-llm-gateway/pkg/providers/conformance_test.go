@@ -129,9 +129,10 @@ func TestS11OfflineStatelessProviderConformance(t *testing.T) {
 			provider := tc.new(&http.Client{Transport: probe}, conformanceSecret)
 			_, err := provider.Infer(context.Background(), tc.request)
 			assertStatelessFailure(t, tc.name, probe, err, ErrorExpectation{
-				class:  providers.ErrorClassTransport,
-				cause:  providers.ErrTransport,
-				signal: "s2s-conformance-transport-failure",
+				class:     providers.ErrorClassTransport,
+				cause:     providers.ErrTransport,
+				signal:    "s2s-conformance-transport-failure",
+				retryable: true,
 			})
 		})
 
@@ -143,9 +144,10 @@ func TestS11OfflineStatelessProviderConformance(t *testing.T) {
 			provider := tc.new(&http.Client{Transport: probe}, conformanceSecret)
 			_, err := provider.Infer(context.Background(), tc.request)
 			assertStatelessFailure(t, tc.name, probe, err, ErrorExpectation{
-				class:  providers.ErrorClassRateLimited,
-				cause:  providers.ErrRateLimited,
-				signal: "s2s-conformance-protocol-failure",
+				class:     providers.ErrorClassRateLimited,
+				cause:     providers.ErrRateLimited,
+				signal:    "s2s-conformance-protocol-failure",
+				retryable: true,
 			})
 			var typed *providers.ProviderError
 			if !errors.As(err, &typed) {
@@ -158,6 +160,9 @@ func TestS11OfflineStatelessProviderConformance(t *testing.T) {
 			if !errors.Is(wrapped, providers.ErrProviderRejected) || !errors.Is(wrapped, providers.ErrRateLimited) {
 				t.Fatal("protocol taxonomy did not survive two wrapping levels")
 			}
+			if !providers.IsRetryable(wrapped) {
+				t.Fatal("protocol retryability did not survive two wrapping levels")
+			}
 			var wrappedTyped *providers.ProviderError
 			if !errors.As(wrapped, &wrappedTyped) || wrappedTyped.StatusCode != http.StatusTooManyRequests {
 				t.Fatalf("wrapped ProviderError = %+v", wrappedTyped)
@@ -167,9 +172,10 @@ func TestS11OfflineStatelessProviderConformance(t *testing.T) {
 }
 
 type ErrorExpectation struct {
-	class  string
-	cause  error
-	signal string
+	class     string
+	cause     error
+	signal    string
+	retryable bool
 }
 
 func assertStatelessFailure(t *testing.T, providerName string, probe *conformanceRoundTripper, err error, want ErrorExpectation) {
@@ -190,6 +196,9 @@ func assertStatelessFailure(t *testing.T, providerName string, probe *conformanc
 	}
 	if got := providers.ErrorClassification(err); got != want.class {
 		t.Skipf("provider defect: %s failure classified as %q, want shared %q: %T: %v", providerName, got, want.class, err, err)
+	}
+	if got := providers.IsRetryable(err); got != want.retryable {
+		t.Skipf("provider defect: %s failure retryable = %v, want %v: %T: %v", providerName, got, want.retryable, err, err)
 	}
 	if !errors.Is(err, want.cause) {
 		t.Skipf("provider defect: %s failure did not preserve shared cause %v: %T: %v", providerName, want.cause, err, err)
@@ -404,7 +413,7 @@ func TestS11OfflineSessionProviderConformance(t *testing.T) {
 			probe := newSessionProbe(errors.New("s2s-conformance-transport-failure"), nil)
 			provider := tc.new(probe, conformanceSecret)
 			_, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "s2s-conformance-model"})
-			assertSessionFailure(t, tc.name, probe, err, "s2s-conformance-transport-failure")
+			assertSessionFailure(t, tc.name, probe, err, "s2s-conformance-transport-failure", true)
 			if got := providers.ErrorClassification(err); got != providers.ErrorClassTransport {
 				t.Skipf("provider defect: %s dial failure classified as %q, want shared %q: %T: %v", tc.name, got, providers.ErrorClassTransport, err, err)
 			}
@@ -414,7 +423,7 @@ func TestS11OfflineSessionProviderConformance(t *testing.T) {
 			probe := newSessionProbe(nil, errors.New("s2s-conformance-protocol-failure"))
 			provider := tc.new(probe, conformanceSecret)
 			_, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "s2s-conformance-model"})
-			assertSessionFailure(t, tc.name, probe, err, "s2s-conformance-protocol-failure")
+			assertSessionFailure(t, tc.name, probe, err, "s2s-conformance-protocol-failure", false)
 			if got := providers.ErrorClassification(err); got != providers.ErrorClassProviderRejected {
 				t.Skipf("provider defect: %s protocol failure classified as %q, want shared %q: %T: %v", tc.name, got, providers.ErrorClassProviderRejected, err, err)
 			}
@@ -422,7 +431,7 @@ func TestS11OfflineSessionProviderConformance(t *testing.T) {
 	}
 }
 
-func assertSessionFailure(t *testing.T, providerName string, probe *sessionProbe, err error, signal string) {
+func assertSessionFailure(t *testing.T, providerName string, probe *sessionProbe, err error, signal string, wantRetryable bool) {
 	t.Helper()
 	if err == nil {
 		t.Fatal("session provider failure returned nil error")
@@ -443,6 +452,9 @@ func assertSessionFailure(t *testing.T, providerName string, probe *sessionProbe
 	assertErrorChainSecretFree(t, err, conformanceSecret)
 	if !errorChainContains(err, signal) {
 		t.Fatalf("%s session error omitted deterministic non-secret signal %q (writes=%d): %v", providerName, signal, writes, err)
+	}
+	if got := providers.IsRetryable(err); got != wantRetryable {
+		t.Skipf("provider defect: %s session failure retryable = %v, want %v: %T: %v", providerName, got, wantRetryable, err, err)
 	}
 }
 

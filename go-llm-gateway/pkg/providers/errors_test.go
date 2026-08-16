@@ -19,19 +19,20 @@ func TestS4ProviderHTTPErrorTable(t *testing.T) {
 		wantMessage string
 		wantClass   string
 		wantCause   error
+		wantRetry   bool
 	}{
-		{name: "400 invalid request", status: 400, detail: "bad payload", wantMessage: "openai: api error 400: bad payload", wantClass: ErrorClassInvalidRequest, wantCause: ErrInvalidRequest},
-		{name: "422 invalid request", status: 422, detail: "unprocessable", wantMessage: "openai: api error 422: unprocessable", wantClass: ErrorClassInvalidRequest, wantCause: ErrInvalidRequest},
-		{name: "401 authentication", status: 401, detail: "missing token", wantMessage: "openai: api error 401: missing token", wantClass: ErrorClassAuthentication, wantCause: ErrAuthentication},
-		{name: "403 authentication", status: 403, detail: "forbidden", wantMessage: "openai: api error 403: forbidden", wantClass: ErrorClassAuthentication, wantCause: ErrAuthentication},
-		{name: "408 rate limited", status: 408, detail: "request timeout", wantMessage: "openai: api error 408: request timeout", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited},
-		{name: "409 rate limited", status: 409, detail: "conflict", wantMessage: "openai: api error 409: conflict", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited},
-		{name: "425 rate limited", status: 425, detail: "too early", wantMessage: "openai: api error 425: too early", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited},
-		{name: "429 rate limited", status: 429, detail: "slow down", wantMessage: "openai: api error 429: slow down", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited},
-		{name: "500 transport", status: 500, detail: "server failed", wantMessage: "openai: api error 500: server failed", wantClass: ErrorClassTransport, wantCause: ErrTransport},
-		{name: "599 transport", status: 599, detail: "upstream failed", wantMessage: "openai: api error 599: upstream failed", wantClass: ErrorClassTransport, wantCause: ErrTransport},
-		{name: "other rejected", status: 404, detail: "not found", wantMessage: "openai: api error 404: not found", wantClass: ErrorClassProviderRejected, wantCause: ErrProviderRejected},
-		{name: "zero status rejected", status: 0, detail: "no status", wantMessage: "openai: no status", wantClass: ErrorClassProviderRejected, wantCause: ErrProviderRejected},
+		{name: "400 invalid request", status: 400, detail: "bad payload", wantMessage: "openai: api error 400: bad payload", wantClass: ErrorClassInvalidRequest, wantCause: ErrInvalidRequest, wantRetry: false},
+		{name: "422 invalid request", status: 422, detail: "unprocessable", wantMessage: "openai: api error 422: unprocessable", wantClass: ErrorClassInvalidRequest, wantCause: ErrInvalidRequest, wantRetry: false},
+		{name: "401 authentication", status: 401, detail: "missing token", wantMessage: "openai: api error 401: missing token", wantClass: ErrorClassAuthentication, wantCause: ErrAuthentication, wantRetry: false},
+		{name: "403 authentication", status: 403, detail: "forbidden", wantMessage: "openai: api error 403: forbidden", wantClass: ErrorClassAuthentication, wantCause: ErrAuthentication, wantRetry: false},
+		{name: "408 rate limited", status: 408, detail: "request timeout", wantMessage: "openai: api error 408: request timeout", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited, wantRetry: true},
+		{name: "409 rate limited", status: 409, detail: "conflict", wantMessage: "openai: api error 409: conflict", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited, wantRetry: true},
+		{name: "425 rate limited", status: 425, detail: "too early", wantMessage: "openai: api error 425: too early", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited, wantRetry: true},
+		{name: "429 rate limited", status: 429, detail: "slow down", wantMessage: "openai: api error 429: slow down", wantClass: ErrorClassRateLimited, wantCause: ErrRateLimited, wantRetry: true},
+		{name: "500 transport", status: 500, detail: "server failed", wantMessage: "openai: api error 500: server failed", wantClass: ErrorClassTransport, wantCause: ErrTransport, wantRetry: true},
+		{name: "599 transport", status: 599, detail: "upstream failed", wantMessage: "openai: api error 599: upstream failed", wantClass: ErrorClassTransport, wantCause: ErrTransport, wantRetry: true},
+		{name: "other rejected", status: 404, detail: "not found", wantMessage: "openai: api error 404: not found", wantClass: ErrorClassProviderRejected, wantCause: ErrProviderRejected, wantRetry: false},
+		{name: "zero status rejected", status: 0, detail: "no status", wantMessage: "openai: no status", wantClass: ErrorClassProviderRejected, wantCause: ErrProviderRejected, wantRetry: false},
 	}
 
 	for _, tc := range tests {
@@ -51,6 +52,9 @@ func TestS4ProviderHTTPErrorTable(t *testing.T) {
 			}
 			if got := ErrorClassification(err); got != tc.wantClass {
 				t.Fatalf("ErrorClassification() = %q, want %q", got, tc.wantClass)
+			}
+			if got := IsRetryable(err); got != tc.wantRetry {
+				t.Fatalf("IsRetryable() = %v, want %v", got, tc.wantRetry)
 			}
 			var typed *ProviderError
 			if !errors.As(err, &typed) || typed != err {
@@ -79,6 +83,9 @@ func TestS4ProviderErrorFormattingBranches(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.err.Error(); got != tc.want {
 				t.Fatalf("Error() = %q, want %q", got, tc.want)
+			}
+			if got := IsRetryable(tc.err); got {
+				t.Fatalf("IsRetryable() = %v, want false for an unclassified formatting branch", got)
 			}
 		})
 	}
@@ -161,6 +168,9 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 			if got := ErrorClassification(tc.err); got != tc.wantClass {
 				t.Fatalf("ErrorClassification() = %q, want %q", got, tc.wantClass)
 			}
+			if got := IsRetryable(tc.err); got {
+				t.Fatalf("IsRetryable() = %v, want false for validation class %q", got, tc.wantClass)
+			}
 			var typed *ValidationError
 			if !errors.As(tc.err, &typed) || typed != tc.err {
 				t.Fatalf("errors.As() = %v, want the constructed *ValidationError", typed)
@@ -180,24 +190,25 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 
 func TestS4ErrorClassificationTableAndPrecedence(t *testing.T) {
 	tests := []struct {
-		name string
-		err  error
-		want string
+		name      string
+		err       error
+		want      string
+		wantRetry bool
 	}{
-		{name: "nil", err: nil, want: ""},
-		{name: "context canceled", err: context.Canceled, want: ErrorClassCancellation},
-		{name: "context deadline is not cancellation", err: context.DeadlineExceeded, want: ErrorClassUnknown},
-		{name: "taxonomy cancellation", err: ErrCancellation, want: ErrorClassCancellation},
-		{name: "replay incomplete", err: ErrReplayIncomplete, want: ErrorClassReplayIncomplete},
-		{name: "replay mismatch", err: ErrReplayMismatch, want: ErrorClassReplayMismatch},
-		{name: "partial output", err: ErrPartialOutput, want: ErrorClassPartialOutput},
-		{name: "authentication", err: ErrAuthentication, want: ErrorClassAuthentication},
-		{name: "rate limited", err: ErrRateLimited, want: ErrorClassRateLimited},
-		{name: "invalid request", err: ErrInvalidRequest, want: ErrorClassInvalidRequest},
-		{name: "unsupported request", err: ErrUnsupportedRequest, want: ErrorClassUnsupportedRequest},
-		{name: "transport", err: ErrTransport, want: ErrorClassTransport},
-		{name: "provider rejected", err: ErrProviderRejected, want: ErrorClassProviderRejected},
-		{name: "unknown", err: errors.New("unclassified"), want: ErrorClassUnknown},
+		{name: "nil", err: nil, want: "", wantRetry: false},
+		{name: "context canceled", err: context.Canceled, want: ErrorClassCancellation, wantRetry: false},
+		{name: "context deadline is not cancellation", err: context.DeadlineExceeded, want: ErrorClassUnknown, wantRetry: true},
+		{name: "taxonomy cancellation", err: ErrCancellation, want: ErrorClassCancellation, wantRetry: false},
+		{name: "replay incomplete", err: ErrReplayIncomplete, want: ErrorClassReplayIncomplete, wantRetry: false},
+		{name: "replay mismatch", err: ErrReplayMismatch, want: ErrorClassReplayMismatch, wantRetry: false},
+		{name: "partial output", err: ErrPartialOutput, want: ErrorClassPartialOutput, wantRetry: false},
+		{name: "authentication", err: ErrAuthentication, want: ErrorClassAuthentication, wantRetry: false},
+		{name: "rate limited", err: ErrRateLimited, want: ErrorClassRateLimited, wantRetry: true},
+		{name: "invalid request", err: ErrInvalidRequest, want: ErrorClassInvalidRequest, wantRetry: false},
+		{name: "unsupported request", err: ErrUnsupportedRequest, want: ErrorClassUnsupportedRequest, wantRetry: false},
+		{name: "transport", err: ErrTransport, want: ErrorClassTransport, wantRetry: true},
+		{name: "provider rejected", err: ErrProviderRejected, want: ErrorClassProviderRejected, wantRetry: false},
+		{name: "unknown", err: errors.New("unclassified"), want: ErrorClassUnknown, wantRetry: false},
 	}
 
 	for _, tc := range tests {
@@ -205,23 +216,27 @@ func TestS4ErrorClassificationTableAndPrecedence(t *testing.T) {
 			if got := ErrorClassification(tc.err); got != tc.want {
 				t.Fatalf("ErrorClassification(%v) = %q, want %q", tc.err, got, tc.want)
 			}
+			if got := IsRetryable(tc.err); got != tc.wantRetry {
+				t.Fatalf("IsRetryable(%v) = %v, want %v", tc.err, got, tc.wantRetry)
+			}
 		})
 	}
 
 	ordered := []struct {
-		sentinel error
-		class    string
+		sentinel  error
+		class     string
+		retryable bool
 	}{
-		{ErrCancellation, ErrorClassCancellation},
-		{ErrReplayIncomplete, ErrorClassReplayIncomplete},
-		{ErrReplayMismatch, ErrorClassReplayMismatch},
-		{ErrPartialOutput, ErrorClassPartialOutput},
-		{ErrAuthentication, ErrorClassAuthentication},
-		{ErrRateLimited, ErrorClassRateLimited},
-		{ErrInvalidRequest, ErrorClassInvalidRequest},
-		{ErrUnsupportedRequest, ErrorClassUnsupportedRequest},
-		{ErrTransport, ErrorClassTransport},
-		{ErrProviderRejected, ErrorClassProviderRejected},
+		{ErrCancellation, ErrorClassCancellation, false},
+		{ErrReplayIncomplete, ErrorClassReplayIncomplete, false},
+		{ErrReplayMismatch, ErrorClassReplayMismatch, false},
+		{ErrPartialOutput, ErrorClassPartialOutput, false},
+		{ErrAuthentication, ErrorClassAuthentication, false},
+		{ErrRateLimited, ErrorClassRateLimited, true},
+		{ErrInvalidRequest, ErrorClassInvalidRequest, false},
+		{ErrUnsupportedRequest, ErrorClassUnsupportedRequest, false},
+		{ErrTransport, ErrorClassTransport, true},
+		{ErrProviderRejected, ErrorClassProviderRejected, false},
 	}
 	for high, higher := range ordered {
 		for low := high + 1; low < len(ordered); low++ {
@@ -229,6 +244,9 @@ func TestS4ErrorClassificationTableAndPrecedence(t *testing.T) {
 				err := errors.Join(ordered[low].sentinel, higher.sentinel)
 				if got := ErrorClassification(err); got != higher.class {
 					t.Fatalf("ErrorClassification(%v) = %q, want %q", err, got, higher.class)
+				}
+				if got := IsRetryable(err); got != higher.retryable {
+					t.Fatalf("IsRetryable(%v) = %v, want %v", err, got, higher.retryable)
 				}
 			})
 		}
@@ -244,6 +262,9 @@ func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) 
 	if got := ErrorClassification(wrappedProvider); got != ErrorClassRateLimited {
 		t.Fatalf("wrapped provider classification = %q, want %q", got, ErrorClassRateLimited)
 	}
+	if got := IsRetryable(wrappedProvider); !got {
+		t.Fatalf("wrapped provider retryability = %v, want true", got)
+	}
 	var gotProvider *ProviderError
 	if !errors.As(wrappedProvider, &gotProvider) || gotProvider.Provider != "fake" || gotProvider.StatusCode != 429 || gotProvider.Detail != "slow down" {
 		t.Fatalf("wrapped provider details = %+v", gotProvider)
@@ -257,6 +278,9 @@ func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) 
 	if got := ErrorClassification(wrappedValidation); got != ErrorClassUnsupportedRequest {
 		t.Fatalf("wrapped validation classification = %q, want %q", got, ErrorClassUnsupportedRequest)
 	}
+	if got := IsRetryable(wrappedValidation); got {
+		t.Fatalf("wrapped validation retryability = %v, want false", got)
+	}
 	var gotValidation *ValidationError
 	if !errors.As(wrappedValidation, &gotValidation) || gotValidation.Provider != "fake" || gotValidation.Requested != "unknown" || strings.Join(gotValidation.Supported, ",") != "known" {
 		t.Fatalf("wrapped validation details = %+v", gotValidation)
@@ -269,10 +293,16 @@ func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) 
 	if got := ErrorClassification(joinedSentinels); got != ErrorClassRateLimited {
 		t.Fatalf("joined sentinel classification = %q, want %q", got, ErrorClassRateLimited)
 	}
+	if got := IsRetryable(joinedSentinels); !got {
+		t.Fatalf("joined sentinel retryability = %v, want true", got)
+	}
 
 	joinedTyped := fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", errors.Join(providerErr, ErrPartialOutput)))
 	if got := ErrorClassification(joinedTyped); got != ErrorClassPartialOutput {
 		t.Fatalf("joined typed classification = %q, want %q", got, ErrorClassPartialOutput)
+	}
+	if got := IsRetryable(joinedTyped); got {
+		t.Fatalf("joined typed retryability = %v, want false after partial-output precedence", got)
 	}
 	if !errors.Is(joinedTyped, ErrPartialOutput) {
 		t.Fatal("joined typed error lost partial-output sentinel")
@@ -292,16 +322,17 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 		build     func(error) *messages.ErrorValue
 		err       error
 		wantClass string
+		wantRetry bool
 	}{
-		{name: "stream nil", build: NewStreamErrorValue, wantClass: ""},
-		{name: "stream provider error", build: NewStreamErrorValue, err: providerErr, wantClass: ErrorClassRateLimited},
-		{name: "stream cancellation", build: NewStreamErrorValue, err: context.Canceled, wantClass: ErrorClassCancellation},
-		{name: "stream unknown", build: NewStreamErrorValue, err: unknownErr, wantClass: ErrorClassUnknown},
-		{name: "transport nil", build: NewStreamTransportErrorValue, wantClass: ""},
-		{name: "transport unknown", build: NewStreamTransportErrorValue, err: unknownErr, wantClass: ErrorClassTransport},
-		{name: "transport wrapped cause", build: NewStreamTransportErrorValue, err: wrappedTransport, wantClass: ErrorClassTransport},
-		{name: "transport preserves known class", build: NewStreamTransportErrorValue, err: providerErr, wantClass: ErrorClassRateLimited},
-		{name: "transport preserves invalid class", build: NewStreamTransportErrorValue, err: ErrInvalidRequest, wantClass: ErrorClassInvalidRequest},
+		{name: "stream nil", build: NewStreamErrorValue, wantClass: "", wantRetry: false},
+		{name: "stream provider error", build: NewStreamErrorValue, err: providerErr, wantClass: ErrorClassRateLimited, wantRetry: true},
+		{name: "stream cancellation", build: NewStreamErrorValue, err: context.Canceled, wantClass: ErrorClassCancellation, wantRetry: false},
+		{name: "stream unknown", build: NewStreamErrorValue, err: unknownErr, wantClass: ErrorClassUnknown, wantRetry: false},
+		{name: "transport nil", build: NewStreamTransportErrorValue, wantClass: "", wantRetry: false},
+		{name: "transport unknown", build: NewStreamTransportErrorValue, err: unknownErr, wantClass: ErrorClassTransport, wantRetry: false},
+		{name: "transport wrapped cause", build: NewStreamTransportErrorValue, err: wrappedTransport, wantClass: ErrorClassTransport, wantRetry: false},
+		{name: "transport preserves known class", build: NewStreamTransportErrorValue, err: providerErr, wantClass: ErrorClassRateLimited, wantRetry: true},
+		{name: "transport preserves invalid class", build: NewStreamTransportErrorValue, err: ErrInvalidRequest, wantClass: ErrorClassInvalidRequest, wantRetry: false},
 	}
 
 	for _, tc := range tests {
@@ -312,6 +343,9 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 			}
 			if got := value.Classification; got != tc.wantClass {
 				t.Fatalf("classification = %q, want %q", got, tc.wantClass)
+			}
+			if got := IsRetryable(tc.err); got != tc.wantRetry {
+				t.Fatalf("IsRetryable(%v) = %v, want %v", tc.err, got, tc.wantRetry)
 			}
 			if tc.err == nil {
 				if value.Message != "" || value.Err != nil {
@@ -345,6 +379,9 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 	if !errors.As(value.Err, &typed) || typed.StatusCode != 429 {
 		t.Fatalf("stream typed cause = %+v, want status 429 provider error", typed)
 	}
+	if !IsRetryable(value.Err) {
+		t.Fatal("stream value lost provider retryability")
+	}
 	transportValue := NewStreamTransportErrorValue(wrappedTransport)
 	if !errors.Is(transportValue.Err, io.ErrUnexpectedEOF) {
 		t.Fatal("transport stream value lost wrapped reader cause")
@@ -354,6 +391,9 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 	if !errors.Is(wrappedStreamValue.Err, ErrProviderRejected) || !errors.Is(wrappedStreamValue.Err, ErrRateLimited) {
 		t.Fatal("stream value lost two-level wrapped provider taxonomy")
 	}
+	if !IsRetryable(wrappedStreamValue.Err) {
+		t.Fatal("stream value lost two-level wrapped provider retryability")
+	}
 	var wrappedStreamTyped *ProviderError
 	if !errors.As(wrappedStreamValue.Err, &wrappedStreamTyped) || wrappedStreamTyped.StatusCode != 429 {
 		t.Fatalf("two-level wrapped stream cause = %+v, want status 429 provider error", wrappedStreamTyped)
@@ -361,21 +401,31 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 }
 
 func TestS4RetryabilityPolicyMatrix(t *testing.T) {
-	// The current production surface exposes classification but no retryability
-	// policy function or field. Keep the intended matrix visible and skipped
-	// until an owning behavior lane adds an observable policy contract.
 	cases := []struct {
+		name      string
+		err       error
 		class     string
 		retryable bool
 	}{
-		{class: ErrorClassRateLimited, retryable: true},
-		{class: ErrorClassTransport, retryable: true},
-		{class: ErrorClassAuthentication, retryable: false},
-		{class: ErrorClassInvalidRequest, retryable: false},
-		{class: ErrorClassUnsupportedRequest, retryable: false},
-		{class: ErrorClassProviderRejected, retryable: false},
+		{name: "rate limited", err: ErrRateLimited, class: ErrorClassRateLimited, retryable: true},
+		{name: "transport", err: ErrTransport, class: ErrorClassTransport, retryable: true},
+		{name: "wrapped transport", err: fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", ErrTransport)), class: ErrorClassTransport, retryable: true},
+		{name: "authentication", err: ErrAuthentication, class: ErrorClassAuthentication, retryable: false},
+		{name: "invalid request", err: ErrInvalidRequest, class: ErrorClassInvalidRequest, retryable: false},
+		{name: "unsupported request", err: ErrUnsupportedRequest, class: ErrorClassUnsupportedRequest, retryable: false},
+		{name: "provider rejected", err: ErrProviderRejected, class: ErrorClassProviderRejected, retryable: false},
+		{name: "wrapped deadline", err: fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", context.DeadlineExceeded)), class: ErrorClassUnknown, retryable: true},
 	}
-	t.Skipf("retryability policy is not observable from providers; intended matrix has %d classes", len(cases))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ErrorClassification(tc.err); got != tc.class {
+				t.Fatalf("ErrorClassification(%v) = %q, want %q", tc.err, got, tc.class)
+			}
+			if got := IsRetryable(tc.err); got != tc.retryable {
+				t.Fatalf("IsRetryable(%v) = %v, want %v", tc.err, got, tc.retryable)
+			}
+		})
+	}
 }
 
 // Keep the original focused runtime checks alongside the exhaustive S4 tables
