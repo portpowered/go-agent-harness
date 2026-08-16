@@ -20,6 +20,24 @@ const (
 	ManifestVersion = 1
 	SuiteName       = "functional"
 
+	// ManifestPathEnv overrides the embedded manifest for a hermetic or local
+	// suite invocation. An unset value always uses the committed manifest.
+	ManifestPathEnv = "FUNCTIONAL_QUARANTINE_FILE"
+
+	// GoTagsEnv carries build tags from a suite driver into discovered and
+	// selected child package invocations.
+	GoTagsEnv = "FUNCTIONAL_GO_TAGS"
+
+	// SelectionAppliedEnv tells a child package invocation that its exact
+	// selector was already chosen by the suite runner. The package TestMain
+	// hook uses this to avoid applying the manifest a second time.
+	SelectionAppliedEnv = "FUNCTIONAL_QUARANTINE_SELECTION_APPLIED"
+
+	// DiscoveryEnv is used only while a package test binary lists its own
+	// top-level tests. It prevents the package TestMain hook from recursively
+	// applying a manifest during discovery.
+	DiscoveryEnv = "FUNCTIONAL_QUARANTINE_DISCOVERY"
+
 	BucketEnvironmentDependent = "ENVIRONMENT-DEPENDENT"
 	BucketGenuinelyFailing     = "GENUINELY FAILING"
 )
@@ -92,6 +110,16 @@ func ReadEmbeddedManifest() (Manifest, error) {
 		return Manifest{}, fmt.Errorf("read embedded functional quarantine: %w", err)
 	}
 	return ParseManifest(body)
+}
+
+// ReadConfiguredManifest reads an explicit manifest when the suite driver
+// supplies one, otherwise it reads the versioned manifest committed beside
+// this package.
+func ReadConfiguredManifest() (Manifest, error) {
+	if path := strings.TrimSpace(os.Getenv(ManifestPathEnv)); path != "" {
+		return ReadManifest(path)
+	}
+	return ReadEmbeddedManifest()
 }
 
 // ParseManifest strictly parses JSON, rejecting unknown fields, trailing JSON,
