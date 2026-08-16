@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,55 @@ type ExecTool struct {
 	denyPatterns        []*regexp.Regexp
 	allowPatterns       []*regexp.Regexp
 	restrictToWorkspace bool
+	processFactory      shellProcessFactory
+}
+
+type shellProcess interface {
+	Start() error
+	Wait() error
+	Terminate() error
+	Kill() error
+}
+
+type shellProcessFactory func(context.Context, string, string, io.Writer, io.Writer) shellProcess
+
+type execShellProcess struct {
+	cmd *exec.Cmd
+}
+
+func newExecShellProcess(ctx context.Context, cwd, command string, stdout, stderr io.Writer) shellProcess {
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", command)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", command)
+	}
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+	prepareCommandForTermination(cmd)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return &execShellProcess{cmd: cmd}
+}
+
+func (p *execShellProcess) Start() error {
+	return p.cmd.Start()
+}
+
+func (p *execShellProcess) Wait() error {
+	return p.cmd.Wait()
+}
+
+func (p *execShellProcess) Terminate() error {
+	return terminateProcessTree(p.cmd)
+}
+
+func (p *execShellProcess) Kill() error {
+	if p.cmd == nil || p.cmd.Process == nil {
+		return nil
+	}
+	return p.cmd.Process.Kill()
 }
 
 var defaultDenyPatterns = []*regexp.Regexp{
@@ -105,6 +155,7 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		denyPatterns:        denyPatterns,
 		allowPatterns:       nil,
 		restrictToWorkspace: restrict,
+		processFactory:      newExecShellProcess,
 	}
 }
 
@@ -173,21 +224,8 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) ([]messages
 	}
 	defer cancel()
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(cmdCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", command)
-	} else {
-		cmd = exec.CommandContext(cmdCtx, "sh", "-c", command)
-	}
-	if cwd != "" {
-		cmd.Dir = cwd
-	}
-
-	prepareCommandForTermination(cmd)
-
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd := t.processFactory(cmdCtx, cwd, command, &stdout, &stderr)
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start command: %w", err)
@@ -202,13 +240,11 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) ([]messages
 	select {
 	case err = <-done:
 	case <-cmdCtx.Done():
-		_ = terminateProcessTree(cmd)
+		_ = cmd.Terminate()
 		select {
 		case err = <-done:
 		case <-time.After(2 * time.Second):
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
+			_ = cmd.Kill()
 			err = <-done
 		}
 	}
