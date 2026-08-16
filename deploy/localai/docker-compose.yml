@@ -1,0 +1,28 @@
+services:
+  localai:
+    image: localai/localai:v4.8.2
+    container_name: go-agent-harness-localai
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      LOCALAI_MODELS_PATH: /models
+      LOCALAI_LOG_LEVEL: info
+      LOCALAI_MAX_ACTIVE_BACKENDS: "4"
+      LOCALAI_GALLERIES: >-
+        [{"name":"localai","url":"https://raw.githubusercontent.com/mudler/LocalAI/v4.8.2/gallery/index.yaml"}]
+      LOCALAI_PRELOAD_MODELS_CONFIG: /models/preload.yaml
+    volumes:
+      - localai-model-cache:/models
+      - ./models/gpt-realtime.yaml:/models/gpt-realtime.yaml:ro
+      - ./models/preload.yaml:/models/preload.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/readyz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+
+volumes:
+  localai-model-cache:
+    name: go-agent-harness-localai-model-cache
