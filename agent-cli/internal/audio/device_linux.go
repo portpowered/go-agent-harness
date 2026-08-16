@@ -32,6 +32,12 @@ type linuxDeviceRecord struct {
 	defaulted bool
 }
 
+var (
+	_ OpenedDevice = (*linuxOpenedDevice)(nil)
+	_ AudioSource  = (*linuxOpenedDevice)(nil)
+	_ AudioSink    = (*linuxOpenedDevice)(nil)
+)
+
 // LinuxDeviceRegistry adapts ALSA and PulseAudio to DeviceRegistry.
 type LinuxDeviceRegistry struct {
 	mu        sync.Mutex
@@ -255,7 +261,25 @@ func (d *linuxOpenedDevice) onData(output, _ []byte, _ uint32) {
 	clear(output)
 	n := min(len(output)/2, len(d.playback))
 	encodePCM16(output[:n*2], d.playback[:n])
-	d.positive, d.playback = d.positive || n > 0, d.playback[n:]
+	if !d.positive && slices.ContainsFunc(d.playback[:n], func(sample int16) bool { return sample != 0 }) {
+		d.positive = true
+	}
+	d.playback = d.playback[n:]
+}
+func (d *linuxOpenedDevice) ReadFrame(ctx context.Context, frame []int16) error {
+	if d.direction != DirectionInput {
+		return fmt.Errorf("audio device %q is output-only", d.id)
+	}
+	if err := validateFrame("read", frame); err != nil {
+		return err
+	}
+	if d.microphone == nil {
+		return fmt.Errorf("audio device %q has no capture source", d.id)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return d.microphone.ReadFrame(ctx, frame)
 }
 func (d *linuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error {
 	if d.direction != DirectionOutput {

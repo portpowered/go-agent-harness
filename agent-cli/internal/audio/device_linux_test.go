@@ -34,6 +34,21 @@ func TestLinuxStableDirectionalIDs(t *testing.T) {
 	}
 }
 func TestLinuxHardwareAndPositiveAudio(t *testing.T) {
+	assertRenderEvidence := func(frame []int16, want bool) {
+		writer := &linuxOpenedDevice{direction: DirectionOutput}
+		if err := writer.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatal(err)
+		}
+		writer.onData(make([]byte, FrameSize*2), nil, FrameSize)
+		if got := writer.PositiveAudioEvidence(); got != want {
+			t.Fatalf("PositiveAudioEvidence()=%v for frame with non-zero=%v", got, want)
+		}
+	}
+	assertRenderEvidence(make([]int16, FrameSize), false)
+	nonZero := make([]int16, FrameSize)
+	nonZero[0] = 1
+	assertRenderEvidence(nonZero, true)
+
 	records, err := enumerateLinuxDevices()
 	if len(records) == 0 {
 		t.Skipf("linux: no usable ALSA endpoint or reachable PulseAudio server: %v", err)
@@ -50,7 +65,11 @@ func TestLinuxHardwareAndPositiveAudio(t *testing.T) {
 	if err != nil {
 		t.Skipf("linux: capture source cannot be opened: %v", err)
 	}
-	positive, readErr := readPositiveCapture(opened.(*linuxOpenedDevice).microphone)
+	source, ok := opened.(AudioSource)
+	if !ok {
+		t.Fatal("Linux capture handle does not implement AudioSource")
+	}
+	positive, readErr := readPositiveCapture(source)
 	closeErr := opened.Close()
 	if readErr != nil || closeErr != nil {
 		t.Fatalf("capture read=%v close=%v", readErr, closeErr)
@@ -84,7 +103,7 @@ func linuxRecord(records []linuxDeviceRecord, direction Direction) *linuxDeviceR
 	}
 	return nil
 }
-func readPositiveCapture(reader *MicrophoneSource) (bool, error) {
+func readPositiveCapture(reader AudioSource) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	for i := 0; i < 10; i++ {
