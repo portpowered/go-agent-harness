@@ -1,9 +1,9 @@
 package agent
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -13,6 +13,28 @@ import (
 
 func validationRunData(models *config.ModelsConfig) *RunData {
 	return &RunData{Models: models}
+}
+
+type validationErrorContract interface {
+	Error() string
+}
+
+func assertValidationError(t *testing.T, err error, wantMessage string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("validation error = nil, want %q", wantMessage)
+	}
+	// These validators currently return bare fmt.Errorf values: there is no
+	// exported sentinel or custom type for errors.Is/errors.As identity matching.
+	// Preserve the available typed error contract and exact message until that
+	// production API can expose a stable classification without changing this lane.
+	var typed validationErrorContract
+	if !errors.As(err, &typed) {
+		t.Fatalf("validation error %T does not satisfy the error contract", err)
+	}
+	if typed.Error() != wantMessage {
+		t.Fatalf("validation error = %q, want exact message %q", typed.Error(), wantMessage)
+	}
 }
 
 func TestValidateOutputModality_S4ErrorTableAndControls(t *testing.T) {
@@ -114,9 +136,7 @@ func TestValidateOutputModality_S4ErrorTableAndControls(t *testing.T) {
 				}
 				return
 			}
-			if err == nil || err.Error() != tt.wantError {
-				t.Fatalf("validateOutputModality() error = %v, want exact message %q", err, tt.wantError)
-			}
+			assertValidationError(t, err, tt.wantError)
 		})
 	}
 }
@@ -210,7 +230,7 @@ func TestValidateInputMimeTypes_S4ErrorTableAndControls(t *testing.T) {
 				SupportedInputMimeTypes: []string{"image/png"},
 			}}}),
 			input:     inputWithImage,
-			wantError: `model "gpt-4o" does not support input type "image/webp"`,
+			wantError: `model "gpt-4o" does not support input type "image/webp". supported types: image/png Tip: Convert with: convert input.webp output.png`,
 		},
 		{
 			name:     "supported input mime",
@@ -234,9 +254,7 @@ func TestValidateInputMimeTypes_S4ErrorTableAndControls(t *testing.T) {
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
-				t.Fatalf("validateInputMimeTypes() error = %v, want message containing %q", err, tt.wantError)
-			}
+			assertValidationError(t, err, tt.wantError)
 		})
 	}
 }
