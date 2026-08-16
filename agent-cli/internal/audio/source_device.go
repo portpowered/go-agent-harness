@@ -15,8 +15,6 @@ var (
 	ErrDeviceCapabilityMismatch = errors.New("audio device capability mismatch")
 )
 
-// DeviceAdapterError is the inspectable constructor error used for nil
-// registries, direction mismatches, and missing stream capabilities.
 type DeviceAdapterError struct {
 	ID        DeviceID
 	Direction Direction
@@ -50,41 +48,36 @@ func (e *DeviceAdapterError) Is(target error) bool { return target == e.Kind }
 type deviceFrameReader interface {
 	ReadFrame(context.Context, []int16) error
 }
-
 type deviceFrameWriter interface {
 	WriteFrame(context.Context, []int16) error
 }
-
 type deviceByteReader interface {
 	Read(context.Context) ([]byte, error)
 }
-
 type deviceByteWriter interface {
 	Write(context.Context, []byte) error
 }
 
 type deviceAdapter struct {
-	mu        sync.Mutex
 	handle    OpenedDevice
 	id        DeviceID
 	direction Direction
-	closed    bool
+	closed    chan struct{}
 	closeOnce sync.Once
 	closeErr  error
 }
 
 func newDeviceAdapter(handle OpenedDevice, id DeviceID, direction Direction) *deviceAdapter {
-	return &deviceAdapter{handle: handle, id: id, direction: direction}
+	return &deviceAdapter{handle: handle, id: id, direction: direction, closed: make(chan struct{})}
 }
 
 func (a *deviceAdapter) begin(operation string) error {
-	a.mu.Lock()
-	if a.closed {
-		a.mu.Unlock()
+	select {
+	case <-a.closed:
 		return &ClosedError{Operation: operation, Path: string(a.id)}
+	default:
+		return nil
 	}
-	a.mu.Unlock()
-	return nil
 }
 
 func (a *deviceAdapter) finish(operation string, err error) error {
@@ -98,32 +91,18 @@ func (a *deviceAdapter) finish(operation string, err error) error {
 		}
 		return fmt.Errorf("%w: %v", &DeviceLostError{ID: a.id, Direction: a.direction}, err)
 	}
-	if a.isClosed() {
+	select {
+	case <-a.closed:
 		return &ClosedError{Operation: operation, Path: string(a.id)}
+	default:
+		return err
 	}
-	return err
-}
-
-func (a *deviceAdapter) isClosed() bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.closed
 }
 
 func (a *deviceAdapter) close() error {
 	a.closeOnce.Do(func() {
-		a.mu.Lock()
-		a.closed = true
-		handle := a.handle
-		a.mu.Unlock()
-
-		var closeErr error
-		if handle != nil {
-			closeErr = handle.Close()
-		}
-		a.mu.Lock()
-		a.closeErr = closeErr
-		a.mu.Unlock()
+		close(a.closed)
+		a.closeErr = a.handle.Close()
 	})
 	return a.closeErr
 }
@@ -141,17 +120,13 @@ func NewDeviceSource(registry DeviceRegistry, id DeviceID) (*DeviceSource, error
 	if err != nil {
 		return nil, err
 	}
-	frameReader, hasFrames := handle.(deviceFrameReader)
-	byteReader, hasBytes := handle.(deviceByteReader)
+	frames, hasFrames := handle.(deviceFrameReader)
+	bytes, hasBytes := handle.(deviceByteReader)
 	if !hasFrames && !hasBytes {
 		_ = handle.Close()
 		return nil, &DeviceCapabilityError{ID: id, Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSource{
-		adapter:     newDeviceAdapter(handle, id, DirectionInput),
-		frameReader: frameReader,
-		byteReader:  byteReader,
-	}, nil
+	return &DeviceSource{newDeviceAdapter(handle, id, DirectionInput), frames, bytes}, nil
 }
 
 func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
@@ -167,16 +142,15 @@ func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
 	if err := s.adapter.begin("read"); err != nil {
 		return err
 	}
-
 	if s.frameReader != nil {
 		return s.adapter.finish("read", s.frameReader.ReadFrame(ctx, frame))
 	}
-	encoded, readErr := s.byteReader.Read(ctx)
-	if readErr != nil {
-		return s.adapter.finish("read", readErr)
+	encoded, err := s.byteReader.Read(ctx)
+	if err != nil {
+		return s.adapter.finish("read", err)
 	}
 	if len(encoded) != rawFrameBytes {
-		return &FrameSizeError{Operation: "device read", Got: len(encoded) / 2, Want: FrameSize}
+		return s.adapter.finish("read", &FrameSizeError{Operation: "device read", Got: len(encoded) / 2, Want: FrameSize})
 	}
 	decodePCM16(frame, encoded)
 	return nil

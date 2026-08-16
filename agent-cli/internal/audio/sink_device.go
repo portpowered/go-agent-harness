@@ -15,17 +15,13 @@ func NewDeviceSink(registry DeviceRegistry, id DeviceID) (*DeviceSink, error) {
 	if err != nil {
 		return nil, err
 	}
-	frameWriter, hasFrames := handle.(deviceFrameWriter)
-	byteWriter, hasBytes := handle.(deviceByteWriter)
+	frames, hasFrames := handle.(deviceFrameWriter)
+	bytes, hasBytes := handle.(deviceByteWriter)
 	if !hasFrames && !hasBytes {
 		_ = handle.Close()
 		return nil, &DeviceCapabilityError{ID: id, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSink{
-		adapter:     newDeviceAdapter(handle, id, DirectionOutput),
-		frameWriter: frameWriter,
-		byteWriter:  byteWriter,
-	}, nil
+	return &DeviceSink{newDeviceAdapter(handle, id, DirectionOutput), frames, bytes}, nil
 }
 
 func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
@@ -41,10 +37,8 @@ func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 	if err := s.adapter.begin("write"); err != nil {
 		return err
 	}
-
 	if s.frameWriter != nil {
-		copyOfFrame := append([]int16(nil), frame...)
-		return s.adapter.finish("write", s.frameWriter.WriteFrame(ctx, copyOfFrame))
+		return s.adapter.finish("write", s.frameWriter.WriteFrame(ctx, append([]int16(nil), frame...)))
 	}
 	encoded := make([]byte, rawFrameBytes)
 	encodePCM16(encoded, frame)
