@@ -17,7 +17,8 @@ import (
 // ToolCommand wraps the tool subcommand for invoking tools directly (debugging).
 // It loads config at run time and uses only enabled tools from config.
 type ToolCommand struct {
-	globalFlags *flags.GlobalFlags
+	globalFlags    *flags.GlobalFlags
+	registryLoader func() (*tools.ToolRegistry, error)
 }
 
 // NewToolCommand creates the ToolCommand with global flags (used to load config and resolve enabled tools).
@@ -27,6 +28,9 @@ func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
 
 // getRegistry loads config and returns a registry with only enabled tools.
 func (c *ToolCommand) getRegistry() (*tools.ToolRegistry, error) {
+	if c.registryLoader != nil {
+		return c.registryLoader()
+	}
 	storage, err := config.NewDefaultConfigStorage(c.globalFlags.ConfigDir())
 	if err != nil {
 		return nil, fmt.Errorf("config: %w", err)
