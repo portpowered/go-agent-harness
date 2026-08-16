@@ -1,0 +1,12 @@
+{
+  "name": "empty",
+  "messages": [
+    {
+      "role": "assistant",
+      "content_parts": null,
+      "refusal": "",
+      "tool_calls": null,
+      "tool_call_id": ""
+    }
+  ]
+}
