@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var ansiEscape = regexp.MustCompile("\\x1b\\[[0-9;]*m")
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func visibleAutocompleteLines(view string) []string {
 	if view == "" {
