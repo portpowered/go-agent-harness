@@ -23,7 +23,7 @@ const (
 	// LocalAI may rehydrate one pipeline backend when a fresh realtime
 	// connection is opened. Keep discovery bounded in the low seconds without
 	// making a ready fixture look absent during that warm-up.
-	probeTimeout = 5 * time.Second
+	probeTimeout = 10 * time.Second
 )
 
 var failedEndpoints = struct {
