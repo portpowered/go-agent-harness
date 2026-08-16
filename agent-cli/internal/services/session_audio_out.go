@@ -14,10 +14,14 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 const sessionAudioOutputBufferSize = 256
+
+const (
+	sessionAudioWAVHeaderSize  = 44
+	sessionAudioWAVMaxDataSize = uint64(^uint32(0)) - 36
+)
 
 // RunSessionWithAudioOut runs a session and writes assistant AUDIO.DELTA
 // samples to path as they arrive. An empty path preserves the normal session
@@ -40,17 +44,24 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		opts.Prompt = seed.Value
 	}
 
-	sink, err := audio.NewFileSink(path, out)
-	if err != nil {
-		return fmt.Errorf("--audio-out %q: %w", path, err)
+	if err := validateSessionRunOptions(opts); err != nil {
+		return err
 	}
-	audioOut := &sessionAudioOutput{path: path, sink: sink}
-	defer func() { runErr = errors.Join(runErr, audioOut.close()) }()
-
 	plan, err := planSessionRuntime(opts)
 	if err != nil {
 		return err
 	}
+
+	sink, err := newSessionAudioSink(path, out)
+	if err != nil {
+		return fmt.Errorf("--audio-out %q: %w", path, err)
+	}
+	audioOut := &sessionAudioOutput{sink: sink}
+	defer func() {
+		if closeErr := audioOut.close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
+		}
+	}()
 
 	if plan.inferencer != nil {
 		wirePrompt := ""
@@ -83,15 +94,248 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 }
 
 type sessionAudioOutput struct {
-	path string
 	sink audio.AudioSink
 
 	mu        sync.Mutex
 	closed    bool
-	wrote     bool
 	pending   []int16
 	closeOnce sync.Once
 	closeErr  error
+}
+
+type sessionAudioSamplesWriter interface {
+	WriteSamples(context.Context, []int16) error
+}
+
+// newSessionAudioSink keeps the existing frame-oriented audio sink in the
+// write path while adding a bounded tail writer and an incremental WAV
+// container for session output. The audio package's WAV sink intentionally
+// buffers samples for its generic file-sink contract; session output needs a
+// streaming container because deltas can be consumed before the session ends.
+func newSessionAudioSink(path string, out io.Writer) (audio.AudioSink, error) {
+	if path == "-" {
+		raw, err := audio.NewFileSink(path, out)
+		if err != nil {
+			return nil, err
+		}
+		return &sessionAudioSink{path: path, raw: raw, writer: out}, nil
+	}
+
+	// Use the established sink as the format/open preflight so its typed path
+	// and format errors remain part of the CLI contract. The session sink below
+	// reopens the now-validated target as a raw frame sink so it can stream WAV
+	// bytes and preserve a non-frame-aligned tail.
+	probe, err := audio.NewFileSink(path, out)
+	if err != nil {
+		return nil, err
+	}
+	_ = probe.Close()
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := audio.NewFileSink("-", file)
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+
+	sink := &sessionAudioSink{
+		path:   path,
+		raw:    raw,
+		writer: file,
+		file:   file,
+		wav:    strings.EqualFold(filepath.Ext(path), ".wav"),
+	}
+	if sink.wav {
+		if err := sink.updateWAVHeaderLocked(); err != nil {
+			_ = file.Close()
+			return nil, err
+		}
+	}
+	return sink, nil
+}
+
+// sessionAudioSink is an AudioSink-backed stream. Complete frames go through
+// the established audio sink; only a final partial frame uses WriteSamples.
+// WAV headers are rewritten in place after each write, so the file grows and
+// remains readable throughout the session without retaining the response.
+type sessionAudioSink struct {
+	mu sync.Mutex
+
+	path   string
+	raw    audio.AudioSink
+	writer io.Writer
+	file   *os.File
+	wav    bool
+
+	samples  uint64
+	closed   bool
+	closeErr error
+}
+
+var _ audio.AudioSink = (*sessionAudioSink)(nil)
+var _ sessionAudioSamplesWriter = (*sessionAudioSink)(nil)
+
+func (s *sessionAudioSink) WriteFrame(ctx context.Context, frame []int16) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return audio.ErrClosed
+	}
+	if s.wav && !sessionAudioWAVSizeFits(s.samples+uint64(len(frame))) {
+		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
+	}
+	if err := s.raw.WriteFrame(ctx, frame); err != nil {
+		return sessionAudioSinkError(s.path, "write", err)
+	}
+	s.samples += uint64(len(frame))
+	return s.updateWAVHeaderLocked()
+}
+
+func (s *sessionAudioSink) WriteSamples(ctx context.Context, samples []int16) error {
+	if err := sessionAudioContextError(ctx); err != nil {
+		return err
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return audio.ErrClosed
+	}
+	if s.wav && !sessionAudioWAVSizeFits(s.samples+uint64(len(samples))) {
+		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
+	}
+	encoded := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
+	}
+	if err := writeSessionAudioAll(s.writer, encoded); err != nil {
+		return sessionAudioSinkError(s.path, "write", err)
+	}
+	s.samples += uint64(len(samples))
+	return s.updateWAVHeaderLocked()
+}
+
+func (s *sessionAudioSink) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return s.closeErr
+	}
+	s.closed = true
+
+	var closeErr error
+	if err := s.raw.Close(); err != nil {
+		closeErr = errors.Join(closeErr, sessionAudioSinkError(s.path, "close", err))
+	}
+	if s.wav && s.samples > 0 {
+		closeErr = errors.Join(closeErr, sessionAudioSinkError(s.path, "write", s.updateWAVHeaderLocked()))
+	}
+	if s.file != nil {
+		closeErr = errors.Join(closeErr, sessionAudioSinkError(s.path, "close", s.file.Close()))
+		if s.wav && s.samples == 0 {
+			if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				closeErr = errors.Join(closeErr, sessionAudioSinkError(s.path, "remove", err))
+			}
+		}
+	}
+	s.closeErr = closeErr
+	return closeErr
+}
+
+func sessionAudioSinkError(path, operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	var streamErr *audio.StreamError
+	if errors.As(err, &streamErr) {
+		copyErr := *streamErr
+		copyErr.Operation = operation
+		copyErr.Path = path
+		copyErr.Format = sessionAudioFormat(path)
+		return &copyErr
+	}
+	return &audio.StreamError{Operation: operation, Path: path, Format: sessionAudioFormat(path), Err: err}
+}
+
+func sessionAudioFormat(path string) string {
+	if strings.EqualFold(filepath.Ext(path), ".wav") {
+		return "wav"
+	}
+	return "raw PCM16"
+}
+
+func (s *sessionAudioSink) updateWAVHeaderLocked() error {
+	if !s.wav {
+		return nil
+	}
+	if !sessionAudioWAVSizeFits(s.samples) {
+		return fmt.Errorf("WAV audio output %q exceeds the 32-bit data chunk limit", s.path)
+	}
+	if _, err := s.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	var header [sessionAudioWAVHeaderSize]byte
+	dataSize := uint32(s.samples * 2)
+	copy(header[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(header[4:8], 36+dataSize)
+	copy(header[8:12], "WAVE")
+	copy(header[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(header[16:20], 16)
+	binary.LittleEndian.PutUint16(header[20:22], 1)
+	binary.LittleEndian.PutUint16(header[22:24], audio.Channels)
+	binary.LittleEndian.PutUint32(header[24:28], audio.SampleRate)
+	binary.LittleEndian.PutUint32(header[28:32], audio.SampleRate*2)
+	binary.LittleEndian.PutUint16(header[32:34], 2)
+	binary.LittleEndian.PutUint16(header[34:36], 16)
+	copy(header[36:40], "data")
+	binary.LittleEndian.PutUint32(header[40:44], dataSize)
+	if err := writeSessionAudioAll(s.file, header[:]); err != nil {
+		return err
+	}
+	_, err := s.file.Seek(0, io.SeekEnd)
+	return err
+}
+
+func sessionAudioWAVSizeFits(samples uint64) bool {
+	return samples <= sessionAudioWAVMaxDataSize/2
+}
+
+func sessionAudioContextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+func writeSessionAudioAll(writer io.Writer, data []byte) error {
+	for len(data) > 0 {
+		written, err := writer.Write(data)
+		if written < 0 || written > len(data) {
+			return fmt.Errorf("%w: writer returned invalid byte count %d", io.ErrShortWrite, written)
+		}
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[written:]
+	}
+	return nil
 }
 
 func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte) error {
@@ -119,7 +363,6 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte) err
 		if err := o.sink.WriteFrame(ctx, frame); err != nil {
 			return err
 		}
-		o.wrote = true
 	}
 	return nil
 }
@@ -128,22 +371,17 @@ func (o *sessionAudioOutput) close() error {
 	o.closeOnce.Do(func() {
 		o.mu.Lock()
 		o.closed = true
-		sinkErr := o.sink.Close()
 		var pendingErr error
 		if len(o.pending) != 0 {
-			pendingErr = fmt.Errorf("PCM16 audio output ended with %d samples in an incomplete %d-sample frame", len(o.pending), audio.FrameSize)
-		}
-		wrote := o.wrote
-		o.mu.Unlock()
-		if sinkErr != nil && errors.Is(sinkErr, wavio.ErrEmptySamples) && !wrote && strings.EqualFold(filepath.Ext(o.path), ".wav") {
-			// The shared WAV sink rejects an empty sample payload. A no-audio
-			// session is represented by no output file, not a corrupt stub.
-			if removeErr := os.Remove(o.path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-				sinkErr = errors.Join(sinkErr, removeErr)
+			writer, ok := o.sink.(sessionAudioSamplesWriter)
+			if !ok {
+				pendingErr = fmt.Errorf("PCM16 audio output cannot write a trailing %d-sample fragment", len(o.pending))
 			} else {
-				sinkErr = nil
+				pendingErr = writer.WriteSamples(context.Background(), o.pending)
 			}
 		}
+		sinkErr := o.sink.Close()
+		o.mu.Unlock()
 		o.mu.Lock()
 		o.closeErr = errors.Join(pendingErr, sinkErr)
 		o.mu.Unlock()
