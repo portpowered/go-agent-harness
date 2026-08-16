@@ -32,9 +32,11 @@ func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 		}
 	}
 
-	transport := &scriptedWebSocket{
-		incoming: [][]byte{{0x31, 0x00, 0xfd}, {0x32, 0x00, 0xfc}},
+	incoming := []scriptedWebSocketMessage{
+		{messageType: 7, payload: []byte{0x31, 0x00, 0xfd}},
+		{messageType: 8, payload: []byte{0x32, 0x00, 0xfc}},
 	}
+	transport := &scriptedWebSocket{incoming: incoming}
 	webSocket := capture.WrapWebSocket(transport)
 	outgoing := [][]byte{
 		{0x41, 0x00, 0xfb},
@@ -46,11 +48,11 @@ func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 			t.Fatalf("websocket send %d: %v", index, err)
 		}
 	}
-	for index, wantPayload := range transport.incoming {
+	for index, wantMessage := range incoming {
 		messageType, payload, err := webSocket.ReadMessage()
-		if err != nil || messageType != 7+index || !bytes.Equal(payload, wantPayload) {
+		if err != nil || messageType != wantMessage.messageType || !bytes.Equal(payload, wantMessage.payload) {
 			t.Fatalf("websocket receive %d = (%d, %x, %v), want (%d, %x, nil)",
-				index, messageType, payload, err, 7+index, wantPayload)
+				index, messageType, payload, err, wantMessage.messageType, wantMessage.payload)
 		}
 	}
 
@@ -153,6 +155,25 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 			capturedN, capturedErr, capturedWriter.seen, capturedWriter.calls,
 			baselineN, baselineErr, baselineWriter.seen, baselineWriter.calls)
 	}
+	partialSink := &clientRecordSink{}
+	partialCapture := NewClientCapture(partialSink, func() (uint64, time.Time) {
+		return 18, time.Unix(18, 0)
+	})
+	partialWriter := &scriptedWriter{n: 2, err: liveWriteErr}
+	partialN, partialErr := partialCapture.WrapDeviceOutput(partialWriter).Write(writePayload)
+	if partialN != baselineN || partialErr != baselineErr || !errors.Is(partialErr, liveWriteErr) ||
+		!bytes.Equal(partialWriter.seen, baselineWriter.seen) || partialWriter.calls != baselineWriter.calls {
+		t.Fatalf("partial device output changed: captured=(%d,%v,%x,%d), baseline=(%d,%v,%x,%d)",
+			partialN, partialErr, partialWriter.seen, partialWriter.calls,
+			baselineN, baselineErr, baselineWriter.seen, baselineWriter.calls)
+	}
+	if len(partialSink.records) != 1 {
+		t.Fatalf("partial device output records = %d, want exactly one accepted-prefix record", len(partialSink.records))
+	}
+	wantPartialRecord := NewRecord(18, time.Unix(18, 0), PeerClient, DirectionOut, StreamDeviceOut, writePayload[:2])
+	if !recordsEqual(partialSink.records[0], wantPartialRecord) {
+		t.Fatalf("partial device output record = %+v, want %+v", partialSink.records[0], wantPartialRecord)
+	}
 
 	baselineTransport := &scriptedWebSocket{sendErr: liveSendErr, receiveErr: liveReceiveErr}
 	capturedTransport := &scriptedWebSocket{sendErr: liveSendErr, receiveErr: liveReceiveErr}
@@ -172,6 +193,49 @@ func TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades(t *testin
 		t.Fatalf("websocket receive changed: captured=(%d,%x,%v,%d), baseline=(%d,%x,%v,%d)",
 			gotType, gotPayload, capturedErr, capturedTransport.receiveCalls,
 			wantType, wantPayload, baselineErr, baselineTransport.receiveCalls)
+	}
+	successIncoming := []scriptedWebSocketMessage{
+		{messageType: 11, payload: []byte{0x05, 0xfb, 0x06}},
+		{messageType: 12, payload: []byte{0x07, 0xf9}},
+	}
+	successBaselineTransport := &scriptedWebSocket{
+		incoming: cloneScriptedWebSocketMessages(successIncoming),
+	}
+	successCapturedTransport := &scriptedWebSocket{
+		incoming: cloneScriptedWebSocketMessages(successIncoming),
+	}
+	successBaselineConnection := successBaselineTransport
+	successCapturedConnection := capture.WrapWebSocket(successCapturedTransport)
+	successOutgoing := []scriptedWebSocketMessage{
+		{messageType: 3, payload: []byte{0x08, 0xf8, 0x09}},
+		{messageType: 4, payload: []byte{0x0a, 0xf6}},
+	}
+	for index, message := range successOutgoing {
+		baselineErr := successBaselineConnection.WriteMessage(message.messageType, message.payload)
+		capturedErr := successCapturedConnection.WriteMessage(message.messageType, message.payload)
+		if capturedErr != baselineErr || capturedErr != nil {
+			t.Fatalf("successful websocket send %d changed: captured=%v, baseline=%v", index, capturedErr, baselineErr)
+		}
+	}
+	for index := range successIncoming {
+		baselineType, baselinePayload, baselineErr := successBaselineConnection.ReadMessage()
+		capturedType, capturedPayload, capturedErr := successCapturedConnection.ReadMessage()
+		if capturedType != baselineType || !bytes.Equal(capturedPayload, baselinePayload) || capturedErr != baselineErr || capturedErr != nil {
+			t.Fatalf("successful websocket receive %d changed: captured=(%d,%x,%v), baseline=(%d,%x,%v)",
+				index, capturedType, capturedPayload, capturedErr, baselineType, baselinePayload, baselineErr)
+		}
+	}
+	if successBaselineTransport.sendCalls != len(successOutgoing) || successCapturedTransport.sendCalls != len(successOutgoing) ||
+		!reflect.DeepEqual(successBaselineTransport.sent, successOutgoing) ||
+		!reflect.DeepEqual(successCapturedTransport.sent, successOutgoing) ||
+		!reflect.DeepEqual(successCapturedTransport.sent, successBaselineTransport.sent) {
+		t.Fatalf("successful websocket sends = baseline=%+v captured=%+v, want %+v", successBaselineTransport.sent, successCapturedTransport.sent, successOutgoing)
+	}
+	if successBaselineTransport.receiveCalls != len(successIncoming) || successCapturedTransport.receiveCalls != len(successIncoming) ||
+		!reflect.DeepEqual(successBaselineTransport.received, successIncoming) ||
+		!reflect.DeepEqual(successCapturedTransport.received, successIncoming) ||
+		!reflect.DeepEqual(successCapturedTransport.received, successBaselineTransport.received) {
+		t.Fatalf("successful websocket receives = baseline=%+v captured=%+v, want %+v", successBaselineTransport.received, successCapturedTransport.received, successIncoming)
 	}
 	if len(reports) != 1 || !errors.Is(reports[0], recordingErr) {
 		t.Fatalf("transcript reports = %v, want one report retaining sink error", reports)
@@ -262,16 +326,27 @@ func (w *scriptedWriter) Write(source []byte) (int, error) {
 	return w.n, w.err
 }
 
+type scriptedWebSocketMessage struct {
+	messageType int
+	payload     []byte
+}
+
 type scriptedWebSocket struct {
-	incoming     [][]byte
+	incoming     []scriptedWebSocketMessage
 	sendErr      error
 	receiveErr   error
 	sendCalls    int
 	receiveCalls int
+	sent         []scriptedWebSocketMessage
+	received     []scriptedWebSocketMessage
 }
 
-func (c *scriptedWebSocket) WriteMessage(_ int, _ []byte) error {
+func (c *scriptedWebSocket) WriteMessage(messageType int, payload []byte) error {
 	c.sendCalls++
+	c.sent = append(c.sent, scriptedWebSocketMessage{
+		messageType: messageType,
+		payload:     append([]byte(nil), payload...),
+	})
 	return c.sendErr
 }
 
@@ -283,9 +358,24 @@ func (c *scriptedWebSocket) ReadMessage() (int, []byte, error) {
 	if len(c.incoming) == 0 {
 		return 0, nil, io.EOF
 	}
-	payload := c.incoming[0]
+	message := c.incoming[0]
 	c.incoming = c.incoming[1:]
-	return 6 + c.receiveCalls, payload, nil
+	c.received = append(c.received, scriptedWebSocketMessage{
+		messageType: message.messageType,
+		payload:     append([]byte(nil), message.payload...),
+	})
+	return message.messageType, append([]byte(nil), message.payload...), nil
+}
+
+func cloneScriptedWebSocketMessages(messages []scriptedWebSocketMessage) []scriptedWebSocketMessage {
+	cloned := make([]scriptedWebSocketMessage, len(messages))
+	for index, message := range messages {
+		cloned[index] = scriptedWebSocketMessage{
+			messageType: message.messageType,
+			payload:     append([]byte(nil), message.payload...),
+		}
+	}
+	return cloned
 }
 
 type mutatingWebSocket struct{}
