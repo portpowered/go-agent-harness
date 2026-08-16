@@ -126,7 +126,7 @@ func (s *SessionTurns) EndTurn(index uint64, direction TurnDirection, response m
 	event = TurnEvent{Type: TurnEventEnd, Index: active.Index, Direction: active.Direction, Tick: tick, StartTick: active.StartTick, EndTick: tick}
 	return cloneTurn(active), nil
 }
-func (s *SessionTurns) RunTurn(ctx context.Context, input TurnInput, direction TurnDirection, startTick, endTick uint64) (SessionTurn, err error) {
+func (s *SessionTurns) RunTurn(ctx context.Context, input TurnInput, direction TurnDirection, startTick, endTick uint64) (turn SessionTurn, err error) {
 	started, err := s.StartTurn(input, direction, startTick)
 	if err != nil {
 		return SessionTurn{}, err
