@@ -50,7 +50,6 @@ type generation struct {
 	remaining int
 	started   time.Time
 }
-
 type Scenario struct {
 	mu                 sync.Mutex
 	cond               *sync.Cond
@@ -66,7 +65,6 @@ type Scenario struct {
 	advanceCalls       int
 	watchdogDone       chan struct{}
 }
-
 type Participant struct {
 	scenario *Scenario
 	name     string
@@ -89,7 +87,6 @@ func New(base time.Time, tickDuration time.Duration) *Scenario {
 	s.cond = sync.NewCond(&s.mu)
 	return s
 }
-
 func NewScenario(t testing.TB, base time.Time, tickDuration time.Duration) *Scenario {
 	s := New(base, tickDuration)
 	if t != nil {
@@ -98,11 +95,8 @@ func NewScenario(t testing.TB, base time.Time, tickDuration time.Duration) *Scen
 	}
 	return s
 }
-
 func (s *Scenario) Clock() *clock.Deterministic { return s.clock }
-
-func (s *Scenario) CurrentTick() uint64 { return s.clock.Tick() }
-
+func (s *Scenario) CurrentTick() uint64         { return s.clock.Tick() }
 func (s *Scenario) Register(name string) (*Participant, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -121,23 +115,19 @@ func (s *Scenario) Register(name string) (*Participant, error) {
 	s.activeParticipants++
 	return p, nil
 }
-
 func (p *Participant) Name() string { return p.name }
-
 func (p *Participant) LastTick() uint64 {
 	s := p.scenario
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return p.lastTick
 }
-
 func (p *Participant) Run(fn func()) {
 	go func() {
 		p.bind()
 		fn()
 	}()
 }
-
 func (p *Participant) Complete() {
 	s := p.scenario
 	s.mu.Lock()
@@ -154,7 +144,6 @@ func (p *Participant) Complete() {
 	}
 	s.mu.Unlock()
 }
-
 func (p *Participant) Observe(target uint64) (Observation, error) {
 	p.bind()
 	s := p.scenario
@@ -196,7 +185,6 @@ func (p *Participant) Observe(target uint64) (Observation, error) {
 	}
 	return Observation{}, fmt.Errorf("timeharness scenario is closed")
 }
-
 func (p *Participant) observation(target uint64) Observation {
 	p.lastTick = target
 	return Observation{p.name, target, p.scenario.base.Add(time.Duration(target) * p.scenario.tickDuration)}
@@ -234,7 +222,6 @@ func (s *Scenario) AdvanceTo(target uint64) (uint64, error) {
 	}
 	return s.clock.Tick(), nil
 }
-
 func (s *Scenario) ExpectWithinTicks(expectation string, allowed uint64, condition func() bool) (uint64, error) {
 	start := s.CurrentTick()
 	for step := uint64(0); ; step++ {
@@ -251,7 +238,6 @@ func (s *Scenario) ExpectWithinTicks(expectation string, allowed uint64, conditi
 	final := s.CurrentTick()
 	return final, &HarnessError{Kind: FailureExpectation, Expectation: expectation, StartingTick: start, AllowedTicks: allowed, FinalTick: final}
 }
-
 func (s *Scenario) Close() {
 	s.mu.Lock()
 	s.closed = true
@@ -262,7 +248,6 @@ func (s *Scenario) Close() {
 		<-done
 	}
 }
-
 func (s *Scenario) startLocked(target uint64) {
 	s.clock.AdvanceTo(target)
 	s.active = &generation{tick: target, arrived: make(map[string]bool), remaining: s.activeParticipants, started: time.Now()}
@@ -271,7 +256,6 @@ func (s *Scenario) startLocked(target uint64) {
 	}
 	s.cond.Broadcast()
 }
-
 func (s *Scenario) finishLocked() {
 	for name := range s.active.arrived {
 		s.participants[name].lastTick = s.active.tick
@@ -279,7 +263,6 @@ func (s *Scenario) finishLocked() {
 	s.completed, s.active = s.active.tick, nil
 	s.cond.Broadcast()
 }
-
 func (s *Scenario) missingLocked() []string {
 	if s.active == nil {
 		return nil
@@ -292,7 +275,6 @@ func (s *Scenario) missingLocked() []string {
 	}
 	return missing
 }
-
 func (s *Scenario) watchdog(done chan<- struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(defaultWatchdogInterval)
@@ -318,7 +300,6 @@ func (s *Scenario) watchdog(done chan<- struct{}) {
 		s.mu.Unlock()
 	}
 }
-
 func (s *Scenario) sleepingLocked() []string {
 	ids, result := sleepingGoroutines(), []string{}
 	for name, p := range s.participants {
@@ -328,20 +309,15 @@ func (s *Scenario) sleepingLocked() []string {
 	}
 	return result
 }
-
 func (p *Participant) bind() {
-	if p.gid.Load() != 0 {
-		return
-	}
 	var stack [64]byte
 	n := runtime.Stack(stack[:], false)
 	var id uint64
 	_, _ = fmt.Sscanf(string(stack[:n]), "goroutine %d ", &id)
-	if id != 0 {
-		p.gid.CompareAndSwap(0, id)
+	if p.gid.Load() == 0 && id != 0 {
+		p.gid.Store(id)
 	}
 }
-
 func sleepingGoroutines() map[uint64]bool {
 	buffer := make([]byte, 128*1024)
 	n := runtime.Stack(buffer, true)
@@ -351,13 +327,13 @@ func sleepingGoroutines() map[uint64]bool {
 			continue
 		}
 		var id uint64
-		if _, err := fmt.Sscanf(block, "goroutine %d ", &id); err == nil && id != 0 {
+		_, _ = fmt.Sscanf(block, "goroutine %d ", &id)
+		if id != 0 {
 			result[id] = true
 		}
 	}
 	return result
 }
-
 func names(values []string) string {
 	if len(values) == 0 {
 		return "<none>"

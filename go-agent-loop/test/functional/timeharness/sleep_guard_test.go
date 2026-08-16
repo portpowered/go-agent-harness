@@ -28,12 +28,10 @@ func TestDiagnosticsChild(t *testing.T) {
 		t.Fatal("stuck participant unexpectedly crossed the barrier")
 	}
 }
-
 func TestDiagnosticNegativeControls(t *testing.T) {
 	runFailureChild(t, "^TestDiagnosticsChild$", "TIMEHARNESS_CHILD=sleep", "sleeper", "time.Sleep", "forbidden")
 	runFailureChild(t, "^TestDiagnosticsChild$", "TIMEHARNESS_CHILD=stuck", "stuck-peer", "target tick 3", "watchdog")
 }
-
 func runFailureChild(t *testing.T, testName, marker string, fragments ...string) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run="+testName, "-test.v", "-test.timeout=2s")
