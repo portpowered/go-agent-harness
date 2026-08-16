@@ -274,7 +274,16 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 		module="$$1"; \
 		shift; \
 		echo "==> test-budget $$module $$*"; \
-		(cd "$$module" && CGO_ENABLED=0 $(GO) test "$$@" -json -v -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)") | tee -a "$$timingate_input"; \
+		run_budget_output="$$(mktemp)"; \
+		if (cd "$$module" && CGO_ENABLED=0 $(GO) test "$$@" -json -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)") >"$$run_budget_output" 2>&1; then \
+			cat "$$run_budget_output" >> "$$timingate_input"; \
+			rm -f "$$run_budget_output"; \
+		else \
+			status=$$?; \
+			cat "$$run_budget_output"; \
+			rm -f "$$run_budget_output"; \
+			return $$status; \
+		fi; \
 	}; \
 	run_budget_unit() { \
 		module="$$1"; \
