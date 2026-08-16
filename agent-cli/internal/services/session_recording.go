@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -263,9 +264,12 @@ func recordingDestinationError(kind error, operation, path string, cause error) 
 type sessionDirectoryRecording struct {
 	destination string
 	base        time.Time
+	clock       *platformclock.Deterministic
 	metadata    transcript.RecordingMetadata
+	writeFile   transcript.RecordingWriteFile
 
 	mu        sync.Mutex
+	eventMu   sync.Mutex
 	tick      uint64
 	client    bytes.Buffer
 	agent     bytes.Buffer
@@ -277,11 +281,17 @@ type sessionDirectoryRecording struct {
 	finalizeErr  error
 }
 
+var sessionRecordingClockBase = time.Unix(0, 0).UTC()
+
 func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, opts SessionRunOptions) *sessionDirectoryRecording {
-	base := time.Now().UTC()
+	// Recording timestamps are logical observations, not measurements of host
+	// time. A fixed base makes paired captures comparable while the shared
+	// deterministic clock keeps both transcript sides on the same timeline.
+	base := sessionRecordingClockBase
 	return &sessionDirectoryRecording{
 		destination: destination,
 		base:        base,
+		clock:       platformclock.NewDeterministic(base, time.Nanosecond),
 		metadata: transcript.RecordingMetadata{
 			Transport: "websocket",
 			Model:     sessionRecordingModel(opts, plan),
@@ -325,12 +335,43 @@ type sessionDirectoryRecordingInferencer struct {
 	recording *sessionDirectoryRecording
 }
 
+// sessionRecordingAudioInputKey is an in-package deterministic test seam for
+// feeding the same session boundary that the loop's audio-input path uses.
+// The CLI does not set it; production sessions therefore retain their normal
+// input behavior while runner tests can exercise both PCM directions without a
+// live device.
+type sessionRecordingAudioInputKey struct{}
+
+func withSessionRecordingAudioInput(ctx context.Context, segments [][]byte) context.Context {
+	return context.WithValue(ctx, sessionRecordingAudioInputKey{}, copySessionRecordingSegments(segments))
+}
+
+func sessionRecordingAudioInput(ctx context.Context) [][]byte {
+	segments, _ := ctx.Value(sessionRecordingAudioInputKey{}).([][]byte)
+	return copySessionRecordingSegments(segments)
+}
+
 func (i *sessionDirectoryRecordingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return newSessionDirectoryRecordingSession(ctx, session, i.recording), nil
+	wrapped := newSessionDirectoryRecordingSession(ctx, session, i.recording)
+	for _, segment := range sessionRecordingAudioInput(ctx) {
+		if len(segment) == 0 {
+			continue
+		}
+		msg := messages.StreamMessage{
+			Type:  messages.StreamTypeAudioDelta,
+			Role:  messages.RoleUser,
+			Value: messages.NewAudioDeltaValue(segment),
+		}
+		if !wrapped.Send(ctx, msg) {
+			i.recording.fail(recordingDestinationError(transcript.ErrRecordingWrite, "send input audio", i.recording.destination, errors.New("session rejected input audio")))
+			break
+		}
+	}
+	return wrapped, nil
 }
 
 type sessionDirectoryRecordingSession struct {
@@ -365,9 +406,11 @@ func (s *sessionDirectoryRecordingSession) Send(ctx context.Context, msg message
 func (s *sessionDirectoryRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	payload, err := gwtesting.MarshalStreamMessage(msg)
 	audio := sessionRecordingAudio(msg)
+	s.recording.eventMu.Lock()
+	defer s.recording.eventMu.Unlock()
 	outcome := messages.SendSessionWithOutcome(ctx, s.inner, msg)
 	if outcome.OK() {
-		s.recording.observePayload(msg, payload, audio, err, true)
+		s.recording.observePayloadLocked(msg, payload, audio, err, true)
 	}
 	return outcome
 }
@@ -435,6 +478,12 @@ func (r *sessionDirectoryRecording) observe(msg messages.StreamMessage, outbound
 }
 
 func (r *sessionDirectoryRecording) observePayload(msg messages.StreamMessage, payload, audio []byte, err error, outbound bool) {
+	r.eventMu.Lock()
+	defer r.eventMu.Unlock()
+	r.observePayloadLocked(msg, payload, audio, err, outbound)
+}
+
+func (r *sessionDirectoryRecording) observePayloadLocked(msg messages.StreamMessage, payload, audio []byte, err error, outbound bool) {
 	if err != nil {
 		r.fail(recordingDestinationError(transcript.ErrRecordingWrite, "encode transcript frame", r.destination, err))
 		return
@@ -442,8 +491,8 @@ func (r *sessionDirectoryRecording) observePayload(msg messages.StreamMessage, p
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.tick++
-	timestamp := r.base.Add(time.Duration(r.tick) * time.Nanosecond)
+	r.tick = r.clock.Advance()
+	timestamp := r.clock.Now()
 	clientDirection := transcript.DirectionIn
 	agentDirection := transcript.DirectionOut
 	if outbound {
@@ -506,6 +555,7 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			InputSegments:    copySessionRecordingSegments(r.input),
 			OutputSegments:   copySessionRecordingSegments(r.output),
 			Metadata:         r.metadata,
+			WriteFile:        r.writeFile,
 		}
 		r.mu.Unlock()
 		r.finalizeErr = transcript.WriteRecordingBundle(config)
