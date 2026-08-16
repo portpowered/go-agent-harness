@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 type recordingToolExecutor struct {
@@ -131,6 +132,13 @@ type recordingDialer struct {
 	dials atomic.Int64
 }
 
+var _ transport.Dialer = (*recordingDialer)(nil)
+
+func (d *recordingDialer) Dial(string, map[string]string) (transport.Conn, error) {
+	d.dials.Add(1)
+	return nil, errors.New("composition test transport dial")
+}
+
 func (d *recordingDialer) DialContext(context.Context, string, string) (net.Conn, error) {
 	d.dials.Add(1)
 	return nil, errors.New("composition test network dial")
@@ -138,17 +146,31 @@ func (d *recordingDialer) DialContext(context.Context, string, string) (net.Conn
 
 func validCompositionValues() compositionValues {
 	return compositionValues{
-		toolExecutor:   &recordingToolExecutor{},
-		deviceRegistry: &recordingDeviceRegistry{},
-		audioSource:    &recordingAudioSource{},
-		audioSink:      &recordingAudioSink{},
-		clockSource:    &recordingClock{now: time.Unix(123, 0)},
+		toolExecutor:    &recordingToolExecutor{},
+		transportDialer: &recordingDialer{},
+		deviceRegistry:  &recordingDeviceRegistry{},
+		audioSource:     &recordingAudioSource{},
+		audioSink:       &recordingAudioSink{},
+		clockSource:     &recordingClock{now: time.Unix(123, 0)},
 	}
 }
 
 func composeTestAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionOption) (*cli.AgentCLI, error) {
 	return ComposeAgentCLI(
 		toolExecutor,
+		&recordingDialer{},
+		&recordingDeviceRegistry{},
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		&recordingClock{now: time.Unix(123, 0)},
+		options...,
+	)
+}
+
+func composeTestAgentCLIWithDialer(toolExecutor messages.ToolExecutor, dialer transport.Dialer, options ...CompositionOption) (*cli.AgentCLI, error) {
+	return ComposeAgentCLI(
+		toolExecutor,
+		dialer,
 		&recordingDeviceRegistry{},
 		&recordingAudioSource{},
 		&recordingAudioSink{},
@@ -192,6 +214,7 @@ func TestCompositionClock_DefaultsThroughEnsureAndPreservesSuppliedIdentity(t *t
 
 	root, err := ComposeAgentCLI(
 		&recordingToolExecutor{},
+		&recordingDialer{},
 		&recordingDeviceRegistry{},
 		&recordingAudioSource{},
 		&recordingAudioSink{},
@@ -249,6 +272,14 @@ func TestValidateDependencies_RejectsEveryRequiredLivePortByName(t *testing.T) {
 	err = validateDependencies(&values)
 	if err == nil || !errors.Is(err, ErrMissingRequiredPort) || !strings.Contains(err.Error(), PortAudioSource) {
 		t.Fatalf("typed nil audio source was accepted or unnamed: %v", err)
+	}
+
+	var typedNilDialer *recordingDialer
+	values = validCompositionValues()
+	values.transportDialer = typedNilDialer
+	err = validateDependencies(&values)
+	if err == nil || !errors.Is(err, ErrMissingRequiredPort) || !strings.Contains(err.Error(), PortTransportDialer) {
+		t.Fatalf("typed nil transport dialer was accepted or unnamed: %v", err)
 	}
 }
 
@@ -319,7 +350,8 @@ func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 			case reflect.TypeOf((*DeviceRegistry)(nil)).Elem(),
 				reflect.TypeOf((*AudioSource)(nil)).Elem(),
 				reflect.TypeOf((*AudioSink)(nil)).Elem(),
-				reflect.TypeOf((*Clock)(nil)).Elem():
+				reflect.TypeOf((*Clock)(nil)).Elem(),
+				reflect.TypeOf((*transport.Dialer)(nil)).Elem():
 				values := validCompositionValues()
 				if err := applyPortSwap(&values, swaps[0]); err != nil {
 					t.Fatalf("applyPortSwap(%q): %v", definition.descriptor.Name, err)
@@ -331,6 +363,13 @@ func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 					if _, ok := definition.value(&values).(Clock); !ok {
 						t.Fatalf("selected %q replacement lost its clock contract", definition.descriptor.Name)
 					}
+				}
+				if definition.descriptor.Name == PortTransportDialer {
+					if got := replacement.(*recordingDialer).dials.Load(); got != 0 {
+						t.Fatalf("selected %q replacement was dialed during construction: %d", definition.descriptor.Name, got)
+					}
+					_, err := InitializeMockAgentCLIWithPorts(NewPortSwap(PortTransportDialer, struct{}{}))
+					assertPortSwapError(t, err, ErrIncompatiblePort, PortTransportDialer)
 				}
 			default:
 				t.Fatalf("no root-level observation for live port type %v", definition.descriptor.Type)
@@ -368,6 +407,8 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 		return &recordingAudioSink{}
 	case portType == reflect.TypeOf((*Clock)(nil)).Elem():
 		return &recordingClock{now: time.Unix(456, 0)}
+	case portType == reflect.TypeOf((*transport.Dialer)(nil)).Elem():
+		return &recordingDialer{}
 	default:
 		t.Fatalf("no recording replacement for live port type %v", portType)
 		return nil
@@ -553,8 +594,8 @@ func TestCompositionConstruction_IsInert(t *testing.T) {
 	t.Setenv("TEMP", fileSentinel)
 	beforeFiles := directoryEntries(t, fileSentinel)
 	dialer := &recordingDialer{}
-	// Composition has no file or network ports. The sentinel catches the old
-	// construction-time config-file path, while the default transport hook
+	// Composition has no file or network side effects. The sentinel catches the
+	// old construction-time config-file path, while the default transport hook
 	// catches an accidental HTTP client dial without making a real connection.
 	previousTransport := http.DefaultTransport
 	http.DefaultTransport = &http.Transport{DialContext: dialer.DialContext}
@@ -563,8 +604,9 @@ func TestCompositionConstruction_IsInert(t *testing.T) {
 	}()
 	before := runtime.NumGoroutine()
 
-	root, err := composeTestAgentCLI(
+	root, err := composeTestAgentCLIWithDialer(
 		toolExecutor,
+		dialer,
 		WithInferencer(inferencer),
 		WithSessionInferencer(sessionInferencer),
 	)
