@@ -72,9 +72,9 @@ func (askTestToolExecutor) Execute(_ context.Context, call messages.ToolCall) (m
 	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, nil
 }
 
-type askTestReaderError struct{}
+type askTestReaderError struct{ err error }
 
-func (askTestReaderError) Read([]byte) (int, error) { return 0, errors.New("stdin failed") }
+func (r askTestReaderError) Read([]byte) (int, error) { return 0, r.err }
 
 type askTestFailWriter struct {
 	err       error
@@ -127,24 +127,21 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 		wantOutput  string
 		wantCalls   int
 		wantStreams int
-		skipReason  string
 		wantErr     string
+		wantIs      error
 	}{
 		{name: "one-shot prompt", args: []string{"summarize this"}, response: "one-shot answer", wantOutput: "one-shot answer\n", wantCalls: 1},
 		{name: "piped context plus prompt", args: []string{"answer from context"}, stdin: strings.NewReader("context text"), response: "context answer", wantOutput: "context answer\n", wantCalls: 1},
 		{name: "stream mode", args: []string{"--stream", "stream it"}, response: "stream answer", wantOutput: "stream answer", wantCalls: 1, wantStreams: 1},
 		{name: "loop mode", args: []string{"--loop", "--max-iterations", "2", "--stop-word", "DONE", "iterate"}, response: "DONE", wantOutput: "Trace ID:", wantCalls: 1},
-		{name: "loop-only flag without loop", args: []string{"--stop-word", "DONE", "prompt"}, skipReason: "production currently accepts loop-only flags without --loop; preserve the intended validation assertion for review", wantErr: "requires --loop"},
-		{name: "record and replay conflict", args: []string{"--record", "capture", "--replay", "replay", "prompt"}, skipReason: "production currently accepts --record and --replay together; preserve the intended validation assertion for review", wantErr: "cannot use --record and --replay together"},
+		{name: "loop-only flag without loop", args: []string{"--stop-word", "DONE", "prompt"}, wantErr: "--stop-word requires --loop", wantIs: errAskFlagConflict},
+		{name: "record and replay conflict", args: []string{"--record", "capture", "--replay", "replay", "prompt"}, wantErr: "cannot use --record and --replay together", wantIs: errAskFlagConflict},
 		{name: "malformed numeric flag", args: []string{"--loop", "--max-iterations", "not-a-number", "prompt"}, wantErr: `invalid argument "not-a-number" for "--max-iterations"`},
-		{name: "conflicting session flags", args: []string{"--session-id", "session-1", "--continue-last-session", "prompt"}, wantErr: "cannot use session ID and continue last session together"},
+		{name: "conflicting session flags", args: []string{"--session-id", "session-1", "--continue-last-session", "prompt"}, wantErr: "cannot use session ID and continue last session together", wantIs: errAskFlagConflict},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.skipReason != "" {
-				t.Skip(tc.skipReason)
-			}
 			inf := &askTestInferencer{responses: []messages.InferenceResult{textInference(tc.response)}}
 			stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 			if tc.stdin == nil {
@@ -154,6 +151,9 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("error = %v, want message containing %q", err, tc.wantErr)
+				}
+				if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
+					t.Fatalf("error = %v, want wrapped identity %v", err, tc.wantIs)
 				}
 				return
 			}
@@ -178,6 +178,10 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 
 func TestAskCommandS4ErrorTable(t *testing.T) {
 	sentinel := errors.New("inferencer failed")
+	stdinErr := errors.New("stdin failed")
+	outputErr := errors.New("output failed")
+	traceErr := errors.New("trace failed")
+	summaryErr := errors.New("summary failed")
 	tests := []struct {
 		name       string
 		args       []string
@@ -185,13 +189,14 @@ func TestAskCommandS4ErrorTable(t *testing.T) {
 		inf        *askTestInferencer
 		out        io.Writer
 		wantErrors []string
+		wantIs     []error
 	}{
-		{name: "input construction", inf: &askTestInferencer{}, wantErrors: []string{"no prompt: provide a prompt"}},
-		{name: "stdin construction", args: []string{"prompt"}, stdin: askTestReaderError{}, inf: &askTestInferencer{}, wantErrors: []string{"read stdin: stdin failed"}},
-		{name: "one-shot execution", args: []string{"prompt"}, inf: &askTestInferencer{err: sentinel}, wantErrors: []string{"execution failed: inferencer failed"}},
-		{name: "one-shot output", args: []string{"prompt"}, inf: &askTestInferencer{}, out: askTestFailWriter{err: errors.New("output failed")}, wantErrors: []string{"execution failed: write output: output failed"}},
-		{name: "loop setup writer", args: []string{"--loop", "prompt"}, inf: &askTestInferencer{}, out: askTestFailWriter{err: errors.New("trace failed"), substring: "Trace ID:"}, wantErrors: []string{"loop execution failed: write trace ID: trace failed"}},
-		{name: "loop summary", args: []string{"--loop", "--max-iterations", "1", "prompt"}, inf: &askTestInferencer{responses: []messages.InferenceResult{textInference("loop answer")}}, out: askTestFailWriter{err: errors.New("summary failed"), substring: "Loop complete"}, wantErrors: []string{"write loop summary: summary failed"}},
+		{name: "input construction", inf: &askTestInferencer{}, wantErrors: []string{"no prompt: provide a prompt"}, wantIs: []error{errAskInput}},
+		{name: "stdin construction", args: []string{"prompt"}, stdin: askTestReaderError{err: stdinErr}, inf: &askTestInferencer{}, wantErrors: []string{"read stdin: stdin failed"}, wantIs: []error{errAskInput, stdinErr}},
+		{name: "one-shot execution", args: []string{"prompt"}, inf: &askTestInferencer{err: sentinel}, wantErrors: []string{"execution failed: inferencer failed"}, wantIs: []error{errAskExecution}},
+		{name: "one-shot output", args: []string{"prompt"}, inf: &askTestInferencer{}, out: askTestFailWriter{err: outputErr}, wantErrors: []string{"execution failed: write output: output failed"}, wantIs: []error{errAskExecution, outputErr}},
+		{name: "loop setup writer", args: []string{"--loop", "prompt"}, inf: &askTestInferencer{}, out: askTestFailWriter{err: traceErr, substring: "Trace ID:"}, wantErrors: []string{"loop execution failed: write trace ID: trace failed"}, wantIs: []error{errAskLoopExecution, traceErr}},
+		{name: "loop summary", args: []string{"--loop", "--max-iterations", "1", "prompt"}, inf: &askTestInferencer{responses: []messages.InferenceResult{textInference("loop answer")}}, out: askTestFailWriter{err: summaryErr, substring: "Loop complete"}, wantErrors: []string{"write loop summary: summary failed"}, wantIs: []error{errAskLoopSummary, summaryErr}},
 	}
 
 	for _, tc := range tests {
@@ -210,6 +215,11 @@ func TestAskCommandS4ErrorTable(t *testing.T) {
 			for _, want := range tc.wantErrors {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error = %q, want substring %q", err, want)
+				}
+			}
+			for _, wantIs := range tc.wantIs {
+				if !errors.Is(err, wantIs) {
+					t.Errorf("error = %v, want wrapped identity %v", err, wantIs)
 				}
 			}
 		})

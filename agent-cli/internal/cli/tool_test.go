@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -74,26 +73,27 @@ func TestToolCommandS2FlagMatrix(t *testing.T) {
 		registry   *tools.ToolRegistry
 		wantOutput string
 		wantErr    string
-		skipReason string
+		wantIs     error
 	}{
-		{name: "list mode", args: []string{"--list"}, registry: testToolRegistry(listTool), wantOutput: "only-tool\n"},
-		{name: "missing tool id", args: nil, registry: testToolRegistry(), wantErr: "tool-id required"},
+		{name: "list mode", args: []string{"--list"}, registry: testToolRegistry(&cliTestTool{id: "zeta"}, listTool), wantOutput: "only-tool\nzeta\n"},
+		{name: "missing tool id", args: nil, registry: testToolRegistry(), wantErr: "tool-id required", wantIs: errToolIDRequired},
 		{name: "coerced key values", args: []string{"capture", "name='Ada Lovelace'", "count=7", "ratio=2.5", "enabled=true", "text=hello=world"}, registry: testToolRegistry(good), wantOutput: "captured"},
-		{name: "malformed key value", args: []string{"capture", "broken"}, registry: testToolRegistry(good), wantErr: `invalid argument "broken": expected key=value`},
-		{name: "empty key", args: []string{"capture", "=value"}, registry: testToolRegistry(good), wantErr: `invalid argument "=value": expected key=value`},
-		{name: "list and invocation conflict", args: []string{"--list", "capture"}, registry: testToolRegistry(listTool), skipReason: "production currently ignores invocation args when --list is present; preserve the intended conflict assertion for review", wantErr: "cannot combine --list with a tool id"},
+		{name: "malformed key value", args: []string{"capture", "broken"}, registry: testToolRegistry(good), wantErr: `invalid argument "broken": expected key=value`, wantIs: errToolArguments},
+		{name: "empty key", args: []string{"capture", "=value"}, registry: testToolRegistry(good), wantErr: `invalid argument "=value": expected key=value`, wantIs: errToolArguments},
+		{name: "trimmed empty key", args: []string{"capture", " =value"}, registry: testToolRegistry(good), wantErr: `invalid argument " =value": empty key`, wantIs: errToolArguments},
+		{name: "list and invocation conflict", args: []string{"--list", "capture"}, registry: testToolRegistry(listTool), wantErr: "cannot combine --list with a tool id", wantIs: errToolFlagConflict},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.skipReason != "" {
-				t.Skip(tc.skipReason)
-			}
 			stdout := &bytes.Buffer{}
 			err := runToolTestCommand(t, newToolTestCommand(t, tc.registry), tc.args, stdout)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("error = %v, want message containing %q", err, tc.wantErr)
+				}
+				if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
+					t.Fatalf("error = %v, want wrapped identity %v", err, tc.wantIs)
 				}
 				return
 			}
@@ -119,9 +119,9 @@ func TestToolCommandS2FlagMatrix(t *testing.T) {
 
 func TestToolCommandS4ErrorTable(t *testing.T) {
 	unknown := testToolRegistry()
-	unavailableErr := errors.New("show tool is unavailable in this build")
-	unavailable := &cliTestTool{id: "unavailable", err: unavailableErr}
+	unavailable := &cliTestTool{id: "unavailable", err: errToolUnavailable}
 	writeErr := errors.New("tool output failed")
+	configInitErr := errors.New("config directory could not be resolved")
 	tests := []struct {
 		name       string
 		command    *ToolCommand
@@ -130,9 +130,11 @@ func TestToolCommandS4ErrorTable(t *testing.T) {
 		wantErrors []string
 		wantIs     error
 	}{
-		{name: "unknown tool", command: newToolTestCommand(t, unknown), args: []string{"missing"}, wantErrors: []string{`tool "missing": tool "missing" not found`}},
-		{name: "registered unavailable tool", command: newToolTestCommand(t, testToolRegistry(unavailable)), args: []string{"unavailable"}, wantErrors: []string{"tool \"unavailable\": show tool is unavailable in this build"}, wantIs: unavailableErr},
-		{name: "registry load failure", command: toolCommandWithLoaderError(t, errors.New("config load failed")), args: []string{"anything"}, wantErrors: []string{"config load failed"}},
+		{name: "unknown tool", command: newToolTestCommand(t, unknown), args: []string{"missing"}, wantErrors: []string{`tool "missing": tool "missing" not found`}, wantIs: errToolNotFound},
+		{name: "malformed arguments", command: newToolTestCommand(t, testToolRegistry(unavailable)), args: []string{"unavailable", " =value"}, wantErrors: []string{`invalid argument " =value": empty key`}, wantIs: errToolArguments},
+		{name: "registered unavailable tool", command: newToolTestCommand(t, testToolRegistry(unavailable)), args: []string{"unavailable"}, wantErrors: []string{"tool \"unavailable\": tool unavailable in this build"}, wantIs: errToolUnavailable},
+		{name: "config initialization failure", command: toolCommandWithStorageError(t, configInitErr), args: []string{"anything"}, wantErrors: []string{"config: config directory could not be resolved"}, wantIs: errToolConfig},
+		{name: "registry load failure", command: toolCommandWithLoaderError(t, errors.New("config load failed")), args: []string{"anything"}, wantErrors: []string{"config load failed"}, wantIs: errToolConfig},
 		{name: "list writer failure", command: newToolTestCommand(t, testToolRegistry(&cliTestTool{id: "listed"})), args: []string{"--list"}, out: toolTestFailWriter{err: writeErr}, wantErrors: []string{"tool output failed"}, wantIs: writeErr},
 		{name: "message writer failure", command: newToolTestCommand(t, testToolRegistry(&cliTestTool{id: "writer", result: []messages.Message{messages.NewTextMessage(messages.RoleTool, "payload")}})), args: []string{"writer"}, out: toolTestFailWriter{err: writeErr}, wantErrors: []string{"tool output failed"}, wantIs: writeErr},
 	}
@@ -175,6 +177,13 @@ func toolCommandWithLoaderError(t *testing.T, want error) *ToolCommand {
 	t.Helper()
 	command := NewToolCommand(flags.NewGlobalFlags())
 	command.registryLoader = func() (*tools.ToolRegistry, error) { return nil, fmt.Errorf("config: %w", want) }
+	return command
+}
+
+func toolCommandWithStorageError(t *testing.T, want error) *ToolCommand {
+	t.Helper()
+	command := NewToolCommand(flags.NewGlobalFlags())
+	command.configStorageFactory = func(string) (*config.ConfigStorage, error) { return nil, want }
 	return command
 }
 
@@ -237,19 +246,18 @@ func TestToolCommandConfigLoadError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "load config") {
 		t.Fatalf("getRegistry error = %v, want load config context", err)
 	}
+	if !errors.Is(err, errToolConfig) {
+		t.Fatalf("getRegistry error = %v, want tool config identity", err)
+	}
 }
 
-func TestToolCommandListOrderingIsStableForSingleTool(t *testing.T) {
-	registry := testToolRegistry(&cliTestTool{id: "stable"})
+func TestToolCommandListOrderingIsStableForMultipleTools(t *testing.T) {
+	registry := testToolRegistry(&cliTestTool{id: "zeta"}, &cliTestTool{id: "alpha"})
 	var out bytes.Buffer
 	if err := NewToolCommand(flags.NewGlobalFlags()).listTools(&out, registry); err != nil {
 		t.Fatalf("listTools: %v", err)
 	}
-	lines := strings.Fields(out.String())
-	sort.Strings(lines)
-	if !reflect.DeepEqual(lines, []string{"stable"}) {
-		t.Fatalf("listed tools = %v", lines)
+	if got, want := out.String(), "alpha\nzeta\n"; got != want {
+		t.Fatalf("listed tools = %q, want %q", got, want)
 	}
 }
-
-var _ = sort.Strings
