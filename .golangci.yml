@@ -1,0 +1,26 @@
+version: "2"
+
+run:
+  tests: false
+
+linters:
+  default: none
+  enable:
+    - funlen
+    - gocognit
+    - revive
+
+  settings:
+    funlen:
+      lines: 296
+      statements: -1
+      ignore-comments: false
+    gocognit:
+      min-complexity: 124
+    revive:
+      rules:
+        - name: file-length-limit
+          arguments:
+            - max: 1307
+              skip-comments: false
+              skip-blank-lines: false
