@@ -391,7 +391,9 @@ func Run(ctx context.Context, manifest Manifest, inventory Inventory, execute Te
 	}
 	for _, record := range selection.Quarantined {
 		report.Quarantined += len(record.Tests)
-		fmt.Fprintf(output, "quarantine: selector=%s bucket=%s reason=%q exitCondition=%q count=%d observed=skip\n", record.Entry.Selector(), record.Entry.Bucket, record.Entry.Reason, record.Entry.ExitCondition, len(record.Tests))
+		if _, err := fmt.Fprintf(output, "quarantine: selector=%s bucket=%s reason=%q exitCondition=%q count=%d observed=skip\n", record.Entry.Selector(), record.Entry.Bucket, record.Entry.Reason, record.Entry.ExitCondition, len(record.Tests)); err != nil {
+			return report, fmt.Errorf("write quarantine report: %w", err)
+		}
 	}
 
 	var firstErr error
@@ -406,13 +408,19 @@ func Run(ctx context.Context, manifest Manifest, inventory Inventory, execute Te
 			if firstErr == nil {
 				firstErr = &ExecutionError{Selector: selector.String(), Err: err}
 			}
-			fmt.Fprintf(output, "functional: selector=%s observed=fail reason=%q\n", selector, err)
+			if _, writeErr := fmt.Fprintf(output, "functional: selector=%s observed=fail reason=%q\n", selector, err); writeErr != nil {
+				return report, fmt.Errorf("write failed selector report: %w", writeErr)
+			}
 			continue
 		}
 		report.Passed++
-		fmt.Fprintf(output, "functional: selector=%s observed=pass\n", selector)
+		if _, err := fmt.Fprintf(output, "functional: selector=%s observed=pass\n", selector); err != nil {
+			return report, fmt.Errorf("write passed selector report: %w", err)
+		}
 	}
-	fmt.Fprintln(output, report.Summary())
+	if _, err := fmt.Fprintln(output, report.Summary()); err != nil {
+		return report, fmt.Errorf("write functional summary: %w", err)
+	}
 	return report, firstErr
 }
 
