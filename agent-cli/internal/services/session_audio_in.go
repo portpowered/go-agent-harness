@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -20,10 +21,15 @@ import (
 // SessionAudioInput carries the command-line presence bit separately from the
 // value so --audio-in= can be rejected instead of treated as an omitted flag.
 type SessionAudioInput struct {
-	Path          string
-	Stdin         io.Reader
-	Present       bool
-	DevicePresent bool
+	Path  string
+	Stdin io.Reader
+	// Source and SendAudioInput are optional deterministic service-test seams.
+	// CLI callers leave them nil so paths use FileSource and frames use the
+	// AgentLoop's SendAudioInput method.
+	Source         audio.AudioSource
+	SendAudioInput func(context.Context, []byte) error
+	Present        bool
+	DevicePresent  bool
 }
 
 // SessionAudioInputErrorKind identifies the failed session audio boundary.
@@ -163,11 +169,31 @@ func validateSessionAudioInput(input SessionAudioInput) error {
 			Err:  ErrSessionAudioInputEmpty,
 		}
 	}
+	if input.Source == nil && input.Path != "-" && strings.EqualFold(filepath.Ext(input.Path), ".wav") {
+		return &SessionAudioInputError{
+			Kind: SessionAudioInputFormat,
+			Path: input.Path,
+			Err:  fmt.Errorf("%w: .wav input is not incrementally supported by this command; use .pcm, .raw, or -", audio.ErrUnsupportedFormat),
+		}
+	}
 	return nil
 }
 
 func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error) {
-	source, err := audio.NewFileSource(input.Path, input.Stdin)
+	if input.Source != nil {
+		return &sessionAudioSource{source: input.Source, path: input.Path, send: input.SendAudioInput}, nil
+	}
+
+	stdin := input.Stdin
+	var inputReader *sessionAudioReader
+	if input.Path == "-" {
+		if stdin == nil {
+			return nil, classifySessionAudioOpenError(input.Path, audio.ErrNilStream)
+		}
+		inputReader = newSessionAudioReader(stdin)
+		stdin = inputReader
+	}
+	source, err := audio.NewFileSource(input.Path, stdin)
 	if err != nil {
 		return nil, classifySessionAudioOpenError(input.Path, err)
 	}
@@ -182,11 +208,11 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 			return nil, &SessionAudioInputError{
 				Kind: SessionAudioInputUnreadable,
 				Path: input.Path,
-				Err:  fmt.Errorf("path is a directory; provide a .wav, .pcm, or .raw file"),
+				Err:  fmt.Errorf("path is a directory; provide a .pcm or .raw file"),
 			}
 		}
 	}
-	return &sessionAudioSource{source: source, path: input.Path}, nil
+	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, send: input.SendAudioInput}, nil
 }
 
 func classifySessionAudioOpenError(path string, err error) error {
@@ -196,6 +222,8 @@ func classifySessionAudioOpenError(path string, err error) error {
 		kind = SessionAudioInputFormat
 	case errors.Is(err, os.ErrNotExist):
 		kind = SessionAudioInputMissing
+	case errors.Is(err, audio.ErrNilStream):
+		kind = SessionAudioInputUnreadable
 	}
 	return &SessionAudioInputError{Kind: kind, Path: path, Err: err}
 }
@@ -203,8 +231,16 @@ func classifySessionAudioOpenError(path string, err error) error {
 type sessionAudioSource struct {
 	source audio.AudioSource
 	path   string
+	reader *sessionAudioReader
+	send   func(context.Context, []byte) error
 	once   sync.Once
 	err    error
+}
+
+func (s *sessionAudioSource) bindContext(ctx context.Context) {
+	if s.reader != nil {
+		s.reader.bindContext(ctx)
+	}
 }
 
 func (s *sessionAudioSource) Close() error {
@@ -213,6 +249,71 @@ func (s *sessionAudioSource) Close() error {
 		return nil
 	}
 	return &SessionAudioInputError{Kind: SessionAudioInputClose, Path: s.path, Err: s.err}
+}
+
+// sessionAudioReader carries cancellation into readers that can honor it
+// without closing the caller-owned stdin. The standard io.Reader contract has
+// no cancellation method, so a reader may optionally implement ReadContext;
+// os.File-style deadline readers are handled as a bounded fallback.
+type sessionAudioReader struct {
+	reader io.Reader
+	mu     sync.RWMutex
+	ctx    context.Context
+}
+
+type contextAudioReader interface {
+	ReadContext(context.Context, []byte) (int, error)
+}
+
+type deadlineAudioReader interface {
+	SetReadDeadline(time.Time) error
+}
+
+const sessionAudioReadDeadline = 250 * time.Millisecond
+
+func newSessionAudioReader(reader io.Reader) *sessionAudioReader {
+	return &sessionAudioReader{reader: reader}
+}
+
+func (r *sessionAudioReader) bindContext(ctx context.Context) {
+	r.mu.Lock()
+	r.ctx = ctx
+	r.mu.Unlock()
+}
+
+func (r *sessionAudioReader) Read(destination []byte) (int, error) {
+	r.mu.RLock()
+	ctx := r.ctx
+	reader := r.reader
+	r.mu.RUnlock()
+	if ctx == nil {
+		return reader.Read(destination)
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if cancellable, ok := reader.(contextAudioReader); ok {
+		return cancellable.ReadContext(ctx, destination)
+	}
+	if deadliner, ok := reader.(deadlineAudioReader); ok {
+		if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err == nil {
+			for {
+				count, readErr := reader.Read(destination)
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return count, ctxErr
+				}
+				if errors.Is(readErr, os.ErrDeadlineExceeded) && count == 0 {
+					if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err != nil {
+						return 0, err
+					}
+					continue
+				}
+				_ = deadliner.SetReadDeadline(time.Time{})
+				return count, readErr
+			}
+		}
+	}
+	return reader.Read(destination)
 }
 
 func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) (runErr error) {
@@ -236,7 +337,11 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		for i, sample := range frame {
 			binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
 		}
-		if err := loop.SendAudioInput(ctx, pcm); err != nil {
+		send := source.send
+		if send == nil {
+			send = loop.SendAudioInput
+		}
+		if err := send(ctx, pcm); err != nil {
 			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
 		}
 	}
@@ -291,6 +396,7 @@ func runAgentLoopSessionWithAudioInput(ctx context.Context, out io.Writer, sessi
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	source.bindContext(runCtx)
 	runErrCh := make(chan error, 1)
 	go func() { runErrCh <- loop.Run(runCtx) }()
 	audioErrCh := make(chan error, 1)
