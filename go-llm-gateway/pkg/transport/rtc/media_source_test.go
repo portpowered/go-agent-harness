@@ -2,11 +2,13 @@ package rtc
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +22,21 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
+
+type rtspFixtureObservation struct {
+	sync.Mutex
+	methods []string
+	paths   []string
+	path    string
+	auth    string
+}
+
+type rtspFixtureOptions struct {
+	body          string
+	challengeAuth bool
+	requireAuth   bool
+	frameGate     <-chan struct{}
+}
 
 func TestMediaSourceParsingRedactsPrivateDialState(t *testing.T) {
 	secret := "pw-" + "marker"
@@ -74,9 +91,141 @@ func TestMediaSourceS4TypedErrors(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 	_, err := ProbeMediaSource(ctx, "rtsp://127.0.0.1:1/camera")
-	if !errors.Is(err, ErrSourceUnreachable) || !strings.Contains(err.Error(), "127.0.0.1:1") {
+	if !errors.Is(err, ErrSourceWrongPort) || !errors.Is(err, ErrSourceUnreachable) || !strings.Contains(err.Error(), "127.0.0.1:1") {
 		t.Fatalf("unreachable error = %v", err)
 	}
+}
+
+func TestMediaSourceS4RuntimeErrorTaxonomy(t *testing.T) {
+	t.Run("unreachable host preserves network cause", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+		_, err := ProbeMediaSource(ctx, "rtsp://camera:secret@unreachable.invalid:554/camera")
+		typed := assertSourceError(t, err, SourceErrorUnreachable, "secret")
+		if !strings.Contains(typed.Source, "unreachable.invalid") {
+			t.Fatalf("source identity = %q", typed.Source)
+		}
+		var networkErr net.Error
+		if !errors.As(err, &networkErr) {
+			t.Fatalf("error = %v, want preserved network cause", err)
+		}
+	})
+
+	t.Run("wrong port has stable subtype", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+		_, err := ProbeMediaSource(ctx, "rtsp://camera:secret@127.0.0.1:1/camera")
+		assertSourceError(t, err, SourceErrorWrongPort, "secret")
+		if !errors.Is(err, ErrSourceUnreachable) {
+			t.Fatalf("wrong-port error = %v, want general unreachable identity too", err)
+		}
+	})
+
+	t.Run("bad credentials", func(t *testing.T) {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		var observed rtspFixtureObservation
+		serverDone := make(chan error, 1)
+		go func() {
+			serverDone <- serveRTSPFixture(listener, &observed, "correct-password", rtspFixtureOptions{challengeAuth: true, requireAuth: true})
+		}()
+		_, err = ProbeMediaSource(context.Background(), fmt.Sprintf("rtsp://camera:wrong-password@%s/camera", listener.Addr()))
+		assertSourceError(t, err, SourceErrorAuthentication, "wrong-password")
+		select {
+		case <-serverDone:
+		case <-time.After(time.Second):
+			t.Fatal("bad-credentials fixture did not close")
+		}
+	})
+
+	t.Run("unknown go2rtc source", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/ws" || r.URL.Query().Get("src") != "missing-camera" {
+				t.Fatalf("request = %s %s", r.Method, r.URL.String())
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+		u, _ := url.Parse(server.URL)
+		_, err := ProbeMediaSource(context.Background(), "go2rtc://"+u.Host+"/api/ws?src=missing-camera")
+		assertSourceError(t, err, SourceErrorUnknown, "")
+	})
+
+	t.Run("source has no audio", func(t *testing.T) {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		var observed rtspFixtureObservation
+		serverDone := make(chan error, 1)
+		go func() {
+			serverDone <- serveRTSPFixture(listener, &observed, "", rtspFixtureOptions{body: "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=video-only\r\nt=0 0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:trackID=1\r\n", challengeAuth: false})
+		}()
+		_, err = ProbeMediaSource(context.Background(), fmt.Sprintf("rtsp://%s/video-only", listener.Addr()))
+		assertSourceError(t, err, SourceErrorNoAudio, "")
+		select {
+		case <-serverDone:
+		case <-time.After(time.Second):
+			t.Fatal("no-audio fixture did not close")
+		}
+	})
+
+	t.Run("non-responsive endpoint is deadline bounded", func(t *testing.T) {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		serverDone := make(chan error, 1)
+		go func() {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				serverDone <- acceptErr
+				return
+			}
+			defer conn.Close()
+			_, copyErr := io.Copy(io.Discard, conn)
+			serverDone <- copyErr
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		started := time.Now()
+		_, err = ProbeMediaSource(ctx, fmt.Sprintf("rtsp://%s/non-responsive", listener.Addr()))
+		if time.Since(started) > time.Second {
+			t.Fatalf("probe exceeded bound: %v", time.Since(started))
+		}
+		assertSourceError(t, err, SourceErrorUnreachable, "")
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("deadline error = %v, want context deadline identity", err)
+		}
+		select {
+		case <-serverDone:
+		case <-time.After(time.Second):
+			t.Fatal("non-responsive fixture did not close")
+		}
+	})
+}
+
+func assertSourceError(t *testing.T, err error, wantKind SourceErrorKind, secret string) *MediaSourceError {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("error = nil, want %s", wantKind)
+	}
+	var typed *MediaSourceError
+	if !errors.As(err, &typed) {
+		t.Fatalf("error = %v, want *MediaSourceError", err)
+	}
+	if typed.Kind != wantKind || typed.Source == "" || !strings.Contains(err.Error(), typed.Source) {
+		t.Fatalf("typed error = %#v, text = %q", typed, err)
+	}
+	if secret != "" && strings.Contains(err.Error(), secret) {
+		t.Fatalf("error leaked secret %q: %v", secret, err)
+	}
+	return typed
 }
 
 func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
@@ -86,12 +235,7 @@ func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 	}
 	defer listener.Close()
 	secret := "rtsp-" + "marker"
-	var observed struct {
-		sync.Mutex
-		methods []string
-		path    string
-		auth    string
-	}
+	var observed rtspFixtureObservation
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- serveRTSPFixture(listener, &observed, secret) }()
 
@@ -105,7 +249,7 @@ func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 	}
 	defer stream.Close()
 	frame, err := stream.ReadFrame(context.Background())
-	if err != nil || len(frame.Samples) == 0 || frame.Samples[0] == 0 {
+	if err != nil || !equalSamples(frame.Samples, []int16{32124, -32124, -716}) {
 		t.Fatalf("frame = %#v, error = %v", frame, err)
 	}
 	if stream.Capabilities.AudioCodec != "PCMU" || stream.Capabilities.SampleRate != 8000 || stream.Capabilities.Channels != 1 || !stream.Capabilities.Video {
@@ -130,12 +274,56 @@ func TestRTSPMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 	}
 }
 
-func serveRTSPFixture(listener net.Listener, observed *struct {
-	sync.Mutex
-	methods []string
-	path    string
-	auth    string
-}, secret string) error {
+func TestRTSPReadRemainsUsableAfterSetupContextCompletes(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	frameGate := make(chan struct{})
+	var observed rtspFixtureObservation
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- serveRTSPFixture(listener, &observed, "deadline-password", rtspFixtureOptions{challengeAuth: true, frameGate: frameGate})
+	}()
+
+	source, err := ParseMediaSource(fmt.Sprintf("rtsp://camera:deadline-password@%s/camera/main", listener.Addr()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(100 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	stream, err := source.Open(ctx)
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+
+	timer := time.NewTimer(time.Until(deadline) + 30*time.Millisecond)
+	<-timer.C
+	close(frameGate)
+	frameCtx, frameCancel := context.WithTimeout(context.Background(), time.Second)
+	defer frameCancel()
+	frame, err := stream.ReadFrame(frameCtx)
+	if err != nil || !equalSamples(frame.Samples, []int16{32124, -32124, -716}) {
+		t.Fatalf("post-setup frame = %#v, error = %v", frame, err)
+	}
+	select {
+	case <-serverDone:
+	case <-time.After(time.Second):
+		t.Fatal("deadline regression fixture did not close")
+	}
+}
+
+func serveRTSPFixture(listener net.Listener, observed *rtspFixtureObservation, secret string, options ...rtspFixtureOptions) error {
+	config := rtspFixtureOptions{challengeAuth: true}
+	if len(options) > 0 {
+		config = options[0]
+	}
+	if config.body == "" {
+		config.body = "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=fixture\r\nt=0 0\r\nm=audio 0 RTP/AVP 0\r\na=rtpmap:0 PCMU/8000/1\r\na=control:trackID=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:trackID=1\r\n"
+	}
 	conn, err := listener.Accept()
 	if err != nil {
 		return err
@@ -150,26 +338,33 @@ func serveRTSPFixture(listener net.Listener, observed *struct {
 		}
 		observed.Lock()
 		observed.methods = append(observed.methods, method)
+		observed.paths = append(observed.paths, path)
 		observed.path = path
 		observed.auth = headers["authorization"]
 		observed.Unlock()
 		switch method {
 		case "DESCRIBE":
-			if !challenge {
+			if config.challengeAuth && !challenge {
 				challenge = true
 				fmt.Fprint(conn, "RTSP/1.0 401 Unauthorized\r\nCSeq: 1\r\nWWW-Authenticate: Basic realm=fixture\r\nContent-Length: 0\r\n\r\n")
 				continue
 			}
-			if headers["authorization"] != "Basic "+base64.StdEncoding.EncodeToString([]byte("camera:"+secret)) {
+			if config.challengeAuth && headers["authorization"] != "Basic "+base64.StdEncoding.EncodeToString([]byte("camera:"+secret)) {
+				if config.requireAuth {
+					fmt.Fprintf(conn, "RTSP/1.0 401 Unauthorized\r\nCSeq: %s\r\nWWW-Authenticate: Basic realm=fixture\r\nContent-Length: 0\r\n\r\n", headers["cseq"])
+					continue
+				}
 				return errors.New("fixture did not receive expected authorization")
 			}
-			body := "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=fixture\r\nt=0 0\r\nm=audio 0 RTP/AVP 0\r\na=rtpmap:0 PCMU/8000/1\r\na=control:trackID=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:trackID=1\r\n"
-			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nContent-Base: %s\r\nContent-Length: %d\r\n\r\n%s", headers["cseq"], path, len(body), body)
+			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nContent-Base: %s\r\nContent-Length: %d\r\n\r\n%s", headers["cseq"], path, len(config.body), config.body)
 		case "SETUP":
 			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: fixture-session\r\nTransport: RTP/AVP/TCP;unicast;interleaved=%s\r\nContent-Length: 0\r\n\r\n", headers["cseq"], interleavedForSetup(headers["transport"]))
 		case "PLAY":
 			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: fixture-session\r\nContent-Length: 0\r\n\r\n", headers["cseq"])
-			packet, err := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: 1, Timestamp: 1}, Payload: []byte{0x00, 0x7f, 0xff}}).Marshal()
+			if config.frameGate != nil {
+				<-config.frameGate
+			}
+			packet, err := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: 1, Timestamp: 1}, Payload: []byte{0x80, 0x00, 0x55}}).Marshal()
 			if err != nil {
 				return err
 			}
@@ -240,7 +435,14 @@ func TestGo2RTCMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 		if jsonErr := json.Unmarshal(data, &offer); jsonErr != nil || offer.Type != "webrtc/offer" {
 			return
 		}
-		api := webrtc.NewAPI()
+		mediaEngine := &webrtc.MediaEngine{}
+		if err = mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1}, PayloadType: 0}, webrtc.RTPCodecTypeAudio); err != nil {
+			return
+		}
+		if err = mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, PayloadType: 96}, webrtc.RTPCodecTypeVideo); err != nil {
+			return
+		}
+		api := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine))
 		pc, err := api.NewPeerConnection(webrtc.Configuration{})
 		if err != nil {
 			return
@@ -305,8 +507,8 @@ func TestGo2RTCMediaSourceStubNegotiatesAndStreams(t *testing.T) {
 	if err != nil || len(frame.Samples) == 0 {
 		t.Fatalf("frame = %#v, error = %v", frame, err)
 	}
-	if sourceName != "tuya-main" || stream.Capabilities.AudioCodec == "" || stream.Capabilities.SampleRate <= 0 || stream.Capabilities.Channels <= 0 {
-		t.Fatalf("source/capabilities = %q/%#v", sourceName, stream.Capabilities)
+	if sourceName != "tuya-main" || stream.Capabilities.AudioCodec != "PCMU" || stream.Capabilities.SampleRate != 8000 || stream.Capabilities.Channels != 1 || !stream.Capabilities.Video || !equalSamples(frame.Samples, []int16{0, -32124, 0}) {
+		t.Fatalf("source/capabilities/frame = %q/%#v/%#v", sourceName, stream.Capabilities, frame.Samples)
 	}
 }
 
@@ -316,4 +518,220 @@ func TestDecodeAudioProducesNonEmptySamples(t *testing.T) {
 			t.Errorf("decodeAudio(%q) returned no samples", codec)
 		}
 	}
+}
+
+func TestRTSPReadPacketStripsRTPHeaders(t *testing.T) {
+	rtpBytes := []byte{
+		0xb1, 0x00, 0x00, 0x01, // version, padding, extension, one CSRC; payload type and sequence
+		0x00, 0x00, 0x00, 0x01, // timestamp
+		0x00, 0x00, 0x00, 0x02, // SSRC
+		0x00, 0x00, 0x00, 0x03, // CSRC
+		0xbe, 0xde, 0x00, 0x01, // one four-byte extension word
+		0x10, 0x01, 0x00, 0x00, // extension payload
+		0x80, 0x00, 0x55, // distinctive PCMU payload
+		0x00, 0x02, // two bytes of RTP padding
+	}
+	interleaved := append([]byte{'$', 0, byte(len(rtpBytes) >> 8), byte(len(rtpBytes))}, rtpBytes...)
+	inbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader(interleaved))}}
+	channel, payload, err := inbound.readPacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if channel != 0 || !bytes.Equal(payload, []byte{0x80, 0x00, 0x55}) {
+		t.Fatalf("channel/payload = %d/%x", channel, payload)
+	}
+}
+
+func TestMediaSourceAPIAndProtocolEdgeContracts(t *testing.T) {
+	var nilContext context.Context
+	var nilSourceError *MediaSourceError
+	if nilSourceError.Error() != "media source error" {
+		t.Fatalf("nil source error = %q", nilSourceError.Error())
+	}
+	unknownError := (&MediaSourceError{Identity: "rtsp://host/camera", Kind: "custom source failure"}).Error()
+	if !strings.Contains(unknownError, "rtsp://host/camera") || !strings.Contains(unknownError, "check the source") {
+		t.Fatalf("unknown source error = %q", unknownError)
+	}
+	if (safeCause{err: errors.New("private cause")}).Error() != "source operation failed" {
+		t.Fatal("safe cause did not use stable public text")
+	}
+	if errString(nil) != "" {
+		t.Fatal("nil dial error did not have empty diagnostic text")
+	}
+	wrongPort := &MediaSourceError{Kind: SourceErrorWrongPort, Source: "source"}
+	if !errors.Is(wrongPort, ErrSourceWrongPort) || !errors.Is(wrongPort, ErrSourceUnreachable) {
+		t.Fatal("wrong-port error lost its stable identities")
+	}
+	if errors.Is(wrongPort, &MediaSourceError{Kind: SourceErrorWrongPort, Source: "other"}) {
+		t.Fatal("source error matched a different source identity")
+	}
+
+	source, err := NewMediaSource("rtsp://camera:password@host:554/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.Identity() != source.String() || source.URL() != source.String() || source.Kind() != SourceKindRTSP {
+		t.Fatalf("source accessors = %q/%q/%q", source.Identity(), source.URL(), source.Kind())
+	}
+	if parsed, err := ParseSource("go2rtc://host:1984/api/ws?src=main"); err != nil || parsed.Kind() != SourceKindGo2RTC {
+		t.Fatalf("ParseSource = %#v/%v", parsed, err)
+	}
+	if privateGo2RTC, err := ParseMediaSource("go2rtc://user:password@host:1984/api/ws?src=main"); err != nil || privateGo2RTC.password != "password" {
+		t.Fatalf("go2rtc private credentials = %#v/%v", privateGo2RTC, err)
+	}
+	if got := safeIdentity("%"); got != "<invalid source>" {
+		t.Fatalf("invalid safe identity = %q", got)
+	}
+	if got := safeIdentity("rtsp://host:554/main"); got != "rtsp://host:554/main" {
+		t.Fatalf("valid safe identity = %q", got)
+	}
+	for _, raw := range []string{"%", "rtsp://host:554/main#fragment", "rtsp://host:554/main\n"} {
+		if _, err := ParseMediaSource(raw); !errors.Is(err, ErrMalformedSource) {
+			t.Fatalf("ParseMediaSource(%q) = %v", raw, err)
+		}
+	}
+
+	normalized := (MediaCapabilities{Codec: "PCMA", AudioSampleRate: 16000, AudioChannels: 2, Video: true}).normalized()
+	if normalized.AudioCodec != "PCMA" || normalized.SampleRate != 16000 || normalized.Channels != 2 || !normalized.HasVideo || !normalized.VideoPresent || !normalized.VideoPresence {
+		t.Fatalf("normalized capabilities = %#v", normalized)
+	}
+	var nilStream *MediaStream
+	if _, err := nilStream.ReadFrame(context.Background()); !errors.Is(err, ErrPeerNotConnected) || nilStream.Close() != nil {
+		t.Fatal("nil stream did not preserve peer-not-connected behavior")
+	}
+	stream := &MediaStream{Inbound: newPionInbound(nil)}
+	if err := stream.Close(); err != nil || stream.Close() != nil {
+		t.Fatalf("fallback stream close = %v", err)
+	}
+	if _, err := stream.ReadFrame(nilContext); !errors.Is(err, io.EOF) {
+		t.Fatalf("closed stream frame error = %v", err)
+	}
+	closeErr := errors.New("close failed")
+	closeCalls := 0
+	owned := &MediaStream{close: func() error { closeCalls++; return closeErr }}
+	firstClose := owned.Close()
+	secondClose := owned.Close()
+	if !errors.Is(firstClose, closeErr) || !errors.Is(secondClose, closeErr) || closeCalls != 1 {
+		t.Fatalf("owned close = %v/%v/%d", firstClose, secondClose, closeCalls)
+	}
+	bounded, cancel := boundedSourceContext(nilContext)
+	if bounded == nil {
+		t.Fatal("nil context was not replaced")
+	}
+	cancel()
+	if _, err := (MediaSource{identity: "stub"}).Open(context.Background()); !errors.Is(err, ErrMalformedSource) {
+		t.Fatalf("zero source open error = %v", err)
+	}
+	for name, probe := range map[string]func(context.Context, string) error{
+		"probe source":      func(ctx context.Context, raw string) error { _, err := ProbeSource(ctx, raw); return err },
+		"open media source": func(ctx context.Context, raw string) error { _, err := OpenMediaSource(ctx, raw); return err },
+		"open source":       func(ctx context.Context, raw string) error { _, err := OpenSource(ctx, raw); return err },
+	} {
+		if err := probe(context.Background(), "bad://source"); !errors.Is(err, ErrMalformedSource) {
+			t.Fatalf("%s error = %v", name, err)
+		}
+	}
+	if _, err := OpenMediaSource(context.Background(), "rtsp://127.0.0.1:1/open-wrapper"); err == nil {
+		t.Fatal("OpenMediaSource unexpectedly opened refused port")
+	}
+
+	audio, video, codec, rate, channels := parseSDP("m=audio 0 RTP/AVP 0\na=rtpmap:garbage\na=rtpmap:2 PCMU\na=rtpmap:3 telephone-event/8000\na=rtpmap:4 PCMA/16000/2\na=rtpmap:5 OPUS/48000/2\nm=video 0 RTP/AVP 96\na=rtpmap:96 H264/90000\nm=application 0 RTP/AVP 97")
+	if !audio || !video || codec != "PCMA" || rate != 16000 || channels != 2 {
+		t.Fatalf("complex SDP = %t/%t/%q/%d/%d", audio, video, codec, rate, channels)
+	}
+	if _, _, codec, rate, channels = parseSDP("m=audio 0 RTP/AVP 0\na=rtpmap:0 PCMU/8000/0"); codec != "PCMU" || rate != 8000 || channels != 1 {
+		t.Fatalf("zero-channel SDP = %q/%d/%d", codec, rate, channels)
+	}
+	if _, _, codec, rate, channels = parseSDP("m=audio 0 RTP/AVP 0"); codec != "PCMU" || rate != 8000 || channels != 1 {
+		t.Fatalf("default audio SDP = %q/%d/%d", codec, rate, channels)
+	}
+
+	inbound := newPionInbound(nil)
+	ctx, cancelRead := context.WithCancel(context.Background())
+	cancelRead()
+	if _, err := inbound.ReadFrame(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled Pion read = %v", err)
+	}
+	inbound.Close()
+	if _, err := inbound.ReadFrame(nilContext); !errors.Is(err, io.EOF) {
+		t.Fatalf("closed Pion read = %v", err)
+	}
+	pipeReader, pipeWriter := net.Pipe()
+	defer pipeReader.Close()
+	defer pipeWriter.Close()
+	inboundStream := &rtspInbound{client: &rtspClient{conn: pipeReader, reader: bufio.NewReader(pipeReader)}}
+	canceled, cancelRTSP := context.WithCancel(context.Background())
+	cancelRTSP()
+	if _, err := inboundStream.ReadFrame(canceled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled RTSP read = %v", err)
+	}
+
+	trackSDP := "m=audio 0 RTP/AVP 0\na=control:*\nm=video 0 RTP/AVP 96\na=control:trackID=1\nm=application 0 RTP/AVP 97\na=control:ignored"
+	tracks := parseRTSPTracks(trackSDP, "rtsp://host/base?profile=main", "rtsp://fallback/camera")
+	if len(tracks) != 1 || tracks[0].audio || tracks[0].control != "rtsp://host/base/trackID=1" {
+		t.Fatalf("RTSP tracks = %#v", tracks)
+	}
+	if got := joinRTSPControl("", "rtsp://fallback/camera", "trackID=2"); got != "rtsp://fallback/camera/trackID=2" {
+		t.Fatalf("fallback RTSP control = %q", got)
+	}
+	if got := joinRTSPControl("rtsp://host/base", "", "rtsp://other/track"); got != "rtsp://other/track" {
+		t.Fatalf("absolute RTSP control = %q", got)
+	}
+	if got := joinRTSPControl("rtsp://host/base", "", "/absolute"); got != "rtsp://host/absolute" {
+		t.Fatalf("absolute path RTSP control = %q", got)
+	}
+	if got := joinRTSPControl("://bad", "rtsp://fallback/camera", "track"); got != "://bad/track" {
+		t.Fatalf("invalid-base RTSP control = %q", got)
+	}
+
+	response := &rtspClient{reader: bufio.NewReader(strings.NewReader("RTSP/1.0 200 OK\r\nContent-Length: 3\r\nX-Fixture: yes\r\n\r\nabc"))}
+	parsedResponse, err := response.readResponse()
+	if err != nil || parsedResponse.code != 200 || string(parsedResponse.body) != "abc" || parsedResponse.headers["x-fixture"] != "yes" {
+		t.Fatalf("parsed RTSP response = %#v/%v", parsedResponse, err)
+	}
+	for _, raw := range []string{"bad\r\n", "RTSP/1.0 nope OK\r\n", "RTSP/1.0 200 OK\r\n", "RTSP/1.0 200 OK\r\nContent-Length: 3\r\n\r\nx"} {
+		if _, err := (&rtspClient{reader: bufio.NewReader(strings.NewReader(raw))}).readResponse(); err == nil {
+			t.Fatalf("readResponse(%q) returned nil error", raw)
+		}
+	}
+	for _, raw := range [][]byte{{'x'}, {'$', 0}, {'$', 0, 0, 1, 0}} {
+		inbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader(raw))}}
+		if _, _, err := inbound.readPacket(); err == nil {
+			t.Fatalf("readPacket(%x) returned nil error", raw)
+		}
+	}
+	emptyInbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(strings.NewReader(""))}}
+	if _, err := emptyInbound.ReadFrame(nilContext); err == nil {
+		t.Fatal("empty RTSP frame read returned nil error")
+	}
+	packet, err := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0}, Payload: []byte{0x80}}).Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	videoInterleaved := append([]byte{'$', 1, byte(len(packet) >> 8), byte(len(packet))}, packet...)
+	videoInbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader(videoInterleaved))}, audioChannel: 0, codec: "PCMU"}
+	if _, err := videoInbound.ReadFrame(context.Background()); err == nil {
+		t.Fatal("video-only RTSP frame read returned nil error")
+	}
+	if _, _, err := (&rtspInbound{client: &rtspClient{reader: bufio.NewReader(bytes.NewReader([]byte{'$', 0, 0, 2, 0}))}}).readPacket(); err == nil {
+		t.Fatal("short RTP body returned nil error")
+	}
+	if got := decodeAudio("PCMU", nil); got != nil {
+		t.Fatalf("empty audio decode = %v", got)
+	}
+	if got := decodeAudio("PCMA", []byte{0xd4}); len(got) != 1 || got[0] <= 0 {
+		t.Fatalf("positive A-law decode = %v", got)
+	}
+}
+
+func equalSamples(got, want []int16) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

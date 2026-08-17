@@ -15,9 +15,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -38,6 +40,7 @@ type SourceErrorKind string
 const (
 	SourceErrorMalformed      SourceErrorKind = "malformed source"
 	SourceErrorUnreachable    SourceErrorKind = "source unreachable"
+	SourceErrorWrongPort      SourceErrorKind = "source port refused"
 	SourceErrorAuthentication SourceErrorKind = "source authentication failed"
 	SourceErrorUnknown        SourceErrorKind = "unknown source"
 	SourceErrorNoAudio        SourceErrorKind = "source has no audio"
@@ -49,15 +52,18 @@ const (
 var (
 	ErrMalformedSource           = errors.New(string(SourceErrorMalformed))
 	ErrSourceUnreachable         = errors.New(string(SourceErrorUnreachable))
+	ErrSourceWrongPort           = errors.New(string(SourceErrorWrongPort))
 	ErrSourceAuthentication      = errors.New(string(SourceErrorAuthentication))
 	ErrUnknownSource             = errors.New(string(SourceErrorUnknown))
 	ErrNoAudio                   = errors.New(string(SourceErrorNoAudio))
 	ErrMediaSourceMalformed      = ErrMalformedSource
 	ErrMediaSourceUnreachable    = ErrSourceUnreachable
+	ErrMediaSourceWrongPort      = ErrSourceWrongPort
 	ErrMediaSourceAuthentication = ErrSourceAuthentication
 	ErrMediaSourceUnknown        = ErrUnknownSource
 	ErrMediaSourceNoAudio        = ErrNoAudio
 	ErrBadCredentials            = ErrSourceAuthentication
+	ErrWrongPort                 = ErrSourceWrongPort
 )
 
 // MediaSourceError is a safe, typed source failure. Cause is a safe adapter:
@@ -75,7 +81,7 @@ func (e *MediaSourceError) Error() string {
 	}
 	source := e.Source
 	action := map[SourceErrorKind]string{
-		SourceErrorMalformed: "check the supported go2rtc or RTSP URL form", SourceErrorUnreachable: "check the host, port, and camera availability",
+		SourceErrorMalformed: "check the supported go2rtc or RTSP URL form", SourceErrorUnreachable: "check the host, port, and camera availability", SourceErrorWrongPort: "check that the source port is listening",
 		SourceErrorAuthentication: "check the source credentials", SourceErrorUnknown: "check the source name or stream path", SourceErrorNoAudio: "choose a source that offers an audio track",
 	}[e.Kind]
 	if source == "" {
@@ -91,8 +97,11 @@ func (e *MediaSourceError) Is(target error) bool {
 	if e == nil {
 		return false
 	}
-	want := map[SourceErrorKind]error{SourceErrorMalformed: ErrMalformedSource, SourceErrorUnreachable: ErrSourceUnreachable, SourceErrorAuthentication: ErrSourceAuthentication, SourceErrorUnknown: ErrUnknownSource, SourceErrorNoAudio: ErrNoAudio}[e.Kind]
+	want := map[SourceErrorKind]error{SourceErrorMalformed: ErrMalformedSource, SourceErrorUnreachable: ErrSourceUnreachable, SourceErrorWrongPort: ErrSourceWrongPort, SourceErrorAuthentication: ErrSourceAuthentication, SourceErrorUnknown: ErrUnknownSource, SourceErrorNoAudio: ErrNoAudio}[e.Kind]
 	if target == want {
+		return true
+	}
+	if e.Kind == SourceErrorWrongPort && target == ErrSourceUnreachable {
 		return true
 	}
 	other, ok := target.(*MediaSourceError)
@@ -110,6 +119,28 @@ func sourceError(kind SourceErrorKind, source string, cause error) error {
 		safe = safeCause{cause}
 	}
 	return &MediaSourceError{Kind: kind, Source: source, Identity: source, Cause: safe, cause: safe}
+}
+
+func operationCause(ctx context.Context, err error) error {
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
+func classifyDialError(err error) SourceErrorKind {
+	message := strings.ToLower(errString(err))
+	if errors.Is(err, syscall.ECONNREFUSED) || strings.Contains(message, "connection refused") || strings.Contains(message, "no connection could be made") {
+		return SourceErrorWrongPort
+	}
+	return SourceErrorUnreachable
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 type MediaSource struct {
@@ -319,14 +350,14 @@ type go2rtcMessage struct {
 func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 	ws, response, err := websocket.DefaultDialer.DialContext(ctx, s.dialURL, http.Header{})
 	if err != nil {
-		kind := SourceErrorUnreachable
+		kind := classifyDialError(err)
 		if response != nil && (response.StatusCode == 401 || response.StatusCode == 403) {
 			kind = SourceErrorAuthentication
 		}
 		if response != nil && response.StatusCode == 404 {
 			kind = SourceErrorUnknown
 		}
-		return nil, sourceError(kind, s.identity, err)
+		return nil, sourceError(kind, s.identity, operationCause(ctx, err))
 	}
 	pc, err := webrtc.NewAPI().NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -372,7 +403,7 @@ func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 		_, data, readErr := ws.ReadMessage()
 		if readErr != nil {
 			_ = inbound.Close()
-			return nil, sourceError(SourceErrorUnreachable, s.identity, readErr)
+			return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, readErr))
 		}
 		var message go2rtcMessage
 		if json.Unmarshal(data, &message) != nil {
@@ -521,13 +552,13 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	}
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", address)
 	if err != nil {
-		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
+		return nil, sourceError(classifyDialError(err), s.identity, operationCause(ctx, err))
 	}
 	c := &rtspClient{conn: conn, reader: bufio.NewReader(conn), uri: s.requestURI, user: s.username, pass: s.password}
 	response, err := c.request(ctx, "DESCRIBE", c.uri, map[string]string{"Accept": "application/sdp"})
 	if err != nil {
 		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
+		return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err))
 	}
 	if response.code == 401 {
 		if c.user == "" {
@@ -539,7 +570,7 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	}
 	if err != nil {
 		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
+		return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err))
 	}
 	if response.code == 401 {
 		_ = conn.Close()
@@ -567,7 +598,7 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 		setup, setupErr := c.request(ctx, "SETUP", tracks[i].control, map[string]string{"Transport": fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)})
 		if setupErr != nil || setup.code < 200 || setup.code >= 300 {
 			_ = conn.Close()
-			return nil, sourceError(SourceErrorUnreachable, s.identity, setupErr)
+			return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, setupErr))
 		}
 		if c.session == "" {
 			c.session = strings.Split(setup.headers["session"], ";")[0]
@@ -582,6 +613,10 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	}
 	play, err := c.request(ctx, "PLAY", c.uri, map[string]string{"Session": c.session})
 	if err != nil || play.code < 200 || play.code >= 300 {
+		_ = conn.Close()
+		return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err))
+	}
+	if err = conn.SetDeadline(time.Time{}); err != nil {
 		_ = conn.Close()
 		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
 	}
@@ -680,6 +715,11 @@ func joinRTSPControl(base, fallback, control string) string {
 			return u.String()
 		}
 	}
+	if u, err := url.Parse(base); err == nil {
+		u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.TrimLeft(control, "/")
+		u.RawQuery = ""
+		return u.String()
+	}
 	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(control, "/")
 }
 
@@ -732,9 +772,15 @@ func (r *rtspInbound) readPacket() (int, []byte, error) {
 	if _, err = io.ReadFull(r.client.reader, header); err != nil {
 		return 0, nil, err
 	}
-	payload := make([]byte, int(binary.BigEndian.Uint16(header[1:])))
-	_, err = io.ReadFull(r.client.reader, payload)
-	return int(header[0]), payload, err
+	rtpBytes := make([]byte, int(binary.BigEndian.Uint16(header[1:])))
+	if _, err = io.ReadFull(r.client.reader, rtpBytes); err != nil {
+		return 0, nil, err
+	}
+	var packet rtp.Packet
+	if err = packet.Unmarshal(rtpBytes); err != nil {
+		return 0, nil, fmt.Errorf("invalid interleaved RTP packet: %w", err)
+	}
+	return int(header[0]), packet.Payload, nil
 }
 func (r *rtspInbound) Close() error { r.once.Do(func() { _ = r.client.conn.Close() }); return nil }
 
@@ -742,7 +788,7 @@ func decodeAudio(codec string, payload []byte) []int16 {
 	if len(payload) == 0 {
 		return nil
 	}
-	codec = strings.ToUpper(strings.TrimPrefix(codec, "AUDIO/"))
+	codec = strings.TrimPrefix(strings.ToUpper(codec), "AUDIO/")
 	if codec == "L16" || codec == "PCM16" || codec == "RAW" {
 		out := make([]int16, len(payload)/2)
 		for i := range out {
