@@ -21,8 +21,8 @@ The behavior assertions are:
 
 ## Measurements: 2026-08-16
 
-The code and negative-control proofs were validated with Go 1.24.2. The pinned
-LocalAI fixture was reachable at
+The code and negative-control proofs were validated with Go 1.24.2. In the
+latest same-day run, the pinned LocalAI fixture was reachable at
 `ws://localhost:8080/v1/realtime?model=gpt-realtime` after Docker Engine
 27.4.0 started `localai/localai:v4.8.2`. The five LocalAI behavior cases ran
 against that image. The live command exits non-zero for the two reachable
@@ -35,11 +35,11 @@ there is no OpenAI tier conclusion from this run.
 
 | Measurement date | Provider / endpoint tier | Behavior | Result | Latency | Observed evidence | Divergence / gating conclusion |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-08-16 | LocalAI / T2 | Audio round trip | **SERVED** — passing live assertion | 2.540s | 2 audio deltas, 71,680 decoded PCM bytes, RMS `0.092849` | T2 may gate audio replay/round-trip work; OpenAI reference measurement remains pending |
-| 2026-08-16 | LocalAI / T2 | Three-turn context | **NOT SERVED** — positive assertion rejected | 1.177s | Replies were `READY`, `READY`, then `UNKNOWN`; retained fact `cobalt-17` was absent | T2 cannot gate retained context; T3 OpenAI measurement is required |
-| 2026-08-16 | LocalAI / T2 | VAD/barge-in | **SERVED** — passing live assertion | 2.236s | `speech_started=true`, cancellation=true, playback flush=true, 1 audio delta before cancellation | T2 may gate VAD/barge-in work; OpenAI reference measurement remains pending |
-| 2026-08-16 | LocalAI / T2 | Model-chosen function call | **SERVED** — passing live assertion | 5.464s | Exactly one `lookup_weather` call; no-tools control observed 0 calls | T2 may gate model-chosen tool dispatch; OpenAI reference measurement remains pending |
-| 2026-08-16 | LocalAI / T2 | Image input | **NOT SERVED** — positive request rejected | 55ms | `image input is not supported` with `prediction_failed`; backend advised that an `mmproj` is required | T2 cannot gate vision; OpenAI is the only remaining live tier that can establish the vision gate |
+| 2026-08-16 | LocalAI / T2 | Audio round trip | **SERVED** — passing live assertion | 3.827s | 1 audio delta, 82,944 decoded PCM bytes, RMS `0.095216` | T2 may gate audio replay/round-trip work; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Three-turn context | **NOT SERVED** — positive assertion rejected | 1.862s | Replies were `READY`, `READY`, then `UNKNOWN`; retained fact `cobalt-17` was absent | T2 cannot gate retained context; T3 OpenAI measurement is required |
+| 2026-08-16 | LocalAI / T2 | VAD/barge-in | **SERVED** — passing live assertion | 2.459s | `speech_started=true`, cancellation=true, playback flush=true, 1 audio delta before cancellation | T2 may gate VAD/barge-in work; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Model-chosen function call | **SERVED** — passing live assertion | 8.885s | Exactly one `lookup_weather` call; no-tools control observed 0 calls | T2 may gate model-chosen tool dispatch; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Image input | **NOT SERVED** — positive request rejected | 76ms | `image input is not supported` with `prediction_failed`; backend advised that an `mmproj` is required | T2 cannot gate vision; OpenAI is the only remaining live tier that can establish the vision gate |
 | 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Audio round trip | **UNMEASURED** — credential-gated skip | — | No live request; credential value was absent and not logged | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
 | 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Three-turn context | **UNMEASURED** — credential-gated skip | — | No live conversation | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
 | 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | VAD/barge-in | **UNMEASURED** — credential-gated skip | — | No live VAD/cancellation sequence | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
