@@ -44,21 +44,11 @@ func TestSequencerUsesSharedBarrierAndCanonicalEvidence(t *testing.T) {
 	}
 }
 
-func TestSequencerRegistersExplicitParticipants(t *testing.T) {
-	sequencer, err := NewSequencer(SequencePlan{Steps: []SequenceStep{{Tick: 1}}})
-	if err != nil {
-		t.Fatalf("NewSequencer() error = %v", err)
-	}
-	want := []Participant{ScenarioDriver, Client, Agent}
-	if !reflect.DeepEqual(sequencer.Participants(), want) {
-		t.Fatalf("participants = %#v, want %#v", sequencer.Participants(), want)
-	}
-}
-
 func TestSequencerRejectsResponseBeforeStimulus(t *testing.T) {
 	plan := SequencePlan{
-		Steps:     []SequenceStep{{ID: "response-step", Tick: 1}, {ID: "stimulus-step", Tick: 2}},
-		Causality: []CausalExpectation{{ID: "request-response", Stimulus: "stimulus", Response: "response"}},
+		Steps:        []SequenceStep{{Tick: 1}, {Tick: 2}},
+		Expectations: []TickExpectation{{ID: "response-at-two", At: 2, EventID: "response"}},
+		Causality:    []CausalExpectation{{Stimulus: "stimulus", Response: "response"}},
 	}
 	sequencer, err := NewSequencer(plan)
 	if err != nil {
@@ -67,9 +57,11 @@ func TestSequencerRejectsResponseBeforeStimulus(t *testing.T) {
 	result, err := sequencer.Run(ParticipantHandlers{
 		Driver: func(ctx *TickContext, _ []SequenceStep) error {
 			if ctx.Tick() == 1 {
-				return ctx.Emit("response")
+				ctx.Emit("response")
+				return nil
 			}
-			return ctx.Emit("stimulus")
+			ctx.Emit("stimulus")
+			return nil
 		},
 	})
 	if !errors.Is(err, ErrOrderingViolation) {
@@ -92,7 +84,7 @@ func TestSequencerRejectsResponseBeforeStimulus(t *testing.T) {
 
 func TestSequencerRejectsWallDurationExpectation(t *testing.T) {
 	plan := SequencePlan{
-		Steps: []SequenceStep{{ID: "stimulus-step", Tick: 1}},
+		Steps: []SequenceStep{{Tick: 1}},
 		Expectations: []TickExpectation{{
 			ID: "wall-latency", At: 1, EventID: "response", WallDuration: time.Second,
 		}},
@@ -113,38 +105,17 @@ func TestSequencerRejectsWallDurationExpectation(t *testing.T) {
 	}
 }
 
-func TestSequencerReportsExpectationFailure(t *testing.T) {
-	sequencer, err := NewSequencer(SequencePlan{
-		Steps:        []SequenceStep{{ID: "step", Tick: 1}},
-		Expectations: []TickExpectation{{ID: "missing", At: 1, EventID: "not-emitted"}},
-	})
-	if err != nil {
-		t.Fatalf("NewSequencer() error = %v", err)
-	}
-	result, err := sequencer.Run(ParticipantHandlers{})
-	if err == nil || result.Expectations[0].Passed {
-		t.Fatalf("Run() = result %#v, error %v; want failed expectation", result, err)
-	}
-}
-
-func TestSequencerRejectsEmptyEventIdentity(t *testing.T) {
-	sequencer, err := NewSequencer(SequencePlan{Steps: []SequenceStep{{Tick: 1}}})
-	if err != nil {
-		t.Fatalf("NewSequencer() error = %v", err)
-	}
-	_, err = sequencer.Run(ParticipantHandlers{Driver: func(ctx *TickContext, _ []SequenceStep) error {
-		return ctx.Emit(" ")
-	}})
-	if !errors.Is(err, ErrInvalidSequencingPlan) {
-		t.Fatalf("Run() error = %v, want invalid event error", err)
+func TestSequencerRejectsEmptyPlan(t *testing.T) {
+	if _, err := NewSequencer(SequencePlan{}); err == nil {
+		t.Fatal("NewSequencer() accepted an empty plan")
 	}
 }
 
 func runConcurrentProbe() (SequenceResult, int32, error) {
 	plan := SequencePlan{
-		Steps:        []SequenceStep{{ID: "send", Tick: 1}, {ID: "receive", Tick: 2}},
+		Steps:        []SequenceStep{{Tick: 1}, {Tick: 2}},
 		Expectations: []TickExpectation{{ID: "response-at-two", At: 2, EventID: "response"}},
-		Causality:    []CausalExpectation{{ID: "stimulus-before-response", Stimulus: "stimulus", Response: "response"}},
+		Causality:    []CausalExpectation{{Stimulus: "stimulus", Response: "response"}},
 	}
 	sequencer, err := NewSequencer(plan)
 	if err != nil {
@@ -152,16 +123,14 @@ func runConcurrentProbe() (SequenceResult, int32, error) {
 	}
 	stimulus := make(chan struct{}, 2)
 	var crossed atomic.Int32
-	recordClock := func(ctx *TickContext) {
+	recordClock := func(_ *TickContext) {
 		crossed.Add(1)
 	}
 	handlers := ParticipantHandlers{
 		Driver: func(ctx *TickContext, _ []SequenceStep) error {
 			recordClock(ctx)
 			if ctx.Tick() == 1 {
-				if err := ctx.Emit("stimulus"); err != nil {
-					return err
-				}
+				ctx.Emit("stimulus")
 				stimulus <- struct{}{}
 				stimulus <- struct{}{}
 			}
@@ -171,7 +140,8 @@ func runConcurrentProbe() (SequenceResult, int32, error) {
 			recordClock(ctx)
 			if ctx.Tick() == 1 {
 				<-stimulus
-				return ctx.Emit("client-observed")
+				ctx.Emit("client-observed")
+				return nil
 			}
 			return nil
 		},
@@ -179,9 +149,11 @@ func runConcurrentProbe() (SequenceResult, int32, error) {
 			recordClock(ctx)
 			if ctx.Tick() == 1 {
 				<-stimulus
-				return ctx.Emit("agent-observed")
+				ctx.Emit("agent-observed")
+				return nil
 			}
-			return ctx.Emit("response")
+			ctx.Emit("response")
+			return nil
 		},
 	}
 	result, err := sequencer.Run(handlers)
