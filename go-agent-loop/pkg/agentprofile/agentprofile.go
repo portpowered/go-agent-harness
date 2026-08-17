@@ -98,7 +98,6 @@ func (l *Loader) Load(name string) (Profile, error) {
 	case !info.IsDir():
 		return Profile{}, malformed(name, "catalog entry is not a profile directory")
 	}
-
 	instructions, err := readFile(l.root, name, InstructionsFileName)
 	if err != nil {
 		return Profile{}, malformed(name, err.Error())
