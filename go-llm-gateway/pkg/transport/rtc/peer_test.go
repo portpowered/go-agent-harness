@@ -18,7 +18,7 @@ func TestPeerS4Lifecycle(t *testing.T) {
 	})
 	t.Run("peer gone", func(t *testing.T) {
 		var open atomic.Int32
-		first, second := newConn(&open), newConn(&open)
+		first, second := newConn(&open, nil), newConn(&open, nil)
 		p := peer(func(_ context.Context, n int) (Conn, error) {
 			if n == 1 {
 				return first, nil
@@ -30,7 +30,7 @@ func TestPeerS4Lifecycle(t *testing.T) {
 		must(t, p.Wait(context.Background()))
 		path(t, p, StateIdle, StateConnecting, StateConnected, StateReconnecting, StateConnected)
 		d := p.config.Dialer.(*fake)
-		check(t, d.calls() == 2 && p.Attempts() == 1 && first.closes.Load() == 1, "dials/attempts/first close = %d/%d/%d", d.calls(), p.Attempts(), first.closes.Load())
+		check(t, d.dials.Load() == 2 && p.Attempts() == 1 && first.closes.Load() == 1, "dials/attempts/first close = %d/%d/%d", d.dials.Load(), p.Attempts(), first.closes.Load())
 		must(t, p.Close())
 		check(t, second.closes.Load() == 1 && open.Load() == 0, "second close/open = %d/%d", second.closes.Load(), open.Load())
 	})
@@ -46,7 +46,7 @@ func TestPeerS4Lifecycle(t *testing.T) {
 		path(t, p, StateIdle, StateConnecting, StateClosed)
 	})
 	t.Run("double teardown", func(t *testing.T) {
-		conn := newConn(nil)
+		conn := newConn(nil, nil)
 		p := peer(func(context.Context, int) (Conn, error) { return conn, nil }, 1)
 		must(t, p.Connect(context.Background()))
 		must(t, p.Close())
@@ -59,7 +59,7 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 	started := make(chan struct{})
 	d := &fake{fn: func(_ context.Context, n int) (Conn, error) {
 		if n == 1 {
-			return newConn(nil), nil
+			return newConn(nil, nil), nil
 		}
 		return nil, errors.New("unavailable")
 	}}
@@ -68,7 +68,7 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 	must(t, p.PeerLost(nil))
 	<-started
 	must(t, p.Close())
-	check(t, d.calls() == 2 && p.Attempts() == 1 && p.State() == StateClosed, "dials/attempts/state = %d/%d/%s", d.calls(), p.Attempts(), p.State())
+	check(t, d.dials.Load() == 2 && p.Attempts() == 1 && p.State() == StateClosed, "dials/attempts/state = %d/%d/%s", d.dials.Load(), p.Attempts(), p.State())
 }
 
 func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
@@ -77,21 +77,20 @@ func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 	d := &fake{fn: func(context.Context, int) (Conn, error) { return nil, cause }}
 	p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 4, Backoff: time.Hour, MaxBackoff: time.Millisecond, Wait: func(_ context.Context, d time.Duration) error { delay.Store(int64(d)); return nil }}})
 	terminal(t, p, p.Connect(context.Background()), cause, 4)
-	check(t, d.calls() == 4 && time.Duration(delay.Load()) <= time.Millisecond, "dials/delay = %d/%s", d.calls(), time.Duration(delay.Load()))
+	check(t, d.dials.Load() == 4 && time.Duration(delay.Load()) <= time.Millisecond, "dials/delay = %d/%s", d.dials.Load(), time.Duration(delay.Load()))
 	must(t, p.Close())
 }
 
 func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
-	started := make(chan struct{})
-	conn := newConn(nil)
+	started, conn := make(chan struct{}), newConn(nil, nil)
 	p := peer(func(ctx context.Context, _ int) (Conn, error) { close(started); <-ctx.Done(); return conn, nil }, 1)
 	a, b := make(chan error, 1), make(chan error, 1)
 	go func() { a <- p.Connect(context.Background()) }()
 	<-started
 	go func() { b <- p.Connect(context.Background()) }()
-	readerDone := make(chan struct{})
+	readDone := make(chan struct{})
 	go func() {
-		defer close(readerDone)
+		defer close(readDone)
 		for range 1200 {
 			switch p.State() {
 			case StateIdle, StateConnecting, StateConnected, StateReconnecting, StateTerminalFailure, StateClosed:
@@ -103,7 +102,7 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	}()
 	closed := make(chan error, 1)
 	go func() { closed <- p.Close() }()
-	<-readerDone
+	<-readDone
 	must(t, await(t, closed))
 	for _, ch := range []<-chan error{a, b} {
 		check(t, errors.Is(await(t, ch), ErrPeerClosed), "connect did not close")
@@ -112,15 +111,15 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 }
 
 func TestPeerS9OneHundredConnectTeardownCycles(t *testing.T) {
-	baseG, openSockets := runtime.NumGoroutine(), new(atomic.Int32)
-	baseOpen := openSockets.Load()
+	baseG, open := runtime.NumGoroutine(), new(atomic.Int32)
+	baseOpen := open.Load()
 	var created, closed atomic.Int32
 	for range 100 {
-		p := peer(func(context.Context, int) (Conn, error) { created.Add(1); return newConn(openSockets, &closed), nil }, 1)
+		p := peer(func(context.Context, int) (Conn, error) { created.Add(1); return newConn(open, &closed), nil }, 1)
 		must(t, p.Connect(context.Background()))
 		must(t, p.Close())
 	}
-	check(t, created.Load() == 100 && closed.Load() == 100 && openSockets.Load() == baseOpen, "created/closed/open = %d/%d/%d", created.Load(), closed.Load(), openSockets.Load())
+	check(t, created.Load() == 100 && closed.Load() == 100 && open.Load() == baseOpen, "created/closed/open = %d/%d/%d", created.Load(), closed.Load(), open.Load())
 	settle(t, 500*time.Millisecond, func() bool { return runtime.NumGoroutine() <= baseG+2 })
 }
 
@@ -133,19 +132,14 @@ type fake struct {
 func (f *fake) DialContext(ctx context.Context, _ string, _ map[string]string) (Conn, error) {
 	return f.fn(ctx, int(f.dials.Add(1)))
 }
-func (f *fake) calls() int { return int(f.dials.Load()) }
 func peer(fn func(context.Context, int) (Conn, error), max int) *Peer {
 	return NewPeer(PeerConfig{Dialer: &fake{fn: fn}, Retry: RetryPolicy{MaxAttempts: max}})
 }
-func newConn(open *atomic.Int32, closed ...*atomic.Int32) *fake {
+func newConn(open, closed *atomic.Int32) *fake {
 	if open != nil {
 		open.Add(1)
 	}
-	var c *atomic.Int32
-	if len(closed) > 0 {
-		c = closed[0]
-	}
-	return &fake{open: open, closed: c}
+	return &fake{open: open, closed: closed}
 }
 func (*fake) ReadMessage() (int, []byte, error) { return 0, nil, nil }
 func (*fake) WriteMessage(int, []byte) error    { return nil }
@@ -159,15 +153,12 @@ func (f *fake) Close() error {
 	}
 	return nil
 }
-
-func must(t *testing.T, err error) { t.Helper(); check(t, err == nil, "unexpected error: %v", err) }
+func must(t *testing.T, err error) { check(t, err == nil, "unexpected error: %v", err) }
 func terminal(t *testing.T, p *Peer, err, cause error, attempts int) {
-	t.Helper()
-	var e *TerminalError
-	check(t, errors.Is(err, cause) && errors.Is(err, ErrPeerTerminalFailure) && errors.As(err, &e) && e.Attempts == attempts && p.State() == StateTerminalFailure, "error/state = %v/%s", err, p.State())
+	var typed *TerminalError
+	check(t, errors.Is(err, cause) && errors.Is(err, ErrPeerTerminalFailure) && errors.As(err, &typed) && typed.Attempts == attempts && p.State() == StateTerminalFailure, "error/state = %v/%s", err, p.State())
 }
 func path(t *testing.T, p *Peer, want ...State) {
-	t.Helper()
 	got := p.Transitions()
 	check(t, len(got) == len(want)-1, "transitions = %#v", got)
 	for i, tr := range got {
@@ -175,13 +166,11 @@ func path(t *testing.T, p *Peer, want ...State) {
 	}
 }
 func check(t *testing.T, ok bool, format string, args ...any) {
-	t.Helper()
 	if !ok {
 		t.Fatalf(format, args...)
 	}
 }
 func await(t *testing.T, ch <-chan error) error {
-	t.Helper()
 	select {
 	case err := <-ch:
 		return err
@@ -191,10 +180,9 @@ func await(t *testing.T, ch <-chan error) error {
 	}
 }
 func settle(t *testing.T, timeout time.Duration, f func() bool) {
-	t.Helper()
-	end := time.Now().Add(timeout)
+	deadline := time.Now().Add(timeout)
 	for !f() {
-		if time.Now().After(end) {
+		if time.Now().After(deadline) {
 			t.Fatal("condition did not settle")
 		}
 		runtime.Gosched()
