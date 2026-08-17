@@ -8,6 +8,7 @@ package audio
 import "C"
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -28,6 +29,12 @@ const coreAudioBackend = "coreaudio"
 type CoreAudioDeviceRegistry struct{}
 
 var _ DeviceRegistry = (*CoreAudioDeviceRegistry)(nil)
+
+var (
+	_ OpenedDevice = (*coreAudioHandle)(nil)
+	_ AudioSource  = (*coreAudioHandle)(nil)
+	_ AudioSink    = (*coreAudioHandle)(nil)
+)
 
 // NewCoreAudioDeviceRegistry constructs the Darwin CoreAudio registry.
 func NewCoreAudioDeviceRegistry() *CoreAudioDeviceRegistry {
@@ -73,7 +80,10 @@ func (r *CoreAudioDeviceRegistry) Default(direction Direction) (Device, error) {
 
 func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	backend, nativeID, err := ParseDeviceID(id)
-	if err != nil || backend != coreAudioBackend {
+	if err != nil {
+		return nil, err
+	}
+	if backend != coreAudioBackend {
 		return nil, NewDeviceNotFoundError(id)
 	}
 	if !strings.HasSuffix(nativeID, ":input") && !strings.HasSuffix(nativeID, ":output") {
@@ -215,12 +225,18 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	} else {
 		config.Playback.DeviceID = nativeIDPtr
 	}
-	handle := &coreAudioHandle{context: ctx, direction: direction}
+	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction}
+	if direction == DirectionInput {
+		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
+	}
 	device, err := malgo.InitDevice(ctx.Context, config, malgo.DeviceCallbacks{Data: handle.onData})
 	if err != nil {
 		return nil, err
 	}
 	handle.device = device
+	if handle.capture != nil {
+		handle.capture.device = device
+	}
 	if err := device.Start(); err != nil {
 		device.Uninit()
 		return nil, err
@@ -243,11 +259,16 @@ func isCoreAudioUnavailable(err error) bool {
 }
 
 type coreAudioHandle struct {
+	id        DeviceID
 	context   *malgo.AllocatedContext
 	device    *malgo.Device
 	direction Direction
+	capture   *MicrophoneSource
+	mu        sync.Mutex
 	closeOnce sync.Once
 	closeErr  error
+	closed    bool
+	playback  []int16
 	callbacks atomic.Uint64
 	samples   atomic.Uint64
 	energy    atomic.Uint64
@@ -257,6 +278,12 @@ type coreAudioHandle struct {
 func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 	h.callbacks.Add(1)
 	if h.direction == DirectionInput {
+		h.mu.Lock()
+		closed := h.closed
+		h.mu.Unlock()
+		if closed {
+			return
+		}
 		for i := 0; i+1 < len(input); i += 2 {
 			sample := int64(int16(binary.LittleEndian.Uint16(input[i : i+2])))
 			if sample < 0 {
@@ -265,16 +292,89 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 			h.samples.Add(1)
 			h.energy.Add(uint64(sample))
 		}
+		if h.capture != nil {
+			h.capture.onCapture(input, len(input)/2)
+		}
 		return
 	}
-	for i := 0; i+1 < len(output); i += 2 {
-		binary.LittleEndian.PutUint16(output[i:i+2], 512)
-		h.nonZero.Add(1)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return
 	}
+	clear(output)
+	n := len(output) / 2
+	if n > len(h.playback) {
+		n = len(h.playback)
+	}
+	encodePCM16(output[:n*2], h.playback[:n])
+	for _, sample := range h.playback[:n] {
+		if sample != 0 {
+			h.nonZero.Add(1)
+		}
+	}
+	h.playback = h.playback[n:]
+}
+
+func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
+	if h.direction != DirectionInput {
+		return fmt.Errorf("audio device %q is output-only", h.id)
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if err := validateFrame("read", frame); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	closed := h.closed
+	h.mu.Unlock()
+	if closed {
+		return &ClosedError{Operation: "read", Path: string(h.id)}
+	}
+	if h.capture == nil {
+		return fmt.Errorf("audio device %q has no capture source", h.id)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return h.capture.ReadFrame(ctx, frame)
+}
+
+func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
+	if h.direction != DirectionOutput {
+		return fmt.Errorf("audio device %q is input-only", h.id)
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if err := validateFrame("write", frame); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return &ClosedError{Operation: "write", Path: string(h.id)}
+	}
+	h.playback = append(h.playback, frame...)
+	if len(h.playback) > FrameSize*64 {
+		h.playback = h.playback[len(h.playback)-FrameSize*64:]
+	}
+	return nil
 }
 
 func (h *coreAudioHandle) Close() error {
+	if h == nil {
+		return nil
+	}
 	h.closeOnce.Do(func() {
+		h.mu.Lock()
+		h.closed = true
+		h.mu.Unlock()
+		if h.capture != nil {
+			h.closeErr = h.capture.Close()
+			return
+		}
 		if h.device != nil {
 			if err := h.device.Stop(); err != nil && !errors.Is(err, malgo.ErrDeviceNotStarted) {
 				h.closeErr = err

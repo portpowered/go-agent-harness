@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -37,6 +38,28 @@ func TestCoreAudioOpenProducesSignals(t *testing.T) {
 		handle, ok := opened.(*coreAudioHandle)
 		if !ok {
 			t.Fatalf("%s handle type=%T, want *coreAudioHandle", capability.name, opened)
+		}
+		if capability.output {
+			sink, ok := opened.(AudioSink)
+			if !ok {
+				t.Fatalf("%s handle does not implement AudioSink", capability.name)
+			}
+			frame := make([]int16, FrameSize)
+			frame[0] = 1024
+			if err := sink.WriteFrame(context.Background(), frame); err != nil {
+				t.Fatalf("%s WriteFrame: %v", capability.name, err)
+			}
+		} else {
+			source, ok := opened.(AudioSource)
+			if !ok {
+				t.Fatalf("%s handle does not implement AudioSource", capability.name)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			readErr := source.ReadFrame(ctx, make([]int16, FrameSize))
+			cancel()
+			if readErr != nil {
+				t.Fatalf("%s ReadFrame: %v", capability.name, readErr)
+			}
 		}
 		waitForCoreAudioSignal(t, handle, capability.output)
 		if err := opened.Close(); err != nil {
