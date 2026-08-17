@@ -517,6 +517,71 @@ func TestRunSessionWithAudioInputSessionTerminationStopsBlockingStdin(t *testing
 	assertGoroutinesSettled(t, baselineGoroutines, "session termination")
 }
 
+func TestRunSessionWithAudioInputRejectsUninterruptibleStdin(t *testing.T) {
+	baselineGoroutines := runtime.NumGoroutine()
+	reader := newUninterruptibleReader()
+	defer close(reader.release)
+	inferencer := functional.NewMockSessionInferencer()
+	t.Cleanup(inferencer.Close)
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd.SetIn(reader)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", "-"})
+
+	result := make(chan error, 1)
+	go func() { result <- cmd.ExecuteContext(context.Background()) }()
+
+	select {
+	case err := <-result:
+		if !errors.Is(err, services.ErrSessionAudioInputUninterruptible) {
+			t.Fatalf("unsupported stdin error = %v, want ErrSessionAudioInputUninterruptible", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("unsupported blocking stdin left the session command blocked")
+	}
+	select {
+	case <-reader.started:
+		t.Fatal("unsupported blocking stdin was called instead of being rejected")
+	default:
+	}
+	assertGoroutinesSettled(t, baselineGoroutines, "uninterruptible stdin")
+}
+
+func TestRunSessionWithAudioInputRejectsFailedDeadlineStdin(t *testing.T) {
+	baselineGoroutines := runtime.NumGoroutine()
+	wantDeadlineErr := errors.New("deadline unsupported")
+	reader := &failedDeadlineReader{deadlineErr: wantDeadlineErr, started: make(chan struct{})}
+	inferencer := functional.NewMockSessionInferencer()
+	t.Cleanup(inferencer.Close)
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd.SetIn(reader)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", "-"})
+
+	result := make(chan error, 1)
+	go func() { result <- cmd.ExecuteContext(context.Background()) }()
+
+	select {
+	case err := <-result:
+		if !errors.Is(err, services.ErrSessionAudioInputUninterruptible) {
+			t.Fatalf("failed-deadline stdin error = %v, want ErrSessionAudioInputUninterruptible", err)
+		}
+		if !errors.Is(err, wantDeadlineErr) {
+			t.Fatalf("failed-deadline stdin error = %v, want deadline error", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("failed-deadline stdin left the session command blocked")
+	}
+	select {
+	case <-reader.started:
+		t.Fatal("failed-deadline stdin was read after deadline setup failed")
+	default:
+	}
+	assertGoroutinesSettled(t, baselineGoroutines, "failed stdin deadline")
+}
+
 func TestRunSessionWithAudioInputTerminalErrorsCloseSourceExactlyOnce(t *testing.T) {
 	wantReadErr := errors.New("synthetic source read failed")
 	wantSendErr := errors.New("synthetic loop send failed")
@@ -618,6 +683,18 @@ type blockingContextReader struct {
 	once     sync.Once
 }
 
+type uninterruptibleReader struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+type failedDeadlineReader struct {
+	deadlineErr error
+	started     chan struct{}
+	once        sync.Once
+}
+
 type connectSignaledInferencer struct {
 	inner     messages.SessionInferencer
 	connected chan struct{}
@@ -649,6 +726,25 @@ func (r *blockingContextReader) ReadContext(ctx context.Context, _ []byte) (int,
 	defer close(r.returned)
 	<-ctx.Done()
 	return 0, ctx.Err()
+}
+
+func newUninterruptibleReader() *uninterruptibleReader {
+	return &uninterruptibleReader{started: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (r *uninterruptibleReader) Read([]byte) (int, error) {
+	r.once.Do(func() { close(r.started) })
+	<-r.release
+	return 0, errors.New("uninterruptible reader released")
+}
+
+func (r *failedDeadlineReader) Read([]byte) (int, error) {
+	r.once.Do(func() { close(r.started) })
+	return 0, errors.New("failed-deadline reader was called")
+}
+
+func (r *failedDeadlineReader) SetReadDeadline(time.Time) error {
+	return r.deadlineErr
 }
 
 func assertGoroutinesSettled(t *testing.T, baseline int, operation string) {
