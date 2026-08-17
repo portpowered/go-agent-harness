@@ -261,16 +261,37 @@ func TestInboundTrackSuppressesDuplicatesLatePacketsAndOrdersWraparound(t *testi
 	t.Run("duplicate-and-late", func(t *testing.T) {
 		source := newTestPacketSource(16)
 		decoder := &testOpusDecoder{samples: 960}
-		track := newTestTrack(t, source, decoder, InboundTrackConfig{JitterDepth: 60 * time.Millisecond})
+		timers := &manualTimerFactory{requests: make(chan timerRequest, 8)}
+		track := newTestTrack(t, source, decoder, InboundTrackConfig{JitterDepth: 60 * time.Millisecond, NewTimer: timers.newTimer})
 		source.push(testRTPPacket(10, 1000, 0))
 		source.push(testRTPPacket(12, 2920, 2))
 		source.push(testRTPPacket(11, 1960, 1))
 		source.push(testRTPPacket(10, 1000, 0))
+		initial := timers.next(t)
+		initial.fire()
+		readTestFrame(t, track)
+		timers.next(t).fire()
+		readTestFrame(t, track)
+		timers.next(t).fire()
+		readTestFrame(t, track)
 		source.push(testRTPPacket(9, 40, 9))
+		source.close()
+		if got := decoder.decodedIDs(); !equalBytes(got, []byte{0, 1, 2}) {
+			t.Fatalf("decoded IDs = %v, want [0 1 2]", got)
+		}
+	})
+
+	t.Run("first-arrival-is-not-earliest", func(t *testing.T) {
+		source := newTestPacketSource(8)
+		decoder := &testOpusDecoder{samples: 960}
+		track := newTestTrack(t, source, decoder, InboundTrackConfig{JitterDepth: 60 * time.Millisecond})
+		source.push(testRTPPacket(102, 2920, 2))
+		source.push(testRTPPacket(100, 1000, 0))
+		source.push(testRTPPacket(101, 1960, 1))
 		source.close()
 		_ = readTestFrames(t, track, 3)
 		if got := decoder.decodedIDs(); !equalBytes(got, []byte{0, 1, 2}) {
-			t.Fatalf("decoded IDs = %v, want [0 1 2]", got)
+			t.Fatalf("initial-window decoded IDs = %v, want [0 1 2]", got)
 		}
 	})
 
@@ -475,18 +496,31 @@ func FuzzInboundTrackIngress(f *testing.F) {
 			limit = maxPackets
 		}
 		source := newTestPacketSource(2*maxPackets + 4)
-		track, err := NewInboundTrack(source, &testOpusDecoder{samples: 960}, InboundTrackConfig{JitterDepth: 20 * time.Millisecond})
+		decoder := &testOpusDecoder{samples: 960}
+		timers := &manualTimerFactory{requests: make(chan timerRequest, 8)}
+		track, err := NewInboundTrack(source, decoder, InboundTrackConfig{JitterDepth: 20 * time.Millisecond, NewTimer: timers.newTimer})
 		if err != nil {
 			t.Fatalf("NewInboundTrack() error = %v", err)
 		}
 		defer track.Close()
 		packets := make([]*rtp.Packet, 0, limit)
+		baseSequence := uint16(65520)
+		baseTimestamp := uint32(4000)
+		if len(data) >= 2 {
+			baseSequence = binary.LittleEndian.Uint16(data[:2])
+		}
+		if len(data) >= 6 {
+			baseTimestamp = binary.LittleEndian.Uint32(data[2:6])
+		}
+		if len(data) > 0 && data[0]&0x01 != 0 {
+			baseSequence = 65520 + uint16(data[0]&0x0f) //nolint:gosec // intentional wraparound input
+		}
 		for index := range limit {
-			sequence := uint16(65520 + index)     //nolint:gosec // intentional wraparound fixture
-			timestamp := uint32(4000 + index*960) //nolint:gosec // bounded fuzz index
-			payload := []byte{data[index]}
+			sequence := baseSequence + uint16(index)       //nolint:gosec // bounded fuzz index
+			timestamp := baseTimestamp + uint32(index*960) //nolint:gosec // bounded fuzz index
+			payload := []byte{byte(index)}                 //nolint:gosec // bounded fuzz index
 			if data[index]&0x80 != 0 {
-				payload = nil
+				payload = []byte{data[index], 0}
 			}
 			if data[index]&0x10 != 0 {
 				timestamp++
@@ -506,19 +540,61 @@ func FuzzInboundTrackIngress(f *testing.F) {
 		if len(data) > 1 && data[1]&1 != 0 && len(packets) > 2 {
 			packets[0], packets[1] = packets[1], packets[0]
 		}
-		if len(data) > 0 && data[0]&2 != 0 && limit > 0 {
-			packets = append(packets, testRTPPacket(65519, 3040, 9))
+		if len(data) > 2 && len(packets) > 1 {
+			for distance := int(data[2]) % len(packets); distance > 0; distance-- {
+				first := packets[0]
+				copy(packets, packets[1:])
+				packets[len(packets)-1] = first
+			}
 		}
 		for _, packet := range packets {
 			source.push(packet)
 		}
-		source.close()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
+		if len(data) > 0 && data[0]&0x04 != 0 {
+			cancel()
+			_, readErr := track.ReadFrame(ctx)
+			if !errors.Is(readErr, context.Canceled) {
+				t.Fatalf("fuzz cancellation error = %v, want context.Canceled", readErr)
+			}
+			return
+		}
+		if len(data) > 0 && data[0]&0x08 != 0 {
+			if err := track.Close(); err != nil {
+				t.Fatalf("fuzz close error = %v", err)
+			}
+			if _, readErr := track.ReadFrame(context.Background()); !errors.Is(readErr, ErrInboundTrackClosed) {
+				t.Fatalf("fuzz post-close error = %v, want ErrInboundTrackClosed", readErr)
+			}
+			return
+		}
 		emitted := 0
+		if len(packets) > 0 {
+			initial := timers.next(t)
+			initial.fire()
+			frame, readErr := track.ReadFrame(ctx)
+			if readErr != nil {
+				if !isDocumentedInboundTrackError(readErr) {
+					t.Fatalf("fuzz initial ReadFrame() error = %v", readErr)
+				}
+				return
+			}
+			if len(frame.Samples) != 960 {
+				t.Fatalf("fuzz frame length = %d, want 960", len(frame.Samples))
+			}
+			emitted++
+			late := testRTPPacket(baseSequence-1, baseTimestamp-960, 0xfe)
+			late.Payload = []byte{0xfe}
+			source.push(late)
+		}
+		source.close()
 		for {
 			frame, readErr := track.ReadFrame(ctx)
 			if readErr != nil {
+				if !isDocumentedInboundTrackError(readErr) {
+					t.Fatalf("fuzz ReadFrame() error = %v", readErr)
+				}
 				break
 			}
 			if len(frame.Samples) != 960 {
@@ -526,7 +602,19 @@ func FuzzInboundTrackIngress(f *testing.F) {
 			}
 			emitted++
 		}
+		seen := make(map[byte]struct{}, len(decoder.decodedIDs()))
+		for _, id := range decoder.decodedIDs() {
+			if _, duplicate := seen[id]; duplicate {
+				t.Fatalf("fuzz decoded payload %d more than once", id)
+			}
+			seen[id] = struct{}{}
+		}
 	})
+}
+
+func isDocumentedInboundTrackError(err error) bool {
+	var typed *InboundTrackError
+	return errors.As(err, &typed) || errors.Is(err, ErrInboundTrackClosed) || errors.Is(err, io.EOF)
 }
 
 const inboundTrackAllocationBudget = 9

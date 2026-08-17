@@ -296,13 +296,13 @@ func (t *InboundTrack) Close() error {
 }
 
 type playout struct {
-	track                    *InboundTrack
-	packets                  map[int64]*rtp.Packet
-	have, started            bool
-	baseSeq, nextSeq, maxSeq int64
-	baseTimestamp            uint32
-	ssrc                     uint32
-	payloadType              uint8
+	track                            *InboundTrack
+	packets                          map[int64]*rtp.Packet
+	have, started                    bool
+	baseSeq, minSeq, nextSeq, maxSeq int64
+	baseTimestamp                    uint32
+	ssrc                             uint32
+	payloadType                      uint8
 }
 
 func (s *playout) push(packet *rtp.Packet) error {
@@ -310,11 +310,12 @@ func (s *playout) push(packet *rtp.Packet) error {
 		return trackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("version %d: want RTP version 2", packet.Version))
 	}
 	if !s.have {
-		s.have, s.baseSeq, s.baseTimestamp, s.maxSeq = true, int64(packet.SequenceNumber), packet.Timestamp, int64(packet.SequenceNumber)
+		sequence := int64(packet.SequenceNumber)
+		s.have, s.baseSeq, s.minSeq, s.baseTimestamp, s.maxSeq = true, sequence, sequence, packet.Timestamp, sequence
 		s.ssrc, s.payloadType = packet.SSRC, packet.PayloadType
 	}
 	ext := unwrapSequence(packet.SequenceNumber, s.maxSeq)
-	if !s.started && ext < s.baseSeq || s.started && ext < s.nextSeq {
+	if s.started && ext < s.nextSeq {
 		return nil
 	}
 	if _, ok := s.packets[ext]; ok {
@@ -331,22 +332,26 @@ func (s *playout) push(packet *rtp.Packet) error {
 		return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d timestamp %d: want %d", packet.SequenceNumber, packet.Timestamp, expected))
 	}
 	if !s.started {
-		distance := ext - s.maxSeq
-		if distance > int64(s.track.config.jitterPackets) {
-			return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds initial jitter window", packet.SequenceNumber))
+		if ext < s.minSeq {
+			if s.minSeq-ext > int64(s.track.config.jitterPackets) {
+				return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds initial jitter window", packet.SequenceNumber))
+			}
+			s.minSeq = ext
+		} else if ext > s.maxSeq {
+			if ext-s.maxSeq > int64(s.track.config.jitterPackets) {
+				return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds initial jitter window", packet.SequenceNumber))
+			}
+			s.maxSeq = ext
 		}
 	} else if ext-s.nextSeq > int64(s.track.config.jitterPackets) {
 		return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds jitter window", packet.SequenceNumber))
-	}
-	if ext > s.maxSeq {
-		s.maxSeq = ext
 	}
 	s.packets[ext] = clonePacket(packet)
 	return nil
 }
 func (s *playout) tick() error {
 	if !s.started {
-		s.nextSeq = s.baseSeq
+		s.nextSeq = s.minSeq
 		s.started = true
 	}
 	return s.emitNext()
@@ -356,7 +361,7 @@ func (s *playout) flush() error {
 		return nil
 	}
 	if !s.started {
-		s.nextSeq = s.baseSeq
+		s.nextSeq = s.minSeq
 		s.started = true
 	}
 	for s.nextSeq <= s.maxSeq {
