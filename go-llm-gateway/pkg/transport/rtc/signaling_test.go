@@ -3,184 +3,141 @@ package rtc_test
 import (
 	"context"
 	"errors"
+	rtc "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
+	"runtime"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 func TestLoopbackSignalingExchangePreservesOrder(t *testing.T) {
-	offerer, answerer := pair(t, 250*time.Millisecond)
+	o, a := pair(t, 250*time.Millisecond)
 	ctx := context.Background()
-	offer := rtc.SessionDescription{Type: "offer", SDP: "offer-sdp-exact"}
-	answer := rtc.SessionDescription{Type: "answer", SDP: "answer-sdp-exact"}
-	offers := []rtc.ICECandidate{{Candidate: "offer-1"}, {Candidate: "offer-2"}}
-	answers := []rtc.ICECandidate{{Candidate: "answer-1"}, {Candidate: "answer-2"}}
-	must(t, offerer.SendOffer(ctx, offer))
-	sendCandidates(t, ctx, offerer, offers)
-	must(t, offerer.CompleteCandidateGathering(ctx))
-	if got, err := answerer.ReceiveOffer(ctx); err != nil || got != offer {
-		t.Fatalf("offer = %#v, %v", got, err)
-	}
-	receiveCandidates(t, ctx, answerer, offers)
-	if _, err := answerer.ReceiveCandidate(ctx); !errors.Is(err, rtc.ErrGatheringComplete) {
-		t.Fatalf("offer completion = %v", err)
-	}
-	must(t, answerer.SendAnswer(ctx, answer))
-	sendCandidates(t, ctx, answerer, answers)
-	must(t, answerer.CompleteCandidateGathering(ctx))
-	if got, err := offerer.ReceiveAnswer(ctx); err != nil || got != answer {
-		t.Fatalf("answer = %#v, %v", got, err)
-	}
-	receiveCandidates(t, ctx, offerer, answers)
-	if _, err := offerer.ReceiveCandidate(ctx); !errors.Is(err, rtc.ErrGatheringComplete) {
-		t.Fatalf("answer completion = %v", err)
-	}
-	must(t, offerer.WaitCandidateGathering(ctx))
-	must(t, answerer.WaitCandidateGathering(ctx))
-	waitDone(t, offerer)
-	waitDone(t, answerer)
+	offer, answer := sdp("offer", "offer-exact"), sdp("answer", "answer-exact")
+	ocs, acs := []rtc.ICECandidate{{"offer-1"}, {"offer-2"}}, []rtc.ICECandidate{{"answer-1"}, {"answer-2"}}
+	exchange(t, ctx, o.SendOffer, a.ReceiveOffer, o.SendCandidate, a.ReceiveCandidate, o.CompleteCandidateGathering, offer, ocs)
+	exchange(t, ctx, a.SendAnswer, o.ReceiveAnswer, a.SendCandidate, o.ReceiveCandidate, a.CompleteCandidateGathering, answer, acs)
+	expect(t, o.WaitCandidateGathering(ctx), nil)
+	expect(t, a.WaitCandidateGathering(ctx), nil)
+	done(t, o)
+	done(t, a)
 }
 
-func TestLoopbackSignalingErrorsAreDistinctAndTerminal(t *testing.T) {
-	cases := []struct {
-		name string
-		want error
-		run  func(context.Context, *rtc.LoopbackEndpoint, *rtc.LoopbackEndpoint) error
-	}{
-		{"malformed offer", rtc.ErrMalformedOffer, func(ctx context.Context, o, a *rtc.LoopbackEndpoint) error {
-			if err := o.SendOffer(ctx, rtc.SessionDescription{Type: "offer"}); err != nil {
-				return err
-			}
-			_, err := a.ReceiveOffer(ctx)
-			return err
-		}},
-		{"malformed answer", rtc.ErrMalformedAnswer, func(ctx context.Context, o, a *rtc.LoopbackEndpoint) error {
-			if err := offerPhase(ctx, o, a); err != nil {
-				return err
-			}
-			if err := a.SendAnswer(ctx, rtc.SessionDescription{Type: "answer"}); err != nil {
-				return err
-			}
-			_, err := o.ReceiveAnswer(ctx)
-			return err
-		}},
-		{"no candidates", rtc.ErrNoCandidates, func(ctx context.Context, o, a *rtc.LoopbackEndpoint) error {
-			if err := offerPhase(ctx, o, a); err != nil {
-				return err
-			}
-			if err := o.CompleteCandidateGathering(ctx); err != nil {
-				return err
-			}
-			return o.WaitCandidateGathering(ctx)
-		}},
-		{"ICE gathering timeout", rtc.ErrICEGatheringTimeout, func(ctx context.Context, o, a *rtc.LoopbackEndpoint) error {
-			if err := offerPhase(ctx, o, a); err != nil {
-				return err
-			}
-			return a.WaitCandidateGathering(ctx)
-		}},
-		{"signaling unreachable", rtc.ErrSignalingUnreachable, func(ctx context.Context, o, _ *rtc.LoopbackEndpoint) error { return o.SendOffer(ctx, validOffer()) }},
-		{"answer before offer", rtc.ErrAnswerBeforeOffer, func(ctx context.Context, _, a *rtc.LoopbackEndpoint) error { return a.SendAnswer(ctx, validAnswer()) }},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := rtc.SignalingConfig{ICEGatheringTimeout: 25 * time.Millisecond}
-			var o, a *rtc.LoopbackEndpoint
-			var err error
-			if tc.name == "signaling unreachable" {
-				cfg.Unreachable = true
-			}
-			o, a, err = rtc.NewLoopbackSignalingPair(cfg)
-			must(t, err)
-			got := tc.run(context.Background(), o, a)
-			if !errors.Is(got, tc.want) {
-				t.Fatalf("error = %v, want %v", got, tc.want)
-			}
-			var typed *rtc.SignalingError
-			if !errors.As(got, &typed) {
-				t.Fatalf("error = %v, want typed signaling error", got)
-			}
-			for _, other := range failureKinds() {
-				if other != tc.want && errors.Is(got, other) {
-					t.Fatalf("error %v also matches %v", got, other)
-				}
-			}
-			waitDone(t, o)
-			waitDone(t, a)
-		})
-	}
-}
+var failures = []error{rtc.ErrMalformedOffer, rtc.ErrMalformedAnswer, rtc.ErrNoCandidates, rtc.ErrICEGatheringTimeout, rtc.ErrSignalingUnreachable, rtc.ErrAnswerBeforeOffer}
 
-func TestLoopbackSignalingCancellationAndConfiguration(t *testing.T) {
-	if _, _, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{}); !errors.Is(err, rtc.ErrInvalidSignalingConfiguration) {
-		t.Fatalf("zero timeout = %v", err)
-	}
-	if _, _, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: -time.Second}); !errors.Is(err, rtc.ErrInvalidSignalingConfiguration) {
-		t.Fatalf("negative timeout = %v", err)
+func TestLoopbackSignalingFailureMatrixAndCleanup(t *testing.T) {
+	base := runtime.NumGoroutine()
+	for _, timeout := range []time.Duration{0, -time.Second} {
+		_, _, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: timeout})
+		expect(t, err, rtc.ErrInvalidSignalingConfiguration)
 	}
 	o, a := pair(t, time.Second)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := a.ReceiveOffer(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatalf("canceled receive = %v", err)
+	_, err := a.ReceiveOffer(ctx)
+	expect(t, err, context.Canceled)
+	done(t, o)
+	done(t, a)
+	for kind, want := range failures {
+		for n := 0; n < 8; n++ {
+			o, a, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: 5 * time.Millisecond, Unreachable: kind == 4})
+			expect(t, err, nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			got := runFailure(kind, ctx, o, a)
+			cancel()
+			assertFailure(t, got, want)
+			done(t, o)
+			done(t, a)
+			postTerminal(t, ctx, o, a, want)
+		}
 	}
-	waitDone(t, o)
-	waitDone(t, a)
+	runtime.GC()
+	if got := runtime.NumGoroutine(); got > base {
+		t.Fatalf("goroutine baseline grew from %d to %d", base, got)
+	}
 }
-
-func offerPhase(ctx context.Context, o, a *rtc.LoopbackEndpoint) error {
-	if err := o.SendOffer(ctx, validOffer()); err != nil {
+func assertFailure(t *testing.T, got, want error) {
+	expect(t, got, want)
+	for _, other := range failures {
+		if other != want && errors.Is(got, other) {
+			t.Fatalf("%v also matches %v", got, other)
+		}
+	}
+}
+func runFailure(kind int, ctx context.Context, o, a *rtc.LoopbackEndpoint) error {
+	switch kind {
+	case 0:
+		return phase(ctx, o, a, rtc.SessionDescription{Type: "offer", SDP: "not-sdp"}, false)
+	case 1, 2, 3:
+		if err := phase(ctx, o, a, sdp("offer", "valid"), false); err != nil {
+			return err
+		}
+		if kind == 1 {
+			return phase(ctx, o, a, rtc.SessionDescription{Type: "answer", SDP: "not-sdp"}, true)
+		}
+		if kind == 2 {
+			o.CompleteCandidateGathering(ctx)
+			return o.WaitCandidateGathering(ctx)
+		}
+		return a.WaitCandidateGathering(ctx)
+	case 4:
+		return o.SendOffer(ctx, sdp("offer", "unreachable"))
+	default:
+		return a.SendAnswer(ctx, sdp("answer", "early"))
+	}
+}
+func phase(ctx context.Context, o, a *rtc.LoopbackEndpoint, d rtc.SessionDescription, answer bool) error {
+	send, receive := o.SendOffer, a.ReceiveOffer
+	if answer {
+		send, receive = a.SendAnswer, o.ReceiveAnswer
+	}
+	if err := send(ctx, d); err != nil {
 		return err
 	}
-	_, err := a.ReceiveOffer(ctx)
+	_, err := receive(ctx)
 	return err
 }
-func validOffer() rtc.SessionDescription {
-	return rtc.SessionDescription{Type: "offer", SDP: "valid-offer"}
+func sdp(kind, name string) rtc.SessionDescription {
+	return rtc.SessionDescription{Type: kind, SDP: "v=0\r\no=- " + name + " 1 IN IP4 127.0.0.1\r\ns=" + name + "\r\nt=0 0"}
 }
-func validAnswer() rtc.SessionDescription {
-	return rtc.SessionDescription{Type: "answer", SDP: "valid-answer"}
+func pair(t *testing.T, timeout time.Duration) (*rtc.LoopbackEndpoint, *rtc.LoopbackEndpoint) {
+	o, a, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: timeout})
+	expect(t, err, nil)
+	return o, a
 }
-func failureKinds() []error {
-	return []error{rtc.ErrMalformedOffer, rtc.ErrMalformedAnswer, rtc.ErrNoCandidates, rtc.ErrICEGatheringTimeout, rtc.ErrSignalingUnreachable, rtc.ErrAnswerBeforeOffer}
-}
-
-func sendCandidates(t *testing.T, ctx context.Context, e *rtc.LoopbackEndpoint, candidates []rtc.ICECandidate) {
-	t.Helper()
-	for _, c := range candidates {
-		must(t, e.SendCandidate(ctx, c))
+func exchange(t *testing.T, ctx context.Context, sendDescription func(context.Context, rtc.SessionDescription) error, receiveDescription func(context.Context) (rtc.SessionDescription, error), sendCandidate func(context.Context, rtc.ICECandidate) error, receiveCandidate func(context.Context) (rtc.ICECandidate, error), complete func(context.Context) error, want rtc.SessionDescription, candidates []rtc.ICECandidate) {
+	expect(t, sendDescription(ctx, want), nil)
+	for _, candidate := range candidates {
+		expect(t, sendCandidate(ctx, candidate), nil)
 	}
-}
-func receiveCandidates(t *testing.T, ctx context.Context, e *rtc.LoopbackEndpoint, want []rtc.ICECandidate) {
-	t.Helper()
-	for i, expected := range want {
-		got, err := e.ReceiveCandidate(ctx)
+	expect(t, complete(ctx), nil)
+	got, err := receiveDescription(ctx)
+	if err != nil || got != want {
+		t.Fatalf("description = %#v, %v; want %#v", got, err, want)
+	}
+	for i, expected := range candidates {
+		got, err := receiveCandidate(ctx)
 		if err != nil || got != expected {
 			t.Fatalf("candidate %d = %#v, %v", i, got, err)
 		}
 	}
+	_, err = receiveCandidate(ctx)
+	expect(t, err, rtc.ErrGatheringComplete)
 }
-func must(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
+func expect(t *testing.T, got, want error) {
+	if !errors.Is(got, want) {
+		t.Fatalf("error = %v, want %v", got, want)
 	}
 }
-
-func pair(t *testing.T, timeout time.Duration) (*rtc.LoopbackEndpoint, *rtc.LoopbackEndpoint) {
-	t.Helper()
-	o, a, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: timeout})
-	must(t, err)
-	return o, a
-}
-func waitDone(t *testing.T, e *rtc.LoopbackEndpoint) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+func done(t *testing.T, e *rtc.LoopbackEndpoint) {
 	select {
 	case <-e.Done():
-	case <-ctx.Done():
-		t.Fatalf("endpoint did not terminate: %v", ctx.Err())
+	default:
+		t.Fatal("endpoint did not terminate")
 	}
+}
+func postTerminal(t *testing.T, ctx context.Context, o, a *rtc.LoopbackEndpoint, want error) {
+	expect(t, o.SendOffer(ctx, sdp("offer", "after")), want)
+	expect(t, a.SendAnswer(ctx, sdp("answer", "after")), want)
+	expect(t, o.SendCandidate(ctx, rtc.ICECandidate{"after"}), want)
+	expect(t, a.CompleteCandidateGathering(ctx), want)
 }
