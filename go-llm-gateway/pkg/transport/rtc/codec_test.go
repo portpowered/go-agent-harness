@@ -43,10 +43,10 @@ func TestRTCOpusRoundTripProducesNovelPCM(t *testing.T) {
 		if len(decoded) != OpusFrameSamples {
 			t.Fatalf("decode frame %d returned %d samples, want %d", frameIndex, len(decoded), OpusFrameSamples)
 		}
-		if got := normalizedRMSError(source, decoded); got > 0.35 {
+		if got := codecNormalizedRMSError(source, decoded); got > 0.35 {
 			t.Fatalf("frame %d normalized RMS error = %.4f, want <= 0.35", frameIndex, got)
 		}
-		if got := dbDifference(rms(source), rms(decoded)); math.Abs(got) > 3 {
+		if got := dbDifference(codecRMS(source), codecRMS(decoded)); math.Abs(got) > 3 {
 			t.Fatalf("frame %d RMS difference = %.2f dB, want <= 3 dB", frameIndex, got)
 		}
 	}
@@ -78,7 +78,7 @@ func TestRTCOpusPLCUsesVoicedHistoryAndResumesDecode(t *testing.T) {
 	if len(plc) != OpusFrameSamples {
 		t.Fatalf("PLC returned %d samples, want %d", len(plc), OpusFrameSamples)
 	}
-	if got := rms(plc); !isFinitePositive(got) {
+	if got := codecRMS(plc); !isFinitePositive(got) {
 		t.Fatalf("PLC RMS = %v, want finite non-zero history-dependent energy", got)
 	}
 	if got := rmsDifference(plc, make([]int16, OpusFrameSamples)); got == 0 {
@@ -291,7 +291,7 @@ func voicedFrame(frameIndex, frequency int) []int16 {
 	return frame
 }
 
-func rms(samples []int16) float64 {
+func codecRMS(samples []int16) float64 {
 	if len(samples) == 0 {
 		return 0
 	}
@@ -303,7 +303,7 @@ func rms(samples []int16) float64 {
 	return math.Sqrt(sum / float64(len(samples)))
 }
 
-func normalizedRMSError(want, got []int16) float64 {
+func codecNormalizedRMSError(want, got []int16) float64 {
 	if len(want) != len(got) || len(want) == 0 {
 		return math.Inf(1)
 	}
