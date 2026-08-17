@@ -1,3 +1,5 @@
+//go:build nomicrophone
+
 package sessions
 
 import (
