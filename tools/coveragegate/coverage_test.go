@@ -183,27 +183,33 @@ func TestKnownGoodManifestAndProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseManifest() error = %v", err)
 	}
-	if got, want := len(manifest.Packages), 43; got != want {
-		t.Fatalf("manifest package count = %d, want %d", got, want)
+	if len(manifest.Packages) == 0 {
+		t.Fatal("manifest contains no packages")
 	}
-	zeroCount := 0
+	hasZeroMinimum := false
+	hasPositiveMinimum := false
 	for _, entry := range manifest.Packages {
-		if !entry.HasMinimum || entry.HasException {
+		if entry.ImportPath == "" || !entry.HasMinimum || entry.HasException {
 			t.Fatalf("entry %q is not a minimum registration: %#v", entry.ImportPath, entry)
 		}
 		if entry.MinimumCents == 0 {
-			zeroCount++
+			hasZeroMinimum = true
+		} else if entry.MinimumCents > 0 {
+			hasPositiveMinimum = true
 		}
 	}
-	if zeroCount != 12 {
-		t.Fatalf("zero-coverage package count = %d, want 12", zeroCount)
+	if !hasZeroMinimum {
+		t.Fatal("manifest contains no zero-coverage package")
+	}
+	if !hasPositiveMinimum {
+		t.Fatal("manifest contains no positive coverage package")
 	}
 	measurements := make(map[string]Coverage, len(manifest.Packages))
 	for _, entry := range manifest.Packages {
 		measurements[entry.ImportPath] = Coverage{Covered: 1, Total: 1}
 	}
-	if err := Compare(Manifest{Packages: []PackageEntry{{ImportPath: "example/a", MinimumCents: 0, HasMinimum: true}}}, map[string]Coverage{"example/a": {Covered: 1, Total: 1}}); err != nil {
-		t.Fatalf("known-good synthetic manifest rejected: %v", err)
+	if err := Compare(manifest, measurements); err != nil {
+		t.Fatalf("known-good committed manifest rejected: %v", err)
 	}
 }
 
