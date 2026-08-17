@@ -3,6 +3,7 @@ package rtc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -81,6 +82,64 @@ func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 	must(t, p.Close())
 }
 
+func TestPeerPublicErrorAndWaitOutcomes(t *testing.T) {
+	t.Run("idle and closed", func(t *testing.T) {
+		p := NewPeer(PeerConfig{})
+		must(t, p.Wait(context.Background()))
+		must(t, p.Close())
+		check(t, errors.Is(p.Wait(context.Background()), ErrPeerClosed), "closed wait did not preserve state")
+	})
+	t.Run("terminal", func(t *testing.T) {
+		cause := errors.New("terminal")
+		p := peer(func(context.Context, int) (Conn, error) { return nil, cause }, 1)
+		err := p.Connect(context.Background())
+		terminal(t, p, err, cause, 1)
+		waitErr := p.Wait(context.Background())
+		check(t, errors.Is(waitErr, cause), "terminal wait lost cause: %v", waitErr)
+		must(t, p.Close())
+	})
+	t.Run("wait cancellation", func(t *testing.T) {
+		started := make(chan struct{})
+		p := peer(func(ctx context.Context, _ int) (Conn, error) { close(started); <-ctx.Done(); return nil, ctx.Err() }, 1)
+		connected := make(chan error, 1)
+		go func() { connected <- p.Connect(context.Background()) }()
+		<-started
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		check(t, errors.Is(p.Wait(ctx), context.Canceled), "wait did not honor cancellation")
+		must(t, p.Close())
+		check(t, errors.Is(<-connected, ErrPeerClosed), "connect did not close")
+	})
+}
+
+func TestPeerBackoffCancellationAndZeroDelay(t *testing.T) {
+	t.Run("zero delay retries", func(t *testing.T) {
+		cause := errors.New("unavailable")
+		d := &fake{fn: func(context.Context, int) (Conn, error) { return nil, cause }}
+		p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 2}})
+		terminal(t, p, p.Connect(context.Background()), cause, 2)
+		check(t, d.dials.Load() == 2, "dial count = %d", d.dials.Load())
+		must(t, p.Close())
+	})
+	t.Run("timer cancellation", func(t *testing.T) {
+		started := make(chan struct{})
+		cause := errors.New("unavailable")
+		d := &fake{fn: func(_ context.Context, n int) (Conn, error) {
+			if n == 1 {
+				close(started)
+			}
+			return nil, cause
+		}}
+		p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 2, Backoff: time.Hour, MaxBackoff: time.Hour}})
+		connected := make(chan error, 1)
+		go func() { connected <- p.Connect(context.Background()) }()
+		<-started
+		must(t, p.Close())
+		check(t, errors.Is(<-connected, ErrPeerClosed), "connect did not close")
+		check(t, d.dials.Load() == 1, "dial count after cancellation = %d", d.dials.Load())
+	})
+}
+
 func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	started, conn := make(chan struct{}), newConn(nil, nil)
 	p := peer(func(ctx context.Context, _ int) (Conn, error) { close(started); <-ctx.Done(); return conn, nil }, 1)
@@ -157,6 +216,8 @@ func must(t *testing.T, err error) { check(t, err == nil, "unexpected error: %v"
 func terminal(t *testing.T, p *Peer, err, cause error, attempts int) {
 	var typed *TerminalError
 	check(t, errors.Is(err, cause) && errors.Is(err, ErrPeerTerminalFailure) && errors.As(err, &typed) && typed.Attempts == attempts && p.State() == StateTerminalFailure, "error/state = %v/%s", err, p.State())
+	check(t, errors.Is(p.Err(), cause), "peer error lost cause: %v", p.Err())
+	check(t, typed.Error() == fmt.Sprintf("rtc peer terminal failure after %d attempts: %v", attempts, typed.Cause), "terminal error string = %q", typed.Error())
 }
 func path(t *testing.T, p *Peer, want ...State) {
 	got := p.Transitions()
