@@ -242,9 +242,6 @@ func (t *OutboundTrack) WriteFrame(ctx context.Context, frame PCMFrame) error {
 	if err := t.writer.WriteRTP(operationCtx, packet); err != nil {
 		return wrapOutbound("write RTP", err)
 	}
-	if err := contextCauseIfDone(operationCtx); err != nil {
-		return wrapOutbound("write RTP", err)
-	}
 
 	t.sequence++
 	t.timestamp += uint32(len(resampled))

@@ -83,6 +83,70 @@ func TestOutboundTrackResamplesAndPreservesRTPTimeline(t *testing.T) {
 	}
 }
 
+func TestOutboundTrackSuccessfulWriteCommitsAfterCancellation(t *testing.T) {
+	writer := &captureOutboundWriter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	writer.cancelAfterWrite = cancel
+	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, writer, &captureOutboundPacer{})
+
+	if err := track.WriteFrame(ctx, PCMFrame{Samples: pcmTone(320, 1)}); err != nil {
+		t.Fatalf("successful canceled WriteFrame: %v", err)
+	}
+	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 2)}); err != nil {
+		t.Fatalf("follow-up WriteFrame: %v", err)
+	}
+	if err := track.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	packets := writer.Packets()
+	if len(packets) != 2 {
+		t.Fatalf("captured packets = %d, want 2", len(packets))
+	}
+	if got, want := packets[0].SequenceNumber, uint16(41); got != want {
+		t.Fatalf("first sequence = %d, want %d", got, want)
+	}
+	if got, want := packets[1].SequenceNumber, uint16(42); got != want {
+		t.Fatalf("second sequence = %d, want %d", got, want)
+	}
+	if got, want := packets[1].Timestamp-packets[0].Timestamp, uint32(960); got != want {
+		t.Fatalf("timestamp delta = %d, want %d", got, want)
+	}
+}
+
+func TestOutboundTrackPacingUsesMediaTimelineAcrossIrregularArrival(t *testing.T) {
+	pacer := &captureOutboundPacer{}
+	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, &captureOutboundWriter{}, pacer)
+
+	firstResult := make(chan error, 1)
+	go func() {
+		firstResult <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)})
+	}()
+	if err := <-firstResult; err != nil {
+		t.Fatalf("first WriteFrame: %v", err)
+	}
+
+	// The second frame is deliberately held at the caller boundary. Its
+	// media-clock offset must still follow the first frame, not this gap.
+	secondArrival := make(chan struct{})
+	secondResult := make(chan error, 1)
+	go func() {
+		<-secondArrival
+		secondResult <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 2)})
+	}()
+	close(secondArrival)
+	if err := <-secondResult; err != nil {
+		t.Fatalf("second WriteFrame: %v", err)
+	}
+	if err := track.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if got, want := pacer.Offsets(), []uint64{0, 960}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("pacer offsets = %v, want %v", got, want)
+	}
+}
+
 func TestOutboundTrackErrorsPreserveIdentity(t *testing.T) {
 	codecErr := &outboundTestError{operation: "codec"}
 	writerErr := &outboundTestError{operation: "writer"}
@@ -169,6 +233,61 @@ func TestOutboundTrackErrorsPreserveIdentity(t *testing.T) {
 	})
 }
 
+func TestOutboundTrackConfigurationDefaultsAndAdapters(t *testing.T) {
+	validWriter := &captureOutboundWriter{}
+	if _, err := NewOutboundTrack(OutboundTrackConfig{SourceRate: wavio.Rate16kHz, Writer: validWriter}); !errors.Is(err, ErrOutboundNilEncoder) {
+		t.Fatalf("nil encoder error = %v, want %v", err, ErrOutboundNilEncoder)
+	}
+	validEncoder := &captureOutboundEncoder{}
+	if _, err := NewOutboundTrack(OutboundTrackConfig{SourceRate: wavio.Rate16kHz, Encoder: validEncoder}); !errors.Is(err, ErrOutboundNilWriter) {
+		t.Fatalf("nil writer error = %v, want %v", err, ErrOutboundNilWriter)
+	}
+
+	var encodedSamples []int16
+	var packet *rtp.Packet
+	encoder := OpusEncoderFunc(func(_ context.Context, samples []int16) ([]byte, error) {
+		encodedSamples = append([]int16(nil), samples...)
+		return []byte{0x01}, nil
+	})
+	writer := RTPWriterFunc(func(_ context.Context, value *rtp.Packet) error {
+		clone := *value
+		clone.Payload = append([]byte(nil), value.Payload...)
+		packet = &clone
+		return nil
+	})
+	track, err := NewOutboundTrack(OutboundTrackConfig{
+		SourceRate: wavio.Rate48kHz,
+		Encoder:    encoder,
+		Writer:     writer,
+	})
+	if err != nil {
+		t.Fatalf("NewOutboundTrack: %v", err)
+	}
+	samples := pcmTone(3, 5)
+	wantSamples := append([]int16(nil), samples...)
+	if err := track.WriteFrame(nil, PCMFrame{Samples: samples}); err != nil {
+		t.Fatalf("identity-rate WriteFrame: %v", err)
+	}
+	if !reflect.DeepEqual(encodedSamples, wantSamples) {
+		t.Fatalf("identity-rate samples = %v, want %v", encodedSamples, wantSamples)
+	}
+	if packet == nil {
+		t.Fatal("RTP writer did not receive a packet")
+	}
+	if packet.PayloadType != defaultOpusPayloadType || packet.SSRC != defaultOutboundSSRC || packet.SequenceNumber != 0 || packet.Timestamp != 0 || !packet.Marker {
+		t.Fatalf("default RTP header = %#v, want default payload, SSRC, sequence, timestamp, and marker", packet.Header)
+	}
+	if err := track.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	cause := errors.New("codec failed")
+	wrapped := &OutboundOperationError{Operation: "encode", Err: cause}
+	if got, want := wrapped.Error(), "rtc outbound encode: codec failed"; got != want {
+		t.Fatalf("OutboundOperationError.Error() = %q, want %q", got, want)
+	}
+}
+
 func TestOutboundTrackCancellationInterruptsPacingAndWriting(t *testing.T) {
 	t.Run("pacer", func(t *testing.T) {
 		pacer := &captureOutboundPacer{block: make(chan struct{}), entered: make(chan struct{})}
@@ -244,6 +363,84 @@ func TestOutboundTrackSerializesConcurrentWrites(t *testing.T) {
 	}
 	if err := track.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestOutboundTrackConcurrentWriteCancelClose(t *testing.T) {
+	writer := &captureOutboundWriter{block: make(chan struct{}), entered: make(chan struct{})}
+	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, writer, &captureOutboundPacer{})
+	writeContext, cancelWrite := context.WithCancel(context.Background())
+	firstResult := make(chan error, 1)
+	secondResult := make(chan error, 1)
+	closeResult := make(chan error, 1)
+
+	go func() {
+		firstResult <- track.WriteFrame(writeContext, PCMFrame{Samples: pcmTone(320, 1)})
+	}()
+	waitForSignal(t, writer.entered)
+	go func() {
+		secondResult <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 2)})
+	}()
+
+	shutdown := make(chan struct{})
+	go func() {
+		<-shutdown
+		cancelWrite()
+	}()
+	go func() {
+		<-shutdown
+		closeResult <- track.Close()
+	}()
+	close(shutdown)
+
+	assertOutboundShutdownError(t, <-firstResult)
+	assertOutboundShutdownError(t, <-secondResult)
+	if err := <-closeResult; err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if packets := writer.Packets(); len(packets) != 0 {
+		t.Fatalf("packets emitted during concurrent shutdown = %d, want 0", len(packets))
+	}
+}
+
+func TestOutboundTrackRejectsUnrepresentableMediaTimeline(t *testing.T) {
+	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, &captureOutboundWriter{}, &captureOutboundPacer{})
+	track.mediaSamples = ^uint64(0)
+	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)}); !errors.Is(err, ErrOutboundFrameTooLarge) {
+		t.Fatalf("oversized media timeline error = %v, want %v", err, ErrOutboundFrameTooLarge)
+	}
+	if err := track.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestOutboundTrackWallClockPacerAndMediaOffsets(t *testing.T) {
+	const maxDuration = uint64(1<<63 - 1)
+	if got, want := sampleOffsetDuration(0), time.Duration(0); got != want {
+		t.Fatalf("zero media offset duration = %v, want %v", got, want)
+	}
+	if got, want := sampleOffsetDuration(uint64(OutboundRTPClockRate)+1), time.Second+time.Duration(time.Second/OutboundRTPClockRate); got != want {
+		t.Fatalf("one-second media offset duration = %v, want %v", got, want)
+	}
+	if got, want := sampleOffsetDuration(^uint64(0)), time.Duration(maxDuration); got != want {
+		t.Fatalf("large media offset duration = %v, want %v", got, want)
+	}
+	boundarySamples := (maxDuration/uint64(time.Second))*uint64(OutboundRTPClockRate) + uint64(OutboundRTPClockRate-1)
+	if got, want := sampleOffsetDuration(boundarySamples), time.Duration(maxDuration); got != want {
+		t.Fatalf("duration addition overflow = %v, want %v", got, want)
+	}
+
+	pacer := newWallClockPacer()
+	if err := pacer.Wait(context.Background(), 0); err != nil {
+		t.Fatalf("zero-offset Wait: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := pacer.Wait(ctx, OutboundRTPClockRate); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled Wait error = %v, want context.Canceled", err)
+	}
+	if got, want := contextCause(context.Background()), context.Canceled; !errors.Is(got, want) {
+		t.Fatalf("background context cause = %v, want %v", got, want)
 	}
 }
 
@@ -408,12 +605,14 @@ func (noAllocOutboundEncoder) Encode(context.Context, []int16) ([]byte, error) {
 }
 
 type captureOutboundWriter struct {
-	mu       sync.Mutex
-	packets  []*rtp.Packet
-	writeErr error
-	block    <-chan struct{}
-	entered  chan struct{}
-	once     sync.Once
+	mu                   sync.Mutex
+	packets              []*rtp.Packet
+	writeErr             error
+	block                <-chan struct{}
+	entered              chan struct{}
+	once                 sync.Once
+	cancelAfterWrite     context.CancelFunc
+	cancelAfterWriteOnce sync.Once
 }
 
 func (w *captureOutboundWriter) WriteRTP(ctx context.Context, packet *rtp.Packet) error {
@@ -438,6 +637,9 @@ func (w *captureOutboundWriter) WriteRTP(ctx context.Context, packet *rtp.Packet
 	w.mu.Lock()
 	w.packets = append(w.packets, &clone)
 	w.mu.Unlock()
+	if w.cancelAfterWrite != nil {
+		w.cancelAfterWriteOnce.Do(w.cancelAfterWrite)
+	}
 	return nil
 }
 
@@ -464,6 +666,13 @@ type captureOutboundPacer struct {
 	block   <-chan struct{}
 	entered chan struct{}
 	once    sync.Once
+}
+
+func assertOutboundShutdownError(t testing.TB, err error) {
+	t.Helper()
+	if err == nil || (!errors.Is(err, context.Canceled) && !errors.Is(err, ErrOutboundClosed)) {
+		t.Fatalf("shutdown WriteFrame error = %v, want context.Canceled or %v", err, ErrOutboundClosed)
+	}
 }
 
 func (p *captureOutboundPacer) Wait(ctx context.Context, offset uint64) error {
