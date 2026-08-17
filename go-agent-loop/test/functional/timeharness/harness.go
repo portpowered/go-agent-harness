@@ -98,7 +98,7 @@ func (p *Participant) Observe(target uint64) (Observation, error) {
 			return Observation{}, fmt.Errorf("timeharness participant %q is complete", p.name)
 		}
 		if target <= s.completed {
-			return p.observation(target), nil
+			return Observation{Participant: p.name, Tick: target, Time: s.base.Add(time.Duration(target) * s.tickDuration)}, nil
 		}
 		g := s.active
 		if g == nil || target != g.tick {
@@ -118,9 +118,6 @@ func (p *Participant) Observe(target uint64) (Observation, error) {
 			s.cond.Wait()
 		}
 	}
-}
-func (p *Participant) observation(target uint64) Observation {
-	return Observation{Participant: p.name, Tick: target, Time: p.scenario.base.Add(time.Duration(target) * p.scenario.tickDuration)}
 }
 
 type Observation struct {
@@ -228,9 +225,8 @@ func (s *Scenario) checkWatchdog(target uint64) {
 }
 func (p *Participant) bind() {
 	var stack [64]byte
-	n := runtime.Stack(stack[:], false)
 	var id uint64
-	fmt.Sscanf(string(stack[:n]), "goroutine %d ", &id)
+	fmt.Sscanf(string(stack[:runtime.Stack(stack[:], false)]), "goroutine %d ", &id)
 	p.gid.CompareAndSwap(0, id)
 }
 func sleepingGoroutines() map[uint64]bool {
