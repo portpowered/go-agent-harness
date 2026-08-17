@@ -11,22 +11,15 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 const (
-	// CodecSampleRate is the mono PCM rate produced by an Opus decoder.
-	CodecSampleRate = 48000
-	// DefaultInboundLoopSampleRate is the default output rate.
+	CodecSampleRate              = 48000
 	DefaultInboundLoopSampleRate = CodecSampleRate
-	// DefaultInboundFrameDuration is one default Opus packet.
-	DefaultInboundFrameDuration = 20 * time.Millisecond
-	// DefaultInboundJitterDepth holds three default-sized packets.
-	DefaultInboundJitterDepth = 60 * time.Millisecond
-	DefaultJitterDepth        = DefaultInboundJitterDepth
-	DefaultJitterBufferDepth  = DefaultInboundJitterDepth
-	maxInboundJitterDepth     = 2 * time.Second
+	DefaultInboundFrameDuration  = 20 * time.Millisecond
+	DefaultInboundJitterDepth    = 60 * time.Millisecond
+	maxInboundJitterDepth        = 2 * time.Second
 )
 
 var (
@@ -38,501 +31,232 @@ var (
 	ErrImpossibleRTPProgress     = errors.New("impossible RTP audio progress")
 	ErrInboundTrackSource        = errors.New("inbound RTP track source failed")
 	ErrInboundTrackDecode        = errors.New("inbound Opus decode failed")
+	ErrInboundTrackResample      = errors.New("inbound PCM resample failed")
 	ErrInboundTrackFrame         = errors.New("inbound PCM frame has invalid size")
 	ErrInboundTrackClosed        = errors.New("inbound RTP audio track is closed")
-
-	ErrTrackClosed        = ErrInboundTrackClosed
-	ErrInvalidTrackConfig = ErrInvalidInboundTrackConfig
 )
 
-// InboundTrackConfig controls an inbound Opus/RTP endpoint. Zero values use defaults.
 type InboundTrackConfig struct {
-	SampleRate        int
-	LoopSampleRate    int
-	OutputSampleRate  int
-	FrameDuration     time.Duration
-	JitterDepth       time.Duration
-	JitterBufferDepth time.Duration
+	SampleRate    int
+	FrameDuration time.Duration
+	JitterDepth   time.Duration
+	NewTimer      func(time.Duration) <-chan time.Time
+	Resample      func([]int16, int, int) ([]int16, error)
 }
 
-// DefaultInboundTrackConfig returns a complete valid configuration.
 func DefaultInboundTrackConfig() InboundTrackConfig {
-	return InboundTrackConfig{
-		SampleRate:        DefaultInboundLoopSampleRate,
-		FrameDuration:     DefaultInboundFrameDuration,
-		JitterDepth:       DefaultInboundJitterDepth,
-		JitterBufferDepth: DefaultInboundJitterDepth,
-	}
+	return InboundTrackConfig{SampleRate: DefaultInboundLoopSampleRate, FrameDuration: DefaultInboundFrameDuration,
+		JitterDepth: DefaultInboundJitterDepth}
 }
 
-// InboundTrackConfigError identifies a rejected configuration field.
-type InboundTrackConfigError struct {
-	Field    string
-	Observed any
-	Reason   string
-}
-
-func (e *InboundTrackConfigError) Error() string {
-	return fmt.Sprintf("invalid inbound track %s: got %v (%s)", e.Field, e.Observed, e.Reason)
-}
-func (e *InboundTrackConfigError) Unwrap() error { return ErrInvalidInboundTrackConfig }
-
-// InboundTrackError wraps an operation failure while preserving its cause.
 type InboundTrackError struct {
 	Operation string
-	Err       error
+	Kind, Err error
 }
 
 func (e *InboundTrackError) Error() string {
-	if e.Err == nil {
-		return fmt.Sprintf("inbound RTP track %s failed", e.Operation)
-	}
 	return fmt.Sprintf("inbound RTP track %s failed: %v", e.Operation, e.Err)
 }
-
 func (e *InboundTrackError) Unwrap() error { return e.Err }
 func (e *InboundTrackError) Is(target error) bool {
-	return target == ErrInboundTrackSource || errors.Is(e.Err, target)
+	return target == e.Kind || errors.Is(e.Err, target)
 }
 
-// OpusDecodeError distinguishes a codec failure while preserving its cause.
-type OpusDecodeError struct {
-	PLC bool
-	Err error
-}
-
-func (e *OpusDecodeError) Error() string {
-	operation := "decode"
-	if e.PLC {
-		operation = "packet-loss concealment"
-	}
-	return fmt.Sprintf("Opus %s failed: %v", operation, e.Err)
-}
-
-func (e *OpusDecodeError) Unwrap() error { return e.Err }
-func (e *OpusDecodeError) Is(target error) bool {
-	return target == ErrInboundTrackDecode || errors.Is(e.Err, target)
-}
-
-// InboundRTPPacketError identifies malformed packet metadata before decode.
-type InboundRTPPacketError struct {
-	Field    string
-	Observed any
-	Reason   string
-}
-
-func (e *InboundRTPPacketError) Error() string {
-	return fmt.Sprintf("invalid inbound RTP %s: got %v (%s)", e.Field, e.Observed, e.Reason)
-}
-func (e *InboundRTPPacketError) Unwrap() error { return ErrInvalidInboundRTPPacket }
-
-// RTPProgressError reports a sequence/timestamp pair that cannot belong to
-// the configured one-packet-per-frame Opus cadence.
-type RTPProgressError struct {
-	Sequence          uint16
-	Timestamp         uint32
-	ExpectedTimestamp uint32
-	Reason            string
-}
-
-func (e *RTPProgressError) Error() string {
-	return fmt.Sprintf("impossible RTP progress at sequence %d timestamp %d: want %d (%s)", e.Sequence, e.Timestamp, e.ExpectedTimestamp, e.Reason)
-}
-func (e *RTPProgressError) Unwrap() error { return ErrImpossibleRTPProgress }
-
-// OpusDecoder is the slice-returning Opus decoder seam; DecodePLC returns one codec frame.
 type OpusDecoder interface {
-	Decode(payload []byte) ([]int16, error)
+	Decode([]byte) ([]int16, error)
 	DecodePLC() ([]int16, error)
 }
+type RTPPacketSource interface{ ReadRTP() (*rtp.Packet, error) }
 
-// BufferedOpusDecoder describes a decoder that writes into a caller buffer.
-type BufferedOpusDecoder interface {
-	Decode(payload []byte, pcm []int16) (int, error)
-	DecodePLC(pcm []int16) (int, error)
+type trackConfig struct {
+	rate, codecSamples, outputSamples, jitterPackets int
+	frameDuration, jitterDepth                       time.Duration
+	newTimer                                         func(time.Duration) <-chan time.Time
+	resample                                         func([]int16, int, int) ([]int16, error)
 }
 
-// BufferedOpusDecoderWithFEC is a common Opus binding shape.
-type BufferedOpusDecoderWithFEC interface {
-	Decode(payload []byte, pcm []int16, fec bool) (int, error)
-	DecodePLC(pcm []int16) (int, error)
-}
-
-// OpusDecoderWithFEC is a slice-returning decoder with an FEC flag.
-type OpusDecoderWithFEC interface {
-	Decode(payload []byte, fec bool) ([]int16, error)
-	DecodePLC() ([]int16, error)
-}
-
-// RTPPacketSource is the minimal inbound RTP source seam.
-type RTPPacketSource interface {
-	ReadRTP() (*rtp.Packet, error)
-}
-
-// RTPTrack is an alias for RTPPacketSource.
-type RTPTrack = RTPPacketSource
-
-// ContextRTPPacketSource is a cancellation-aware source seam.
-type ContextRTPPacketSource interface {
-	ReadRTP(context.Context) (*rtp.Packet, error)
-}
-
-// RTPPacketSourceFunc adapts a function into RTPPacketSource.
-type RTPPacketSourceFunc func() (*rtp.Packet, error)
-
-func (f RTPPacketSourceFunc) ReadRTP() (*rtp.Packet, error) { return f() }
-
-// PionTrackSource adapts Pion's TrackRemote to RTPPacketSource.
-type PionTrackSource struct {
-	track     *webrtc.TrackRemote
-	closeOnce sync.Once
-	closeErr  error
-}
-
-// NewPionTrackSource validates and wraps a Pion inbound track.
-func NewPionTrackSource(track *webrtc.TrackRemote) (*PionTrackSource, error) {
-	if track == nil {
-		return nil, ErrNilInboundRTPTrack
-	}
-	return &PionTrackSource{track: track}, nil
-}
-
-func (s *PionTrackSource) ReadRTP() (*rtp.Packet, error) {
-	if s == nil || s.track == nil {
-		return nil, ErrNilInboundRTPTrack
-	}
-	packet, _, err := s.track.ReadRTP()
-	return packet, err
-}
-
-// Close sets a read deadline so a blocked TrackRemote read is released.
-func (s *PionTrackSource) Close() error {
-	if s == nil || s.track == nil {
-		return ErrNilInboundRTPTrack
-	}
-	s.closeOnce.Do(func() { s.closeErr = s.track.SetReadDeadline(time.Now()) })
-	return s.closeErr
-}
-
-type normalizedInboundTrackConfig struct {
-	loopRate      int
-	codecSamples  int
-	outputSamples int
-	jitterPackets int
-}
-
-func (c InboundTrackConfig) normalize() (normalizedInboundTrackConfig, error) {
-	rate, err := chooseConfig("sample rate", c.SampleRate, c.LoopSampleRate, c.OutputSampleRate)
-	if err != nil {
-		return normalizedInboundTrackConfig{}, err
-	}
+func (c InboundTrackConfig) normalize() (trackConfig, error) {
+	rate := c.SampleRate
 	if rate == 0 {
-		rate = DefaultInboundLoopSampleRate
+		rate = CodecSampleRate
 	}
 	if rate != wavio.Rate16kHz && rate != wavio.Rate24kHz && rate != wavio.Rate48kHz {
-		return normalizedInboundTrackConfig{}, &InboundTrackConfigError{Field: "sample rate", Observed: rate, Reason: "want 16000, 24000, or 48000 Hz"}
+		return trackConfig{}, configError("sample rate", rate, "want 16000, 24000, or 48000 Hz")
 	}
-
-	frameDuration := c.FrameDuration
-	if frameDuration == 0 {
-		frameDuration = DefaultInboundFrameDuration
+	d := c.FrameDuration
+	if d == 0 {
+		d = DefaultInboundFrameDuration
 	}
-	if !validOpusFrameDuration(frameDuration) {
-		return normalizedInboundTrackConfig{}, &InboundTrackConfigError{Field: "frame duration", Observed: frameDuration, Reason: "want a legal Opus duration from 2.5 ms through 60 ms"}
+	if !validDuration(d) {
+		return trackConfig{}, configError("frame duration", d, "want a legal Opus duration from 2.5 ms through 60 ms")
 	}
-
-	jitterDepth, err := chooseConfig("jitter depth", c.JitterDepth, c.JitterBufferDepth)
-	if err != nil {
-		return normalizedInboundTrackConfig{}, err
+	depth := c.JitterDepth
+	if depth == 0 {
+		depth = DefaultInboundJitterDepth
 	}
-	if jitterDepth == 0 {
-		jitterDepth = DefaultInboundJitterDepth
+	if depth <= 0 || depth > maxInboundJitterDepth || depth%d != 0 {
+		return trackConfig{}, configError("jitter depth", depth, "must be positive, bounded, and frame-aligned")
 	}
-	if jitterDepth <= 0 || jitterDepth > maxInboundJitterDepth || jitterDepth%frameDuration != 0 {
-		return normalizedInboundTrackConfig{}, &InboundTrackConfigError{Field: "jitter depth", Observed: jitterDepth, Reason: "must be positive, bounded, and frame-aligned"}
+	codec, output := int(int64(CodecSampleRate)*int64(d)/int64(time.Second)), int(int64(rate)*int64(d)/int64(time.Second))
+	timer := c.NewTimer
+	if timer == nil {
+		timer = time.After
 	}
-
-	codecSamples64 := int64(CodecSampleRate) * int64(frameDuration) / int64(time.Second)
-	outputSamples64 := int64(rate) * int64(frameDuration) / int64(time.Second)
-	if codecSamples64 <= 0 || outputSamples64 <= 0 || codecSamples64 > int64(int(^uint(0)>>1)) || outputSamples64 > int64(int(^uint(0)>>1)) {
-		return normalizedInboundTrackConfig{}, &InboundTrackConfigError{Field: "frame duration", Observed: frameDuration, Reason: "sample count is not representable"}
+	resample := c.Resample
+	if resample == nil {
+		resample = wavio.Resample
 	}
-
-	return normalizedInboundTrackConfig{
-		loopRate:      rate,
-		codecSamples:  int(codecSamples64),
-		outputSamples: int(outputSamples64),
-		jitterPackets: int(jitterDepth / frameDuration),
-	}, nil
+	return trackConfig{rate, codec, output, int(depth / d), d, depth, timer, resample}, nil
+}
+func validDuration(d time.Duration) bool {
+	return d == 2500*time.Microsecond || d == 5*time.Millisecond || d == 10*time.Millisecond || d == 20*time.Millisecond || d == 40*time.Millisecond || d == 60*time.Millisecond
 }
 
-func chooseConfig[T comparable](field string, values ...T) (T, error) {
-	var chosen, zero T
-	for _, value := range values {
-		if value == zero {
-			continue
-		}
-		if chosen != zero && chosen != value {
-			return zero, &InboundTrackConfigError{Field: field, Observed: values, Reason: "equivalent fields disagree"}
-		}
-		chosen = value
-	}
-	return chosen, nil
-}
-
-func validOpusFrameDuration(duration time.Duration) bool {
-	switch duration {
-	case 2500 * time.Microsecond, 5 * time.Millisecond, 10 * time.Millisecond,
-		20 * time.Millisecond, 40 * time.Millisecond, 60 * time.Millisecond:
-		return true
-	default:
-		return false
-	}
-}
-
-type opusDecoderAdapter struct {
-	decode func(payload []byte, plc bool) ([]int16, error)
-}
-
-func adaptOpusDecoder(value any, codecSamples int) (opusDecoderAdapter, error) {
-	if isNil(value) {
-		return opusDecoderAdapter{}, ErrNilOpusDecoder
-	}
-	switch decoder := value.(type) {
-	case OpusDecoder:
-		return opusDecoderAdapter{decode: func(payload []byte, plc bool) ([]int16, error) {
-			if plc {
-				return decoder.DecodePLC()
-			}
-			return decoder.Decode(payload)
-		}}, nil
-	case OpusDecoderWithFEC:
-		return opusDecoderAdapter{decode: func(payload []byte, plc bool) ([]int16, error) {
-			if plc {
-				return decoder.DecodePLC()
-			}
-			return decoder.Decode(payload, false)
-		}}, nil
-	case BufferedOpusDecoderWithFEC:
-		return bufferedDecoderAdapter(codecSamples, func(payload []byte, pcm []int16, plc bool) (int, error) {
-			if plc {
-				return decoder.DecodePLC(pcm)
-			}
-			return decoder.Decode(payload, pcm, false)
-		}), nil
-	case BufferedOpusDecoder:
-		return bufferedDecoderAdapter(codecSamples, func(payload []byte, pcm []int16, plc bool) (int, error) {
-			if plc {
-				return decoder.DecodePLC(pcm)
-			}
-			return decoder.Decode(payload, pcm)
-		}), nil
-	default:
-		return opusDecoderAdapter{}, ErrUnsupportedOpusDecoder
-	}
-}
-
-func bufferedDecoderAdapter(codecSamples int, decode func([]byte, []int16, bool) (int, error)) opusDecoderAdapter {
-	return opusDecoderAdapter{decode: func(payload []byte, plc bool) ([]int16, error) {
-		pcm := make([]int16, codecSamples)
-		count, err := decode(payload, pcm, plc)
-		if err != nil {
-			return nil, err
-		}
-		if count < 0 || count > len(pcm) {
-			return nil, &InboundTrackError{Operation: "decode", Err: fmt.Errorf("decoder returned %d samples", count)}
-		}
-		return pcm[:count], nil
-	}}
-}
-
-type packetSourceAdapter struct {
-	read  func(context.Context) (*rtp.Packet, error)
+type packetSource struct {
+	read  func() (*rtp.Packet, error)
 	close func() error
 }
 
-func adaptPacketSource(value any) (packetSourceAdapter, error) {
-	if isNil(value) {
-		return packetSourceAdapter{}, ErrNilInboundRTPTrack
+func adaptSource(value any) (packetSource, error) {
+	if nilValue(value) {
+		return packetSource{}, ErrNilInboundRTPTrack
 	}
-	if source, ok := value.(ContextRTPPacketSource); ok {
-		return packetSourceAdapter{
-			read:  source.ReadRTP,
-			close: sourceClose(value),
-		}, nil
+	if s, ok := value.(RTPPacketSource); ok {
+		return packetSource{s.ReadRTP, closeSource(value)}, nil
 	}
-	if source, ok := value.(RTPPacketSource); ok {
-		return packetSourceAdapter{
-			read:  func(context.Context) (*rtp.Packet, error) { return source.ReadRTP() },
-			close: sourceClose(value),
-		}, nil
-	}
-	if source, ok := value.(interface{ ReadPacket() (*rtp.Packet, error) }); ok {
-		return packetSourceAdapter{
-			read:  func(context.Context) (*rtp.Packet, error) { return source.ReadPacket() },
-			close: sourceClose(value),
-		}, nil
-	}
-	if track, ok := value.(*webrtc.TrackRemote); ok {
-		pionSource, err := NewPionTrackSource(track)
-		if err != nil {
-			return packetSourceAdapter{}, err
-		}
-		return adaptPacketSource(pionSource)
-	}
-	return packetSourceAdapter{}, &InboundTrackConfigError{Field: "RTP source", Observed: fmt.Sprintf("%T", value), Reason: "want ReadRTP or ReadPacket"}
+	return packetSource{}, configError("RTP source", fmt.Sprintf("%T", value), "want ReadRTP")
 }
-
-func sourceClose(value any) func() error {
-	if closer, ok := value.(interface{ Close() error }); ok {
-		return closer.Close
-	}
-	if closer, ok := value.(io.Closer); ok {
-		return closer.Close
+func closeSource(value any) func() error {
+	if c, ok := value.(interface{ Close() error }); ok {
+		return c.Close
 	}
 	return func() error { return nil }
 }
-
-func isNil(value any) bool {
-	if value == nil {
-		return true
-	}
-	v := reflect.ValueOf(value)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return v.IsNil()
-	default:
-		return false
-	}
+func nilValue(value any) bool {
+	return value == nil || reflect.ValueOf(value).Kind() == reflect.Pointer && reflect.ValueOf(value).IsNil()
 }
 
-// InboundTrack is a caller-owned PCM ingress endpoint backed by one RTP audio
-// source. It implements InboundMedia.
 type InboundTrack struct {
-	source  packetSourceAdapter
-	decoder opusDecoderAdapter
-	config  normalizedInboundTrackConfig
-
-	frames  chan inboundFrameResult
-	done    chan struct{}
-	readCtx context.Context
-	cancel  context.CancelFunc
-
+	source    packetSource
+	decoder   OpusDecoder
+	config    trackConfig
+	frames    chan frameResult
+	done      chan struct{}
 	closed    atomic.Bool
 	closeOnce sync.Once
 	closeErr  error
-
-	terminalMu  sync.RWMutex
-	terminalErr error
+}
+type frameResult struct {
+	frame PCMFrame
+	err   error
+}
+type packetEvent struct {
+	packet *rtp.Packet
+	err    error
 }
 
 var _ InboundMedia = (*InboundTrack)(nil)
 
-type inboundFrameResult struct {
-	frame PCMFrame
-	err   error
-}
-
-// NewInboundTrack creates a bounded Opus/RTP ingress endpoint. Validation is
-// completed before the reader goroutine starts or any source reads occur.
-func NewInboundTrack(source any, decoder any, config InboundTrackConfig) (*InboundTrack, error) {
-	normalized, err := config.normalize()
+func NewInboundTrack(source, opus any, config InboundTrackConfig) (*InboundTrack, error) {
+	cfg, err := config.normalize()
 	if err != nil {
 		return nil, err
 	}
-	packetSource, err := adaptPacketSource(source)
+	src, err := adaptSource(source)
 	if err != nil {
 		return nil, err
 	}
-	decoderAdapter, err := adaptOpusDecoder(decoder, normalized.codecSamples)
-	if err != nil {
-		return nil, err
+	if nilValue(opus) {
+		return nil, ErrNilOpusDecoder
 	}
-
-	readCtx, cancel := context.WithCancel(context.Background())
-	track := &InboundTrack{
-		source:  packetSource,
-		decoder: decoderAdapter,
-		config:  normalized,
-		frames:  make(chan inboundFrameResult, normalized.jitterPackets+1),
-		done:    make(chan struct{}),
-		readCtx: readCtx,
-		cancel:  cancel,
+	decoder, ok := opus.(OpusDecoder)
+	if !ok {
+		return nil, ErrUnsupportedOpusDecoder
 	}
-	go track.readLoop()
-	return track, nil
+	t := &InboundTrack{source: src, decoder: decoder, config: cfg, frames: make(chan frameResult, cfg.jitterPackets+1), done: make(chan struct{})}
+	go t.readLoop()
+	return t, nil
 }
-
-// NewInboundAudioTrack is the descriptive constructor spelling.
-func NewInboundAudioTrack(source any, decoder any, config InboundTrackConfig) (*InboundTrack, error) {
-	return NewInboundTrack(source, decoder, config)
-}
-
-// NewInboundMedia is a constructor alias for callers that program to the
-// existing contract name.
-func NewInboundMedia(source any, decoder any, config InboundTrackConfig) (InboundMedia, error) {
-	return NewInboundTrack(source, decoder, config)
-}
-
 func (t *InboundTrack) readLoop() {
-	state := inboundPlayoutState{
-		track:   t,
-		packets: make(map[int64]*rtp.Packet, t.config.jitterPackets),
-	}
+	events := make(chan packetEvent)
+	go t.readSource(events)
+	state := playout{track: t, packets: make(map[int64]*rtp.Packet, t.config.jitterPackets)}
+	var timer <-chan time.Time
 	for {
-		packet, err := t.source.read(t.readCtx)
+		select {
+		case <-t.done:
+			close(t.frames)
+			return
+		case event, ok := <-events:
+			if !ok {
+				close(t.frames)
+				return
+			}
+			if event.err != nil {
+				if err := state.flush(); err != nil {
+					t.finish(err)
+				} else {
+					t.finish(trackError(ErrInboundTrackSource, "read RTP", event.err))
+				}
+				return
+			}
+			if event.packet == nil {
+				t.finish(trackError(ErrInvalidInboundRTPPacket, "packet", errors.New("source returned nil without an error")))
+				return
+			}
+			if err := state.push(event.packet); err != nil {
+				if flushErr := state.flush(); flushErr != nil {
+					t.finish(flushErr)
+				} else {
+					t.finish(err)
+				}
+				return
+			}
+			if timer == nil && !state.started {
+				timer = t.config.newTimer(t.config.jitterDepth)
+			}
+		case <-timer:
+			if err := state.tick(); err != nil {
+				t.finish(err)
+				return
+			}
+			timer = t.config.newTimer(t.config.frameDuration)
+		}
+	}
+}
+func (t *InboundTrack) readSource(events chan<- packetEvent) {
+	defer close(events)
+	for {
+		p, err := t.source.read()
+		select {
+		case events <- packetEvent{p, err}:
+		case <-t.done:
+			return
+		}
 		if err != nil {
-			if t.closed.Load() {
-				t.closeFrames()
-				return
-			}
-			if flushErr := state.flush(); flushErr != nil {
-				t.finish(flushErr)
-				return
-			}
-			t.finish(&InboundTrackError{Operation: "read RTP", Err: err})
-			return
-		}
-		if packet == nil {
-			t.finish(&InboundRTPPacketError{Field: "packet", Observed: nil, Reason: "source returned nil without an error"})
-			return
-		}
-		if err := state.push(packet); err != nil {
-			t.finish(err)
 			return
 		}
 	}
 }
-
 func (t *InboundTrack) emit(samples []int16) error {
-	result := inboundFrameResult{frame: PCMFrame{Samples: samples}}
 	select {
-	case t.frames <- result:
+	case t.frames <- frameResult{frame: PCMFrame{Samples: samples}}:
 		return nil
 	case <-t.done:
 		return ErrInboundTrackClosed
 	}
 }
-
 func (t *InboundTrack) finish(err error) {
 	if err == nil {
 		err = io.EOF
 	}
-	t.terminalMu.Lock()
-	t.terminalErr = err
-	t.terminalMu.Unlock()
 	select {
-	case t.frames <- inboundFrameResult{err: err}:
+	case t.frames <- frameResult{err: err}:
 	case <-t.done:
 	}
-	t.closeFrames()
-}
-
-func (t *InboundTrack) closeFrames() {
 	close(t.frames)
 }
 
-// ReadFrame returns one fresh, fixed-duration mono PCM16 frame.
 func (t *InboundTrack) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -555,201 +279,152 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (PCMFrame, error) {
 			return PCMFrame{}, ErrInboundTrackClosed
 		}
 		if !ok {
-			return PCMFrame{}, t.terminal()
+			return PCMFrame{}, io.EOF
 		}
 		if result.err != nil {
 			return PCMFrame{}, result.err
 		}
 		if len(result.frame.Samples) != t.config.outputSamples {
-			return PCMFrame{}, &InboundTrackError{Operation: "frame", Err: fmt.Errorf("got %d samples, want %d", len(result.frame.Samples), t.config.outputSamples)}
+			return PCMFrame{}, trackError(ErrInboundTrackFrame, "frame", fmt.Errorf("got %d samples, want %d", len(result.frame.Samples), t.config.outputSamples))
 		}
 		return result.frame, nil
 	}
 }
-
-// Close is idempotent, stops future delivery, and asks a closeable source to
-// unblock its read. A source close failure keeps its errors.Is identity.
 func (t *InboundTrack) Close() error {
-	t.closeOnce.Do(func() {
-		t.closed.Store(true)
-		close(t.done)
-		t.cancel()
-		t.closeErr = t.source.close()
-	})
+	t.closeOnce.Do(func() { t.closed.Store(true); close(t.done); t.closeErr = t.source.close() })
 	return t.closeErr
 }
 
-func (t *InboundTrack) terminal() error {
-	t.terminalMu.RLock()
-	defer t.terminalMu.RUnlock()
-	if t.terminalErr == nil {
-		return io.EOF
-	}
-	return t.terminalErr
+type playout struct {
+	track                    *InboundTrack
+	packets                  map[int64]*rtp.Packet
+	have, started            bool
+	baseSeq, nextSeq, maxSeq int64
+	baseTimestamp            uint32
+	ssrc                     uint32
+	payloadType              uint8
 }
 
-type inboundPlayoutState struct {
-	track   *InboundTrack
-	packets map[int64]*rtp.Packet
-
-	started       bool
-	baseSeq       int64
-	nextSeq       int64
-	latestSeq     int64
-	haveSequence  bool
-	baseTimestamp uint32
-	frameTicks    int64
-
-	ssrc         uint32
-	payloadType  uint8
-	metadataSeen bool
-}
-
-func (s *inboundPlayoutState) push(packet *rtp.Packet) error {
-	if packet.Version != 0 && packet.Version != 2 {
-		return &InboundRTPPacketError{Field: "version", Observed: packet.Version, Reason: "want RTP version 2"}
+func (s *playout) push(packet *rtp.Packet) error {
+	if packet.Version != 2 {
+		return trackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("version %d: want RTP version 2", packet.Version))
 	}
-	if !s.haveSequence {
-		s.baseSeq = int64(packet.SequenceNumber)
-		s.latestSeq = s.baseSeq
-		s.haveSequence = true
-		s.baseTimestamp = packet.Timestamp
-		s.frameTicks = int64(s.track.config.codecSamples)
-		s.ssrc = packet.SSRC
-		s.payloadType = packet.PayloadType
-		s.metadataSeen = true
+	if !s.have {
+		s.have, s.baseSeq, s.baseTimestamp, s.maxSeq = true, int64(packet.SequenceNumber), packet.Timestamp, int64(packet.SequenceNumber)
+		s.ssrc, s.payloadType = packet.SSRC, packet.PayloadType
 	}
-	extSeq := unwrapSequence(packet.SequenceNumber, s.latestSeq)
-	if extSeq > s.latestSeq {
-		s.latestSeq = extSeq
-	}
-	if s.started && extSeq < s.nextSeq {
+	ext := unwrapSequence(packet.SequenceNumber, s.maxSeq)
+	if !s.started && ext < s.baseSeq || s.started && ext < s.nextSeq {
 		return nil
 	}
-	if _, duplicate := s.packets[extSeq]; duplicate {
+	if _, ok := s.packets[ext]; ok {
 		return nil
 	}
-	if s.metadataSeen && s.ssrc != 0 && packet.SSRC != 0 && packet.SSRC != s.ssrc {
-		return &InboundRTPPacketError{Field: "SSRC", Observed: packet.SSRC, Reason: "changed within one audio track"}
+	if packet.SSRC != s.ssrc {
+		return trackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("SSRC %d changed within one audio track", packet.SSRC))
 	}
-	if expected := s.expectedTimestamp(extSeq); packet.Timestamp != expected {
-		return &RTPProgressError{Sequence: packet.SequenceNumber, Timestamp: packet.Timestamp, ExpectedTimestamp: expected, Reason: "timestamp is not one Opus frame per sequence"}
+	if packet.PayloadType != s.payloadType {
+		return trackError(ErrInvalidInboundRTPPacket, "packet", fmt.Errorf("payload type %d changed within one audio track", packet.PayloadType))
 	}
-	if s.started && extSeq-s.nextSeq > int64(s.track.config.jitterPackets) {
-		return &RTPProgressError{Sequence: packet.SequenceNumber, Timestamp: packet.Timestamp, ExpectedTimestamp: s.expectedTimestamp(extSeq), Reason: "packet exceeds bounded jitter window"}
+	expected := s.expectedTimestamp(ext)
+	if packet.Timestamp != expected {
+		return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d timestamp %d: want %d", packet.SequenceNumber, packet.Timestamp, expected))
 	}
-	s.packets[extSeq] = cloneRTPPacket(packet)
 	if !s.started {
-		if max, min := s.packetRange(); max-min > int64(s.track.config.jitterPackets) {
-			return &RTPProgressError{Sequence: packet.SequenceNumber, Timestamp: packet.Timestamp, ExpectedTimestamp: s.expectedTimestamp(extSeq), Reason: "initial packets exceed bounded jitter window"}
+		distance := ext - s.maxSeq
+		if distance > int64(s.track.config.jitterPackets) {
+			return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds initial jitter window", packet.SequenceNumber))
 		}
-		if len(s.packets) >= s.track.config.jitterPackets {
-			s.started = true
-			_, s.nextSeq = s.packetRange()
-		}
+	} else if ext-s.nextSeq > int64(s.track.config.jitterPackets) {
+		return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds jitter window", packet.SequenceNumber))
 	}
-	return s.drain(false)
+	if ext > s.maxSeq {
+		s.maxSeq = ext
+	}
+	s.packets[ext] = clonePacket(packet)
+	return nil
 }
-
-func (s *inboundPlayoutState) flush() error {
+func (s *playout) tick() error {
+	if !s.started {
+		s.nextSeq = s.baseSeq
+		s.started = true
+	}
+	return s.emitNext()
+}
+func (s *playout) flush() error {
 	if len(s.packets) == 0 {
 		return nil
 	}
 	if !s.started {
+		s.nextSeq = s.baseSeq
 		s.started = true
-		_, s.nextSeq = s.packetRange()
 	}
-	return s.drain(true)
-}
-
-func (s *inboundPlayoutState) drain(force bool) error {
-	for s.started {
-		packet, present := s.packets[s.nextSeq]
-		plc := !present
-		if !present {
-			if len(s.packets) == 0 {
-				return nil
-			}
-			maxSeq, _ := s.packetRange()
-			if !force && maxSeq-s.nextSeq < int64(s.track.config.jitterPackets-1) {
-				return nil
-			}
-		} else {
-			delete(s.packets, s.nextSeq)
-		}
-
-		var payload []byte
-		if !plc {
-			payload = packet.Payload
-		}
-		samples, err := s.decode(payload, plc)
-		if err != nil {
+	for s.nextSeq <= s.maxSeq {
+		if err := s.emitNext(); err != nil {
 			return err
 		}
-		if err := s.track.emit(samples); err != nil {
-			return err
-		}
-		s.nextSeq++
 	}
 	return nil
 }
-
-func (s *inboundPlayoutState) decode(payload []byte, plc bool) ([]int16, error) {
-	samples, err := s.track.decoder.decode(payload, plc)
+func (s *playout) emitNext() error {
+	packet, ok := s.packets[s.nextSeq]
+	if ok {
+		delete(s.packets, s.nextSeq)
+	}
+	if !ok {
+		if len(s.packets) == 0 || s.nextSeq > s.maxSeq {
+			return nil
+		}
+	}
+	payload := []byte(nil)
+	if ok {
+		payload = packet.Payload
+	}
+	samples, err := s.decode(payload, !ok)
 	if err != nil {
-		return nil, &OpusDecodeError{PLC: plc, Err: err}
+		return err
+	}
+	if err := s.track.emit(samples); err != nil {
+		return err
+	}
+	s.nextSeq++
+	return nil
+}
+func (s *playout) decode(payload []byte, plc bool) ([]int16, error) {
+	samples, err := func() ([]int16, error) {
+		if plc {
+			return s.track.decoder.DecodePLC()
+		}
+		return s.track.decoder.Decode(payload)
+	}()
+	if err != nil {
+		return nil, trackError(ErrInboundTrackDecode, "decode", err)
 	}
 	if len(samples) != s.track.config.codecSamples {
-		return nil, &InboundTrackError{Operation: "decode", Err: &InboundTrackFrameSizeError{Observed: len(samples), Expected: s.track.config.codecSamples}}
+		return nil, trackError(ErrInboundTrackFrame, "decode", fmt.Errorf("got %d samples, want %d", len(samples), s.track.config.codecSamples))
 	}
 	owned := append([]int16(nil), samples...)
-	if s.track.config.loopRate == CodecSampleRate {
+	if s.track.config.rate == CodecSampleRate {
 		return owned, nil
 	}
-	resampled, err := wavio.Resample(owned, CodecSampleRate, s.track.config.loopRate)
+	resampled, err := s.track.config.resample(owned, CodecSampleRate, s.track.config.rate)
 	if err != nil {
-		return nil, &InboundTrackError{Operation: "resample", Err: err}
+		return nil, trackError(ErrInboundTrackResample, "resample", err)
 	}
 	if len(resampled) != s.track.config.outputSamples {
-		return nil, &InboundTrackError{Operation: "resample", Err: &InboundTrackFrameSizeError{Observed: len(resampled), Expected: s.track.config.outputSamples}}
+		return nil, trackError(ErrInboundTrackFrame, "resample", fmt.Errorf("got %d samples, want %d", len(resampled), s.track.config.outputSamples))
 	}
 	return resampled, nil
 }
-
-// InboundTrackFrameSizeError identifies a decoder/resampler cadence violation.
-type InboundTrackFrameSizeError struct {
-	Observed int
-	Expected int
+func (s *playout) expectedTimestamp(sequence int64) uint32 {
+	return uint32(int64(s.baseTimestamp) + (sequence-s.baseSeq)*int64(s.track.config.codecSamples))
 }
-
-func (e *InboundTrackFrameSizeError) Error() string {
-	return fmt.Sprintf("inbound frame has %d samples, want %d", e.Observed, e.Expected)
+func trackError(kind error, operation string, err error) *InboundTrackError {
+	return &InboundTrackError{Operation: operation, Kind: kind, Err: err}
 }
-
-func (e *InboundTrackFrameSizeError) Unwrap() error { return ErrInboundTrackFrame }
-
-func (e *InboundTrackFrameSizeError) Is(target error) bool {
-	return target == ErrInboundTrackFrame
+func configError(field string, observed any, reason string) error {
+	return trackError(ErrInvalidInboundTrackConfig, "configuration", fmt.Errorf("%s: got %v (%s)", field, observed, reason))
 }
-
-func (s *inboundPlayoutState) expectedTimestamp(extSeq int64) uint32 {
-	return uint32(int64(s.baseTimestamp) + (extSeq-s.baseSeq)*s.frameTicks)
-}
-
-func (s *inboundPlayoutState) packetRange() (maxSeq, minSeq int64) {
-	first := true
-	for sequence := range s.packets {
-		if first || sequence > maxSeq {
-			maxSeq = sequence
-		}
-		if first || sequence < minSeq {
-			minSeq = sequence
-		}
-		first = false
-	}
-	return maxSeq, minSeq
-}
-
 func unwrapSequence(sequence uint16, reference int64) int64 {
 	candidate := (reference &^ 0xffff) | int64(sequence)
 	delta := candidate - reference
@@ -760,8 +435,7 @@ func unwrapSequence(sequence uint16, reference int64) int64 {
 	}
 	return candidate
 }
-
-func cloneRTPPacket(packet *rtp.Packet) *rtp.Packet {
+func clonePacket(packet *rtp.Packet) *rtp.Packet {
 	cloned := *packet
 	cloned.Payload = append([]byte(nil), packet.Payload...)
 	cloned.CSRC = append([]uint32(nil), packet.CSRC...)
