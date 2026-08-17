@@ -35,5 +35,8 @@ jobs:
       - name: Install staticcheck
         run: go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
 
+      - name: Run focused RTC race acceptance
+        run: make test-rtc-race
+
       - name: Run root CI pipeline
         run: make ci
