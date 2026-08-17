@@ -87,6 +87,24 @@ func TestNegativeControlsRejectFalsePositives(t *testing.T) {
 	}
 }
 
+func TestPlaybackFlushAssertionRejectsQueuedPlayback(t *testing.T) {
+	playback := &playbackConsumer{}
+	playback.enqueue([]byte{1, 2, 3, 4})
+
+	if err := requirePlaybackFlushed(playback); err == nil {
+		t.Fatal("queued playback without a cancellation flush unexpectedly passed")
+	} else {
+		t.Logf("intentional negative-control failure: %v", err)
+	}
+
+	if flushed := playback.flush(); flushed != 4 {
+		t.Fatalf("flushed bytes = %d, want 4", flushed)
+	}
+	if err := requirePlaybackFlushed(playback); err != nil {
+		t.Fatalf("flushed playback rejected: %v", err)
+	}
+}
+
 func fixtureImageDataURI() (string, error) {
 	const (
 		glyphWidth  = 5

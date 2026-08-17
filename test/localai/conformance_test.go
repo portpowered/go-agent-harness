@@ -230,10 +230,17 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	}
 
 	var observation responseObservation
+	playback := &playbackConsumer{}
 	bargeSent := false
 	vadStarted := false
 	cancelled := false
-	flushObserved := false
+	flushPlayback := func() {
+		if cancelled {
+			return
+		}
+		cancelled = true
+		playback.flush()
+	}
 	sendBargeAudio := func() error {
 		if bargeSent {
 			return nil
@@ -272,30 +279,25 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 				observation.audioDeltasBeforeCancel++
 			}
 			observation.audio = append(observation.audio, chunk...)
+			playback.enqueue(chunk)
 			if err := sendBargeAudio(); err != nil {
 				return behaviorObservation{}, err
 			}
 		case "response.cancelled":
-			cancelled = true
-		case "response.output_audio.done", "response.audio.done":
-			if cancelled {
-				flushObserved = true
-			}
+			flushPlayback()
 		case "response.done":
 			status := firstString(event.data, "response.status", "status")
 			reason := firstString(event.data, "response.status_details.reason", "status_details.reason")
 			if status == "cancelled" || reason == "turn_detected" || reason == "client_cancelled" {
-				cancelled = true
+				flushPlayback()
 			}
-			if cancelled && !flushObserved && observation.audioDeltasBeforeCancel > 0 && observation.audioDeltasAfterCancel == 0 {
-				flushObserved = true
-			}
-			if !bargeSent || !vadStarted || !cancelled || !flushObserved || observation.audioDeltasBeforeCancel == 0 || observation.audioDeltasAfterCancel != 0 {
-				return behaviorObservation{}, fmt.Errorf("barge-in assertion failed: barge_audio=%t vad_started=%t cancelled=%t flush=%t audio_before_cancel=%d audio_after_cancel=%d events=%v", bargeSent, vadStarted, cancelled, flushObserved, observation.audioDeltasBeforeCancel, observation.audioDeltasAfterCancel, observation.events)
+			playbackErr := requirePlaybackFlushed(playback)
+			if !bargeSent || !vadStarted || !cancelled || playbackErr != nil || observation.audioDeltasBeforeCancel == 0 || observation.audioDeltasAfterCancel != 0 {
+				return behaviorObservation{}, fmt.Errorf("barge-in assertion failed: barge_audio=%t vad_started=%t cancelled=%t playback=%v audio_before_cancel=%d audio_after_cancel=%d events=%v", bargeSent, vadStarted, cancelled, playbackErr, observation.audioDeltasBeforeCancel, observation.audioDeltasAfterCancel, observation.events)
 			}
 			return behaviorObservation{
 				latency:  time.Since(started),
-				evidence: fmt.Sprintf("vad_speech_started=true cancellation=true playback_flush=true audio_before_cancel=%d", observation.audioDeltasBeforeCancel),
+				evidence: fmt.Sprintf("vad_speech_started=true cancellation=true playback_flush_bytes=%d playback_pending_bytes=%d audio_before_cancel=%d", playback.flushedBytes, playback.pendingBytes(), observation.audioDeltasBeforeCancel),
 			}, nil
 		}
 	}

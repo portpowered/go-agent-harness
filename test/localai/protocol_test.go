@@ -89,9 +89,54 @@ type responseObservation struct {
 	events                  []string
 	responseStatus          string
 	cancellationObserved    bool
-	playbackFlushObserved   bool
 	audioDeltasBeforeCancel int
 	audioDeltasAfterCancel  int
+}
+
+// playbackConsumer models the client-side audio queue that is observable by
+// the user. Realtime output events only deliver chunks; response.done and
+// response.output_audio.done do not prove that a client has stopped playing
+// already-delivered chunks. A cancellation must explicitly flush this queue.
+type playbackConsumer struct {
+	pending      [][]byte
+	flushedBytes int
+	flushCount   int
+}
+
+func (p *playbackConsumer) enqueue(chunk []byte) {
+	if len(chunk) == 0 {
+		return
+	}
+	p.pending = append(p.pending, append([]byte(nil), chunk...))
+}
+
+func (p *playbackConsumer) pendingBytes() int {
+	var total int
+	for _, chunk := range p.pending {
+		total += len(chunk)
+	}
+	return total
+}
+
+func (p *playbackConsumer) flush() int {
+	flushed := p.pendingBytes()
+	p.pending = nil
+	p.flushedBytes += flushed
+	p.flushCount++
+	return flushed
+}
+
+func requirePlaybackFlushed(playback *playbackConsumer) error {
+	if playback.flushCount != 1 {
+		return fmt.Errorf("playback flush count=%d, want exactly one", playback.flushCount)
+	}
+	if playback.flushedBytes == 0 {
+		return fmt.Errorf("playback flush discarded zero bytes, want pending audio")
+	}
+	if pending := playback.pendingBytes(); pending != 0 {
+		return fmt.Errorf("playback queue retained %d bytes after cancellation", pending)
+	}
+	return nil
 }
 
 func (e endpointConfig) connect(ctx context.Context, settings sessionSettings) (*websocket.Conn, error) {
@@ -291,10 +336,6 @@ func readResponse(ctx context.Context, conn *websocket.Conn) (responseObservatio
 				observation.audioDeltasBeforeCancel++
 			}
 			observation.audio = append(observation.audio, chunk...)
-		case "response.output_audio.done", "response.audio.done":
-			if cancelled {
-				observation.playbackFlushObserved = true
-			}
 		case "response.output_item.added":
 			item := mapAt(event.data, "item")
 			if stringAt(item, "type") == "function_call" {
@@ -318,13 +359,6 @@ func readResponse(ctx context.Context, conn *websocket.Conn) (responseObservatio
 			if observation.responseStatus == "cancelled" || statusReason == "turn_detected" || statusReason == "client_cancelled" {
 				cancelled = true
 				observation.cancellationObserved = true
-			}
-			if cancelled && !observation.playbackFlushObserved {
-				// Some compatible servers use response.done as the only
-				// post-cancellation playback boundary.
-				if observation.audioDeltasBeforeCancel > 0 && observation.audioDeltasAfterCancel == 0 {
-					observation.playbackFlushObserved = true
-				}
 			}
 			return observation, nil
 		}
