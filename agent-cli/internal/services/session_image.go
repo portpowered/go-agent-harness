@@ -20,17 +20,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-const sessionImageCapability = "image input"
-
-var defaultSessionImageMIMETypes = []string{"image/png", "image/jpeg"}
 var (
-	ErrSessionImageMissingFile     = errors.New("session image file is missing")
-	ErrSessionImageUnreadableFile  = errors.New("session image file is unreadable")
-	ErrSessionImageUnsupportedMIME = errors.New("session image MIME type is unsupported")
-	ErrSessionImageInvalidContent  = errors.New("session image content is invalid")
-	ErrSessionImageEmptyFile       = errors.New("session image file is empty")
-	ErrSessionImageCapability      = errors.New("session image capability is unsupported")
-	ErrSessionImageSend            = errors.New("session image turn could not be sent")
+	ErrSessionImageMissingFile, ErrSessionImageUnreadableFile     = errors.New("session image file is missing"), errors.New("session image file is unreadable")
+	ErrSessionImageUnsupportedMIME, ErrSessionImageInvalidContent = errors.New("session image MIME type is unsupported"), errors.New("session image content is invalid")
+	ErrSessionImageEmptyFile, ErrSessionImageCapability           = errors.New("session image file is empty"), errors.New("session image capability is unsupported")
+	ErrSessionImageSend                                           = errors.New("session image turn could not be sent")
 )
 
 type SessionImageRunOptions struct {
@@ -45,24 +39,18 @@ type SessionImageCapabilities struct {
 	SupportsImageInput      bool
 	SupportedInputMIMETypes []string
 }
-type SessionImageCapabilityError struct {
-	Model      string
-	Capability string
-}
+type SessionImageCapabilityError struct{ Model, Capability string }
 
 func (e *SessionImageCapabilityError) Error() string {
 	return fmt.Sprintf("model %q does not support %s capability", e.Model, e.Capability)
 }
-
 func (*SessionImageCapabilityError) Unwrap() error { return ErrSessionImageCapability }
 
 type sessionImageError struct {
-	Path          string
-	DetectedMIME  string
-	SupportedMIME []string
-	Err           error
-	kind          error
-	text          string
+	Path, DetectedMIME string
+	SupportedMIME      []string
+	Err, kind          error
+	text               string
 }
 
 func (e *sessionImageError) Error() string   { return e.text }
@@ -116,8 +104,20 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	}
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
-func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed) (sessionRuntimePlan, string, error) {
-	plan, err := planSessionRuntime(opts)
+func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string) (sessionRuntimePlan, string, error) {
+	var (
+		plan         sessionRuntimePlan
+		err          error
+		instructions string
+	)
+	if opts.SessionInferencer != nil || opts.ReplayPath != "" {
+		plan, err = planSessionRuntime(opts)
+	} else {
+		instructions, err = resolveSessionInstructions(opts, systemPrompt)
+		if err == nil {
+			plan, err = planSessionWithResolvedInstructions(opts, instructions)
+		}
+	}
 	if err != nil {
 		return sessionRuntimePlan{}, "", err
 	}
@@ -193,11 +193,11 @@ func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRun
 }
 func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities) ([]messages.ImagePart, error) {
 	if !metadata.SupportsImageInput {
-		return nil, &SessionImageCapabilityError{Model: metadata.Model, Capability: sessionImageCapability}
+		return nil, &SessionImageCapabilityError{Model: metadata.Model, Capability: "image input"}
 	}
 	supported := append([]string(nil), metadata.SupportedInputMIMETypes...)
 	if len(supported) == 0 {
-		supported = append([]string(nil), defaultSessionImageMIMETypes...)
+		supported = []string{"image/png", "image/jpeg"}
 	}
 	parts := make([]messages.ImagePart, 0, len(paths))
 	for _, path := range paths {
@@ -290,7 +290,7 @@ func resolveSessionImageCapabilities(opts SessionRunOptions) (SessionImageCapabi
 	return SessionImageCapabilities{Model: model, SupportsImageInput: true, SupportedInputMIMETypes: supported}, nil
 }
 func sessionImageCapabilityError(model string) error {
-	return &SessionImageCapabilityError{Model: strings.TrimSpace(model), Capability: sessionImageCapability}
+	return &SessionImageCapabilityError{Model: strings.TrimSpace(model), Capability: "image input"}
 }
 func loadSessionImageModelInfo(configDir, model string) (*config.ModelInfo, error) {
 	storage, err := config.NewModelsConfigStorage(configDir)
@@ -359,7 +359,6 @@ func SendSessionImageTurn(ctx context.Context, session messages.Session, text st
 	}
 	return fmt.Errorf("%w: provider session rejected image turn", ErrSessionImageSend)
 }
-
 func sendSessionImageTurn(ctx context.Context, session messages.Session, text string, parts []messages.ImagePart) bool {
 	sender, ok := session.(SessionImageMessageSender)
 	if !ok {
