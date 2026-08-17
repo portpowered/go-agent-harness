@@ -184,10 +184,31 @@ your payload names it. Path prefix: `C:/Users/andre/work/portos/infinite-you/`.
 | Functional layout by subject + `functional-quarantine.json` + `_long_` naming | `tests/functional/` | `s2s-b3-functional-layout-and-quarantine` |
 
 **Lane sizing contract.** Every lane in this program is deliberately small: one
-story, one surface, ≤~400 changed lines, finishable in one or two process
-sessions. If your lane looks larger than that when you plan it, say so in a PR
-comment — do not silently widen it, and do not pull in an adjacent lane's files
-to "finish the thought".
+story, one surface, finishable in one or two process sessions. If your lane
+looks larger than that when you plan it, say so in a PR comment — do not
+silently widen it, and do not pull in an adjacent lane's files to "finish the
+thought".
+
+The **≤~400 changed lines** bound counts **production (non-test) lines only**.
+Test, fixture, testdata, and golden-file lines are NOT counted against it. This
+program's whole point is dense behavioural coverage, and a coverage lane's
+deliverable IS a large volume of test code; a 400-line cap measured over test
+files would make the lanes that matter most unmergeable by construction.
+
+Two obligations remain, and reviewers should enforce these instead of a raw
+total-line count:
+
+1. If the TOTAL diff exceeds ~400 lines, the lane states the split in a PR
+   comment — production lines vs test/fixture lines — so the reviewer can see
+   the production surface is still small. A stated split is an accepted
+   exception; the reviewer does not need to negotiate it.
+2. The production-line bound is unchanged. A lane whose *production* diff
+   exceeds ~400 lines is genuinely too big and must be split.
+
+Measured 2026-08-17: this bound, applied to total lines, blocked 9 of 15 live
+lanes at review (501–1465 line diffs, nearly all test code) and contributed to
+a 3-hour window with zero merges across 17 open PRs. Reviewers were correct to
+enforce the rule as written; the rule was wrong.
 
 ---
 
