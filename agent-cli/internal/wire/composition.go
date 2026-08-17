@@ -548,22 +548,6 @@ func validateDependenciesWithDefinitions(values *compositionValues, definitions 
 	return nil
 }
 
-func applyPortSwap(values *compositionValues, swap PortSwap) error {
-	definition, ok := findPortDefinition(swap.Name)
-	if !ok {
-		return &PortSwapError{Name: swap.Name, Reason: "unknown port", cause: ErrUnknownPort}
-	}
-	if err := validatePortSwap(definition, swap.Value); err != nil {
-		return err
-	}
-	definition.assign(values, swap.Value)
-	return nil
-}
-
-func findPortDefinition(name string) (portDefinition, bool) {
-	return findPortDefinitionIn(livePortDefinitions(), name)
-}
-
 func findPortDefinitionIn(definitions []portDefinition, name string) (portDefinition, bool) {
 	for _, definition := range definitions {
 		if definition.descriptor.Name == name {
