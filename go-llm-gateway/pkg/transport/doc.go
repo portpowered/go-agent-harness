@@ -13,9 +13,7 @@
 // retain them without first making a copy. A write completes before it returns
 // successfully, so the message may be reused after the call returns.
 //
-// The current Grok record/replay surface leaks the grok.WebSocketDialer type,
-// and OpenAI uses openAIWebSocketDialerAdapter and
-// openAIWebSocketConnAdapter to bridge an equivalent provider-local contract.
-// Later lanes will retype those consumers and remove the adapters; this
-// package intentionally does not make those migrations.
+// Provider implementations and shared record/replay helpers consume this
+// contract directly. Provider packages may retain compatibility aliases, but
+// no provider-specific adapter is required at this boundary.
 package transport

@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -35,7 +36,7 @@ type OpenAIProvider struct {
 	realtimeBaseURL             string
 	logger                      logging.Logger
 	apiKey                      string
-	realtimeDialer              WebSocketDialer
+	realtimeDialer              transport.Dialer
 	realtimeLegacySessionUpdate bool
 }
 

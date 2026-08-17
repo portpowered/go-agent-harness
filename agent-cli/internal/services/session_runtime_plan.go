@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 type sessionRuntimeMode string
@@ -28,31 +29,31 @@ const (
 )
 
 type sessionRecordingDialer interface {
-	grok.WebSocketDialer
+	transport.Dialer
 	FlushToFile(path string) error
 }
 
 type sessionReplayDialer interface {
-	grok.WebSocketDialer
+	transport.Dialer
 	Done() <-chan struct{}
 	Err() error
 	Model() string
 }
 
 type sessionRuntimeFactory struct {
-	newDefaultLiveDialer     func() grok.WebSocketDialer
-	newRecordingDialer       func(grok.WebSocketDialer, string, string) sessionRecordingDialer
+	newDefaultLiveDialer     func() transport.Dialer
+	newRecordingDialer       func(transport.Dialer, string, string) sessionRecordingDialer
 	newReplayDialer          func(string) (sessionReplayDialer, error)
 	newReplayInferencer      func(string) messages.SessionInferencer
-	newGrokSessionInferencer func(config.GrokConfig, grok.WebSocketDialer) (messages.SessionInferencer, error)
-	newOpenAISessionInf      func(config.OpenAIConfig, grok.WebSocketDialer) (messages.SessionInferencer, error)
+	newGrokSessionInferencer func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
+	newOpenAISessionInf      func(config.OpenAIConfig, transport.Dialer) (messages.SessionInferencer, error)
 }
 
 var defaultSessionRuntimeFactory = sessionRuntimeFactory{
-	newDefaultLiveDialer: func() grok.WebSocketDialer {
+	newDefaultLiveDialer: func() transport.Dialer {
 		return grok.NewDefaultWebSocketDialer()
 	},
-	newRecordingDialer: func(inner grok.WebSocketDialer, providerName string, model string) sessionRecordingDialer {
+	newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
 		return gwtesting.NewRecordingWebSocketDialer(inner, providerName, model)
 	},
 	newReplayDialer: func(path string) (sessionReplayDialer, error) {
@@ -61,10 +62,10 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	newReplayInferencer: func(path string) messages.SessionInferencer {
 		return gwtesting.NewReplaySessionInferencer(path)
 	},
-	newGrokSessionInferencer: func(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+	newGrokSessionInferencer: func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencer(sessionCfg, dialer)
 	},
-	newOpenAISessionInf: func(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+	newOpenAISessionInf: func(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencer(sessionCfg, dialer)
 	},
 }
