@@ -51,11 +51,12 @@ type ConformanceHarness struct {
 	DialFailure  FailureCase
 	ReadFailure  FailureCase
 	WriteFailure FailureCase
+	CloseFailure FailureCase
 }
 
 // RunS11 runs the shared runtime conformance suite for a message transport.
 // It verifies dial forwarding and ownership, ordered typed messages, exact
-// writes, close observation, and distinct typed dial/read/write failures.
+// writes, close observation, and distinct typed dial/read/write/close failures.
 func RunS11(t *testing.T, h ConformanceHarness) {
 	t.Helper()
 	if err := validateHarness(h); err != nil {
@@ -65,6 +66,7 @@ func RunS11(t *testing.T, h ConformanceHarness) {
 	t.Run("dial failure", func(t *testing.T) { runFailure(t, h, h.DialFailure, "dial") })
 	t.Run("read failure", func(t *testing.T) { runFailure(t, h, h.ReadFailure, "read") })
 	t.Run("write failure", func(t *testing.T) { runFailure(t, h, h.WriteFailure, "write") })
+	t.Run("close failure", func(t *testing.T) { runFailure(t, h, h.CloseFailure, "close") })
 }
 
 // RunConformance is an intentionally descriptive alias for RunS11.
@@ -88,6 +90,7 @@ func validateHarness(h ConformanceHarness) error {
 	}
 	for name, failure := range map[string]FailureCase{
 		"DialFailure": h.DialFailure, "ReadFailure": h.ReadFailure, "WriteFailure": h.WriteFailure,
+		"CloseFailure": h.CloseFailure,
 	} {
 		if failure.New == nil {
 			return fmt.Errorf("transport S11: %s.New is required", name)
@@ -96,11 +99,11 @@ func validateHarness(h ConformanceHarness) error {
 			return fmt.Errorf("transport S11: %s.WantErr is required", name)
 		}
 	}
-	errs := []error{h.DialFailure.WantErr, h.ReadFailure.WantErr, h.WriteFailure.WantErr}
+	errs := []error{h.DialFailure.WantErr, h.ReadFailure.WantErr, h.WriteFailure.WantErr, h.CloseFailure.WantErr}
 	for i := range errs {
 		for j := i + 1; j < len(errs); j++ {
 			if errors.Is(errs[i], errs[j]) || errors.Is(errs[j], errs[i]) {
-				return errors.New("transport S11: dial, read, and write errors must be distinct")
+				return errors.New("transport S11: dial, read, write, and close errors must be distinct")
 			}
 		}
 	}
@@ -200,12 +203,16 @@ func runFailure(t *testing.T, h ConformanceHarness, failure FailureCase, operati
 	if err != nil || conn == nil {
 		t.Fatalf("failure fixture Dial = (%v, %v), want a usable connection", conn, err)
 	}
-	defer func() { _ = conn.Close() }()
+	if operation != "close" {
+		defer func() { _ = conn.Close() }()
+	}
 	if operation == "read" {
 		_, _, err = conn.ReadMessage()
-	} else {
+	} else if operation == "write" {
 		message := h.Outbound[0]
 		err = conn.WriteMessage(message.Type, append([]byte(nil), message.Payload...))
+	} else {
+		err = conn.Close()
 	}
 	checkFailure(t, err, failure)
 }

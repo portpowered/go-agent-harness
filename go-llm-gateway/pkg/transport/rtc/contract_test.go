@@ -28,19 +28,20 @@ func s11Harness() transporttest.ConformanceHarness {
 	dialErr := &operationError{"dial"}
 	readErr := &operationError{"read"}
 	writeErr := &operationError{"write"}
+	closeErr := &operationError{"close"}
 	h := transporttest.ConformanceHarness{
 		Endpoint: "rtc://memory/s11",
 		Headers:  map[string]string{"Authorization": "test", "X-Trace": "s11"},
 		Inbound:  []transporttest.Message{{Type: 7, Payload: []byte{0, 1, 2}}, {Type: -4, Payload: []byte("inbound-second")}},
 		Outbound: []transporttest.Message{{Type: 3, Payload: []byte{9, 0, 8}}, {Type: 11, Payload: []byte("outbound-second")}},
 	}
-	h.NewValid = func() (transport.Dialer, transporttest.Observer) { return newData(h.Inbound, nil, nil, nil) }
-	h.DialFailure, h.ReadFailure, h.WriteFailure = failure("dial", dialErr), failure("read", readErr), failure("write", writeErr)
+	h.NewValid = func() (transport.Dialer, transporttest.Observer) { return newData(h.Inbound, nil, nil, nil, nil) }
+	h.DialFailure, h.ReadFailure, h.WriteFailure, h.CloseFailure = failure("dial", dialErr), failure("read", readErr), failure("write", writeErr), failure("close", closeErr)
 	return h
 }
 
 func failure(op string, want error) transporttest.FailureCase {
-	var dErr, rErr, wErr error
+	var dErr, rErr, wErr, cErr error
 	switch op {
 	case "dial":
 		dErr = want
@@ -48,9 +49,11 @@ func failure(op string, want error) transporttest.FailureCase {
 		rErr = want
 	case "write":
 		wErr = want
+	case "close":
+		cErr = want
 	}
 	return transporttest.FailureCase{
-		New: func() transport.Dialer { return newDataOnly(nil, dErr, rErr, wErr) }, WantErr: want, MatchErr: match(op),
+		New: func() transport.Dialer { return newDataOnly(nil, dErr, rErr, wErr, cErr) }, WantErr: want, MatchErr: match(op),
 	}
 }
 
@@ -85,7 +88,7 @@ func TestRTCS4OperationErrorIdentity(t *testing.T) {
 			case "write":
 				wErr = want
 			}
-			conn, err := newDataOnly(nil, dErr, rErr, wErr).Dial("rtc://memory/s4", map[string]string{"X-Test": "s4"})
+			conn, err := newDataOnly(nil, dErr, rErr, wErr, nil).Dial("rtc://memory/s4", map[string]string{"X-Test": "s4"})
 			if tc.name == "dial" {
 				if conn != nil {
 					t.Fatal("failed Dial returned a connection")
@@ -143,14 +146,15 @@ type dataDialer struct {
 	dialErr  error
 	readErr  error
 	writeErr error
+	closeErr error
 }
 
-func newData(in []transporttest.Message, dialErr, readErr, writeErr error) (transport.Dialer, transporttest.Observer) {
+func newData(in []transporttest.Message, dialErr, readErr, writeErr, closeErr error) (transport.Dialer, transporttest.Observer) {
 	o := &observer{}
-	return &dataDialer{o: o, in: cloneMessages(in), dialErr: dialErr, readErr: readErr, writeErr: writeErr}, o
+	return &dataDialer{o: o, in: cloneMessages(in), dialErr: dialErr, readErr: readErr, writeErr: writeErr, closeErr: closeErr}, o
 }
-func newDataOnly(in []transporttest.Message, dialErr, readErr, writeErr error) transport.Dialer {
-	dialer, _ := newData(in, dialErr, readErr, writeErr)
+func newDataOnly(in []transporttest.Message, dialErr, readErr, writeErr, closeErr error) transport.Dialer {
+	dialer, _ := newData(in, dialErr, readErr, writeErr, closeErr)
 	return dialer
 }
 func (d *dataDialer) Dial(endpoint string, headers map[string]string) (transport.Conn, error) {
@@ -158,13 +162,13 @@ func (d *dataDialer) Dial(endpoint string, headers map[string]string) (transport
 		return nil, fmt.Errorf("rtc dial: %w", d.dialErr)
 	}
 	d.o.dials = append(d.o.dials, transporttest.DialCall{Endpoint: endpoint, Headers: cloneHeaders(headers)})
-	return &dataConn{o: d.o, in: cloneMessages(d.in), readErr: d.readErr, writeErr: d.writeErr}, nil
+	return &dataConn{o: d.o, in: cloneMessages(d.in), readErr: d.readErr, writeErr: d.writeErr, closeErr: d.closeErr}, nil
 }
 
 type dataConn struct {
-	o                 *observer
-	in                []transporttest.Message
-	readErr, writeErr error
+	o                           *observer
+	in                          []transporttest.Message
+	readErr, writeErr, closeErr error
 }
 
 func (c *dataConn) ReadMessage() (int, []byte, error) {
@@ -185,7 +189,13 @@ func (c *dataConn) WriteMessage(messageType int, payload []byte) error {
 	c.o.writes = append(c.o.writes, transporttest.Message{Type: messageType, Payload: append([]byte(nil), payload...)})
 	return nil
 }
-func (c *dataConn) Close() error { c.o.closes++; return nil }
+func (c *dataConn) Close() error {
+	c.o.closes++
+	if c.closeErr != nil {
+		return fmt.Errorf("rtc close: %w", c.closeErr)
+	}
+	return nil
+}
 
 type noOpDialer struct{}
 
