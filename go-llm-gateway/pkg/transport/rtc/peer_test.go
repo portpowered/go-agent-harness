@@ -41,8 +41,8 @@ func TestPeerS4Lifecycle(t *testing.T) {
 		go func() { connect <- p.Connect(context.Background()) }()
 		<-started
 		go func() { closed <- p.Close() }()
-		must(t, await(t, closed))
-		check(t, errors.Is(await(t, connect), ErrPeerClosed), "connect was not closed")
+		must(t, awaitErr(t, closed))
+		check(t, errors.Is(awaitErr(t, connect), ErrPeerClosed), "connect was not closed")
 		path(t, p, StateIdle, StateConnecting, StateClosed)
 	})
 	t.Run("double teardown", func(t *testing.T) {
@@ -103,9 +103,9 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	closed := make(chan error, 1)
 	go func() { closed <- p.Close() }()
 	<-readDone
-	must(t, await(t, closed))
+	must(t, awaitErr(t, closed))
 	for _, ch := range []<-chan error{a, b} {
-		check(t, errors.Is(await(t, ch), ErrPeerClosed), "connect did not close")
+		check(t, errors.Is(awaitErr(t, ch), ErrPeerClosed), "connect did not close")
 	}
 	check(t, p.State() == StateClosed && conn.closes.Load() == 1, "state/close = %s/%d", p.State(), conn.closes.Load())
 }
@@ -170,7 +170,7 @@ func check(t *testing.T, ok bool, format string, args ...any) {
 		t.Fatalf(format, args...)
 	}
 }
-func await(t *testing.T, ch <-chan error) error {
+func awaitErr(t *testing.T, ch <-chan error) error {
 	select {
 	case err := <-ch:
 		return err
