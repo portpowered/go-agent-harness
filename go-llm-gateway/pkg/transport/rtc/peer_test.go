@@ -38,9 +38,9 @@ func s4Loss(t *testing.T) {
 		return second, nil
 	}}
 	p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 2}})
-	must(t, p.Connect(nil))
+	must(t, p.Connect(context.Background()))
 	must(t, p.PeerLost(nil))
-	must(t, p.Wait(nil))
+	must(t, p.Wait(context.Background()))
 	path(t, p, StateIdle, StateConnecting, StateConnected, StateReconnecting, StateConnected)
 	if d.calls() != 2 || p.Attempts() != 1 || first.calls.Load() != 1 {
 		t.Fatalf("dials/attempts/first close = %d/%d/%d, want 2/1/1", d.calls(), p.Attempts(), first.calls.Load())
@@ -59,7 +59,7 @@ func s4ConnectClose(t *testing.T) {
 		return nil, ctx.Err()
 	}, 3)
 	connected := make(chan error, 1)
-	go func() { connected <- p.Connect(nil) }()
+	go func() { connected <- p.Connect(context.Background()) }()
 	<-started
 	closed := make(chan error, 1)
 	go func() { closed <- p.Close() }()
@@ -72,7 +72,7 @@ func s4ConnectClose(t *testing.T) {
 func s4DoubleClose(t *testing.T) {
 	conn := newConn(nil)
 	p := peer(func(context.Context, int) (Conn, error) { return conn, nil }, 1)
-	must(t, p.Connect(nil))
+	must(t, p.Connect(context.Background()))
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	for range 2 {
@@ -103,7 +103,7 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	}}})
-	must(t, p.Connect(nil))
+	must(t, p.Connect(context.Background()))
 	must(t, p.PeerLost(nil))
 	<-started
 	must(t, p.Close())
@@ -116,7 +116,7 @@ func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 	cause := &dialFailure{"permanently unavailable"}
 	var delay atomic.Int64
 	p := NewPeer(PeerConfig{Dialer: &scriptDialer{fn: func(context.Context, int) (Conn, error) { return nil, cause }}, Retry: RetryPolicy{MaxAttempts: 4, Backoff: time.Hour, MaxBackoff: time.Millisecond, Wait: func(_ context.Context, d time.Duration) error { delay.Store(int64(d)); return nil }}})
-	err := p.Connect(nil)
+	err := p.Connect(context.Background())
 	terminal(t, p, err, cause, 4)
 	if !errors.Is(err, ErrRetryExhausted) || p.Attempts() != 4 || time.Duration(delay.Load()) > time.Millisecond {
 		t.Fatalf("error/attempts/delay = %v/%d/%s", err, p.Attempts(), time.Duration(delay.Load()))
@@ -134,7 +134,7 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 		return conn, nil
 	}, 1)
 	connected := make(chan error, 1)
-	go func() { connected <- p.Connect(nil) }()
+	go func() { connected <- p.Connect(context.Background()) }()
 	<-started
 	var readers sync.WaitGroup
 	for range 12 {
@@ -165,7 +165,7 @@ func TestPeerS9OneHundredConnectTeardownCycles(t *testing.T) {
 	var created, closed atomic.Int32
 	for range 100 {
 		p := peer(func(context.Context, int) (Conn, error) { created.Add(1); return tracked(openSockets, &closed), nil }, 1)
-		must(t, p.Connect(nil))
+		must(t, p.Connect(context.Background()))
 		must(t, p.Close())
 	}
 	if created.Load() != 100 || closed.Load() != 100 || openSockets.Load() != baseSockets {
