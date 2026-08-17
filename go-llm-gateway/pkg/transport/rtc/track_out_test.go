@@ -115,35 +115,38 @@ func TestOutboundTrackSuccessfulWriteCommitsAfterCancellation(t *testing.T) {
 }
 
 func TestOutboundTrackPacingUsesMediaTimelineAcrossIrregularArrival(t *testing.T) {
-	pacer := &captureOutboundPacer{}
-	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, &captureOutboundWriter{}, pacer)
+	clock := &outboundFakeClock{now: time.Unix(0, 0)}
+	pacer := &wallClockPacer{now: clock.Now, wait: clock.Wait}
+	writer := &captureOutboundWriter{now: clock.Now}
+	track := newTestOutboundTrack(t, &captureOutboundEncoder{}, writer, pacer)
 
-	firstResult := make(chan error, 1)
-	go func() {
-		firstResult <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 1)})
-	}()
-	if err := <-firstResult; err != nil {
-		t.Fatalf("first WriteFrame: %v", err)
-	}
-
-	// The second frame is deliberately held at the caller boundary. Its
-	// media-clock offset must still follow the first frame, not this gap.
-	secondArrival := make(chan struct{})
-	secondResult := make(chan error, 1)
-	go func() {
-		<-secondArrival
-		secondResult <- track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, 2)})
-	}()
-	close(secondArrival)
-	if err := <-secondResult; err != nil {
-		t.Fatalf("second WriteFrame: %v", err)
+	for index := 0; index < 3; index++ {
+		if index == 1 {
+			// Simulate a late caller without sleeping. The next packet is
+			// emitted immediately, but a following packet keeps the media
+			// interval instead of bursting alongside it.
+			clock.Advance(5 * sampleOffsetDuration(960))
+		}
+		if err := track.WriteFrame(context.Background(), PCMFrame{Samples: pcmTone(320, index+1)}); err != nil {
+			t.Fatalf("WriteFrame %d: %v", index, err)
+		}
 	}
 	if err := track.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if got, want := pacer.Offsets(), []uint64{0, 960}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("pacer offsets = %v, want %v", got, want)
+	if got, want := clock.Waits(), []time.Duration{0, 0, sampleOffsetDuration(960)}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("pacer waits = %v, want %v", got, want)
+	}
+	emissions := writer.EmissionTimes()
+	if len(emissions) != 3 {
+		t.Fatalf("emission times = %d, want 3", len(emissions))
+	}
+	if got, want := emissions[1].Sub(emissions[0]), 5*sampleOffsetDuration(960); got != want {
+		t.Fatalf("late-arrival emission gap = %v, want %v", got, want)
+	}
+	if got, want := emissions[2].Sub(emissions[1]), sampleOffsetDuration(960); got != want {
+		t.Fatalf("post-late emission gap = %v, want %v", got, want)
 	}
 }
 
@@ -265,7 +268,7 @@ func TestOutboundTrackConfigurationDefaultsAndAdapters(t *testing.T) {
 	}
 	samples := pcmTone(3, 5)
 	wantSamples := append([]int16(nil), samples...)
-	if err := track.WriteFrame(nil, PCMFrame{Samples: samples}); err != nil {
+	if err := track.WriteFrame(context.Background(), PCMFrame{Samples: samples}); err != nil {
 		t.Fatalf("identity-rate WriteFrame: %v", err)
 	}
 	if !reflect.DeepEqual(encodedSamples, wantSamples) {
@@ -607,6 +610,8 @@ func (noAllocOutboundEncoder) Encode(context.Context, []int16) ([]byte, error) {
 type captureOutboundWriter struct {
 	mu                   sync.Mutex
 	packets              []*rtp.Packet
+	emissionTimes        []time.Time
+	now                  func() time.Time
 	writeErr             error
 	block                <-chan struct{}
 	entered              chan struct{}
@@ -636,6 +641,9 @@ func (w *captureOutboundWriter) WriteRTP(ctx context.Context, packet *rtp.Packet
 	clone.Payload = append([]byte(nil), packet.Payload...)
 	w.mu.Lock()
 	w.packets = append(w.packets, &clone)
+	if w.now != nil {
+		w.emissionTimes = append(w.emissionTimes, w.now())
+	}
 	w.mu.Unlock()
 	if w.cancelAfterWrite != nil {
 		w.cancelAfterWriteOnce.Do(w.cancelAfterWrite)
@@ -653,6 +661,12 @@ func (w *captureOutboundWriter) Packets() []*rtp.Packet {
 		packets[index] = &clone
 	}
 	return packets
+}
+
+func (w *captureOutboundWriter) EmissionTimes() []time.Time {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]time.Time(nil), w.emissionTimes...)
 }
 
 type noAllocOutboundWriter struct{}
@@ -699,4 +713,39 @@ func (p *captureOutboundPacer) Offsets() []uint64 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]uint64(nil), p.offsets...)
+}
+
+type outboundFakeClock struct {
+	mu    sync.Mutex
+	now   time.Time
+	waits []time.Duration
+}
+
+func (c *outboundFakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *outboundFakeClock) Advance(duration time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(duration)
+	c.mu.Unlock()
+}
+
+func (c *outboundFakeClock) Wait(ctx context.Context, duration time.Duration) error {
+	if err := contextCauseIfDone(ctx); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.waits = append(c.waits, duration)
+	c.now = c.now.Add(duration)
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *outboundFakeClock) Waits() []time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]time.Duration(nil), c.waits...)
 }
