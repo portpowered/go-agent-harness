@@ -79,6 +79,7 @@ The root Makefile exposes these deterministic and opt-in test tiers:
 | Target | Deterministic | What it runs |
 |--------|---------------|--------------|
 | `make test` | yes | Per-module `go test ./...` across `agent-cli`, `go-agent-loop`, and `go-llm-gateway`. |
+| `make test-rtc-race` | yes, supported Linux only | Focused `go-llm-gateway/pkg/transport/rtc` S8 cases with CGO, the race detector, `nomicrophone`, fresh execution, a finite timeout, and fail-closed JSON event verification. |
 | `make test-factory-scripts` | yes | Factory runtime coverage for `factory/scripts/setup-workspace.py`, executed with bytecode writes disabled so the root checkout stays clean. |
 | `make test-integration` | yes | Deterministic integration packages: `agent-cli/test/integration` and `go-agent-loop/test/functional`. |
 | `make test-regressions` | yes | Committed replay and fixture regression tests, including Agent CLI replay cases and `go-llm-gateway` replay/fixture packages. |
@@ -92,4 +93,11 @@ Repository CI lives in `.github/workflows/ci.yml`. It:
 
 - Triggers on pull requests and pushes to `main`.
 - Installs Go 1.24.2 plus pinned `golangci-lint` and `staticcheck` versions that match the root Makefile guidance, so the CI toolchain does not drift under the same commit.
+- Runs the focused `make test-rtc-race` acceptance step on Ubuntu with the
+  runner's CGO toolchain.
 - Runs `make ci` as the single validation entrypoint instead of duplicating per-module build or test commands in workflow YAML.
+
+The focused RTC race step is separate from `make ci`, so both outcomes are
+required for the job to pass. It is intentionally Linux-only: the current
+Windows `runtime/cgo: cgo.exe: exit status 2` failure is an environment
+limitation, and Ubuntu CI is the authoritative reproduction environment.

@@ -75,6 +75,7 @@ make vet
 make lint
 make staticcheck
 make test
+make test-rtc-race
 make test-integration
 make test-regressions
 make build
@@ -92,6 +93,7 @@ Use them as follows:
 - `make lint`: run `golangci-lint` across all modules
 - `make staticcheck`: run `staticcheck` across all modules
 - `make test`: run each module's package test suite
+- `make test-rtc-race`: run the focused RTC S8 concurrency acceptance cases under the race detector; this requires supported Linux with CGO enabled
 - `make test-integration`: run the deterministic `agent-cli` and
   `go-agent-loop` integration suites
 - `make test-regressions`: run the committed replay and fixture regression
@@ -101,6 +103,32 @@ Use them as follows:
 - `make validate`: backward-compatible alias for the full root validation
   pipeline
 - `make ci`: full deterministic validation pipeline used by contributors and CI
+
+### Focused RTC race acceptance
+
+The focused RTC concurrency gate is authoritative on supported Linux. It
+requires Go 1.24.2 or newer, GNU Make, Bash, and a working C compiler/linker
+for CGO. From the repository root, run the exact reproduction command:
+
+```bash
+make test-rtc-race
+```
+
+The target enables CGO and runs `go test` for
+`go-llm-gateway/pkg/transport/rtc` with `-race`, `-tags=nomicrophone`,
+`-count=1`, and a finite timeout. It uses only in-process RTC fixtures and
+event-driven synchronization: no microphone or other device, credential,
+harness-root `credentials` file, or live network service is needed. The gate
+requires one non-skipped completion for each intended concurrency case and
+returns non-zero for a race, build or test failure, timeout, missing or renamed
+case, undiscovered case, or skip. The JSON event output names each required
+case so a successful run is visibly distinguishable from an empty test match.
+
+The current Windows runtime/CGO failure (`runtime/cgo: cgo.exe: exit status 2`)
+is an environment limitation, not a reason to retry the focused tests. Run the
+gate on supported Linux; Ubuntu CI is authoritative. The CI workflow runs this
+focused step separately from the unchanged full `make ci` pipeline, and both
+steps must succeed.
 
 If you are working inside a single module, its README also documents the
 package-local commands.
