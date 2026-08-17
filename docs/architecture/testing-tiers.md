@@ -8,7 +8,7 @@ hardware/provider acceptance work have predictable boundaries.
 | T0 unit | `make test` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T0 functional | `make test-integration` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T0 hermetic | `make test-hermetic` | Contributor machines and the hermetic Linux CI leg; this is the local Windows command | Every PR and local Windows validation |
-| T1 probe-replay | `make test-probe` | Contributor machines and PR CI | Every PR |
+| T1 probe-replay | `make test-regressions` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T2 probe-live | `agent probe run <scenario> --transport live` | A per-vertical acceptance environment with live services | Per-vertical acceptance; never PR CI |
 | T2 device | `agent probe run <scenario> --devices real` | An acceptance host with the required real audio device | Per-vertical acceptance; never PR CI |
 | T3 fleet + fault | `agent probe fleet` | An operator-controlled fleet environment | On demand |
