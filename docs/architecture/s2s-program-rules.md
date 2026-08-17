@@ -687,3 +687,76 @@ Corpus audio is the input side of nearly every test here, so if it changes shape
 underneath us the failures surface in lanes with nothing to do with TTS.
 `s2s-lai-tts-gguf-format-check` resolves and pins it.
 
+
+## 10. When your lease runs out, STOP — the `<CONTINUE>` deadlock
+
+This section records a measured outage. Read it before you decide to emit
+`<CONTINUE>` "until review gets back to me".
+
+### 10.1 The mechanism
+
+The factory's `review` workstation is a **two-token join**. From
+`factory/factory.json`:
+
+```
+process  inputs:  task:init
+         outputs: task:in-review  AND  review:init     <-- emits BOTH
+review   inputs:  task:in-review  AND  review:init     <-- consumes BOTH
+review-loop-breaker  inputs: task:in-review -> task:failed
+```
+
+`process` is a REPEATER. `<CONTINUE>` re-arms it and fires **no output arc**, so
+no `task:in-review` + `review:init` pair is ever minted. Only `<COMPLETE>` mints
+that pair. Therefore:
+
+> **`<CONTINUE>` with no in-lease work left does not queue you for review. It
+> makes review structurally unreachable, and your PR can never merge however
+> green it is.**
+
+Waiting for review feedback by emitting `<CONTINUE>` is self-defeating: the
+reviewer is never dispatched, because you never released the token.
+
+### 10.2 The outage it caused
+
+Measured 2026-08-17 on this program's board. Lane
+`s2s-b1-cov-workspace-agents-md` emitted `<CONTINUE>` for **~17 hours** against
+PR #58, which was `OPEN` / `MERGEABLE` / `CLEAN` with required CI green the
+entire time. Its head never moved from `0e461ec`. A board census found **16 of
+19** open lanes in the same state. #58 merged **9 minutes** after the lane was
+told its lease was exhausted.
+
+The lane was not malfunctioning. `process/AGENTS.md` 17.1 permits `<COMPLETE>`
+only when every PRD item is `passes:true`, and its last acceptance criteria
+required production APIs (upward discovery, parsed resolution, traversal
+boundary, typed oversized-file errors) that its **coverage-only lease forbade it
+to write**. Unsatisfiable criteria plus an all-items gate is an infinite loop by
+construction.
+
+### 10.3 The rule
+
+`process/AGENTS.md` gained 17.4 and 17.5 (commit `e17e1f6`). In short:
+
+> If every remaining PRD item requires changes outside your `changedPathLease`,
+> you have no in-lease work left. Mark those items `passes:true` with a one-line
+> note naming the out-of-lease contract, state the gap in a PR comment so the
+> operator can file it as its own work item, and respond `<COMPLETE>`.
+
+Reporting an out-of-lease gap **is** delivery. It is not a failure, and it is
+not something to keep grinding at.
+
+### 10.4 Operator notes
+
+- **Never hand-move a token to `task:in-review`.** It looks like a shortcut to
+  review and is a dead end: the paired `review:init` token does not exist, so
+  the join can never fire and the only transition that can consume the token is
+  `review-loop-breaker`, which fails it. Verified 2026-08-17 — a token moved
+  this way sat unreachable until it was reverted to `init`. `init` is the only
+  safe manual destination, because only `process` can mint the review pair.
+- The `review` inputs carry **no `SAME_NAME` guard** (unlike `consume`, which
+  has one). Review therefore binds any `task:in-review` to any `review:init`,
+  which is why review token names cross-attribute between lanes. Merges are not
+  lost by this, but do not treat a `work-review-N` token's name as evidence of
+  which lane it reviewed.
+- When writing payloads, keep acceptance criteria **inside the lane's lease**.
+  If a criterion needs a production contract the lease forbids, it belongs in a
+  separate lane, not as an item the lease-bound lane can never mark passing.
