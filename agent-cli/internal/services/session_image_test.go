@@ -157,6 +157,26 @@ func TestSendSessionImageTurn_ImageOnlyMessageHasNoPlaceholderText(t *testing.T)
 	}
 }
 
+func TestSendSessionImageTurn_RejectsStreamOnlySessionWithoutPartialSend(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := copySessionImageFixture(t, dir, "fixture.png")
+	parts, err := services.PrepareSessionImageParts([]string{imagePath}, services.SessionImageCapabilities{
+		Model:              "gpt-realtime",
+		SupportsImageInput: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := &streamOnlySession{recv: messages.NewTypedBuffer[messages.StreamMessage](1), done: make(chan struct{})}
+	err = services.SendSessionImageTurn(context.Background(), session, "describe this", parts)
+	if err == nil || !errors.Is(err, services.ErrSessionImageSend) {
+		t.Fatalf("error = %v, want image-send error", err)
+	}
+	if len(session.events) != 0 {
+		t.Fatalf("stream events = %#v, want no partial text or image events", session.events)
+	}
+}
+
 func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	dir := t.TempDir()
 	png := copySessionImageFixture(t, dir, "fixture.png")
@@ -337,6 +357,79 @@ func TestSessionCommand_ImageFlagCardinalityAndOrder(t *testing.T) {
 	}
 }
 
+func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := copySessionImageFixture(t, dir, "fixture.png")
+	cases := []struct {
+		name          string
+		flags         []string
+		wantAudio     bool
+		wantArtifacts bool
+	}{
+		{name: "duration", flags: []string{"--max-duration", "1s"}, wantArtifacts: true},
+		{name: "audio output", flags: []string{"--audio-out", filepath.Join(dir, "assistant.wav")}, wantAudio: true},
+		{name: "duration and audio output", flags: []string{"--max-duration", "1s", "--audio-out", filepath.Join(dir, "assistant-bounded.wav")}, wantAudio: true, wantArtifacts: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			capturePath := filepath.Join(dir, tc.name, "capture.json")
+			session := newRecordingSessionImageSession()
+			session.onMessage = func(ctx context.Context) {
+				session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
+				session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1, 0})})
+				session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+				session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("image-flags", "done")})
+			}
+			inf := &countingSessionImageInferencer{session: session}
+			globalFlags := flags.NewGlobalFlags()
+			globalFlags.ConfigDirPath = filepath.Join(dir, tc.name, "config")
+			command := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, inf).Generate()
+			args := []string{
+				"--record", capturePath,
+				"--provider", "openai",
+				"--model", "gpt-realtime",
+				"--api-key", "sk-test-key",
+				"--image", imagePath,
+			}
+			args = append(args, tc.flags...)
+			args = append(args, "describe this")
+			command.SetOut(io.Discard)
+			command.SetErr(io.Discard)
+			command.SetArgs(args)
+			if err := command.ExecuteContext(context.Background()); err != nil {
+				t.Fatalf("execute session command: %v", err)
+			}
+			if len(session.messages) != 1 || session.messages[0].TextContent() != "describe this" {
+				t.Fatalf("provider messages = %#v, want one image turn with the positional prompt", session.messages)
+			}
+			if tc.wantAudio {
+				audioPath := filepath.Join(dir, "assistant.wav")
+				if tc.name == "duration and audio output" {
+					audioPath = filepath.Join(dir, "assistant-bounded.wav")
+				}
+				info, err := os.Stat(audioPath)
+				if err != nil {
+					t.Fatalf("audio output stat: %v", err)
+				}
+				if info.Size() <= 44 {
+					t.Fatalf("audio output size = %d, want WAV header plus audio", info.Size())
+				}
+			}
+			if tc.wantArtifacts {
+				for _, path := range []string{
+					filepath.Join(dir, tc.name, "capture.wav"),
+					filepath.Join(dir, tc.name, "capture.jsonl"),
+				} {
+					if _, err := os.Stat(path); err != nil {
+						t.Fatalf("duration artifact %q: %v", path, err)
+					}
+				}
+			}
+		})
+	}
+}
+
 func copySessionImageFixture(t *testing.T, dir, name string) string {
 	t.Helper()
 	data := mustReadSessionImage(t, filepath.Join("..", "..", "testdata", "images", name))
@@ -438,3 +531,17 @@ func (i *countingSessionImageInferencer) ConnectSession(ctx context.Context) (me
 	i.session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("image-test", "gpt-realtime")})
 	return i.session, nil
 }
+
+type streamOnlySession struct {
+	events []messages.StreamMessage
+	recv   *messages.TypedBuffer[messages.StreamMessage]
+	done   chan struct{}
+}
+
+func (s *streamOnlySession) Send(_ context.Context, event messages.StreamMessage) bool {
+	s.events = append(s.events, event)
+	return true
+}
+func (s *streamOnlySession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
+func (s *streamOnlySession) Done() <-chan struct{}                                  { return s.done }
+func (s *streamOnlySession) Close() error                                           { return nil }

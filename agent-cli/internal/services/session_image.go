@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
@@ -22,7 +23,6 @@ import (
 const sessionImageCapability = "image input"
 
 var defaultSessionImageMIMETypes = []string{"image/png", "image/jpeg"}
-
 var (
 	ErrSessionImageMissingFile     = errors.New("session image file is missing")
 	ErrSessionImageUnreadableFile  = errors.New("session image file is unreadable")
@@ -33,20 +33,18 @@ var (
 	ErrSessionImageSend            = errors.New("session image turn could not be sent")
 )
 
-// SessionImageRunOptions carries image paths alongside the existing session options.
 type SessionImageRunOptions struct {
 	SessionRunOptions
-	ImagePaths []string
+	ImagePaths   []string
+	AudioOutPath string
+	MaxDuration  time.Duration
+	TextSeed     SessionTextSeed
 }
-
-// SessionImageCapabilities is the model metadata used to validate attachments.
 type SessionImageCapabilities struct {
 	Model                   string
 	SupportsImageInput      bool
 	SupportedInputMIMETypes []string
 }
-
-// SessionImageCapabilityError reports a model without the requested capability.
 type SessionImageCapabilityError struct {
 	Model      string
 	Capability string
@@ -73,37 +71,30 @@ func newSessionImageError(kind error, path, detected, text string, supported []s
 	return &sessionImageError{Path: path, DetectedMIME: detected, SupportedMIME: supported, Err: err, kind: kind, text: text}
 }
 
-// SessionImageMissingFileError reports a path that does not exist.
-type SessionImageMissingFileError struct{ *sessionImageError }
-
-// SessionImageUnreadableFileError reports a path that exists but cannot be read.
-type SessionImageUnreadableFileError struct{ *sessionImageError }
-
-// SessionImageUnsupportedMIMEError reports a MIME type outside the model contract.
-type SessionImageUnsupportedMIMEError struct{ *sessionImageError }
-
-// SessionImageInvalidContentError reports bytes that are not a decodable image.
-type SessionImageInvalidContentError struct{ *sessionImageError }
-
-// SessionImageEmptyFileError reports a successfully read zero-byte file.
-type SessionImageEmptyFileError struct{ Path string }
+type (
+	SessionImageMissingFileError     struct{ *sessionImageError }
+	SessionImageUnreadableFileError  struct{ *sessionImageError }
+	SessionImageUnsupportedMIMEError struct{ *sessionImageError }
+	SessionImageInvalidContentError  struct{ *sessionImageError }
+	SessionImageEmptyFileError       struct{ Path string }
+)
 
 func (e *SessionImageEmptyFileError) Error() string {
 	return fmt.Sprintf("session image %q is empty", e.Path)
 }
 func (*SessionImageEmptyFileError) Unwrap() error { return ErrSessionImageEmptyFile }
 
-// SessionImageMessageSender is an optional seam for a complete multimodal user message.
 type SessionImageMessageSender interface {
 	SendMessage(context.Context, messages.Message) bool
 }
 
-// RunSessionWithImages validates attachments before constructing or connecting a session.
-// With no images it delegates to the existing session path unchanged.
-func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) error {
+func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) (runErr error) {
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
 		return RunSession(ctx, out, opts.SessionRunOptions)
+	}
+	if err := ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
+		return err
 	}
 	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
 		return err
@@ -116,21 +107,90 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err != nil {
 		return err
 	}
-	plan, err := planSessionRuntime(opts.SessionRunOptions)
+	if opts.TextSeed.Present {
+		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+	}
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed)
 	if err != nil {
 		return err
 	}
+	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+}
+func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed) (sessionRuntimePlan, string, error) {
+	plan, err := planSessionRuntime(opts)
+	if err != nil {
+		return sessionRuntimePlan{}, "", err
+	}
 	if plan.inferencer == nil {
-		return errors.New("session image runtime has no session inferencer")
+		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
 	plan.inferencer = &sessionImageInferencer{inner: plan.inferencer, parts: cloneSessionImageParts(parts)}
+	if seed.Present {
+		wirePrompt := nextSessionTextWirePrompt()
+		plan.loop.Prompt = wirePrompt
+		return plan, wirePrompt, nil
+	}
 	if opts.Prompt == "" {
 		plan.loop.Prompt = sessionImageOnlyPrompt
 	}
-	return plan.run(ctx, out)
+	return plan, "", nil
 }
-
-// PrepareSessionImageParts reads paths in occurrence order and preserves successful bytes.
+func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt string) (runErr error) {
+	if opts.AudioOutPath != "" {
+		sink, err := newSessionAudioSink(opts.AudioOutPath, out)
+		if err != nil {
+			return fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, err)
+		}
+		audioOut := &sessionAudioOutput{sink: sink}
+		defer func() {
+			if closeErr := audioOut.close(); closeErr != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, closeErr))
+			}
+		}()
+		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, opts.TextSeed.Value)
+		plan.inferencer = wrapped
+		if opts.AudioOutPath == "-" {
+			out = io.Discard
+		}
+		if opts.MaxDuration == 0 {
+			runErr = plan.run(ctx, out)
+		} else {
+			runErr = runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
+		}
+		wrapped.wait()
+		if outputErr := wrapped.err(); outputErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", opts.AudioOutPath, outputErr))
+		}
+		return runErr
+	}
+	if opts.TextSeed.Present {
+		output := &sessionTextOutput{writer: out}
+		if opts.MaxDuration == 0 {
+			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value, audioOut: output}
+			return errors.Join(plan.run(ctx, output), output.errorValue())
+		}
+		durationCtx, err := prepareSessionDurationArtifacts(ctx)
+		if err != nil {
+			return err
+		}
+		admission := newSessionDurationAdmission()
+		admittedInferencer := &sessionDurationAdmissionInferencer{inner: plan.inferencer, admission: admission, closeDone: make(chan struct{})}
+		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value, audioOut: output}
+		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, realSessionDurationClock{}, admittedInferencer)
+		return errors.Join(err, output.errorValue())
+	}
+	if opts.MaxDuration == 0 {
+		return plan.run(ctx, out)
+	}
+	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
+}
+func runSessionImageDuration(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration) error {
+	durationCtx, err := prepareSessionDurationArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+	return runSessionDurationPlan(durationCtx, out, plan, maxDuration, realSessionDurationClock{})
+}
 func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities) ([]messages.ImagePart, error) {
 	if !metadata.SupportsImageInput {
 		return nil, &SessionImageCapabilityError{Model: metadata.Model, Capability: sessionImageCapability}
@@ -171,23 +231,6 @@ func PrepareSessionImageParts(paths []string, metadata SessionImageCapabilities)
 	}
 	return parts, nil
 }
-
-func missingSessionImage(path string, err error) error {
-	return &SessionImageMissingFileError{newSessionImageError(ErrSessionImageMissingFile, path, "", fmt.Sprintf("session image %q is missing: %v", path, err), nil, err)}
-}
-
-func unreadableSessionImage(path string, err error) error {
-	return &SessionImageUnreadableFileError{newSessionImageError(ErrSessionImageUnreadableFile, path, "", fmt.Sprintf("session image %q cannot be read: %v", path, err), nil, err)}
-}
-
-func unsupportedSessionImage(path, mediaType string, supported []string) error {
-	return &SessionImageUnsupportedMIMEError{newSessionImageError(
-		ErrSessionImageUnsupportedMIME, path, mediaType,
-		fmt.Sprintf("session image %q has unsupported MIME type %q (supported: %s)", path, mediaType, strings.Join(supported, ", ")),
-		append([]string(nil), supported...), nil,
-	)}
-}
-
 func sessionImageContent(content messages.ContentPart) (data []byte, mediaType string, isImage bool) {
 	switch part := content.(type) {
 	case messages.ImagePart:
@@ -202,7 +245,15 @@ func sessionImageContent(content messages.ContentPart) (data []byte, mediaType s
 		return nil, "", false
 	}
 }
-
+func missingSessionImage(path string, err error) error {
+	return &SessionImageMissingFileError{newSessionImageError(ErrSessionImageMissingFile, path, "", fmt.Sprintf("session image %q is missing: %v", path, err), nil, err)}
+}
+func unreadableSessionImage(path string, err error) error {
+	return &SessionImageUnreadableFileError{newSessionImageError(ErrSessionImageUnreadableFile, path, "", fmt.Sprintf("session image %q cannot be read: %v", path, err), nil, err)}
+}
+func unsupportedSessionImage(path, mediaType string, supported []string) error {
+	return &SessionImageUnsupportedMIMEError{newSessionImageError(ErrSessionImageUnsupportedMIME, path, mediaType, fmt.Sprintf("session image %q has unsupported MIME type %q (supported: %s)", path, mediaType, strings.Join(supported, ", ")), append([]string(nil), supported...), nil)}
+}
 func resolveSessionImageCapabilities(opts SessionRunOptions) (SessionImageCapabilities, error) {
 	if !strings.EqualFold(strings.TrimSpace(effectiveSessionProvider(opts)), sessionProviderOpenAI) {
 		return SessionImageCapabilities{}, sessionImageCapabilityError(opts.Model)
@@ -238,11 +289,9 @@ func resolveSessionImageCapabilities(opts SessionRunOptions) (SessionImageCapabi
 	}
 	return SessionImageCapabilities{Model: model, SupportsImageInput: true, SupportedInputMIMETypes: supported}, nil
 }
-
 func sessionImageCapabilityError(model string) error {
 	return &SessionImageCapabilityError{Model: strings.TrimSpace(model), Capability: sessionImageCapability}
 }
-
 func loadSessionImageModelInfo(configDir, model string) (*config.ModelInfo, error) {
 	storage, err := config.NewModelsConfigStorage(configDir)
 	if err != nil {
@@ -254,20 +303,11 @@ func loadSessionImageModelInfo(configDir, model string) (*config.ModelInfo, erro
 	}
 	return models.Lookup(model), nil
 }
-
 func configuredModelSupportsImageInput(model *config.ModelInfo) bool {
-	if model == nil {
-		return false
-	}
-	if len(model.InputModalities) > 0 {
-		return slices.Contains(model.InputModalities, "image")
-	}
-	for _, mimeType := range model.SupportedInputMimeTypes {
-		if strings.HasPrefix(mimeType, "image/") {
-			return true
-		}
-	}
-	return false
+	return model != nil && (slices.Contains(model.InputModalities, "image") ||
+		(len(model.InputModalities) == 0 && slices.ContainsFunc(model.SupportedInputMimeTypes, func(mime string) bool {
+			return strings.HasPrefix(mime, "image/")
+		})))
 }
 
 const sessionImageOnlyPrompt = "\x00agent-session-image-turn\x00"
@@ -292,7 +332,7 @@ type sessionImageSession struct {
 }
 
 func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	if msg.Type != messages.StreamTypeTextDelta && msg.Type != messages.StreamTypeAudioDelta {
+	if msg.Type != messages.StreamTypeTextDelta {
 		return s.Session.Send(ctx, msg)
 	}
 	s.mu.Lock()
@@ -309,10 +349,7 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 		}
 		return sendSessionImageTurn(ctx, s.Session, text, parts)
 	}
-	if !s.Session.Send(ctx, msg) {
-		return false
-	}
-	return sendSessionImageParts(ctx, s.Session, parts)
+	return false
 }
 
 // SendSessionImageTurn attaches validated parts to one reusable user turn.
@@ -324,44 +361,23 @@ func SendSessionImageTurn(ctx context.Context, session messages.Session, text st
 }
 
 func sendSessionImageTurn(ctx context.Context, session messages.Session, text string, parts []messages.ImagePart) bool {
-	if sender, ok := session.(SessionImageMessageSender); ok {
-		content := make([]messages.ContentPart, 0, len(parts)+1)
-		if text != "" {
-			content = append(content, messages.TextPart{Text: text})
-		}
-		for _, part := range parts {
-			content = append(content, messages.ImagePart{Bytes: append([]byte(nil), part.Bytes...), MediaType: part.MediaType})
-		}
-		return sender.SendMessage(ctx, messages.Message{Role: messages.RoleUser, ContentParts: content})
-	}
-	if text != "" && !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)}) {
+	sender, ok := session.(SessionImageMessageSender)
+	if !ok {
 		return false
 	}
-	return sendSessionImageParts(ctx, session, parts)
-}
-
-func sendSessionImageParts(ctx context.Context, session messages.Session, parts []messages.ImagePart) bool {
+	content := make([]messages.ContentPart, 0, len(parts)+1)
+	if text != "" {
+		content = append(content, messages.TextPart{Text: text})
+	}
 	for _, part := range parts {
-		for _, event := range []messages.StreamMessage{
-			{Type: messages.StreamTypeImageStart, Value: messages.NewImageStartValue(part.MediaType)},
-			{Type: messages.StreamTypeImageDelta, Value: messages.NewImageDeltaValue(append([]byte(nil), part.Bytes...))},
-			{Type: messages.StreamTypeImageEnd, Value: messages.NewImageEndValue()},
-		} {
-			if !session.Send(ctx, event) {
-				return false
-			}
-		}
+		content = append(content, messages.ImagePart{Bytes: append([]byte(nil), part.Bytes...), MediaType: part.MediaType})
 	}
-	return true
+	return sender.SendMessage(ctx, messages.Message{Role: messages.RoleUser, ContentParts: content})
 }
-
 func cloneSessionImageParts(parts []messages.ImagePart) []messages.ImagePart {
-	if len(parts) == 0 {
-		return nil
-	}
-	cloned := make([]messages.ImagePart, len(parts))
-	for i, part := range parts {
-		cloned[i] = messages.ImagePart{URL: part.URL, MediaType: part.MediaType, Bytes: append([]byte(nil), part.Bytes...)}
+	cloned := slices.Clone(parts)
+	for i := range cloned {
+		cloned[i].Bytes = append([]byte(nil), cloned[i].Bytes...)
 	}
 	return cloned
 }

@@ -77,14 +77,6 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
-			if cmd.Flags().Changed("audio-in") {
-				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, services.SessionAudioInput{
-					Path:          audioIn,
-					Stdin:         cmd.InOrStdin(),
-					Present:       true,
-					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-				}, c.askFlags.SystemPrompt)
-			}
 			if len(c.imagePaths) > 0 {
 				return services.RunSessionWithImages(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
 					SessionRunOptions: sessionOptions,
@@ -94,6 +86,14 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					TextSeed:          seed,
 					SystemPrompt:      c.askFlags.SystemPrompt,
 				})
+			}
+			if cmd.Flags().Changed("audio-in") {
+				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, services.SessionAudioInput{
+					Path:          audioIn,
+					Stdin:         cmd.InOrStdin(),
+					Present:       true,
+					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+				}, c.askFlags.SystemPrompt)
 			}
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
