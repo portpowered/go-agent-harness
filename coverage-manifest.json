@@ -22,6 +22,7 @@
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/test/functional", "minimum": 75.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration", "minimum": 71.40},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop", "minimum": 70.70},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentprofile", "minimum": 80.20},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/audiofixture", "minimum": 90.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine", "minimum": 70.40},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging", "minimum": 0.00},
