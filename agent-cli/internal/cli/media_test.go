@@ -120,6 +120,7 @@ func TestMediaProbeCommandRunsAgainstBothProtocolStubs(t *testing.T) {
 			}
 		})
 	}
+	go2rtcObserved.waitFor(t, go2rtcObserved.frameDelivered, "go2rtc audio frame delivery")
 
 	rtspObserved.Lock()
 	gotMethods := append([]string(nil), rtspObserved.methods...)
@@ -147,6 +148,34 @@ func TestMediaProbeCommandRunsAgainstBothProtocolStubs(t *testing.T) {
 	go2rtcObserved.Unlock()
 	if gotPath != "/api/ws" || gotSource != "cli-tuya-main" || goFrameCount == 0 {
 		t.Fatalf("go2rtc path/source/frame count = %q/%q/%d", gotPath, gotSource, goFrameCount)
+	}
+}
+
+func TestMediaProbeCommandRejectsFrameLessGo2RTC(t *testing.T) {
+	go2rtcURL, observed, cleanup := startCLIGo2RTCFixture(t, false)
+	defer cleanup()
+
+	command := NewMediaProbeCommand(rtc.ProbeMediaSource)
+	command.Timeout = 250 * time.Millisecond
+	var out bytes.Buffer
+	err := command.Run(context.Background(), &out, go2rtcURL)
+	if err == nil || !errors.Is(err, rtc.ErrSourceUnreachable) {
+		t.Fatalf("frame-less probe error = %v, want typed unreachable error", err)
+	}
+	var typed *rtc.MediaSourceError
+	if !errors.As(err, &typed) || typed.Kind != rtc.SourceErrorUnreachable {
+		t.Fatalf("frame-less probe error = %v, want *MediaSourceError with unreachable kind", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("frame-less probe report = %q, want no successful capability report", out.String())
+	}
+	observed.waitFor(t, observed.negotiated, "go2rtc negotiation")
+
+	observed.Lock()
+	gotPath, gotSource, frameCount := observed.path, observed.source, observed.frameCount
+	observed.Unlock()
+	if gotPath != "/api/ws" || gotSource != "cli-tuya-main" || frameCount != 0 {
+		t.Fatalf("frame-less path/source/frame count = %q/%q/%d", gotPath, gotSource, frameCount)
 	}
 }
 
@@ -358,16 +387,37 @@ func readCLIRTSPRequest(reader *bufio.Reader) (string, string, map[string]string
 
 type cliGo2RTCObservation struct {
 	sync.Mutex
-	path       string
-	source     string
-	frameCount int
+	path, source              string
+	frameCount                int
+	negotiated                chan struct{}
+	frameDelivered            chan struct{}
+	negotiatedOnce, frameOnce sync.Once
 }
 
-func startCLIGo2RTCFixture(t *testing.T) (string, *cliGo2RTCObservation, func()) {
+func startCLIGo2RTCFixture(t *testing.T, sendFrames ...bool) (string, *cliGo2RTCObservation, func()) {
 	t.Helper()
-	observed := &cliGo2RTCObservation{}
+	frames := true
+	if len(sendFrames) > 0 {
+		frames = sendFrames[0]
+	}
+	observed := &cliGo2RTCObservation{
+		negotiated:     make(chan struct{}),
+		frameDelivered: make(chan struct{}),
+	}
+	handlerDone := make(chan struct{})
+	fixtureContext, cancelFixture := context.WithCancel(context.Background())
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(handlerDone)
+		handlerContext, cancelHandler := context.WithCancel(r.Context())
+		defer cancelHandler()
+		go func() {
+			select {
+			case <-fixtureContext.Done():
+				cancelHandler()
+			case <-handlerContext.Done():
+			}
+		}()
 		observed.Lock()
 		observed.path = r.URL.Path
 		observed.source = r.URL.Query().Get("src")
@@ -430,7 +480,7 @@ func startCLIGo2RTCFixture(t *testing.T) (string, *cliGo2RTCObservation, func())
 		}
 		select {
 		case <-webrtc.GatheringCompletePromise(pc):
-		case <-time.After(time.Second):
+		case <-handlerContext.Done():
 			return
 		}
 		if err = conn.WriteJSON(struct {
@@ -439,24 +489,71 @@ func startCLIGo2RTCFixture(t *testing.T) (string, *cliGo2RTCObservation, func())
 		}{Type: "webrtc/answer", Value: pc.LocalDescription().SDP}); err != nil {
 			return
 		}
+		observed.negotiatedOnce.Do(func() { close(observed.negotiated) })
 		select {
 		case <-connected:
-		case <-time.After(time.Second):
+		case <-handlerContext.Done():
 			return
 		}
-		for i := 0; i < 2; i++ {
-			if err = audio.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}); err != nil {
-				return
+		if frames {
+			for i := 0; i < 2; i++ {
+				packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}
+				if err = audio.WriteRTP(packet); err != nil {
+					return
+				}
+				observed.recordFrame(len(packet.Payload))
 			}
 		}
-		observed.Lock()
-		observed.frameCount += 2
-		observed.Unlock()
-		<-r.Context().Done()
+		<-handlerContext.Done()
 	}))
 	u, _ := url.Parse(server.URL)
 	rawURL := "go2rtc://" + u.Host + "/api/ws?src=cli-tuya-main"
-	return rawURL, observed, server.Close
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			cancelFixture()
+			server.CloseClientConnections()
+			closed := make(chan struct{})
+			go func() {
+				server.Close()
+				close(closed)
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			select {
+			case <-closed:
+			case <-ctx.Done():
+				t.Errorf("go2rtc fixture server did not close: %v", ctx.Err())
+			}
+			select {
+			case <-handlerDone:
+			case <-ctx.Done():
+				t.Errorf("go2rtc fixture handler did not close: %v", ctx.Err())
+			}
+		})
+	}
+	return rawURL, observed, cleanup
+}
+
+func (o *cliGo2RTCObservation) recordFrame(payloadSize int) {
+	if payloadSize == 0 {
+		return
+	}
+	o.Lock()
+	o.frameCount++
+	o.Unlock()
+	o.frameOnce.Do(func() { close(o.frameDelivered) })
+}
+
+func (o *cliGo2RTCObservation) waitFor(t *testing.T, event <-chan struct{}, name string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	select {
+	case <-event:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for %s: %v", name, ctx.Err())
+	}
 }
 
 func pcmBytes(samples []int16) []byte {
