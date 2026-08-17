@@ -9,11 +9,9 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -22,10 +20,10 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource audio.AudioSource, audioSink AudioSink, clockSource clock.Source, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	v := provideModelValidation(relaxModelValidation)
+	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, inferencer, sessionInferencer)
 	executor := agent.NewExecutor(toolExecutor, toolDefs, inferencer, v...)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
@@ -48,7 +46,30 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 
 // wire.go:
 
-func provideModelValidation(relaxModelValidation bool) []bool {
+func provideModelValidation(
+	relaxModelValidation bool,
+	observer assemblyObserver,
+	toolExecutor messages.ToolExecutor,
+	transportDialer transport.Dialer,
+	deviceRegistry DeviceRegistry,
+	audioSource AudioSource,
+	audioSink AudioSink,
+	clockSource Clock,
+	inferencer messages.Inferencer,
+	sessionInferencer messages.SessionInferencer,
+) []bool {
+	if observer != nil {
+		observer(compositionValues{
+			toolExecutor:      toolExecutor,
+			transportDialer:   transportDialer,
+			deviceRegistry:    deviceRegistry,
+			audioSource:       audioSource,
+			audioSink:         audioSink,
+			clockSource:       clockSource,
+			inferencer:        inferencer,
+			sessionInferencer: sessionInferencer,
+		})
+	}
 	return []bool{relaxModelValidation}
 }
 

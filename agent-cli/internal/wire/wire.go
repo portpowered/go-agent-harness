@@ -14,7 +14,30 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-func provideModelValidation(relaxModelValidation bool) []bool {
+func provideModelValidation(
+	relaxModelValidation bool,
+	observer assemblyObserver,
+	toolExecutor messages.ToolExecutor,
+	transportDialer transport.Dialer,
+	deviceRegistry DeviceRegistry,
+	audioSource AudioSource,
+	audioSink AudioSink,
+	clockSource Clock,
+	inferencer messages.Inferencer,
+	sessionInferencer messages.SessionInferencer,
+) []bool {
+	if observer != nil {
+		observer(compositionValues{
+			toolExecutor:      toolExecutor,
+			transportDialer:   transportDialer,
+			deviceRegistry:    deviceRegistry,
+			audioSource:       audioSource,
+			audioSink:         audioSink,
+			clockSource:       clockSource,
+			inferencer:        inferencer,
+			sessionInferencer: sessionInferencer,
+		})
+	}
 	return []bool{relaxModelValidation}
 }
 
@@ -59,6 +82,7 @@ func assembleAgentCLI(
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
 	relaxModelValidation bool,
+	observer assemblyObserver,
 ) (*cli.AgentCLI, error) {
 	wire.Build(CliSet, provideModelValidation, agent.NewExecutor)
 	return nil, nil

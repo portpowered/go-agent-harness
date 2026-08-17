@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -153,6 +154,16 @@ func validCompositionValues() compositionValues {
 		audioSink:       &recordingAudioSink{},
 		clockSource:     &recordingClock{now: time.Unix(123, 0)},
 	}
+}
+
+type assemblyObservation struct {
+	calls  int
+	values compositionValues
+}
+
+func (o *assemblyObservation) record(values compositionValues) {
+	o.calls++
+	o.values = values
 }
 
 func composeTestAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionOption) (*cli.AgentCLI, error) {
@@ -303,23 +314,52 @@ func TestLivePorts_ReturnsStableIndependentDescriptors(t *testing.T) {
 	}
 }
 
-func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
+func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 	for _, definition := range livePortDefinitions() {
+		definition := definition
 		t.Run(definition.descriptor.Name, func(t *testing.T) {
 			replacement := replacementForPortType(t, definition.descriptor.Type)
 			swaps := []PortSwap{{Name: definition.descriptor.Name, Value: replacement}}
+			expectedSwaps := map[string]any{definition.descriptor.Name: replacement}
 			var fixtureInferencer *recordingInferencer
 			if definition.descriptor.Type == reflect.TypeOf((*messages.ToolExecutor)(nil)).Elem() {
 				fixtureInferencer = toolCallingInferencer()
 				swaps = append([]PortSwap{{Name: PortInferencer, Value: fixtureInferencer}}, swaps...)
+				expectedSwaps[PortInferencer] = fixtureInferencer
 			}
 
-			root, err := InitializeMockAgentCLIWithPorts(swaps...)
+			var observation assemblyObservation
+			root, err := initializeAgentCLIWithPorts(true, observation.record, swaps...)
 			if err != nil {
 				t.Fatalf("InitializeMockAgentCLIWithPorts(%q): %v", definition.descriptor.Name, err)
 			}
 			if root == nil {
 				t.Fatalf("InitializeMockAgentCLIWithPorts(%q) returned nil root", definition.descriptor.Name)
+			}
+			if observation.calls != 1 {
+				t.Fatalf("assembly boundary calls for %q = %d, want exactly 1", definition.descriptor.Name, observation.calls)
+			}
+			for _, liveDefinition := range livePortDefinitions() {
+				name := liveDefinition.descriptor.Name
+				got := liveDefinition.value(&observation.values)
+				if expected, replaced := expectedSwaps[name]; replaced {
+					if got != expected {
+						t.Fatalf("assembly boundary value for %q changed identity: got %T/%p want %T/%p", name, got, got, expected, expected)
+					}
+					if calls := observation.values.defaultCalls[name]; calls != 0 {
+						t.Fatalf("displaced %q default constructor calls = %d, want exactly 0", name, calls)
+					}
+					continue
+				}
+				if liveDefinition.descriptor.Required && isNilPort(got) {
+					t.Fatalf("unswapped required port %q has no valid default", name)
+				}
+				if got != nil && !reflect.TypeOf(got).Implements(liveDefinition.descriptor.Type) {
+					t.Fatalf("unswapped port %q has type %T, want %v", name, got, liveDefinition.descriptor.Type)
+				}
+				if calls := observation.values.defaultCalls[name]; calls != 1 {
+					t.Fatalf("unswapped %q default constructor calls = %d, want exactly 1", name, calls)
+				}
 			}
 
 			switch definition.descriptor.Type {
@@ -352,27 +392,61 @@ func TestInitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 				reflect.TypeOf((*AudioSink)(nil)).Elem(),
 				reflect.TypeOf((*Clock)(nil)).Elem(),
 				reflect.TypeOf((*transport.Dialer)(nil)).Elem():
-				values := validCompositionValues()
-				if err := applyPortSwap(&values, swaps[0]); err != nil {
-					t.Fatalf("applyPortSwap(%q): %v", definition.descriptor.Name, err)
-				}
-				if got := definition.value(&values); got != replacement {
-					t.Fatalf("selected %q replacement identity was not retained", definition.descriptor.Name)
-				}
-				if definition.descriptor.Name == PortClock {
-					if _, ok := definition.value(&values).(Clock); !ok {
-						t.Fatalf("selected %q replacement lost its clock contract", definition.descriptor.Name)
-					}
-				}
 				if definition.descriptor.Name == PortTransportDialer {
 					if got := replacement.(*recordingDialer).dials.Load(); got != 0 {
 						t.Fatalf("selected %q replacement was dialed during construction: %d", definition.descriptor.Name, got)
 					}
-					_, err := InitializeMockAgentCLIWithPorts(NewPortSwap(PortTransportDialer, struct{}{}))
-					assertPortSwapError(t, err, ErrIncompatiblePort, PortTransportDialer)
 				}
 			default:
 				t.Fatalf("no root-level observation for live port type %v", definition.descriptor.Type)
+			}
+		})
+	}
+}
+
+func TestCompositionValuesWithPorts_SkipsDisplacedDefaultConstructors(t *testing.T) {
+	for _, selected := range livePortDefinitions() {
+		selected := selected
+		t.Run(selected.descriptor.Name, func(t *testing.T) {
+			definitions := livePortDefinitions()
+			defaultCalls := make(map[string]int, len(definitions))
+			for index := range definitions {
+				name := definitions[index].descriptor.Name
+				factory := definitions[index].defaultValue
+				definitions[index].defaultValue = func(registry *tools.ToolRegistry) any {
+					defaultCalls[name]++
+					return factory(registry)
+				}
+			}
+
+			replacement := replacementForPortType(t, selected.descriptor.Type)
+			values, err := compositionValuesWithPorts(
+				definitions,
+				nil,
+				[]PortSwap{NewPortSwap(selected.descriptor.Name, replacement)},
+			)
+			if err != nil {
+				t.Fatalf("compositionValuesWithPorts: %v", err)
+			}
+			definition, ok := findPortDefinitionIn(definitions, selected.descriptor.Name)
+			if !ok {
+				t.Fatalf("selected port %q disappeared from live definitions", selected.descriptor.Name)
+			}
+			if got := definition.value(&values); got != replacement {
+				t.Fatalf("selected %q replacement identity changed: got %T/%p want %T/%p", selected.descriptor.Name, got, got, replacement, replacement)
+			}
+
+			for _, definition := range definitions {
+				calls := defaultCalls[definition.descriptor.Name]
+				if definition.descriptor.Name == selected.descriptor.Name {
+					if calls != 0 {
+						t.Fatalf("displaced %q default constructor calls = %d, want exactly 0", definition.descriptor.Name, calls)
+					}
+					continue
+				}
+				if calls != 1 {
+					t.Fatalf("unswapped %q default constructor calls = %d, want exactly 1", definition.descriptor.Name, calls)
+				}
 			}
 		})
 	}
@@ -415,37 +489,66 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 	}
 }
 
-func TestPortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
-	unknown := applyPortSwap(&compositionValues{}, PortSwap{Name: "unknown-port", Value: &recordingToolExecutor{}})
-	assertPortSwapError(t, unknown, ErrUnknownPort, "unknown-port")
+func TestS4_PortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
+	assertInvalid := func(name string, swaps []PortSwap, sentinel error, attemptedName string) {
+		t.Run(name, func(t *testing.T) {
+			var observation assemblyObservation
+			root, err := initializeAgentCLIWithPorts(true, observation.record, swaps...)
+			if root != nil {
+				t.Fatal("invalid swap unexpectedly returned a root")
+			}
+			if observation.calls != 0 {
+				t.Fatalf("invalid %q request reached assembly %d times, want exactly 0", attemptedName, observation.calls)
+			}
+			assertPortSwapError(t, err, sentinel, attemptedName)
+		})
+	}
 
-	incompatible := applyPortSwap(&compositionValues{}, PortSwap{Name: PortInferencer, Value: struct{}{}})
-	assertPortSwapError(t, incompatible, ErrIncompatiblePort, PortInferencer)
-
-	toolValues := validCompositionValues()
-	requiredNil := applyPortSwap(&toolValues, PortSwap{Name: PortToolExecutor, Value: nil})
-	assertPortSwapError(t, requiredNil, ErrInvalidPortSwap, PortToolExecutor)
+	assertInvalid(
+		"unknown",
+		[]PortSwap{{Name: "unknown-port", Value: &recordingToolExecutor{}}},
+		ErrUnknownPort,
+		"unknown-port",
+	)
 
 	for _, definition := range livePortDefinitions() {
-		if !definition.descriptor.Required || definition.descriptor.Name == PortToolExecutor {
-			continue
+		definition := definition
+		replacement := replacementForPortType(t, definition.descriptor.Type)
+		assertInvalid(
+			definition.descriptor.Name+"/duplicate",
+			[]PortSwap{
+				NewPortSwap(definition.descriptor.Name, replacement),
+				NewPortSwap(definition.descriptor.Name, replacement),
+			},
+			ErrDuplicatePortSwap,
+			definition.descriptor.Name,
+		)
+		if definition.descriptor.Required {
+			assertInvalid(
+				definition.descriptor.Name+"/required-nil",
+				[]PortSwap{NewPortSwap(definition.descriptor.Name, nil)},
+				ErrInvalidPortSwap,
+				definition.descriptor.Name,
+			)
 		}
-		values := validCompositionValues()
-		err := applyPortSwap(&values, PortSwap{Name: definition.descriptor.Name, Value: nil})
-		assertPortSwapError(t, err, ErrInvalidPortSwap, definition.descriptor.Name)
-
-		values = validCompositionValues()
-		err = applyPortSwap(&values, PortSwap{Name: definition.descriptor.Name, Value: struct{}{}})
-		assertPortSwapError(t, err, ErrIncompatiblePort, definition.descriptor.Name)
-	}
-
-	values := validCompositionValues()
-	values.inferencer = &recordingInferencer{}
-	if err := applyPortSwap(&values, PortSwap{Name: PortInferencer, Value: nil}); err != nil {
-		t.Fatalf("optional nil swap failed: %v", err)
-	}
-	if values.inferencer != nil {
-		t.Fatal("optional nil swap left inferencer available")
+		assertInvalid(
+			definition.descriptor.Name+"/incompatible",
+			[]PortSwap{NewPortSwap(definition.descriptor.Name, struct{}{})},
+			ErrIncompatiblePort,
+			definition.descriptor.Name,
+		)
+		if !definition.descriptor.Required {
+			t.Run(definition.descriptor.Name+"/optional-nil", func(t *testing.T) {
+				var observation assemblyObservation
+				root, err := initializeAgentCLIWithPorts(true, observation.record, NewPortSwap(definition.descriptor.Name, nil))
+				if err != nil || root == nil {
+					t.Fatalf("optional nil swap returned root=%v err=%v", root, err)
+				}
+				if observation.calls != 1 {
+					t.Fatalf("optional nil %q request reached assembly %d times, want exactly 1", definition.descriptor.Name, observation.calls)
+				}
+			})
+		}
 	}
 }
 
@@ -463,6 +566,9 @@ func assertPortSwapError(t *testing.T, err error, sentinel error, name string) {
 	}
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("swap error %v does not preserve %v", err, sentinel)
+	}
+	if sentinel == ErrIncompatiblePort && (swapErr.Expected == nil || swapErr.Actual == nil) {
+		t.Fatalf("incompatible swap %q omitted expected/actual type details: %#v", name, swapErr)
 	}
 }
 
