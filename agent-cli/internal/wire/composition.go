@@ -56,6 +56,9 @@ var (
 	ErrUnknownPort = errors.New("unknown composition port")
 	// ErrInvalidPortSwap identifies a malformed or nil-required replacement.
 	ErrInvalidPortSwap = errors.New("invalid composition port swap")
+	// ErrDuplicatePortSwap identifies a request that names one live port more
+	// than once. Rejecting duplicates keeps a multi-port request unambiguous.
+	ErrDuplicatePortSwap = errors.New("duplicate composition port swap")
 	// ErrIncompatiblePort identifies a replacement with the wrong type.
 	ErrIncompatiblePort = errors.New("incompatible composition port")
 
@@ -549,11 +552,16 @@ func findPortDefinitionIn(definitions []portDefinition, name string) (portDefini
 }
 
 func validatePortSwaps(definitions []portDefinition, swaps []PortSwap) error {
+	seen := make(map[string]struct{}, len(swaps))
 	for _, swap := range swaps {
 		definition, ok := findPortDefinitionIn(definitions, swap.Name)
 		if !ok {
 			return &PortSwapError{Name: swap.Name, Reason: "unknown port", cause: ErrUnknownPort}
 		}
+		if _, duplicate := seen[swap.Name]; duplicate {
+			return &PortSwapError{Name: swap.Name, Reason: "duplicate replacement", cause: ErrDuplicatePortSwap}
+		}
+		seen[swap.Name] = struct{}{}
 		if err := validatePortSwap(definition, swap.Value); err != nil {
 			return err
 		}

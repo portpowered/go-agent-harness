@@ -479,6 +479,17 @@ func TestS4_PortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
 
 	for _, definition := range livePortDefinitions() {
 		definition := definition
+		t.Run(definition.descriptor.Name+"/duplicate", func(t *testing.T) {
+			replacement := replacementForPortType(t, definition.descriptor.Type)
+			root, err := InitializeMockAgentCLIWithPorts(
+				NewPortSwap(definition.descriptor.Name, replacement),
+				NewPortSwap(definition.descriptor.Name, replacement),
+			)
+			if root != nil {
+				t.Fatal("duplicate swap unexpectedly returned a root")
+			}
+			assertPortSwapError(t, err, ErrDuplicatePortSwap, definition.descriptor.Name)
+		})
 		if definition.descriptor.Required {
 			t.Run(definition.descriptor.Name+"/required-nil", func(t *testing.T) {
 				_, err := InitializeMockAgentCLIWithPorts(NewPortSwap(definition.descriptor.Name, nil))
