@@ -9,7 +9,6 @@ import "C"
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net/url"
@@ -23,22 +22,23 @@ import (
 
 const coreAudioBackend = "coreaudio"
 
-// CoreAudioDeviceRegistry exposes macOS's current CoreAudio endpoints. A
-// context is created per operation so enumeration never keeps native state
-// alive; an opened handle owns its context until Close.
-type CoreAudioDeviceRegistry struct{}
+var coreAudioBackends = []malgo.Backend{malgo.BackendCoreaudio}
+
+// CoreAudioDeviceRegistry exposes macOS's current CoreAudio endpoints.
+type CoreAudioDeviceRegistry struct {
+	enumerate func() ([]coreAudioEndpoint, error)
+	open      func(coreAudioEndpoint) (OpenedDevice, error)
+}
 
 var _ DeviceRegistry = (*CoreAudioDeviceRegistry)(nil)
-
 var (
 	_ OpenedDevice = (*coreAudioHandle)(nil)
 	_ AudioSource  = (*coreAudioHandle)(nil)
 	_ AudioSink    = (*coreAudioHandle)(nil)
 )
 
-// NewCoreAudioDeviceRegistry constructs the Darwin CoreAudio registry.
 func NewCoreAudioDeviceRegistry() *CoreAudioDeviceRegistry {
-	return &CoreAudioDeviceRegistry{}
+	return &CoreAudioDeviceRegistry{enumerate: enumerateCoreAudioDevices, open: openCoreAudioDevice}
 }
 
 type coreAudioEndpoint struct {
@@ -48,7 +48,7 @@ type coreAudioEndpoint struct {
 }
 
 func (r *CoreAudioDeviceRegistry) List() ([]Device, error) {
-	endpoints, err := r.endpoints()
+	endpoints, err := r.enumerate()
 	if err != nil {
 		return nil, err
 	}
@@ -58,12 +58,11 @@ func (r *CoreAudioDeviceRegistry) List() ([]Device, error) {
 	}
 	return devices, nil
 }
-
 func (r *CoreAudioDeviceRegistry) Default(direction Direction) (Device, error) {
 	if err := ValidateDirection(direction); err != nil {
 		return Device{}, err
 	}
-	endpoints, err := r.endpoints()
+	endpoints, err := r.enumerate()
 	if err != nil {
 		if isCoreAudioUnavailable(err) {
 			return Device{}, NewNoDefaultDeviceError(direction)
@@ -77,51 +76,39 @@ func (r *CoreAudioDeviceRegistry) Default(direction Direction) (Device, error) {
 	}
 	return Device{}, NewNoDefaultDeviceError(direction)
 }
-
 func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
-	backend, nativeID, err := ParseDeviceID(id)
+	backend, _, err := ParseDeviceID(id)
 	if err != nil {
 		return nil, err
 	}
 	if backend != coreAudioBackend {
 		return nil, NewDeviceNotFoundError(id)
 	}
-	if !strings.HasSuffix(nativeID, ":input") && !strings.HasSuffix(nativeID, ":output") {
-		return nil, NewDeviceNotFoundError(id)
-	}
-
-	ctx, err := newCoreAudioContext()
+	endpoints, err := r.enumerate()
 	if err != nil {
 		if isCoreAudioUnavailable(err) {
 			return nil, NewDeviceNotFoundError(id)
 		}
-		return nil, fmt.Errorf("initialize CoreAudio for %q: %w", id, err)
-	}
-	endpoints, err := enumerateCoreAudioEndpoints(ctx)
-	if err != nil {
-		releaseCoreAudioContext(ctx)
-		if isCoreAudioUnavailable(err) {
-			return nil, NewDeviceNotFoundError(id)
-		}
-		return nil, err
+		return nil, fmt.Errorf("enumerate CoreAudio for %q: %w", id, err)
 	}
 	for _, endpoint := range endpoints {
 		if endpoint.device.ID != id {
 			continue
 		}
-		handle, openErr := openCoreAudioEndpoint(ctx, endpoint)
-		if openErr == nil {
-			return handle, nil
+		opened, openErr := r.open(endpoint)
+		if openErr != nil {
+			return nil, mapCoreAudioOpenError(id, openErr)
 		}
-		releaseCoreAudioContext(ctx)
-		return nil, mapCoreAudioOpenError(id, openErr)
+		return opened, nil
 	}
-	releaseCoreAudioContext(ctx)
 	return nil, NewDeviceNotFoundError(id)
 }
-
-func (r *CoreAudioDeviceRegistry) endpoints() ([]coreAudioEndpoint, error) {
-	ctx, err := newCoreAudioContext()
+func releaseCoreAudioContext(ctx *malgo.AllocatedContext) error {
+	defer ctx.Free()
+	return ctx.Uninit()
+}
+func enumerateCoreAudioDevices() ([]coreAudioEndpoint, error) {
+	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
 	if err != nil {
 		if isCoreAudioUnavailable(err) {
 			return []coreAudioEndpoint{}, nil
@@ -131,58 +118,45 @@ func (r *CoreAudioDeviceRegistry) endpoints() ([]coreAudioEndpoint, error) {
 	defer releaseCoreAudioContext(ctx)
 	return enumerateCoreAudioEndpoints(ctx)
 }
-
-func newCoreAudioContext() (*malgo.AllocatedContext, error) {
-	return malgo.InitContext([]malgo.Backend{malgo.BackendCoreaudio}, malgo.ContextConfig{}, nil)
-}
-
-func releaseCoreAudioContext(ctx *malgo.AllocatedContext) error {
-	if ctx == nil {
-		return nil
+func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {
+	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
+	if err != nil {
+		return nil, err
 	}
-	err := ctx.Uninit()
-	ctx.Free()
-	return err
+	handle, err := openCoreAudioEndpoint(ctx, endpoint)
+	if err != nil {
+		return nil, errors.Join(err, releaseCoreAudioContext(ctx))
+	}
+	return handle, nil
 }
-
 func enumerateCoreAudioEndpoints(ctx *malgo.AllocatedContext) ([]coreAudioEndpoint, error) {
 	var endpoints []coreAudioEndpoint
 	seen := make(map[DeviceID]struct{})
-	for _, direction := range []struct {
-		kind  malgo.DeviceType
-		value Direction
-	}{
-		{kind: malgo.Playback, value: DirectionOutput},
-		{kind: malgo.Capture, value: DirectionInput},
-	} {
-		infos, err := ctx.Devices(direction.kind)
+	for _, request := range []struct {
+		kind      malgo.DeviceType
+		direction Direction
+	}{{malgo.Playback, DirectionOutput}, {malgo.Capture, DirectionInput}} {
+		infos, err := ctx.Devices(request.kind)
 		if err != nil {
 			if isCoreAudioUnavailable(err) {
 				continue
 			}
-			return nil, fmt.Errorf("enumerate CoreAudio %s devices: %w", direction.value, err)
+			return nil, fmt.Errorf("enumerate CoreAudio %s devices: %w", request.direction, err)
 		}
 		for _, raw := range infos {
 			info := raw
-			// malgo's combined enumeration can carry the playback default bit
-			// into a duplex capture entry. Querying by direction fixes that.
-			if detailed, detailErr := ctx.DeviceInfo(direction.kind, raw.ID, malgo.Shared); detailErr == nil {
+			if detailed, detailErr := ctx.DeviceInfo(request.kind, raw.ID, malgo.Shared); detailErr == nil {
 				info = detailed
-			} else {
-				// The playback bit is directionally reliable in the raw
-				// playback snapshot; the combined snapshot is not reliable
-				// for capture because it reuses that bit for duplex devices.
-				if direction.value == DirectionInput {
-					info.IsDefault = 0
-				}
+			} else if request.direction == DirectionInput {
+				info.IsDefault = 0
 			}
-			uid := coreAudioUID(info.ID)
-			if uid == "" || strings.TrimSpace(info.Name()) == "" {
+			uid, name := coreAudioUID(info.ID), strings.TrimSpace(info.Name())
+			if uid == "" || name == "" {
 				continue
 			}
-			device, deviceErr := NewDevice(coreAudioBackend, coreAudioNativeID(uid, direction.value), info.Name(), direction.value)
-			if deviceErr != nil {
-				return nil, fmt.Errorf("map CoreAudio %s device %q: %w", direction.value, uid, deviceErr)
+			device, err := NewDevice(coreAudioBackend, coreAudioNativeID(uid, request.direction), name, request.direction)
+			if err != nil {
+				return nil, fmt.Errorf("map CoreAudio %s device %q: %w", request.direction, uid, err)
 			}
 			if _, exists := seen[device.ID]; exists {
 				return nil, fmt.Errorf("CoreAudio returned duplicate endpoint %q", device.ID)
@@ -194,13 +168,10 @@ func enumerateCoreAudioEndpoints(ctx *malgo.AllocatedContext) ([]coreAudioEndpoi
 	sort.Slice(endpoints, func(i, j int) bool { return endpoints[i].device.ID < endpoints[j].device.ID })
 	return endpoints, nil
 }
-
 func coreAudioUID(id malgo.DeviceID) string { return strings.TrimRight(string(id[:]), "\x00") }
-
 func coreAudioNativeID(uid string, direction Direction) string {
 	return url.PathEscape(uid) + ":" + direction.String()
 }
-
 func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoint) (*coreAudioHandle, error) {
 	direction := endpoint.device.Direction
 	kind := malgo.Capture
@@ -208,22 +179,18 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 		kind = malgo.Playback
 	}
 	config := malgo.DefaultDeviceConfig(kind)
-	config.SampleRate = uint32(SampleRate)
-	config.PerformanceProfile = malgo.LowLatency
+	config.SampleRate, config.PerformanceProfile = uint32(SampleRate), malgo.LowLatency
 	if direction == DirectionInput {
-		config.Capture.Format = malgo.FormatS16
-		config.Capture.Channels = uint32(Channels)
+		config.Capture.Format, config.Capture.Channels = malgo.FormatS16, uint32(Channels)
 	} else {
-		config.Playback.Format = malgo.FormatS16
-		config.Playback.Channels = uint32(Channels)
+		config.Playback.Format, config.Playback.Channels = malgo.FormatS16, uint32(Channels)
 	}
-	nativeID := endpoint.native
-	nativeIDPtr := nativeID.Pointer()
-	defer C.free(nativeIDPtr)
+	nativeID := endpoint.native.Pointer()
+	defer C.free(nativeID)
 	if direction == DirectionInput {
-		config.Capture.DeviceID = nativeIDPtr
+		config.Capture.DeviceID = nativeID
 	} else {
-		config.Playback.DeviceID = nativeIDPtr
+		config.Playback.DeviceID = nativeID
 	}
 	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction}
 	if direction == DirectionInput {
@@ -243,7 +210,6 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	}
 	return handle, nil
 }
-
 func mapCoreAudioOpenError(id DeviceID, err error) error {
 	if isCoreAudioUnavailable(err) {
 		return NewDeviceNotFoundError(id)
@@ -253,7 +219,6 @@ func mapCoreAudioOpenError(id DeviceID, err error) error {
 	}
 	return fmt.Errorf("open CoreAudio device %q: %w", id, err)
 }
-
 func isCoreAudioUnavailable(err error) bool {
 	return errors.Is(err, malgo.ErrNoDevice) || errors.Is(err, malgo.ErrDoesNotExist) || errors.Is(err, malgo.ErrUnavailable)
 }
@@ -269,29 +234,12 @@ type coreAudioHandle struct {
 	closeErr  error
 	closed    bool
 	playback  []int16
-	callbacks atomic.Uint64
-	samples   atomic.Uint64
-	energy    atomic.Uint64
 	nonZero   atomic.Uint64
+	release   func()
 }
 
 func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
-	h.callbacks.Add(1)
 	if h.direction == DirectionInput {
-		h.mu.Lock()
-		closed := h.closed
-		h.mu.Unlock()
-		if closed {
-			return
-		}
-		for i := 0; i+1 < len(input); i += 2 {
-			sample := int64(int16(binary.LittleEndian.Uint16(input[i : i+2])))
-			if sample < 0 {
-				sample = -sample
-			}
-			h.samples.Add(1)
-			h.energy.Add(uint64(sample))
-		}
 		if h.capture != nil {
 			h.capture.onCapture(input, len(input)/2)
 		}
@@ -303,10 +251,7 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 		return
 	}
 	clear(output)
-	n := len(output) / 2
-	if n > len(h.playback) {
-		n = len(h.playback)
-	}
+	n := min(len(output)/2, len(h.playback))
 	encodePCM16(output[:n*2], h.playback[:n])
 	for _, sample := range h.playback[:n] {
 		if sample != 0 {
@@ -315,7 +260,6 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 	}
 	h.playback = h.playback[n:]
 }
-
 func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	if h.direction != DirectionInput {
 		return fmt.Errorf("audio device %q is output-only", h.id)
@@ -340,7 +284,6 @@ func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	}
 	return h.capture.ReadFrame(ctx, frame)
 }
-
 func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	if h.direction != DirectionOutput {
 		return fmt.Errorf("audio device %q is input-only", h.id)
@@ -362,7 +305,6 @@ func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	}
 	return nil
 }
-
 func (h *coreAudioHandle) Close() error {
 	if h == nil {
 		return nil
@@ -375,15 +317,17 @@ func (h *coreAudioHandle) Close() error {
 			h.closeErr = h.capture.Close()
 			return
 		}
+		if h.release != nil {
+			h.release()
+			return
+		}
 		if h.device != nil {
 			if err := h.device.Stop(); err != nil && !errors.Is(err, malgo.ErrDeviceNotStarted) {
 				h.closeErr = err
 			}
 			h.device.Uninit()
 		}
-		if err := releaseCoreAudioContext(h.context); err != nil {
-			h.closeErr = errors.Join(h.closeErr, err)
-		}
+		h.closeErr = errors.Join(h.closeErr, releaseCoreAudioContext(h.context))
 	})
 	return h.closeErr
 }
