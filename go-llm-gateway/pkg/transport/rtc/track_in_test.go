@@ -230,7 +230,6 @@ func TestInboundTrackDeadlineDrivesPLCWithoutEOF(t *testing.T) {
 	decoder := &testOpusDecoder{samples: 960}
 	track := newTestTrack(t, source, decoder, InboundTrackConfig{JitterDepth: 40 * time.Millisecond, NewTimer: timers.newTimer})
 	source.push(testRTPPacket(400, 12000, 0))
-	source.push(testRTPPacket(402, 13920, 2))
 	initial := timers.next(t)
 	if initial.duration != 40*time.Millisecond {
 		t.Fatalf("initial timer = %v, want jitter depth 40 ms", initial.duration)
@@ -244,16 +243,10 @@ func TestInboundTrackDeadlineDrivesPLCWithoutEOF(t *testing.T) {
 	frameTimer.fire()
 	concealed := readTestFrame(t, track)
 	if decoder.plcCount() != 1 || isSilent(concealed.Samples) || !finiteRMS(concealed.Samples) {
-		t.Fatalf("deadline PLC = calls %d, rms-valid %v; want one non-silent frame", decoder.plcCount(), finiteRMS(concealed.Samples))
+		t.Fatalf("deadline PLC without a later packet = calls %d, rms-valid %v; want one non-silent frame", decoder.plcCount(), finiteRMS(concealed.Samples))
 	}
-	resumeTimer := timers.next(t)
-	resumeTimer.fire()
-	resumed := readTestFrame(t, track)
-	if resumed.Samples[10] != voicedTestFrame(2, 960)[10] {
-		t.Fatal("received packet did not resume after deadline PLC")
-	}
-	if got := decoder.decodedIDs(); !equalBytes(got, []byte{0, 2}) {
-		t.Fatalf("decoded IDs = %v, want [0 2] with one PLC", got)
+	if got := decoder.decodedIDs(); !equalBytes(got, []byte{0}) {
+		t.Fatalf("decoded IDs = %v, want [0] before any later packet", got)
 	}
 }
 

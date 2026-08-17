@@ -380,7 +380,7 @@ func (s *playout) emitNext() error {
 		delete(s.packets, s.nextSeq)
 	}
 	if !ok {
-		if len(s.packets) == 0 || s.nextSeq > s.maxSeq {
+		if !s.started {
 			return nil
 		}
 	}
