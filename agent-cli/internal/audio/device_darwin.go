@@ -53,8 +53,8 @@ func (r *CoreAudioDeviceRegistry) List() ([]Device, error) {
 		return nil, err
 	}
 	devices := make([]Device, len(endpoints))
-	for i := range endpoints {
-		devices[i] = endpoints[i].device
+	for i, endpoint := range endpoints {
+		devices[i] = endpoint.device
 	}
 	return devices, nil
 }
@@ -95,9 +95,9 @@ func (r *CoreAudioDeviceRegistry) Open(id DeviceID) (OpenedDevice, error) {
 		if endpoint.device.ID != id {
 			continue
 		}
-		opened, openErr := r.open(endpoint)
-		if openErr != nil {
-			return nil, mapCoreAudioOpenError(id, openErr)
+		opened, err := r.open(endpoint)
+		if err != nil {
+			return nil, mapCoreAudioOpenError(id, err)
 		}
 		return opened, nil
 	}
@@ -147,7 +147,7 @@ func enumerateCoreAudioEndpoints(ctx *malgo.AllocatedContext) ([]coreAudioEndpoi
 			info := raw
 			if detailed, detailErr := ctx.DeviceInfo(request.kind, raw.ID, malgo.Shared); detailErr == nil {
 				info = detailed
-			} else if request.direction == DirectionInput {
+			} else {
 				info.IsDefault = 0
 			}
 			uid, name := coreAudioUID(info.ID), strings.TrimSpace(info.Name())
@@ -211,13 +211,14 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	return handle, nil
 }
 func mapCoreAudioOpenError(id DeviceID, err error) error {
-	if isCoreAudioUnavailable(err) {
+	switch {
+	case isCoreAudioUnavailable(err):
 		return NewDeviceNotFoundError(id)
-	}
-	if errors.Is(err, malgo.ErrBusy) || errors.Is(err, malgo.ErrAlreadyInUse) || errors.Is(err, malgo.ErrAccessDenied) || errors.Is(err, malgo.ErrInvalidOperation) {
+	case errors.Is(err, malgo.ErrBusy), errors.Is(err, malgo.ErrAlreadyInUse), errors.Is(err, malgo.ErrAccessDenied), errors.Is(err, malgo.ErrInvalidOperation):
 		return NewDeviceInUseError(id)
+	default:
+		return fmt.Errorf("open CoreAudio device %q: %w", id, err)
 	}
-	return fmt.Errorf("open CoreAudio device %q: %w", id, err)
 }
 func isCoreAudioUnavailable(err error) bool {
 	return errors.Is(err, malgo.ErrNoDevice) || errors.Is(err, malgo.ErrDoesNotExist) || errors.Is(err, malgo.ErrUnavailable)
@@ -232,7 +233,7 @@ type coreAudioHandle struct {
 	mu        sync.Mutex
 	closeOnce sync.Once
 	closeErr  error
-	closed    bool
+	closed    atomic.Bool
 	playback  []int16
 	nonZero   atomic.Uint64
 	release   func()
@@ -247,7 +248,7 @@ func (h *coreAudioHandle) onData(output, input []byte, _ uint32) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.closed {
+	if h.closed.Load() {
 		return
 	}
 	clear(output)
@@ -270,10 +271,7 @@ func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	if err := validateFrame("read", frame); err != nil {
 		return err
 	}
-	h.mu.Lock()
-	closed := h.closed
-	h.mu.Unlock()
-	if closed {
+	if h.closed.Load() {
 		return &ClosedError{Operation: "read", Path: string(h.id)}
 	}
 	if h.capture == nil {
@@ -296,7 +294,7 @@ func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.closed {
+	if h.closed.Load() {
 		return &ClosedError{Operation: "write", Path: string(h.id)}
 	}
 	h.playback = append(h.playback, frame...)
@@ -310,24 +308,19 @@ func (h *coreAudioHandle) Close() error {
 		return nil
 	}
 	h.closeOnce.Do(func() {
-		h.mu.Lock()
-		h.closed = true
-		h.mu.Unlock()
-		if h.capture != nil {
+		h.closed.Store(true)
+		switch {
+		case h.capture != nil:
 			h.closeErr = h.capture.Close()
-			return
-		}
-		if h.release != nil {
+		case h.release != nil:
 			h.release()
-			return
-		}
-		if h.device != nil {
+		case h.device != nil:
 			if err := h.device.Stop(); err != nil && !errors.Is(err, malgo.ErrDeviceNotStarted) {
 				h.closeErr = err
 			}
 			h.device.Uninit()
+			h.closeErr = errors.Join(h.closeErr, releaseCoreAudioContext(h.context))
 		}
-		h.closeErr = errors.Join(h.closeErr, releaseCoreAudioContext(h.context))
 	})
 	return h.closeErr
 }
