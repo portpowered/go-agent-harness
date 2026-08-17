@@ -50,6 +50,91 @@ func TestNormalizeAgentRepresentativeProjection(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentPublicInputForms(t *testing.T) {
+	records := []transcript.Record{
+		agentRecord(2, transcript.DirectionOut, transcript.StreamWS, `{"kind":"transcript","text":"hello"}`),
+	}
+	input := encodeAgentRecords(t, records)
+	want, err := NormalizeAgent("agent", records)
+	if err != nil {
+		t.Fatalf("baseline NormalizeAgent: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		normalize func() (Projection, error)
+	}{
+		{
+			name: "single record input",
+			normalize: func() (Projection, error) {
+				return NormalizeAgent("agent", records[0])
+			},
+		},
+		{
+			name: "transcript alias",
+			normalize: func() (Projection, error) {
+				return NormalizeAgentTranscript("agent", input)
+			},
+		},
+		{
+			name: "JSONL alias",
+			normalize: func() (Projection, error) {
+				return NormalizeAgentJSONL("agent", input)
+			},
+		},
+		{
+			name: "records alias",
+			normalize: func() (Projection, error) {
+				return NormalizeAgentRecords("agent", records)
+			},
+		},
+		{
+			name: "default interface name",
+			normalize: func() (Projection, error) {
+				return NormalizeAgent(" \t", records)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.normalize()
+			if err != nil {
+				t.Fatalf("normalization: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("projection mismatch\n got: %#v\nwant: %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestNormalizeAgentRejectsEmptyAndUnsupportedInputs(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      any
+		field      string
+		reasonPart string
+	}{
+		{name: "nil input", input: nil, field: "records", reasonPart: "is required"},
+		{name: "empty JSONL", input: []byte{}, field: "records", reasonPart: "is required"},
+		{name: "whitespace JSONL", input: []byte(" \n\t"), field: "records", reasonPart: "is required"},
+		{name: "empty records", input: []transcript.Record{}, field: "records", reasonPart: "is required"},
+		{name: "unsupported input", input: "not a transcript", field: "input", reasonPart: "unsupported transcript input string"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeAgent("S4-input", tt.input)
+			if err == nil {
+				t.Fatalf("NormalizeAgent returned projection %+v without an error", got)
+			}
+			if !reflect.DeepEqual(got, Projection{}) {
+				t.Fatalf("error returned partial projection: %+v", got)
+			}
+			assertNormalizationError(t, err, "S4-input", tt.field, tt.reasonPart)
+		})
+	}
+}
+
 func TestNormalizeAgentExclusionMutations(t *testing.T) {
 	baseRecords := agentFixtureRecords()
 	base, err := NormalizeAgent("agent", encodeAgentRecords(t, baseRecords))
@@ -58,27 +143,57 @@ func TestNormalizeAgentExclusionMutations(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		index  int
-		mutate func(*transcript.Record)
+		name          string
+		field         string
+		justification string
+		index         int
+		mutate        func(*transcript.Record)
 	}{
 		{
-			name:  "wall-clock timestamp",
-			index: 0,
+			name:          "wall-clock timestamp",
+			field:         "t",
+			justification: "arrival time is capture-specific; logical tick is the comparable clock",
+			index:         0,
 			mutate: func(record *transcript.Record) {
 				record.Timestamp = "2099-12-31T23:59:59.999999999Z"
 			},
 		},
 		{
-			name:  "transport identifier",
-			index: 9,
+			name:          "agent-relative direction",
+			field:         "dir",
+			justification: "direction is validated and translated to semantic orientation, then omitted by the shared projection",
+			index:         2,
+			mutate: func(record *transcript.Record) {
+				if record.Direction == transcript.DirectionIn {
+					record.Direction = transcript.DirectionOut
+				} else {
+					record.Direction = transcript.DirectionIn
+				}
+			},
+		},
+		{
+			name:          "capture stream",
+			field:         "stream",
+			justification: "the known transport channel is validated but is not semantic evidence in the shared projection",
+			index:         2,
+			mutate: func(record *transcript.Record) {
+				record.Stream = transcript.StreamRTCData
+			},
+		},
+		{
+			name:          "transport identifier",
+			field:         "payload transport identity",
+			justification: "connection identity is transport state and carries no comparable conversation fact",
+			index:         9,
 			mutate: func(record *transcript.Record) {
 				record.Payload = []byte(`{"kind":"transport.id","connection":"different-connection"}`)
 			},
 		},
 		{
-			name:  "transport segmentation",
-			index: 10,
+			name:          "transport segmentation",
+			field:         "payload transport segmentation",
+			justification: "packet and fragment boundaries vary with capture mechanics and are not semantic evidence",
+			index:         10,
 			mutate: func(record *transcript.Record) {
 				record.Payload = []byte(`{"kind":"transport.segment","packet":999,"part":4}`)
 			},
@@ -86,6 +201,9 @@ func TestNormalizeAgentExclusionMutations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.field == "" || tt.justification == "" {
+				t.Fatal("exclusion must name a raw field and a narrow justification")
+			}
 			records := cloneAgentRecords(baseRecords)
 			tt.mutate(&records[tt.index])
 			got, err := NormalizeAgent("agent", encodeAgentRecords(t, records))
@@ -95,6 +213,90 @@ func TestNormalizeAgentExclusionMutations(t *testing.T) {
 			if !reflect.DeepEqual(got, base) {
 				t.Fatalf("excluded field changed projection\n got: %#v\nwant: %#v", got, base)
 			}
+		})
+	}
+}
+
+func TestNormalizeAgentValidatedMetadata(t *testing.T) {
+	base := agentFixtureRecords()[0]
+	tests := []struct {
+		name          string
+		field         string
+		justification string
+		reasonPart    string
+		mutate        func(*transcript.Record)
+	}{
+		{
+			name:          "missing schema version",
+			field:         "records[0].version",
+			justification: "format version selects the transcript schema and has no valid alternate for this adapter",
+			reasonPart:    "missing format version",
+			mutate: func(record *transcript.Record) {
+				record.Version = 0
+			},
+		},
+		{
+			name:          "unsupported schema version",
+			field:         "records[0].version",
+			justification: "format version selects the transcript schema and has no valid alternate for this adapter",
+			reasonPart:    "unsupported format version",
+			mutate: func(record *transcript.Record) {
+				record.Version = transcript.FormatVersion + 1
+			},
+		},
+		{
+			name:          "agent peer invariant",
+			field:         "records[0].peer",
+			justification: "peer identity selects the agent-side adapter; a client peer belongs to the other adapter contract",
+			reasonPart:    "must be \"agent\"",
+			mutate: func(record *transcript.Record) {
+				record.Peer = transcript.PeerClient
+			},
+		},
+		{
+			name:          "unknown direction",
+			field:         "records[0].direction",
+			justification: "direction must be known before the adapter can translate the recorder viewpoint",
+			reasonPart:    "unknown direction",
+			mutate: func(record *transcript.Record) {
+				record.Direction = transcript.Direction("sideways")
+			},
+		},
+		{
+			name:          "unknown stream",
+			field:         "records[0].stream",
+			justification: "stream must be a known capture channel before the adapter can classify raw audio evidence",
+			reasonPart:    "unknown stream",
+			mutate: func(record *transcript.Record) {
+				record.Stream = transcript.Stream("mystery")
+			},
+		},
+		{
+			name:          "empty retained payload",
+			field:         "records[0].payload",
+			justification: "an agent observation without payload bytes cannot represent evidence or a transport mechanic",
+			reasonPart:    "must not be empty",
+			mutate: func(record *transcript.Record) {
+				record.Payload = nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.field == "" || tt.justification == "" {
+				t.Fatal("validated metadata must name the field and its validation rationale")
+			}
+			record := base
+			record.Payload = append([]byte(nil), base.Payload...)
+			tt.mutate(&record)
+			got, err := NormalizeAgentRecords("S4-records", []transcript.Record{record})
+			if err == nil {
+				t.Fatalf("NormalizeAgentRecords returned projection %+v without an error", got)
+			}
+			if !reflect.DeepEqual(got, Projection{}) {
+				t.Fatalf("error returned partial projection: %+v", got)
+			}
+			assertNormalizationError(t, err, "S4-records", tt.field, tt.reasonPart)
 		})
 	}
 }
@@ -214,6 +416,42 @@ func TestNormalizeAgentS4Errors(t *testing.T) {
 			input:      encodeAgentRecords(t, []transcript.Record{agentRecord(1, transcript.DirectionIn, transcript.StreamWS, `{"kind":"future.event"}`)}),
 			field:      "records[0].kind",
 			reasonPart: "unknown record kind",
+		},
+		{
+			name:       "malformed JSON record",
+			input:      []byte("{"),
+			field:      "records[0].record",
+			reasonPart: "must be a JSON object",
+		},
+		{
+			name:       "null JSON record",
+			input:      []byte("null\n"),
+			field:      "records[0].record",
+			reasonPart: "must be a JSON object",
+		},
+		{
+			name:       "missing required version",
+			input:      mutateAgentEnvelope(t, valid, func(fields map[string]json.RawMessage) { delete(fields, "v") }),
+			field:      "records[0].version",
+			reasonPart: "is required",
+		},
+		{
+			name:       "unsupported version",
+			input:      mutateAgentEnvelope(t, valid, func(fields map[string]json.RawMessage) { fields["v"] = json.RawMessage(`2`) }),
+			field:      "records[0].version",
+			reasonPart: "unsupported format version",
+		},
+		{
+			name:       "wrong timestamp type",
+			input:      mutateAgentEnvelope(t, valid, func(fields map[string]json.RawMessage) { fields["t"] = json.RawMessage(`17`) }),
+			field:      "records[0].timestamp",
+			reasonPart: "must be a string",
+		},
+		{
+			name:       "invalid encoded payload",
+			input:      mutateAgentEnvelope(t, valid, func(fields map[string]json.RawMessage) { fields["payload"] = json.RawMessage(`"not base64"`) }),
+			field:      "records[0].payload",
+			reasonPart: "must be valid base64",
 		},
 		{
 			name:       "missing required tick",
