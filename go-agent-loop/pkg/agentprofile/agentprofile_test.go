@@ -66,7 +66,7 @@ func TestLoadMalformedCasesAreTypedAndReturnZero(t *testing.T) {
 	cases := map[string]map[string]string{
 		"empty instructions": {"profile/AGENTS.md": " \n", "profile/expected-outcome.json": validOutcome}, "malformed declaration": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":`}, "missing declaration": {"profile/AGENTS.md": instructions},
 		"duplicate declarations": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": validOutcome, "profile/expected.json": validOutcome}, "invalid outcome kind": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"network"}`}, "empty command": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"shell-command","command":""}`},
-		"unsafe target": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"file-read","target_file":"../secret"}`}, "wrong ordered count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"ordered-multi-tool","ordered_calls":["file_read"],"first_result_informs_second":true}`}, "non-zero no-tools count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"no-tools","call_count":1}`},
+		"unsafe target": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"file-read","target_file":"../secret"}`}, "root target": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"file-read","target_file":"."}`}, "wrong ordered count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"ordered-multi-tool","ordered_calls":["file_read"],"first_result_informs_second":true}`}, "non-zero no-tools count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"no-tools","call_count":1}`},
 	}
 	for name, files := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -88,7 +88,7 @@ const validOutcome = `{"kind":"no-tools","call_count":0}`
 
 func assertMalformed(t *testing.T, profile agentprofile.Profile, err error) {
 	var malformed *agentprofile.MalformedProfileError
-	if err == nil || !errors.As(err, &malformed) || !errors.Is(err, agentprofile.ErrMalformedProfile) || malformed.Profile != "profile" || strings.TrimSpace(malformed.Reason) == "" {
+	if err == nil || !errors.As(err, &malformed) || !errors.Is(err, agentprofile.ErrMalformedProfile) || malformed.Profile != "profile" || strings.TrimSpace(malformed.Reason) == "" || !reflect.DeepEqual(profile, agentprofile.Profile{}) {
 		t.Fatalf("error = %T %v, want typed profile diagnostic", err, err)
 	}
 }

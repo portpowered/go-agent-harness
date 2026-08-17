@@ -271,7 +271,7 @@ func parseOutcome(data []byte) (ExpectedOutcome, error) {
 }
 
 func validTargetFile(name string) bool {
-	return name != "" && name == strings.TrimSpace(name) && fs.ValidPath(name) && !path.IsAbs(name) && !strings.ContainsAny(name, ":\\")
+	return name != "" && name != "." && name == strings.TrimSpace(name) && fs.ValidPath(name) && !path.IsAbs(name) && !strings.ContainsAny(name, ":\\")
 }
 
 func malformed(profile, reason string) *MalformedProfileError {
