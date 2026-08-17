@@ -205,10 +205,12 @@ func (p *Peer) run(ctx context.Context) error {
 		p.mu.Unlock()
 		conn, err := p.dial(ctx)
 		if err == nil {
-			if err = ctx.Err(); err == nil && conn == nil {
+			switch {
+			case ctx.Err() != nil:
+				err = ctx.Err()
+			case conn == nil:
 				err = ErrNilConnection
-			}
-			if err == nil {
+			default:
 				return p.accept(conn, attempt)
 			}
 		}
@@ -233,7 +235,10 @@ func (p *Peer) dial(ctx context.Context) (Conn, error) {
 	return p.config.Dialer.DialContext(ctx, p.config.Endpoint, maps.Clone(p.config.Headers))
 }
 func (p *Peer) backoff(ctx context.Context) error {
-	delay := minDuration(p.config.Retry.Backoff, p.config.Retry.MaxBackoff)
+	delay := p.config.Retry.Backoff
+	if delay > p.config.Retry.MaxBackoff {
+		delay = p.config.Retry.MaxBackoff
+	}
 	if delay <= 0 {
 		return nil
 	}
@@ -248,12 +253,6 @@ func (p *Peer) backoff(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-func minDuration(a, b time.Duration) time.Duration {
-	if a > b {
-		return b
-	}
-	return a
 }
 func (p *Peer) accept(conn Conn, attempt int) error {
 	p.mu.Lock()
@@ -278,18 +277,18 @@ func (p *Peer) terminal(cause error, attempts int, exhausted bool) error {
 	}
 	err := &TerminalError{Cause: cause, Attempts: attempts}
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.state == StateClosed {
+		p.mu.Unlock()
 		return ErrPeerClosed
 	}
 	p.terminalErr, p.conn = err, nil
 	p.transitionLocked(StateTerminalFailure, err, attempts)
+	p.mu.Unlock()
 	return err
 }
 func (p *Peer) finish(op *operation, err error) error {
 	op.cancel()
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.state == StateClosed {
 		err = ErrPeerClosed
 	}
@@ -298,14 +297,16 @@ func (p *Peer) finish(op *operation, err error) error {
 	}
 	op.err = err
 	close(op.done)
+	p.mu.Unlock()
 	return err
 }
 func waitOperation(ctx context.Context, op *operation) error {
+	ctx = contextOrBackground(ctx)
 	select {
 	case <-op.done:
 		return op.err
-	case <-contextOrBackground(ctx).Done():
-		return contextOrBackground(ctx).Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 func contextOrBackground(ctx context.Context) context.Context {
