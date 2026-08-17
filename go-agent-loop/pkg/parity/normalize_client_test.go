@@ -77,11 +77,20 @@ func TestNormalizeClientExcludesOnlyNamedRecorderMechanics(t *testing.T) {
 			records[3].Direction = transcript.DirectionOut
 			return records
 		}},
+		{"transport_id_event", func(records []transcript.Record) []transcript.Record {
+			return append(records, normalizeClientTestRecord(11, transcript.StreamWS, `{"kind":"transport.id","connection":"changed"}`))
+		}},
 		{"transport_identifier_event", func(records []transcript.Record) []transcript.Record {
 			return append(records, normalizeClientTestRecord(11, transcript.StreamWS, `{"kind":"transport.identifier","connection":"changed"}`))
 		}},
+		{"transport_packet_event", func(records []transcript.Record) []transcript.Record {
+			return append(records, normalizeClientTestRecord(12, transcript.StreamWS, `{"kind":"transport.packet","sequence":99,"payload":"changed"}`))
+		}},
+		{"transport_frame_event", func(records []transcript.Record) []transcript.Record {
+			return append(records, normalizeClientTestRecord(13, transcript.StreamWS, `{"kind":"transport.frame","sequence":99,"part":4}`))
+		}},
 		{"payload_framing_event", func(records []transcript.Record) []transcript.Record {
-			return append(records, normalizeClientTestRecord(12, transcript.StreamRTCData, `{"kind":"transport.segment","packet":99,"part":4}`))
+			return append(records, normalizeClientTestRecord(14, transcript.StreamRTCData, `{"kind":"transport.segment","packet":99,"part":4}`))
 		}},
 	}
 
