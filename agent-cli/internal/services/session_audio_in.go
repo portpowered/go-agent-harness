@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -50,14 +51,15 @@ const (
 )
 
 var (
-	ErrSessionAudioInputEmpty      = errors.New("session audio input path is empty")
-	ErrSessionAudioInputMissing    = errors.New("session audio input is missing")
-	ErrSessionAudioInputUnreadable = errors.New("session audio input is unreadable")
-	ErrSessionAudioInputFormat     = errors.New("session audio input format is unsupported")
-	ErrSessionAudioInputConflict   = errors.New("--audio-in and --audio-in-device (audio device input) cannot be used together")
-	ErrSessionAudioInputRead       = errors.New("session audio input read failed")
-	ErrSessionAudioInputSend       = errors.New("session audio input send failed")
-	ErrSessionAudioInputClose      = errors.New("session audio input close failed")
+	ErrSessionAudioInputEmpty           = errors.New("session audio input path is empty")
+	ErrSessionAudioInputMissing         = errors.New("session audio input is missing")
+	ErrSessionAudioInputUnreadable      = errors.New("session audio input is unreadable")
+	ErrSessionAudioInputFormat          = errors.New("session audio input format is unsupported")
+	ErrSessionAudioInputConflict        = errors.New("--audio-in and --audio-in-device (audio device input) cannot be used together")
+	ErrSessionAudioInputRead            = errors.New("session audio input read failed")
+	ErrSessionAudioInputSend            = errors.New("session audio input send failed")
+	ErrSessionAudioInputClose           = errors.New("session audio input close failed")
+	ErrSessionAudioInputUninterruptible = errors.New("session audio input reader cannot be interrupted safely")
 )
 
 // SessionAudioInputError adds the command boundary and preserves the
@@ -315,8 +317,10 @@ func (s *sessionAudioSource) Close() error {
 
 // sessionAudioReader carries cancellation into readers that can honor it
 // without closing the caller-owned stdin. The standard io.Reader contract has
-// no cancellation method, so a reader may optionally implement ReadContext;
-// os.File-style deadline readers are handled as a bounded fallback.
+// no cancellation method, so a reader must implement ReadContext or support
+// read deadlines once the session context is bound. Calling an arbitrary
+// blocking Read in a helper goroutine would leak that goroutine when stdin is
+// caller-owned and cannot be closed.
 type sessionAudioReader struct {
 	reader io.Reader
 	mu     sync.RWMutex
@@ -357,25 +361,41 @@ func (r *sessionAudioReader) Read(destination []byte) (int, error) {
 	if cancellable, ok := reader.(contextAudioReader); ok {
 		return cancellable.ReadContext(ctx, destination)
 	}
-	if deadliner, ok := reader.(deadlineAudioReader); ok {
-		if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err == nil {
-			for {
-				count, readErr := reader.Read(destination)
-				if ctxErr := ctx.Err(); ctxErr != nil {
-					return count, ctxErr
-				}
-				if errors.Is(readErr, os.ErrDeadlineExceeded) && count == 0 {
-					if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err != nil {
-						return 0, err
-					}
-					continue
-				}
-				_ = deadliner.SetReadDeadline(time.Time{})
-				return count, readErr
-			}
-		}
+	// These standard in-memory readers have a finite, synchronous Read
+	// contract and are used by injected command stdin in tests and embedders.
+	// They cannot block waiting for more input, so they do not need a helper
+	// goroutine or a close operation to make cancellation safe.
+	switch reader.(type) {
+	case *bytes.Reader, *bytes.Buffer, *strings.Reader:
+		return reader.Read(destination)
 	}
-	return reader.Read(destination)
+	deadliner, ok := reader.(deadlineAudioReader)
+	if !ok {
+		return 0, fmt.Errorf("%w: stdin must implement ReadContext or SetReadDeadline", ErrSessionAudioInputUninterruptible)
+	}
+	if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err != nil {
+		return 0, errors.Join(
+			ErrSessionAudioInputUninterruptible,
+			fmt.Errorf("stdin read deadline setup failed: %w", err),
+		)
+	}
+	for {
+		count, readErr := reader.Read(destination)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return count, ctxErr
+		}
+		if errors.Is(readErr, os.ErrDeadlineExceeded) && count == 0 {
+			if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err != nil {
+				return 0, errors.Join(
+					ErrSessionAudioInputUninterruptible,
+					fmt.Errorf("stdin read deadline renewal failed: %w", err),
+				)
+			}
+			continue
+		}
+		_ = deadliner.SetReadDeadline(time.Time{})
+		return count, readErr
+	}
 }
 
 func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) (runErr error) {
