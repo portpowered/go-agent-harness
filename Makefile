@@ -10,6 +10,7 @@ CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
 GORELEASER ?= goreleaser
+RTC_RACE_TIMEOUT ?= 30s
 GOLANGCI_LINT_VERSION ?= v2.3.0
 STATICCHECK_VERSION ?= 2025.1.1
 GOLANGCI_LINT_INSTALL ?= go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -27,7 +28,7 @@ SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
 
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -118,6 +119,11 @@ test: ## Run deterministic Go tests across all workspace modules.
 		echo "==> test $$module"; \
 		(cd "$$module" && $(GO) test ./... -timeout $(GO_TEST_TIMEOUT)); \
 	done
+
+test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
+	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
