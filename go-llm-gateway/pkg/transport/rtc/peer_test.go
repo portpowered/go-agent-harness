@@ -40,9 +40,9 @@ func s4Loss(t *testing.T) {
 	must(t, p.Wait(context.Background()))
 	path(t, p, StateIdle, StateConnecting, StateConnected, StateReconnecting, StateConnected)
 	d := p.config.Dialer.(*fake)
-	assert(t, d.calls() == 2 && p.Attempts() == 1 && first.closes.Load() == 1, "dials/attempts/first close = %d/%d/%d", d.calls(), p.Attempts(), first.closes.Load())
+	check(t, d.calls() == 2 && p.Attempts() == 1 && first.closes.Load() == 1, "dials/attempts/first close = %d/%d/%d", d.calls(), p.Attempts(), first.closes.Load())
 	must(t, p.Close())
-	assert(t, second.closes.Load() == 1 && open.Load() == 0, "second close/open = %d/%d", second.closes.Load(), open.Load())
+	check(t, second.closes.Load() == 1 && open.Load() == 0, "second close/open = %d/%d", second.closes.Load(), open.Load())
 }
 func s4ConnectClose(t *testing.T) {
 	started := make(chan struct{})
@@ -53,7 +53,7 @@ func s4ConnectClose(t *testing.T) {
 	go func() { closed <- p.Close() }()
 	must(t, await(t, closed))
 	err := await(t, connect)
-	assert(t, errors.Is(err, ErrPeerClosed), "connect = %v", err)
+	check(t, errors.Is(err, ErrPeerClosed), "connect = %v", err)
 	path(t, p, StateIdle, StateConnecting, StateClosed)
 }
 func s4DoubleClose(t *testing.T) {
@@ -62,7 +62,7 @@ func s4DoubleClose(t *testing.T) {
 	must(t, p.Connect(context.Background()))
 	must(t, p.Close())
 	must(t, p.Close())
-	assert(t, conn.closes.Load() == 1 && p.State() == StateClosed, "close/state = %d/%s", conn.closes.Load(), p.State())
+	check(t, conn.closes.Load() == 1 && p.State() == StateClosed, "close/state = %d/%s", conn.closes.Load(), p.State())
 }
 
 func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
@@ -78,7 +78,7 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 	must(t, p.PeerLost(nil))
 	<-started
 	must(t, p.Close())
-	assert(t, d.calls() == 2 && p.Attempts() == 1 && p.State() == StateClosed, "dials/attempts/state = %d/%d/%s", d.calls(), p.Attempts(), p.State())
+	check(t, d.calls() == 2 && p.Attempts() == 1 && p.State() == StateClosed, "dials/attempts/state = %d/%d/%s", d.calls(), p.Attempts(), p.State())
 }
 func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 	cause := errors.New("permanently unavailable")
@@ -87,9 +87,10 @@ func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 	p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 4, Backoff: time.Hour, MaxBackoff: time.Millisecond, Wait: func(_ context.Context, d time.Duration) error { delay.Store(int64(d)); return nil }}})
 	err := p.Connect(context.Background())
 	terminal(t, p, err, cause, 4)
-	assert(t, d.calls() == 4 && time.Duration(delay.Load()) <= time.Millisecond, "dials/delay = %d/%s", d.calls(), time.Duration(delay.Load()))
+	check(t, d.calls() == 4 && time.Duration(delay.Load()) <= time.Millisecond, "dials/delay = %d/%s", d.calls(), time.Duration(delay.Load()))
 	must(t, p.Close())
 }
+
 func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	started := make(chan struct{})
 	conn := newConn(nil)
@@ -102,7 +103,11 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	go func() {
 		defer close(readerDone)
 		for range 1200 {
-			_ = p.State()
+			switch p.State() {
+			case StateIdle, StateConnecting, StateConnected, StateReconnecting, StateTerminalFailure, StateClosed:
+			default:
+				t.Errorf("illegal state %q", p.State())
+			}
 			_ = p.Transitions()
 		}
 	}()
@@ -111,9 +116,9 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	<-readerDone
 	must(t, await(t, closed))
 	for _, ch := range []<-chan error{a, b} {
-		assert(t, errors.Is(await(t, ch), ErrPeerClosed), "connect did not close")
+		check(t, errors.Is(await(t, ch), ErrPeerClosed), "connect did not close")
 	}
-	assert(t, p.State() == StateClosed && conn.closes.Load() == 1, "state/close = %s/%d", p.State(), conn.closes.Load())
+	check(t, p.State() == StateClosed && conn.closes.Load() == 1, "state/close = %s/%d", p.State(), conn.closes.Load())
 }
 func TestPeerS9OneHundredConnectTeardownCycles(t *testing.T) {
 	baseG, open := runtime.NumGoroutine(), new(atomic.Int32)
@@ -124,7 +129,7 @@ func TestPeerS9OneHundredConnectTeardownCycles(t *testing.T) {
 		must(t, p.Connect(context.Background()))
 		must(t, p.Close())
 	}
-	assert(t, created.Load() == 100 && closed.Load() == 100 && open.Load() == baseSockets, "created/closed/open = %d/%d/%d", created.Load(), closed.Load(), open.Load())
+	check(t, created.Load() == 100 && closed.Load() == 100 && open.Load() == baseSockets, "created/closed/open = %d/%d/%d", created.Load(), closed.Load(), open.Load())
 	settle(t, 500*time.Millisecond, func() bool { return runtime.NumGoroutine() <= baseG+2 })
 }
 
@@ -141,16 +146,15 @@ func (f *fake) calls() int { return int(f.dials.Load()) }
 func peer(fn func(context.Context, int) (Conn, error), max int) *Peer {
 	return NewPeer(PeerConfig{Dialer: &fake{fn: fn}, Retry: RetryPolicy{MaxAttempts: max}})
 }
-
 func newConn(open *atomic.Int32, closed ...*atomic.Int32) *fake {
 	if open != nil {
 		open.Add(1)
 	}
-	c := &fake{open: open}
-	if len(closed) != 0 {
-		c.closed = closed[0]
+	var c *atomic.Int32
+	if len(closed) > 0 {
+		c = closed[0]
 	}
-	return c
+	return &fake{open: open, closed: c}
 }
 func (*fake) ReadMessage() (int, []byte, error) { return 0, nil, nil }
 func (*fake) WriteMessage(int, []byte) error    { return nil }
@@ -165,23 +169,21 @@ func (f *fake) Close() error {
 	return nil
 }
 
-func must(t *testing.T, err error) {
-	assert(t, err == nil, "unexpected error: %v", err)
-}
+func must(t *testing.T, err error) { t.Helper(); check(t, err == nil, "unexpected error: %v", err) }
 func terminal(t *testing.T, p *Peer, err, cause error, attempts int) {
 	t.Helper()
 	var e *TerminalError
-	assert(t, errors.Is(err, cause) && errors.Is(err, ErrPeerTerminalFailure) && errors.As(err, &e) && e.Attempts == attempts && p.State() == StateTerminalFailure, "error/state = %v/%s", err, p.State())
+	check(t, errors.Is(err, cause) && errors.Is(err, ErrPeerTerminalFailure) && errors.As(err, &e) && e.Attempts == attempts && p.State() == StateTerminalFailure, "error/state = %v/%s", err, p.State())
 }
 func path(t *testing.T, p *Peer, want ...State) {
 	t.Helper()
 	got := p.Transitions()
-	assert(t, len(got) == len(want)-1, "transitions = %#v", got)
+	check(t, len(got) == len(want)-1, "transitions = %#v", got)
 	for i, tr := range got {
-		assert(t, tr.From == want[i] && tr.To == want[i+1], "transition %d = %s -> %s", i, tr.From, tr.To)
+		check(t, tr.From == want[i] && tr.To == want[i+1], "transition %d = %s -> %s", i, tr.From, tr.To)
 	}
 }
-func assert(t *testing.T, ok bool, format string, args ...any) {
+func check(t *testing.T, ok bool, format string, args ...any) {
 	t.Helper()
 	if !ok {
 		t.Fatalf(format, args...)

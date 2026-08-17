@@ -61,8 +61,8 @@ type PeerConfig struct {
 	Retry    RetryPolicy
 }
 type Transition struct {
-	From, To State
-	Attempt  int
+	From, To     State
+	Attempt      int
 	Cause, Error error
 }
 type operation struct {
@@ -86,30 +86,27 @@ type Peer struct {
 }
 
 func NewPeer(c PeerConfig) *Peer {
-	r := c.Retry
-	if r.MaxAttempts <= 0 {
-		r.MaxAttempts = 3
+	if c.Retry.MaxAttempts <= 0 {
+		c.Retry.MaxAttempts = 3
 	}
-	if r.MaxBackoff <= 0 {
-		r.MaxBackoff = time.Second
+	if c.Retry.MaxBackoff <= 0 {
+		c.Retry.MaxBackoff = time.Second
 	}
-	c.Headers, c.Retry = maps.Clone(c.Headers), r
+	c.Headers = maps.Clone(c.Headers)
 	return &Peer{config: c, state: StateIdle}
 }
-func (p *Peer) State() State  { p.mu.RLock(); defer p.mu.RUnlock(); return p.state }
-func (p *Peer) Err() error    { p.mu.RLock(); defer p.mu.RUnlock(); return p.terminalErr }
-func (p *Peer) Attempts() int { p.mu.RLock(); defer p.mu.RUnlock(); return p.attempts }
+func (p *Peer) State() State     { p.mu.RLock(); defer p.mu.RUnlock(); return p.state }
+func (p *Peer) Err() error       { p.mu.RLock(); defer p.mu.RUnlock(); return p.terminalErr }
+func (p *Peer) Attempts() int    { p.mu.RLock(); defer p.mu.RUnlock(); return p.attempts }
 func (p *Peer) Connection() Conn { p.mu.RLock(); defer p.mu.RUnlock(); return p.conn }
 func (p *Peer) Transitions() []Transition {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return append([]Transition(nil), p.history...)
 }
+
 func (p *Peer) Connect(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	op, owner, err := p.start(false, nil, ctx)
+	op, owner, err := p.start(false, nil, contextOrBackground(ctx))
 	if err != nil {
 		return err
 	}
@@ -119,8 +116,7 @@ func (p *Peer) Connect(ctx context.Context) error {
 		}
 		return waitOperation(ctx, op)
 	}
-	err = p.run(op.ctx)
-	return p.finish(op, err)
+	return p.finish(op, p.run(op.ctx))
 }
 func (p *Peer) PeerLost(cause error) error {
 	if cause == nil {
@@ -131,7 +127,7 @@ func (p *Peer) PeerLost(cause error) error {
 		return err
 	}
 	_ = closeConn(op.old)
-	go func() { p.finish(op, p.run(op.ctx)) }()
+	go func() { _ = p.finish(op, p.run(op.ctx)) }()
 	return nil
 }
 func (p *Peer) start(reconnect bool, cause error, parent context.Context) (*operation, bool, error) {
@@ -147,11 +143,9 @@ func (p *Peer) start(reconnect bool, cause error, parent context.Context) (*oper
 			return nil, false, ErrPeerNotConnected
 		}
 		return p.op, false, nil
-	}
-	if reconnect && p.state != StateConnected {
+	case reconnect && p.state != StateConnected:
 		return nil, false, ErrPeerNotConnected
-	}
-	if !reconnect && p.state == StateConnected {
+	case !reconnect && p.state == StateConnected:
 		return nil, false, nil
 	}
 	old := p.conn
@@ -164,14 +158,10 @@ func (p *Peer) start(reconnect bool, cause error, parent context.Context) (*oper
 	}
 	p.attempts, p.terminalErr = 0, nil
 	ctx, cancel := context.WithCancel(parent)
-	op := &operation{done: make(chan struct{}), cancel: cancel, ctx: ctx, old: old}
-	p.op = op
-	return op, true, nil
+	p.op = &operation{done: make(chan struct{}), cancel: cancel, ctx: ctx, old: old}
+	return p.op, true, nil
 }
 func (p *Peer) Wait(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	p.mu.RLock()
 	op, state, err := p.op, p.state, p.terminalErr
 	p.mu.RUnlock()
@@ -205,7 +195,7 @@ func (p *Peer) Close() error {
 }
 
 func (p *Peer) run(ctx context.Context) error {
-	var last error
+	last := error(ErrRetryExhausted)
 	for attempt := 1; attempt <= p.config.Retry.MaxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return p.terminal(err, attempt-1, false)
@@ -214,14 +204,13 @@ func (p *Peer) run(ctx context.Context) error {
 		p.attempts = attempt
 		p.mu.Unlock()
 		conn, err := p.dial(ctx)
-		if err == nil && ctx.Err() != nil {
-			err = ctx.Err()
-		}
-		if err == nil && conn == nil {
-			err = ErrNilConnection
-		}
 		if err == nil {
-			return p.accept(conn, attempt)
+			if err = ctx.Err(); err == nil && conn == nil {
+				err = ErrNilConnection
+			}
+			if err == nil {
+				return p.accept(conn, attempt)
+			}
 		}
 		_ = closeConn(conn)
 		last = err
@@ -244,12 +233,9 @@ func (p *Peer) dial(ctx context.Context) (Conn, error) {
 	return p.config.Dialer.DialContext(ctx, p.config.Endpoint, maps.Clone(p.config.Headers))
 }
 func (p *Peer) backoff(ctx context.Context) error {
-	delay := p.config.Retry.Backoff
+	delay := minDuration(p.config.Retry.Backoff, p.config.Retry.MaxBackoff)
 	if delay <= 0 {
 		return nil
-	}
-	if delay > p.config.Retry.MaxBackoff {
-		delay = p.config.Retry.MaxBackoff
 	}
 	if p.config.Retry.Wait != nil {
 		return p.config.Retry.Wait(ctx, delay)
@@ -262,6 +248,12 @@ func (p *Peer) backoff(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+func minDuration(a, b time.Duration) time.Duration {
+	if a > b {
+		return b
+	}
+	return a
 }
 func (p *Peer) accept(conn Conn, attempt int) error {
 	p.mu.Lock()
@@ -286,18 +278,18 @@ func (p *Peer) terminal(cause error, attempts int, exhausted bool) error {
 	}
 	err := &TerminalError{Cause: cause, Attempts: attempts}
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.state == StateClosed {
-		p.mu.Unlock()
 		return ErrPeerClosed
 	}
 	p.terminalErr, p.conn = err, nil
 	p.transitionLocked(StateTerminalFailure, err, attempts)
-	p.mu.Unlock()
 	return err
 }
 func (p *Peer) finish(op *operation, err error) error {
 	op.cancel()
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.state == StateClosed {
 		err = ErrPeerClosed
 	}
@@ -306,16 +298,21 @@ func (p *Peer) finish(op *operation, err error) error {
 	}
 	op.err = err
 	close(op.done)
-	p.mu.Unlock()
 	return err
 }
 func waitOperation(ctx context.Context, op *operation) error {
 	select {
 	case <-op.done:
 		return op.err
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-contextOrBackground(ctx).Done():
+		return contextOrBackground(ctx).Err()
 	}
+}
+func contextOrBackground(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 func (p *Peer) transitionLocked(to State, cause error, attempt int) {
 	if p.state == to {
