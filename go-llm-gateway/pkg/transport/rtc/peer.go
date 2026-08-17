@@ -13,12 +13,12 @@ type State string
 
 const (
 	StateIdle            State = "idle"
-	StateNew             State = StateIdle
+	StateNew                   = StateIdle
 	StateConnecting      State = "connecting"
 	StateConnected       State = "connected"
 	StateReconnecting    State = "reconnecting"
 	StateTerminalFailure State = "terminal-failure"
-	StateFailed          State = StateTerminalFailure
+	StateFailed                = StateTerminalFailure
 	StateClosed          State = "closed"
 )
 
@@ -46,11 +46,10 @@ func (e *TerminalError) Error() string {
 func (e *TerminalError) Unwrap() error        { return e.Cause }
 func (e *TerminalError) Is(target error) bool { return target == ErrPeerTerminalFailure }
 
-// ContextDialer is required because Close must cancel and join an in-flight dial.
+// ContextDialer is required so Close can cancel and join an in-flight dial.
 type ContextDialer interface {
 	DialContext(context.Context, string, map[string]string) (Conn, error)
 }
-
 type RetryPolicy struct {
 	MaxAttempts         int
 	Backoff, MaxBackoff time.Duration
@@ -95,8 +94,7 @@ func NewPeer(c PeerConfig) *Peer {
 	if r.MaxBackoff <= 0 {
 		r.MaxBackoff = time.Second
 	}
-	c.Headers = maps.Clone(c.Headers)
-	c.Retry = r
+	c.Headers, c.Retry = maps.Clone(c.Headers), r
 	return &Peer{config: c, state: StateIdle}
 }
 func (p *Peer) State() State     { p.mu.RLock(); defer p.mu.RUnlock(); return p.state }
@@ -113,7 +111,7 @@ func (p *Peer) Connect(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	op, run, err := p.begin(false, nil)
+	op, run, err := p.start(false, nil)
 	if err != nil {
 		return err
 	}
@@ -126,27 +124,21 @@ func (p *Peer) Connect(ctx context.Context) error {
 	stop := context.AfterFunc(ctx, op.cancel)
 	err = p.run(op.ctx)
 	stop()
-	p.finish(op, err)
-	return err
+	return p.finish(op, err)
 }
-
 func (p *Peer) PeerLost(cause error) error {
 	if cause == nil {
 		cause = ErrPeerLost
 	}
-	op, run, err := p.begin(true, cause)
-	if err != nil {
+	op, run, err := p.start(true, cause)
+	if err != nil || !run {
 		return err
-	}
-	if !run {
-		return nil
 	}
 	_ = closeConn(op.old)
 	go func() { p.finish(op, p.run(op.ctx)) }()
 	return nil
 }
-
-func (p *Peer) begin(reconnect bool, cause error) (*operation, bool, error) {
+func (p *Peer) start(reconnect bool, cause error) (*operation, bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.state == StateClosed {
@@ -161,32 +153,25 @@ func (p *Peer) begin(reconnect bool, cause error) (*operation, bool, error) {
 		}
 		return p.op, false, nil
 	}
+	var old Conn
 	if reconnect {
 		if p.state != StateConnected {
 			return nil, false, ErrPeerNotConnected
 		}
-		old := p.conn
-		p.conn, p.attempts = nil, 0
+		old, p.conn, p.attempts = p.conn, nil, 0
 		p.transitionLocked(StateReconnecting, cause, 0)
-		op := p.newOperationLocked()
-		op.old = old
-		return op, true, nil
+	} else {
+		if p.state == StateConnected {
+			return nil, false, nil
+		}
+		p.attempts, p.terminalErr = 0, nil
+		p.transitionLocked(StateConnecting, nil, 0)
 	}
-	if p.state == StateConnected {
-		return nil, false, nil
-	}
-	p.attempts, p.terminalErr = 0, nil
-	p.transitionLocked(StateConnecting, nil, 0)
-	return p.newOperationLocked(), true, nil
-}
-
-func (p *Peer) newOperationLocked() *operation {
 	ctx, cancel := context.WithCancel(context.Background())
-	op := &operation{done: make(chan struct{}), cancel: cancel, ctx: ctx}
+	op := &operation{done: make(chan struct{}), cancel: cancel, ctx: ctx, old: old}
 	p.op = op
-	return op
+	return op, true, nil
 }
-
 func (p *Peer) Wait(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -205,15 +190,13 @@ func (p *Peer) Wait(ctx context.Context) error {
 	}
 	return nil
 }
-
 func (p *Peer) Close() error {
 	p.once.Do(func() {
 		p.mu.Lock()
-		op := p.op
+		op, conn := p.op, p.conn
 		if op != nil {
 			op.cancel()
 		}
-		conn := p.conn
 		p.conn = nil
 		p.transitionLocked(StateClosed, nil, p.attempts)
 		p.mu.Unlock()
@@ -229,7 +212,7 @@ func (p *Peer) run(ctx context.Context) error {
 	var last error
 	for attempt := 1; attempt <= p.config.Retry.MaxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return p.cancelled(err, attempt-1)
+			return p.terminal(err, attempt-1, false)
 		}
 		p.mu.Lock()
 		if p.state == StateClosed {
@@ -238,7 +221,13 @@ func (p *Peer) run(ctx context.Context) error {
 		}
 		p.attempts = attempt
 		p.mu.Unlock()
-		conn, err := p.dial(ctx)
+		var conn Conn
+		var err error
+		if p.config.Dialer == nil {
+			err = ErrNoDialer
+		} else {
+			conn, err = p.config.Dialer.DialContext(ctx, p.config.Endpoint, maps.Clone(p.config.Headers))
+		}
 		if err == nil && conn == nil {
 			err = ErrNilConnection
 		}
@@ -247,29 +236,17 @@ func (p *Peer) run(ctx context.Context) error {
 		}
 		_ = closeConn(conn)
 		last = err
-		if p.isClosed() {
-			return ErrPeerClosed
-		}
 		if err = ctx.Err(); err != nil {
-			return p.cancelled(err, attempt)
+			return p.terminal(err, attempt, false)
 		}
 		if attempt == p.config.Retry.MaxAttempts {
 			return p.terminal(last, attempt, true)
 		}
 		if err = p.backoff(ctx); err != nil {
-			if p.isClosed() {
-				return ErrPeerClosed
-			}
-			return p.cancelled(err, attempt)
+			return p.terminal(err, attempt, false)
 		}
 	}
 	return p.terminal(last, p.config.Retry.MaxAttempts, true)
-}
-func (p *Peer) dial(ctx context.Context) (Conn, error) {
-	if p.config.Dialer == nil {
-		return nil, ErrNoDialer
-	}
-	return p.config.Dialer.DialContext(ctx, p.config.Endpoint, maps.Clone(p.config.Headers))
 }
 func (p *Peer) backoff(ctx context.Context) error {
 	delay := p.config.Retry.Backoff
@@ -305,12 +282,6 @@ func (p *Peer) accept(conn Conn, attempt int) error {
 	_ = closeConn(old)
 	return nil
 }
-func (p *Peer) cancelled(cause error, attempts int) error {
-	if p.isClosed() {
-		return ErrPeerClosed
-	}
-	return p.terminal(cause, attempts, false)
-}
 func (p *Peer) terminal(cause error, attempts int, exhausted bool) error {
 	if cause == nil {
 		cause = ErrRetryExhausted
@@ -332,15 +303,19 @@ func (p *Peer) terminal(cause error, attempts int, exhausted bool) error {
 	_ = closeConn(conn)
 	return err
 }
-func (p *Peer) finish(op *operation, err error) {
+func (p *Peer) finish(op *operation, err error) error {
 	op.cancel()
 	p.mu.Lock()
+	if p.state == StateClosed {
+		err = ErrPeerClosed
+	}
 	if p.op == op {
 		p.op = nil
 	}
 	op.err = err
 	close(op.done)
 	p.mu.Unlock()
+	return err
 }
 func waitOperation(ctx context.Context, op *operation) error {
 	select {
@@ -351,13 +326,11 @@ func waitOperation(ctx context.Context, op *operation) error {
 	}
 }
 func (p *Peer) transitionLocked(to State, cause error, attempt int) {
-	if p.state == to {
-		return
+	if p.state != to {
+		p.history = append(p.history, Transition{From: p.state, To: to, Attempt: attempt, Cause: cause, Error: cause})
+		p.state = to
 	}
-	p.history = append(p.history, Transition{From: p.state, To: to, Attempt: attempt, Cause: cause, Error: cause})
-	p.state = to
 }
-func (p *Peer) isClosed() bool { p.mu.RLock(); defer p.mu.RUnlock(); return p.state == StateClosed }
 func closeConn(conn Conn) error {
 	if conn == nil {
 		return nil

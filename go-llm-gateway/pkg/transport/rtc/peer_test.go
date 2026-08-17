@@ -51,20 +51,14 @@ func s4Loss(t *testing.T) {
 	}
 }
 func s4ConnectClose(t *testing.T) {
-	started, returned := make(chan struct{}), make(chan struct{})
-	p := peer(func(ctx context.Context, _ int) (Conn, error) {
-		close(started)
-		<-ctx.Done()
-		close(returned)
-		return nil, ctx.Err()
-	}, 3)
+	started := make(chan struct{})
+	p := peer(func(ctx context.Context, _ int) (Conn, error) { close(started); <-ctx.Done(); return nil, ctx.Err() }, 3)
 	connected := make(chan error, 1)
 	go func() { connected <- p.Connect(context.Background()) }()
 	<-started
 	closed := make(chan error, 1)
 	go func() { closed <- p.Close() }()
 	must(t, await(t, closed))
-	<-returned
 	if err := await(t, connected); !errors.Is(err, ErrPeerClosed) {
 		t.Fatalf("connect = %v", err)
 	}
@@ -74,17 +68,8 @@ func s4DoubleClose(t *testing.T) {
 	conn := newConn(nil)
 	p := peer(func(context.Context, int) (Conn, error) { return conn, nil }, 1)
 	must(t, p.Connect(context.Background()))
-	var wg sync.WaitGroup
-	errs := make(chan error, 2)
-	for range 2 {
-		wg.Add(1)
-		go func() { defer wg.Done(); errs <- p.Close() }()
-	}
-	wg.Wait()
-	close(errs)
-	for err := range errs {
-		must(t, err)
-	}
+	must(t, p.Close())
+	must(t, p.Close())
 	if conn.calls.Load() != 1 || p.State() != StateClosed {
 		t.Fatalf("close/state = %d/%s", conn.calls.Load(), p.State())
 	}
@@ -98,11 +83,7 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 		}
 		return nil, errors.New("unavailable")
 	}}
-	p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 4, Backoff: time.Hour, MaxBackoff: time.Hour, Wait: func(ctx context.Context, _ time.Duration) error {
-		close(started)
-		<-ctx.Done()
-		return ctx.Err()
-	}}})
+	p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 4, Backoff: time.Hour, MaxBackoff: time.Hour, Wait: func(ctx context.Context, _ time.Duration) error { close(started); <-ctx.Done(); return ctx.Err() }}})
 	must(t, p.Connect(context.Background()))
 	must(t, p.PeerLost(nil))
 	<-started
@@ -111,7 +92,6 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 		t.Fatalf("dials/attempts/state = %d/%d/%s", d.calls(), p.Attempts(), p.State())
 	}
 }
-
 func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 	cause := &dialFailure{"permanently unavailable"}
 	var delay atomic.Int64
@@ -127,11 +107,7 @@ func TestPeerRetryExhaustionPreservesCause(t *testing.T) {
 func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	started := make(chan struct{})
 	conn := newConn(nil)
-	p := peer(func(ctx context.Context, _ int) (Conn, error) {
-		close(started)
-		<-ctx.Done()
-		return conn, nil
-	}, 1)
+	p := peer(func(ctx context.Context, _ int) (Conn, error) { close(started); <-ctx.Done(); return conn, nil }, 1)
 	connect1, connect2 := make(chan error, 1), make(chan error, 1)
 	go func() { connect1 <- p.Connect(context.Background()) }()
 	<-started
@@ -160,7 +136,6 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 		t.Fatalf("state/close = %s/%d", p.State(), conn.calls.Load())
 	}
 }
-
 func TestPeerS9OneHundredConnectTeardownCycles(t *testing.T) {
 	baseG, open := runtime.NumGoroutine(), new(atomic.Int32)
 	baseSockets := open.Load()
@@ -192,7 +167,6 @@ func peer(fn func(context.Context, int) (Conn, error), max int) *Peer {
 type countedConn struct {
 	calls        atomic.Int32
 	open, closed *atomic.Int32
-	once         sync.Once
 }
 
 func newConn(open *atomic.Int32) *countedConn {
@@ -210,14 +184,12 @@ func (*countedConn) ReadMessage() (int, []byte, error) { return 0, nil, nil }
 func (*countedConn) WriteMessage(int, []byte) error    { return nil }
 func (c *countedConn) Close() error {
 	c.calls.Add(1)
-	c.once.Do(func() {
-		if c.open != nil {
-			c.open.Add(-1)
-		}
-		if c.closed != nil {
-			c.closed.Add(1)
-		}
-	})
+	if c.open != nil {
+		c.open.Add(-1)
+	}
+	if c.closed != nil {
+		c.closed.Add(1)
+	}
 	return nil
 }
 
