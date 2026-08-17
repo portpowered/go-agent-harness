@@ -144,14 +144,13 @@ type SessionScenario struct {
 }
 
 // NewSessionScenario creates a SessionScenario with the given mock inferencer
-// and tool executor. Existing agentloop.Option values (e.g. WithTools) remain
-// accepted, and SessionScenarioOptions or SessionScenarioOption values may be
-// added for deterministic clocks and opt-in capture.
-func NewSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, opts ...any) *SessionScenario {
+// and tool executor. Additional agentloop.Option values (e.g. WithTools) can
+// be passed, preserving the typed variadic contract used by existing callers.
+// Use NewSessionScenarioWithConfig when deterministic clocks or capture are
+// needed alongside those loop options.
+func NewSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, opts ...agentloop.Option) *SessionScenario {
 	t.Helper()
-
-	options, loopOpts := parseSessionScenarioOptions(t, opts)
-	return newSessionScenario(t, inf, tool, options, loopOpts...)
+	return newSessionScenario(t, inf, tool, SessionScenarioOptions{}, opts...)
 }
 
 // NewSessionScenarioWithConfig is the typed constructor for callers that keep
@@ -195,37 +194,6 @@ func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockTool
 		}
 	}
 	return scenario
-}
-
-func parseSessionScenarioOptions(t *testing.T, raw []any) (SessionScenarioOptions, []agentloop.Option) {
-	t.Helper()
-	options := SessionScenarioOptions{}
-	loopOpts := make([]agentloop.Option, 0, len(raw))
-	for _, rawOption := range raw {
-		switch option := rawOption.(type) {
-		case nil:
-			continue
-		case agentloop.Option:
-			loopOpts = append(loopOpts, option)
-		case SessionScenarioOption:
-			if option != nil {
-				option(&options)
-			}
-		case SessionScenarioOptions:
-			options = option
-		case *SessionScenarioOptions:
-			if option != nil {
-				options = *option
-			}
-		case clock.Source:
-			options.Clock = option
-		case transcript.RecordSink:
-			options.Capture = option
-		default:
-			t.Fatalf("NewSessionScenario: unsupported option type %T", rawOption)
-		}
-	}
-	return options, loopOpts
 }
 
 // Start begins the session. Call this before sending events.
@@ -420,9 +388,10 @@ func AssertSessionLifecycle(t *testing.T, deltas []messages.StreamMessage) {
 }
 
 type sessionCapture struct {
-	source   clock.Source
-	sink     transcript.RecordSink
-	sequence atomic.Uint64
+	crossingMu sync.Mutex
+	source     clock.Source
+	sink       transcript.RecordSink
+	sequence   atomic.Uint64
 }
 
 type sessionSnapshot struct {
@@ -449,6 +418,8 @@ func (s *sessionCapture) clientToAgent(stream transcript.Stream, payload []byte)
 	if s == nil || s.sink == nil || len(payload) == 0 {
 		return
 	}
+	s.crossingMu.Lock()
+	defer s.crossingMu.Unlock()
 	snapshot := s.snapshot()
 	client := transcript.NewClientCapture(&sessionClientStreamSink{sink: s.sink, stream: stream}, func() (uint64, time.Time) {
 		return snapshot.tick, snapshot.timestamp
@@ -471,6 +442,8 @@ func (s *sessionCapture) agentToClient(delta messages.StreamMessage) {
 	if len(payload) == 0 {
 		return
 	}
+	s.crossingMu.Lock()
+	defer s.crossingMu.Unlock()
 	snapshot := s.snapshot()
 	agent := transcript.NewAgentCapture(s.sink, snapshot)
 	_, _ = agent.Outbound(streamForDelta(delta), payload, func(data []byte) (int, error) {

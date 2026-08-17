@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -75,6 +76,144 @@ func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
 	}
 }
 
+func TestNewSessionScenarioPreservesTypedOptionForwarding(t *testing.T) {
+	options := []agentloop.Option{agentloop.WithBufferCapacity(8)}
+	scenario := NewSessionScenario(t, NewMockSessionInferencer(), NewMockToolExecutor(), options...)
+	if scenario == nil || scenario.Loop == nil {
+		t.Fatal("typed agentloop.Option forwarding did not construct a session scenario")
+	}
+}
+
+func TestSessionScenarioConfigAliasesExposeSharedCapture(t *testing.T) {
+	logicalClock := clock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
+	collector := NewSessionTranscript()
+	options := SessionScenarioOptions{}
+	WithSessionClock(logicalClock)(&options)
+	WithTranscriptCapture(collector)(&options)
+
+	scenario := NewSessionScenarioWithOptions(t, NewMockSessionInferencer(), NewMockToolExecutor(), options)
+	scenario.SendText("captured through config aliases")
+	if scenario.Clock() != logicalClock {
+		t.Fatalf("scenario clock = %T, want injected deterministic clock", scenario.Clock())
+	}
+	if scenario.Transcript != collector {
+		t.Fatal("scenario did not expose the configured session transcript")
+	}
+	if len(scenario.CapturedRecords()) != 2 || len(scenario.ClientRecords()) != 1 || len(scenario.AgentRecords()) != 1 {
+		t.Fatalf("scenario capture views = total:%d client:%d agent:%d, want 2/1/1", len(scenario.CapturedRecords()), len(scenario.ClientRecords()), len(scenario.AgentRecords()))
+	}
+
+	configured := SessionScenarioOptions{}
+	WithClock(logicalClock)(&configured)
+	WithCapture()(&configured)
+	auto := NewSessionScenarioWithConfig(t, NewMockSessionInferencer(), NewMockToolExecutor(), configured)
+	auto.SendText("captured by an auto-created collector")
+	if len(auto.CapturedRecords()) != 2 {
+		t.Fatalf("auto-created capture records = %d, want 2", len(auto.CapturedRecords()))
+	}
+}
+
+func TestSessionCaptureSerializesConcurrentCrossings(t *testing.T) {
+	sink := newBlockingSessionSink()
+	capture := newSessionCapture(clock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second), sink)
+
+	clientDone := make(chan struct{})
+	go func() {
+		capture.clientToAgent(transcript.StreamWS, []byte("client"))
+		close(clientDone)
+	}()
+	awaitSignal(t, sink.firstWrite, "first crossing record")
+
+	agentDone := make(chan struct{})
+	go func() {
+		capture.agentToClient(messages.StreamMessage{
+			Type:  messages.StreamTypeTextDelta,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewTextDeltaValue("agent"),
+		})
+		close(agentDone)
+	}()
+
+	select {
+	case <-sink.secondWrite:
+		close(sink.releaseFirst)
+		<-clientDone
+		<-agentDone
+		t.Fatal("a concurrent crossing wrote before the first crossing completed")
+	case <-time.After(250 * time.Millisecond):
+		// The second crossing is blocked on the crossing lock. Release the
+		// first crossing and let the event-driven completion checks below prove
+		// that both records remain adjacent.
+	}
+	close(sink.releaseFirst)
+	awaitSignal(t, clientDone, "client crossing completion")
+	awaitSignal(t, agentDone, "agent crossing completion")
+
+	records := sink.Records()
+	if len(records) != 4 {
+		t.Fatalf("concurrent capture records = %d, want 4", len(records))
+	}
+	assertAdjacentTranscriptPair(t, records[0], records[1], []byte("client"))
+	assertAdjacentTranscriptPair(t, records[2], records[3], []byte("agent"))
+}
+
+func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
+	payloadCases := []struct {
+		name    string
+		message messages.Message
+		want    []byte
+	}{
+		{name: "text", message: messages.NewTextMessage(messages.RoleUser, "text"), want: []byte("text")},
+		{name: "control", message: messages.Message{ContentParts: []messages.ContentPart{messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypePing}}}, want: []byte(messages.ControlPlaneMessageTypePing)},
+		{name: "audio", message: messages.Message{ContentParts: []messages.ContentPart{messages.AudioPart{Bytes: []byte{1, 2}}}}, want: []byte{1, 2}},
+		{name: "image", message: messages.Message{ContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{3, 4}}}}, want: []byte{3, 4}},
+		{name: "video", message: messages.Message{ContentParts: []messages.ContentPart{messages.VideoPart{Bytes: []byte{5, 6}}}}, want: []byte{5, 6}},
+		{name: "file", message: messages.Message{ContentParts: []messages.ContentPart{messages.FilePart{Bytes: []byte{7, 8}}}}, want: []byte{7, 8}},
+	}
+	for _, testCase := range payloadCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := messagePayload(testCase.message); !bytes.Equal(got, testCase.want) {
+				t.Fatalf("message payload = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+	if got := messagePayload(messages.Message{Role: messages.RoleUser}); len(got) == 0 {
+		t.Fatal("fallback message payload is empty")
+	}
+	if got := marshalPayload(make(chan int), []byte("fallback")); !bytes.Equal(got, []byte("fallback")) {
+		t.Fatalf("marshal fallback = %q, want fallback", got)
+	}
+
+	streamCases := []struct {
+		name   string
+		delta  messages.StreamMessage
+		want   []byte
+		stream transcript.Stream
+	}{
+		{name: "text", delta: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("text")}, want: []byte("text"), stream: transcript.StreamWS},
+		{name: "reasoning", delta: messages.StreamMessage{Type: messages.StreamTypeReasoningDelta, Value: messages.NewReasoningDeltaValue("reasoning")}, want: []byte("reasoning"), stream: transcript.StreamWS},
+		{name: "audio", delta: messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{9, 10})}, want: []byte{9, 10}, stream: transcript.StreamRTCAudio},
+		{name: "transcript", delta: messages.StreamMessage{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("transcript")}, want: []byte("transcript"), stream: transcript.StreamWS},
+		{name: "transcript end", delta: messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("complete")}, want: []byte("complete"), stream: transcript.StreamWS},
+	}
+	for _, testCase := range streamCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := streamPayload(testCase.delta); !bytes.Equal(got, testCase.want) {
+				t.Fatalf("stream payload = %v, want %v", got, testCase.want)
+			}
+			if got := streamForDelta(testCase.delta); got != testCase.stream {
+				t.Fatalf("stream identity = %q, want %q", got, testCase.stream)
+			}
+		})
+	}
+	if got := streamPayload(messages.StreamMessage{Type: messages.StreamTypeSessionOpen}); len(got) == 0 {
+		t.Fatal("fallback stream payload is empty")
+	}
+	if got := streamForDelta(messages.StreamMessage{Type: messages.StreamTypeVADSpeechStarted}); got != transcript.StreamRTCAudio {
+		t.Fatalf("VAD stream identity = %q, want %q", got, transcript.StreamRTCAudio)
+	}
+}
+
 func TestSessionScenarioCaptureIsOptInAndNilClockUsesRealTime(t *testing.T) {
 	inf := NewMockSessionInferencer()
 	scenario := NewSessionScenario(t, inf, NewMockToolExecutor())
@@ -116,6 +255,43 @@ type notifyingSessionSink struct {
 	records   chan<- struct{}
 }
 
+type blockingSessionSink struct {
+	mu           sync.Mutex
+	records      []transcript.Record
+	firstWrite   chan struct{}
+	secondWrite  chan struct{}
+	releaseFirst chan struct{}
+}
+
+func newBlockingSessionSink() *blockingSessionSink {
+	return &blockingSessionSink{
+		firstWrite:   make(chan struct{}),
+		secondWrite:  make(chan struct{}),
+		releaseFirst: make(chan struct{}),
+	}
+}
+
+func (s *blockingSessionSink) Write(record transcript.Record) error {
+	s.mu.Lock()
+	index := len(s.records)
+	s.records = append(s.records, record)
+	s.mu.Unlock()
+	switch index {
+	case 0:
+		close(s.firstWrite)
+		<-s.releaseFirst
+	case 1:
+		close(s.secondWrite)
+	}
+	return nil
+}
+
+func (s *blockingSessionSink) Records() []transcript.Record {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneTranscriptRecords(s.records)
+}
+
 func (s *notifyingSessionSink) Write(record transcript.Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -139,6 +315,15 @@ func awaitCapturedRecords(t *testing.T, records <-chan struct{}, count int) {
 		case <-deadline.C:
 			t.Fatal("timed out waiting for captured session record")
 		}
+	}
+}
+
+func awaitSignal(t *testing.T, signal <-chan struct{}, description string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for %s", description)
 	}
 }
 
@@ -169,6 +354,22 @@ func assertTranscriptPair(t *testing.T, left, right transcript.Record, leftPeer 
 	}
 	if left.Stream != transcript.StreamWS || right.Stream != transcript.StreamWS || !bytes.Equal(left.Payload, payload) || !bytes.Equal(right.Payload, payload) || len(left.Payload) == 0 || len(right.Payload) == 0 {
 		t.Fatalf("pair stream/payload = (%q,%q,%q) and (%q,%q,%q), want non-empty matching WS payload %q", left.Stream, left.Payload, left.Timestamp, right.Stream, right.Payload, right.Timestamp, payload)
+	}
+}
+
+func assertAdjacentTranscriptPair(t *testing.T, left, right transcript.Record, payload []byte) {
+	t.Helper()
+	if left.Peer != transcript.PeerClient && left.Peer != transcript.PeerAgent {
+		t.Fatalf("left pair peer = %q, want client or agent", left.Peer)
+	}
+	if left.Peer == right.Peer || left.Direction == right.Direction {
+		t.Fatalf("pair peers/directions = (%s,%s) and (%s,%s), want opposite peers and directions", left.Peer, left.Direction, right.Peer, right.Direction)
+	}
+	if left.Tick != right.Tick || left.Timestamp != right.Timestamp || left.Stream != right.Stream || !bytes.Equal(left.Payload, right.Payload) {
+		t.Fatalf("pair metadata/payload mismatch: left=%+v right=%+v", left, right)
+	}
+	if len(left.Payload) == 0 || !bytes.Equal(left.Payload, payload) {
+		t.Fatalf("pair payload = %q and %q, want %q", left.Payload, right.Payload, payload)
 	}
 }
 
