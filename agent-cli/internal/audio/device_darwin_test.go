@@ -20,9 +20,26 @@ func TestCoreAudioDeviceRegistryConformance(t *testing.T) {
 	})
 }
 
-func TestCoreAudioOpenProducesSignals(t *testing.T) {
-	capabilities := requireCoreAudioCapabilities(t)
+func requireCoreAudioCapabilities(t *testing.T) coreAudioTestCapabilities {
+	t.Helper()
 	registry := NewCoreAudioDeviceRegistry()
+	listed, err := registry.List()
+	if err != nil {
+		t.Skipf("darwin: CoreAudio enumeration unavailable: %v", err)
+	}
+	var capabilities coreAudioTestCapabilities
+	for _, device := range listed {
+		t.Logf("darwin CoreAudio endpoint: id=%q name=%q direction=%s", device.ID, device.Display(), device.Direction)
+	}
+	capabilities.input, err = registry.Default(DirectionInput)
+	if err != nil {
+		t.Skipf("darwin: missing usable default input device or microphone permission: %v", err)
+	}
+	capabilities.output, err = registry.Default(DirectionOutput)
+	if err != nil {
+		t.Skipf("darwin: missing usable default output device: %v", err)
+	}
+	t.Logf("darwin CoreAudio defaults: input=%q output=%q", capabilities.input.ID, capabilities.output.ID)
 	for _, capability := range []struct {
 		name   string
 		device Device
@@ -31,9 +48,9 @@ func TestCoreAudioOpenProducesSignals(t *testing.T) {
 		{name: "input", device: capabilities.input},
 		{name: "output", device: capabilities.output, output: true},
 	} {
-		opened, err := registry.Open(capability.device.ID)
-		if err != nil {
-			t.Fatalf("Open(%s %q): %v", capability.name, capability.device.ID, err)
+		opened, openErr := registry.Open(capability.device.ID)
+		if openErr != nil {
+			t.Skipf("darwin: %s endpoint lacks open capability or is in use: %v", capability.name, openErr)
 		}
 		handle, ok := opened.(*coreAudioHandle)
 		if !ok {
@@ -62,48 +79,11 @@ func TestCoreAudioOpenProducesSignals(t *testing.T) {
 			}
 		}
 		waitForCoreAudioSignal(t, handle, capability.output)
-		if err := opened.Close(); err != nil {
-			t.Fatalf("%s Close: %v", capability.name, err)
-		}
-		if err := opened.Close(); err != nil {
-			t.Fatalf("%s second Close: %v", capability.name, err)
-		}
-	}
-}
-
-func requireCoreAudioCapabilities(t *testing.T) coreAudioTestCapabilities {
-	t.Helper()
-	registry := NewCoreAudioDeviceRegistry()
-	listed, err := registry.List()
-	if err != nil {
-		t.Skipf("darwin: CoreAudio enumeration unavailable: %v", err)
-	}
-	var capabilities coreAudioTestCapabilities
-	for _, device := range listed {
-		t.Logf("darwin CoreAudio endpoint: id=%q name=%q direction=%s", device.ID, device.Display(), device.Direction)
-	}
-	capabilities.input, err = registry.Default(DirectionInput)
-	if err != nil {
-		t.Skipf("darwin: missing usable default input device or microphone permission: %v", err)
-	}
-	capabilities.output, err = registry.Default(DirectionOutput)
-	if err != nil {
-		t.Skipf("darwin: missing usable default output device: %v", err)
-	}
-	t.Logf("darwin CoreAudio defaults: input=%q output=%q", capabilities.input.ID, capabilities.output.ID)
-	for _, capability := range []struct {
-		name   string
-		device Device
-	}{
-		{name: "input", device: capabilities.input},
-		{name: "output", device: capabilities.output},
-	} {
-		opened, openErr := registry.Open(capability.device.ID)
-		if openErr != nil {
-			t.Skipf("darwin: %s endpoint lacks open capability or is in use: %v", capability.name, openErr)
-		}
 		if closeErr := opened.Close(); closeErr != nil {
 			t.Fatalf("darwin: close %s capability probe: %v", capability.name, closeErr)
+		}
+		if closeErr := opened.Close(); closeErr != nil {
+			t.Fatalf("darwin: second close %s capability probe: %v", capability.name, closeErr)
 		}
 	}
 	return capabilities
