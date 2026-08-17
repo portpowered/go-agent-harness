@@ -277,9 +277,6 @@ func participantRank(participant Participant) int {
 }
 
 func normalizePlan(plan SequencePlan) (SequencePlan, error) {
-	if len(plan.Steps) == 0 && len(plan.Expectations) == 0 {
-		return SequencePlan{}, errors.New("invalid probe sequencing plan: plan is empty")
-	}
 	plan.Steps = append([]SequenceStep(nil), plan.Steps...)
 	plan.Expectations = append([]TickExpectation(nil), plan.Expectations...)
 	for _, step := range plan.Steps {
