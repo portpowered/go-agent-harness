@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // RunSessionWithInstructions resolves the ask-path system-prompt contract and
@@ -196,7 +197,7 @@ func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFa
 	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}
-	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}
 	return factory
@@ -221,7 +222,7 @@ func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, di
 	), nil
 }
 
-func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer, instructions string) (messages.SessionInferencer, error) {
+func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
@@ -232,7 +233,7 @@ func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.Open
 		oaiprovider.WithAPIKey(sessionCfg.APIKey),
 		oaiprovider.WithModel(sessionCfg.Model),
 		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
-		oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(dialer)),
+		oaiprovider.WithWebSocketDialer(dialer),
 	}
 	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -35,7 +36,7 @@ type SessionRunOptions struct {
 	Prompt        string
 
 	SessionInferencer messages.SessionInferencer
-	WebSocketDialer   grok.WebSocketDialer
+	WebSocketDialer   transport.Dialer
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {
@@ -233,40 +234,4 @@ func openAIRealtimeURL(sessionCfg config.OpenAIConfig) string {
 	}
 	parsed.RawQuery = query.Encode()
 	return parsed.String()
-}
-
-type openAIWebSocketDialerAdapter struct {
-	inner grok.WebSocketDialer
-}
-
-var _ oaiprovider.WebSocketDialer = (*openAIWebSocketDialerAdapter)(nil)
-
-func newOpenAIWebSocketDialerAdapter(inner grok.WebSocketDialer) *openAIWebSocketDialerAdapter {
-	return &openAIWebSocketDialerAdapter{inner: inner}
-}
-
-func (d *openAIWebSocketDialerAdapter) Dial(url string, headers map[string]string) (oaiprovider.WebSocketConn, error) {
-	conn, err := d.inner.Dial(url, headers)
-	if err != nil {
-		return nil, err
-	}
-	return &openAIWebSocketConnAdapter{inner: conn}, nil
-}
-
-type openAIWebSocketConnAdapter struct {
-	inner grok.WebSocketConn
-}
-
-var _ oaiprovider.WebSocketConn = (*openAIWebSocketConnAdapter)(nil)
-
-func (c *openAIWebSocketConnAdapter) ReadMessage() (int, []byte, error) {
-	return c.inner.ReadMessage()
-}
-
-func (c *openAIWebSocketConnAdapter) WriteMessage(messageType int, data []byte) error {
-	return c.inner.WriteMessage(messageType, data)
-}
-
-func (c *openAIWebSocketConnAdapter) Close() error {
-	return c.inner.Close()
 }

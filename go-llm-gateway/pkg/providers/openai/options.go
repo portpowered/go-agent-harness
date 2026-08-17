@@ -4,22 +4,19 @@ import (
 	"net/http"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // Option configures the OpenAI provider.
 type Option func(*OpenAIProvider)
 
-// WebSocketDialer abstracts realtime WebSocket connection establishment for tests.
-type WebSocketDialer interface {
-	Dial(url string, headers map[string]string) (WebSocketConn, error)
-}
+// WebSocketDialer is retained as a compatibility name for the shared
+// provider-neutral transport contract.
+type WebSocketDialer = transport.Dialer
 
-// WebSocketConn abstracts a realtime WebSocket connection for tests.
-type WebSocketConn interface {
-	ReadMessage() (messageType int, p []byte, err error)
-	WriteMessage(messageType int, data []byte) error
-	Close() error
-}
+// WebSocketConn is retained as a compatibility name for the shared
+// provider-neutral transport contract.
+type WebSocketConn = transport.Conn
 
 // WithHTTPClient sets a custom HTTP client for API calls (e.g. for record/replay testing).
 func WithHTTPClient(client *http.Client) Option {
@@ -63,7 +60,7 @@ func WithAPIKey(key string) Option {
 }
 
 // WithWebSocketDialer sets a custom realtime WebSocket dialer for tests or replay.
-func WithWebSocketDialer(d WebSocketDialer) Option {
+func WithWebSocketDialer(d transport.Dialer) Option {
 	return func(p *OpenAIProvider) {
 		p.realtimeDialer = d
 	}

@@ -7,12 +7,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 var _ messages.Session = (*realtimeSession)(nil)
 
 type realtimeSession struct {
-	conn    WebSocketConn
+	conn    transport.Conn
 	logger  logging.Logger
 	sendCh  chan models.SessionEvent
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
@@ -23,7 +24,7 @@ type realtimeSession struct {
 
 var _ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
 
-func newRealtimeSession(conn WebSocketConn, logger logging.Logger) *realtimeSession {
+func newRealtimeSession(conn transport.Conn, logger logging.Logger) *realtimeSession {
 	return &realtimeSession{
 		conn:    conn,
 		logger:  logger,

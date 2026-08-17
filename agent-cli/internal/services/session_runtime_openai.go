@@ -10,8 +10,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
@@ -88,11 +88,11 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}, nil
 }
 
-func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	opts := make([]oaiprovider.Option, 0, 1)
-	opts = append(opts, oaiprovider.WithWebSocketDialer(newOpenAIWebSocketDialerAdapter(dialer)))
+	opts = append(opts, oaiprovider.WithWebSocketDialer(dialer))
 	return NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg, opts...)
 }
