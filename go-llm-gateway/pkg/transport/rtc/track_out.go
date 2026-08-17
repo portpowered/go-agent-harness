@@ -339,33 +339,64 @@ func contextCause(ctx context.Context) error {
 type wallClockPacer struct {
 	started bool
 	start   time.Time
+	now     func() time.Time
+	wait    func(context.Context, time.Duration) error
 }
 
-func newWallClockPacer() Pacer { return &wallClockPacer{} }
+func newWallClockPacer() Pacer {
+	return &wallClockPacer{
+		now:  time.Now,
+		wait: waitWallClock,
+	}
+}
 
 func (p *wallClockPacer) Wait(ctx context.Context, mediaSampleOffset uint64) error {
-	if !p.started {
-		p.started = true
-		p.start = time.Now()
+	if err := contextCauseIfDone(ctx); err != nil {
+		return err
 	}
-	deadline := p.start.Add(sampleOffsetDuration(mediaSampleOffset))
-	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil
-		}
-		timer := time.NewTimer(remaining)
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
+
+	now := p.now()
+	offsetDuration := sampleOffsetDuration(mediaSampleOffset)
+	start := p.start
+	if !p.started {
+		start = now
+	}
+	deadline := start.Add(offsetDuration)
+	if p.started && !deadline.After(now) {
+		// A late caller must not make a backlog burst. Re-anchor the media
+		// timeline at the current emission while retaining the requested
+		// interval for the next packet.
+		start = now.Add(-offsetDuration)
+		deadline = now
+	}
+
+	if err := p.wait(ctx, deadline.Sub(now)); err != nil {
+		return err
+	}
+	p.started = true
+	p.start = start
+	return nil
+}
+
+func waitWallClock(ctx context.Context, duration time.Duration) error {
+	if err := contextCauseIfDone(ctx); err != nil {
+		return err
+	}
+	if duration <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(duration)
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
 			}
-			return contextCause(ctx)
 		}
+		return contextCause(ctx)
 	}
 }
 
