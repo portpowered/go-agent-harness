@@ -99,10 +99,6 @@ func (e endpointConfig) connect(ctx context.Context, settings sessionSettings) (
 	if err != nil {
 		return nil, err
 	}
-	if err := waitForEvent(ctx, conn, "session.created"); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("wait for session.created: %w", err)
-	}
 	if err := writeEvent(ctx, conn, sessionUpdateEvent(e, settings)); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("send session.update: %w", err)
@@ -532,7 +528,10 @@ func probeLocalEndpoint(endpoint endpointConfig) bool {
 		return false
 	}
 	defer func() { _ = conn.Close() }()
-	return waitForEvent(ctx, conn, "session.created") == nil
+	if err := writeEvent(ctx, conn, sessionUpdateEvent(endpoint, sessionSettings{modalities: []string{"text"}})); err != nil {
+		return false
+	}
+	return waitForEvent(ctx, conn, "session.updated") == nil
 }
 
 func endpointURL(raw, model string) (string, error) {

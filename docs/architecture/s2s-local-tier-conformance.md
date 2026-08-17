@@ -28,6 +28,9 @@ latest same-day run, the pinned LocalAI fixture was reachable at
 against that image. The live command exits non-zero for the two reachable
 behaviors whose positive assertions reject the subject; those failures are the
 measured **NOT SERVED** evidence below, not skipped or inferred results.
+The v4.8.2 handshake emits `session.created` after the first client
+`session.update`, so the bounded probe and shared connector send that update
+before waiting for `session.updated`.
 
 OpenAI was credential-gated and did not run because
 `AGENT_MODEL__OPENAI__API_KEY` was absent. Its rows remain **UNMEASURED**;
@@ -35,11 +38,11 @@ there is no OpenAI tier conclusion from this run.
 
 | Measurement date | Provider / endpoint tier | Behavior | Result | Latency | Observed evidence | Divergence / gating conclusion |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-08-16 | LocalAI / T2 | Audio round trip | **SERVED** — passing live assertion | 3.827s | 1 audio delta, 82,944 decoded PCM bytes, RMS `0.095216` | T2 may gate audio replay/round-trip work; OpenAI reference measurement remains pending |
-| 2026-08-16 | LocalAI / T2 | Three-turn context | **NOT SERVED** — positive assertion rejected | 1.862s | Replies were `READY`, `READY`, then `UNKNOWN`; retained fact `cobalt-17` was absent | T2 cannot gate retained context; T3 OpenAI measurement is required |
-| 2026-08-16 | LocalAI / T2 | VAD/barge-in | **SERVED** — passing live assertion | 2.459s | `speech_started=true`, cancellation=true, playback flush=true, 1 audio delta before cancellation | T2 may gate VAD/barge-in work; OpenAI reference measurement remains pending |
-| 2026-08-16 | LocalAI / T2 | Model-chosen function call | **SERVED** — passing live assertion | 8.885s | Exactly one `lookup_weather` call; no-tools control observed 0 calls | T2 may gate model-chosen tool dispatch; OpenAI reference measurement remains pending |
-| 2026-08-16 | LocalAI / T2 | Image input | **NOT SERVED** — positive request rejected | 76ms | `image input is not supported` with `prediction_failed`; backend advised that an `mmproj` is required | T2 cannot gate vision; OpenAI is the only remaining live tier that can establish the vision gate |
+| 2026-08-16 | LocalAI / T2 | Audio round trip | **SERVED** — passing live assertion | 3.063s | 1 audio delta, 115,712 decoded PCM bytes, RMS `0.085274` | T2 may gate audio replay/round-trip work; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Three-turn context | **NOT SERVED** — positive assertion rejected | 1.632s | Replies were `READY`, `READY`, then `UNKNOWN`; withheld-history control also returned `UNKNOWN`, while `cobalt-17` was absent | T2 cannot gate retained context; T3 OpenAI measurement is required |
+| 2026-08-16 | LocalAI / T2 | VAD/barge-in | **SERVED** — passing live assertion | 10.248s | `speech_started=true`, cancellation=true, playback flush=true, 1 audio delta before cancellation | T2 may gate VAD/barge-in work; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Model-chosen function call | **SERVED** — passing live assertion | 4.347s | Exactly one `lookup_weather` call; no-tools control observed 0 calls | T2 may gate model-chosen tool dispatch; OpenAI reference measurement remains pending |
+| 2026-08-16 | LocalAI / T2 | Image input | **NOT SERVED** — positive request rejected | 433ms | `image input is not supported` with `prediction_failed`; backend advised that an `mmproj` is required; no-image control returned `UNKNOWN` | T2 cannot gate vision; OpenAI is the only remaining live tier that can establish the vision gate |
 | 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Audio round trip | **UNMEASURED** — credential-gated skip | — | No live request; credential value was absent and not logged | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
 | 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | Three-turn context | **UNMEASURED** — credential-gated skip | — | No live conversation | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |
 | 2026-08-16 | OpenAI / T3 (`gpt-realtime-2.1-mini`) | VAD/barge-in | **UNMEASURED** — credential-gated skip | — | No live VAD/cancellation sequence | Rerun with `AGENT_MODEL__OPENAI__API_KEY` |

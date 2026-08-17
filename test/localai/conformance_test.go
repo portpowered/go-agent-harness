@@ -172,12 +172,7 @@ func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointCon
 		t.Logf("context turn=%d reply=%q", turnIndex+1, final.text)
 	}
 	_ = conn.Close()
-	if err := requireContextFact(final.text, contextFact); err != nil {
-		return behaviorObservation{
-			latency:  time.Since(started),
-			evidence: fmt.Sprintf("turn1=READY turn2=READY turn3=%q", final.text),
-		}, err
-	}
+	positiveErr := requireContextFact(final.text, contextFact)
 
 	// The same assertion is deliberately exercised without the first two
 	// conversation items. A model that guesses the answer would make the
@@ -191,22 +186,27 @@ func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointCon
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("withheld-history control response: %w", err)
 	}
-	if err := requireContextFact(control.text, contextFact); err == nil {
+	withheldHistoryErr := requireContextFact(control.text, contextFact)
+	if withheldHistoryErr == nil {
 		return behaviorObservation{}, fmt.Errorf("withheld-history negative control unexpectedly passed: reply=%q", control.text)
 	} else {
-		t.Logf("negative control withheld-history rejected: %v", err)
+		t.Logf("negative control withheld-history rejected: %v", withheldHistoryErr)
 	}
-	return behaviorObservation{
+	observation := behaviorObservation{
 		latency:  time.Since(started),
 		evidence: fmt.Sprintf("turn3=%q withheld_history=%q", final.text, control.text),
-	}, nil
+	}
+	if positiveErr != nil {
+		return observation, positiveErr
+	}
+	return observation, nil
 }
 
 func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
 	started := time.Now()
 	conn, err := endpoint.connect(ctx, sessionSettings{
 		modalities:   []string{"audio"},
-		instructions: "Count slowly from one to twenty so playback remains in flight long enough for an interruption.",
+		instructions: "Count slowly from one to one hundred in a continuous spoken response. Say every number clearly and do not stop early, so playback remains in flight long enough for an interruption.",
 		audio:        true,
 		serverVAD:    true,
 	})
@@ -234,6 +234,19 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	vadStarted := false
 	cancelled := false
 	flushObserved := false
+	sendBargeAudio := func() error {
+		if bargeSent {
+			return nil
+		}
+		if err := appendAudio(ctx, conn, audio, endpoint.inputRate); err != nil {
+			return fmt.Errorf("append barge-in audio: %w", err)
+		}
+		if err := appendAudio(ctx, conn, silence, endpoint.inputRate); err != nil {
+			return fmt.Errorf("append barge-in silence: %w", err)
+		}
+		bargeSent = true
+		return nil
+	}
 	for {
 		event, err := readEvent(ctx, conn)
 		if err != nil {
@@ -259,11 +272,8 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 				observation.audioDeltasBeforeCancel++
 			}
 			observation.audio = append(observation.audio, chunk...)
-			if !bargeSent {
-				if err := appendAudio(ctx, conn, audio, endpoint.inputRate); err != nil {
-					return behaviorObservation{}, fmt.Errorf("append barge-in audio: %w", err)
-				}
-				bargeSent = true
+			if err := sendBargeAudio(); err != nil {
+				return behaviorObservation{}, err
 			}
 		case "response.cancelled":
 			cancelled = true
@@ -363,15 +373,7 @@ func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		{"type": "input_image", "image_url": imageURI},
 	})
 	_ = conn.Close()
-	if err != nil {
-		return behaviorObservation{
-			latency:  time.Since(started),
-			evidence: fmt.Sprintf("positive_error=%v", err),
-		}, fmt.Errorf("image response: %w", err)
-	}
-	if err := requireImageFact(positive.text, imageFact); err != nil {
-		return behaviorObservation{}, err
-	}
+	positiveErr := err
 
 	controlConn, err := endpoint.connect(ctx, sessionSettings{modalities: []string{"text"}, instructions: instructions})
 	if err != nil {
@@ -382,15 +384,24 @@ func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("no-image control response: %w", err)
 	}
-	if err := requireImageFact(control.text, imageFact); err == nil {
+	noImageErr := requireImageFact(control.text, imageFact)
+	if noImageErr == nil {
 		return behaviorObservation{}, fmt.Errorf("no-image negative control unexpectedly passed: reply=%q", control.text)
 	} else {
-		t.Logf("negative control no-image rejected: %v", err)
+		t.Logf("negative control no-image rejected: %v", noImageErr)
 	}
-	return behaviorObservation{
+	observation := behaviorObservation{
 		latency:  time.Since(started),
 		evidence: fmt.Sprintf("image_fact=%q reply=%q no_image_reply=%q", imageFact, positive.text, control.text),
-	}, nil
+	}
+	if positiveErr != nil {
+		observation.evidence = fmt.Sprintf("positive_error=%v %s", positiveErr, observation.evidence)
+		return observation, fmt.Errorf("image response: %w", positiveErr)
+	}
+	if err := requireImageFact(positive.text, imageFact); err != nil {
+		return observation, err
+	}
+	return observation, nil
 }
 
 func countAudioDeltas(events []string) int {
