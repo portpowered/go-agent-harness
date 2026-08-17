@@ -22,7 +22,7 @@ import (
 // RunSessionWithRecordingDirectory is the directory-recording entry point for
 // callers that do not need the optional audio-out, prompt, or duration seams.
 func RunSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts SessionRunOptions, directory string) error {
-	return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, "", 0, SessionTextSeed{}, "")
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, "", 0, SessionTextSeed{}, "", false)
 }
 
 // RunSessionWithRecordingDirectoryAndAudioOutAndTextSeedAndMaxDuration runs the
@@ -38,7 +38,7 @@ func RunSessionWithRecordingDirectoryAndAudioOutAndTextSeedAndMaxDuration(
 	maxDuration time.Duration,
 	seed SessionTextSeed,
 ) (runErr error) {
-	return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, "")
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, "", false)
 }
 
 // RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration
@@ -55,8 +55,25 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMax
 	seed SessionTextSeed,
 	systemPrompt string,
 ) (runErr error) {
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true)
+}
+
+func runSessionWithRecordingDirectory(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionRunOptions,
+	directory string,
+	audioOutPath string,
+	maxDuration time.Duration,
+	seed SessionTextSeed,
+	systemPrompt string,
+	withInstructions bool,
+) (runErr error) {
 	if strings.TrimSpace(directory) == "" {
-		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)
+		if withInstructions {
+			return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)
+		}
+		return RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed)
 	}
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
@@ -70,7 +87,7 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMax
 		return err
 	}
 
-	plan, cleanup, err := planSessionForDirectoryRecording(opts, systemPrompt)
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
 	}
@@ -157,7 +174,11 @@ func validateSessionRecordingOptions(opts SessionRunOptions) error {
 	return validateSessionRunOptions(opts)
 }
 
-func planSessionForDirectoryRecording(opts SessionRunOptions, systemPrompt string) (sessionRuntimePlan, func(), error) {
+func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
+	return planSessionForDirectoryRecordingWithInstructions(opts, "", false)
+}
+
+func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
 	planOpts := opts
 	cleanup := func() {}
 	if opts.RecordPath == "" && opts.ReplayPath == "" && opts.SessionInferencer == nil {
@@ -174,7 +195,7 @@ func planSessionForDirectoryRecording(opts SessionRunOptions, systemPrompt strin
 
 	var plan sessionRuntimePlan
 	var err error
-	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
+	if !withInstructions || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
 		plan, err = planSessionRuntime(planOpts)
 	} else {
 		instructions, instructionErr := resolveSessionInstructions(opts, systemPrompt)
