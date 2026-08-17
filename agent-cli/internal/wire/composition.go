@@ -226,6 +226,7 @@ func ComposeAgentCLI(
 		values.inferencer,
 		values.sessionInferencer,
 		compositionOptions.relaxModelValidation,
+		nil,
 	)
 }
 
@@ -233,14 +234,14 @@ func ComposeAgentCLI(
 // executor. It shares the same live-port defaults and explicit assembly helper
 // as all test paths.
 func InitializeAgentCLI() (*cli.AgentCLI, error) {
-	return initializeAgentCLIWithPorts(false)
+	return initializeAgentCLIWithPorts(false, nil)
 }
 
 // InitializeMockAgentCLIWithPorts is the one uniform mock-injection entry
 // point. Its cases are named replacements, validated against the same live
 // port definitions used by defaults, discovery, and required-port validation.
 func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
-	return initializeAgentCLIWithPorts(true, swaps...)
+	return initializeAgentCLIWithPorts(true, nil, swaps...)
 }
 
 // InitializeMockAgentCLI is retained for existing integration callers and
@@ -264,18 +265,26 @@ func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, in
 func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
 	return initializeAgentCLIWithPorts(
 		relaxModelValidation,
+		nil,
 		NewPortSwap(PortToolExecutor, toolExecutor),
 		NewPortSwap(PortInferencer, inferencer),
 		NewPortSwap(PortSessionInferencer, sessionInferencer),
 	)
 }
 
+// assemblyObserver is an optional, package-local observation seam for the
+// conformance suite. Production composition passes nil; the observer is
+// carried into the generated assembly graph and sees the exact port values
+// that cross the normal assembly boundary.
+type assemblyObserver func(compositionValues)
+
 // initializeAgentCLIWithPorts is the single assembly path for default and
 // mock composition. Swap validation happens before the registry or any port
 // default is constructed. Defaults are then created only for ports that were
 // not explicitly replaced, which keeps a displaced real implementation from
-// running its constructor alongside a supplied double.
-func initializeAgentCLIWithPorts(relaxModelValidation bool, swaps ...PortSwap) (*cli.AgentCLI, error) {
+// running its constructor alongside a supplied double. The package-local
+// observer is nil for all production entry points.
+func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObserver, swaps ...PortSwap) (*cli.AgentCLI, error) {
 	definitions := livePortDefinitions()
 	if err := validatePortSwaps(definitions, swaps); err != nil {
 		return nil, err
@@ -296,7 +305,18 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, swaps ...PortSwap) (
 		values.inferencer,
 		values.sessionInferencer,
 		relaxModelValidation,
+		withDefaultCallCounts(observer, values.defaultCalls),
 	)
+}
+
+func withDefaultCallCounts(observer assemblyObserver, defaultCalls map[string]int) assemblyObserver {
+	if observer == nil {
+		return nil
+	}
+	return func(values compositionValues) {
+		values.defaultCalls = defaultCalls
+		observer(values)
+	}
 }
 
 func compositionValuesWithPorts(definitions []portDefinition, registry *tools.ToolRegistry, swaps []PortSwap) (compositionValues, error) {
@@ -304,7 +324,7 @@ func compositionValuesWithPorts(definitions []portDefinition, registry *tools.To
 		return compositionValues{}, err
 	}
 
-	values := compositionValues{}
+	values := compositionValues{defaultCalls: make(map[string]int, len(definitions))}
 	swapped := make(map[string]struct{}, len(swaps))
 	for _, swap := range swaps {
 		swapped[swap.Name] = struct{}{}
@@ -313,6 +333,7 @@ func compositionValuesWithPorts(definitions []portDefinition, registry *tools.To
 		if _, replaced := swapped[definition.descriptor.Name]; replaced || definition.defaultValue == nil {
 			continue
 		}
+		values.defaultCalls[definition.descriptor.Name]++
 		definition.assign(&values, definition.defaultValue(registry))
 	}
 	for _, swap := range swaps {
@@ -348,6 +369,7 @@ type compositionValues struct {
 	clockSource       Clock
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
+	defaultCalls      map[string]int
 }
 
 type portDefinition struct {
