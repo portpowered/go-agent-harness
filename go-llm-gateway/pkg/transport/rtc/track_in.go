@@ -346,6 +346,9 @@ func (s *playout) push(packet *rtp.Packet) error {
 	} else if ext-s.nextSeq > int64(s.track.config.jitterPackets) {
 		return trackError(ErrImpossibleRTPProgress, "RTP progress", fmt.Errorf("sequence %d exceeds jitter window", packet.SequenceNumber))
 	}
+	if ext > s.maxSeq {
+		s.maxSeq = ext
+	}
 	s.packets[ext] = clonePacket(packet)
 	return nil
 }

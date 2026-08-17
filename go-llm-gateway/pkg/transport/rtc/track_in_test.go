@@ -257,6 +257,43 @@ func TestInboundTrackDeadlineDrivesPLCWithoutEOF(t *testing.T) {
 	}
 }
 
+func TestInboundTrackPostStartGapDrivesPLCBeforeBufferedPacket(t *testing.T) {
+	source := newTestPacketSource(1)
+	decoder := &testOpusDecoder{samples: 960}
+	track := newTestTrack(t, source, decoder, InboundTrackConfig{JitterDepth: 20 * time.Millisecond})
+	state := playout{track: track, packets: make(map[int64]*rtp.Packet)}
+
+	if err := state.push(testRTPPacket(100, 2000, 0)); err != nil {
+		t.Fatalf("push initial packet: %v", err)
+	}
+	if err := state.tick(); err != nil {
+		t.Fatalf("initial playout tick: %v", err)
+	}
+	readTestFrame(t, track)
+
+	if err := state.push(testRTPPacket(102, 3920, 2)); err != nil {
+		t.Fatalf("push packet after playout started: %v", err)
+	}
+	if err := state.tick(); err != nil {
+		t.Fatalf("gap playout tick: %v", err)
+	}
+	concealed := readTestFrame(t, track)
+	if decoder.plcCount() != 1 || !finiteRMS(concealed.Samples) {
+		t.Fatalf("post-start PLC = calls %d, valid RMS %v; want one valid concealed frame", decoder.plcCount(), finiteRMS(concealed.Samples))
+	}
+
+	if err := state.tick(); err != nil {
+		t.Fatalf("resume playout tick: %v", err)
+	}
+	resumed := readTestFrame(t, track)
+	if resumed.Samples[10] != voicedTestFrame(2, 960)[10] {
+		t.Fatal("buffered packet did not resume ordinary decode after post-start PLC")
+	}
+	if got := decoder.decodedIDs(); !equalBytes(got, []byte{0, 2}) {
+		t.Fatalf("decoded IDs = %v, want [0 2] with one post-start PLC", got)
+	}
+}
+
 func TestInboundTrackSuppressesDuplicatesLatePacketsAndOrdersWraparound(t *testing.T) {
 	t.Run("duplicate-and-late", func(t *testing.T) {
 		source := newTestPacketSource(16)
