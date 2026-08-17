@@ -19,15 +19,12 @@ func TestCatalogGoldenAndOneToOne(t *testing.T) {
 	var golden struct {
 		Profiles []struct {
 			Name, Instructions string
-			Expected           agentprofile.ExpectedOutcome
+			Expected           agentprofile.ExpectedOutcome `json:"expected"`
 		} `json:"profiles"`
 	}
 	data, err := os.ReadFile(filepath.Join("testdata", "catalog.golden.json"))
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
-	}
-	if err := json.Unmarshal(data, &golden); err != nil {
-		t.Fatalf("decode golden: %v", err)
+	if err != nil || json.Unmarshal(data, &golden) != nil {
+		t.Fatalf("read/decode golden: %v", err)
 	}
 	loader := agentprofile.NewLoader(realCatalogFS(t))
 	names, err := loader.Names()
@@ -42,11 +39,8 @@ func TestCatalogGoldenAndOneToOne(t *testing.T) {
 		t.Fatalf("catalog names = %v, want exactly sorted names %v", names, wantNames)
 	}
 	profiles, err := loader.Catalog()
-	if err != nil {
-		t.Fatalf("Catalog: %v", err)
-	}
-	if len(profiles) != len(names) {
-		t.Fatalf("loaded profile count = %d, want %d", len(profiles), len(names))
+	if err != nil || len(profiles) != len(names) {
+		t.Fatalf("Catalog = %d profiles, error %v; want %d", len(profiles), err, len(names))
 	}
 	for i, want := range golden.Profiles {
 		got := profiles[i]
@@ -57,15 +51,12 @@ func TestCatalogGoldenAndOneToOne(t *testing.T) {
 }
 
 func TestLoadUnknownNamesAreTypedAndReturnZero(t *testing.T) {
-	loader := agentprofile.NewLoader(profileFS("instructions", validOutcome))
+	loader := agentprofile.NewLoader(mapFS(map[string]string{"profile/AGENTS.md": "instructions", "profile/expected-outcome.json": validOutcome}))
 	for _, name := range []string{"", "missing", "../shell-command", "shell/command", `C:\\shell-command`, "/shell-command"} {
 		profile, err := loader.Load(name)
 		var unknown *agentprofile.UnknownProfileError
-		if err == nil || !errors.As(err, &unknown) || !errors.Is(err, agentprofile.ErrUnknownProfile) || unknown.Name != name || strings.TrimSpace(unknown.Reason) == "" {
-			t.Fatalf("Load(%q) = profile=%+v error=%T %v, want typed unknown and zero profile", name, profile, err, err)
-		}
-		if !reflect.DeepEqual(profile, agentprofile.Profile{}) {
-			t.Fatalf("Load(%q) returned usable profile %+v", name, profile)
+		if err == nil || !errors.As(err, &unknown) || !errors.Is(err, agentprofile.ErrUnknownProfile) || unknown.Name != name || strings.TrimSpace(unknown.Reason) == "" || !reflect.DeepEqual(profile, agentprofile.Profile{}) {
+			t.Fatalf("Load(%q) = profile=%+v error=%T %v, want typed unknown", name, profile, err, err)
 		}
 	}
 }
@@ -73,26 +64,14 @@ func TestLoadUnknownNamesAreTypedAndReturnZero(t *testing.T) {
 func TestLoadMalformedCasesAreTypedAndReturnZero(t *testing.T) {
 	const instructions = "use no tools"
 	cases := map[string]map[string]string{
-		"empty instructions":      {"profile/AGENTS.md": " \n", "profile/expected-outcome.json": validOutcome},
-		"malformed declaration":   {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":`},
-		"missing declaration":     {"profile/AGENTS.md": instructions},
-		"duplicate declarations":  {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": validOutcome, "profile/expected.json": validOutcome},
-		"invalid outcome kind":    {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"network"}`},
-		"empty command":           {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"shell-command","command":""}`},
-		"unsafe target":           {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"file-read","target_file":"../secret"}`},
-		"wrong ordered count":     {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"ordered-multi-tool","ordered_calls":["file_read"],"first_result_informs_second":true}`},
-		"non-zero no-tools count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"no-tools","call_count":1}`},
+		"empty instructions": {"profile/AGENTS.md": " \n", "profile/expected-outcome.json": validOutcome}, "malformed declaration": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":`}, "missing declaration": {"profile/AGENTS.md": instructions},
+		"duplicate declarations": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": validOutcome, "profile/expected.json": validOutcome}, "invalid outcome kind": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"network"}`}, "empty command": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"shell-command","command":""}`},
+		"unsafe target": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"file-read","target_file":"../secret"}`}, "wrong ordered count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"ordered-multi-tool","ordered_calls":["file_read"],"first_result_informs_second":true}`}, "non-zero no-tools count": {"profile/AGENTS.md": instructions, "profile/expected-outcome.json": `{"kind":"no-tools","call_count":1}`},
 	}
 	for name, files := range cases {
 		t.Run(name, func(t *testing.T) {
 			profile, err := agentprofile.Load(mapFS(files), "profile")
-			var malformed *agentprofile.MalformedProfileError
-			if err == nil || !errors.As(err, &malformed) || !errors.Is(err, agentprofile.ErrMalformedProfile) || malformed.Profile != "profile" || strings.TrimSpace(malformed.Reason) == "" {
-				t.Fatalf("error = %T %v, want typed profile diagnostic", err, err)
-			}
-			if !reflect.DeepEqual(profile, agentprofile.Profile{}) {
-				t.Fatalf("malformed load returned usable profile %+v", profile)
-			}
+			assertMalformed(t, profile, err)
 		})
 	}
 }
@@ -107,8 +86,11 @@ func TestCatalogRejectsOrphanDeclaration(t *testing.T) {
 
 const validOutcome = `{"kind":"no-tools","call_count":0}`
 
-func profileFS(instructions, outcome string) fstest.MapFS {
-	return mapFS(map[string]string{"profile/AGENTS.md": instructions, "profile/expected-outcome.json": outcome})
+func assertMalformed(t *testing.T, profile agentprofile.Profile, err error) {
+	var malformed *agentprofile.MalformedProfileError
+	if err == nil || !errors.As(err, &malformed) || !errors.Is(err, agentprofile.ErrMalformedProfile) || malformed.Profile != "profile" || strings.TrimSpace(malformed.Reason) == "" {
+		t.Fatalf("error = %T %v, want typed profile diagnostic", err, err)
+	}
 }
 
 func mapFS(files map[string]string) fstest.MapFS {
@@ -120,11 +102,6 @@ func mapFS(files map[string]string) fstest.MapFS {
 }
 
 func realCatalogFS(t *testing.T) fs.FS {
-	t.Helper()
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", ".."))
-	return os.DirFS(filepath.Join(root, "agent-cli", "testdata", "agents-profiles"))
+	_, source, _, _ := runtime.Caller(0)
+	return os.DirFS(filepath.Join(filepath.Dir(source), "..", "..", "..", "agent-cli", "testdata", "agents-profiles"))
 }

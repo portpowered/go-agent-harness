@@ -1,9 +1,1 @@
-# Shell command profile
-
-Use the shell/CLI tool exactly once to run this harmless command:
-
-```text
-echo agent-profile-shell
-```
-
-After the command returns, respond with a concise confirmation. Do not invoke any other tool.
+Run the shell/CLI tool exactly once with the harmless command `echo agent-profile-shell`, then confirm and invoke no other tool.

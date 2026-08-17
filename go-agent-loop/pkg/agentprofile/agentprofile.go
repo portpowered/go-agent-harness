@@ -48,51 +48,38 @@ type Profile struct {
 	ExpectedOutcome ExpectedOutcome
 }
 
-var (
-	// ErrUnknownProfile identifies an unsafe or absent profile name.
-	ErrUnknownProfile = errors.New("unknown agent profile")
-	// ErrMalformedProfile identifies a profile whose instructions or
-	// declaration cannot be used safely and deterministically.
-	ErrMalformedProfile = errors.New("malformed agent profile")
-)
+// ErrUnknownProfile identifies an unsafe or absent profile name.
+var ErrUnknownProfile = errors.New("unknown agent profile")
+
+// ErrMalformedProfile identifies a profile whose instructions or declaration cannot be used safely.
+var ErrMalformedProfile = errors.New("malformed agent profile")
 
 // UnknownProfileError reports an unsafe or absent name.
-type UnknownProfileError struct {
-	Name   string
-	Reason string
-}
+type UnknownProfileError struct{ Name, Reason string }
 
 func (e *UnknownProfileError) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
 	return fmt.Sprintf("unknown agent profile %q: %s", e.Name, e.Reason)
 }
 
 func (e *UnknownProfileError) Unwrap() error { return ErrUnknownProfile }
 
 // MalformedProfileError identifies a profile and actionable reason.
-type MalformedProfileError struct {
-	Profile string
-	Reason  string
-}
+type MalformedProfileError struct{ Profile, Reason string }
 
 func (e *MalformedProfileError) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
 	return fmt.Sprintf("malformed agent profile %q: %s", e.Profile, e.Reason)
 }
 
 func (e *MalformedProfileError) Unwrap() error { return ErrMalformedProfile }
 
 // Loader reads profiles from an injected filesystem root.
-type Loader struct {
-	root fs.FS
-}
+type Loader struct{ root fs.FS }
 
 // NewLoader constructs a loader for root.
 func NewLoader(root fs.FS) *Loader { return &Loader{root: root} }
+
+// Load reads one profile from root.
+func Load(root fs.FS, name string) (Profile, error) { return NewLoader(root).Load(name) }
 
 // Load reads one profile by canonical directory name.
 func (l *Loader) Load(name string) (Profile, error) {
@@ -102,49 +89,36 @@ func (l *Loader) Load(name string) (Profile, error) {
 	if l == nil || l.root == nil {
 		return Profile{}, malformed(name, "profile filesystem is nil")
 	}
-
 	info, err := fs.Stat(l.root, name)
-	if errors.Is(err, fs.ErrNotExist) {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
 		return Profile{}, &UnknownProfileError{Name: name, Reason: "profile is not present in the supplied catalog"}
-	}
-	if err != nil {
+	case err != nil:
 		return Profile{}, malformed(name, fmt.Sprintf("stat profile: %v", err))
-	}
-	if !info.IsDir() {
+	case !info.IsDir():
 		return Profile{}, malformed(name, "catalog entry is not a profile directory")
 	}
 
-	instructionsData, err := fs.ReadFile(l.root, path.Join(name, InstructionsFileName))
+	instructions, err := readFile(l.root, name, InstructionsFileName)
 	if err != nil {
-		return Profile{}, malformed(name, fmt.Sprintf("read %s: %v", InstructionsFileName, err))
+		return Profile{}, malformed(name, err.Error())
 	}
-	if !validInstructions(instructionsData) {
+	if len(instructions) == 0 || !utf8.Valid(instructions) || strings.TrimSpace(string(instructions)) == "" {
 		return Profile{}, malformed(name, fmt.Sprintf("%s must contain non-empty UTF-8 instructions", InstructionsFileName))
 	}
-
 	declarationName, err := findDeclaration(l.root, name)
 	if err != nil {
 		return Profile{}, malformed(name, err.Error())
 	}
-	declarationData, err := fs.ReadFile(l.root, path.Join(name, declarationName))
-	if err != nil {
-		return Profile{}, malformed(name, fmt.Sprintf("read %s: %v", declarationName, err))
-	}
-	outcome, err := parseOutcome(declarationData)
+	declaration, err := readFile(l.root, name, declarationName)
 	if err != nil {
 		return Profile{}, malformed(name, err.Error())
 	}
-
-	return Profile{
-		Name:            name,
-		Instructions:    string(instructionsData),
-		ExpectedOutcome: outcome,
-	}, nil
-}
-
-// Load reads one profile from root.
-func Load(root fs.FS, name string) (Profile, error) {
-	return NewLoader(root).Load(name)
+	outcome, err := parseOutcome(declaration)
+	if err != nil {
+		return Profile{}, malformed(name, err.Error())
+	}
+	return Profile{Name: name, Instructions: string(instructions), ExpectedOutcome: outcome}, nil
 }
 
 // Names returns sorted profile directory names and rejects catalog-only files.
@@ -156,7 +130,6 @@ func (l *Loader) Names() ([]string, error) {
 	if err != nil {
 		return nil, malformed("<catalog>", fmt.Sprintf("read profile root: %v", err))
 	}
-
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -188,47 +161,40 @@ func (l *Loader) Catalog() ([]Profile, error) {
 	return profiles, nil
 }
 
+func readFile(root fs.FS, profile, name string) ([]byte, error) {
+	data, err := fs.ReadFile(root, path.Join(profile, name))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %v", name, err)
+	}
+	return data, nil
+}
+
 func validProfileName(name string) bool {
-	if name == "" || name != strings.TrimSpace(name) || !fs.ValidPath(name) {
-		return false
-	}
-	if strings.ContainsAny(name, `/\\`) || name == "." || name == ".." {
-		return false
-	}
-	for _, r := range name {
-		if !(r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
-			return false
-		}
-	}
-	return true
+	return name != "" && name == strings.TrimSpace(name) && fs.ValidPath(name) &&
+		!strings.ContainsAny(name, `/\`) && strings.IndexFunc(name, func(r rune) bool {
+		return !(r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+	}) == -1
 }
 
-func validInstructions(data []byte) bool {
-	return len(data) > 0 && utf8.Valid(data) && strings.TrimSpace(string(data)) != ""
-}
-
-func isDeclarationName(name string) bool {
-	return name == ExpectedOutcomeFileName || name == "expected.json"
-}
-
-func findDeclaration(root fs.FS, profileName string) (string, error) {
-	entries, err := fs.ReadDir(root, profileName)
+func findDeclaration(root fs.FS, profile string) (string, error) {
+	entries, err := fs.ReadDir(root, profile)
 	if err != nil {
 		return "", fmt.Errorf("read profile directory: %v", err)
 	}
-	declarations := make([]string, 0, 1)
+	name, count := "", 0
 	for _, entry := range entries {
-		if !entry.IsDir() && isDeclarationName(entry.Name()) {
-			declarations = append(declarations, entry.Name())
+		if !entry.IsDir() && (entry.Name() == ExpectedOutcomeFileName || entry.Name() == "expected.json") {
+			name, count = entry.Name(), count+1
 		}
 	}
-	if len(declarations) == 0 {
+	switch count {
+	case 0:
 		return "", errors.New("missing expected-outcome declaration")
+	case 1:
+		return name, nil
+	default:
+		return "", fmt.Errorf("expected exactly one expected-outcome declaration, found %d", count)
 	}
-	if len(declarations) != 1 {
-		return "", fmt.Errorf("expected exactly one expected-outcome declaration, found %d", len(declarations))
-	}
-	return declarations[0], nil
 }
 
 type outcomeDeclaration struct {
@@ -248,8 +214,8 @@ func parseOutcome(data []byte) (ExpectedOutcome, error) {
 	if err := decoder.Decode(&declaration); err != nil {
 		return ExpectedOutcome{}, fmt.Errorf("decode expected-outcome declaration: %v", err)
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
 		if err == nil {
 			return ExpectedOutcome{}, errors.New("expected-outcome declaration contains multiple JSON values")
 		}
@@ -257,13 +223,16 @@ func parseOutcome(data []byte) (ExpectedOutcome, error) {
 	}
 
 	kind := OutcomeKind(declaration.Kind)
-	if !isKnownOutcome(kind) {
+	switch kind {
+	case OutcomeShellCommand, OutcomeFileRead, OutcomeImageDescription, OutcomeOrderedTools, OutcomeNoTools:
+	default:
 		return ExpectedOutcome{}, fmt.Errorf("invalid outcome kind %q", declaration.Kind)
 	}
-	if err := rejectIrrelevantFields(declaration, kind); err != nil {
-		return ExpectedOutcome{}, err
+	if (declaration.Command != nil && kind != OutcomeShellCommand) || (declaration.TargetFile != nil && kind != OutcomeFileRead) ||
+		(declaration.ImageRequirement != nil && kind != OutcomeImageDescription) || (declaration.OrderedCalls != nil && kind != OutcomeOrderedTools) ||
+		(declaration.FirstResultInformsSecond != nil && kind != OutcomeOrderedTools) || (declaration.CallCount != nil && kind != OutcomeNoTools) {
+		return ExpectedOutcome{}, fmt.Errorf("outcome contains fields not valid for outcome kind %q", kind)
 	}
-
 	switch kind {
 	case OutcomeShellCommand:
 		if declaration.Command == nil || strings.TrimSpace(*declaration.Command) == "" {
@@ -284,63 +253,26 @@ func parseOutcome(data []byte) (ExpectedOutcome, error) {
 		if declaration.OrderedCalls == nil || len(*declaration.OrderedCalls) != 2 {
 			return ExpectedOutcome{}, errors.New("ordered-multi-tool outcome requires exactly two ordered_calls")
 		}
-		for index, call := range *declaration.OrderedCalls {
+		for i, call := range *declaration.OrderedCalls {
 			if strings.TrimSpace(call) == "" {
-				return ExpectedOutcome{}, fmt.Errorf("ordered-multi-tool outcome call %d must be non-empty", index)
+				return ExpectedOutcome{}, fmt.Errorf("ordered-multi-tool outcome call %d must be non-empty", i)
 			}
 		}
 		if declaration.FirstResultInformsSecond == nil || !*declaration.FirstResultInformsSecond {
 			return ExpectedOutcome{}, errors.New("ordered-multi-tool outcome requires first_result_informs_second=true")
 		}
-		return ExpectedOutcome{
-			Kind: kind, OrderedCalls: append([]string(nil), (*declaration.OrderedCalls)...),
-			FirstResultInformsSecond: true,
-		}, nil
+		return ExpectedOutcome{Kind: kind, OrderedCalls: append([]string(nil), (*declaration.OrderedCalls)...), FirstResultInformsSecond: true}, nil
 	case OutcomeNoTools:
 		if declaration.CallCount == nil || *declaration.CallCount != 0 {
 			return ExpectedOutcome{}, errors.New("no-tools outcome requires call_count=0")
 		}
 		return ExpectedOutcome{Kind: kind, CallCount: 0}, nil
-	default:
-		return ExpectedOutcome{}, fmt.Errorf("invalid outcome kind %q", declaration.Kind)
 	}
-}
-
-func rejectIrrelevantFields(declaration outcomeDeclaration, kind OutcomeKind) error {
-	fields := []struct {
-		name string
-		set  bool
-		want OutcomeKind
-	}{
-		{"command", declaration.Command != nil, OutcomeShellCommand},
-		{"target_file", declaration.TargetFile != nil, OutcomeFileRead},
-		{"image_requirement", declaration.ImageRequirement != nil, OutcomeImageDescription},
-		{"ordered_calls", declaration.OrderedCalls != nil, OutcomeOrderedTools},
-		{"first_result_informs_second", declaration.FirstResultInformsSecond != nil, OutcomeOrderedTools},
-		{"call_count", declaration.CallCount != nil, OutcomeNoTools},
-	}
-	for _, field := range fields {
-		if field.set && field.want != kind {
-			return fmt.Errorf("field %s is not valid for outcome kind %q", field.name, kind)
-		}
-	}
-	return nil
+	return ExpectedOutcome{}, fmt.Errorf("invalid outcome kind %q", declaration.Kind)
 }
 
 func validTargetFile(name string) bool {
-	if name == "" || name != strings.TrimSpace(name) || !fs.ValidPath(name) || name == "." {
-		return false
-	}
-	return !path.IsAbs(name) && !strings.ContainsAny(name, ":\\")
-}
-
-func isKnownOutcome(kind OutcomeKind) bool {
-	switch kind {
-	case OutcomeShellCommand, OutcomeFileRead, OutcomeImageDescription, OutcomeOrderedTools, OutcomeNoTools:
-		return true
-	default:
-		return false
-	}
+	return name != "" && name == strings.TrimSpace(name) && fs.ValidPath(name) && !path.IsAbs(name) && !strings.ContainsAny(name, ":\\")
 }
 
 func malformed(profile, reason string) *MalformedProfileError {
