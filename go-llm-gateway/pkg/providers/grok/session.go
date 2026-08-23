@@ -3,11 +3,13 @@ package grok
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -125,7 +127,21 @@ func (s *grokSession) readLoop(ctx context.Context) {
 				logging.Field{Key: "error", Value: err},
 				logging.Field{Key: "raw", Value: string(data)},
 			)
-			continue
+			// An unparseable provider frame is a protocol violation, not a
+			// skippable event: surface a classified terminal ERROR so consumers
+			// can diagnose the failure instead of silently losing the stream.
+			_ = s.recvBuf.Write(ctx, messages.StreamMessage{
+				Type: messages.StreamTypeError,
+				Value: messages.NewErrorValueWithTerminal(
+					fmt.Sprintf("malformed provider event: %v", err),
+					providers.ErrorClassInvalidRequest,
+					messages.TerminalReasonTerminalFailure,
+					messages.TerminalProvenanceGateway,
+					messages.TerminalOutputNone,
+				),
+			})
+			_ = s.Close()
+			return
 		}
 
 		msgs := translateInbound(event)

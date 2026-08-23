@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // readFromSession reads one StreamMessage from the session's receive buffer,
@@ -233,9 +234,10 @@ func TestSession_CloseStopsDone(t *testing.T) {
 
 func TestSession_MalformedServerEvent(t *testing.T) {
 	conn := newMockConn()
-	// First message is malformed (no type field).
+	// The message is malformed (no type field).
 	conn.addServerMessage([]byte(`{"data": "no type"}`))
-	// Second message is valid — emits a MESSAGE.END via response.done.
+	// A valid event afterwards must never be delivered: the malformed frame is
+	// a protocol violation that terminally fails the session.
 	conn.addServerEvent("response.done", nil)
 
 	session := newGrokSession(conn, logging.DummyLogger())
@@ -244,10 +246,26 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	// The malformed event should be skipped; we should receive the valid one.
 	got := readFromSession(t, ctx, session)
-	if got.Type != messages.StreamTypeMessageEnd {
-		t.Errorf("expected %q, got %q", messages.StreamTypeMessageEnd, got.Type)
+	if got.Type != messages.StreamTypeError {
+		t.Fatalf("expected %q, got %q", messages.StreamTypeError, got.Type)
+	}
+	errValue, ok := got.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("expected *messages.ErrorValue, got %T", got.Value)
+	}
+	if errValue.Classification != providers.ErrorClassInvalidRequest {
+		t.Errorf("classification = %q, want %q", errValue.Classification, providers.ErrorClassInvalidRequest)
+	}
+	if errValue.TerminalProvenance != messages.TerminalProvenanceGateway {
+		t.Errorf("terminal_provenance = %q, want %q", errValue.TerminalProvenance, messages.TerminalProvenanceGateway)
+	}
+
+	select {
+	case <-session.Done():
+		// Session terminated after the malformed frame.
+	case <-time.After(2 * time.Second):
+		t.Fatal("session was not terminated after malformed server frame")
 	}
 }
 
@@ -393,7 +411,7 @@ func TestSession_SessionClosedEmitsTerminalMetadata(t *testing.T) {
 	if v.SessionID != "sess-xyz" || v.Reason != "fixture_complete" {
 		t.Fatalf("session close value: got %#v", v)
 	}
-	if v.Classification != string(messages.TerminalReasonProviderClose) ||
+	if v.Classification != providers.ErrorClassTransport ||
 		v.TerminalReason != messages.TerminalReasonProviderClose ||
 		v.TerminalProvenance != messages.TerminalProvenanceProvider ||
 		v.OutputState != messages.TerminalOutputNotApplicable {

@@ -125,7 +125,10 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		}
 		value := messages.NewErrorValueWithTerminal(
 			msg,
-			providers.ErrorClassProviderRejected,
+			providers.SessionErrorClassification(
+				firstStringField(event.Data, "error.type"),
+				firstStringField(event.Data, "error.code"),
+			),
 			messages.TerminalReasonTerminalFailure,
 			messages.TerminalProvenanceProvider,
 			messages.TerminalOutputNone,
