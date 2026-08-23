@@ -292,6 +292,14 @@ Optimize for maximal throughput. we want to move forward as fast as possible, wi
 
 After each batch, review the outcomes of the submitted batch that was submitted, and confirm the resullts yourself to determine teh overall system trajectory and optimal next steps.
 
+## Ending your response
+
+End your response with exactly `<COMPLETE>` on its own line once this planning
+pass is finished — after you have submitted a batch, or after you have
+concluded that no new work should be submitted this pass. `<COMPLETE>` is this
+worker's stop token: a response without it does not complete the dispatch.
+Emitting it is how a monitoring pass that submits nothing still counts as done.
+
 # Customer ask 
 
 There is additional customer ask as follows: 
