@@ -303,6 +303,11 @@ func websocketCapture(direction SessionEventDirection, sequence int, payload str
 	}
 }
 
+var (
+	_ transport.Dialer = (*testWebSocketDialer)(nil)
+	_ transport.Conn   = (*testWebSocketConn)(nil)
+)
+
 type testWebSocketDialer struct {
 	conn transport.Conn
 }
