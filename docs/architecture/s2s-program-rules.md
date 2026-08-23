@@ -427,8 +427,8 @@ it build on that decision; none of them may relitigate it.
   prove it: `git merge-base --is-ancestor <fix-sha> HEAD`, and decisively
   `git show HEAD:<path> | grep -c <identifier-the-fix-introduced>` compared
   against `git show origin/main:<path> | grep -c ...`.
-- `prd.json` and `progress.txt` are untracked worktree scaffolding and must
-  **never** appear in your PR diff. Never `git add -f` them.
+- `prd.json`, `progress.txt`, and `prd.md` are untracked worktree scaffolding and
+  must **never** appear in your PR diff. Never `git add -f` them.
 
 ---
 
