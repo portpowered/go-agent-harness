@@ -217,3 +217,25 @@ func (r *devicesTestRegistry) Open(audio.DeviceID) (audio.OpenedDevice, error) {
 	r.openCalls++
 	return nil, fmt.Errorf("device listing must not open devices")
 }
+
+func TestDevicesListRegisteredInProductionRoot(t *testing.T) {
+	table := executeCLI("devices", "list")
+	if table.exitCode != 0 || table.stderr != "" {
+		t.Fatalf("devices list = (%d, %q), want exit 0 and empty stderr; stdout=%q", table.exitCode, table.stderr, table.stdout)
+	}
+	if table.stdout != "INPUT\nOUTPUT\nNo audio devices found.\n" {
+		t.Fatalf("production table output = %q, want retained headings plus empty note on the default registry", table.stdout)
+	}
+
+	jsonResult := executeCLI("devices", "list", "--json")
+	if jsonResult.exitCode != 0 || jsonResult.stderr != "" {
+		t.Fatalf("devices list --json = (%d, %q), want exit 0 and JSON only on stdout; stdout=%q", jsonResult.exitCode, jsonResult.stderr, jsonResult.stdout)
+	}
+	var response deviceListResponse
+	if err := json.Unmarshal([]byte(jsonResult.stdout), &response); err != nil {
+		t.Fatalf("production root JSON invalid: %v", err)
+	}
+	if len(response.Devices) != 0 {
+		t.Fatalf("production root devices = %#v, want the default registry to enumerate as empty", response.Devices)
+	}
+}
