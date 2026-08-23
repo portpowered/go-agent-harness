@@ -36,7 +36,7 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	return sessionRuntimePlan{
 		mode:        sessionRuntimeModeRecordGrok,
 		provider:    sessionProviderGrok,
-		capturePath: opts.RecordPath,
+		model:       sessionCfg.Model,
 		announce:    fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath),
 		inferencer:  sessionInferencer,
 		loop: sessionLoopOptions{
@@ -72,7 +72,7 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	return sessionRuntimePlan{
 		mode:        sessionRuntimeModeReplayGrok,
 		provider:    sessionProviderGrok,
-		capturePath: opts.ReplayPath,
+		model:       model,
 		inferencer:  sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,

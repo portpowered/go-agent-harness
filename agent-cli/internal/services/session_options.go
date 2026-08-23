@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
@@ -25,18 +26,27 @@ const (
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
-	RecordPath    string
-	ReplayPath    string
-	Provider      string
-	Model         string
-	ModelProvided bool
-	APIKey        string
-	BaseURL       string
-	ConfigDir     string
-	Prompt        string
-
+	RecordPath        string
+	ReplayPath        string
+	Provider          string
+	Model             string
+	ModelProvided     bool
+	APIKey            string
+	BaseURL           string
+	ConfigDir         string
+	Prompt            string
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
+
+	// Diagnostics optionally receives one canonical structured record per
+	// terminal failure plus per-turn and tool-call records. Nil keeps runtime
+	// behavior byte-for-byte unchanged.
+	Diagnostics SessionDiagnosticSink
+	// MetricsRecorder optionally receives per-direction stream observations.
+	MetricsRecorder metrics.Recorder
+	// AudioInputs schedules user audio injections through the loop's existing
+	// audio-input seam, attributed to specific turns.
+	AudioInputs []SessionAudioInput
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {

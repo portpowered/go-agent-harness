@@ -27,9 +27,19 @@ type sessionLoopOptions struct {
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
 	AudioIn *sessionAudioSource
+
+	// observer optionally records per-turn and terminal diagnostics from the
+	// consumed delta stream; nil keeps runtime behavior unchanged.
+	observer *sessionProgressObserver
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
+	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
+	opts.observer.finish(err)
+	return err
+}
+
+func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	observedInferencer := newObservedSessionInferencer(sessionInferencer)
 	loop, err := agentloop.New(
 		agentloop.WithMode(engine.DuplexSession),
@@ -90,7 +100,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	}
 	stopAndDrain := func() error {
 		stopErr := stop()
-		if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+		if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 			stopErr = errors.Join(stopErr, drainErr)
 		}
 		return stopErr
@@ -120,10 +130,10 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			}
 			var initialDrainErr error
 			if doneErr == nil {
-				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay)
+				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
 			}
 			stopErr := stop()
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+			if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 				stopErr = errors.Join(stopErr, drainErr)
 			}
 			if initialDrainErr != nil {
@@ -142,7 +152,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			}
 			return ctx.Err()
 		case <-observedInferencer.Done():
-			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond)
+			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond, opts.observer)
 			stopErr := stopAndDrain()
 			if drainErr != nil {
 				stopErr = errors.Join(stopErr, drainErr)
@@ -154,6 +164,8 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			cancel()
 			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
+			opts.observer.observe(msg)
+			opts.observer.dispatchScheduledInputs(runCtx, loop)
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return errors.Join(err, stop())
 			}
@@ -164,6 +176,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
 						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
 					}
+					opts.observer.noteUserTextInput(opts.Prompt)
 				}
 				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
 					closeSent = true
