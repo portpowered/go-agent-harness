@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // mockWebSocketConn simulates a Grok realtime WebSocket connection for testing.
@@ -113,7 +115,7 @@ func (c *mockWebSocketConn) getClientMessages() [][]byte {
 	return out
 }
 
-// mockDialer implements WebSocketDialer for testing.
+// mockDialer implements transport.Dialer for testing.
 type mockDialer struct {
 	conn    *mockWebSocketConn
 	dialErr error
@@ -122,7 +124,7 @@ type mockDialer struct {
 	capturedHeaders map[string]string
 }
 
-func (d *mockDialer) Dial(url string, headers map[string]string) (WebSocketConn, error) {
+func (d *mockDialer) Dial(url string, headers map[string]string) (transport.Conn, error) {
 	d.capturedURL = url
 	d.capturedHeaders = headers
 	if d.dialErr != nil {

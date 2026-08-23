@@ -5,14 +5,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-// WebSocketDialer is retained as a compatibility name for the shared
-// provider-neutral transport contract.
-type WebSocketDialer = transport.Dialer
-
-// WebSocketConn is retained as a compatibility name for the shared
-// provider-neutral transport contract.
-type WebSocketConn = transport.Conn
-
 // Option configures the Grok session provider.
 type Option func(*GrokSessionProvider)
 
@@ -31,7 +23,7 @@ func WithBaseURL(url string) Option {
 }
 
 // WithWebSocketDialer sets a custom WebSocket dialer for testing.
-func WithWebSocketDialer(d WebSocketDialer) Option {
+func WithWebSocketDialer(d transport.Dialer) Option {
 	return func(p *GrokSessionProvider) {
 		p.dialer = d
 	}

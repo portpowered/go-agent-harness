@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // Ensure grokSession satisfies messages.Session at compile time.
@@ -19,7 +20,7 @@ var _ messages.SessionSendOutcomeSender = (*grokSession)(nil)
 // (OpenAI Realtime API conventions) internally, so consumers only see generic
 // StreamMessage types.
 type grokSession struct {
-	conn   WebSocketConn
+	conn   transport.Conn
 	logger logging.Logger
 
 	// sendCh is the internal queue for outbound wire events (SessionEvent).
@@ -34,7 +35,7 @@ type grokSession struct {
 	closeOnce sync.Once
 }
 
-func newGrokSession(conn WebSocketConn, logger logging.Logger) *grokSession {
+func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {
 	return &grokSession{
 		conn:    conn,
 		logger:  logger,
