@@ -7,7 +7,7 @@ hardware/provider acceptance work have predictable boundaries.
 | --- | --- | --- | --- |
 | T0 unit | `make test` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T0 functional | `make test-integration` | Contributor machines and the ordinary Linux CI leg | Every PR |
-| T0 hermetic | `make test-hermetic` | Contributor machines and the hermetic Linux CI leg; this is the local Windows command | Every PR and local Windows validation |
+| T0 hermetic | `make test-hermetic` | Contributor machines and the hermetic Linux CI leg; also the command for any host without a working CGO toolchain | Every PR and local validation on such hosts |
 | T1 probe-replay | `make test-regressions` | Contributor machines and the ordinary Linux CI leg | Every PR |
 | T2 probe-live | `agent probe run <scenario> --transport live` | A per-vertical acceptance environment with live services | Per-vertical acceptance; never PR CI |
 | T2 device | `agent probe run <scenario> --devices real` | An acceptance host with the required real audio device | Per-vertical acceptance; never PR CI |
@@ -26,9 +26,10 @@ with `CGO_ENABLED=0` and `-tags=nomicrophone`. The target prints the module and
 the hermetic environment before each invocation, making a failed module
 identifiable in local and CI output.
 
-On Windows, run `make test-hermetic` from the repository root to exercise the
-complete no-CGO/no-microphone suite without depending on a C compiler or a
-microphone device.
+On any host without a working CGO toolchain — for example Windows, or a
+darwin/arm64 machine with no configured C toolchain — run `make test-hermetic`
+from the repository root to exercise the complete no-CGO/no-microphone suite
+without depending on a C compiler or a microphone device.
 
 ## Scope and evidence
 
