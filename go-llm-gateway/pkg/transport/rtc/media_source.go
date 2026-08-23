@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -121,9 +122,19 @@ func sourceError(kind SourceErrorKind, source string, cause error) error {
 	return &MediaSourceError{Kind: kind, Source: source, Identity: source, Cause: safe, cause: safe}
 }
 
+// operationCause attributes a failed source operation to its context once the
+// context knows it expired. A connection deadline set from that same context
+// can fire moments before the context timer itself is serviced; a socket
+// timeout observed after the deadline verifiably passed therefore still
+// carries the context's DeadlineExceeded identity instead of raw i/o timeout.
 func operationCause(ctx context.Context, err error) error {
-	if ctx != nil && ctx.Err() != nil {
-		return ctx.Err()
+	if ctx != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if deadline, ok := ctx.Deadline(); ok && errors.Is(err, os.ErrDeadlineExceeded) && !time.Now().Before(deadline) {
+			return context.DeadlineExceeded
+		}
 	}
 	return err
 }
