@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const defaultBaseURL = "https://api.x.ai/v1/realtime"
@@ -21,7 +22,7 @@ const defaultBaseURL = "https://api.x.ai/v1/realtime"
 type GrokSessionProvider struct {
 	apiKey  string
 	baseURL string
-	dialer  WebSocketDialer
+	dialer  transport.Dialer
 	logger  logging.Logger
 }
 

@@ -20,8 +20,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -458,9 +458,9 @@ type recordingRealtimeTestDialer struct {
 	url  string
 }
 
-var _ grok.WebSocketDialer = (*recordingRealtimeTestDialer)(nil)
+var _ transport.Dialer = (*recordingRealtimeTestDialer)(nil)
 
-func (d *recordingRealtimeTestDialer) Dial(url string, _ map[string]string) (grok.WebSocketConn, error) {
+func (d *recordingRealtimeTestDialer) Dial(url string, _ map[string]string) (transport.Conn, error) {
 	d.mu.Lock()
 	d.url = url
 	d.mu.Unlock()
@@ -482,7 +482,7 @@ type recordingRealtimeTestConn struct {
 	respondToConversationItem bool
 }
 
-var _ grok.WebSocketConn = (*recordingRealtimeTestConn)(nil)
+var _ transport.Conn = (*recordingRealtimeTestConn)(nil)
 
 func newRecordingRealtimeTestConn() *recordingRealtimeTestConn {
 	c := &recordingRealtimeTestConn{

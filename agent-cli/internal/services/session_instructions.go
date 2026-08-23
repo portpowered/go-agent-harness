@@ -194,7 +194,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 // same value before ConnectSession can send their initial wire update.
 func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFactory {
 	factory := defaultSessionRuntimeFactory
-	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}
 	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
@@ -203,7 +203,7 @@ func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFa
 	return factory
 }
 
-func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, dialer grok.WebSocketDialer, instructions string) (messages.SessionInferencer, error) {
+func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
 	}

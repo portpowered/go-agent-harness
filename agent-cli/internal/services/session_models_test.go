@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func TestOpenAIRealtimeModels_ReturnsOrderedIndependentRegistryCopy(t *testing.T) {
@@ -234,7 +234,7 @@ model:
 	}
 }
 
-func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer grok.WebSocketDialer) (string, error) {
+func runOpenAIRealtimeWithDialer(t *testing.T, configDir, model string, dialer transport.Dialer) (string, error) {
 	t.Helper()
 	var out strings.Builder
 	err := RunSession(context.Background(), &out, SessionRunOptions{
@@ -271,9 +271,9 @@ type recordingGrokRealtimeDialer struct {
 	dialErr error
 }
 
-var _ grok.WebSocketDialer = (*recordingGrokRealtimeDialer)(nil)
+var _ transport.Dialer = (*recordingGrokRealtimeDialer)(nil)
 
-func (d *recordingGrokRealtimeDialer) Dial(url string, _ map[string]string) (grok.WebSocketConn, error) {
+func (d *recordingGrokRealtimeDialer) Dial(url string, _ map[string]string) (transport.Conn, error) {
 	d.calls++
 	d.url = url
 	return nil, d.dialErr
