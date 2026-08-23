@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const conformanceSecret = "s2s-conformance-secret-not-real"
@@ -362,7 +363,7 @@ func (d openAIConformanceDialer) Dial(url string, headers map[string]string) (op
 
 type grokConformanceDialer struct{ probe *sessionProbe }
 
-func (d grokConformanceDialer) Dial(url string, headers map[string]string) (grok.WebSocketConn, error) {
+func (d grokConformanceDialer) Dial(url string, headers map[string]string) (transport.Conn, error) {
 	d.probe.recordDial(url, headers)
 	if d.probe.dialErr != nil {
 		return nil, d.probe.dialErr

@@ -11,7 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func TestReplayWebSocketDialer_ReplaysInboundAndValidatesOutbound(t *testing.T) {
@@ -304,10 +304,10 @@ func websocketCapture(direction SessionEventDirection, sequence int, payload str
 }
 
 type testWebSocketDialer struct {
-	conn grok.WebSocketConn
+	conn transport.Conn
 }
 
-func (d *testWebSocketDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+func (d *testWebSocketDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	return d.conn, nil
 }
 
