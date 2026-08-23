@@ -22,6 +22,7 @@ const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurabl
 	"  chat        Start an interactive chat session with the agent\n" +
 	"  completion  Generate the autocompletion script for the specified shell\n" +
 	"  config      Configuration management commands\n" +
+	"  devices     Discover available audio devices\n" +
 	"  help        Help about any command\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
 	"  session     Run or manage agent sessions\n" +
@@ -39,6 +40,7 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  chat        Start an interactive chat session with the agent\n" +
 	"  completion  Generate the autocompletion script for the specified shell\n" +
 	"  config      Configuration management commands\n" +
+	"  devices     Discover available audio devices\n" +
 	"  help        Help about any command\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
 	"  session     Run or manage agent sessions\n" +
