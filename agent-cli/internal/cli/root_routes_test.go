@@ -25,6 +25,7 @@ const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurabl
 	"  devices     Discover available audio devices\n" +
 	"  help        Help about any command\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
+	"  probe       Run deterministic offline probes\n" +
 	"  session     Run or manage agent sessions\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
 	"Flags:\n" +
@@ -43,6 +44,7 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  devices     Discover available audio devices\n" +
 	"  help        Help about any command\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
+	"  probe       Run deterministic offline probes\n" +
 	"  session     Run or manage agent sessions\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
 	"Flags:\n" +
@@ -66,6 +68,8 @@ func newTestRootCommand() *cobra.Command {
 		NewToolCommand(globalFlags),
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
+		NewProbeCommand(),
+		NewProbeRunCommand(),
 		NewSessionCommand(askFlags, globalFlags, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),

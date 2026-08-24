@@ -33,13 +33,15 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	toolCommand := cli.NewToolCommand(globalFlags)
 	interactionCommand := cli.NewInteractionCommand()
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
+	probeCommand := cli.NewProbeCommand()
+	probeRunCommand := cli.NewProbeRunCommand()
 	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }

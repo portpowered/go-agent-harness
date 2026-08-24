@@ -19,6 +19,9 @@ type Router struct {
 	InteractionCommand       *InteractionCommand
 	InteractionReplayCommand *InteractionReplayCommand
 
+	ProbeCommand    *ProbeCommand
+	ProbeRunCommand *ProbeRunCommand
+
 	SessionCommand       *SessionCommand
 	SessionShowCommand   *SessionShowCommand
 	SessionListCommand   *SessionListCommand
@@ -37,6 +40,8 @@ func NewRouter(
 	toolCommand *ToolCommand,
 	interactionCommand *InteractionCommand,
 	interactionReplayCommand *InteractionReplayCommand,
+	probeCommand *ProbeCommand,
+	probeRunCommand *ProbeRunCommand,
 	sessionCommand *SessionCommand,
 	sessionShowCommand *SessionShowCommand,
 	sessionListCommand *SessionListCommand,
@@ -52,6 +57,8 @@ func NewRouter(
 		ToolCommand:              toolCommand,
 		InteractionCommand:       interactionCommand,
 		InteractionReplayCommand: interactionReplayCommand,
+		ProbeCommand:             probeCommand,
+		ProbeRunCommand:          probeRunCommand,
 		SessionCommand:           sessionCommand,
 		SessionShowCommand:       sessionShowCommand,
 		SessionListCommand:       sessionListCommand,
@@ -72,6 +79,10 @@ func (r *Router) BuildRoot() *cobra.Command {
 	interactionGroup := NewPath("interaction", r.InteractionCommand.Generate())
 	interactionGroup.AddCommand(NewPath("replay <fixture-path>", r.InteractionReplayCommand.Generate()))
 	root.AddCommand(interactionGroup)
+
+	probeGroup := NewPath("probe", r.ProbeCommand.Generate())
+	probeGroup.AddCommand(NewPath("run [scenario-path...]", r.ProbeRunCommand.Generate()))
+	root.AddCommand(probeGroup)
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())
 	sessionGroup.AddCommand(NewPath("show <session-id>", r.SessionShowCommand.Generate()))
