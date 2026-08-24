@@ -37,6 +37,12 @@ type ModelRunner struct {
 	// When audio arrives while the model is streaming an audio response, the
 	// model runner sends RESPONSE.CANCEL (barge-in) before forwarding the audio.
 	UserAudioInbox chan []byte
+	// UserEventInbox receives pre-built outbound StreamMessages from the user
+	// side in session mode. Each message is forwarded to the provider session
+	// unchanged, preserving caller ordering. It carries control-plane turns
+	// such as MESSAGE.END (input_audio_buffer.commit + response.create on the
+	// OpenAI Realtime wire).
+	UserEventInbox chan messages.StreamMessage
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
@@ -70,6 +76,7 @@ func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, co
 		Inbox:             messages.NewTypedBuffer[messages.InferenceRequest](bufferCapacity),
 		DeltaOutbox:       messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
 		UserAudioInbox:    make(chan []byte, 64),
+		UserEventInbox:    make(chan messages.StreamMessage, 8),
 	}
 }
 
@@ -155,6 +162,36 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				Type:  messages.StreamTypeAudioDelta,
 				Value: messages.NewAudioDeltaValue(pcm),
 			})
+		case evt, ok := <-r.UserEventInbox:
+			if !ok {
+				return nil
+			}
+			// Preserve caller ordering: any user audio enqueued before this
+			// event must reach the session first, so drain the buffered audio
+			// inbox without blocking before forwarding the control-plane turn.
+			for drained := true; drained; {
+				drained = false
+				select {
+				case pcm, ok := <-r.UserAudioInbox:
+					if !ok {
+						continue
+					}
+					if audioStreaming {
+						session.Send(ctx, messages.StreamMessage{
+							Type:  messages.StreamTypeResponseCancel,
+							Value: messages.NewResponseCancelValue(),
+						})
+						audioStreaming = false
+					}
+					session.Send(ctx, messages.StreamMessage{
+						Type:  messages.StreamTypeAudioDelta,
+						Value: messages.NewAudioDeltaValue(pcm),
+					})
+					drained = true
+				default:
+				}
+			}
+			session.Send(ctx, evt)
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
 				return nil

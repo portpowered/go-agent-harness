@@ -31,8 +31,12 @@ type SessionAudioInput struct {
 	// frames use the AgentLoop's SendAudioInput method.
 	Source         audio.AudioSource
 	SendAudioInput func(context.Context, []byte) error
-	Present        bool
-	DevicePresent  bool
+	// SendEndOfTurn is an optional deterministic service-test seam invoked
+	// once after the finite source reaches EOF. CLI callers leave it nil so
+	// the loop's SendSessionEvent carries the end-of-turn boundary.
+	SendEndOfTurn func(context.Context) error
+	Present       bool
+	DevicePresent bool
 }
 
 // SessionAudioInputErrorKind identifies the failed session audio boundary.
@@ -119,7 +123,7 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
-	return runSessionWithAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+	return runSessionWithAudioInputPlan(ctx, out, input, "", SessionTextSeed{}, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
@@ -132,11 +136,19 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 // command surface. The no-audio path remains on the established instructions
 // entry point so its replay and duration artifact behavior stays unchanged.
 func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) error {
+	return RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, input, systemPrompt)
+}
+
+// RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration
+// composes the instructions, text-seed, duration, audio-input, and
+// audio-output extensions on the command surface. An empty audioOutPath
+// preserves the established audio-input-only behavior.
+func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) error {
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}
 	if !sessionAudioInputSelected(input) {
-		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, systemPrompt)
+		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
@@ -146,14 +158,14 @@ func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx contex
 		return err
 	}
 	if systemPrompt == "" || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
-		return runSessionWithAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+		return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, func() (sessionRuntimePlan, error) {
 			if err := validateSessionRunOptions(opts); err != nil {
 				return sessionRuntimePlan{}, err
 			}
 			return planSessionRuntime(opts)
 		})
 	}
-	return runSessionWithAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+	return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
@@ -172,8 +184,10 @@ func sessionAudioInputSelected(input SessionAudioInput) bool {
 // runSessionWithAudioInputPlan validates and opens the audio input before the
 // plan is built so every preflight failure happens before any provider dial,
 // then hands the opened source to the shared session lifecycle through the
-// loop options. No session behavior changes when the flag is absent.
-func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
+// loop options. A non-empty audioOutPath additionally records assistant audio
+// received after the end-of-turn commit. No session behavior changes when the
+// flag is absent.
+func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, audioOutPath string, seed SessionTextSeed, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
 	source, err := openSessionAudioInput(input)
 	if err != nil {
 		return err
@@ -191,11 +205,41 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	if input.MaxDuration > 0 {
 		plan.loop.MaxDuration = input.MaxDuration
 	}
+
+	sessionOut := out
+	var audioOutput *sessionAudioOutput
+	var audioWrapped *sessionAudioOutputInferencer
+	if audioOutPath != "" {
+		sink, sinkErr := newSessionAudioSink(audioOutPath, out)
+		if sinkErr != nil {
+			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
+		}
+		audioOutput = &sessionAudioOutput{sink: sink}
+		defer func() {
+			if closeErr := audioOutput.close(); closeErr != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
+			}
+		}()
+		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOutput, "", seed.Value)
+		plan.inferencer = wrapped
+		audioWrapped = wrapped
+		if audioOutPath == "-" {
+			sessionOut = io.Discard
+		}
+	}
+
 	// A finite audio source is the input lifetime. Do not close immediately on
 	// SESSION.OPEN; allow every source frame to reach the loop first.
 	plan.loop.CloseAfterOpen = false
 	plan.loop.AudioIn = source
-	return plan.run(ctx, out)
+	runErr = plan.run(ctx, sessionOut)
+	if audioWrapped != nil {
+		audioWrapped.wait()
+		if outputErr := audioWrapped.err(); outputErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, outputErr))
+		}
+	}
+	return runErr
 }
 
 func validateSessionAudioInput(input SessionAudioInput) error {
@@ -218,7 +262,7 @@ func validateSessionAudioInput(input SessionAudioInput) error {
 
 func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error) {
 	if input.Source != nil {
-		return &sessionAudioSource{source: input.Source, path: input.Path, send: input.SendAudioInput}, nil
+		return &sessionAudioSource{source: input.Source, path: input.Path, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 	}
 
 	if strings.EqualFold(filepath.Ext(input.Path), ".wav") {
@@ -226,7 +270,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 		if err != nil {
 			return nil, err
 		}
-		return &sessionAudioSource{source: source, path: input.Path, send: input.SendAudioInput}, nil
+		return &sessionAudioSource{source: source, path: input.Path, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 	}
 
 	stdin := input.Stdin
@@ -257,7 +301,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 			}
 		}
 	}
-	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, send: input.SendAudioInput}, nil
+	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 }
 
 func classifySessionAudioOpenError(path string, err error) error {
@@ -274,12 +318,13 @@ func classifySessionAudioOpenError(path string, err error) error {
 }
 
 type sessionAudioSource struct {
-	source audio.AudioSource
-	path   string
-	reader *sessionAudioReader
-	send   func(context.Context, []byte) error
-	once   sync.Once
-	err    error
+	source    audio.AudioSource
+	path      string
+	reader    *sessionAudioReader
+	send      func(context.Context, []byte) error
+	endOfTurn func(context.Context) error
+	once      sync.Once
+	err       error
 }
 
 func (s *sessionAudioSource) bindContext(ctx context.Context) {
@@ -391,7 +436,7 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		clear(frame)
 		if err := source.source.ReadFrame(ctx, frame); err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil
+				return sendSessionAudioEndOfTurn(ctx, loop, source)
 			}
 			return &SessionAudioInputError{Kind: SessionAudioInputRead, Path: source.path, Err: err}
 		}
@@ -408,6 +453,23 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
 		}
 	}
+}
+
+// sendSessionAudioEndOfTurn signals end-of-turn after a finite audio source
+// is exhausted: MESSAGE.END flows to the realtime provider as
+// input_audio_buffer.commit followed by response.create, so the server stops
+// waiting for more audio and produces a response.
+func sendSessionAudioEndOfTurn(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) error {
+	send := source.endOfTurn
+	if send == nil {
+		send = func(ctx context.Context) error {
+			return loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+		}
+	}
+	if err := send(ctx); err != nil {
+		return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: fmt.Errorf("end-of-turn signaling: %w", err)}
+	}
+	return nil
 }
 
 // joinSessionTerminationErrors drops expected cancellations and preserves the

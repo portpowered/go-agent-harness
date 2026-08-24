@@ -366,6 +366,27 @@ func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 			Payload:     payload,
 		})
 	}
+	// End-of-turn regression: after the final append the client must emit
+	// input_audio_buffer.commit followed by response.create, in that order,
+	// before anything else.
+	records = append(records,
+		gwtesting.CapturedSessionEvent{
+			Sequence:    len(records) + 1,
+			Direction:   gwtesting.DirectionClientToServer,
+			TimestampMs: int64(len(records)),
+			Type:        "input_audio_buffer.commit",
+			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
+		},
+		gwtesting.CapturedSessionEvent{
+			Sequence:    len(records) + 1,
+			Direction:   gwtesting.DirectionClientToServer,
+			TimestampMs: int64(len(records)),
+			Type:        "response.create",
+			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			Payload:     json.RawMessage(`{"type":"response.create"}`),
+		},
+	)
 	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,

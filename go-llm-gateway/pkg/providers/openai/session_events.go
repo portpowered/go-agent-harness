@@ -155,7 +155,13 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		}
 		return []models.SessionEvent{models.NewAudioBufferAppendEvent(base64.StdEncoding.EncodeToString(v.Content))}, true
 	case messages.StreamTypeMessageEnd:
-		return []models.SessionEvent{models.NewAudioBufferCommitEvent()}, true
+		// End-of-turn: commit the input audio buffer and explicitly request a
+		// response so finite client-side audio sources (file --audio-in)
+		// elicit output even without server-side VAD.
+		return []models.SessionEvent{
+			models.NewAudioBufferCommitEvent(),
+			models.NewResponseCreateEvent(),
+		}, true
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)
 		if !ok || v == nil {
