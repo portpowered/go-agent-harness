@@ -117,7 +117,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if audioErr != nil && !isSessionCancellation(audioErr) {
 				cancel()
 				stopErr := errors.Join(audioErr, joinSessionTerminationErrors(waitRun(), nil))
-				if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+				if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 					stopErr = errors.Join(stopErr, drainErr)
 				}
 				return stopErr

@@ -84,7 +84,7 @@ type sessionRuntimePlan struct {
 	finalize        func(context.Context, io.Writer) error
 	diagnostics     SessionDiagnosticSink
 	metricsRecorder metrics.Recorder
-	audioInputs     []SessionAudioInput
+	audioInputs     []ScheduledAudioInput
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {

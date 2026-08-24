@@ -46,7 +46,7 @@ type SessionRunOptions struct {
 	MetricsRecorder metrics.Recorder
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
-	AudioInputs []SessionAudioInput
+	AudioInputs []ScheduledAudioInput
 	// WaitForClose keeps the replay session loop running across multiple
 	// completed turns until an explicit SESSION.CLOSE arrives instead of
 	// stopping at the first completed turn. Defaults to false, which preserves

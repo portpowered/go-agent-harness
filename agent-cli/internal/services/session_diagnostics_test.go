@@ -491,7 +491,7 @@ func TestSessionDiagnostics_SilentAudioInputAttributesZeroBytesToItsTurn(t *test
 		opts.Model = "scripted-realtime"
 		opts.SessionInferencer = sessionInf
 		opts.WaitForClose = true
-		opts.AudioInputs = []SessionAudioInput{
+		opts.AudioInputs = []ScheduledAudioInput{
 			{AfterCompletedTurns: 0, PCM: nil},
 			{AfterCompletedTurns: 1, PCM: []byte{1, 2, 3, 4}},
 		}
@@ -582,7 +582,7 @@ func TestSessionDiagnostics_FailureModeSignaturesArePairwiseDistinct(t *testing.
 					},
 				}
 				opts.WaitForClose = true
-				opts.AudioInputs = []SessionAudioInput{
+				opts.AudioInputs = []ScheduledAudioInput{
 					{AfterCompletedTurns: 0, PCM: nil},
 					{AfterCompletedTurns: 1, PCM: []byte{1, 2, 3, 4}},
 				}

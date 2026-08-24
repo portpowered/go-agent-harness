@@ -80,12 +80,12 @@ type SessionDiagnosticSink interface {
 	RecordSessionDiagnostic(SessionDiagnosticRecord)
 }
 
-// SessionAudioInput schedules one raw PCM user-audio injection through the
+// ScheduledAudioInput schedules one raw PCM user-audio injection through the
 // loop's existing audio-input seam (AgentLoop.SendAudioInput). The injection
 // fires as soon as AfterCompletedTurns assistant turns have completed, and its
 // bytes are attributed to the then in-flight turn (turn index
 // AfterCompletedTurns+1).
-type SessionAudioInput struct {
+type ScheduledAudioInput struct {
 	AfterCompletedTurns int
 	PCM                 []byte
 }
@@ -128,7 +128,7 @@ type sessionProgressObserver struct {
 	sawSessionOpen bool
 	turnsCompleted int
 	counters       audioTurnCounters
-	pendingInputs  []SessionAudioInput
+	pendingInputs  []ScheduledAudioInput
 
 	failure *failureFacts
 
@@ -154,7 +154,7 @@ func (o *sessionProgressObserver) record(direction metrics.Direction, modality m
 }
 
 // scheduleAudioInputs registers caller-scheduled user audio injections.
-func (o *sessionProgressObserver) scheduleAudioInputs(inputs []SessionAudioInput) {
+func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
 	if o == nil {
 		return
 	}
