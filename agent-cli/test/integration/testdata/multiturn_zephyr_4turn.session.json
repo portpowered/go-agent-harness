@@ -1,0 +1,1442 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime"
+  },
+  "session": {
+    "id": "sess_multiturn_zephyr",
+    "started_at_utc": "2026-08-24T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 1,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "model": "gpt-realtime",
+          "type": "realtime"
+        },
+        "type": "session.update"
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session": {
+          "id": "sess_multiturn_zephyr",
+          "model": "gpt-realtime"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 3,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 4,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "client_to_server",
+      "timestamp_ms": 5,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "client_to_server",
+      "timestamp_ms": 6,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "client_to_server",
+      "timestamp_ms": 7,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "client_to_server",
+      "timestamp_ms": 8,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "client_to_server",
+      "timestamp_ms": 9,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "client_to_server",
+      "timestamp_ms": 11,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "client_to_server",
+      "timestamp_ms": 12,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "client_to_server",
+      "timestamp_ms": 13,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "client_to_server",
+      "timestamp_ms": 14,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "client_to_server",
+      "timestamp_ms": 15,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "client_to_server",
+      "timestamp_ms": 16,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 17,
+      "direction": "client_to_server",
+      "timestamp_ms": 17,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 18,
+      "direction": "client_to_server",
+      "timestamp_ms": 18,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 19,
+      "direction": "client_to_server",
+      "timestamp_ms": 19,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 20,
+      "direction": "client_to_server",
+      "timestamp_ms": 20,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 21,
+      "direction": "client_to_server",
+      "timestamp_ms": 21,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 22,
+      "direction": "client_to_server",
+      "timestamp_ms": 22,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 23,
+      "direction": "client_to_server",
+      "timestamp_ms": 23,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 24,
+      "direction": "client_to_server",
+      "timestamp_ms": 24,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 25,
+      "direction": "client_to_server",
+      "timestamp_ms": 25,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 26,
+      "direction": "client_to_server",
+      "timestamp_ms": 26,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 27,
+      "direction": "client_to_server",
+      "timestamp_ms": 27,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 28,
+      "direction": "client_to_server",
+      "timestamp_ms": 28,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 29,
+      "direction": "server_to_client",
+      "timestamp_ms": 29,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "resp_turn1"
+        }
+      }
+    },
+    {
+      "sequence": 30,
+      "direction": "server_to_client",
+      "timestamp_ms": 30,
+      "type": "response.output_item.added",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_item.added",
+        "response_id": "resp_turn1",
+        "output_index": 0,
+        "item": {
+          "type": "message",
+          "role": "assistant",
+          "id": "item_assistant_turn1"
+        }
+      }
+    },
+    {
+      "sequence": 31,
+      "direction": "server_to_client",
+      "timestamp_ms": 31,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "ZEPHYR noted."
+      }
+    },
+    {
+      "sequence": 32,
+      "direction": "server_to_client",
+      "timestamp_ms": 32,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": " I will remember it."
+      }
+    },
+    {
+      "sequence": 33,
+      "direction": "server_to_client",
+      "timestamp_ms": 33,
+      "type": "response.output_text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.done",
+        "text": "ZEPHYR noted. I will remember it."
+      }
+    },
+    {
+      "sequence": 34,
+      "direction": "server_to_client",
+      "timestamp_ms": 34,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 35,
+      "direction": "server_to_client",
+      "timestamp_ms": 35,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "resp_turn1",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 36,
+      "direction": "client_to_server",
+      "timestamp_ms": 36,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 37,
+      "direction": "client_to_server",
+      "timestamp_ms": 37,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 38,
+      "direction": "client_to_server",
+      "timestamp_ms": 38,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 39,
+      "direction": "client_to_server",
+      "timestamp_ms": 39,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 40,
+      "direction": "client_to_server",
+      "timestamp_ms": 40,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 41,
+      "direction": "client_to_server",
+      "timestamp_ms": 41,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 42,
+      "direction": "client_to_server",
+      "timestamp_ms": 42,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 43,
+      "direction": "client_to_server",
+      "timestamp_ms": 43,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 44,
+      "direction": "client_to_server",
+      "timestamp_ms": 44,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 45,
+      "direction": "client_to_server",
+      "timestamp_ms": 45,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 46,
+      "direction": "client_to_server",
+      "timestamp_ms": 46,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 47,
+      "direction": "client_to_server",
+      "timestamp_ms": 47,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 48,
+      "direction": "client_to_server",
+      "timestamp_ms": 48,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 49,
+      "direction": "client_to_server",
+      "timestamp_ms": 49,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 50,
+      "direction": "client_to_server",
+      "timestamp_ms": 50,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 51,
+      "direction": "client_to_server",
+      "timestamp_ms": 51,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 52,
+      "direction": "client_to_server",
+      "timestamp_ms": 52,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 53,
+      "direction": "client_to_server",
+      "timestamp_ms": 53,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 54,
+      "direction": "client_to_server",
+      "timestamp_ms": 54,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 55,
+      "direction": "client_to_server",
+      "timestamp_ms": 55,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 56,
+      "direction": "client_to_server",
+      "timestamp_ms": 56,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 57,
+      "direction": "client_to_server",
+      "timestamp_ms": 57,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 58,
+      "direction": "client_to_server",
+      "timestamp_ms": 58,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 59,
+      "direction": "client_to_server",
+      "timestamp_ms": 59,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 60,
+      "direction": "client_to_server",
+      "timestamp_ms": 60,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 61,
+      "direction": "client_to_server",
+      "timestamp_ms": 61,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 62,
+      "direction": "server_to_client",
+      "timestamp_ms": 62,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "resp_turn2"
+        }
+      }
+    },
+    {
+      "sequence": 63,
+      "direction": "server_to_client",
+      "timestamp_ms": 63,
+      "type": "response.output_item.added",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_item.added",
+        "response_id": "resp_turn2",
+        "output_index": 0,
+        "item": {
+          "type": "message",
+          "role": "assistant",
+          "id": "item_assistant_turn2"
+        }
+      }
+    },
+    {
+      "sequence": 64,
+      "direction": "server_to_client",
+      "timestamp_ms": 64,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "Sunny and mild"
+      }
+    },
+    {
+      "sequence": 65,
+      "direction": "server_to_client",
+      "timestamp_ms": 65,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": " today."
+      }
+    },
+    {
+      "sequence": 66,
+      "direction": "server_to_client",
+      "timestamp_ms": 66,
+      "type": "response.output_text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.done",
+        "text": "Sunny and mild today."
+      }
+    },
+    {
+      "sequence": 67,
+      "direction": "server_to_client",
+      "timestamp_ms": 67,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 68,
+      "direction": "server_to_client",
+      "timestamp_ms": 68,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "resp_turn2",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 69,
+      "direction": "client_to_server",
+      "timestamp_ms": 69,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 70,
+      "direction": "client_to_server",
+      "timestamp_ms": 70,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 71,
+      "direction": "client_to_server",
+      "timestamp_ms": 71,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 72,
+      "direction": "client_to_server",
+      "timestamp_ms": 72,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 73,
+      "direction": "client_to_server",
+      "timestamp_ms": 73,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 74,
+      "direction": "client_to_server",
+      "timestamp_ms": 74,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 75,
+      "direction": "client_to_server",
+      "timestamp_ms": 75,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 76,
+      "direction": "client_to_server",
+      "timestamp_ms": 76,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 77,
+      "direction": "client_to_server",
+      "timestamp_ms": 77,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 78,
+      "direction": "client_to_server",
+      "timestamp_ms": 78,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 79,
+      "direction": "client_to_server",
+      "timestamp_ms": 79,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 80,
+      "direction": "client_to_server",
+      "timestamp_ms": 80,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 81,
+      "direction": "client_to_server",
+      "timestamp_ms": 81,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 82,
+      "direction": "client_to_server",
+      "timestamp_ms": 82,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 83,
+      "direction": "client_to_server",
+      "timestamp_ms": 83,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 84,
+      "direction": "client_to_server",
+      "timestamp_ms": 84,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 85,
+      "direction": "client_to_server",
+      "timestamp_ms": 85,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 86,
+      "direction": "client_to_server",
+      "timestamp_ms": 86,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 87,
+      "direction": "client_to_server",
+      "timestamp_ms": 87,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 88,
+      "direction": "client_to_server",
+      "timestamp_ms": 88,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 89,
+      "direction": "client_to_server",
+      "timestamp_ms": 89,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 90,
+      "direction": "client_to_server",
+      "timestamp_ms": 90,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 91,
+      "direction": "client_to_server",
+      "timestamp_ms": 91,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 92,
+      "direction": "client_to_server",
+      "timestamp_ms": 92,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 93,
+      "direction": "client_to_server",
+      "timestamp_ms": 93,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 94,
+      "direction": "client_to_server",
+      "timestamp_ms": 94,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 95,
+      "direction": "server_to_client",
+      "timestamp_ms": 95,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "resp_turn3"
+        }
+      }
+    },
+    {
+      "sequence": 96,
+      "direction": "server_to_client",
+      "timestamp_ms": 96,
+      "type": "response.output_item.added",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_item.added",
+        "response_id": "resp_turn3",
+        "output_index": 0,
+        "item": {
+          "type": "message",
+          "role": "assistant",
+          "id": "item_assistant_turn3"
+        }
+      }
+    },
+    {
+      "sequence": 97,
+      "direction": "server_to_client",
+      "timestamp_ms": 97,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "The word was "
+      }
+    },
+    {
+      "sequence": 98,
+      "direction": "server_to_client",
+      "timestamp_ms": 98,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "ZEPHYR."
+      }
+    },
+    {
+      "sequence": 99,
+      "direction": "server_to_client",
+      "timestamp_ms": 99,
+      "type": "response.output_text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.done",
+        "text": "The word was ZEPHYR."
+      }
+    },
+    {
+      "sequence": 100,
+      "direction": "server_to_client",
+      "timestamp_ms": 100,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 101,
+      "direction": "server_to_client",
+      "timestamp_ms": 101,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "resp_turn3",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 102,
+      "direction": "client_to_server",
+      "timestamp_ms": 102,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 103,
+      "direction": "client_to_server",
+      "timestamp_ms": 103,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 104,
+      "direction": "client_to_server",
+      "timestamp_ms": 104,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 105,
+      "direction": "client_to_server",
+      "timestamp_ms": 105,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 106,
+      "direction": "client_to_server",
+      "timestamp_ms": 106,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 107,
+      "direction": "client_to_server",
+      "timestamp_ms": 107,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 108,
+      "direction": "client_to_server",
+      "timestamp_ms": 108,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 109,
+      "direction": "client_to_server",
+      "timestamp_ms": 109,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 110,
+      "direction": "client_to_server",
+      "timestamp_ms": 110,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 111,
+      "direction": "client_to_server",
+      "timestamp_ms": 111,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 112,
+      "direction": "client_to_server",
+      "timestamp_ms": 112,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 113,
+      "direction": "client_to_server",
+      "timestamp_ms": 113,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 114,
+      "direction": "client_to_server",
+      "timestamp_ms": 114,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 115,
+      "direction": "client_to_server",
+      "timestamp_ms": 115,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 116,
+      "direction": "client_to_server",
+      "timestamp_ms": 116,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 117,
+      "direction": "client_to_server",
+      "timestamp_ms": 117,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 118,
+      "direction": "client_to_server",
+      "timestamp_ms": 118,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 119,
+      "direction": "client_to_server",
+      "timestamp_ms": 119,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 120,
+      "direction": "client_to_server",
+      "timestamp_ms": 120,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 121,
+      "direction": "client_to_server",
+      "timestamp_ms": 121,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 122,
+      "direction": "client_to_server",
+      "timestamp_ms": 122,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 123,
+      "direction": "client_to_server",
+      "timestamp_ms": 123,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 124,
+      "direction": "client_to_server",
+      "timestamp_ms": 124,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 125,
+      "direction": "client_to_server",
+      "timestamp_ms": 125,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 126,
+      "direction": "client_to_server",
+      "timestamp_ms": 126,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 127,
+      "direction": "client_to_server",
+      "timestamp_ms": 127,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 128,
+      "direction": "server_to_client",
+      "timestamp_ms": 128,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "resp_turn4"
+        }
+      }
+    },
+    {
+      "sequence": 129,
+      "direction": "server_to_client",
+      "timestamp_ms": 129,
+      "type": "response.output_item.added",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_item.added",
+        "response_id": "resp_turn4",
+        "output_index": 0,
+        "item": {
+          "type": "message",
+          "role": "assistant",
+          "id": "item_assistant_turn4"
+        }
+      }
+    },
+    {
+      "sequence": 130,
+      "direction": "server_to_client",
+      "timestamp_ms": 130,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "Backwards it is "
+      }
+    },
+    {
+      "sequence": 131,
+      "direction": "server_to_client",
+      "timestamp_ms": 131,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "RYHPEZ."
+      }
+    },
+    {
+      "sequence": 132,
+      "direction": "server_to_client",
+      "timestamp_ms": 132,
+      "type": "response.output_text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.done",
+        "text": "Backwards it is RYHPEZ."
+      }
+    },
+    {
+      "sequence": 133,
+      "direction": "server_to_client",
+      "timestamp_ms": 133,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 134,
+      "direction": "server_to_client",
+      "timestamp_ms": 134,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "resp_turn4",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 135,
+      "direction": "server_to_client",
+      "timestamp_ms": 135,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "session_id": "sess_multiturn_zephyr",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}
