@@ -264,7 +264,7 @@ func TestProbeRunMisclassifiedAuthExitsNonZero(t *testing.T) {
 		"id": "misclassified-auth",
 		"steps": [{"type": "send_text", "text": "hello"}, {"type": "close"}],
 		"expectations": [{"type": "terminal_reason", "value": "disconnect"}]
-	}`)
+	}`
 	scenario := filepath.Join(dir, "misclassified-auth.scenario.json")
 	if err := os.WriteFile(scenario, []byte(document), 0o644); err != nil {
 		t.Fatalf("write scenario: %v", err)
