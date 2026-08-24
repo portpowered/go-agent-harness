@@ -2,6 +2,7 @@ package timeharness
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -20,8 +21,13 @@ func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 		}
 	}
 	observations := make(chan Observation, 4)
+	var participantsDone sync.WaitGroup
 	for _, p := range []*Participant{left, right} {
-		p.Run(func() { runTicks(p, observations, 2, nil) })
+		participantsDone.Add(1)
+		p.Run(func() {
+			defer participantsDone.Done()
+			runTicks(p, observations, 2, nil)
+		})
 	}
 	tick, err := s.ExpectWithinTicks("both peers reached tick two", 3, func() bool { return s.Clock().Tick() == 2 })
 	if err != nil || tick != 2 {
@@ -33,6 +39,7 @@ func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 			t.Fatalf("observation: %+v", o)
 		}
 	}
+	participantsDone.Wait()
 	if _, err = s.Register("late"); err == nil {
 		t.Fatal("registration remained open after advancement")
 	}
