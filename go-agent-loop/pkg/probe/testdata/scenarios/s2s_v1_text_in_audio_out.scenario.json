@@ -1,0 +1,24 @@
+{
+  "id": "s2s-v1-text-in-audio-out",
+  "name": "s2s_v1_text_in_audio_out",
+  "description": "Vertical probe v1 baseline: a text prompt enters over the session path and an audio (or audio-transcript) response arrives before the session closes.",
+  "steps": [
+    {
+      "type": "send_text",
+      "text": "What is the weather today?"
+    },
+    {
+      "type": "close"
+    }
+  ],
+  "expectations": [
+    {
+      "type": "frame_count",
+      "count": 9
+    },
+    {
+      "type": "terminal_reason",
+      "value": "synthetic"
+    }
+  ]
+}

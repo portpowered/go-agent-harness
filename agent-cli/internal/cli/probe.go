@@ -190,6 +190,10 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 			continue
 		}
 		seen[selection] = true
+		if scenario, ok := lookupRegisteredScenario(selection); ok {
+			scenarios = append(scenarios, scenario)
+			continue
+		}
 		data, readErr := os.ReadFile(selection)
 		if readErr != nil {
 			return nil, nil, fmt.Errorf("unknown probe scenario %q: %w", selection, readErr)
@@ -362,4 +366,20 @@ func scenarioName(scenario probe.Scenario) string {
 		return scenario.Name
 	}
 	return scenario.ID
+}
+
+// lookupRegisteredScenario resolves a selection against the live probe
+// scenario registry by ID or name, so registered scenarios can be run
+// without an on-disk scenario document.
+func lookupRegisteredScenario(selection string) (probe.Scenario, bool) {
+	trimmed := strings.TrimSpace(selection)
+	if trimmed == "" {
+		return probe.Scenario{}, false
+	}
+	for _, scenario := range probe.LiveScenarioRegistry().Snapshot() {
+		if scenario.ID == trimmed || scenario.Name == trimmed {
+			return scenario, true
+		}
+	}
+	return probe.Scenario{}, false
 }
