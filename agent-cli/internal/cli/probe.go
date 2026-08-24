@@ -210,10 +210,10 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 
 // scenarioDocument is the on-disk scenario JSON envelope.
 type scenarioDocument struct {
-	ID               string            `json:"id"`
-	Name             string            `json:"name"`
-	Description      string            `json:"description"`
-	Steps            []probeStep       `json:"steps"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	Description      string             `json:"description"`
+	Steps            []probeStep        `json:"steps"`
 	Expectations     []probeExpectation `json:"expectations"`
 	ExpectedBehavior []probeExpectation `json:"expected_behavior"`
 	Expected         []probeExpectation `json:"expected"`
