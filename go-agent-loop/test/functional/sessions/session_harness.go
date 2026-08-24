@@ -304,6 +304,24 @@ func (s *SessionScenario) Deltas() []messages.StreamMessage {
 	return out
 }
 
+// DeltaProgress returns the number of collected deltas matching match,
+// without copying the stream. Concurrency tests poll it many times per
+// logical tick, so it must not allocate.
+func (s *SessionScenario) DeltaProgress(match func(messages.StreamMessage) bool) int {
+	if s == nil {
+		return 0
+	}
+	s.deltasMu.Lock()
+	defer s.deltasMu.Unlock()
+	count := 0
+	for _, delta := range s.deltas {
+		if match(delta) {
+			count++
+		}
+	}
+	return count
+}
+
 // Clock returns the scenario's resolved clock. It is clock.Real when no
 // source was supplied and never advances an injected deterministic clock.
 func (s *SessionScenario) Clock() clock.Source { return s.clock }
