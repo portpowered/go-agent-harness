@@ -7,12 +7,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/spf13/cobra"
 )
+
+// probeScenarioDeadline is the deadguard bound applied to every scenario
+// execution: a session that never terminates within this window yields a
+// failed result with a deadguard indication instead of blocking the runner.
+const probeScenarioDeadline = 30 * time.Second
 
 // ProbeCommand is the probe group (parent command); subcommands are wired in routes.go.
 type ProbeCommand struct{}
@@ -111,7 +119,7 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	}
 
 	runner := &probe.Runner{
-		Exec: exec,
+		Exec: deadguardExec(exec, probeScenarioDeadline),
 		Out:  &resultRouter{results: resultsOut, summary: summaryOut},
 	}
 	summary, runErr := runner.Run(cmd.Context(), scenarios)
@@ -178,6 +186,11 @@ func fixtureStem(path string) string {
 
 // buildProbePlan loads selected scenarios and resolves the fixture-backed
 // execution function. Every unknown selection is reported by name.
+//
+// A selection is resolved in order: (1) a scenario file on disk, (2) an exact
+// match against a registered scenario's ID or name, (3) a suite prefix match
+// that expands to every registered scenario whose ID extends the selection
+// with "-" (e.g. s2s-v6a-error-auth selects both of its cases).
 func buildProbePlan(positional []string, flags []string, fixtures map[string]string) ([]probe.Scenario, probe.ExecFunc, error) {
 	selections := append(append([]string{}, positional...), flags...)
 	if len(selections) == 0 {
@@ -186,19 +199,18 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 	seen := map[string]bool{}
 	scenarios := make([]probe.Scenario, 0, len(selections))
 	for _, selection := range selections {
-		if seen[selection] {
-			continue
+		resolved, err := resolveProbeSelection(selection)
+		if err != nil {
+			return nil, nil, err
 		}
-		seen[selection] = true
-		data, readErr := os.ReadFile(selection)
-		if readErr != nil {
-			return nil, nil, fmt.Errorf("unknown probe scenario %q: %w", selection, readErr)
+		for _, scenario := range resolved {
+			key := scenario.ID + "\x00" + scenario.Name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			scenarios = append(scenarios, scenario)
 		}
-		scenario, loadErr := loadProbeScenario(data)
-		if loadErr != nil {
-			return nil, nil, fmt.Errorf("load probe scenario %q: %w", selection, loadErr)
-		}
-		scenarios = append(scenarios, scenario)
 	}
 	for _, fixture := range fixtures {
 		if _, err := gatewaytesting.LoadSessionCapture(fixture); err != nil {
@@ -206,6 +218,35 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 		}
 	}
 	return scenarios, replayExecFunc(fixtures), nil
+}
+
+// resolveProbeSelection resolves one selection into zero or more scenarios,
+// preferring on-disk scenario files over the registered scenario set.
+func resolveProbeSelection(selection string) ([]probe.Scenario, error) {
+	if data, readErr := os.ReadFile(selection); readErr == nil {
+		scenario, loadErr := loadProbeScenario(data)
+		if loadErr != nil {
+			return nil, fmt.Errorf("load probe scenario %q: %w", selection, loadErr)
+		}
+		return []probe.Scenario{scenario}, nil
+	}
+	registered := probe.Scenarios()
+	for _, scenario := range registered {
+		if scenario.ID == selection || scenarioName(scenario) == selection {
+			return []probe.Scenario{scenario}, nil
+		}
+	}
+	suite := make([]probe.Scenario, 0)
+	for _, scenario := range registered {
+		if strings.HasPrefix(scenario.ID, selection+"-") {
+			suite = append(suite, scenario)
+		}
+	}
+	sort.Slice(suite, func(i, j int) bool { return suite[i].ID < suite[j].ID })
+	if len(suite) > 0 {
+		return suite, nil
+	}
+	return nil, fmt.Errorf("unknown probe scenario %q: no such file and no registered scenario matches", selection)
 }
 
 // scenarioDocument is the on-disk scenario JSON envelope.
@@ -353,7 +394,66 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if report.EndsWithDisconnect {
 			observation.TerminalReason = "disconnect"
 		}
+		if classification := replayErrorClassification(fixture); classification != "" {
+			observation.TerminalReason = "error:" + classification
+		}
 		return observation, nil
+	}
+}
+
+// replayErrorClassification classifies the first server-to-client error record
+// in the fixture through the established provider error taxonomy. It returns
+// the empty string when the fixture records no provider error, so healthy
+// sessions keep their disconnect/provenance terminal reason.
+func replayErrorClassification(fixture string) string {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return ""
+	}
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionServerToClient || record.Type != "error" {
+			continue
+		}
+		var payload struct {
+			Error struct {
+				Type string `json:"type"`
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(record.Payload, &payload) != nil {
+			continue
+		}
+		if classification := providers.SessionErrorClassification(payload.Error.Type, payload.Error.Code); classification != "" {
+			return classification
+		}
+	}
+	return ""
+}
+
+// deadguardExec bounds one scenario execution by a wall-clock deadline so a
+// hung session yields a failed result carrying a deadguard indication instead
+// of blocking the runner.
+func deadguardExec(exec probe.ExecFunc, deadline time.Duration) probe.ExecFunc {
+	return func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
+		bounded, cancel := context.WithTimeout(ctx, deadline)
+		defer cancel()
+		type outcome struct {
+			snapshot probe.ObservationSnapshot
+			err      error
+		}
+		done := make(chan outcome, 1)
+		go func() {
+			snapshot, execErr := exec(bounded, scenario)
+			done <- outcome{snapshot: snapshot, err: execErr}
+		}()
+		select {
+		case result := <-done:
+			return result.snapshot, result.err
+		case <-bounded.Done():
+			return probe.ObservationSnapshot{}, fmt.Errorf(
+				"deadguard: scenario %q exceeded its %s deadline: %w",
+				scenarioName(scenario), deadline, bounded.Err())
+		}
 	}
 }
 

@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -221,5 +223,132 @@ func TestProbeRunBadOutputParentDirectoryErrors(t *testing.T) {
 	}
 	if !strings.Contains(run.stderr, "--out") {
 		t.Fatalf("error does not mention --out: %q", run.stderr)
+	}
+}
+
+const probeFixtureDir = "../../../go-llm-gateway/pkg/testing/testdata/session-fixtures"
+
+func TestProbeRunErrorAuthSuiteOfflineExitZero(t *testing.T) {
+	run := executeCLI("probe", "run", "--replay", probeFixtureDir, "--json",
+		"--scenario", "s2s-v6a-error-auth")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 2, run.stdout, run.stderr)
+	byName := map[string]map[string]any{}
+	for _, result := range results {
+		byName[result["name"].(string)] = result
+	}
+	authCase, ok := byName["s2s-v6a-error-auth-invalid-credentials"]
+	if !ok || authCase["pass"] != true {
+		t.Fatalf("invalid-credentials case missing or failing: %v", authCase)
+	}
+	if authCase["terminal_reason"] != "error:authentication" {
+		t.Fatalf("invalid-credentials terminal reason = %v, want error:authentication", authCase["terminal_reason"])
+	}
+	healthy, ok := byName["s2s-v6a-error-auth-healthy-control"]
+	if !ok || healthy["pass"] != true {
+		t.Fatalf("healthy control case missing or failing: %v", healthy)
+	}
+	if healthy["terminal_reason"] != "disconnect" {
+		t.Fatalf("healthy control terminal reason = %v, want disconnect", healthy["terminal_reason"])
+	}
+	if summary["status"] != "pass" || summary["passed"] != float64(2) || summary["failed"] != float64(0) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
+func TestProbeRunMisclassifiedAuthExitsNonZero(t *testing.T) {
+	dir := t.TempDir()
+	document := fmt.Sprintf(`{
+		"id": "misclassified-auth",
+		"steps": [{"type": "send_text", "text": "hello"}, {"type": "close"}],
+		"expectations": [{"type": "terminal_reason", "value": "disconnect"}]
+	}`)
+	scenario := filepath.Join(dir, "misclassified-auth.scenario.json")
+	if err := os.WriteFile(scenario, []byte(document), 0o644); err != nil {
+		t.Fatalf("write scenario: %v", err)
+	}
+	run := executeCLI("probe", "run", scenario, "--replay",
+		filepath.Join(probeFixtureDir, "s2s-v6a-error-auth-invalid-credentials.session.json"), "--json")
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != false {
+		t.Fatalf("misclassified auth case must fail: %v", results[0])
+	}
+	outcomes := results[0]["expectations"].([]any)
+	outcome := outcomes[0].(map[string]any)
+	if outcome["passed"] != false || !strings.Contains(fmt.Sprint(outcome["actual"]), "error:authentication") {
+		t.Fatalf("failed outcome lacks misclassification detail: %v", outcome)
+	}
+	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
+func TestProbeRunAbsentAuthErrorExitsNonZero(t *testing.T) {
+	run := executeCLI("probe", "run", "--replay", probeFixtureDir, "--json",
+		"--scenario", "s2s-v6a-error-auth-invalid-credentials",
+		"--scenario", "s2s-v6a-error-auth-healthy-control")
+	if run.exitCode != 0 {
+		t.Fatalf("control setup exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+
+	dir := t.TempDir()
+	document := `{
+		"id": "absent-error",
+		"name": "s2s-v6a-error-auth-invalid-credentials",
+		"steps": [{"type": "send_text", "text": "hello"}, {"type": "close"}],
+		"expectations": [{"type": "terminal_reason", "value": "error:authentication"}]
+	}`
+	scenario := filepath.Join(dir, "absent-error.scenario.json")
+	if err := os.WriteFile(scenario, []byte(document), 0o644); err != nil {
+		t.Fatalf("write scenario: %v", err)
+	}
+	run = executeCLI("probe", "run", scenario, "--replay",
+		filepath.Join(probeFixtureDir, "s2s-v6a-error-auth-healthy-control.session.json"), "--json")
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1 (absent error must fail); stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, _ := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != false {
+		t.Fatalf("absent-error case must fail: %v", results[0])
+	}
+}
+
+func TestDeadguardBoundsHungScenarioExecution(t *testing.T) {
+	block := make(chan struct{})
+	defer close(block)
+	hungExec := func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
+		<-ctx.Done()
+		return probe.ObservationSnapshot{}, ctx.Err()
+	}
+	exec := deadguardExec(hungExec, 50*time.Millisecond)
+
+	scenario := probe.Scenario{ID: "hung", Name: "hung"}
+	snapshot, err := exec(context.Background(), scenario)
+	if err == nil {
+		t.Fatalf("deadguard must fail a hung scenario execution")
+	}
+	if !strings.Contains(err.Error(), "deadguard") || !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Fatalf("deadguard error lacks indication: %v", err)
+	}
+	if snapshot.FrameCount != 0 || snapshot.TerminalReason != "" {
+		t.Fatalf("hung scenario must not produce an observation: %+v", snapshot)
+	}
+}
+
+func TestDeadguardDoesNotFireForQuickHealthyExecution(t *testing.T) {
+	quickExec := func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
+		return probe.ObservationSnapshot{FrameCount: 2, HasObservedTick: true, ObservedTick: 1, TerminalReason: "disconnect"}, nil
+	}
+	snapshot, err := deadguardExec(quickExec, 5*time.Second)(context.Background(), probe.Scenario{ID: "quick", Name: "quick"})
+	if err != nil {
+		t.Fatalf("deadguard fired spuriously for quick execution: %v", err)
+	}
+	if snapshot.FrameCount != 2 || snapshot.TerminalReason != "disconnect" {
+		t.Fatalf("unexpected snapshot through deadguard: %+v", snapshot)
 	}
 }
