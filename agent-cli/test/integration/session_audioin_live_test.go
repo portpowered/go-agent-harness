@@ -64,9 +64,20 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 		t.Fatalf("load live capture (run error: %v): %v", runErr, loadErr)
 	}
 
+	commitSent := false
+	responseCreateSent := false
 	transcriptDone := false
 	audioBytes := 0
 	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionClientToServer {
+			switch record.Type {
+			case "input_audio_buffer.commit":
+				commitSent = true
+			case "response.create":
+				responseCreateSent = true
+			}
+			continue
+		}
 		if record.Direction != gwtesting.DirectionServerToClient {
 			continue
 		}
@@ -87,6 +98,9 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 				}
 			}
 		}
+	}
+	if !commitSent || !responseCreateSent {
+		t.Fatalf("live capture missing client end-of-turn signaling (commit=%v response.create=%v, run error: %v): %s", commitSent, responseCreateSent, runErr, describeCapture(&capture))
 	}
 	if !transcriptDone {
 		t.Fatalf("live session never received response.output_audio_transcript.done within %s (run error: %v)", liveAudioInTimeout, describeCapture(&capture))
