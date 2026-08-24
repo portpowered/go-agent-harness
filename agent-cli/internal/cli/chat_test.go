@@ -113,6 +113,8 @@ func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, co
 		NewToolCommand(globalFlags),
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
+		NewProbeCommand(),
+		NewProbeRunCommand(),
 		NewSessionCommand(askFlags, globalFlags, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),
