@@ -11,7 +11,7 @@ import (
 
 func passingScenario() Scenario {
 	return Scenario{
-		ID:   "all-pass",
+		ID: "all-pass",
 		Steps: []Step{
 			{Type: StepSendText, Kind: StepSendText, Text: "hello"},
 			{Type: StepAdvanceTo, Kind: StepAdvanceTo, At: 5, Time: 5},
@@ -26,7 +26,7 @@ func passingScenario() Scenario {
 
 func failingScenario() Scenario {
 	return Scenario{
-		ID:   "failing",
+		ID: "failing",
 		Steps: []Step{
 			{Type: StepSendText, Kind: StepSendText, Text: "hi"},
 			{Type: StepAdvanceTo, Kind: StepAdvanceTo, At: 2, Time: 2},
