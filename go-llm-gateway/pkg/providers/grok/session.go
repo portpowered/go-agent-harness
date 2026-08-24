@@ -73,6 +73,13 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 		return sessionSendContextOutcome(ctx)
 	default:
 	}
+	// A terminated session reports closed regardless of remaining outbound
+	// buffer capacity.
+	select {
+	case <-s.done:
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+	default:
+	}
 	select {
 	case <-ctx.Done():
 		return sessionSendContextOutcome(ctx)

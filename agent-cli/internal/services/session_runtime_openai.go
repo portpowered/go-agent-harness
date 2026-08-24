@@ -34,11 +34,11 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}
 
 	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeRecordOpenAI,
-		provider:    sessionProviderOpenAI,
-		model:       sessionCfg.Model,
-		announce:    fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
-		inferencer:  sessionInferencer,
+		mode:       sessionRuntimeModeRecordOpenAI,
+		provider:   sessionProviderOpenAI,
+		model:      sessionCfg.Model,
+		announce:   fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
+		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:         opts.Prompt,
 			CloseAfterOpen: true,
@@ -70,10 +70,10 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeReplayOpenAI,
-		provider:    sessionProviderOpenAI,
-		model:       model,
-		inferencer:  sessionInferencer,
+		mode:       sessionRuntimeModeReplayOpenAI,
+		provider:   sessionProviderOpenAI,
+		model:      model,
+		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
 			WaitForClose: captureHasEvent(opts.ReplayPath, sessionClosedEventType),

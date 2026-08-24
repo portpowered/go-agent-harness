@@ -47,6 +47,11 @@ type SessionRunOptions struct {
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
 	AudioInputs []SessionAudioInput
+	// WaitForClose keeps the replay session loop running across multiple
+	// completed turns until an explicit SESSION.CLOSE arrives instead of
+	// stopping at the first completed turn. Defaults to false, which preserves
+	// the existing single-turn stop behavior byte-for-byte.
+	WaitForClose bool
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {

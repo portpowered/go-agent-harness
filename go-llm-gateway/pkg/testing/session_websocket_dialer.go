@@ -184,15 +184,15 @@ func (d *ReplayWebSocketDialer) Err() error {
 }
 
 type replayWebSocketConn struct {
-	events            []CapturedSessionEvent
-	index             int
-	closed            bool
+	events             []CapturedSessionEvent
+	index              int
+	closed             bool
 	endsWithDisconnect bool
-	mu                sync.Mutex
-	cond              *sync.Cond
-	err               error
-	done              chan struct{}
-	once              sync.Once
+	mu                 sync.Mutex
+	cond               *sync.Cond
+	err                error
+	done               chan struct{}
+	once               sync.Once
 }
 
 var _ transport.Conn = (*replayWebSocketConn)(nil)

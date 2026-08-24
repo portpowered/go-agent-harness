@@ -40,6 +40,10 @@ func validateSessionFixtureFile(path string) []gatewaytesting.SessionFixtureVali
 
 func validateSessionCaptureShapes(file string, capture gatewaytesting.SessionCapture) []gatewaytesting.SessionFixtureValidationError {
 	var errs []gatewaytesting.SessionFixtureValidationError
+	// Failure-shaped fixtures intentionally replay unexecutable provider tool
+	// calls, so the healthy-session call/result pairing expectation does not
+	// apply to them. All other shape and hygiene rules still apply.
+	requireMatchedToolPairs := strings.TrimSpace(capture.Session.FixtureProvenance) != gatewaytesting.SessionFixtureProvenanceSyntheticFailure
 	callOccurrences := make(map[string][]toolObservation)
 	resultOccurrences := make(map[string][]toolObservation)
 	for recordIndex, record := range capture.Records {
@@ -79,15 +83,17 @@ func validateSessionCaptureShapes(file string, capture gatewaytesting.SessionCap
 	}
 
 	unmatched := make([]toolObservation, 0)
-	for id, occurrences := range callOccurrences {
-		matchingResults := resultOccurrences[id]
-		matched := minInt(len(occurrences), len(matchingResults))
-		unmatched = append(unmatched, occurrences[matched:]...)
-	}
-	for id, occurrences := range resultOccurrences {
-		matchingCalls := callOccurrences[id]
-		matched := minInt(len(occurrences), len(matchingCalls))
-		unmatched = append(unmatched, occurrences[matched:]...)
+	if requireMatchedToolPairs {
+		for id, occurrences := range callOccurrences {
+			matchingResults := resultOccurrences[id]
+			matched := minInt(len(occurrences), len(matchingResults))
+			unmatched = append(unmatched, occurrences[matched:]...)
+		}
+		for id, occurrences := range resultOccurrences {
+			matchingCalls := callOccurrences[id]
+			matched := minInt(len(occurrences), len(matchingCalls))
+			unmatched = append(unmatched, occurrences[matched:]...)
+		}
 	}
 	sort.SliceStable(unmatched, func(i, j int) bool {
 		if unmatched[i].recordIdx != unmatched[j].recordIdx {

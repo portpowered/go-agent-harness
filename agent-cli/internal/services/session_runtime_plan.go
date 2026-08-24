@@ -174,11 +174,13 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 		return sessionRuntimePlan{
 			mode:        sessionRuntimeModeReplayGeneric,
 			capturePath: opts.ReplayPath,
+			provider:    strings.ToLower(strings.TrimSpace(opts.Provider)),
 			model:       opts.Model,
 			inferencer:  sessionInferencer,
 			loop: sessionLoopOptions{
-				Prompt:      opts.Prompt,
-				MaxDuration: 3 * time.Second,
+				Prompt:       opts.Prompt,
+				WaitForClose: opts.WaitForClose,
+				MaxDuration:  3 * time.Second,
 			},
 		}, nil
 	}

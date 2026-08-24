@@ -157,6 +157,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if drainErr != nil {
 				stopErr = errors.Join(stopErr, drainErr)
 			}
+			if connectErr := observedInferencer.connectFailure(); connectErr != nil {
+				stopErr = errors.Join(stopErr, fmt.Errorf("session connect: %w", connectErr))
+			}
 			return stopErr
 		case err := <-runErrCh:
 			runErr = err
@@ -207,6 +210,9 @@ type observedSessionInferencer struct {
 	inner messages.SessionInferencer
 	done  chan struct{}
 	once  sync.Once
+
+	mu         sync.Mutex
+	connectErr error
 }
 
 var _ messages.SessionInferencer = (*observedSessionInferencer)(nil)
@@ -218,9 +224,15 @@ func newObservedSessionInferencer(inner messages.SessionInferencer) *observedSes
 	}
 }
 
+// ConnectSession wraps the inner connect and remembers a failed connect so
+// the session runner can surface it: the engine runs model runners as
+// background participants whose errors are not propagated to the hot loop.
 func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
+		i.mu.Lock()
+		i.connectErr = err
+		i.mu.Unlock()
 		i.closeDone()
 		return nil, err
 	}
@@ -232,6 +244,13 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		}
 	}()
 	return &observedSession{Session: session, closeDone: i.closeDone}, nil
+}
+
+// connectFailure returns the remembered connect error, if any.
+func (i *observedSessionInferencer) connectFailure() error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.connectErr
 }
 
 func (i *observedSessionInferencer) Done() <-chan struct{} {

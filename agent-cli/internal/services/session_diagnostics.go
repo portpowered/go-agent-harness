@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -143,10 +144,6 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 	}
 }
 
-func (o *sessionProgressObserver) enabled() bool {
-	return o != nil && (o.sink != nil || o.recorder != nil)
-}
-
 // record forwards one byte observation to the metrics recorder. Recording
 // failures are diagnostics-only and never alter session behavior.
 func (o *sessionProgressObserver) record(direction metrics.Direction, modality metrics.Modality, n int) {
@@ -242,6 +239,12 @@ func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue
 	if o.failure != nil || v == nil {
 		return
 	}
+	o.failure = factsFromErrorValue(v)
+}
+
+// factsFromErrorValue maps one typed ERROR stream value onto the canonical
+// failure facts, applying the public taxonomy defaults for absent fields.
+func factsFromErrorValue(v *messages.ErrorValue) *failureFacts {
 	f := &failureFacts{
 		classification: v.Classification,
 		terminalReason: string(v.TerminalReason),
@@ -263,18 +266,24 @@ func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue
 	if f.outputState == "" {
 		f.outputState = string(messages.TerminalOutputNone)
 	}
-	o.failure = f
+	return f
 }
 
 // captureFailureFromClose captures only failure-worthy session closes; clean,
-// caller-authored completions are never failures.
+// caller-authored completions are never failures. A provider_close terminal
+// reason is a failure only when the model runner synthesized it because the
+// provider transport died without an explicit close (marker reason
+// "provider_closed"); an explicit wire session.closed is normal teardown.
 func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionCloseValue) {
 	if o.failure != nil || v == nil {
 		return
 	}
 	switch v.TerminalReason {
-	case messages.TerminalReasonProviderClose,
-		messages.TerminalReasonTerminalFailure,
+	case messages.TerminalReasonProviderClose:
+		if v.Reason != "provider_closed" {
+			return
+		}
+	case messages.TerminalReasonTerminalFailure,
 		messages.TerminalReasonReplayDivergence,
 		messages.TerminalReasonReplayIncomplete:
 	default:
@@ -293,8 +302,10 @@ func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionClo
 	if f.provenance == "" {
 		f.provenance = string(messages.TerminalProvenanceSession)
 	}
-	if f.outputState == "" {
-		f.outputState = string(messages.TerminalOutputNotApplicable)
+	if f.outputState == "" || v.TerminalReason == messages.TerminalReasonProviderClose {
+		// The model runner synthesizes transport-death closes without output
+		// knowledge; derive the state from what the stream actually delivered.
+		f.outputState = deriveOutputState(o.sawSessionOpen, o.turnsCompleted)
 	}
 	o.failure = f
 }
@@ -331,6 +342,15 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 			if runErr == nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 				return
 			}
+			var deltaErr *engine.StreamDeltaError
+			if errors.As(runErr, &deltaErr) && deltaErr.Value != nil {
+				// The engine terminates the hot loop on ERROR deltas and the
+				// typed value may never cross the consumer deltas; recover the
+				// canonical facts from the run error itself.
+				f = factsFromErrorValue(deltaErr.Value)
+			}
+		}
+		if f == nil {
 			classification := providers.ErrorClassification(runErr)
 			if classification == "" {
 				classification = providers.ErrorClassUnknown
