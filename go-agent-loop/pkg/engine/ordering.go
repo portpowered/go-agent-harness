@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -175,6 +174,21 @@ func (o *GlobalOrdering) toolDeltasForCurrentBatch(ts *state.LoopState) []messag
 	return out
 }
 
+// StreamDeltaError preserves the typed ERROR stream value that terminated the
+// loop. Consumers classify session failures from Value's structured fields
+// (classification, terminal reason/provenance, provider error type/code)
+// instead of parsing the human-readable message string.
+type StreamDeltaError struct {
+	Value *messages.ErrorValue
+}
+
+func (e *StreamDeltaError) Error() string {
+	if e != nil && e.Value != nil {
+		return e.Value.Message
+	}
+	return "stream error"
+}
+
 // consumeModelDelta processes one delta from the model runner's DeltaOutbox.
 // ERROR deltas clean up history and return an error. Stale deltas (LoopPassID
 // lower than current) are silently dropped to handle mid-stream interrupts.
@@ -200,7 +214,7 @@ func (o *GlobalOrdering) consumeModelDelta(ts *state.LoopState, delta messages.S
 				break
 			}
 		}
-		return errors.New(ev.Message)
+		return &StreamDeltaError{Value: ev}
 	}
 
 	assigned := o.assignStreamOrdering(ts, delta, messages.Model)
@@ -253,7 +267,7 @@ func (o *GlobalOrdering) consumeToolDelta(ts *state.LoopState, delta messages.St
 	}
 
 	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr {
-		return errors.New(ev.Message)
+		return &StreamDeltaError{Value: ev}
 	}
 
 	assigned := o.assignStreamOrdering(ts, delta, messages.Tool)

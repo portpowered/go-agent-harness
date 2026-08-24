@@ -34,11 +34,11 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	}
 
 	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeRecordGrok,
-		provider:    sessionProviderGrok,
-		capturePath: opts.RecordPath,
-		announce:    fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath),
-		inferencer:  sessionInferencer,
+		mode:       sessionRuntimeModeRecordGrok,
+		provider:   sessionProviderGrok,
+		model:      sessionCfg.Model,
+		announce:   fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath),
+		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:         opts.Prompt,
 			CloseAfterOpen: true,
@@ -70,10 +70,10 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 	return sessionRuntimePlan{
-		mode:        sessionRuntimeModeReplayGrok,
-		provider:    sessionProviderGrok,
-		capturePath: opts.ReplayPath,
-		inferencer:  sessionInferencer,
+		mode:       sessionRuntimeModeReplayGrok,
+		provider:   sessionProviderGrok,
+		model:      model,
+		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
 			WaitForClose: grokReplayCaptureHasSessionClose(opts.ReplayPath),

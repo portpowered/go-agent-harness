@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/pion/opus v0.1.1-0.20260814200708-161621adf560
 	github.com/pion/webrtc/v4 v4.2.18
 	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.1
 	google.golang.org/genai v1.48.0

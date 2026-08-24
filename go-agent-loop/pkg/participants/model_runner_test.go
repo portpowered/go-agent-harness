@@ -682,8 +682,8 @@ func TestSessionModelRunner_SessionDoneEmitsSessionClose(t *testing.T) {
 	if value.TerminalReason != messages.TerminalReasonProviderClose {
 		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonProviderClose)
 	}
-	if value.Classification != string(messages.TerminalReasonProviderClose) {
-		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonProviderClose)
+	if value.Classification != "transport" {
+		t.Fatalf("classification = %q, want %q", value.Classification, "transport")
 	}
 	if value.TerminalProvenance != messages.TerminalProvenanceSession {
 		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceSession)

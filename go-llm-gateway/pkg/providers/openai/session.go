@@ -51,6 +51,13 @@ func (s *realtimeSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	default:
 	}
 	for _, event := range events {
+		// A terminated session reports closed regardless of remaining
+		// outbound buffer capacity.
+		select {
+		case <-s.done:
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+		default:
+		}
 		select {
 		case <-ctx.Done():
 			return sessionSendContextOutcome(ctx)

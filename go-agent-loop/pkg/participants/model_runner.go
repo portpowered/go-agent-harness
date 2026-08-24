@@ -130,7 +130,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 					Value: messages.NewSessionCloseValueWithTerminal(
 						"",
 						"provider_closed",
-						string(messages.TerminalReasonProviderClose),
+						"transport",
 						messages.TerminalReasonProviderClose,
 						messages.TerminalProvenanceSession,
 						messages.TerminalOutputNotApplicable,
@@ -205,7 +205,14 @@ func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMes
 		}
 	}
 	if value.Classification == "" {
-		value.Classification = string(value.TerminalReason)
+		// The gateway public taxonomy classifies a provider transport close
+		// without completion as transport; clean session closes keep their
+		// descriptive reason.
+		if value.TerminalReason == messages.TerminalReasonProviderClose {
+			value.Classification = "transport"
+		} else {
+			value.Classification = string(value.TerminalReason)
+		}
 	}
 	if value.TerminalProvenance == "" {
 		value.TerminalProvenance = messages.TerminalProvenanceSession

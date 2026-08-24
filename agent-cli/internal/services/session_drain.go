@@ -60,9 +60,9 @@ func sessionTerminalFields(classification string, reason messages.TerminalReason
 	return strings.Join(fields, " ")
 }
 
-func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop, idleDelay time.Duration) error {
+func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop, idleDelay time.Duration, obs *sessionProgressObserver) error {
 	if idleDelay <= 0 {
-		return drainSessionLoopMessages(out, loop)
+		return drainSessionLoopMessages(out, loop, obs)
 	}
 
 	idle := time.NewTimer(idleDelay)
@@ -70,6 +70,7 @@ func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop,
 	for {
 		select {
 		case msg := <-loop.Deltas().Chan():
+			obs.observe(msg)
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
 			}
@@ -101,19 +102,20 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 	}
 }
 
-func drainSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop) error {
+func drainSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
 	for {
 		msg, ok := loop.Deltas().Read()
 		if !ok {
 			return nil
 		}
+		obs.observe(msg)
 		if err := writeSessionReplayMessage(out, msg); err != nil {
 			return err
 		}
 	}
 }
 
-func drainSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration) error {
+func drainSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, quiet time.Duration, obs *sessionProgressObserver) error {
 	timer := time.NewTimer(quiet)
 	defer timer.Stop()
 
@@ -123,6 +125,7 @@ func drainSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop
 			if !ok {
 				return nil
 			}
+			obs.observe(msg)
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
 			}
