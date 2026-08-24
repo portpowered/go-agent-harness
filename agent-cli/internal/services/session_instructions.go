@@ -96,18 +96,30 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 				return err
 			}
 			admission := newSessionDurationAdmission()
-			admittedInferencer := &sessionDurationAdmissionInferencer{
-				inner:     plan.inferencer,
-				admission: admission,
-				closeDone: make(chan struct{}),
-			}
+			// The seed substitution wrapper must sit INSIDE the admission
+			// boundary: the duration runner connects through
+			// admittedInferencer, so any wrapper composed outside it never
+			// observes the session and the sentinel prompt would leak onto
+			// the live wire.
+			var admittedInner messages.SessionInferencer
 			if plan.inferencer != nil {
-				plan.inferencer = &sessionTextSeedInferencer{
-					inner:      admittedInferencer,
+				admittedInner = &sessionTextSeedInferencer{
+					inner:      plan.inferencer,
 					wirePrompt: wirePrompt,
 					value:      seed.Value,
 					audioOut:   output,
 				}
+			}
+			if admittedInner != nil {
+				plan.inferencer = &sessionDurationAdmissionInferencer{
+					inner:     admittedInner,
+					admission: admission,
+					closeDone: make(chan struct{}),
+				}
+			}
+			var admittedInferencer *sessionDurationAdmissionInferencer
+			if admitted, ok := plan.inferencer.(*sessionDurationAdmissionInferencer); ok {
+				admittedInferencer = admitted
 			}
 			runErr = runSessionDurationPlanWithAdmission(durationCtx, output, plan, maxDuration, realSessionDurationClock{}, admittedInferencer)
 			return errors.Join(runErr, output.errorValue())
