@@ -260,7 +260,7 @@ func TestProbeRunErrorAuthSuiteOfflineExitZero(t *testing.T) {
 
 func TestProbeRunMisclassifiedAuthExitsNonZero(t *testing.T) {
 	dir := t.TempDir()
-	document := fmt.Sprintf(`{
+	document := `{
 		"id": "misclassified-auth",
 		"steps": [{"type": "send_text", "text": "hello"}, {"type": "close"}],
 		"expectations": [{"type": "terminal_reason", "value": "disconnect"}]
