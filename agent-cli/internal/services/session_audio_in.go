@@ -275,7 +275,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 		if err != nil {
 			return nil, err
 		}
-		return &sessionAudioSource{source: source, path: input.Path, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
+		return &sessionAudioSource{source: source, path: input.Path, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 	}
 
 	stdin := input.Stdin
@@ -306,7 +306,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 			}
 		}
 	}
-	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
+	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 }
 
 func classifySessionAudioOpenError(path string, err error) error {
@@ -323,9 +323,14 @@ func classifySessionAudioOpenError(path string, err error) error {
 }
 
 type sessionAudioSource struct {
-	source    audio.AudioSource
-	path      string
-	reader    *sessionAudioReader
+	source audio.AudioSource
+	path   string
+	reader *sessionAudioReader
+	// paced marks file-backed finite sources whose frames must be delivered
+	// at the encoded real-time rate. Synthetic test sources injected through
+	// the SessionAudioInput.Source seam are never paced so tests control
+	// their own timing.
+	paced     bool
 	send      func(context.Context, []byte) error
 	endOfTurn func(context.Context) error
 	once      sync.Once
@@ -429,6 +434,10 @@ func (r *sessionAudioReader) Read(destination []byte) (int, error) {
 	}
 }
 
+// sessionAudioFrameDuration is the encoded playback duration of one frame:
+// FrameSize samples at the harness sample rate (480 / 16000 Hz = 30 ms).
+var sessionAudioFrameDuration = time.Duration(audio.FrameSize) * time.Second / audio.SampleRate
+
 func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) (runErr error) {
 	defer func() {
 		if closeErr := source.Close(); closeErr != nil {
@@ -436,8 +445,28 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		}
 	}()
 
+	// File-backed finite sources are delivered at their encoded real-time
+	// rate. Bursting a whole recording into the session outbound path faster
+	// than the provider connection drains it silently drops frames at the
+	// bounded session send queue, so the model never hears the complete
+	// utterance and end-of-turn fires over truncated audio. Pacing keeps the
+	// outbound queue occupancy near zero for the whole file.
+	start := time.Now()
+
 	frame := make([]int16, audio.FrameSize)
-	for {
+	for frameIndex := 0; ; frameIndex++ {
+		if source.paced && frameIndex > 0 {
+			target := start.Add(time.Duration(frameIndex) * sessionAudioFrameDuration)
+			if delay := time.Until(target); delay > 0 {
+				timer := time.NewTimer(delay)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return &SessionAudioInputError{Kind: SessionAudioInputRead, Path: source.path, Err: ctx.Err()}
+				case <-timer.C:
+				}
+			}
+		}
 		clear(frame)
 		if err := source.source.ReadFrame(ctx, frame); err != nil {
 			if errors.Is(err, io.EOF) {
