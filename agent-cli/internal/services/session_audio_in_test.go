@@ -24,6 +24,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	functional "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 func TestSessionCommandHelpExposesAudioInput(t *testing.T) {
@@ -43,7 +44,7 @@ func TestSessionCommandHelpExposesAudioInput(t *testing.T) {
 			break
 		}
 	}
-	if !strings.Contains(audioInHelp, "--audio-in string") || !strings.Contains(audioInHelp, "raw PCM16 standard input") || strings.Contains(audioInHelp, ".wav") {
+	if !strings.Contains(audioInHelp, "--audio-in string") || !strings.Contains(audioInHelp, "raw PCM16 standard input") || !strings.Contains(audioInHelp, ".wav") {
 		t.Fatalf("session help does not describe --audio-in path and stdin behavior:\n%s", help)
 	}
 	if strings.Index(help, "--api-key") > strings.Index(help, "--audio-in") || strings.Index(help, "--audio-in") > strings.Index(help, "--base-url") {
@@ -68,6 +69,10 @@ func TestRunSessionWithAudioInputPreflightMatrix(t *testing.T) {
 	}
 	validPath := filepath.Join(t.TempDir(), "valid.raw")
 	if err := os.WriteFile(validPath, pcm16Bytes([]int16{1}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	corruptWAVPath := filepath.Join(t.TempDir(), "corrupt.wav")
+	if err := os.WriteFile(corruptWAVPath, []byte("definitely not a RIFF wave payload"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,11 +116,11 @@ func TestRunSessionWithAudioInputPreflightMatrix(t *testing.T) {
 			wantMsg: ".wav, .pcm, .raw",
 		},
 		{
-			name:    "WAV requires incremental decoder",
-			input:   services.SessionAudioInput{Path: filepath.Join(t.TempDir(), "input.wav"), Present: true},
+			name:    "rejected WAV format",
+			input:   services.SessionAudioInput{Path: corruptWAVPath, Present: true},
 			wantIs:  services.ErrSessionAudioInputFormat,
 			wantAny: []error{audio.ErrUnsupportedFormat},
-			wantMsg: ".pcm",
+			wantMsg: "RIFF",
 		},
 		{
 			name:    "audio device conflict",
@@ -271,31 +276,80 @@ func TestSessionCommandAudioInputReadsRawStdin(t *testing.T) {
 	}
 }
 
-func TestSessionCommandAudioInputReplaysValidatedWireFixture(t *testing.T) {
-	samples := make([]int16, audio.FrameSize*2)
-	for index := range samples {
-		samples[index] = int16(1200 - index*2)
+// committedSessionAudioInputWAVPath returns the committed non-empty audio
+// fixture that drives every real-command audio-input replay proof.
+func committedSessionAudioInputWAVPath(t *testing.T) string {
+	t.Helper()
+	_, sourcePath, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
 	}
-	audioPath := filepath.Join(t.TempDir(), "fixture-input.raw")
-	if err := os.WriteFile(audioPath, pcm16Bytes(samples), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	return filepath.Join(filepath.Dir(sourcePath), "testdata", "session-audio-input", "utterance.wav")
+}
 
-	baseFixturePath := filepath.Join("..", "..", "test", "integration", "testdata", "openai_realtime_smoke.session.json")
-	capture, err := gwtesting.LoadSessionCapture(baseFixturePath)
+func committedSessionAudioInputStreamCapturePath(t *testing.T) string {
+	t.Helper()
+	_, sourcePath, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Join(filepath.Dir(sourcePath), "testdata", "session-audio-input", "utterance-stream.session.json")
+}
+
+func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
+	wavPath := committedSessionAudioInputWAVPath(t)
+	capturePath := committedSessionAudioInputStreamCapturePath(t)
+
+	// Duration-derived expectations come from the committed WAV's sample
+	// contract, never from runtime-generated samples.
+	wavBytes, err := os.ReadFile(wavPath)
 	if err != nil {
-		t.Fatalf("load committed replay fixture: %v", err)
+		t.Fatalf("read committed WAV fixture: %v", err)
 	}
-	if len(capture.Records) < 2 {
-		t.Fatalf("committed replay fixture has %d records, want session update and created", len(capture.Records))
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse committed WAV fixture: %v", err)
+	}
+	if rate != audio.SampleRate {
+		t.Fatalf("committed WAV rate = %d, want %d", rate, audio.SampleRate)
+	}
+	if len(samples) == 0 || len(samples)%audio.FrameSize != 0 {
+		t.Fatalf("committed WAV has %d samples; want a non-empty multiple of %d", len(samples), audio.FrameSize)
+	}
+	expectedFrames := len(samples) / audio.FrameSize
+
+	// The committed stream capture must stay validator-clean and carry exactly
+	// one sanitized AUDIO.DELTA per committed fixture frame.
+	if validationErrs := gwtesting.ValidateSessionCaptureFile(capturePath); len(validationErrs) != 0 {
+		t.Fatalf("committed stream capture failed validation: %v", validationErrs)
+	}
+	streamCapture, err := gwtesting.LoadSessionCapture(capturePath)
+	if err != nil {
+		t.Fatalf("load committed stream capture: %v", err)
+	}
+	captureAudioRecords := 0
+	for _, record := range streamCapture.Records {
+		if record.Direction == gwtesting.DirectionClientToServer && record.Type == string(messages.StreamTypeAudioDelta) {
+			captureAudioRecords++
+		}
+	}
+	if captureAudioRecords != expectedFrames {
+		t.Fatalf("committed capture audio frames = %d, want %d from the WAV sample contract", captureAudioRecords, expectedFrames)
 	}
 
-	// The existing committed OpenAI fixture supplies the real session.update
-	// payload. Add two deterministic wire-level audio frames before a normal
-	// session.closed event so ReplayWebSocketDialer validates every outbound
-	// frame sent by the real agent session command.
-	records := []gwtesting.CapturedSessionEvent{capture.Records[0], capture.Records[1]}
-	for frameIndex := 0; frameIndex < len(samples)/audio.FrameSize; frameIndex++ {
+	// Wire-level order/content proof: derive the provider-wire capture from
+	// the committed WAV and require the real command's outbound WebSocket
+	// frames to match it exactly through the existing replay dialer.
+	baseFixturePath := filepath.Join("..", "..", "test", "integration", "testdata", "openai_realtime_smoke.session.json")
+	baseCapture, err := gwtesting.LoadSessionCapture(baseFixturePath)
+	if err != nil {
+		t.Fatalf("load committed replay base fixture: %v", err)
+	}
+	if len(baseCapture.Records) < 2 {
+		t.Fatalf("committed replay base fixture has %d records, want session update and created", len(baseCapture.Records))
+	}
+	records := []gwtesting.CapturedSessionEvent{baseCapture.Records[0], baseCapture.Records[1]}
+	for frameIndex := range expectedFrames {
 		payload, marshalErr := json.Marshal(map[string]string{
 			"type":  "input_audio_buffer.append",
 			"audio": base64.StdEncoding.EncodeToString(pcm16Bytes(samples[frameIndex*audio.FrameSize : (frameIndex+1)*audio.FrameSize])),
@@ -320,97 +374,35 @@ func TestSessionCommandAudioInputReplaysValidatedWireFixture(t *testing.T) {
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_audio_fixture","reason":"fixture_complete"}`),
 	})
-	capture.Session.ID = "sess_audio_fixture"
-	capture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	capture.Records = records
-
-	fixturePath := filepath.Join(t.TempDir(), "audio.session.json")
-	fixtureData, err := json.MarshalIndent(capture, "", "  ")
+	baseCapture.Session.ID = "sess_audio_fixture"
+	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
+	baseCapture.Records = records
+	wirePath := filepath.Join(t.TempDir(), "audio.session.json")
+	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
 	if err != nil {
-		t.Fatalf("marshal audio replay fixture: %v", err)
+		t.Fatalf("marshal wire replay fixture: %v", err)
 	}
-	if err := os.WriteFile(fixturePath, fixtureData, 0o600); err != nil {
-		t.Fatalf("write audio replay fixture: %v", err)
+	if err := os.WriteFile(wirePath, wireData, 0o600); err != nil {
+		t.Fatalf("write wire replay fixture: %v", err)
 	}
-	if _, err := gwtesting.NewReplayWebSocketDialer(fixturePath); err != nil {
-		t.Fatalf("audio replay fixture rejected by replay dialer: %v", err)
+	if _, err := gwtesting.NewReplayWebSocketDialer(wirePath); err != nil {
+		t.Fatalf("wire replay fixture rejected by replay dialer: %v", err)
 	}
-
-	expectedFrames := (len(samples) + audio.FrameSize - 1) / audio.FrameSize
-	audioRecords := 0
-	for _, record := range capture.Records {
-		if record.Type == "input_audio_buffer.append" {
-			audioRecords++
-		}
-	}
-	if audioRecords != expectedFrames {
-		t.Fatalf("fixture audio frame count = %d, want %d from %d Hz/%d-sample framing", audioRecords, expectedFrames, audio.SampleRate, audio.FrameSize)
-	}
-
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
 	cmd.SetOut(io.Discard)
-	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", audioPath})
+	cmd.SetArgs([]string{"--replay", wirePath, "--audio-in", wavPath})
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("real replay session command: %v", err)
+		t.Fatalf("real wire replay session command: %v", err)
 	}
 
-	// The fixture validator intentionally rejects raw provider-wire audio fields
-	// as unsanitized. Validate the equivalent stream-message replay envelope,
-	// whose base64 content is the existing sanitized session representation, and
-	// run it through the generic replay inferencer for exact frame assertions.
-	streamRecord := func(sequence int, direction gwtesting.SessionEventDirection, msg messages.StreamMessage) gwtesting.CapturedSessionEvent {
-		payload, marshalErr := gwtesting.MarshalStreamMessage(msg)
-		if marshalErr != nil {
-			t.Fatalf("marshal stream replay event: %v", marshalErr)
-		}
-		return gwtesting.CapturedSessionEvent{
-			Sequence:    sequence,
-			Direction:   direction,
-			TimestampMs: int64(sequence),
-			Type:        string(msg.Type),
-			PayloadType: gwtesting.SessionPayloadTypeStreamMessage,
-			Payload:     payload,
-		}
-	}
-	genericRecords := []gwtesting.CapturedSessionEvent{
-		streamRecord(1, gwtesting.DirectionServerToClient, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionOpen,
-			Value: messages.NewSessionOpenValue("sess_audio_fixture", "session"),
-		}),
-	}
-	for frameIndex := 0; frameIndex < expectedFrames; frameIndex++ {
-		genericRecords = append(genericRecords, streamRecord(len(genericRecords)+1, gwtesting.DirectionClientToServer, messages.StreamMessage{
-			Type:  messages.StreamTypeAudioDelta,
-			Value: messages.NewAudioDeltaValue(pcm16Bytes(samples[frameIndex*audio.FrameSize : (frameIndex+1)*audio.FrameSize])),
-		}))
-	}
-	genericRecords = append(genericRecords, streamRecord(len(genericRecords)+1, gwtesting.DirectionServerToClient, messages.StreamMessage{
-		Type:  messages.StreamTypeSessionClose,
-		Value: messages.NewSessionCloseValue("sess_audio_fixture", "fixture_complete"),
-	}))
-	genericCapture := gwtesting.SessionCapture{
-		Version:  gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{Name: "synthetic", Model: "session-replay"},
-		Session:  gwtesting.SessionMetadata{ID: "sess_audio_fixture", FixtureProvenance: gwtesting.SessionFixtureProvenanceSynthetic},
-		Records:  genericRecords,
-	}
-	genericPath := filepath.Join(t.TempDir(), "audio-stream.session.json")
-	genericData, err := json.MarshalIndent(genericCapture, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal generic audio replay fixture: %v", err)
-	}
-	if err := os.WriteFile(genericPath, genericData, 0o600); err != nil {
-		t.Fatalf("write generic audio replay fixture: %v", err)
-	}
-	if validationErrs := gwtesting.ValidateSessionCaptureFile(genericPath); len(validationErrs) != 0 {
-		t.Fatalf("generic audio replay fixture failed validation: %v", validationErrs)
-	}
-	recorded := gwtesting.NewRecordingSessionInferencer(gwtesting.NewReplaySessionInferencer(genericPath))
+	// Generic proof through the committed capture: the real command must
+	// transmit every committed WAV frame, in order, byte for byte.
+	recorded := gwtesting.NewRecordingSessionInferencer(gwtesting.NewReplaySessionInferencer(capturePath))
 	genericCmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), recorded).Generate()
 	genericCmd.SetOut(io.Discard)
-	genericCmd.SetArgs([]string{"--replay", genericPath, "--audio-in", audioPath})
+	genericCmd.SetArgs([]string{"--replay", capturePath, "--audio-in", wavPath})
 	if err := genericCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("generic replay session command: %v", err)
+		t.Fatalf("real generic replay session command: %v", err)
 	}
 	var observedAudio [][]byte
 	for _, event := range recorded.Recorder().Events() {
@@ -428,14 +420,191 @@ func TestSessionCommandAudioInputReplaysValidatedWireFixture(t *testing.T) {
 		observedAudio = append(observedAudio, value.Content)
 	}
 	if len(observedAudio) != expectedFrames {
-		t.Fatalf("observed replay audio frames = %d, want %d", len(observedAudio), expectedFrames)
+		t.Fatalf("observed replay audio frames = %d, want %d from the committed fixture duration", len(observedAudio), expectedFrames)
 	}
 	for frameIndex, got := range observedAudio {
 		want := pcm16Bytes(samples[frameIndex*audio.FrameSize : (frameIndex+1)*audio.FrameSize])
 		if !bytes.Equal(got, want) {
-			t.Fatalf("replay audio frame %d changed order or content", frameIndex)
+			t.Fatalf("replay audio frame %d changed order or content against the committed fixture", frameIndex)
 		}
 	}
+}
+
+// TestSessionCommandWithoutAudioInputDeliversZeroFrames is the load-bearing
+// wiring control: with the audio-in hook disconnected, the otherwise identical
+// run through the shared session lifecycle must deliver zero audio frames to
+// the same inferencer capture.
+func TestSessionCommandWithoutAudioInputDeliversZeroFrames(t *testing.T) {
+	baselineGoroutines := runtime.NumGoroutine()
+	capturePath := committedSessionAudioInputStreamCapturePath(t)
+	recorded := gwtesting.NewRecordingSessionInferencer(gwtesting.NewReplaySessionInferencer(capturePath))
+	err := services.RunSessionWithAudioInput(context.Background(), io.Discard, services.SessionRunOptions{
+		ReplayPath:        capturePath,
+		SessionInferencer: recorded,
+	}, services.SessionAudioInput{})
+	if err != nil {
+		t.Fatalf("disconnected-hook session error = %v", err)
+	}
+	audioEvents := 0
+	for _, event := range recorded.Recorder().Events() {
+		if event.Direction == gwtesting.DirectionClientToServer && event.Type == string(messages.StreamTypeAudioDelta) {
+			audioEvents++
+		}
+	}
+	if audioEvents != 0 {
+		t.Fatalf("disconnected audio-in hook still delivered %d audio frames", audioEvents)
+	}
+	assertGoroutinesSettled(t, baselineGoroutines, "no-audio control run")
+}
+
+// gatedAudioSource blocks read k>0 until send k-1 completed, so any wholesale
+// read-ahead deadlocks instead of passing. It makes each-send-awaited-before-
+// next-read ordering observable.
+type gatedAudioSource struct {
+	frames    int
+	position  int
+	sends     int
+	eofSeen   bool
+	gates     []chan struct{}
+	closed    chan struct{}
+	closeOnce sync.Once
+	mu        sync.Mutex
+}
+
+func newGatedAudioSource(frames int) *gatedAudioSource {
+	source := &gatedAudioSource{frames: frames, closed: make(chan struct{})}
+	source.gates = make([]chan struct{}, frames)
+	for index := range source.gates {
+		source.gates[index] = make(chan struct{})
+	}
+	return source
+}
+
+func (s *gatedAudioSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	position := s.position
+	s.mu.Unlock()
+	if position > 0 {
+		// The previous frame's send must complete before this read proceeds;
+		// a wholesale reader would deadlock here instead of passing.
+		select {
+		case <-s.gates[position-1]:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if position >= s.frames {
+		s.mu.Lock()
+		s.eofSeen = true
+		s.mu.Unlock()
+		return io.EOF
+	}
+	clear(buf)
+	for index := range buf {
+		buf[index] = int16(position*100 + index%97)
+	}
+	s.mu.Lock()
+	s.position++
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *gatedAudioSource) snapshot() (sends int, eof bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sends, s.eofSeen
+}
+
+func (s *gatedAudioSource) Close() error {
+	s.closeOnce.Do(func() { close(s.closed) })
+	return nil
+}
+
+func TestRunSessionWithAudioInputAwaitsSendBeforeNextRead(t *testing.T) {
+	baselineGoroutines := runtime.NumGoroutine()
+	const totalFrames = 3
+	source := newGatedAudioSource(totalFrames)
+	baseInferencer := functional.NewMockSessionInferencer()
+	signaledInferencer := newConnectSignaledInferencer(baseInferencer)
+	t.Cleanup(baseInferencer.Close)
+	var sendMu sync.Mutex
+	var sent [][]byte
+	firstSendObserved := make(chan struct{})
+	releaseSecondRead := make(chan struct{})
+	send := func(_ context.Context, pcm []byte) error {
+		sendMu.Lock()
+		sent = append(sent, append([]byte(nil), pcm...))
+		count := len(sent)
+		sendMu.Unlock()
+		source.mu.Lock()
+		source.sends = count
+		source.mu.Unlock()
+		if count == 1 {
+			// Frame one is delivered; read two stays blocked until the test
+			// releases it, so delivery provably began before file EOF.
+			close(firstSendObserved)
+			<-releaseSecondRead
+			close(source.gates[0])
+			return nil
+		}
+		close(source.gates[count-1])
+		return nil
+	}
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithAudioInput(context.Background(), io.Discard, services.SessionRunOptions{
+			ReplayPath:        "synthetic.json",
+			SessionInferencer: signaledInferencer,
+		}, services.SessionAudioInput{
+			Path:           "gated.raw",
+			Present:        true,
+			Source:         source,
+			SendAudioInput: send,
+		})
+	}()
+
+	select {
+	case <-firstSendObserved:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first frame was not delivered before file EOF")
+	}
+	if _, eofSeen := source.snapshot(); eofSeen {
+		t.Fatal("delivery began only after the source reached EOF")
+	}
+	close(releaseSecondRead)
+	select {
+	case <-signaledInferencer.connected:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session inferencer did not connect")
+	}
+	baseInferencer.Close()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("paced audio session error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		baseInferencer.Close()
+		t.Fatal("timed out waiting for paced audio session completion")
+	}
+	sendMu.Lock()
+	delivered := len(sent)
+	sendMu.Unlock()
+	if delivered != totalFrames {
+		t.Fatalf("sent frame count = %d, want %d delivered one awaited send at a time", delivered, totalFrames)
+	}
+	if sends, _ := source.snapshot(); sends != totalFrames {
+		t.Fatalf("send hook count = %d, want %d", sends, totalFrames)
+	}
+	select {
+	case <-source.closed:
+	default:
+		t.Fatal("audio EOF did not close its source")
+	}
+	assertGoroutinesSettled(t, baselineGoroutines, "paced streaming")
 }
 
 func TestRunSessionWithAudioInputCancellationStopsBlockingStdin(t *testing.T) {

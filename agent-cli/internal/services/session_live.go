@@ -23,6 +23,10 @@ type sessionLoopOptions struct {
 	MaxDuration    time.Duration
 	Done           <-chan struct{}
 	DoneErr        func() error
+	// AudioIn optionally streams a bounded file or stdin audio source into
+	// the loop after SESSION.OPEN. When nil, every session path behaves
+	// exactly as it did before audio input existed.
+	AudioIn *sessionAudioSource
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
@@ -37,6 +41,9 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if opts.AudioIn != nil {
+		opts.AudioIn.bindContext(runCtx)
+	}
 
 	runErrCh := make(chan error, 1)
 	go func() {
@@ -47,116 +54,137 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 		timeout = time.After(opts.MaxDuration)
 	}
 
+	// The optional audio input producer starts only after SESSION.OPEN so
+	// buffered frames cannot precede the provider handshake. Every terminal
+	// path below awaits it before returning.
+	var audioCh <-chan error
+	startAudio := func() {
+		if opts.AudioIn == nil || audioCh != nil {
+			return
+		}
+		audioErrCh := make(chan error, 1)
+		audioCh = audioErrCh
+		go func() { audioErrCh <- streamSessionAudioInput(runCtx, loop, opts.AudioIn) }()
+	}
+	waitAudio := func() error {
+		if audioCh == nil {
+			return nil
+		}
+		audioErr := <-audioCh
+		audioCh = nil
+		return audioErr
+	}
+
+	var runErr error
+	runDone := false
+	waitRun := func() error {
+		if !runDone {
+			runErr = <-runErrCh
+			runDone = true
+		}
+		return runErr
+	}
+	stop := func() error {
+		cancel()
+		return joinSessionTerminationErrors(waitRun(), waitAudio())
+	}
+	stopAndDrain := func() error {
+		stopErr := stop()
+		if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+			stopErr = errors.Join(stopErr, drainErr)
+		}
+		return stopErr
+	}
+
 	promptSent := false
 	closeSent := false
+	audioDone := opts.AudioIn == nil
 	done := opts.Done
 	for {
 		select {
+		case audioErr := <-audioCh:
+			audioCh = nil
+			if audioErr != nil && !isSessionCancellation(audioErr) {
+				cancel()
+				stopErr := errors.Join(audioErr, joinSessionTerminationErrors(waitRun(), nil))
+				if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+					stopErr = errors.Join(stopErr, drainErr)
+				}
+				return stopErr
+			}
+			audioDone = true
 		case <-done:
 			doneErr := error(nil)
 			if opts.DoneErr != nil {
 				doneErr = opts.DoneErr()
 			}
+			var initialDrainErr error
 			if doneErr == nil {
-				if drainErr := drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay); drainErr != nil {
-					return drainErr
-				}
+				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay)
 			}
-			cancel()
-			err := <-runErrCh
+			stopErr := stop()
 			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				return drainErr
+				stopErr = errors.Join(stopErr, drainErr)
+			}
+			if initialDrainErr != nil {
+				stopErr = errors.Join(stopErr, initialDrainErr)
 			}
 			if doneErr != nil {
-				return doneErr
+				stopErr = errors.Join(stopErr, doneErr)
 			}
-			if err != nil && !errors.Is(err, context.Canceled) {
-				return err
-			}
-			return nil
+			return stopErr
 		case <-timeout:
-			cancel()
-			err := <-runErrCh
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				return drainErr
-			}
-			if err != nil && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("session error: %w", err)
-			}
-			return nil
+			return stopAndDrain()
 		case <-ctx.Done():
-			cancel()
-			err := <-runErrCh
-			if err != nil && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("session error: %w", err)
+			stopErr := stop()
+			if stopErr != nil {
+				return stopErr
 			}
 			return ctx.Err()
 		case <-observedInferencer.Done():
-			if drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond); drainErr != nil {
-				cancel()
-				<-runErrCh
-				return drainErr
+			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond)
+			stopErr := stopAndDrain()
+			if drainErr != nil {
+				stopErr = errors.Join(stopErr, drainErr)
 			}
-			cancel()
-			err := <-runErrCh
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				return drainErr
-			}
-			if err != nil && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("session error: %w", err)
-			}
-			return nil
+			return stopErr
 		case err := <-runErrCh:
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				return drainErr
-			}
-			if err != nil && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("session error: %w", err)
-			}
-			return nil
+			runErr = err
+			runDone = true
+			cancel()
+			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
 			if err := writeSessionReplayMessage(out, msg); err != nil {
-				cancel()
-				<-runErrCh
-				return err
+				return errors.Join(err, stop())
 			}
 			if msg.Type == messages.StreamTypeSessionOpen {
 				if opts.Prompt != "" && !promptSent {
 					promptSent = true
 					userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
 					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
-						cancel()
-						<-runErrCh
-						return fmt.Errorf("send session message: %w", err)
+						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
 					}
 				}
 				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
 					closeSent = true
 					if err := sendSessionClose(runCtx, loop); err != nil {
-						cancel()
-						<-runErrCh
-						return err
+						return errors.Join(err, stop())
 					}
 				}
+				startAudio()
 			}
 			if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
 				closeSent = true
 				if err := sendSessionClose(runCtx, loop); err != nil {
-					cancel()
-					<-runErrCh
-					return err
+					return errors.Join(err, stop())
 				}
 			}
-			if shouldStopSessionLoop(msg, opts, closeSent) {
-				cancel()
-				err := <-runErrCh
-				if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-					return drainErr
+			if opts.AudioIn != nil {
+				if shouldStopAudioInputSessionLoop(msg, opts, closeSent, audioDone) {
+					return stopAndDrain()
 				}
-				if err != nil && !errors.Is(err, context.Canceled) {
-					return fmt.Errorf("session error: %w", err)
-				}
-				return nil
+			} else if shouldStopSessionLoop(msg, opts, closeSent) {
+				return stopAndDrain()
 			}
 		}
 	}

@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "synthetic",
+    "model": "session-replay"
+  },
+  "session": {
+    "id": "sess_audio_input_replay",
+    "started_at_utc": "2026-08-23T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "server_to_client",
+      "timestamp_ms": 0,
+      "type": "SESSION.OPEN",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "SESSION.OPEN",
+        "value": {
+          "type": "session_open",
+          "session_id": "sess_audio_input_replay",
+          "mode": "session"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "client_to_server",
+      "timestamp_ms": 1,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "AAA1BUcKFQ9/E2sXwxp3HX4f1iCCIYwhBSEDIJwe7hwTGykZSxePFQoUyxLbET4R8RDtECIRfxHuEVYSnRKqEmQStxGQEOMOqgzkCZcG0AKh/iL6b/Wo8O3rY+cp42DfItyI2aPXfdYc1nzWlddX2a3bft6s4RnlpOgv7J3v1fLB9VH4e/o8/JX9j/43/6D/3/8MAEAAkwAcAe8BGwOsBKYGCQnNC+QOPBK+FU0ZyxwaIBkjqiWyJxop0CnIKfsobCciJSwinx6VGisWghG9DPwHYgML/xL7jPeH9A7yIvC/7t3tau1U7YTt4O1P7rfuAe8Z7+7ud+6s7ZHsKuuF6bPny+Xm4yDiluBi36DeZt7H3tDfh+Ht4/zmp+rb7n/zdvig/dkCAAjxDIwRtBVRGVIcqB5PIEghmiFTIYYgSh+4He4bCBohGFMWsxRSEz4SexELEecQBBFREbsRKRKDEq0SkBIUEiYRtw++DTgLJwiWBJQANfyW99TyEO5r6QnlCeGI3aHaaNjq1i/WOdb/1nfYjNop3TDghOMG55XqFO5n8Xf0M/eM+X37BP0o/vT+d//G//j/JgBnANUAhAGHAukDswXnB4AKcw2wECIUrxc5G6EeyCGPJNgmjCiVKeQpcCk5KEMmmSNOIHkcNhimE+kOIgpzBfoA0/wX+db1HPPw8FDvNe6R7VTtZ+2y7Rzuiu7l7hXvC++37hPuG+3V60vqi+iq5sHk6eJA4eHf6d5v3ofeQt+p4MHihOXq6OPsV/Es9kP7egCtBbsKgA/gE78XCRuuHaUf7CCJIYYh8yDmH3gexBznGv0YIBdpFeoTshLJETQR7hDvECkRiRH4EV4SoRKnElkSoRFuELUObwydCUQGcwI7/rb5APU48IHr/ebM4g7f39tU2YDXbNYc1o7Wt9eI2erbxN754Wrl9+iB7OvvHPMA9of4qPpf/K/9of5D/6f/4/8QAEUAnAArAQYCOwPWBNoGRQkRDC8PjRIQFp8ZGx1jIFoj3yXaJzMp1ym9Kd8oPifkJN8hRh4yGsEVFBFNDI8H+gKq/rv6QPdI9Nvx/O+m7s7tZe1W7Yvt6u1Z7r/uBu8Y7+fuaO6W7XPsButc6Yfnn+W74/rhduBM35Xead7Y3vDfuOEu5EznBOtD7/Dz7fgZ/lMDdghgDfERDhaeGY8c1h5tIFchmiFGIW4gKB+RHcMb3Bn2FysWkBQ2EykSbhEEEecQCRFaEcURMxKJEq4SiRIDEgoRjw+JDfYK2Qc9BDEAzPso92Xy"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 2,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "ou0C6afkseA+3WbaPdjR1ijWQ9Ya16HYxNpr3Xvg1eNY5+fqY+6x8bv0bve++aX7I/0+/gL/gP/L//z/KgBvAOIAmAGjAg4E4gUfCMEKvA3/EHQUAhiKG+4eDSLKJAcnqyikKeEpXCkTKAwmUiP6Hxoczxc5E3oOtAkIBZUAePzF+JH15PLF8DHvIe6I7VPtbO277SbulO7r7hfvBu+s7gDuAe206yTqYOh+5pXkwOIc4cbf2N5q3pHeXN/T4PrizeVB6UbtxPGg9rz78wAlBi0L6w9AFBIYTRvjHcofAiGPIX4h3yDIH1Iemhy7GtEY9xZEFcoTmRK4ESoR7BDzEDERkxECEmYSpRKkEk0SixFMEIYOMwxUCfAFFQLV/Ur5kfTJ7xXrl+Zw4r7enNsi2V/XXdYf1qLW29e52SjcDN9I4rzlSunS7DjwY/M/9r341PqC/Mn9s/5O/67/6P8UAEwApwA8AR4CXAMABQ4HgwlXDHwP3RJjFvIZah2sIJkjFCYAKEkp3SmxKcEoDyekJJEh7B3OGVYVpRDeCyIHkgJK/mX69fYK9Krx1++N7sDtYO1Y7ZLt9O1j7sfuCu8W79/uWO5/7VXs4eoz6VvncuWR49PhVuA234vebN7r3hPg6uFv5JznYuus72H0ZPmT/swD6wjODVYSZxbpGcscAh+KIGMhmCE3IVQgBh9pHZcbrxnLFwMWbhQaExQSYRH/EOgQDxFjEdARPBKPEq4SgRLxEe0QZg9TDbMKiwfjA87/Yvu69vXxNO2Z6EbkW+D13C3aFNi61iPWT9Y3183Y/dqv3cbgJeSr5zrrsu778f30qPfu+cz7QP1T/hD/if/R/wAALwB3APAArQHAAjQEEgZYCAMLBQ5OEcYUVRjbGzofUSIDJTMnySixKd0pRinsJ9MlCyOlH7obZxfMEgsORgmeBDIAHfx1+E31rfKa8BPvD+5/7VLtce3E7TDune7x7hjvAe+f7uzt5uyS6/3pNehR5mnkl+L64Kzfyd5o3p3edt/+4DXjF+aZ6artMvIV9zT8bQGcBp8LVBCeFGQYkRsWHu0fFSGUIXUhyiCqHy0ebxyOGqUYzRYfFasTgRKoESER6hD2EDkRnREMEm4SqBKgEkAScxEpEFYO9gsLCZsFtgFu/d74IvRb76rqMuYU4m/eXNvx2D/XT9Yj1rfWANjs2WfcVN+W4g7mnekj7YTwqfN99vL4APuk/OL9xP5Z/7T/7P8YAFIAsgBNATcCfgMsBUMHwQmdDMgPLhO2FkQa"
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 3,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "uB30INgjRyYlKF4p4SmjKaEo3iZkJEIhkB1pGesUNxBvC7YGKwLr/RD6rPbN83rxtO917rPtXO1b7Zrt/u1t7s/uDe8U79buSO5n7TbsvOoJ6S/nReVm467hOOAh34Lecd7+3jbgHeKz5O7nwOsV8NP02/kN/0QEYAk8DroSvxYzGgYdLR+kIG8hliEoITog5B5AHWsbghmgF9wVTBT/EgASVBH6EOkQFRFsEdoRRRKUEq0SeBLfEc8QOw8cDW8KOweIA2v/+PpM9obxx+wx6ObjBuCu3PTZ7dek1h/WXNZV1/nYNtvz3RLhduT+54zrAe9E8j/14fce+vL7Xf1o/h7/kf/W/wQANQCAAP4AwgHdAlsEQgaSCEULTw6dERkVqBgrHIUflSI8JV8n5ii9KdgpLynDJ5olwiJPH1kb/hZeEpsN2Ag0BM//w/sn+Ar1d/Jx8Pbu/e137VLtd+3N7Tvupu737hnv/O6S7tftyuxw69XpCugk5j3kb+LY4JLfut5m3qnek98q4XHjYuby6Q/uoPKK96385wETBxAMvRD8FLQY0htIHhAgKCGXIWshtCCKHwYeRRxhGnkYpBb6FI0TahKYERkR6BD6EEERpxEWEnUSqhKbEjISWhEEECUOuAvACEUFVgEG/XH4s/Ps7j/qzuW64SHeHNvC2CHXQ9Yp1s3WJtgh2qbcnd/l4mHm8Olz7dHw7/O79ib5KvvF/Pr91f5k/7v/8P8dAFkAvQBfAVECoQNYBXkHAArkDBUQfxMJF5YaBx48IRYkeCZJKHIp5CmUKYAorCYhJPIgNB0DGX8UyA8AC0oGxQGN/bz5Y/aR80vxku9f7qftWe1f7aLtCO537tfuEe8S78zuN+5O7Rbsl+rg6APnGeU844jhGuAN33red94U31vgUuL35EHoIOyA8EX1U/qG/70E1AmpDh0TFhd8Gj8dVx++IHkhkSEXIR8gwB4XHT8bVhl1F7UVKxTlEu0RSRH1EOsQGxF2EeQRThKZEqwSbxLLEbAQEA/kDCoK6QYtAwb/jfre9RfxWuzK54fjst9n3L3Zx9eQ1hzWa9Z01yjZcds43l/hx+RR6N7rUO+N8oD1GfhN+hf8ef18/iv/mf/a/wgAOgCJAAwB2AH8AoMEdAbNCIkLmQ7sEWsV+hh8HNAf1yJ0JYknASnHKdEpFimYJ18leCL3HvcalRbwESwNagjLA2z/avvZ98j0QvJJ8Nru7O1w7VPtfe3X7UXur+787hnv9e6F7sLtruxN663p3+f45RLk"
+        }
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "client_to_server",
+      "timestamp_ms": 4,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "SOK24Hrfrd5m3rjesd9Y4a7jr+ZM6nTuD/MA+Cf9YAKKB4EMJRFZFQQZExx5HjAgOSGaIWAhniBqH+AdGhw1Gk0YexbWFG8TVBKJERIR5xD/EEkRsREgEnwSrBKWEiMSQRHeD/INeQt0CO4E9QCe/AT4Q/N+7tXpa+Vh4dTd3tqU2AXXONYw1ubWTthW2ufc5t8147PmQurE7RzxM/T39lr5VPvl/BH+5P5t/8D/9P8hAGAAyQBxAWsCxAOFBa8HPworDWMQ0RNcF+caVB6CIVMkqSZrKIQp5CmDKV0oeCbeI6Ag1xydGBMUWA+RCt4FXwEw/Wn5HPZW8x3xcO9J7pztVu1j7artEu6B7t7uE+8P78LuJe417fbrceq16Nfm7eQS42Th/d/73nTeft4q34LgieI95ZXogezr8Ln1y/oAADUFRwoVD38TaxfDGncdfh/WIIIhjCEFIQMgnB7uHBMbKRlLF48VChTLEtsRPhHxEO0QIhF/Ee4RVhKdEqoSZBK3EZAQ4w6qDOQJlwbQAqH+Ivpv9ajw7etj5ynjYN8i3IjZo9d91hzWfNaV11fZrdt+3qzhGeWk6C/sne/V8sH1Ufh7+jz8lf2P/jf/oP/f/wwAQACTABwB7wEbA6wEpgYJCc0L5A48Er4VTRnLHBogGSOqJbInGinQKcgp+yhsJyIlLCKfHpUaKxaCEb0M/AdiAwv/EvuM94f0DvIi8L/u3e1q7VTthO3g7U/ut+4B7xnv7u537qztkewq64Xps+fL5ebjIOKW4GLfoN5m3sfe0N+H4e3j/Oan6tvuf/N2+KD92QIACPEMjBG0FVEZUhyoHk8gSCGaIVMhhiBKH7gd7hsIGiEYUxazFFITPhJ7EQsR5xAEEVERuxEpEoMSrRKQEhQSJhG3D74NOAsnCJYElAA1/Jb31PIQ7mvpCeUJ4Yjdodpo2OrWL9Y51v/Wd9iM2indMOCE4wbnleoU7mfxd/Qz94z5ffsE/Sj+9P53/8b/+P8mAGcA1QCEAYcC6QOzBecHgApzDbAQIhSvFzkboR7IIY8k2CaMKJUp5ClwKTkoQyaZI04geRw2GKYT6Q4iCnMF+gDT/Bf51vUc8/DwUO817pHtVO1n7bLtHO6K7uXuFe8L77fuE+4b7dXrS+qL6KrmweTp4kDh4d/p3m/eh95C36ngweKE5ero4+xX8Sz2Q/t6AK0FuwqAD+ATvxcJG64dpR/sIIkhhiHzIOYfeB7EHOca/RggF2kV6hOyEskRNBHuEO8QKRGJEfgR"
+        }
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "client_to_server",
+      "timestamp_ms": 5,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "XhKhEqcSWRKhEW4QtQ5vDJ0JRAZzAjv+tvkA9Tjwgev95sziDt/f21TZgNds1hzWjta314jZ6tvE3vnhauX36IHs6+8c8wD2h/io+l/8r/2h/kP/p//j/xAARQCcACsBBgI7A9YE2gZFCREMLw+NEhAWnxkbHWMgWiPfJdonMynXKb0p3yg+J+Qk3yFGHjIawRUUEU0Mjwf6Aqr+u/pA90j02/H876buzu1l7Vbti+3q7Vnuv+4G7xjv5+5o7pbtc+wG61zph+ef5bvj+uF24Ezfld5p3tje8N+44S7kTOcE60Pv8PPt+Bn+UwN2CGAN8REOFp4ZjxzWHm0gVyGaIUYhbiAoH5EdwxvcGfYXKxaQFDYTKRJuEQQR5xAJEVoRxREzEokSrhKJEgMSChGPD4kN9grZBz0EMQDM+yj3ZfKi7QLpp+Sx4D7dZto92NHWKNZD1hrXodjE2mvde+DV41jn5+pj7rHxu/Ru9775pfsj/T7+Av+A/8v//P8qAG8A4gCYAaMCDgTiBR8IwQq8Df8QdBQCGIob7h4NIsokByerKKQp4SlcKRMoDCZSI/ofGhzPFzkTeg60CQgFlQB4/MX4kfXk8sXwMe8h7ojtU+1s7bvtJu6U7uvuF+8G76zuAO4B7bTrJOpg6H7mleTA4hzhxt/Y3mrekd5c39Pg+uLN5UHpRu3E8aD2vPvzACUGLQvrD0AUEhhNG+Mdyh8CIY8hfiHfIMgfUh6aHLsa0Rj3FkQVyhOZErgRKhHsEPMQMRGTEQISZhKlEqQSTRKLEUwQhg4zDFQJ8AUVAtX9SvmR9MnvFeuX5nDivt6c2yLZX9dd1h/Wotbb17nZKNwM30jivOVK6dLsOPBj8z/2vfjU+oL8yf2z/k7/rv/o/xQATACnADwBHgJcAwAFDgeDCVcMfA/dEmMW8hlqHawgmSMUJgAoSSndKbEpwSgPJ6QkkSHsHc4ZVhWlEN4LIgeSAkr+Zfr19gr0qvHX743uwO1g7Vjtku307WPux+4K7xbv3+5Y7n/tVezh6jPpW+dy5ZHj0+FW4Dbfi95s3uveE+Dq4W/knOdi66zvYfRk+ZP+zAPrCM4NVhJnFukZyxwCH4ogYyGYITchVCAGH2kdlxuvGcsXAxZuFBoTFBJhEf8Q6BAPEWMR0BE8Eo8SrhKBEvER7RBmD1MNswqLB+MDzv9i+7r29fE07ZnoRuRb4PXcLdoU2LrWI9ZP1jfXzdj92q/dxuAl5KvnOuuy7vvx/fSo9+75zPtA/VP+EP+J/9H/"
+        }
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "client_to_server",
+      "timestamp_ms": 6,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "AAAvAHcA8ACtAcACNAQSBlgIAwsFDk4RxhRVGNsbOh9RIgMlMyfJKLEp3SlGKewn0yULI6UfuhtnF8wSCw5GCZ4EMgAd/HX4TfWt8prwE+8P7n/tUu1x7cTtMO6d7vHuGO8B75/u7O3m7JLr/ek16FHmaeSX4vrgrN/J3mjend523/7gNeMX5pnpqu0y8hX3NPxtAZwGnwtUEJ4UZBiRGxYe7R8VIZQhdSHKIKofLR5vHI4apRjNFh8VqxOBEqgRIRHqEPYQORGdEQwSbhKoEqASQBJzESkQVg72CwsJmwW2AW793vgi9Fvvquoy5hTib95c2/HYP9dP1iPWt9YA2OzZZ9xU35biDuad6SPthPCp83328vgA+6T84v3E/ln/tP/s/xgAUgCyAE0BNwJ+AywFQwfBCZ0MyA8uE7YWRBq4HfQg2CNHJiUoXinhKaMpoSjeJmQkQiGQHWkZ6xQ3EG8LtgYrAuv9EPqs9s3zevG073Xus+1c7Vvtmu3+7W3uz+4N7xTv1u5I7mftNuy86gnpL+dF5WbjruE44CHfgt5x3v7eNuAd4rPk7ufA6xXw0/Tb+Q3/RARgCTwOuhK/FjMaBh0tH6QgbyGWISghOiDkHkAdaxuCGaAX3BVMFP8SABJUEfoQ6RAVEWwR2hFFEpQSrRJ4Et8RzxA7DxwNbwo7B4gDa//4+kz2hvHH7DHo5uMG4K7c9Nnt16TWH9Zc1lXX+dg22/PdEuF25P7njOsB70TyP/Xh9x768vtd/Wj+Hv+R/9b/BAA1AIAA/gDCAd0CWwRCBpIIRQtPDp0RGRWoGCschR+VIjwlXyfmKL0p2CkvKcMnmiXCIk8fWRv+Fl4Smw3YCDQEz//D+yf4CvV38nHw9u797XftUu137c3tO+6m7vfuGe/87pLu1+3K7HDr1ekK6CTmPeRv4tjgkt+63mbeqd6T3yrhceNi5vLpD+6g8or3rfznARMHEAy9EPwUtBjSG0geECAoIZchayG0IIofBh5FHGEaeRikFvoUjRNqEpgRGRHoEPoQQRGnERYSdRKqEpsSMhJaEQQQJQ64C8AIRQVWAQb9cfiz8+zuP+rO5brhId4c28LYIddD1inWzdYm2CHaptyd3+XiYebw6XPt0fDv87v2Jvkq+8X8+v3V/mT/u//w/x0AWQC9AF8BUQKhA1gFeQcACuQMFRB/EwkXlhoHHjwhFiR4JkkocinkKZQpgCisJiEk8iA0HQMZfxTIDwALSgbFAY39vPlj9pHzS/GS71/up+1Z7V/t"
+        }
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "client_to_server",
+      "timestamp_ms": 7,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "ou0I7nfu1+4R7xLvzO437k7tFuyX6uDoA+cZ5TzjiOEa4A3fet533hTfW+BS4vfkQegg7IDwRfVT+ob/vQTUCakOHRMWF3waPx1XH74geSGRIRchHyDAHhcdPxtWGXUXtRUrFOUS7RFJEfUQ6xAbEXYR5BFOEpkSrBJvEssRsBAQD+QMKgrpBi0DBv+N+t71F/Fa7Mrnh+Oy32fcvdnH15DWHNZr1nTXKNlx2zjeX+HH5FHo3utQ743ygPUZ+E36F/x5/Xz+K/+Z/9r/CAA6AIkADAHYAfwCgwR0Bs0IiQuZDuwRaxX6GHwc0B/XInQliScBKccp0SkWKZgnXyV4Ivce9xqVFvARLA1qCMsDbP9q+9n3yPRC8knw2u7s7XDtU+197dftRe6v7vzuGe/17oXuwu2u7E3rrenf5/jlEuRI4rbget+t3mbeuN6x31jhruOv5kzqdO4P8wD4J/1gAooHgQwlEVkVBBkTHHkeMCA5IZohYCGeIGof4B0aHDUaTRh7FtYUbxNUEokREhHnEP8QSRGxESASfBKsEpYSIxJBEd4P8g15C3QI7gT1AJ78BPhD837u1elr5WHh1N3e2pTYBdc41jDW5tZO2Fba59zm3zXjs+ZC6sTtHPEz9Pf2WvlU++X8Ef7k/m3/wP/0/yEAYADJAHEBawLEA4UFrwc/CisNYxDRE1wX5xpUHoIhUySpJmsohCnkKYMpXSh4Jt4joCDXHJ0YExRYD5EK3gVfATD9afkc9lbzHfFw70nunO1W7WPtqu0S7oHu3u4T7w/vwu4l7jXt9utx6rXo1+bt5BLjZOH93/vedN5+3irfguCJ4j3lleiB7OvwufXL+gAANQVHChUPfxNrF8Madx1+H9YggiGMIQUhAyCcHu4cExspGUsXjxUKFMsS2xE+EfEQ7RAiEX8R7hFWEp0SqhJkErcRkBDjDqoM5AmXBtACof4i+m/1qPDt62PnKeNg3yLciNmj133WHNZ81pXXV9mt237erOEZ5aToL+yd79XywfVR+Hv6PPyV/Y/+N/+g/9//DABAAJMAHAHvARsDrASmBgkJzQvkDjwSvhVNGcscGiAZI6olsicaKdApyCn7KGwnIiUsIp8elRorFoIRvQz8B2IDC/8S+4z3h/QO8iLwv+7d7WrtVO2E7eDtT+637gHvGe/u7nfurO2R7Crrhemz58vl5uMg4pbgYt+g3mbex97Q34fh7eP85qfq2+5/83b4oP3ZAgAI8QyMEbQVURlSHKgeTyBIIZohUyGGIEof"
+        }
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "client_to_server",
+      "timestamp_ms": 8,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "uB3uGwgaIRhTFrMUUhM+EnsRCxHnEAQRURG7ESkSgxKtEpASFBImEbcPvg04CycIlgSUADX8lvfU8hDua+kJ5QnhiN2h2mjY6tYv1jnW/9Z32IzaKd0w4ITjBueV6hTuZ/F39DP3jPl9+wT9KP70/nf/xv/4/yYAZwDVAIQBhwLpA7MF5weACnMNsBAiFK8XORuhHsghjyTYJowolSnkKXApOShDJpkjTiB5HDYYphPpDiIKcwX6ANP8F/nW9Rzz8PBQ7zXuke1U7Wftsu0c7oru5e4V7wvvt+4T7hvt1etL6ovoqubB5OniQOHh3+neb96H3kLfqeDB4oTl6ujj7FfxLPZD+3oArQW7CoAP4BO/Fwkbrh2lH+wgiSGGIfMg5h94HsQc5xr9GCAXaRXqE7ISyRE0Ee4Q7xApEYkR+BFeEqESpxJZEqERbhC1Dm8MnQlEBnMCO/62+QD1OPCB6/3mzOIO39/bVNmA12zWHNaO1rfXiNnq28Te+eFq5ffogezr7xzzAPaH+Kj6X/yv/aH+Q/+n/+P/EABFAJwAKwEGAjsD1gTaBkUJEQwvD40SEBafGRsdYyBaI98l2iczKdcpvSnfKD4n5CTfIUYeMhrBFRQRTQyPB/oCqv67+kD3SPTb8fzvpu7O7WXtVu2L7ertWe6/7gbvGO/n7mjulu1z7AbrXOmH55/lu+P64XbgTN+V3mne2N7w37jhLuRM5wTrQ+/w8+34Gf5TA3YIYA3xEQ4WnhmPHNYebSBXIZohRiFuICgfkR3DG9wZ9hcrFpAUNhMpEm4RBBHnEAkRWhHFETMSiRKuEokSAxIKEY8PiQ32CtkHPQQxAMz7KPdl8qLtAumn5LHgPt1m2j3Y0dYo1kPWGteh2MTaa9174NXjWOfn6mPusfG79G73vvml+yP9Pv4C/4D/y//8/yoAbwDiAJgBowIOBOIFHwjBCrwN/xB0FAIYihvuHg0iyiQHJ6sopCnhKVwpEygMJlIj+h8aHM8XORN6DrQJCAWVAHj8xfiR9eTyxfAx7yHuiO1T7Wztu+0m7pTu6+4X7wbvrO4A7gHttOsk6mDofuaV5MDiHOHG39jeat6R3lzf0+D64s3lQelG7cTxoPa8+/MAJQYtC+sPQBQSGE0b4x3KHwIhjyF+Id8gyB9SHpocuxrRGPcWRBXKE5kSuBEqEewQ8xAxEZMRAhJmEqUSpBJNEosRTBCGDjMMVAnwBRUC1f1K+ZH0ye8V65fmcOK+3pzbItlf113WH9ai1tvXudko3Azf"
+        }
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "client_to_server",
+      "timestamp_ms": 9,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "SOK85Urp0uw48GPzP/a9+NT6gvzJ/bP+Tv+u/+j/FABMAKcAPAEeAlwDAAUOB4MJVwx8D90SYxbyGWodrCCZIxQmAChJKd0psSnBKA8npCSRIewdzhlWFaUQ3gsiB5ICSv5l+vX2CvSq8dfvje7A7WDtWO2S7fTtY+7H7grvFu/f7ljuf+1V7OHqM+lb53LlkePT4VbgNt+L3mze694T4Orhb+Sc52LrrO9h9GT5k/7MA+sIzg1WEmcW6RnLHAIfiiBjIZghNyFUIAYfaR2XG68ZyxcDFm4UGhMUEmER/xDoEA8RYxHQETwSjxKuEoES8RHtEGYPUw2zCosH4wPO/2L7uvb18TTtmehG5Fvg9dwt2hTYutYj1k/WN9fN2P3ar93G4CXkq+c667Lu+/H99Kj37vnM+0D9U/4Q/4n/0f8AAC8AdwDwAK0BwAI0BBIGWAgDCwUOThHGFFUY2xs6H1EiAyUzJ8kosSndKUYp7CfTJQsjpR+6G2cXzBILDkYJngQyAB38dfhN9a3ymvAT7w/uf+1S7XHtxO0w7p3u8e4Y7wHvn+7s7ebskuv96TXoUeZp5Jfi+uCs38neaN6d3nbf/uA14xfmmemq7TLyFfc0/G0BnAafC1QQnhRkGJEbFh7tHxUhlCF1Icogqh8tHm8cjhqlGM0WHxWrE4ESqBEhEeoQ9hA5EZ0RDBJuEqgSoBJAEnMRKRBWDvYLCwmbBbYBbv3e+CL0W++q6jLmFOJv3lzb8dg/10/WI9a31gDY7Nln3FTfluIO5p3pI+2E8Knzffby+AD7pPzi/cT+Wf+0/+z/GABSALIATQE3An4DLAVDB8EJnQzIDy4TthZEGrgd9CDYI0cmJSheKeEpoymhKN4mZCRCIZAdaRnrFDcQbwu2BisC6/0Q+qz2zfN68bTvde6z7VztW+2a7f7tbe7P7g3vFO/W7kjuZ+027LzqCekv50XlZuOu4TjgId+C3nHe/t424B3is+Tu58DrFfDT9Nv5Df9EBGAJPA66Er8WMxoGHS0fpCBvIZYhKCE6IOQeQB1rG4IZoBfcFUwU/xIAElQR+hDpEBURbBHaEUUSlBKtEngS3xHPEDsPHA1vCjsHiANr//j6TPaG8cfsMejm4wbgrtz02e3XpNYf1lzWVdf52Dbb890S4Xbk/ueM6wHvRPI/9eH3Hvry+139aP4e/5H/1v8EADUAgAD+AMIB3QJbBEIGkghFC08OnREZFagYKxyFH5UiPCVfJ+YovSnYKS8pwyeaJcIiTx9ZG/4W"
+        }
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "XhKbDdgINATP/8P7J/gK9XfycfD27v3td+1S7Xftze077qbu9+4Z7/zuku7X7crscOvV6QroJOY95G/i2OCS37reZt6p3pPfKuFx42Lm8ukP7qDyivet/OcBEwcQDL0Q/BS0GNIbSB4QICghlyFrIbQgih8GHkUcYRp5GKQW+hSNE2oSmBEZEegQ+hBBEacRFhJ1EqoSmxIyEloRBBAlDrgLwAhFBVYBBv1x+LPz7O4/6s7luuEh3hzbwtgh10PWKdbN1ibYIdqm3J3f5eJh5vDpc+3R8O/zu/Ym+Sr7xfz6/dX+ZP+7//D/HQBZAL0AXwFRAqEDWAV5BwAK5AwVEH8TCReWGgcePCEWJHgmSShyKeQplCmAKKwmISTyIDQdAxl/FMgPAAtKBsUBjf28+WP2kfNL8ZLvX+6n7VntX+2i7Qjud+7X7hHvEu/M7jfuTu0W7Jfq4OgD5xnlPOOI4RrgDd963nfeFN9b4FLi9+RB6CDsgPBF9VP6hv+9BNQJqQ4dExYXfBo/HVcfviB5IZEhFyEfIMAeFx0/G1YZdRe1FSsU5RLtEUkR9RDrEBsRdhHkEU4SmRKsEm8SyxGwEBAP5AwqCukGLQMG/4363vUX8VrsyueH47LfZ9y92cfXkNYc1mvWdNco2XHbON5f4cfkUeje61DvjfKA9Rn4TfoX/Hn9fP4r/5n/2v8IADoAiQAMAdgB/AKDBHQGzQiJC5kO7BFrFfoYfBzQH9cidCWJJwEpxynRKRYpmCdfJXgi9x73GpUW8BEsDWoIywNs/2r72ffI9ELySfDa7uztcO1T7X3t1+1F7q/u/O4Z7/Xuhe7C7a7sTeut6d/n+OUS5EjituB6363eZt643rHfWOGu46/mTOp07g/zAPgn/WACigeBDCURWRUEGRMceR4wIDkhmiFgIZ4gah/gHRocNRpNGHsW1hRvE1QSiRESEecQ/xBJEbERIBJ8EqwSlhIjEkER3g/yDXkLdAjuBPUAnvwE+EPzfu7V6WvlYeHU3d7alNgF1zjWMNbm1k7YVtrn3ObfNeOz5kLqxO0c8TP09/Za+VT75fwR/uT+bf/A//T/IQBgAMkAcQFrAsQDhQWvBz8KKw1jENETXBfnGlQegiFTJKkmayiEKeQpgyldKHgm3iOgINccnRgTFFgPkQreBV8BMP1p+Rz2VvMd8XDvSe6c7VbtY+2q7RLuge7e7hPvD+/C7iXuNe3263HqtejX5u3kEuNk4f3f+9503n7eKt+C4IniPeWV6IHs6/C59cv6"
+        }
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "client_to_server",
+      "timestamp_ms": 11,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "AAA1BUcKFQ9/E2sXwxp3HX4f1iCCIYwhBSEDIJwe7hwTGykZSxePFQoUyxLbET4R8RDtECIRfxHuEVYSnRKqEmQStxGQEOMOqgzkCZcG0AKh/iL6b/Wo8O3rY+cp42DfItyI2aPXfdYc1nzWlddX2a3bft6s4RnlpOgv7J3v1fLB9VH4e/o8/JX9j/43/6D/3/8MAEAAkwAcAe8BGwOsBKYGCQnNC+QOPBK+FU0ZyxwaIBkjqiWyJxop0CnIKfsobCciJSwinx6VGisWghG9DPwHYgML/xL7jPeH9A7yIvC/7t3tau1U7YTt4O1P7rfuAe8Z7+7ud+6s7ZHsKuuF6bPny+Xm4yDiluBi36DeZt7H3tDfh+Ht4/zmp+rb7n/zdvig/dkCAAjxDIwRtBVRGVIcqB5PIEghmiFTIYYgSh+4He4bCBohGFMWsxRSEz4SexELEecQBBFREbsRKRKDEq0SkBIUEiYRtw++DTgLJwiWBJQANfyW99TyEO5r6QnlCeGI3aHaaNjq1i/WOdb/1nfYjNop3TDghOMG55XqFO5n8Xf0M/eM+X37BP0o/vT+d//G//j/JgBnANUAhAGHAukDswXnB4AKcw2wECIUrxc5G6EeyCGPJNgmjCiVKeQpcCk5KEMmmSNOIHkcNhimE+kOIgpzBfoA0/wX+db1HPPw8FDvNe6R7VTtZ+2y7Rzuiu7l7hXvC++37hPuG+3V60vqi+iq5sHk6eJA4eHf6d5v3ofeQt+p4MHihOXq6OPsV/Es9kP7egCtBbsKgA/gE78XCRuuHaUf7CCJIYYh8yDmH3gexBznGv0YIBdpFeoTshLJETQR7hDvECkRiRH4EV4SoRKnElkSoRFuELUObwydCUQGcwI7/rb5APU48IHr/ebM4g7f39tU2YDXbNYc1o7Wt9eI2erbxN754Wrl9+iB7OvvHPMA9of4qPpf/K/9of5D/6f/4/8QAEUAnAArAQYCOwPWBNoGRQkRDC8PjRIQFp8ZGx1jIFoj3yXaJzMp1ym9Kd8oPifkJN8hRh4yGsEVFBFNDI8H+gKq/rv6QPdI9Nvx/O+m7s7tZe1W7Yvt6u1Z7r/uBu8Y7+fuaO6W7XPsButc6Yfnn+W74/rhduBM35Xead7Y3vDfuOEu5EznBOtD7/Dz7fgZ/lMDdghgDfERDhaeGY8c1h5tIFchmiFGIW4gKB+RHcMb3Bn2FysWkBQ2EykSbhEEEecQCRFaEcURMxKJEq4SiRIDEgoRjw+JDfYK2Qc9BDEAzPso92Xy"
+        }
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "client_to_server",
+      "timestamp_ms": 12,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "ou0C6afkseA+3WbaPdjR1ijWQ9Ya16HYxNpr3Xvg1eNY5+fqY+6x8bv0bve++aX7I/0+/gL/gP/L//z/KgBvAOIAmAGjAg4E4gUfCMEKvA3/EHQUAhiKG+4eDSLKJAcnqyikKeEpXCkTKAwmUiP6Hxoczxc5E3oOtAkIBZUAePzF+JH15PLF8DHvIe6I7VPtbO277SbulO7r7hfvBu+s7gDuAe206yTqYOh+5pXkwOIc4cbf2N5q3pHeXN/T4PrizeVB6UbtxPGg9rz78wAlBi0L6w9AFBIYTRvjHcofAiGPIX4h3yDIH1Iemhy7GtEY9xZEFcoTmRK4ESoR7BDzEDERkxECEmYSpRKkEk0SixFMEIYOMwxUCfAFFQLV/Ur5kfTJ7xXrl+Zw4r7enNsi2V/XXdYf1qLW29e52SjcDN9I4rzlSunS7DjwY/M/9r341PqC/Mn9s/5O/67/6P8UAEwApwA8AR4CXAMABQ4HgwlXDHwP3RJjFvIZah2sIJkjFCYAKEkp3SmxKcEoDyekJJEh7B3OGVYVpRDeCyIHkgJK/mX69fYK9Krx1++N7sDtYO1Y7ZLt9O1j7sfuCu8W79/uWO5/7VXs4eoz6VvncuWR49PhVuA234vebN7r3hPg6uFv5JznYuus72H0ZPmT/swD6wjODVYSZxbpGcscAh+KIGMhmCE3IVQgBh9pHZcbrxnLFwMWbhQaExQSYRH/EOgQDxFjEdARPBKPEq4SgRLxEe0QZg9TDbMKiwfjA87/Yvu69vXxNO2Z6EbkW+D13C3aFNi61iPWT9Y3183Y/dqv3cbgJeSr5zrrsu778f30qPfu+cz7QP1T/hD/if/R/wAALwB3APAArQHAAjQEEgZYCAMLBQ5OEcYUVRjbGzofUSIDJTMnySixKd0pRinsJ9MlCyOlH7obZxfMEgsORgmeBDIAHfx1+E31rfKa8BPvD+5/7VLtce3E7TDune7x7hjvAe+f7uzt5uyS6/3pNehR5mnkl+L64Kzfyd5o3p3edt/+4DXjF+aZ6artMvIV9zT8bQGcBp8LVBCeFGQYkRsWHu0fFSGUIXUhyiCqHy0ebxyOGqUYzRYfFasTgRKoESER6hD2EDkRnREMEm4SqBKgEkAScxEpEFYO9gsLCZsFtgFu/d74IvRb76rqMuYU4m/eXNvx2D/XT9Yj1rfWANjs2WfcVN+W4g7mnekj7YTwqfN99vL4APuk/OL9xP5Z/7T/7P8YAFIAsgBNATcCfgMsBUMHwQmdDMgPLhO2FkQa"
+        }
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "client_to_server",
+      "timestamp_ms": 13,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "uB30INgjRyYlKF4p4SmjKaEo3iZkJEIhkB1pGesUNxBvC7YGKwLr/RD6rPbN83rxtO917rPtXO1b7Zrt/u1t7s/uDe8U79buSO5n7TbsvOoJ6S/nReVm467hOOAh34Lecd7+3jbgHeKz5O7nwOsV8NP02/kN/0QEYAk8DroSvxYzGgYdLR+kIG8hliEoITog5B5AHWsbghmgF9wVTBT/EgASVBH6EOkQFRFsEdoRRRKUEq0SeBLfEc8QOw8cDW8KOweIA2v/+PpM9obxx+wx6ObjBuCu3PTZ7dek1h/WXNZV1/nYNtvz3RLhduT+54zrAe9E8j/14fce+vL7Xf1o/h7/kf/W/wQANQCAAP4AwgHdAlsEQgaSCEULTw6dERkVqBgrHIUflSI8JV8n5ii9KdgpLynDJ5olwiJPH1kb/hZeEpsN2Ag0BM//w/sn+Ar1d/Jx8Pbu/e137VLtd+3N7Tvupu737hnv/O6S7tftyuxw69XpCugk5j3kb+LY4JLfut5m3qnek98q4XHjYuby6Q/uoPKK96385wETBxAMvRD8FLQY0htIHhAgKCGXIWshtCCKHwYeRRxhGnkYpBb6FI0TahKYERkR6BD6EEERpxEWEnUSqhKbEjISWhEEECUOuAvACEUFVgEG/XH4s/Ps7j/qzuW64SHeHNvC2CHXQ9Yp1s3WJtgh2qbcnd/l4mHm8Olz7dHw7/O79ib5KvvF/Pr91f5k/7v/8P8dAFkAvQBfAVECoQNYBXkHAArkDBUQfxMJF5YaBx48IRYkeCZJKHIp5CmUKYAorCYhJPIgNB0DGX8UyA8AC0oGxQGN/bz5Y/aR80vxku9f7qftWe1f7aLtCO537tfuEe8S78zuN+5O7Rbsl+rg6APnGeU844jhGuAN33red94U31vgUuL35EHoIOyA8EX1U/qG/70E1AmpDh0TFhd8Gj8dVx++IHkhkSEXIR8gwB4XHT8bVhl1F7UVKxTlEu0RSRH1EOsQGxF2EeQRThKZEqwSbxLLEbAQEA/kDCoK6QYtAwb/jfre9RfxWuzK54fjst9n3L3Zx9eQ1hzWa9Z01yjZcds43l/hx+RR6N7rUO+N8oD1GfhN+hf8ef18/iv/mf/a/wgAOgCJAAwB2AH8AoMEdAbNCIkLmQ7sEWsV+hh8HNAf1yJ0JYknASnHKdEpFimYJ18leCL3HvcalRbwESwNagjLA2z/avvZ98j0QvJJ8Nru7O1w7VPtfe3X7UXur+787hnv9e6F7sLtruxN663p3+f45RLk"
+        }
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "client_to_server",
+      "timestamp_ms": 14,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "SOK24Hrfrd5m3rjesd9Y4a7jr+ZM6nTuD/MA+Cf9YAKKB4EMJRFZFQQZExx5HjAgOSGaIWAhniBqH+AdGhw1Gk0YexbWFG8TVBKJERIR5xD/EEkRsREgEnwSrBKWEiMSQRHeD/INeQt0CO4E9QCe/AT4Q/N+7tXpa+Vh4dTd3tqU2AXXONYw1ubWTthW2ufc5t8147PmQurE7RzxM/T39lr5VPvl/BH+5P5t/8D/9P8hAGAAyQBxAWsCxAOFBa8HPworDWMQ0RNcF+caVB6CIVMkqSZrKIQp5CmDKV0oeCbeI6Ag1xydGBMUWA+RCt4FXwEw/Wn5HPZW8x3xcO9J7pztVu1j7artEu6B7t7uE+8P78LuJe417fbrceq16Nfm7eQS42Th/d/73nTeft4q34LgieI95ZXogezr8Ln1y/oAADUFRwoVD38TaxfDGncdfh/WIIIhjCEFIQMgnB7uHBMbKRlLF48VChTLEtsRPhHxEO0QIhF/Ee4RVhKdEqoSZBK3EZAQ4w6qDOQJlwbQAqH+Ivpv9ajw7etj5ynjYN8i3IjZo9d91hzWfNaV11fZrdt+3qzhGeWk6C/sne/V8sH1Ufh7+jz8lf2P/jf/oP/f/wwAQACTABwB7wEbA6wEpgYJCc0L5A48Er4VTRnLHBogGSOqJbInGinQKcgp+yhsJyIlLCKfHpUaKxaCEb0M/AdiAwv/EvuM94f0DvIi8L/u3e1q7VTthO3g7U/ut+4B7xnv7u537qztkewq64Xps+fL5ebjIOKW4GLfoN5m3sfe0N+H4e3j/Oan6tvuf/N2+KD92QIACPEMjBG0FVEZUhyoHk8gSCGaIVMhhiBKH7gd7hsIGiEYUxazFFITPhJ7EQsR5xAEEVERuxEpEoMSrRKQEhQSJhG3D74NOAsnCJYElAA1/Jb31PIQ7mvpCeUJ4Yjdodpo2OrWL9Y51v/Wd9iM2indMOCE4wbnleoU7mfxd/Qz94z5ffsE/Sj+9P53/8b/+P8mAGcA1QCEAYcC6QOzBecHgApzDbAQIhSvFzkboR7IIY8k2CaMKJUp5ClwKTkoQyaZI04geRw2GKYT6Q4iCnMF+gDT/Bf51vUc8/DwUO817pHtVO1n7bLtHO6K7uXuFe8L77fuE+4b7dXrS+qL6KrmweTp4kDh4d/p3m/eh95C36ngweKE5ero4+xX8Sz2Q/t6AK0FuwqAD+ATvxcJG64dpR/sIIkhhiHzIOYfeB7EHOca/RggF2kV6hOyEskRNBHuEO8QKRGJEfgR"
+        }
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "client_to_server",
+      "timestamp_ms": 15,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "XhKhEqcSWRKhEW4QtQ5vDJ0JRAZzAjv+tvkA9Tjwgev95sziDt/f21TZgNds1hzWjta314jZ6tvE3vnhauX36IHs6+8c8wD2h/io+l/8r/2h/kP/p//j/xAARQCcACsBBgI7A9YE2gZFCREMLw+NEhAWnxkbHWMgWiPfJdonMynXKb0p3yg+J+Qk3yFGHjIawRUUEU0Mjwf6Aqr+u/pA90j02/H876buzu1l7Vbti+3q7Vnuv+4G7xjv5+5o7pbtc+wG61zph+ef5bvj+uF24Ezfld5p3tje8N+44S7kTOcE60Pv8PPt+Bn+UwN2CGAN8REOFp4ZjxzWHm0gVyGaIUYhbiAoH5EdwxvcGfYXKxaQFDYTKRJuEQQR5xAJEVoRxREzEokSrhKJEgMSChGPD4kN9grZBz0EMQDM+yj3ZfKi7QLpp+Sx4D7dZto92NHWKNZD1hrXodjE2mvde+DV41jn5+pj7rHxu/Ru9775pfsj/T7+Av+A/8v//P8qAG8A4gCYAaMCDgTiBR8IwQq8Df8QdBQCGIob7h4NIsokByerKKQp4SlcKRMoDCZSI/ofGhzPFzkTeg60CQgFlQB4/MX4kfXk8sXwMe8h7ojtU+1s7bvtJu6U7uvuF+8G76zuAO4B7bTrJOpg6H7mleTA4hzhxt/Y3mrekd5c39Pg+uLN5UHpRu3E8aD2vPvzACUGLQvrD0AUEhhNG+Mdyh8CIY8hfiHfIMgfUh6aHLsa0Rj3FkQVyhOZErgRKhHsEPMQMRGTEQISZhKlEqQSTRKLEUwQhg4zDFQJ8AUVAtX9SvmR9MnvFeuX5nDivt6c2yLZX9dd1h/Wotbb17nZKNwM30jivOVK6dLsOPBj8z/2vfjU+oL8yf2z/k7/rv/o/xQATACnADwBHgJcAwAFDgeDCVcMfA/dEmMW8hlqHawgmSMUJgAoSSndKbEpwSgPJ6QkkSHsHc4ZVhWlEN4LIgeSAkr+Zfr19gr0qvHX743uwO1g7Vjtku307WPux+4K7xbv3+5Y7n/tVezh6jPpW+dy5ZHj0+FW4Dbfi95s3uveE+Dq4W/knOdi66zvYfRk+ZP+zAPrCM4NVhJnFukZyxwCH4ogYyGYITchVCAGH2kdlxuvGcsXAxZuFBoTFBJhEf8Q6BAPEWMR0BE8Eo8SrhKBEvER7RBmD1MNswqLB+MDzv9i+7r29fE07ZnoRuRb4PXcLdoU2LrWI9ZP1jfXzdj92q/dxuAl5KvnOuuy7vvx/fSo9+75zPtA/VP+EP+J/9H/"
+        }
+      }
+    },
+    {
+      "sequence": 17,
+      "direction": "client_to_server",
+      "timestamp_ms": 16,
+      "type": "AUDIO.DELTA",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "AUDIO.DELTA",
+        "value": {
+          "type": "delta_audio",
+          "content": "AAAvAHcA8ACtAcACNAQSBlgIAwsFDk4RxhRVGNsbOh9RIgMlMyfJKLEp3SlGKewn0yULI6UfuhtnF8wSCw5GCZ4EMgAd/HX4TfWt8prwE+8P7n/tUu1x7cTtMO6d7vHuGO8B75/u7O3m7JLr/ek16FHmaeSX4vrgrN/J3mjend523/7gNeMX5pnpqu0y8hX3NPxtAZwGnwtUEJ4UZBiRGxYe7R8VIZQhdSHKIKofLR5vHI4apRjNFh8VqxOBEqgRIRHqEPYQORGdEQwSbhKoEqASQBJzESkQVg72CwsJmwW2AW793vgi9Fvvquoy5hTib95c2/HYP9dP1iPWt9YA2OzZZ9xU35biDuad6SPthPCp83328vgA+6T84v3E/ln/tP/s/xgAUgCyAE0BNwJ+AywFQwfBCZ0MyA8uE7YWRBq4HfQg2CNHJiUoXinhKaMpoSjeJmQkQiGQHWkZ6xQ3EG8LtgYrAuv9EPqs9s3zevG073Xus+1c7Vvtmu3+7W3uz+4N7xTv1u5I7mftNuy86gnpL+dF5WbjruE44CHfgt5x3v7eNuAd4rPk7ufA6xXw0/Tb+Q3/RARgCTwOuhK/FjMaBh0tH6QgbyGWISghOiDkHkAdaxuCGaAX3BVMFP8SABJUEfoQ6RAVEWwR2hFFEpQSrRJ4Et8RzxA7DxwNbwo7B4gDa//4+kz2hvHH7DHo5uMG4K7c9Nnt16TWH9Zc1lXX+dg22/PdEuF25P7njOsB70TyP/Xh9x768vtd/Wj+Hv+R/9b/BAA1AIAA/gDCAd0CWwRCBpIIRQtPDp0RGRWoGCschR+VIjwlXyfmKL0p2CkvKcMnmiXCIk8fWRv+Fl4Smw3YCDQEz//D+yf4CvV38nHw9u797XftUu137c3tO+6m7vfuGe/87pLu1+3K7HDr1ekK6CTmPeRv4tjgkt+63mbeqd6T3yrhceNi5vLpD+6g8or3rfznARMHEAy9EPwUtBjSG0geECAoIZchayG0IIofBh5FHGEaeRikFvoUjRNqEpgRGRHoEPoQQRGnERYSdRKqEpsSMhJaEQQQJQ64C8AIRQVWAQb9cfiz8+zuP+rO5brhId4c28LYIddD1inWzdYm2CHaptyd3+XiYebw6XPt0fDv87v2Jvkq+8X8+v3V/mT/u//w/x0AWQC9AF8BUQKhA1gFeQcACuQMFRB/EwkXlhoHHjwhFiR4JkkocinkKZQpgCisJiEk8iA0HQMZfxTIDwALSgbFAY39vPlj9pHzS/GS71/up+1Z7V/t"
+        }
+      }
+    },
+    {
+      "sequence": 18,
+      "direction": "server_to_client",
+      "timestamp_ms": 17,
+      "type": "SESSION.CLOSE",
+      "payload_type": "stream_message",
+      "payload": {
+        "type": "SESSION.CLOSE",
+        "value": {
+          "type": "session_close",
+          "session_id": "sess_audio_input_replay",
+          "reason": "fixture_complete"
+        }
+      }
+    }
+  ]
+}

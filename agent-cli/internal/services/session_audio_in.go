@@ -15,7 +15,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -24,12 +23,12 @@ import (
 type SessionAudioInput struct {
 	Path  string
 	Stdin io.Reader
-	// MaxDuration bounds an audio-enabled session when the shared duration
-	// wrapper cannot own this parallel audio runner.
+	// MaxDuration bounds an audio-enabled session through the shared loop
+	// options when the caller supplies one.
 	MaxDuration time.Duration
 	// Source and SendAudioInput are optional deterministic service-test seams.
-	// CLI callers leave them nil so paths use FileSource and frames use the
-	// AgentLoop's SendAudioInput method.
+	// CLI callers leave them nil so paths use the file-backed sources and
+	// frames use the AgentLoop's SendAudioInput method.
 	Source         audio.AudioSource
 	SendAudioInput func(context.Context, []byte) error
 	Present        bool
@@ -110,19 +109,17 @@ func sessionAudioInputKindError(kind SessionAudioInputErrorKind) error {
 	}
 }
 
-// RunSessionWithAudioInput runs an existing session runtime while streaming
-// the selected file or raw stdin through the agent loop's session audio inbox.
+// RunSessionWithAudioInput runs the shared session runtime while streaming the
+// selected file or raw stdin through the agent loop's session audio inbox.
 // The ordinary session path remains untouched when the flag is absent.
-func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRunOptions, input SessionAudioInput) (runErr error) {
-	present := input.Present || input.Path != ""
-	if !present {
+func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRunOptions, input SessionAudioInput) error {
+	if !sessionAudioInputSelected(input) {
 		return RunSession(ctx, out, opts)
 	}
-
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
-	return runSessionAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+	return runSessionWithAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
@@ -130,59 +127,33 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	})
 }
 
-// RunSessionWithAudioInputAndTextSeed composes the session text-seed and audio
-// input extensions when both flags are available on the command surface.
-// Keeping the no-audio branch on RunSessionWithTextSeed preserves its explicit
-// empty-prompt semantics for the already-merged text-seed lane.
-func RunSessionWithAudioInputAndTextSeed(ctx context.Context, out io.Writer, opts SessionRunOptions, seed SessionTextSeed, input SessionAudioInput) error {
-	if !input.Present && input.Path == "" {
-		return RunSessionWithTextSeed(ctx, out, opts, seed)
-	}
-	if seed.Present {
-		opts.Prompt = seed.Value
-	}
-	return RunSessionWithAudioInput(ctx, out, opts, input)
-}
-
-// RunSessionWithAudioInputAndTextSeedAndMaxDuration preserves the merged
-// session duration behavior when audio input is absent and applies the same
-// bound to the audio runner when the audio extension is selected.
-func RunSessionWithAudioInputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput) error {
-	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
-		return err
-	}
-	if !input.Present && input.Path == "" {
-		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
-	}
-	input.MaxDuration = maxDuration
-	return RunSessionWithAudioInputAndTextSeed(ctx, out, opts, seed, input)
-}
-
 // RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration composes
-// the instructions, text-seed, duration, and audio-input extensions. The
-// no-audio path remains on the established instructions entry point so its
-// replay and duration artifact behavior stays unchanged.
+// the instructions, text-seed, duration, and audio-input extensions on the
+// command surface. The no-audio path remains on the established instructions
+// entry point so its replay and duration artifact behavior stays unchanged.
 func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) error {
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}
-	if !input.Present && input.Path == "" {
+	if !sessionAudioInputSelected(input) {
 		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, "", maxDuration, seed, systemPrompt)
 	}
-	if systemPrompt == "" {
-		return RunSessionWithAudioInputAndTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed, input)
-	}
-	input.MaxDuration = maxDuration
 	if seed.Present {
 		opts.Prompt = seed.Value
 	}
+	input.MaxDuration = maxDuration
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
-	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		return RunSessionWithAudioInput(ctx, out, opts, input)
+	if systemPrompt == "" || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
+		return runSessionWithAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+			if err := validateSessionRunOptions(opts); err != nil {
+				return sessionRuntimePlan{}, err
+			}
+			return planSessionRuntime(opts)
+		})
 	}
-	return runSessionAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
+	return runSessionWithAudioInputPlan(ctx, out, input, func() (sessionRuntimePlan, error) {
 		if err := validateSessionRunOptions(opts); err != nil {
 			return sessionRuntimePlan{}, err
 		}
@@ -194,7 +165,15 @@ func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx contex
 	})
 }
 
-func runSessionAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
+func sessionAudioInputSelected(input SessionAudioInput) bool {
+	return input.Present || input.Path != ""
+}
+
+// runSessionWithAudioInputPlan validates and opens the audio input before the
+// plan is built so every preflight failure happens before any provider dial,
+// then hands the opened source to the shared session lifecycle through the
+// loop options. No session behavior changes when the flag is absent.
+func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
 	source, err := openSessionAudioInput(input)
 	if err != nil {
 		return err
@@ -215,7 +194,8 @@ func runSessionAudioInputPlan(ctx context.Context, out io.Writer, input SessionA
 	// A finite audio source is the input lifetime. Do not close immediately on
 	// SESSION.OPEN; allow every source frame to reach the loop first.
 	plan.loop.CloseAfterOpen = false
-	return runSessionPlanWithAudioInput(ctx, out, plan, source)
+	plan.loop.AudioIn = source
+	return plan.run(ctx, out)
 }
 
 func validateSessionAudioInput(input SessionAudioInput) error {
@@ -233,19 +213,20 @@ func validateSessionAudioInput(input SessionAudioInput) error {
 			Err:  ErrSessionAudioInputEmpty,
 		}
 	}
-	if input.Source == nil && input.Path != "-" && strings.EqualFold(filepath.Ext(input.Path), ".wav") {
-		return &SessionAudioInputError{
-			Kind: SessionAudioInputFormat,
-			Path: input.Path,
-			Err:  fmt.Errorf("%w: .wav input is not incrementally supported by this command; use .pcm, .raw, or -", audio.ErrUnsupportedFormat),
-		}
-	}
 	return nil
 }
 
 func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error) {
 	if input.Source != nil {
 		return &sessionAudioSource{source: input.Source, path: input.Path, send: input.SendAudioInput}, nil
+	}
+
+	if strings.EqualFold(filepath.Ext(input.Path), ".wav") {
+		source, err := openSessionWAVSource(input.Path)
+		if err != nil {
+			return nil, err
+		}
+		return &sessionAudioSource{source: source, path: input.Path, send: input.SendAudioInput}, nil
 	}
 
 	stdin := input.Stdin
@@ -272,7 +253,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 			return nil, &SessionAudioInputError{
 				Kind: SessionAudioInputUnreadable,
 				Path: input.Path,
-				Err:  fmt.Errorf("path is a directory; provide a .pcm or .raw file"),
+				Err:  fmt.Errorf("path is a directory; provide a .wav, .pcm, or .raw file"),
 			}
 		}
 	}
@@ -429,195 +410,9 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 	}
 }
 
-func runSessionPlanWithAudioInput(ctx context.Context, out io.Writer, plan sessionRuntimePlan, source *sessionAudioSource) error {
-	if plan.announce != "" {
-		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
-			return err
-		}
-	}
-
-	loopOut := out
-	if plan.loopOut != nil {
-		loopOut = plan.loopOut
-	}
-	if plan.inferencer != nil {
-		if err := runAgentLoopSessionWithAudioInput(ctx, loopOut, plan.inferencer, plan.loop, source); err != nil {
-			if plan.flushCapture != nil {
-				flushErr := plan.flushCapture()
-				return wrapSessionRuntimeError(plan, errors.Join(
-					wrapSessionPhaseError("run session loop", err),
-					wrapSessionPhaseError("flush capture", flushErr),
-				))
-			}
-			return wrapSessionRuntimeError(plan, err)
-		}
-	}
-
-	if plan.flushCapture != nil {
-		if err := plan.flushCapture(); err != nil {
-			return wrapSessionRuntimeError(plan, wrapSessionPhaseError("flush capture", err))
-		}
-	}
-	if plan.finalize != nil {
-		if err := plan.finalize(ctx, out); err != nil {
-			return wrapSessionRuntimeError(plan, err)
-		}
-	}
-	return nil
-}
-
-func runAgentLoopSessionWithAudioInput(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, source *sessionAudioSource) error {
-	observedInferencer := newObservedSessionInferencer(sessionInferencer)
-	loop, err := agentloop.New(
-		agentloop.WithMode(engine.DuplexSession),
-		agentloop.WithSessionInferencer(observedInferencer),
-	)
-	if err != nil {
-		return fmt.Errorf("create session agent loop: %w", err)
-	}
-
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	source.bindContext(runCtx)
-	runErrCh := make(chan error, 1)
-	go func() { runErrCh <- loop.Run(runCtx) }()
-
-	var runErr error
-	runDone := false
-	waitRun := func() error {
-		if !runDone {
-			runErr = <-runErrCh
-			runDone = true
-		}
-		return runErr
-	}
-	var audioCh <-chan error
-	startAudio := func() {
-		if audioCh != nil {
-			return
-		}
-		audioErrCh := make(chan error, 1)
-		audioCh = audioErrCh
-		go func() { audioErrCh <- streamSessionAudioInput(runCtx, loop, source) }()
-	}
-	waitAudio := func() error {
-		if audioCh == nil {
-			return nil
-		}
-		err := <-audioCh
-		audioCh = nil
-		return err
-	}
-	stop := func() error {
-		cancel()
-		return joinSessionAudioTerminationErrors(waitRun(), waitAudio())
-	}
-
-	timeout := make(<-chan time.Time)
-	if opts.MaxDuration > 0 {
-		timeout = time.After(opts.MaxDuration)
-	}
-	promptSent := false
-	closeSent := false
-	audioDone := false
-	done := opts.Done
-	for {
-		select {
-		case audioErr := <-audioCh:
-			audioCh = nil
-			if audioErr != nil && !isSessionCancellation(audioErr) {
-				cancel()
-				return errors.Join(audioErr, joinSessionAudioTerminationErrors(waitRun(), nil))
-			}
-			audioDone = true
-		case <-done:
-			doneErr := error(nil)
-			if opts.DoneErr != nil {
-				doneErr = opts.DoneErr()
-			}
-			var initialDrainErr error
-			if doneErr == nil {
-				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay)
-			}
-			stopErr := stop()
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				stopErr = errors.Join(stopErr, drainErr)
-			}
-			if initialDrainErr != nil {
-				stopErr = errors.Join(stopErr, initialDrainErr)
-			}
-			if doneErr != nil {
-				stopErr = errors.Join(stopErr, doneErr)
-			}
-			return stopErr
-		case <-timeout:
-			stopErr := stop()
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				stopErr = errors.Join(stopErr, drainErr)
-			}
-			return stopErr
-		case <-ctx.Done():
-			stopErr := stop()
-			if stopErr != nil {
-				return stopErr
-			}
-			return ctx.Err()
-		case <-observedInferencer.Done():
-			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond)
-			stopErr := stop()
-			if drainErr != nil {
-				stopErr = errors.Join(stopErr, drainErr)
-			}
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				stopErr = errors.Join(stopErr, drainErr)
-			}
-			return stopErr
-		case err := <-runErrCh:
-			runErr = err
-			runDone = true
-			cancel()
-			stopErr := joinSessionAudioTerminationErrors(runErr, waitAudio())
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-				stopErr = errors.Join(stopErr, drainErr)
-			}
-			return stopErr
-		case msg := <-loop.Deltas().Chan():
-			if err := writeSessionReplayMessage(out, msg); err != nil {
-				return errors.Join(err, stop())
-			}
-			if msg.Type == messages.StreamTypeSessionOpen {
-				if opts.Prompt != "" && !promptSent {
-					promptSent = true
-					if err := loop.Send(runCtx, []messages.Message{messages.NewTextMessage(messages.RoleUser, opts.Prompt)}); err != nil {
-						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
-					}
-				}
-				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
-					closeSent = true
-					if err := sendSessionClose(runCtx, loop); err != nil {
-						return errors.Join(err, stop())
-					}
-				}
-				startAudio()
-			}
-			if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
-				closeSent = true
-				if err := sendSessionClose(runCtx, loop); err != nil {
-					return errors.Join(err, stop())
-				}
-			}
-			if shouldStopAudioInputSessionLoop(msg, opts, closeSent, audioDone) {
-				stopErr := stop()
-				if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
-					stopErr = errors.Join(stopErr, drainErr)
-				}
-				return stopErr
-			}
-		}
-	}
-}
-
-func joinSessionAudioTerminationErrors(runErr, audioErr error) error {
+// joinSessionTerminationErrors drops expected cancellations and preserves the
+// identity of real loop and audio producer failures.
+func joinSessionTerminationErrors(runErr, audioErr error) error {
 	var errs []error
 	if runErr != nil && !isSessionCancellation(runErr) {
 		errs = append(errs, fmt.Errorf("session error: %w", runErr))
@@ -637,4 +432,209 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 		return msg.Type == messages.StreamTypeSessionClose
 	}
 	return shouldStopSessionLoop(msg, opts, closeSent)
+}
+
+// Incremental WAV streaming lives beside the session audio boundary so
+// .wav input streams frame-by-frame through the same raw PCM16 path without
+// buffering the whole payload. The shared pkg/wavio decoder reads whole files
+// and is deliberately not used here.
+const (
+	sessionWAVDescriptorBytes  = 12
+	sessionWAVChunkHeaderBytes = 8
+	sessionWAVFmtChunkMinBytes = 16
+	sessionWAVAudioFormatPCM   = 1
+	sessionWAVBitsPerSample    = 16
+)
+
+// sessionWAVSource streams PCM16 frames from a RIFF WAVE file incrementally.
+// Header chunks are parsed once at open; data-chunk bytes are read one frame
+// at a time by ReadFrame.
+type sessionWAVSource struct {
+	path      string
+	file      io.ReadSeekCloser
+	remaining int64
+	done      bool
+	closed    bool
+	mu        sync.Mutex
+	closeOnce sync.Once
+	closeErr  error
+}
+
+var _ audio.AudioSource = (*sessionWAVSource)(nil)
+
+func sessionWAVFormatError(path string, reason string) error {
+	return &SessionAudioInputError{
+		Kind: SessionAudioInputFormat,
+		Path: path,
+		Err: &audio.FormatError{
+			Path:      path,
+			Extension: ".wav",
+			Format:    "wav",
+			Reason:    reason,
+		},
+	}
+}
+
+// openSessionWAVSource validates the RIFF/fmt contract before returning so
+// every rejected format fails during preflight with zero delivered frames.
+func openSessionWAVSource(path string) (*sessionWAVSource, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, classifySessionAudioOpenError(path, err)
+	}
+	source, err := newSessionWAVSource(path, file)
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return source, nil
+}
+
+// newSessionWAVSource parses the RIFF descriptor and chunk headers from r and
+// returns a source positioned at the first data-chunk byte. The payload is
+// never read here; ReadFrame streams it frame by frame.
+func newSessionWAVSource(path string, r io.ReadSeekCloser) (*sessionWAVSource, error) {
+	fail := func(err error) (*sessionWAVSource, error) {
+		return nil, err
+	}
+
+	descriptor := make([]byte, sessionWAVDescriptorBytes)
+	if _, err := io.ReadFull(r, descriptor); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return fail(sessionWAVFormatError(path, "file is too short for a RIFF WAVE descriptor"))
+		}
+		return fail(classifySessionAudioOpenError(path, err))
+	}
+	if string(descriptor[0:4]) != "RIFF" || string(descriptor[8:12]) != "WAVE" {
+		return fail(sessionWAVFormatError(path, `missing RIFF/WAVE descriptor`))
+	}
+
+	fmtSeen := false
+	skip := func(count int64) error {
+		if count <= 0 {
+			return nil
+		}
+		_, err := r.Seek(count, io.SeekCurrent)
+		return err
+	}
+	for {
+		var header [sessionWAVChunkHeaderBytes]byte
+		if _, err := io.ReadFull(r, header[:]); err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				return fail(sessionWAVFormatError(path, "missing fmt or data chunk"))
+			}
+			return fail(classifySessionAudioOpenError(path, err))
+		}
+		id := string(header[0:4])
+		size := int64(binary.LittleEndian.Uint32(header[4:8]))
+		switch id {
+		case "fmt ":
+			if size < sessionWAVFmtChunkMinBytes {
+				return fail(sessionWAVFormatError(path, "fmt chunk is truncated"))
+			}
+			body := make([]byte, sessionWAVFmtChunkMinBytes)
+			if _, err := io.ReadFull(r, body); err != nil {
+				return fail(sessionWAVFormatError(path, "fmt chunk is truncated"))
+			}
+			compression := binary.LittleEndian.Uint16(body[0:2])
+			channels := binary.LittleEndian.Uint16(body[2:4])
+			rate := binary.LittleEndian.Uint32(body[4:8])
+			bits := binary.LittleEndian.Uint16(body[14:16])
+			switch {
+			case compression != sessionWAVAudioFormatPCM:
+				return fail(sessionWAVFormatError(path, fmt.Sprintf("WAV compression format %d is not PCM", compression)))
+			case channels != audio.Channels:
+				return fail(sessionWAVFormatError(path, fmt.Sprintf("channel count is %d; want exactly %d", channels, audio.Channels)))
+			case rate != audio.SampleRate:
+				return fail(sessionWAVFormatError(path, fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", rate, audio.SampleRate)))
+			case bits != sessionWAVBitsPerSample:
+				return fail(sessionWAVFormatError(path, fmt.Sprintf("bit depth is %d; want exactly %d-bit PCM", bits, sessionWAVBitsPerSample)))
+			}
+			fmtSeen = true
+			if err := skip(size - sessionWAVFmtChunkMinBytes); err != nil {
+				return fail(classifySessionAudioOpenError(path, err))
+			}
+		case "data":
+			if !fmtSeen {
+				return fail(sessionWAVFormatError(path, "data chunk appears before fmt chunk"))
+			}
+			return &sessionWAVSource{path: path, file: r, remaining: size}, nil
+		default:
+			if err := skip(size); err != nil {
+				return fail(classifySessionAudioOpenError(path, err))
+			}
+		}
+		// RIFF chunks are word aligned: odd lengths carry one pad byte.
+		if size%2 == 1 {
+			if err := skip(1); err != nil {
+				return fail(classifySessionAudioOpenError(path, err))
+			}
+		}
+	}
+}
+
+// ReadFrame fills buf with the next data-chunk frame, zero-padding a final
+// short frame. Once the payload is exhausted it returns io.EOF. Each call
+// consumes at most FrameSize*2 payload bytes, never the remaining file.
+func (s *sessionWAVSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	if len(buf) != audio.FrameSize {
+		return &audio.FrameSizeError{Operation: "read", Got: len(buf), Want: audio.FrameSize}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return &audio.ClosedError{Operation: "read", Path: s.path}
+	}
+	if s.done {
+		return io.EOF
+	}
+
+	want := int64(audio.FrameSize * 2)
+	count := want
+	if s.remaining < count {
+		count = s.remaining
+	}
+	encoded := make([]byte, count)
+	if _, err := io.ReadFull(s.file, encoded); err != nil {
+		s.done = true
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			return &audio.TruncatedPCMError{Path: s.path, Bytes: int(count % 2)}
+		}
+		return &SessionAudioInputError{Kind: SessionAudioInputRead, Path: s.path, Err: err}
+	}
+	s.remaining -= count
+	if count%2 != 0 {
+		s.done = true
+		return &audio.TruncatedPCMError{Path: s.path, Bytes: 1}
+	}
+	clear(buf)
+	for index := range int(count) / 2 {
+		buf[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
+	}
+	if s.remaining == 0 {
+		s.done = true
+	}
+	return nil
+}
+
+// Close releases the owned file. It is safe to call more than once.
+func (s *sessionWAVSource) Close() error {
+	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		s.closed = true
+		s.done = true
+		err := s.file.Close()
+		s.mu.Unlock()
+		if err != nil {
+			s.closeErr = &SessionAudioInputError{Kind: SessionAudioInputClose, Path: s.path, Err: err}
+		}
+	})
+	return s.closeErr
 }
