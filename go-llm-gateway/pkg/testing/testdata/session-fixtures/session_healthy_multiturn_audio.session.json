@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-4-healthy-multiturn"
+  },
+  "session": {
+    "id": "sess_healthy_multiturn",
+    "started_at_utc": "2026-08-23T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-4-healthy-multiturn"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_healthy_multiturn",
+        "model": "grok-4-healthy-multiturn"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio.delta",
+        "delta": "AQIDBAUG"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Hello there"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "response.audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio.done"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 7,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 8,
+      "type": "response.text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.text.delta",
+        "delta": "Second turn reply"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 9,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 10,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "healthy_complete"
+      }
+    }
+  ]
+}

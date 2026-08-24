@@ -201,6 +201,38 @@ func IsRetryable(err error) bool {
 	}
 }
 
+// SessionErrorClassification refines the public classification for a provider
+// session error event from its wire error type and code. Well-known
+// authentication and rate-limit identifiers map to their taxonomy classes;
+// everything else remains a generic provider rejection.
+func SessionErrorClassification(errorType, code string) string {
+	text := strings.ToLower(errorType + " " + code)
+	switch {
+	case containsAuthIdentifier(text):
+		return ErrorClassAuthentication
+	case strings.Contains(text, "rate_limit"):
+		return ErrorClassRateLimited
+	default:
+		return ErrorClassProviderRejected
+	}
+}
+
+func containsAuthIdentifier(text string) bool {
+	for _, identifier := range []string{
+		"invalid_api_key",
+		"api_key",
+		"authentication",
+		"unauthorized",
+		"forbidden",
+		"permission_denied",
+	} {
+		if strings.Contains(text, identifier) {
+			return true
+		}
+	}
+	return false
+}
+
 // NewStreamErrorValue preserves readable stream error text while exposing the
 // public gateway taxonomy classification carried by typed provider errors.
 func NewStreamErrorValue(err error) *messages.ErrorValue {

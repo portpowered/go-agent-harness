@@ -160,7 +160,7 @@ func (d *ReplayWebSocketDialer) Model() string {
 func (d *ReplayWebSocketDialer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	events := make([]CapturedSessionEvent, len(d.capture.Records))
 	copy(events, d.capture.Records)
-	conn := newReplayWebSocketConn(events, d.done)
+	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect)
 	d.mu.Lock()
 	d.conn = conn
 	d.mu.Unlock()
@@ -184,20 +184,21 @@ func (d *ReplayWebSocketDialer) Err() error {
 }
 
 type replayWebSocketConn struct {
-	events []CapturedSessionEvent
-	index  int
-	closed bool
-	mu     sync.Mutex
-	cond   *sync.Cond
-	err    error
-	done   chan struct{}
-	once   sync.Once
+	events             []CapturedSessionEvent
+	index              int
+	closed             bool
+	endsWithDisconnect bool
+	mu                 sync.Mutex
+	cond               *sync.Cond
+	err                error
+	done               chan struct{}
+	once               sync.Once
 }
 
 var _ transport.Conn = (*replayWebSocketConn)(nil)
 
-func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}) *replayWebSocketConn {
-	conn := &replayWebSocketConn{events: events, done: done}
+func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect bool) *replayWebSocketConn {
+	conn := &replayWebSocketConn{events: events, done: done, endsWithDisconnect: endsWithDisconnect}
 	conn.cond = sync.NewCond(&conn.mu)
 	return conn
 }
@@ -214,6 +215,10 @@ func (c *replayWebSocketConn) ReadMessage() (int, []byte, error) {
 			return 0, nil, io.EOF
 		}
 		if c.index >= len(c.events) {
+			if c.endsWithDisconnect {
+				c.closeDoneLocked()
+				return 0, nil, io.EOF
+			}
 			c.cond.Wait()
 			continue
 		}

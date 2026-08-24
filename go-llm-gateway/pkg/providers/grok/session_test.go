@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // readFromSession reads one StreamMessage from the session's receive buffer,
@@ -233,9 +235,10 @@ func TestSession_CloseStopsDone(t *testing.T) {
 
 func TestSession_MalformedServerEvent(t *testing.T) {
 	conn := newMockConn()
-	// First message is malformed (no type field).
+	// The message is malformed (no type field).
 	conn.addServerMessage([]byte(`{"data": "no type"}`))
-	// Second message is valid — emits a MESSAGE.END via response.done.
+	// A valid event afterwards must never be delivered: the malformed frame is
+	// a protocol violation that terminally fails the session.
 	conn.addServerEvent("response.done", nil)
 
 	session := newGrokSession(conn, logging.DummyLogger())
@@ -244,10 +247,26 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	session.start(ctx)
 	defer func() { _ = session.Close() }()
 
-	// The malformed event should be skipped; we should receive the valid one.
 	got := readFromSession(t, ctx, session)
-	if got.Type != messages.StreamTypeMessageEnd {
-		t.Errorf("expected %q, got %q", messages.StreamTypeMessageEnd, got.Type)
+	if got.Type != messages.StreamTypeError {
+		t.Fatalf("expected %q, got %q", messages.StreamTypeError, got.Type)
+	}
+	errValue, ok := got.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("expected *messages.ErrorValue, got %T", got.Value)
+	}
+	if errValue.Classification != providers.ErrorClassInvalidRequest {
+		t.Errorf("classification = %q, want %q", errValue.Classification, providers.ErrorClassInvalidRequest)
+	}
+	if errValue.TerminalProvenance != messages.TerminalProvenanceGateway {
+		t.Errorf("terminal_provenance = %q, want %q", errValue.TerminalProvenance, messages.TerminalProvenanceGateway)
+	}
+
+	select {
+	case <-session.Done():
+		// Session terminated after the malformed frame.
+	case <-time.After(2 * time.Second):
+		t.Fatal("session was not terminated after malformed server frame")
 	}
 }
 
@@ -393,10 +412,96 @@ func TestSession_SessionClosedEmitsTerminalMetadata(t *testing.T) {
 	if v.SessionID != "sess-xyz" || v.Reason != "fixture_complete" {
 		t.Fatalf("session close value: got %#v", v)
 	}
-	if v.Classification != string(messages.TerminalReasonProviderClose) ||
+	if v.Classification != providers.ErrorClassTransport ||
 		v.TerminalReason != messages.TerminalReasonProviderClose ||
 		v.TerminalProvenance != messages.TerminalProvenanceProvider ||
 		v.OutputState != messages.TerminalOutputNotApplicable {
 		t.Fatalf("session close terminal metadata: got %#v", v)
+	}
+}
+
+func TestSession_SessionErrorEmitsClassifiedFailure(t *testing.T) {
+	conn := newMockConn()
+	conn.addServerEvent("error", map[string]any{
+		"message": "bad key",
+		"error":   map[string]any{"type": "invalid_api_key", "code": "invalid_api_key"},
+	})
+
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	got, ok := session.Receive().ReadBlockingContext(ctx)
+	if !ok {
+		t.Fatal("did not receive ERROR within 1 second")
+	}
+	if got.Type != messages.StreamTypeError {
+		t.Fatalf("type: got %q, want %q", got.Type, messages.StreamTypeError)
+	}
+	v, ok := got.Value.(*messages.ErrorValue)
+	if !ok || v == nil {
+		t.Fatal("expected ErrorValue")
+	}
+	if v.Classification != providers.ErrorClassAuthentication {
+		t.Errorf("classification: got %q, want %q", v.Classification, providers.ErrorClassAuthentication)
+	}
+	if v.ErrorType != "invalid_api_key" || v.Code != "invalid_api_key" {
+		t.Errorf("provider error identity: type=%q code=%q", v.ErrorType, v.Code)
+	}
+	if v.TerminalReason != messages.TerminalReasonTerminalFailure ||
+		v.TerminalProvenance != messages.TerminalProvenanceProvider ||
+		v.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("terminal metadata: got %#v", v)
+	}
+}
+
+func TestSession_SendWithOutcomeLifecycle(t *testing.T) {
+	conn := newMockConn()
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx := context.Background()
+
+	// Unsupported outbound stream types fail terminally.
+	outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeError})
+	if outcome.Status != messages.SessionSendTerminalFailure {
+		t.Fatalf("unsupported message status = %q, want terminal_failure", outcome.Status)
+	}
+
+	// A cancelled context reports cancellation.
+	cancelledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	textInput := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hi")}
+	outcome = session.SendWithOutcome(cancelledCtx, textInput)
+	if outcome.Status != messages.SessionSendCancelled || !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("cancelled send = %#v, want cancelled with context.Canceled", outcome)
+	}
+
+	// A deadline-exceeded context reports timeout.
+	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, 0)
+	defer cancelTimeout()
+	outcome = session.SendWithOutcome(timeoutCtx, textInput)
+	if outcome.Status != messages.SessionSendTimedOut || !errors.Is(outcome.Err, context.DeadlineExceeded) {
+		t.Fatalf("timed-out send = %#v, want timed_out with DeadlineExceeded", outcome)
+	}
+
+	// After the session is closed, sends report closed.
+	_ = session.Close()
+	select {
+	case <-session.Done():
+	case <-time.After(1 * time.Second):
+		t.Fatal("session did not terminate within 1 second after Close")
+	}
+	outcome = session.SendWithOutcome(ctx, textInput)
+	if outcome.Status != messages.SessionSendClosed {
+		t.Fatalf("closed send status = %q, want closed", outcome.Status)
+	}
+
+	// A successful text-delta send maps to a wire event.
+	open := newGrokSession(newMockConn(), logging.DummyLogger())
+	defer func() { _ = open.Close() }()
+	outcome = open.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hi")})
+	if outcome.Status != messages.SessionSendSucceeded {
+		t.Fatalf("successful send status = %q, want succeeded", outcome.Status)
 	}
 }

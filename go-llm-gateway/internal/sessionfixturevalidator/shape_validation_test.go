@@ -303,3 +303,33 @@ func requireShapeValidationError(t *testing.T, errs []gatewaytesting.SessionFixt
 	}
 	t.Fatalf("missing shape validation error for file=%q field=%q reason containing %q; got %#v", file, fieldPath, reasonPart, errs)
 }
+
+func TestValidateSessionCaptureShapes_FailureProvenanceAllowsUnmatchedToolCall(t *testing.T) {
+	unmatchedCall := providerRecord("response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"call-doomed"}}`)
+
+	failurePath := filepath.Join(t.TempDir(), "failure-shaped.session.json")
+	writeCapture(t, failurePath, gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime"},
+		Session:  gatewaytesting.SessionMetadata{FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSyntheticFailure},
+		Records:  []gatewaytesting.CapturedSessionEvent{unmatchedCall},
+	})
+	result, err := ValidatePaths([]string{failurePath})
+	if err != nil {
+		t.Fatalf("ValidatePaths returned traversal error: %v", err)
+	}
+	if result.FilesScanned != 1 || len(result.Errors) != 0 {
+		t.Fatalf("ValidatePaths result = %#v, want synthetic_failure fixture to accept an unexecutable tool call", result)
+	}
+
+	healthyPath := filepath.Join(t.TempDir(), "healthy.session.json")
+	writeCapture(t, healthyPath, providerRecordedCapture(unmatchedCall))
+	result, err = ValidatePaths([]string{healthyPath})
+	if err != nil {
+		t.Fatalf("ValidatePaths returned traversal error: %v", err)
+	}
+	if len(result.Errors) == 0 {
+		t.Fatal("ValidatePaths accepted an unmatched tool call for a healthy provenance, want pairing error")
+	}
+	requireShapeValidationError(t, result.Errors, healthyPath, "records[0].payload.item.call_id", "no matching tool result")
+}

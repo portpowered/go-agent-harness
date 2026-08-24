@@ -3,6 +3,7 @@ package testing
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -226,6 +227,64 @@ func TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose(t *testi
 	var incompleteErr *gateway.ReplayIncompleteError
 	if !errors.As(err, &incompleteErr) {
 		t.Fatal("incomplete replay should expose typed replay incomplete details")
+	}
+}
+
+func TestReplayWebSocketDialer_EndsWithDisconnectReturnsEOFAfterReplayExhausted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "disconnect.session.json")
+	data, err := json.MarshalIndent(SessionCapture{
+		Version: SessionCaptureVersion,
+		Provider: SessionProviderMetadata{
+			Name:  "grok",
+			Model: "grok-replay",
+		},
+		Session: SessionMetadata{
+			StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
+		},
+		EndsWithDisconnect: true,
+		Records: []CapturedSessionEvent{
+			websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1","model":"grok-replay"}`),
+			websocketCapture(DirectionClientToServer, 2, `{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`),
+		},
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("write capture: %v", err)
+	}
+
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage first inbound: %v", err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`)); err != nil {
+		t.Fatalf("WriteMessage outbound: %v", err)
+	}
+
+	messageType, payload, readErr := conn.ReadMessage()
+	if !errors.Is(readErr, io.EOF) {
+		t.Fatalf("ReadMessage after exhausted disconnect capture = (%d, %v), want io.EOF", messageType, readErr)
+	}
+	if payload != nil {
+		t.Fatalf("expected nil payload on EOF, got %s", payload)
+	}
+	if dialer.Err() != nil {
+		t.Fatalf("ends-with-disconnect replay should not set divergence error, got %v", dialer.Err())
+	}
+
+	select {
+	case <-dialer.Done():
+	default:
+		t.Fatal("expected Done to close once the capture ends with a disconnect")
 	}
 }
 

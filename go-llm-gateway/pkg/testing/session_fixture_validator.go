@@ -13,6 +13,12 @@ const (
 	SessionFixtureProvenanceSynthetic = "synthetic"
 	// SessionFixtureProvenanceProviderRecorded marks sanitized captures from a provider session.
 	SessionFixtureProvenanceProviderRecorded = "provider_recorded"
+	// SessionFixtureProvenanceSyntheticFailure marks fixtures that
+	// intentionally encode a failure-shaped session (for example an
+	// unexecutable provider tool call) replayed to prove diagnosability.
+	// Failure fixtures may violate healthy-session shape expectations such as
+	// matched tool-call/result pairs; hygiene rules still apply in full.
+	SessionFixtureProvenanceSyntheticFailure = "synthetic_failure"
 )
 
 var providerWireEventTypes = map[string]struct{}{
@@ -87,12 +93,12 @@ func ValidateSessionCapture(file string, capture SessionCapture) []SessionFixtur
 			FieldPath: "session.fixture_provenance",
 			Reason:    "must be present for committed session fixtures",
 		})
-	case SessionFixtureProvenanceSynthetic, SessionFixtureProvenanceProviderRecorded:
+	case SessionFixtureProvenanceSynthetic, SessionFixtureProvenanceProviderRecorded, SessionFixtureProvenanceSyntheticFailure:
 	default:
 		errs = append(errs, SessionFixtureValidationError{
 			File:      file,
 			FieldPath: "session.fixture_provenance",
-			Reason:    fmt.Sprintf("must be %q or %q", SessionFixtureProvenanceSynthetic, SessionFixtureProvenanceProviderRecorded),
+			Reason:    fmt.Sprintf("must be %q, %q, or %q", SessionFixtureProvenanceSynthetic, SessionFixtureProvenanceProviderRecorded, SessionFixtureProvenanceSyntheticFailure),
 		})
 	}
 

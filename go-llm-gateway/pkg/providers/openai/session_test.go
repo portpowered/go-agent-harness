@@ -783,3 +783,59 @@ func TestConnectSession_InvalidRealtimeEndpointFailsBeforeDial(t *testing.T) {
 		t.Errorf("dial should not run before endpoint validation; got URL %q", dialer.capturedURL)
 	}
 }
+
+func TestRealtimeSession_SendWithOutcomeLifecycle(t *testing.T) {
+	conn := newMockWebSocketConn()
+	dialer := &mockWebSocketDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	sender, ok := session.(messages.SessionSendOutcomeSender)
+	if !ok {
+		t.Fatal("session does not implement SessionSendOutcomeSender")
+	}
+
+	// Unsupported outbound stream types fail terminally.
+	outcome := sender.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeError})
+	if outcome.Status != messages.SessionSendTerminalFailure {
+		t.Fatalf("unsupported message status = %q, want terminal_failure", outcome.Status)
+	}
+
+	// A nil payload for a supported type is also a terminal failure.
+	outcome = sender.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta})
+	if outcome.Status != messages.SessionSendTerminalFailure {
+		t.Fatalf("nil-payload message status = %q, want terminal_failure", outcome.Status)
+	}
+
+	// A cancelled context reports cancellation.
+	cancelledCtx, cancelInner := context.WithCancel(ctx)
+	cancelInner()
+	textInput := messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hi")}
+	outcome = sender.SendWithOutcome(cancelledCtx, textInput)
+	if outcome.Status != messages.SessionSendCancelled || !errors.Is(outcome.Err, context.Canceled) {
+		t.Fatalf("cancelled send = %#v, want cancelled with context.Canceled", outcome)
+	}
+
+	// A deadline-exceeded context reports timeout.
+	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, 0)
+	defer cancelTimeout()
+	outcome = sender.SendWithOutcome(timeoutCtx, textInput)
+	if outcome.Status != messages.SessionSendTimedOut || !errors.Is(outcome.Err, context.DeadlineExceeded) {
+		t.Fatalf("timed-out send = %#v, want timed_out with DeadlineExceeded", outcome)
+	}
+
+	// A successful text-delta send maps to wire events.
+	if outcome := sender.SendWithOutcome(ctx, textInput); outcome.Status != messages.SessionSendSucceeded {
+		t.Fatalf("successful send status = %q, want succeeded", outcome.Status)
+	}
+}

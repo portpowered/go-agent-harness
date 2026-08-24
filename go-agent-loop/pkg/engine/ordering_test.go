@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 )
 
 // fullModelTextDeltas returns the delta sequence for a complete assistant text message.
@@ -163,5 +166,38 @@ func TestReconstructModelMessageFromDeltas_EmptyDeltas(t *testing.T) {
 	msg = ReconstructModelMessageFromDeltas([]messages.StreamMessage{})
 	if msg.TextContent() != "" || len(msg.ToolCalls) != 0 {
 		t.Errorf("empty: unexpected content")
+	}
+}
+
+func TestConsumeModelDeltaErrorReturnsTypedStreamDeltaError(t *testing.T) {
+	runner := participants.NewModelRunner(nil, 4)
+	o := NewGlobalOrdering(runner, nil, nil, nil)
+	ts := &state.LoopState{}
+	ev := messages.NewErrorValueWithClassification("provider exploded", "transport")
+	err := o.consumeModelDelta(ts, messages.StreamMessage{Value: ev})
+	var deltaErr *StreamDeltaError
+	if !errors.As(err, &deltaErr) {
+		t.Fatalf("consumeModelDelta error type = %T, want *StreamDeltaError", err)
+	}
+	if deltaErr.Value != ev {
+		t.Fatalf("StreamDeltaError.Value = %v, want the original ErrorValue", deltaErr.Value)
+	}
+	if deltaErr.Error() != "provider exploded" {
+		t.Fatalf("StreamDeltaError.Error() = %q, want %q", deltaErr.Error(), "provider exploded")
+	}
+	if (&StreamDeltaError{}).Error() != "stream error" {
+		t.Fatalf("empty StreamDeltaError.Error() = %q, want %q", (&StreamDeltaError{}).Error(), "stream error")
+	}
+}
+
+func TestConsumeToolDeltaErrorReturnsTypedStreamDeltaError(t *testing.T) {
+	runner := participants.NewToolRunner(nil, 4)
+	o := NewGlobalOrdering(nil, runner, nil, nil)
+	ts := &state.LoopState{}
+	ev := messages.NewErrorValue("tool exploded")
+	err := o.consumeToolDelta(ts, messages.StreamMessage{Value: ev})
+	var deltaErr *StreamDeltaError
+	if !errors.As(err, &deltaErr) || deltaErr.Value != ev {
+		t.Fatalf("consumeToolDelta error = %v, want typed StreamDeltaError carrying the original value", err)
 	}
 }

@@ -27,9 +27,19 @@ type sessionLoopOptions struct {
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
 	AudioIn *sessionAudioSource
+
+	// observer optionally records per-turn and terminal diagnostics from the
+	// consumed delta stream; nil keeps runtime behavior unchanged.
+	observer *sessionProgressObserver
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
+	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
+	opts.observer.finish(err)
+	return err
+}
+
+func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	observedInferencer := newObservedSessionInferencer(sessionInferencer)
 	loop, err := agentloop.New(
 		agentloop.WithMode(engine.DuplexSession),
@@ -90,7 +100,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	}
 	stopAndDrain := func() error {
 		stopErr := stop()
-		if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+		if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 			stopErr = errors.Join(stopErr, drainErr)
 		}
 		return stopErr
@@ -107,7 +117,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			if audioErr != nil && !isSessionCancellation(audioErr) {
 				cancel()
 				stopErr := errors.Join(audioErr, joinSessionTerminationErrors(waitRun(), nil))
-				if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+				if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 					stopErr = errors.Join(stopErr, drainErr)
 				}
 				return stopErr
@@ -120,10 +130,10 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			}
 			var initialDrainErr error
 			if doneErr == nil {
-				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay)
+				initialDrainErr = drainSessionLoopMessagesUntilIdle(out, loop, sessionReplayDoneDrainIdleDelay, opts.observer)
 			}
 			stopErr := stop()
-			if drainErr := drainSessionLoopMessages(out, loop); drainErr != nil {
+			if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 				stopErr = errors.Join(stopErr, drainErr)
 			}
 			if initialDrainErr != nil {
@@ -142,10 +152,13 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			}
 			return ctx.Err()
 		case <-observedInferencer.Done():
-			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond)
+			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond, opts.observer)
 			stopErr := stopAndDrain()
 			if drainErr != nil {
 				stopErr = errors.Join(stopErr, drainErr)
+			}
+			if connectErr := observedInferencer.connectFailure(); connectErr != nil {
+				stopErr = errors.Join(stopErr, fmt.Errorf("session connect: %w", connectErr))
 			}
 			return stopErr
 		case err := <-runErrCh:
@@ -154,6 +167,8 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 			cancel()
 			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
+			opts.observer.observe(msg)
+			opts.observer.dispatchScheduledInputs(runCtx, loop)
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return errors.Join(err, stop())
 			}
@@ -164,6 +179,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
 						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
 					}
+					opts.observer.noteUserTextInput(opts.Prompt)
 				}
 				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
 					closeSent = true
@@ -194,6 +210,9 @@ type observedSessionInferencer struct {
 	inner messages.SessionInferencer
 	done  chan struct{}
 	once  sync.Once
+
+	mu         sync.Mutex
+	connectErr error
 }
 
 var _ messages.SessionInferencer = (*observedSessionInferencer)(nil)
@@ -205,9 +224,15 @@ func newObservedSessionInferencer(inner messages.SessionInferencer) *observedSes
 	}
 }
 
+// ConnectSession wraps the inner connect and remembers a failed connect so
+// the session runner can surface it: the engine runs model runners as
+// background participants whose errors are not propagated to the hot loop.
 func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
+		i.mu.Lock()
+		i.connectErr = err
+		i.mu.Unlock()
 		i.closeDone()
 		return nil, err
 	}
@@ -219,6 +244,13 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		}
 	}()
 	return &observedSession{Session: session, closeDone: i.closeDone}, nil
+}
+
+// connectFailure returns the remembered connect error, if any.
+func (i *observedSessionInferencer) connectFailure() error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.connectErr
 }
 
 func (i *observedSessionInferencer) Done() <-chan struct{} {

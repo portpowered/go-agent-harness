@@ -12,6 +12,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -71,15 +72,19 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 }
 
 type sessionRuntimePlan struct {
-	mode         sessionRuntimeMode
-	provider     string
-	capturePath  string
-	loopOut      io.Writer
-	inferencer   messages.SessionInferencer
-	loop         sessionLoopOptions
-	announce     string
-	flushCapture func() error
-	finalize     func(context.Context, io.Writer) error
+	mode            sessionRuntimeMode
+	provider        string
+	model           string
+	capturePath     string
+	loopOut         io.Writer
+	inferencer      messages.SessionInferencer
+	loop            sessionLoopOptions
+	announce        string
+	flushCapture    func() error
+	finalize        func(context.Context, io.Writer) error
+	diagnostics     SessionDiagnosticSink
+	metricsRecorder metrics.Recorder
+	audioInputs     []ScheduledAudioInput
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
@@ -88,13 +93,18 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
 			return err
 		}
 	}
-
 	loopOut := out
 	if p.loopOut != nil {
 		loopOut = p.loopOut
 	}
+	loop := p.loop
+	if p.diagnostics != nil || p.metricsRecorder != nil {
+		obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
+		obs.scheduleAudioInputs(p.audioInputs)
+		loop.observer = obs
+	}
 	if p.inferencer != nil {
-		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, p.loop); err != nil {
+		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
 			if p.flushCapture != nil {
 				flushErr := p.flushCapture()
 				return wrapSessionRuntimeError(p, errors.Join(
@@ -125,6 +135,17 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 }
 
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	plan, err := planSessionRuntimeMode(opts, factory)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	plan.diagnostics = opts.Diagnostics
+	plan.metricsRecorder = opts.MetricsRecorder
+	plan.audioInputs = opts.AudioInputs
+	return plan, nil
+}
+
+func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
 	if opts.ReplayPath != "" {
 		return planReplaySessionRuntime(opts, factory)
 	}
@@ -135,6 +156,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 		return sessionRuntimePlan{
 			mode:       sessionRuntimeModeInjectedLive,
 			provider:   strings.ToLower(effectiveSessionProvider(opts)),
+			model:      opts.Model,
 			inferencer: opts.SessionInferencer,
 			loop: sessionLoopOptions{
 				Prompt:         opts.Prompt,
@@ -152,10 +174,13 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 		return sessionRuntimePlan{
 			mode:        sessionRuntimeModeReplayGeneric,
 			capturePath: opts.ReplayPath,
+			provider:    strings.ToLower(strings.TrimSpace(opts.Provider)),
+			model:       opts.Model,
 			inferencer:  sessionInferencer,
 			loop: sessionLoopOptions{
-				Prompt:      opts.Prompt,
-				MaxDuration: 3 * time.Second,
+				Prompt:       opts.Prompt,
+				WaitForClose: opts.WaitForClose,
+				MaxDuration:  3 * time.Second,
 			},
 		}, nil
 	}

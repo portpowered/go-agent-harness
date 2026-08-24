@@ -58,4 +58,10 @@ type SessionCapture struct {
 	Provider SessionProviderMetadata `json:"provider"`
 	Session  SessionMetadata         `json:"session"`
 	Records  []CapturedSessionEvent  `json:"records"`
+
+	// EndsWithDisconnect marks captures whose provider connection ended
+	// without an explicit server session-close event. Replay connections built
+	// from such captures report io.EOF once every record has been consumed so
+	// mid-session disconnects replay hermetically instead of hanging.
+	EndsWithDisconnect bool `json:"ends_with_disconnect,omitempty"`
 }

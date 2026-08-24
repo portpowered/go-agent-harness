@@ -830,6 +830,12 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 }
 
 func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
+	err := runAgentLoopSessionWithDurationAdmissionClockStream(ctx, out, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
+	opts.observer.finish(err)
+	return err
+}
+
+func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
 	if maxDuration <= 0 {
 		return runAgentLoopSession(ctx, out, sessionInferencer, opts)
 	}
@@ -878,12 +884,12 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 	finish := func(planned bool, preferredErr error) error {
 		var preCancelDrainErr error
 		if preferredErr == nil {
-			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts)
+			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer)
 		}
 		cancel()
 		runErr := <-runErrCh
 		admittedInferencer.waitForClose()
-		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts); drainErr != nil {
+		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer); drainErr != nil {
 			return drainErr
 		}
 		runtimeErr := admittedInferencer.runtimeError()
@@ -963,7 +969,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 			return finish(durationExpired && doneErr == nil, doneErr)
 		case err := <-runErrCh:
 			admittedInferencer.waitForClose()
-			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten, artifacts); drainErr != nil {
+			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten, artifacts, opts.observer); drainErr != nil {
 				return drainErr
 			}
 			if runtimeErr := admittedInferencer.runtimeError(); runtimeErr != nil {
@@ -988,6 +994,8 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 			if durationExpired && msg.Type == messages.StreamTypeSessionClose {
 				msg, durationTerminalWritten = maxDurationTerminalMessage(msg)
 			}
+			opts.observer.observe(msg)
+			opts.observer.dispatchScheduledInputs(runCtx, loop)
 			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return finish(false, err)
 			}
@@ -998,6 +1006,7 @@ func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.W
 					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
 						return finish(false, fmt.Errorf("send session message: %w", err))
 					}
+					opts.observer.noteUserTextInput(opts.Prompt)
 				}
 				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
 					closeSent = true
@@ -1040,7 +1049,7 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 	return writeSessionReplayMessage(out, msg)
 }
 
-func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle) error {
+func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver) error {
 	for {
 		msg, ok := loop.Deltas().Read()
 		if !ok {
@@ -1049,13 +1058,14 @@ func drainDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, 
 		if planned && msg.Type == messages.StreamTypeSessionClose {
 			msg, *terminalWritten = maxDurationTerminalMessage(msg)
 		}
+		obs.observe(msg)
 		if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 			return err
 		}
 	}
 }
 
-func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle) error {
+func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver) error {
 	timer := time.NewTimer(sessionReplayDoneDrainIdleDelay)
 	defer timer.Stop()
 	for {
@@ -1067,6 +1077,7 @@ func drainDurationSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.A
 			if planned && msg.Type == messages.StreamTypeSessionClose {
 				msg, *terminalWritten = maxDurationTerminalMessage(msg)
 			}
+			obs.observe(msg)
 			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return err
 			}
