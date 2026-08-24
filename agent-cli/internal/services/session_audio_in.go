@@ -63,6 +63,11 @@ var (
 	ErrSessionAudioInputSend            = errors.New("session audio input send failed")
 	ErrSessionAudioInputClose           = errors.New("session audio input close failed")
 	ErrSessionAudioInputUninterruptible = errors.New("session audio input reader cannot be interrupted safely")
+	// ErrSessionAudioInputEndOfTurnLost reports that a cancellation raced the
+	// end-of-turn signal, so commit + response.create may never have reached
+	// the provider. It is surfaced as an explicit failure instead of being
+	// silently swallowed as an ordinary session cancellation.
+	ErrSessionAudioInputEndOfTurnLost = errors.New("end-of-turn signal was not delivered before session shutdown")
 )
 
 // SessionAudioInputError adds the command boundary and preserves the
@@ -467,6 +472,13 @@ func sendSessionAudioEndOfTurn(ctx context.Context, loop *agentloop.AgentLoop, s
 		}
 	}
 	if err := send(ctx); err != nil {
+		if isSessionCancellation(err) {
+			return &SessionAudioInputError{
+				Kind: SessionAudioInputSend,
+				Path: source.path,
+				Err:  fmt.Errorf("%w (%v)", ErrSessionAudioInputEndOfTurnLost, err),
+			}
+		}
 		return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: fmt.Errorf("end-of-turn signaling: %w", err)}
 	}
 	return nil
@@ -489,11 +501,22 @@ func isSessionCancellation(err error) bool {
 	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
-func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, closeSent, audioDone bool) bool {
-	if !audioDone {
+// shouldStopAudioInputSessionLoop applies audio-aware stop rules. Before the
+// end-of-turn signal is accepted, only a provider-initiated SESSION.CLOSE may
+// stop the run. Once awaitingResponse is set (end-of-turn delivered after
+// local EOF), only a terminal response frame (MESSAGE.END from response.done),
+// an explicit ERROR, or a provider SESSION.CLOSE ends the session — never
+// intermediate TEXT.END or other mid-response deltas.
+func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, closeSent, awaitingResponse bool) bool {
+	if !awaitingResponse {
 		return msg.Type == messages.StreamTypeSessionClose
 	}
-	return shouldStopSessionLoop(msg, opts, closeSent)
+	switch msg.Type {
+	case messages.StreamTypeMessageEnd, messages.StreamTypeError, messages.StreamTypeSessionClose:
+		return true
+	default:
+		return false
+	}
 }
 
 // Incremental WAV streaming lives beside the session audio boundary so

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // countingReadSeeker records how many bytes the WAV source actually consumed
@@ -268,5 +269,35 @@ func TestSessionWAVSourceCloseIsOnceAndGuardsReads(t *testing.T) {
 	}
 	if err := source.ReadFrame(context.Background(), frame); !errors.Is(err, audio.ErrClosed) {
 		t.Fatalf("post-close read = %v, want errors.Is(audio.ErrClosed)", err)
+	}
+}
+
+// TestShouldStopAudioInputAwaitingResponseSemantics pins the explicit
+// awaiting-response stop rules: local audio EOF alone never stops the run,
+// mid-response deltas never stop it, and only terminal response frames,
+// provider errors, or SESSION.CLOSE end an awaiting session.
+func TestShouldStopAudioInputAwaitingResponseSemantics(t *testing.T) {
+	cases := []struct {
+		name     string
+		msg      messages.StreamMessageType
+		awaiting bool
+		wantStop bool
+	}{
+		{"mid-response text end does not stop", messages.StreamTypeTextEnd, true, false},
+		{"audio delta does not stop", messages.StreamTypeAudioDelta, true, false},
+		{"transcript delta does not stop", messages.StreamTypeTranscriptDelta, true, false},
+		{"message end from response.done stops", messages.StreamTypeMessageEnd, true, true},
+		{"provider error stops", messages.StreamTypeError, true, true},
+		{"session close stops", messages.StreamTypeSessionClose, true, true},
+		{"before end-of-turn message end does not stop", messages.StreamTypeMessageEnd, false, false},
+		{"before end-of-turn session close stops", messages.StreamTypeSessionClose, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldStopAudioInputSessionLoop(messages.StreamMessage{Type: tc.msg}, sessionLoopOptions{}, false, tc.awaiting)
+			if got != tc.wantStop {
+				t.Fatalf("stop = %v; want %v", got, tc.wantStop)
+			}
+		})
 	}
 }

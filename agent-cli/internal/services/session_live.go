@@ -108,7 +108,13 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 
 	promptSent := false
 	closeSent := false
-	audioDone := opts.AudioIn == nil
+	// awaitingResponse is the explicit end-of-turn state: it turns on only
+	// after the finite audio source reached EOF AND its end-of-turn signal
+	// (MESSAGE.END -> input_audio_buffer.commit + response.create) was
+	// accepted by the loop. Local audio EOF alone never terminates the run;
+	// while awaiting a response only a terminal response frame, an explicit
+	// error, or max-duration expiry may end the session.
+	awaitingResponse := opts.AudioIn == nil
 	done := opts.Done
 	for {
 		select {
@@ -122,7 +128,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				}
 				return stopErr
 			}
-			audioDone = true
+			awaitingResponse = audioErr == nil
 		case <-done:
 			doneErr := error(nil)
 			if opts.DoneErr != nil {
@@ -147,6 +153,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			return stopAndDrain()
 		case <-ctx.Done():
 			stopErr := stop()
+			if awaitingResponse {
+				return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
+			}
 			if stopErr != nil {
 				return stopErr
 			}
@@ -181,7 +190,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 					}
 					opts.observer.noteUserTextInput(opts.Prompt)
 				}
-				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
+				if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !closeSent {
 					closeSent = true
 					if err := sendSessionClose(runCtx, loop); err != nil {
 						return errors.Join(err, stop())
@@ -196,7 +205,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				}
 			}
 			if opts.AudioIn != nil {
-				if shouldStopAudioInputSessionLoop(msg, opts, closeSent, audioDone) {
+				if shouldStopAudioInputSessionLoop(msg, opts, closeSent, awaitingResponse) {
 					return stopAndDrain()
 				}
 			} else if shouldStopSessionLoop(msg, opts, closeSent) {
