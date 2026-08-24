@@ -73,20 +73,12 @@ func (s *audioInLifecycleServer) Dial(_ string, _ map[string]string) (transport.
 	return &audioInLifecycleConn{server: s}, nil
 }
 
-func (s *audioInLifecycleServer) shutdown() { closeOnce(s.closed) }
-
 func closeOnce(ch chan struct{}) {
 	select {
 	case <-ch:
 	default:
 		close(ch)
 	}
-}
-
-type transportConn interface {
-	ReadMessage() (int, []byte, error)
-	WriteMessage(messageType int, payload []byte) error
-	Close() error
 }
 
 type audioInLifecycleConn struct {
