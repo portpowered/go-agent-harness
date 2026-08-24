@@ -33,6 +33,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
 	audioOutPath := ""
 	var maxDuration time.Duration
+	var audioIn string
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
@@ -75,6 +76,14 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
+			if cmd.Flags().Changed("audio-in") {
+				return services.RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, maxDuration, seed, services.SessionAudioInput{
+					Path:          audioIn,
+					Stdin:         cmd.InOrStdin(),
+					Present:       true,
+					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+				}, c.askFlags.SystemPrompt)
+			}
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
@@ -86,6 +95,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
+	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
 	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	return cmd
