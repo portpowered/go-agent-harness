@@ -218,6 +218,43 @@ func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 	}
 }
 
+type failingWriter struct{}
+
+func (failingWriter) Write(p []byte) (int, error) { return 0, errors.New("sink closed") }
+
+func TestRunnerWriteErrorsSurface(t *testing.T) {
+	runner := Runner{Exec: passingExec(t), Out: failingWriter{}}
+	if _, err := runner.Run(context.Background(), []Scenario{passingScenario()}); err == nil || !strings.Contains(err.Error(), `write result for scenario "all-pass"`) {
+		t.Fatalf("expected result write error, got: %v", err)
+	}
+	emptyRunner := Runner{Exec: passingExec(t), Out: failingWriter{}}
+	if _, err := emptyRunner.Run(context.Background(), nil); err == nil || !strings.Contains(err.Error(), "write run summary") {
+		t.Fatalf("expected summary write error, got: %v", err)
+	}
+}
+
+func unnamedScenario() Scenario {
+	s := passingScenario()
+	s.Name = ""
+	return s
+}
+
+func TestRunnerFallsBackToIDWhenNameEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	runner := Runner{Exec: passingExec(t), Out: &buf}
+	summary, err := runner.Run(context.Background(), []Scenario{unnamedScenario()})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if summary.Passed != 1 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+	lines := decodeLines(t, buf.String())
+	if lines[0]["name"] != "all-pass" {
+		t.Fatalf("expected name fallback to ID, got: %v", lines[0]["name"])
+	}
+}
+
 func TestRunnerWritesOnlyToInjectedWriter(t *testing.T) {
 	var buf bytes.Buffer
 	runner := Runner{Exec: passingExec(t), Out: &buf}
