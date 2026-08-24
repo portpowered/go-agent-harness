@@ -660,7 +660,7 @@ func TestConnectSession_ReplaysOpenAIRealtimeTextFixture(t *testing.T) {
 	provider := New(
 		WithAPIKey("replay-key"),
 		WithRealtimeBaseURL("wss://replay.openai.test/v1/realtime"),
-		WithWebSocketDialer(openAIReplayDialer{inner: replayDialer}),
+		WithWebSocketDialer(replayDialer),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -724,16 +724,6 @@ func TestConnectSession_ReplaysOpenAIRealtimeTextFixture(t *testing.T) {
 	if err := replayDialer.Err(); err != nil {
 		t.Fatalf("replay diverged: %v", err)
 	}
-}
-
-type openAIReplayDialer struct {
-	inner *gwtesting.ReplayWebSocketDialer
-}
-
-var _ WebSocketDialer = openAIReplayDialer{}
-
-func (d openAIReplayDialer) Dial(url string, headers map[string]string) (WebSocketConn, error) {
-	return d.inner.Dial(url, headers)
 }
 
 func assertStringField(t *testing.T, fields map[string]any, key string, want string) {
