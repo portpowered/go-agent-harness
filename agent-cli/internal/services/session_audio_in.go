@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
 // SessionAudioInput carries the command-line presence bit separately from the
 // value so --audio-in= can be rejected instead of treated as an omitted flag.
 type SessionAudioInput struct {
@@ -35,7 +36,7 @@ type SessionAudioInput struct {
 	// the loop's SendSessionEvent carries the end-of-turn boundary.
 	SendEndOfTurn func(context.Context) error
 	Present       bool
-	DevicePresent  bool
+	DevicePresent bool
 }
 
 // SessionAudioInputErrorKind identifies the failed session audio boundary.
