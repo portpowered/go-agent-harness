@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
@@ -191,18 +193,42 @@ func resequencedBatch(records []gwtesting.CapturedSessionEvent, sequence *int) [
 	return out
 }
 
+// syncBuffer is a mutex-protected output buffer because the session command
+// writes replay text and terminal status from independent goroutines.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // runMultiturnTurn drives the shipped 'session' command surface over the
 // record/replay transport with --audio-in for exactly one conversation turn
-// and returns the captured command stdout.
+// and returns the captured command stdout. It waits for the terminal close
+// marker so asynchronous terminal formatting is always observed.
 func runMultiturnTurn(t *testing.T, fixturePath, wavPath string) (string, error) {
 	t.Helper()
 
-	var stdout bytes.Buffer
+	stdout := &syncBuffer{}
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
-	cmd.SetOut(&stdout)
+	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath})
 	err := cmd.ExecuteContext(t.Context())
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(stdout.String(), "[session closed:") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	return stdout.String(), err
 }
 
