@@ -120,3 +120,35 @@ func waitState(t *testing.T, s *Scenario, ready func(*Scenario) bool) {
 		t.Fatalf("scenario failed while synchronizing test: %v", s.failure)
 	}
 }
+
+func TestCompleteBeforeActiveGenerationCreditsArrival(t *testing.T) {
+	s := New(time.Unix(100, 0).UTC(), time.Millisecond)
+	defer s.Close()
+	early, late := register(s, "early"), register(s, "late")
+	observed := make(chan Observation, 2)
+	late.Run(func() {
+		o, err := late.Observe(1)
+		if err == nil {
+			observed <- o
+		}
+	})
+	// "early" retires without ever observing tick 1: the active generation
+	// must be credited on its behalf so the barriered advance still closes.
+	early.Complete()
+	early.Complete() // idempotent
+	tick, err := s.AdvanceTo(1)
+	if err != nil || tick != 1 {
+		t.Fatalf("advance with early-complete participant: tick=%d err=%v", tick, err)
+	}
+	select {
+	case o := <-observed:
+		if o.Tick != 1 {
+			t.Fatalf("surviving participant observed tick %d", o.Tick)
+		}
+	default:
+		t.Fatal("surviving participant never observed tick 1")
+	}
+	if _, err := early.Observe(2); err == nil {
+		t.Fatal("completed participant could still observe")
+	}
+}

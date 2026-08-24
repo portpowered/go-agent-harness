@@ -38,6 +38,9 @@ jobs:
       - name: Run focused RTC race acceptance
         run: make test-rtc-race
 
+      - name: Run concurrent session capacity race acceptance
+        run: make test-sessions-race
+
       - name: Run root CI pipeline
         run: make ci
 

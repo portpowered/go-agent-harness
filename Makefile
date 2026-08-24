@@ -11,6 +11,7 @@ GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
+SESSIONS_RACE_TIMEOUT ?= 600s
 GOLANGCI_LINT_VERSION ?= v2.3.0
 STATICCHECK_VERSION ?= 2025.1.1
 GOLANGCI_LINT_INSTALL ?= go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -27,8 +28,7 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -124,6 +124,11 @@ test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race
 	@set -euo pipefail; \
 	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
 	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
+
+test-sessions-race: ## Run the concurrent session capacity acceptance tests with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-sessions-race go-agent-loop/test/functional/sessions"; \
+	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
 
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \

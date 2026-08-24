@@ -84,7 +84,24 @@ func (s *Scenario) Register(name string) (*Participant, error) {
 
 func (p *Participant) Run(fn func()) { go func() { p.bind(); fn() }() }
 
-func (p *Participant) Complete() { s := p.scenario; s.mu.Lock(); p.complete = true; s.mu.Unlock() }
+// Complete retires the participant. Safe to call at any time, including
+// before the participant first observes the active generation: the active
+// generation is credited as arrived so barriered ticks can still close.
+func (p *Participant) Complete() {
+	s := p.scenario
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p.complete {
+		return
+	}
+	p.complete = true
+	if g := s.active; g != nil && !g.arrived[p.name] {
+		g.arrived[p.name], g.remaining = true, g.remaining-1
+		if g.remaining == 0 {
+			s.finishLocked()
+		}
+	}
+}
 
 func (p *Participant) Observe(target uint64) (Observation, error) {
 	s := p.scenario

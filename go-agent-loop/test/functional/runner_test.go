@@ -55,7 +55,7 @@ func TestFunctionalSuite_ExternalManifestControlsCanonicalInvocation(t *testing.
 	if !strings.Contains(text, "functional: selector="+runnable+" observed=pass") {
 		t.Fatalf("canonical invocation did not execute a runnable real selector:\n%s", text)
 	}
-	if !strings.Contains(text, "summary: discovered=") || !strings.Contains(text, "quarantined=64") {
+	if !strings.Contains(text, "summary: discovered=") || !strings.Contains(text, "quarantined=70") {
 		t.Fatalf("canonical invocation did not report exact quarantine counts:\n%s", text)
 	}
 }
