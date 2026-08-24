@@ -816,13 +816,6 @@ var typedExpectationFieldsByKind = map[ExpectationKind]map[string]bool{
 	ExpectClose:      {},
 	ExpectTime:       {"at": true},
 	ExpectEvent:      {"value": true},
-
-	ExpectAudioEnergy:        {},
-	ExpectTranscriptContains: {"text": true},
-	ExpectToolCalled:         {"tool_name": true},
-	ExpectLatencyWithinTicks: {"at": true},
-	ExpectTerminalReason:     {"value": true},
-	ExpectFrameCount:         {},
 }
 
 func rejectTypedExpectationFields(value ExpectedBehavior, location string, hasAt bool) error {
