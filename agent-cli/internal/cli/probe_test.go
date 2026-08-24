@@ -288,6 +288,38 @@ func TestProbeRunMisclassifiedAuthExitsNonZero(t *testing.T) {
 	}
 }
 
+const s2sFixtureDir = "../../../go-llm-gateway/pkg/testing/testdata/session-fixtures"
+const s2sScenarioDir = "../../../go-agent-loop/pkg/probe/testdata/scenarios"
+
+func TestProbeRunS2SV1TextInAudioOutHappyPathExitZero(t *testing.T) {
+	report, err := gatewaytesting.RunSessionReplayProbe(context.Background(),
+		filepath.Join(s2sFixtureDir, "s2s_v1_text_in_audio_out.session.json"))
+	if err != nil {
+		t.Fatalf("replay probe failed: %v", err)
+	}
+	if len(report.Observations) != 9 || report.OutboundTicks != 1 {
+		t.Fatalf("unexpected fixture observation: frames=%d ticks=%d", len(report.Observations), report.OutboundTicks)
+	}
+
+	run := executeCLI("probe", "run", "s2s-v1-text-in-audio-out",
+		"--replay", s2sFixtureDir, "--json")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["name"] != "s2s_v1_text_in_audio_out" || results[0]["pass"] != true {
+		t.Fatalf("happy-path scenario did not pass: %v", results[0])
+	}
+	for _, expectation := range results[0]["expectations"].([]any) {
+		if expectation.(map[string]any)["passed"] != true {
+			t.Fatalf("all expectations should pass on happy path: %v", expectation)
+		}
+	}
+	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
 func TestProbeRunAbsentAuthErrorExitsNonZero(t *testing.T) {
 	run := executeCLI("probe", "run", "--replay", probeFixtureDir, "--json",
 		"--scenario", "s2s-v6a-error-auth-invalid-credentials",
@@ -350,5 +382,52 @@ func TestDeadguardDoesNotFireForQuickHealthyExecution(t *testing.T) {
 	}
 	if snapshot.FrameCount != 2 || snapshot.TerminalReason != "disconnect" {
 		t.Fatalf("unexpected snapshot through deadguard: %+v", snapshot)
+	}
+}
+
+func TestProbeRunS2SV1TextInAudioOutEmptyResponseFails(t *testing.T) {
+	scenario := filepath.Join(s2sScenarioDir, "s2s_v1_text_in_audio_out_empty_response.scenario.json")
+	fixture := filepath.Join(s2sFixtureDir, "s2s_v1_text_in_audio_out_empty_response.session.json")
+
+	outPath := filepath.Join(t.TempDir(), "results.jsonl")
+	summaryPath := filepath.Join(t.TempDir(), "summary.jsonl")
+	run := executeCLI("probe", "run", scenario, "--replay", fixture,
+		"--out", outPath, "--summary", summaryPath)
+	if run.exitCode == 0 {
+		t.Fatalf("exit code = 0, want non-zero; stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+	if !strings.Contains(run.stderr, "1 of 1 probe scenarios failed") {
+		t.Fatalf("failure not reported: %q", run.stderr)
+	}
+
+	outBytes, readErr := os.ReadFile(outPath)
+	if readErr != nil {
+		t.Fatalf("read JSONL results: %v", readErr)
+	}
+	var result map[string]any
+	if json.Unmarshal([]byte(strings.TrimSpace(string(outBytes))), &result) != nil {
+		t.Fatalf("malformed JSONL result: %q", outBytes)
+	}
+	if result["pass"] != false {
+		t.Fatalf("empty-response scenario must fail: %v", result)
+	}
+	failedKinds := map[string]bool{}
+	for _, expectation := range result["expectations"].([]any) {
+		outcome := expectation.(map[string]any)
+		if outcome["passed"] == false {
+			failedKinds[outcome["kind"].(string)] = true
+		}
+	}
+	if !failedKinds["frame-count"] {
+		t.Fatalf("JSONL must identify the failed frame-count expectation: %v", result["expectations"])
+	}
+
+	summaryBytes, readErr := os.ReadFile(summaryPath)
+	if readErr != nil {
+		t.Fatalf("read summary artifact: %v", readErr)
+	}
+	var summary map[string]any
+	if json.Unmarshal(summaryBytes, &summary) != nil || summary["status"] != "fail" || summary["failed"] != float64(1) {
+		t.Fatalf("summary artifact must record the failure: %q", summaryBytes)
 	}
 }
