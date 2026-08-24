@@ -1,0 +1,24 @@
+{
+  "id": "s2s-v1-text-in-audio-out-empty-response",
+  "name": "s2s_v1_text_in_audio_out_empty_response",
+  "description": "Failing variant of the v1 text-in/audio-out vertical: the provider returns no audio (or transcript) after the text prompt, so the expectations must fail.",
+  "steps": [
+    {
+      "type": "send_text",
+      "text": "What is the weather today?"
+    },
+    {
+      "type": "close"
+    }
+  ],
+  "expectations": [
+    {
+      "type": "frame_count",
+      "count": 9
+    },
+    {
+      "type": "terminal_reason",
+      "value": "synthetic"
+    }
+  ]
+}
