@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-4-v6a-healthy-control"
+  },
+  "session": {
+    "id": "sess_v6a_healthy_control",
+    "started_at_utc": "2026-08-24T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-4-v6a-healthy-control"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_v6a_healthy_control",
+        "model": "grok-4-v6a-healthy-control"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.text.delta",
+        "delta": "Hello there"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    }
+  ],
+  "ends_with_disconnect": true
+}

@@ -27,6 +27,21 @@ func TestValidateSessionCapture_AcceptsValidSyntheticFixture(t *testing.T) {
 	}
 }
 
+func TestValidateSessionCapture_AcceptsSyntheticFailureProvenance(t *testing.T) {
+	capture := validFixtureCapture(SessionFixtureProvenanceSyntheticFailure, CapturedSessionEvent{
+		Sequence:    1,
+		Direction:   DirectionServerToClient,
+		Type:        string(messages.StreamTypeTextDelta),
+		PayloadType: SessionPayloadTypeStreamMessage,
+		Payload:     json.RawMessage(`{"type":"TEXT.DELTA","value":{"type":"delta_text","content":"hello"}}`),
+	})
+
+	errs := ValidateSessionCapture("synthetic_failure.session.json", capture)
+	if len(errs) != 0 {
+		t.Fatalf("ValidateSessionCapture returned %d errors, want 0: %v", len(errs), errs)
+	}
+}
+
 func TestValidateSessionCaptureFile_AcceptsValidFixturePath(t *testing.T) {
 	capture := validFixtureCapture(SessionFixtureProvenanceProviderRecorded, CapturedSessionEvent{
 		Sequence:    1,

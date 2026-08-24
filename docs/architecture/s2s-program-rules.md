@@ -184,10 +184,31 @@ your payload names it. Path prefix: `C:/Users/andre/work/portos/infinite-you/`.
 | Functional layout by subject + `functional-quarantine.json` + `_long_` naming | `tests/functional/` | `s2s-b3-functional-layout-and-quarantine` |
 
 **Lane sizing contract.** Every lane in this program is deliberately small: one
-story, one surface, ≤~400 changed lines, finishable in one or two process
-sessions. If your lane looks larger than that when you plan it, say so in a PR
-comment — do not silently widen it, and do not pull in an adjacent lane's files
-to "finish the thought".
+story, one surface, finishable in one or two process sessions. If your lane
+looks larger than that when you plan it, say so in a PR comment — do not
+silently widen it, and do not pull in an adjacent lane's files to "finish the
+thought".
+
+The **≤~400 changed lines** bound counts **production (non-test) lines only**.
+Test, fixture, testdata, and golden-file lines are NOT counted against it. This
+program's whole point is dense behavioural coverage, and a coverage lane's
+deliverable IS a large volume of test code; a 400-line cap measured over test
+files would make the lanes that matter most unmergeable by construction.
+
+Two obligations remain, and reviewers should enforce these instead of a raw
+total-line count:
+
+1. If the TOTAL diff exceeds ~400 lines, the lane states the split in a PR
+   comment — production lines vs test/fixture lines — so the reviewer can see
+   the production surface is still small. A stated split is an accepted
+   exception; the reviewer does not need to negotiate it.
+2. The production-line bound is unchanged. A lane whose *production* diff
+   exceeds ~400 lines is genuinely too big and must be split.
+
+Measured 2026-08-17: this bound, applied to total lines, blocked 9 of 15 live
+lanes at review (501–1465 line diffs, nearly all test code) and contributed to
+a 3-hour window with zero merges across 17 open PRs. Reviewers were correct to
+enforce the rule as written; the rule was wrong.
 
 ---
 
@@ -406,8 +427,8 @@ it build on that decision; none of them may relitigate it.
   prove it: `git merge-base --is-ancestor <fix-sha> HEAD`, and decisively
   `git show HEAD:<path> | grep -c <identifier-the-fix-introduced>` compared
   against `git show origin/main:<path> | grep -c ...`.
-- `prd.json` and `progress.txt` are untracked worktree scaffolding and must
-  **never** appear in your PR diff. Never `git add -f` them.
+- `prd.json`, `progress.txt`, and `prd.md` are untracked worktree scaffolding and
+  must **never** appear in your PR diff. Never `git add -f` them.
 
 ---
 
@@ -599,3 +620,164 @@ If you believe a rule here is wrong, or your lane cannot proceed without
 touching a surface another lane owns, say so plainly in a PR comment and stop
 on that item — finish everything else in your lane first. Do not silently widen
 your lease.
+
+## 9. LocalAI, the local realtime tier, and the licence rule
+
+Added 2026-08-16, alongside the `operator-s2s-localai-20260816` addendum batch
+(six `s2s-lai-*` lanes). That batch runs concurrently with this one and carries
+no `DEPENDS_ON` edges into it, because a dependency target must live in the same
+batch. Cross-batch coupling is recorded in each payload's `contention` field
+instead.
+
+### 9.1 Why a third tier exists
+
+Every realtime test we have today is one of two things. A hermetic replay
+against a recorded fixture is fast and free and proves nothing about the live
+protocol. A live call to OpenAI `gpt-realtime-2.1-mini` proves everything and
+costs money, needs credentials, cannot run in CI, and is rate-limited exactly
+when a blind-probe fleet wants twenty sessions back to back.
+
+LocalAI closes the gap. It serves an OpenAI-compatible realtime WebSocket at
+`ws://localhost:8080/v1/realtime?model=gpt-realtime` — the same URL shape
+`agent-cli` already builds for `api.openai.com`, against a `--base-url` flag
+that already exists.
+
+| Tier | Endpoint | Cost | May gate |
+|---|---|---|---|
+| T1 replay | recorded fixtures | free | wire-level and transport behaviour |
+| T2 LocalAI | local WebSocket | free | audio round trip, multi-turn, VAD and barge-in, function calling |
+| T3 OpenAI | `gpt-realtime-2.1-mini` | metered | everything T2 gates, plus whatever T2 provably cannot serve |
+
+**T2's boundary is measured, not assumed.** LocalAI's realtime pipeline is
+composed (`vad → transcription → llm → tts`), so image content parts may or may
+not reach the LLM even when the configured LLM is itself vision-capable.
+`s2s-lai-local-tier-conformance` answers that empirically and writes the result
+into `docs/architecture/s2s-local-tier-conformance.md`. Until that table exists,
+no lane may claim a milestone is gated locally. **T2 supplements the acceptance
+gate; it never retires it.** The blind-probe acceptance run in §0 is still a T3
+run.
+
+### 9.2 Licences — the one rule that can invalidate a diff
+
+| Upstream | Licence | What you may do |
+|---|---|---|
+| `github.com/mudler/LocalAI` | MIT | run it, depend on it |
+| `github.com/WqyJh/go-openai-realtime` | MIT | import as a normal Go module |
+| `github.com/gen2brain/malgo` | Unlicense | already our audio dependency |
+| **`github.com/localai-org/localai-realtime-demo`** | **none — the API reports `license: null`** | **read it; imitate its design; copy nothing** |
+
+The demo repository has no licence file, so default copyright applies and all
+rights are reserved. You may read it and imitate its *design* — the arrangement
+of concerns, the stage vocabulary, the fact that a supervisor retries a list of
+endpoints — because architecture is not the copyrightable part. You may **not**
+copy, paste, vendor, `go get`, or translate line-by-line any of its code, YAML,
+comments or test data. A diff containing a block recognisable as lifted from
+that repository has failed regardless of whether its tests pass.
+
+Record the licence of every third-party module you add, one line each, in your
+PR description.
+
+### 9.3 Surfaces the addendum touches
+
+| Path | Owner |
+|---|---|
+| `deploy/localai/**` | `s2s-lai-realtime-server-fixture` (TTS model config: `s2s-lai-tts-gguf-format-check`) |
+| `go-llm-gateway/pkg/testing/localai/**` | `s2s-lai-realtime-server-fixture` |
+| `go-llm-gateway` LocalAI provider + its one registration site | `s2s-lai-gateway-localai-provider` |
+| `test/localai/**`, `docs/architecture/s2s-local-tier-conformance.md` | `s2s-lai-local-tier-conformance` |
+| `test/probe/localtier/**` | `s2s-lai-blind-probe-local-tier` |
+| `docs/architecture/s2s-tts-pinning.md` | `s2s-lai-tts-gguf-format-check` |
+
+Two cross-batch collisions are live and are handled by contention notes, not by
+edges. `agent-cli/internal/services/session.go` belongs to
+`s2s-b0-realtime-model-allowlist`; no `s2s-lai-*` lane may edit it, and the
+gateway provider lane lands its unit-level work and reports the end-to-end item
+as blocked if the allowlist has not generalised by its final rebase. Corpus
+generation belongs to `s2s-b2-audio-corpus-generator`;
+`s2s-lai-tts-gguf-format-check` establishes and pins the facts it depends on and
+posts them, but regenerates nothing.
+
+### 9.4 Upstream change to be aware of
+
+LocalAI PR #10316 migrated the `qwen3-tts-cpp` backend to `qwentts.cpp` **and
+changed the GGUF format**, telling users to reinstall the model from the gallery
+when upgrading. Our corpus artifact is
+`C:/Users/andre/.mangaka/models/qwen3-tts-0.6b-f16.gguf`, and the locked decision
+for this program is that all test audio comes from local `qwen3-tts.cpp` only.
+Corpus audio is the input side of nearly every test here, so if it changes shape
+underneath us the failures surface in lanes with nothing to do with TTS.
+`s2s-lai-tts-gguf-format-check` resolves and pins it.
+
+
+## 10. When your lease runs out, STOP — the `<CONTINUE>` deadlock
+
+This section records a measured outage. Read it before you decide to emit
+`<CONTINUE>` "until review gets back to me".
+
+### 10.1 The mechanism
+
+The factory's `review` workstation is a **two-token join**. From
+`factory/factory.json`:
+
+```
+process  inputs:  task:init
+         outputs: task:in-review  AND  review:init     <-- emits BOTH
+review   inputs:  task:in-review  AND  review:init     <-- consumes BOTH
+review-loop-breaker  inputs: task:in-review -> task:failed
+```
+
+`process` is a REPEATER. `<CONTINUE>` re-arms it and fires **no output arc**, so
+no `task:in-review` + `review:init` pair is ever minted. Only `<COMPLETE>` mints
+that pair. Therefore:
+
+> **`<CONTINUE>` with no in-lease work left does not queue you for review. It
+> makes review structurally unreachable, and your PR can never merge however
+> green it is.**
+
+Waiting for review feedback by emitting `<CONTINUE>` is self-defeating: the
+reviewer is never dispatched, because you never released the token.
+
+### 10.2 The outage it caused
+
+Measured 2026-08-17 on this program's board. Lane
+`s2s-b1-cov-workspace-agents-md` emitted `<CONTINUE>` for **~17 hours** against
+PR #58, which was `OPEN` / `MERGEABLE` / `CLEAN` with required CI green the
+entire time. Its head never moved from `0e461ec`. A board census found **16 of
+19** open lanes in the same state. #58 merged **9 minutes** after the lane was
+told its lease was exhausted.
+
+The lane was not malfunctioning. `process/AGENTS.md` 17.1 permits `<COMPLETE>`
+only when every PRD item is `passes:true`, and its last acceptance criteria
+required production APIs (upward discovery, parsed resolution, traversal
+boundary, typed oversized-file errors) that its **coverage-only lease forbade it
+to write**. Unsatisfiable criteria plus an all-items gate is an infinite loop by
+construction.
+
+### 10.3 The rule
+
+`process/AGENTS.md` gained 17.4 and 17.5 (commit `e17e1f6`). In short:
+
+> If every remaining PRD item requires changes outside your `changedPathLease`,
+> you have no in-lease work left. Mark those items `passes:true` with a one-line
+> note naming the out-of-lease contract, state the gap in a PR comment so the
+> operator can file it as its own work item, and respond `<COMPLETE>`.
+
+Reporting an out-of-lease gap **is** delivery. It is not a failure, and it is
+not something to keep grinding at.
+
+### 10.4 Operator notes
+
+- **Never hand-move a token to `task:in-review`.** It looks like a shortcut to
+  review and is a dead end: the paired `review:init` token does not exist, so
+  the join can never fire and the only transition that can consume the token is
+  `review-loop-breaker`, which fails it. Verified 2026-08-17 — a token moved
+  this way sat unreachable until it was reverted to `init`. `init` is the only
+  safe manual destination, because only `process` can mint the review pair.
+- The `review` inputs carry **no `SAME_NAME` guard** (unlike `consume`, which
+  has one). Review therefore binds any `task:in-review` to any `review:init`,
+  which is why review token names cross-attribute between lanes. Merges are not
+  lost by this, but do not treat a `work-review-N` token's name as evidence of
+  which lane it reviewed.
+- When writing payloads, keep acceptance criteria **inside the lane's lease**.
+  If a criterion needs a production contract the lease forbids, it belongs in a
+  separate lane, not as an item the lease-bound lane can never mark passing.

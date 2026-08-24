@@ -11,23 +11,20 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // Injectors from wire.go:
 
-// InitializeAgentCLI builds the agent CLI with production dependencies (real executor, config-based inferencer).
-func InitializeAgentCLI() (*cli.AgentCLI, error) {
+// assembleAgentCLI is the generated implementation shared by production and
+// mock composition. Its parameters are explicit so the generated graph cannot
+// hide a dependency behind a bag or locator.
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	toolRegistry := tools.NewToolRegistry()
-	registryExecutor := tools.NewRegistryExecutor(toolRegistry)
-	v := services.DefaultToolDefs(toolRegistry)
-	inferencer := provideNilInferencer()
-	bool2 := provideStrictModelValidation()
-	executor := agent.NewExecutor(registryExecutor, v, inferencer, bool2)
+	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, inferencer, sessionInferencer)
+	executor := agent.NewExecutor(toolExecutor, toolDefs, inferencer, v...)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(executor, askFlags, loopFlags, globalFlags)
@@ -36,128 +33,47 @@ func InitializeAgentCLI() (*cli.AgentCLI, error) {
 	toolCommand := cli.NewToolCommand(globalFlags)
 	interactionCommand := cli.NewInteractionCommand()
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
-	sessionInferencer := provideNilSessionInferencer()
+	probeCommand := cli.NewProbeCommand()
+	probeRunCommand := cli.NewProbeRunCommand()
 	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
-	agentCLI := cli.NewAgentCLI(router)
-	return agentCLI, nil
-}
-
-// InitializeMockAgentCLI builds the agent CLI with injected executor and inferencer for testing.
-func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
-	globalFlags := flags.NewGlobalFlags()
-	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
-		return nil, err
-	}
-	rootCommand := cli.NewRootCommand(globalFlags)
-	toolRegistry := tools.NewToolRegistry()
-	v := services.DefaultToolDefs(toolRegistry)
-	bool2 := provideRelaxedModelValidation()
-	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
-	askFlags := flags.NewAskFlags()
-	loopFlags := flags.NewLoopFlags()
-	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
-	chatFlags := flags.NewChatFlags()
-	chatCommand := cli.NewChatCommand(agentExecutor, askFlags, loopFlags, chatFlags, globalFlags)
-	toolCommand := cli.NewToolCommand(globalFlags)
-	interactionCommand := cli.NewInteractionCommand()
-	interactionReplayCommand := cli.NewInteractionReplayCommand()
-	sessionInferencer := provideNilSessionInferencer()
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
-	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
-	sessionListCommand := cli.NewSessionListCommand(globalFlags)
-	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
-	configCommand := cli.NewConfigCommand()
-	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
-	agentCLI := cli.NewAgentCLI(router)
-	return agentCLI, nil
-}
-
-// InitializeMockAgentCLIWithSessionInferencer builds the agent CLI with injected one-shot and session inferencers for testing.
-func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer) (*cli.AgentCLI, error) {
-	globalFlags := flags.NewGlobalFlags()
-	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
-		return nil, err
-	}
-	rootCommand := cli.NewRootCommand(globalFlags)
-	toolRegistry := tools.NewToolRegistry()
-	v := services.DefaultToolDefs(toolRegistry)
-	bool2 := provideRelaxedModelValidation()
-	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
-	askFlags := flags.NewAskFlags()
-	loopFlags := flags.NewLoopFlags()
-	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
-	chatFlags := flags.NewChatFlags()
-	chatCommand := cli.NewChatCommand(agentExecutor, askFlags, loopFlags, chatFlags, globalFlags)
-	toolCommand := cli.NewToolCommand(globalFlags)
-	interactionCommand := cli.NewInteractionCommand()
-	interactionReplayCommand := cli.NewInteractionReplayCommand()
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
-	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
-	sessionListCommand := cli.NewSessionListCommand(globalFlags)
-	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
-	configCommand := cli.NewConfigCommand()
-	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
-	agentCLI := cli.NewAgentCLI(router)
-	return agentCLI, nil
-}
-
-// InitializeAgentCLIWithInferencerOverride builds the CLI with agent.Executor and injected executor/inferencer.
-// Use for tests that need real ask path (config dir, AGENTS.md) but capture inference requests.
-func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
-	globalFlags := flags.NewGlobalFlags()
-	if err := applyDeterministicMockDefaults(globalFlags); err != nil {
-		return nil, err
-	}
-	rootCommand := cli.NewRootCommand(globalFlags)
-	toolRegistry := tools.NewToolRegistry()
-	v := services.DefaultToolDefs(toolRegistry)
-	bool2 := provideStrictModelValidation()
-	agentExecutor := agent.NewExecutor(executor, v, inferencer, bool2)
-	askFlags := flags.NewAskFlags()
-	loopFlags := flags.NewLoopFlags()
-	askCommand := cli.NewAskCommand(agentExecutor, askFlags, loopFlags, globalFlags)
-	chatFlags := flags.NewChatFlags()
-	chatCommand := cli.NewChatCommand(agentExecutor, askFlags, loopFlags, chatFlags, globalFlags)
-	toolCommand := cli.NewToolCommand(globalFlags)
-	interactionCommand := cli.NewInteractionCommand()
-	interactionReplayCommand := cli.NewInteractionReplayCommand()
-	sessionInferencer := provideNilSessionInferencer()
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
-	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
-	sessionListCommand := cli.NewSessionListCommand(globalFlags)
-	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
-	configCommand := cli.NewConfigCommand()
-	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
 
 // wire.go:
 
-// ToolExecutorSet provides the registry-based tool executor.
-var ToolExecutorSet = wire.NewSet(tools.NewToolRegistry, tools.NewRegistryExecutor, wire.Bind(new(messages.ToolExecutor), new(*tools.RegistryExecutor)))
-
-// provideNilInferencer supplies no inferencer override for production (config-backed inferencer is used).
-func provideNilInferencer() messages.Inferencer { return nil }
-
-// provideNilSessionInferencer supplies no session inferencer override for production.
-func provideNilSessionInferencer() messages.SessionInferencer { return nil }
-
-func provideStrictModelValidation() bool { return false }
-
-func provideRelaxedModelValidation() bool { return true }
-
-// ExecutorSet provides the agent executor (config-backed inferencer, injected tool executor).
-var ExecutorSet = wire.NewSet(services.DefaultToolDefs, provideNilInferencer, provideStrictModelValidation, agent.NewExecutor)
+func provideModelValidation(
+	relaxModelValidation bool,
+	observer assemblyObserver,
+	toolExecutor messages.ToolExecutor,
+	transportDialer transport.Dialer,
+	deviceRegistry DeviceRegistry,
+	audioSource AudioSource,
+	audioSink AudioSink,
+	clockSource Clock,
+	inferencer messages.Inferencer,
+	sessionInferencer messages.SessionInferencer,
+) []bool {
+	if observer != nil {
+		observer(compositionValues{
+			toolExecutor:      toolExecutor,
+			transportDialer:   transportDialer,
+			deviceRegistry:    deviceRegistry,
+			audioSource:       audioSource,
+			audioSink:         audioSink,
+			clockSource:       clockSource,
+			inferencer:        inferencer,
+			sessionInferencer: sessionInferencer,
+		})
+	}
+	return []bool{relaxModelValidation}
+}
 
 // FlagsSet provides global and command-specific CLI flags.
 var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)

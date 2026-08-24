@@ -413,7 +413,9 @@ model:
 		t.Fatalf("replay output missing session close status, got:\n%s", got)
 	}
 	for _, want := range []string{
-		"classification=provider_close",
+		// Grok closes carry the public transport classification on the typed
+		// close value; the terminal reason names the provider-close teardown.
+		"classification=transport",
 		"terminal_reason=provider_close",
 		"terminal_provenance=provider",
 		"output_state=not_applicable",

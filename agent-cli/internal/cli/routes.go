@@ -19,6 +19,9 @@ type Router struct {
 	InteractionCommand       *InteractionCommand
 	InteractionReplayCommand *InteractionReplayCommand
 
+	ProbeCommand    *ProbeCommand
+	ProbeRunCommand *ProbeRunCommand
+
 	SessionCommand       *SessionCommand
 	SessionShowCommand   *SessionShowCommand
 	SessionListCommand   *SessionListCommand
@@ -37,6 +40,8 @@ func NewRouter(
 	toolCommand *ToolCommand,
 	interactionCommand *InteractionCommand,
 	interactionReplayCommand *InteractionReplayCommand,
+	probeCommand *ProbeCommand,
+	probeRunCommand *ProbeRunCommand,
 	sessionCommand *SessionCommand,
 	sessionShowCommand *SessionShowCommand,
 	sessionListCommand *SessionListCommand,
@@ -52,6 +57,8 @@ func NewRouter(
 		ToolCommand:              toolCommand,
 		InteractionCommand:       interactionCommand,
 		InteractionReplayCommand: interactionReplayCommand,
+		ProbeCommand:             probeCommand,
+		ProbeRunCommand:          probeRunCommand,
 		SessionCommand:           sessionCommand,
 		SessionShowCommand:       sessionShowCommand,
 		SessionListCommand:       sessionListCommand,
@@ -73,6 +80,10 @@ func (r *Router) BuildRoot() *cobra.Command {
 	interactionGroup.AddCommand(NewPath("replay <fixture-path>", r.InteractionReplayCommand.Generate()))
 	root.AddCommand(interactionGroup)
 
+	probeGroup := NewPath("probe", r.ProbeCommand.Generate())
+	probeGroup.AddCommand(NewPath("run [scenario-path...]", r.ProbeRunCommand.Generate()))
+	root.AddCommand(probeGroup)
+
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())
 	sessionGroup.AddCommand(NewPath("show <session-id>", r.SessionShowCommand.Generate()))
 	sessionGroup.AddCommand(NewPath("list", r.SessionListCommand.Generate()))
@@ -82,6 +93,10 @@ func (r *Router) BuildRoot() *cobra.Command {
 	configGroup := NewPath("config", r.ConfigCommand.Generate())
 	configGroup.AddCommand(NewPath("add-local", r.ConfigAddLocalCommand.Generate()))
 	root.AddCommand(configGroup)
+
+	devicesGroup := NewPath("devices", NewDevicesCommand().Generate())
+	devicesGroup.AddCommand(NewPath("list", NewDevicesListCommand(newDefaultDeviceRegistry()).Generate()))
+	root.AddCommand(devicesGroup)
 
 	cmd := root.CreateCommand()
 	cmd.PersistentFlags().CountVarP(&r.Flags.VerboseMode, "verbose", "v", "Enable verbose output (use -v for info, -vv for debug)")

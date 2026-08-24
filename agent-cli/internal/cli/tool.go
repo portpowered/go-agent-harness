@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,7 +19,37 @@ import (
 // ToolCommand wraps the tool subcommand for invoking tools directly (debugging).
 // It loads config at run time and uses only enabled tools from config.
 type ToolCommand struct {
-	globalFlags *flags.GlobalFlags
+	globalFlags          *flags.GlobalFlags
+	registryLoader       func() (*tools.ToolRegistry, error)
+	configStorageFactory func(string) (*config.ConfigStorage, error)
+}
+
+var (
+	errToolNotFound     = errors.New("tool not found")
+	errToolArguments    = errors.New("invalid tool argument")
+	errToolUnavailable  = errors.New("tool unavailable in this build")
+	errToolConfig       = errors.New("tool configuration error")
+	errToolFlagConflict = errors.New("tool flag conflict")
+	errToolIDRequired   = errors.New("tool id required")
+)
+
+type toolCommandError struct {
+	kind    error
+	message string
+	cause   error
+}
+
+func (e *toolCommandError) Error() string { return e.message }
+
+func (e *toolCommandError) Unwrap() error {
+	if e.cause == nil {
+		return e.kind
+	}
+	return errors.Join(e.kind, e.cause)
+}
+
+func newToolCommandError(kind error, message string, cause error) error {
+	return &toolCommandError{kind: kind, message: message, cause: cause}
 }
 
 // NewToolCommand creates the ToolCommand with global flags (used to load config and resolve enabled tools).
@@ -27,13 +59,24 @@ func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
 
 // getRegistry loads config and returns a registry with only enabled tools.
 func (c *ToolCommand) getRegistry() (*tools.ToolRegistry, error) {
-	storage, err := config.NewDefaultConfigStorage(c.globalFlags.ConfigDir())
+	if c.registryLoader != nil {
+		registry, err := c.registryLoader()
+		if err != nil {
+			return nil, newToolCommandError(errToolConfig, err.Error(), err)
+		}
+		return registry, nil
+	}
+	storageFactory := config.NewDefaultConfigStorage
+	if c.configStorageFactory != nil {
+		storageFactory = c.configStorageFactory
+	}
+	storage, err := storageFactory(c.globalFlags.ConfigDir())
 	if err != nil {
-		return nil, fmt.Errorf("config: %w", err)
+		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("config: %v", err), err)
 	}
 	cfg, err := storage.Load()
 	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
+		return nil, newToolCommandError(errToolConfig, fmt.Sprintf("load config: %v", err), err)
 	}
 	return tools.NewToolRegistryFromConfig(cfg), nil
 }
@@ -46,12 +89,12 @@ func parseKeyValueArgs(args []string) (map[string]any, error) {
 	for _, s := range args {
 		idx := strings.Index(s, "=")
 		if idx <= 0 {
-			return nil, fmt.Errorf("invalid argument %q: expected key=value", s)
+			return nil, newToolCommandError(errToolArguments, fmt.Sprintf("invalid argument %q: expected key=value", s), nil)
 		}
 		key := strings.TrimSpace(s[:idx])
 		valStr := strings.TrimSpace(s[idx+1:])
 		if key == "" {
-			return nil, fmt.Errorf("invalid argument %q: empty key", s)
+			return nil, newToolCommandError(errToolArguments, fmt.Sprintf("invalid argument %q: empty key", s), nil)
 		}
 		valStr = unquoteValue(valStr)
 		out[key] = coerceValue(valStr)
@@ -93,16 +136,19 @@ func (c *ToolCommand) Generate() *cobra.Command {
 		Long:  "Invoke a tool directly. Example: agent tool read_file path=./foo.txt",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			list, _ := cmd.Flags().GetBool("list")
+			if list && len(args) > 0 {
+				return newToolCommandError(errToolFlagConflict, "cannot combine --list with a tool id", nil)
+			}
 			registry, err := c.getRegistry()
 			if err != nil {
 				return err
 			}
-			list, _ := cmd.Flags().GetBool("list")
 			if list {
 				return c.listTools(cmd.OutOrStdout(), registry)
 			}
 			if len(args) < 1 {
-				return fmt.Errorf("tool-id required (e.g. agent tool read_file path=./foo.txt). Use --list to list tools")
+				return newToolCommandError(errToolIDRequired, "tool-id required (e.g. agent tool read_file path=./foo.txt). Use --list to list tools", nil)
 			}
 
 			toolID := args[0]
@@ -111,6 +157,9 @@ func (c *ToolCommand) Generate() *cobra.Command {
 			parsed, err := parseKeyValueArgs(keyValues)
 			if err != nil {
 				return err
+			}
+			if _, ok := registry.Get(toolID); !ok {
+				return fmt.Errorf("tool %q: %w", toolID, newToolCommandError(errToolNotFound, fmt.Sprintf("tool %q not found", toolID), nil))
 			}
 
 			ctx := cmd.Context()
@@ -131,7 +180,9 @@ func (c *ToolCommand) Generate() *cobra.Command {
 }
 
 func (c *ToolCommand) listTools(w io.Writer, registry *tools.ToolRegistry) error {
-	for _, name := range registry.List() {
+	names := registry.List()
+	sort.Strings(names)
+	for _, name := range names {
 		if _, err := fmt.Fprintln(w, name); err != nil {
 			return err
 		}

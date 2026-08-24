@@ -40,8 +40,37 @@ Before submitting new work, inspect the current queue and active sessions.
 Use:
 
 ```sh
-you work list --session {{.Context.SessionID}}
+you work list --server http://localhost:7439 --session {{.Context.SessionID}} --max-results 400
 ```
+
+`--server` is mandatory. The CLI defaults to `http://localhost:7437`, which is a
+DIFFERENT factory (infinite-you); without the flag every command here returns
+`WORK_NOT_FOUND` or `FACTORY_UNREACHABLE` against a factory that does not hold
+this work, and queue reconciliation silently does nothing. `--max-results` is
+also required: the default page size is 50, so a larger board is truncated and
+stranded items past row 50 are never seen.
+
+RETRY ON TIMEOUT. Under load this endpoint costs a fixed ~20s per request
+regardless of filters or page size (measured 2026-08-16: `maxResults=5` took
+19.7s while `maxResults=400` took 22.3s), and the CLI's client timeout is
+around 10s. So `context deadline exceeded (Client.Timeout exceeded while
+awaiting headers)` is EXPECTED under load and does NOT mean the factory is
+down or that the queue is empty. Retry the command; if it keeps timing out,
+fall back to the HTTP endpoint directly, which honours a longer timeout:
+
+```sh
+curl -s --max-time 300 "http://localhost:7439/factory-sessions/~default/work?maxResults=400"
+```
+
+Never treat a timed-out or empty response as "nothing to reconcile" — that
+reading is what let 16 failed tokens and 7 stranded ideas sit untouched for
+about 3.5 hours. Also note the CLI exits 0 on this error, so check for output,
+not just the exit code.
+
+The same applies to `you work move`: a client-side timeout does NOT mean the
+move was rejected. The server usually applies it anyway. Re-read the work item
+before retrying, and always pass `--request-id` so a repeat is idempotent
+(a repeated id returns 409 without a second mutation).
 
 to see current work items, work types, states, names, and whether previous
 batches are still running, blocked, failed, or ready to be consumed.
@@ -49,7 +78,7 @@ batches are still running, blocked, failed, or ready to be consumed.
 Use:
 
 ```sh
-you session list
+you session list --server http://localhost:7439
 ```
 
 to enumerate active and recent sessions. This helps determine whether work is
@@ -91,8 +120,17 @@ returned to a workstation after a failed or interrupted pass, use the complete
 command form:
 
 ```sh
-you work move <work-id> <state-name> --session {{.Context.SessionID}} --request-id <stable-repair-id>
+you work move <work-id> <state-name> --server http://localhost:7439 --session {{.Context.SessionID}} --request-id <stable-repair-id>
 ```
+
+Again, `--server http://localhost:7439` is mandatory for the reason above. Note
+that `<work-id>` is the TRANSIENT token id (`work-task-368`, `work-plan-489`),
+not the `batch-...` idea id: an idea sitting at `to-complete/PROCESSING` is
+usually waiting on a dead `task` token, and it is that token which must be moved
+back to `init`. Valid state names come from `factory/factory.json`: `task` has
+`init`, `in-review`, `to-complete`, `complete`, `failed`; `plan` and `thoughts`
+have `init`, `complete`, `failed`; `review` has `init`, `complete`, `fin`.
+Moves are rejected while a work item is in an active dispatch.
 
 Use `you work move` to move work deliberately between valid states in
 `factory/factory.json`. Move only the specific work items needed to repair the

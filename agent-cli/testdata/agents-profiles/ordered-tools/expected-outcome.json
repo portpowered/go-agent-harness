@@ -1,0 +1,1 @@
+{"kind":"ordered-multi-tool","ordered_calls":["file_read","shell_command"],"first_result_informs_second":true}

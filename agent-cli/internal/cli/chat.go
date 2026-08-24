@@ -28,6 +28,19 @@ type ChatCommand struct {
 	globalFlags *flags.GlobalFlags
 }
 
+// chatFlagParseError preserves Cobra's flag-error message while giving callers
+// a stable type for command-level error handling.
+type chatFlagParseError struct{ cause error }
+
+func (e *chatFlagParseError) Error() string { return e.cause.Error() }
+func (e *chatFlagParseError) Unwrap() error { return e.cause }
+
+// newMicrophoneSource keeps audio-input command tests hardware-free; production
+// uses the real microphone constructor by default.
+var newMicrophoneSource = func() (audio.AudioSource, error) {
+	return audio.NewMicrophoneSource()
+}
+
 // NewChatCommand creates the ChatCommand with the given dependencies.
 func NewChatCommand(executor *agent.Executor, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, globalFlags *flags.GlobalFlags) *ChatCommand {
 	return &ChatCommand{executor: executor, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags}
@@ -44,7 +57,7 @@ func (c *ChatCommand) Generate() *cobra.Command {
 				return c.runLoopChat(cmd)
 			}
 			if c.chatFlags.ActivateAudioIn {
-				src, err := audio.NewMicrophoneSource()
+				src, err := newMicrophoneSource()
 				if err != nil {
 					return fmt.Errorf("open microphone: %w", err)
 				}
@@ -54,6 +67,9 @@ func (c *ChatCommand) Generate() *cobra.Command {
 			return chatService.Run(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 		},
 	}
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &chatFlagParseError{cause: err}
+	})
 
 	cmd.Flags().BoolVar(&c.chatFlags.ActivateAudioIn, "activate-audio-in", false, "Enable audio input from the default microphone")
 	cmd.Flags().BoolVar(&c.chatFlags.ActivateAudioOut, "activate-audio-out", false, "Enable audio output")

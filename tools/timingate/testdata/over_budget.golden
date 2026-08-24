@@ -1,0 +1,7 @@
+PR-tier package-time budget exceeded
+Measured total: 1m1.5s
+Budget: 1m0s
+Slowest packages:
+  1. 30s - example.com/a (1 completion)
+  2. 30s - example.com/z (1 completion)
+  3. 1.5s - example.com/slow (1 completion)

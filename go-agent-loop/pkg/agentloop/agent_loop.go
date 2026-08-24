@@ -498,6 +498,24 @@ func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
 	}
 }
 
+// SendSessionEvent delivers a pre-built outbound StreamMessage to the running
+// session (DuplexSession mode). The message is forwarded to the provider
+// session unchanged and in order relative to audio sent via SendAudioInput.
+// It carries control-plane turns such as MESSAGE.END, which realtime
+// providers translate into input_audio_buffer.commit plus response.create.
+func (al *AgentLoop) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	mr := al.engine.GetModelRunner()
+	if mr == nil || mr.UserEventInbox == nil {
+		return fmt.Errorf("SendSessionEvent: not in session mode")
+	}
+	select {
+	case mr.UserEventInbox <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // EnqueueTodo appends a message to the TODO queue for deferred processing.
 func (al *AgentLoop) EnqueueTodo(msg string) {
 	al.engine.State().LoopState.TodoQueue.Enqueue(msg)

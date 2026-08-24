@@ -123,7 +123,7 @@ Before submitting new work, inspect the current queue and active sessions.
 Use:
 
 ```sh
-you work list --session <session_id>
+you work list --server http://localhost:7439 --session <session_id> --max-results 400
 ```
 
 to see current work items, work types, states, names, and whether previous
@@ -132,13 +132,18 @@ batches are still running, blocked, failed, or ready to be consumed.
 Use:
 
 ```sh
-you session list
+you session list --server http://localhost:7439
 ```
 
 to enumerate active and recent factory sessions. Check both commands before
 deciding that work is stuck or before submitting a new batch. Session list
 answers whether the runtime is alive; work list answers what the queue is doing
 inside a session.
+
+`--server` is mandatory: the CLI defaults to `http://localhost:7437`, a
+DIFFERENT factory, and without it these commands report `FACTORY_UNREACHABLE`
+or `WORK_NOT_FOUND` while appearing to run. `--max-results` is also required
+because the default page size is 50.
 
 Replace `<session_id>` with a live id from `you session list` (for example
 `c803e7f7-1361-4ba6-bb2b-b5c9cfeb2754` on a long-running host).
@@ -148,7 +153,7 @@ Replace `<session_id>` with a live id from `you session list` (for example
 Use:
 
 ```sh
-you work move --session <session_id>
+you work move <work-id> <state-name> --server http://localhost:7439 --session <session_id> --request-id <stable-repair-id>
 ```
 
 only for deliberate workflow repair. Record every manual move in

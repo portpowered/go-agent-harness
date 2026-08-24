@@ -3,11 +3,14 @@ package grok
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // Ensure grokSession satisfies messages.Session at compile time.
@@ -19,7 +22,7 @@ var _ messages.SessionSendOutcomeSender = (*grokSession)(nil)
 // (OpenAI Realtime API conventions) internally, so consumers only see generic
 // StreamMessage types.
 type grokSession struct {
-	conn   WebSocketConn
+	conn   transport.Conn
 	logger logging.Logger
 
 	// sendCh is the internal queue for outbound wire events (SessionEvent).
@@ -34,7 +37,7 @@ type grokSession struct {
 	closeOnce sync.Once
 }
 
-func newGrokSession(conn WebSocketConn, logger logging.Logger) *grokSession {
+func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {
 	return &grokSession{
 		conn:    conn,
 		logger:  logger,
@@ -68,6 +71,13 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 	select {
 	case <-ctx.Done():
 		return sessionSendContextOutcome(ctx)
+	default:
+	}
+	// A terminated session reports closed regardless of remaining outbound
+	// buffer capacity.
+	select {
+	case <-s.done:
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	default:
 	}
 	select {
@@ -124,7 +134,21 @@ func (s *grokSession) readLoop(ctx context.Context) {
 				logging.Field{Key: "error", Value: err},
 				logging.Field{Key: "raw", Value: string(data)},
 			)
-			continue
+			// An unparseable provider frame is a protocol violation, not a
+			// skippable event: surface a classified terminal ERROR so consumers
+			// can diagnose the failure instead of silently losing the stream.
+			_ = s.recvBuf.Write(ctx, messages.StreamMessage{
+				Type: messages.StreamTypeError,
+				Value: messages.NewErrorValueWithTerminal(
+					fmt.Sprintf("malformed provider event: %v", err),
+					providers.ErrorClassInvalidRequest,
+					messages.TerminalReasonTerminalFailure,
+					messages.TerminalProvenanceGateway,
+					messages.TerminalOutputNone,
+				),
+			})
+			_ = s.Close()
+			return
 		}
 
 		msgs := translateInbound(event)

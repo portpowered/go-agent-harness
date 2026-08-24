@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-// RecordingWebSocketDialer records bidirectional Grok WebSocket traffic.
+// RecordingWebSocketDialer records bidirectional WebSocket traffic.
 type RecordingWebSocketDialer struct {
-	inner    grok.WebSocketDialer
+	inner    transport.Dialer
 	startAt  time.Time
 	capture  SessionCapture
 	events   []CapturedSessionEvent
@@ -22,11 +22,11 @@ type RecordingWebSocketDialer struct {
 	mu       sync.Mutex
 }
 
-var _ grok.WebSocketDialer = (*RecordingWebSocketDialer)(nil)
+var _ transport.Dialer = (*RecordingWebSocketDialer)(nil)
 
-// NewRecordingWebSocketDialer wraps a live Grok WebSocket dialer and records
+// NewRecordingWebSocketDialer wraps a live WebSocket dialer and records
 // raw JSON messages passing through the returned WebSocket connection.
-func NewRecordingWebSocketDialer(inner grok.WebSocketDialer, providerName, model string) *RecordingWebSocketDialer {
+func NewRecordingWebSocketDialer(inner transport.Dialer, providerName, model string) *RecordingWebSocketDialer {
 	startAt := time.Now().UTC()
 	d := &RecordingWebSocketDialer{
 		inner:   inner,
@@ -48,7 +48,7 @@ func NewRecordingWebSocketDialer(inner grok.WebSocketDialer, providerName, model
 }
 
 // Dial connects through the wrapped dialer and returns a recording connection.
-func (d *RecordingWebSocketDialer) Dial(url string, headers map[string]string) (grok.WebSocketConn, error) {
+func (d *RecordingWebSocketDialer) Dial(url string, headers map[string]string) (transport.Conn, error) {
 	if d.inner == nil {
 		return nil, fmt.Errorf("recording websocket dialer requires an inner dialer")
 	}
@@ -101,11 +101,11 @@ func (d *RecordingWebSocketDialer) recordMessage(dir SessionEventDirection, payl
 }
 
 type recordingWebSocketConn struct {
-	inner    grok.WebSocketConn
+	inner    transport.Conn
 	recorder *RecordingWebSocketDialer
 }
 
-var _ grok.WebSocketConn = (*recordingWebSocketConn)(nil)
+var _ transport.Conn = (*recordingWebSocketConn)(nil)
 
 func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
 	messageType, payload, err := c.inner.ReadMessage()
@@ -127,7 +127,7 @@ func (c *recordingWebSocketConn) Close() error {
 	return c.inner.Close()
 }
 
-// ReplayWebSocketDialer replays raw Grok WebSocket messages from a capture.
+// ReplayWebSocketDialer replays raw WebSocket messages from a capture.
 type ReplayWebSocketDialer struct {
 	capture SessionCapture
 	mu      sync.Mutex
@@ -135,7 +135,7 @@ type ReplayWebSocketDialer struct {
 	done    chan struct{}
 }
 
-var _ grok.WebSocketDialer = (*ReplayWebSocketDialer)(nil)
+var _ transport.Dialer = (*ReplayWebSocketDialer)(nil)
 
 // NewReplayWebSocketDialer loads a raw WebSocket session capture from path.
 func NewReplayWebSocketDialer(path string) (*ReplayWebSocketDialer, error) {
@@ -157,10 +157,10 @@ func (d *ReplayWebSocketDialer) Model() string {
 }
 
 // Dial returns an in-memory replay connection and never opens a live network connection.
-func (d *ReplayWebSocketDialer) Dial(_ string, _ map[string]string) (grok.WebSocketConn, error) {
+func (d *ReplayWebSocketDialer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	events := make([]CapturedSessionEvent, len(d.capture.Records))
 	copy(events, d.capture.Records)
-	conn := newReplayWebSocketConn(events, d.done)
+	conn := newReplayWebSocketConn(events, d.done, d.capture.EndsWithDisconnect)
 	d.mu.Lock()
 	d.conn = conn
 	d.mu.Unlock()
@@ -184,20 +184,21 @@ func (d *ReplayWebSocketDialer) Err() error {
 }
 
 type replayWebSocketConn struct {
-	events []CapturedSessionEvent
-	index  int
-	closed bool
-	mu     sync.Mutex
-	cond   *sync.Cond
-	err    error
-	done   chan struct{}
-	once   sync.Once
+	events             []CapturedSessionEvent
+	index              int
+	closed             bool
+	endsWithDisconnect bool
+	mu                 sync.Mutex
+	cond               *sync.Cond
+	err                error
+	done               chan struct{}
+	once               sync.Once
 }
 
-var _ grok.WebSocketConn = (*replayWebSocketConn)(nil)
+var _ transport.Conn = (*replayWebSocketConn)(nil)
 
-func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}) *replayWebSocketConn {
-	conn := &replayWebSocketConn{events: events, done: done}
+func newReplayWebSocketConn(events []CapturedSessionEvent, done chan struct{}, endsWithDisconnect bool) *replayWebSocketConn {
+	conn := &replayWebSocketConn{events: events, done: done, endsWithDisconnect: endsWithDisconnect}
 	conn.cond = sync.NewCond(&conn.mu)
 	return conn
 }
@@ -214,6 +215,10 @@ func (c *replayWebSocketConn) ReadMessage() (int, []byte, error) {
 			return 0, nil, io.EOF
 		}
 		if c.index >= len(c.events) {
+			if c.endsWithDisconnect {
+				c.closeDoneLocked()
+				return 0, nil, io.EOF
+			}
 			c.cond.Wait()
 			continue
 		}

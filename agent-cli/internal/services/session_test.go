@@ -17,8 +17,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func TestPlanSessionRuntime_OpenAIRecordOwnsConfigAndDialerSelection(t *testing.T) {
@@ -33,11 +33,11 @@ model:
 
 	defaultDialer := &stubRuntimeDialer{id: "default-live"}
 	recordingDialer := &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "recording-openai"}}
-	var gotInner grok.WebSocketDialer
+	var gotInner transport.Dialer
 	var gotProvider string
 	var gotModel string
 	var gotCfg config.OpenAIConfig
-	var gotDialer grok.WebSocketDialer
+	var gotDialer transport.Dialer
 
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
 		RecordPath: filepath.Join(t.TempDir(), "openai.session.json"),
@@ -46,14 +46,14 @@ model:
 		APIKey:     "sk-override-key",
 		ConfigDir:  configDir,
 	}, sessionRuntimeFactory{
-		newDefaultLiveDialer: func() grok.WebSocketDialer { return defaultDialer },
-		newRecordingDialer: func(inner grok.WebSocketDialer, providerName string, model string) sessionRecordingDialer {
+		newDefaultLiveDialer: func() transport.Dialer { return defaultDialer },
+		newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
 			gotInner = inner
 			gotProvider = providerName
 			gotModel = model
 			return recordingDialer
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			gotCfg = cfg
 			gotDialer = dialer
 			return &scriptedSessionInferencer{}, nil
@@ -93,9 +93,9 @@ model:
 	callerDialer := &stubRuntimeDialer{id: "caller-live"}
 	recordingDialer := &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "recording-grok"}}
 	var defaultDialerCalled bool
-	var gotInner grok.WebSocketDialer
+	var gotInner transport.Dialer
 	var gotCfg config.GrokConfig
-	var gotDialer grok.WebSocketDialer
+	var gotDialer transport.Dialer
 
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
 		RecordPath:      filepath.Join(t.TempDir(), "grok.session.json"),
@@ -105,15 +105,15 @@ model:
 		ConfigDir:       configDir,
 		WebSocketDialer: callerDialer,
 	}, sessionRuntimeFactory{
-		newDefaultLiveDialer: func() grok.WebSocketDialer {
+		newDefaultLiveDialer: func() transport.Dialer {
 			defaultDialerCalled = true
 			return &stubRuntimeDialer{id: "unexpected-default"}
 		},
-		newRecordingDialer: func(inner grok.WebSocketDialer, _ string, _ string) sessionRecordingDialer {
+		newRecordingDialer: func(inner transport.Dialer, _ string, _ string) sessionRecordingDialer {
 			gotInner = inner
 			return recordingDialer
 		},
-		newGrokSessionInferencer: func(cfg config.GrokConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+		newGrokSessionInferencer: func(cfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			gotCfg = cfg
 			gotDialer = dialer
 			return &scriptedSessionInferencer{}, nil
@@ -155,7 +155,7 @@ model:
 		Provider:   config.ProviderGrok,
 		ConfigDir:  configDir,
 	}, sessionRuntimeFactory{
-		newDefaultLiveDialer: func() grok.WebSocketDialer { return nil },
+		newDefaultLiveDialer: func() transport.Dialer { return nil },
 	})
 	if err == nil {
 		t.Fatal("expected record runtime planning to reject a missing owned dialer")
@@ -184,7 +184,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 			}
 			return replayDialer, nil
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer grok.WebSocketDialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			openAICalled = true
 			if cfg.Model != "gpt-realtime" {
 				t.Fatalf("OpenAI replay model = %q, want gpt-realtime", cfg.Model)
@@ -194,7 +194,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 			}
 			return &scriptedSessionInferencer{}, nil
 		},
-		newGrokSessionInferencer: func(config.GrokConfig, grok.WebSocketDialer) (messages.SessionInferencer, error) {
+		newGrokSessionInferencer: func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error) {
 			grokCalled = true
 			return &scriptedSessionInferencer{}, nil
 		},
@@ -703,7 +703,7 @@ type stubRuntimeDialer struct {
 	id string
 }
 
-func (d *stubRuntimeDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+func (d *stubRuntimeDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	return nil, errors.New("unexpected dial")
 }
 
@@ -798,9 +798,9 @@ type cancelingRecordDialer struct {
 	conn *cancelingRecordConn
 }
 
-var _ grok.WebSocketDialer = (*cancelingRecordDialer)(nil)
+var _ transport.Dialer = (*cancelingRecordDialer)(nil)
 
-func (d *cancelingRecordDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+func (d *cancelingRecordDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	return d.conn, nil
 }
 
@@ -808,9 +808,9 @@ type failingDialer struct {
 	called bool
 }
 
-var _ grok.WebSocketDialer = (*failingDialer)(nil)
+var _ transport.Dialer = (*failingDialer)(nil)
 
-func (d *failingDialer) Dial(string, map[string]string) (grok.WebSocketConn, error) {
+func (d *failingDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	d.called = true
 	return nil, errors.New("dial should not be called")
 }
@@ -822,7 +822,7 @@ type cancelingRecordConn struct {
 	read   bool
 }
 
-var _ grok.WebSocketConn = (*cancelingRecordConn)(nil)
+var _ transport.Conn = (*cancelingRecordConn)(nil)
 
 func (c *cancelingRecordConn) ReadMessage() (int, []byte, error) {
 	if !c.read {

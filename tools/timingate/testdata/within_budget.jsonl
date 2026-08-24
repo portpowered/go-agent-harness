@@ -1,0 +1,6 @@
+{"Action":"start","Package":"example.com/repeated"}
+{"Action":"pass","Package":"example.com/repeated","Elapsed":2.25}
+{"Action":"start","Package":"example.com/zero"}
+{"Action":"pass","Package":"example.com/zero","Elapsed":0}
+{"Action":"start","Package":"example.com/repeated"}
+{"Action":"pass","Package":"example.com/repeated","Elapsed":0.75}

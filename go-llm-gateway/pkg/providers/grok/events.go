@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -91,7 +92,7 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValueWithTerminal(
 				sessionID,
 				reason,
-				string(messages.TerminalReasonProviderClose),
+				providers.ErrorClassTransport,
 				messages.TerminalReasonProviderClose,
 				messages.TerminalProvenanceProvider,
 				messages.TerminalOutputNotApplicable,
@@ -185,11 +186,13 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		}
 		value := messages.NewErrorValueWithTerminal(
 			msg,
-			providers.ErrorClassProviderRejected,
+			sessionErrorClassification(event.Data),
 			messages.TerminalReasonTerminalFailure,
 			messages.TerminalProvenanceProvider,
 			messages.TerminalOutputNone,
 		)
+		value.ErrorType = extractErrorDetailField(event.Data, "type")
+		value.Code = extractErrorDetailField(event.Data, "code")
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeError, Value: value},
 		}
@@ -300,4 +303,46 @@ func extractStringField(data json.RawMessage, field string) string {
 		return ""
 	}
 	return s
+}
+
+// sessionErrorClassification refines the public classification for a Grok
+// session error event from its nested wire error type/code fields, falling
+// back to a generic provider rejection.
+func sessionErrorClassification(data json.RawMessage) string {
+	return providers.SessionErrorClassification(
+		extractErrorDetailField(data, "type"),
+		extractErrorDetailField(data, "code"),
+	)
+}
+
+// extractErrorDetailField reads one string detail of a session error payload,
+// preferring the OpenAI-style nested error object and tolerating flattened
+// payloads that carry error_type or error_code directly.
+func extractErrorDetailField(data json.RawMessage, field string) string {
+	if value := extractDottedStringField(data, "error."+field); value != "" {
+		return value
+	}
+	return extractStringField(data, "error_"+field)
+}
+
+// extractDottedStringField resolves a dotted key path such as "error.type"
+// through nested JSON objects and returns the terminal string value.
+func extractDottedStringField(data json.RawMessage, path string) string {
+	parts := strings.Split(path, ".")
+	current := data
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			return extractStringField(current, part)
+		}
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(current, &m); err != nil {
+			return ""
+		}
+		child, ok := m[part]
+		if !ok {
+			return ""
+		}
+		current = child
+	}
+	return ""
 }

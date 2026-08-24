@@ -10,6 +10,8 @@ CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
 GORELEASER ?= goreleaser
+RTC_RACE_TIMEOUT ?= 30s
+SESSIONS_RACE_TIMEOUT ?= 600s
 GOLANGCI_LINT_VERSION ?= v2.3.0
 STATICCHECK_VERSION ?= 2025.1.1
 GOLANGCI_LINT_INSTALL ?= go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -19,14 +21,14 @@ AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
+FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence
 RELEASE_VERSION ?= v0.0.1
 RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
 GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -118,13 +120,45 @@ test: ## Run deterministic Go tests across all workspace modules.
 		(cd "$$module" && $(GO) test ./... -timeout $(GO_TEST_TIMEOUT)); \
 	done
 
+test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
+	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
+
+test-sessions-race: ## Run the concurrent session capacity acceptance tests with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-sessions-race go-agent-loop/test/functional/sessions"; \
+	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
+
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
-	echo "==> test-factory-scripts factory/scripts/tests/test_setup_workspace.py"; \
-	echo "==> test-factory-scripts factory/scripts/tests/test_validate_worktree_hygiene_convergence.py"; \
-	PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest \
-		factory/scripts/tests/test_setup_workspace.py \
-		factory/scripts/tests/test_validate_worktree_hygiene_convergence.py
+	echo "==> test-factory-scripts modules: $(FACTORY_TEST_MODULES)"; \
+	if output="$$(PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v $(FACTORY_TEST_MODULES) 2>&1)"; then \
+		status=0; \
+	else \
+		status=$$?; \
+	fi; \
+	printf '%s\n' "$$output"; \
+	test_count="$$(printf '%s\n' "$$output" | sed -nE 's/^Ran ([0-9]+) tests? in .*/\1/p' | tail -n 1)"; \
+	if [ "$$test_count" = "0" ]; then \
+		echo "test-factory-scripts selected zero tests from $(FACTORY_TEST_MODULES)." >&2; \
+		exit 1; \
+	fi; \
+	if [ "$$status" -ne 0 ]; then \
+		echo "test-factory-scripts failed while loading or executing the selected modules." >&2; \
+		exit "$$status"; \
+	fi; \
+	case "$$test_count" in \
+		'') \
+			echo "test-factory-scripts selected zero tests from $(FACTORY_TEST_MODULES)." >&2; \
+			exit 1; \
+			;; \
+	esac; \
+	echo "==> test-factory-scripts executed $$test_count tests from both intended modules"; \
+	if [ "$${FACTORY_TEST_CONTRACT_CHILD:-0}" = "0" ]; then \
+		echo "==> test-factory-scripts command contract"; \
+		FACTORY_TEST_CONTRACT_CHILD=1 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_factory_script_target; \
+	fi
 
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \
@@ -173,8 +207,10 @@ coverage: ## Write per-module coverage profiles under coverage/.
 	mkdir -p "$(COVERAGE_DIR)"; \
 	for module in $(MODULES); do \
 		echo "==> coverage $$module"; \
-		(cd "$$module" && $(GO) test ./... -timeout $(GO_TEST_TIMEOUT) -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
-	done
+		(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout $(GO_TEST_TIMEOUT) -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+	done; \
+	echo "==> coverage gate"; \
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest ../../coverage-manifest.json ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
@@ -242,3 +278,44 @@ release: release-check ## Run validation and publish the GitHub release for RELE
 
 clean: ## Remove root-generated build and coverage outputs.
 	rm -rf "$(COVERAGE_DIR)" "$(AGENT_CLI_OUTPUT)" dist
+
+test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
+	@set -euo pipefail; \
+	timingate_input="$$(mktemp)"; \
+	trap 'rm -f "$$timingate_input"' EXIT; \
+	run_budget_test() { \
+		module="$$1"; \
+		shift; \
+		echo "==> test-budget $$module $$*"; \
+		run_budget_output="$$(mktemp)"; \
+		if (cd "$$module" && CGO_ENABLED=0 $(GO) test "$$@" -json -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)") >"$$run_budget_output" 2>&1; then \
+			cat "$$run_budget_output" >> "$$timingate_input"; \
+			rm -f "$$run_budget_output"; \
+		else \
+			status=$$?; \
+			cat "$$run_budget_output"; \
+			rm -f "$$run_budget_output"; \
+			return $$status; \
+		fi; \
+	}; \
+	run_budget_unit() { \
+		module="$$1"; \
+		packages="$$(cd "$$module" && CGO_ENABLED=0 $(GO) list ./... | grep -v '/test/')"; \
+		run_budget_test "$$module" $$packages; \
+	}; \
+	run_budget_unit agent-cli; \
+	run_budget_unit go-agent-loop; \
+	run_budget_unit go-llm-gateway; \
+	run_budget_test agent-cli ./test/integration; \
+	run_budget_test go-agent-loop ./test/functional; \
+	run_budget_test agent-cli ./test/integration -run '$(AGENT_CLI_REGRESSION_TESTS)'; \
+	run_budget_test go-llm-gateway $(GO_LLM_GATEWAY_REGRESSION_PACKAGES); \
+	echo "==> test-budget evaluating package timing"; \
+	(cd tools/timingate && GOWORK=off $(GO) run . < "$$timingate_input")
+
+test-hermetic: ## Run all Go tests with CGO disabled and the microphone stub.
+	@set -euo pipefail; \
+	for module in $(MODULES); do \
+		echo "==> test-hermetic $$module (CGO_ENABLED=0, tags=nomicrophone)"; \
+		(cd "$$module" && CGO_ENABLED=0 $(GO) test ./... -tags=nomicrophone -timeout $(GO_TEST_TIMEOUT)); \
+	done

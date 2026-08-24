@@ -30,6 +30,10 @@ func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags,
 
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
+	var prompt string
+	audioOutPath := ""
+	var maxDuration time.Duration
+	var audioIn string
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
@@ -38,27 +42,61 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
+				return err
+			}
 			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" {
 				return cmd.Help()
 			}
-			return services.RunSession(cmd.Context(), cmd.OutOrStdout(), services.SessionRunOptions{
+			sessionContext := cmd.Context()
+			if maxDuration > 0 {
+				capturePath := c.askFlags.RecordCapturePath
+				if capturePath == "" {
+					capturePath = c.askFlags.ReplayCapturePath
+				}
+				artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
+				sessionContext = services.WithSessionDurationArtifactPaths(sessionContext, services.SessionDurationArtifactPaths{
+					AudioPath:      artifactBase + ".wav",
+					TranscriptPath: artifactBase + ".jsonl",
+				})
+			}
+			sessionOptions := services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
 				ReplayPath:        c.askFlags.ReplayCapturePath,
 				Provider:          c.askFlags.Provider,
 				Model:             c.askFlags.Model,
+				ModelProvided:     cmd.Flags().Changed("model"),
 				APIKey:            c.askFlags.APIKey,
 				BaseURL:           c.askFlags.BaseURL,
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
-			})
+			}
+			seed := services.SessionTextSeed{
+				Value:   prompt,
+				Present: cmd.Flags().Changed("prompt"),
+			}
+			if cmd.Flags().Changed("audio-in") {
+				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, services.SessionAudioInput{
+					Path:          audioIn,
+					Stdin:         cmd.InOrStdin(),
+					Present:       true,
+					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+				}, c.askFlags.SystemPrompt)
+			}
+			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
+	cmd.Flags().StringVar(&prompt, "prompt", "", "Seed the realtime session with text")
+	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
 	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")
+	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
+	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
+	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	return cmd
 }

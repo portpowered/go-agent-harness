@@ -14,6 +14,8 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 )
 
+const redactedAPIKey = "<redacted>"
+
 // ConfigCommand is the config group (parent command); subcommands are wired in routes.go.
 type ConfigCommand struct{}
 
@@ -99,6 +101,7 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
+	redactEnvironmentAPIKeys(cfg)
 	data, err := yamlv3.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
@@ -120,6 +123,34 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 		return fmt.Errorf("write config summary: %w", err)
 	}
 	return nil
+}
+
+func redactEnvironmentAPIKeys(cfg *config.Config) {
+	redact := func(envName string, apiKey *string) {
+		value, ok := os.LookupEnv(envName)
+		if ok && value != "" && apiKey != nil && *apiKey == value {
+			*apiKey = redactedAPIKey
+		}
+	}
+
+	if cfg.Model.OpenAI != nil {
+		redact("AGENT_MODEL__OPENAI__API_KEY", &cfg.Model.OpenAI.APIKey)
+	}
+	if cfg.Model.Claude != nil {
+		redact("AGENT_MODEL__CLAUDE__API_KEY", &cfg.Model.Claude.APIKey)
+	}
+	if cfg.Model.OpenRouter != nil {
+		redact("AGENT_MODEL__OPENROUTER__API_KEY", &cfg.Model.OpenRouter.APIKey)
+	}
+	if cfg.Model.Local != nil {
+		redact("AGENT_MODEL__LOCAL__API_KEY", &cfg.Model.Local.APIKey)
+	}
+	if cfg.Model.Fal != nil {
+		redact("AGENT_MODEL__FAL__API_KEY", &cfg.Model.Fal.APIKey)
+	}
+	if cfg.Model.Grok != nil {
+		redact("AGENT_MODEL__GROK__API_KEY", &cfg.Model.Grok.APIKey)
+	}
 }
 
 // probeServer attempts to reach the inference server's models endpoint.
