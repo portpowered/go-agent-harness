@@ -281,19 +281,41 @@ func durationNaturalEvents() []messages.StreamMessage {
 	})
 }
 
+// durationTestClock is shared between the test goroutine, which fires the
+// deadline, and the session goroutine, which creates the timer after the loop
+// starts. A fire can therefore land before NewTimer under load; the clock
+// records it as pending so NewTimer delivers it instead of dropping it. The
+// mutex makes the timer hand-off race-free.
 type durationTestClock struct {
-	timer *durationTestTimer
-	calls int
+	mu      sync.Mutex
+	timer   *durationTestTimer
+	pending bool
+	calls   int
 }
 
 func (c *durationTestClock) NewTimer(time.Duration) SessionDurationTimer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.calls++
 	c.timer = &durationTestTimer{ch: make(chan time.Time, 1)}
+	if c.pending {
+		c.pending = false
+		c.timer.ch <- time.Time{}
+	}
 	return c.timer
 }
 
 func (c *durationTestClock) fire() {
-	c.timer.ch <- time.Time{}
+	c.mu.Lock()
+	c.pending = true
+	timer := c.timer
+	c.mu.Unlock()
+	if timer != nil {
+		c.mu.Lock()
+		c.pending = false
+		c.mu.Unlock()
+		timer.ch <- time.Time{}
+	}
 }
 
 type durationTestTimer struct {
