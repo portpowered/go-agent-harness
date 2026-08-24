@@ -640,5 +640,4 @@ func TestSessionDiagnostics_FieldMapsCarryNoProse(t *testing.T) {
 	if artifacts.runErr != nil && strings.Contains(fmt.Sprint(artifacts.runErr), prose) {
 		t.Log("run error carries prose; diagnostics contract covers the field maps only")
 	}
-	_ = errors.Is // keep errors imported for future typed-error assertions
 }

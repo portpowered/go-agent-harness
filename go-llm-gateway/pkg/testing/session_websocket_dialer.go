@@ -216,6 +216,7 @@ func (c *replayWebSocketConn) ReadMessage() (int, []byte, error) {
 		}
 		if c.index >= len(c.events) {
 			if c.endsWithDisconnect {
+				c.closeDoneLocked()
 				return 0, nil, io.EOF
 			}
 			c.cond.Wait()
