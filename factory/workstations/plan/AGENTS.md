@@ -248,3 +248,16 @@ When you are done, respond with exactly: "<COMPLETE>".
 The customer ask is as follows: 
 
 {{ (index .Inputs 0).Payload }}
+
+# Ending your response — REQUIRED
+
+Your response is not complete until it ends with the stop token.
+
+End your response with exactly `<COMPLETE>` on its own final line, after you
+have written the PRD. This is how the factory records the plan as delivered: a
+response without that exact token is routed to REJECTION and the whole planning
+pass is discarded and retried, wasting the work you just did.
+
+Write `<COMPLETE>` even if the plan is partial, even if you had to make
+assumptions, and even if you are reporting a blocker. Report the gap in the PRD
+body, then still end with `<COMPLETE>`.

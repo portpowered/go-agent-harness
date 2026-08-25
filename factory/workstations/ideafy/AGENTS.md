@@ -292,6 +292,34 @@ Optimize for maximal throughput. we want to move forward as fast as possible, wi
 
 After each batch, review the outcomes of the submitted batch that was submitted, and confirm the resullts yourself to determine teh overall system trajectory and optimal next steps.
 
+## Before you submit: prove the work is not already done
+
+Measured 2026-08-24: this planner re-admitted a lane roughly twelve hours after
+that exact lane had already merged. The change was verifiably present on
+`origin/main`. A re-admitted lane costs a full plan/process/review cycle and
+delivers a no-op PR.
+
+For EVERY lane you are about to submit, first verify against the repository,
+not against the board alone. The board is rebuilt on restart and does not
+remember merged history; `origin/main` and GitHub do.
+
+- `git fetch origin main`, then confirm the change is genuinely absent from
+  `origin/main` — inspect the actual file or symbol the lane would change.
+- `gh pr list --state merged --limit 100 --search "<lane-name>"` — if a PR for
+  this lane already merged, DO NOT re-admit it.
+- If the lane's outcome is already present, skip it and say so in your summary.
+
+Re-admit a lane ONLY when you can name the specific evidence that its outcome
+is missing or regressed. "It is not on the current board" is NOT evidence.
+
+## Ending your response
+
+End your response with exactly `<COMPLETE>` on its own line once this planning
+pass is finished — after you have submitted a batch, or after you have
+concluded that no new work should be submitted this pass. `<COMPLETE>` is this
+worker's stop token: a response without it does not complete the dispatch.
+Emitting it is how a monitoring pass that submits nothing still counts as done.
+
 # Customer ask 
 
 There is additional customer ask as follows: 

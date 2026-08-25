@@ -377,7 +377,7 @@
   "name": "factory",
   "resources": [
     {
-      "capacity": 16,
+      "capacity": 24,
       "id": "executor-slot",
       "name": "executor-slot"
     },
@@ -548,12 +548,9 @@
   ],
   "workers": [
     {
-      "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "codex",
-      "model": "gpt-5.6-luna",
-      "reasoningEffort": "max",
+      "executorProvider": "ACP",
+      "modelProvider": "omp-acp",
       "name": "processor",
-      "skipPermissions": true,
       "stopToken": "<COMPLETE>",
       "type": "AGENT_WORKER"
     },
@@ -568,24 +565,26 @@
       "type": "SCRIPT_WORKER"
     },
     {
-      "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "codex",
-      "model": "gpt-5.6-sol",
-      "reasoningEffort": "medium",
+      "executorProvider": "ACP",
       "id": "planner",
+      "modelProvider": "omp-acp",
       "name": "planner",
-      "skipPermissions": true,
       "stopToken": "<COMPLETE>",
       "type": "AGENT_WORKER"
     },
     {
-      "executorProvider": "SCRIPT_WRAP",
-      "modelProvider": "codex",
-      "model": "gpt-5.6-sol",
-      "reasoningEffort": "medium",
+      "executorProvider": "ACP",
       "id": "ideafier",
+      "modelProvider": "omp-acp",
       "name": "ideafier",
-      "skipPermissions": true,
+      "stopToken": "<COMPLETE>",
+      "type": "AGENT_WORKER"
+    },
+    {
+      "executorProvider": "ACP",
+      "modelProvider": "omp-acp",
+      "name": "reviewer",
+      "stopToken": "<COMPLETE>",
       "type": "AGENT_WORKER"
     }
   ],
@@ -814,7 +813,7 @@
         }
       ],
       "type": "AGENT_RUN",
-      "worker": "planner",
+      "worker": "reviewer",
       "workingDirectory": ".claude/worktrees/{{ (index .Inputs 0).Name }}"
     },
     {
