@@ -21,6 +21,7 @@ type SessionCommand struct {
 	askFlags                  *flags.AskFlags
 	globalFlags               *flags.GlobalFlags
 	sessionInferencerOverride messages.SessionInferencer
+	imagePaths                []string
 }
 
 // NewSessionCommand returns the session group command constructor.
@@ -76,6 +77,16 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
+			if len(c.imagePaths) > 0 {
+				return services.RunSessionWithImages(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
+					SessionRunOptions: sessionOptions,
+					ImagePaths:        append([]string(nil), c.imagePaths...),
+					AudioOutPath:      audioOutPath,
+					MaxDuration:       maxDuration,
+					TextSeed:          seed,
+					SystemPrompt:      c.askFlags.SystemPrompt,
+				})
+			}
 			if cmd.Flags().Changed("audio-in") {
 				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, services.SessionAudioInput{
 					Path:          audioIn,
@@ -98,6 +109,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
 	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
+	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
 	return cmd
 }
 
