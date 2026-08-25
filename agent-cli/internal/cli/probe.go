@@ -466,23 +466,22 @@ func deriveToolResultObservation(fixture string, observation *probe.ObservationS
 		var payload struct {
 			CallID string `json:"call_id"`
 			Item   struct {
+				Type   string `json:"type"`
 				CallID string `json:"call_id"`
 			} `json:"item"`
 		}
 		_ = json.Unmarshal(record.Payload, &payload)
-		callID := payload.CallID
-		if callID == "" {
-			callID = payload.Item.CallID
-		}
 		switch {
 		case record.Direction == gatewaytesting.DirectionServerToClient &&
-			record.Type == "response.function_call_arguments.done" && callID != "":
-			observation.ToolCalls = append(observation.ToolCalls, callID)
+			record.Type == "response.function_call_arguments.done" && payload.CallID != "":
+			observation.ToolCalls = append(observation.ToolCalls, payload.CallID)
 		case record.Direction == gatewaytesting.DirectionClientToServer &&
-			record.Type == "conversation.item.create" && callID != "":
-			observation.ToolResultsDelivered = append(observation.ToolResultsDelivered, callID)
-		case record.Type == "tool.result.discarded" && callID != "":
-			observation.ToolResultsDiscarded = append(observation.ToolResultsDiscarded, callID)
+			record.Type == "conversation.item.create" &&
+			payload.Item.Type == "function_call_output" && payload.Item.CallID != "":
+			observation.ToolResultsDelivered = append(observation.ToolResultsDelivered, payload.Item.CallID)
+		case record.Direction == gatewaytesting.DirectionClientToServer &&
+			record.Type == "tool.result.discarded" && payload.CallID != "":
+			observation.ToolResultsDiscarded = append(observation.ToolResultsDiscarded, payload.CallID)
 		}
 	}
 	return nil

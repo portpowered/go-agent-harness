@@ -104,6 +104,91 @@ func TestV3BNegativeControlOrphanedToolResultFails(t *testing.T) {
 	}
 }
 
+func TestV3BWrongFunctionCallOutputSubtypeFails(t *testing.T) {
+	source := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-delivered.session.json")
+	fixture := writeMutatedV3BFixture(t, source, "conversation.item.create", func(record map[string]any) {
+		payload := record["payload"].(map[string]any)
+		item := payload["item"].(map[string]any)
+		item["type"] = "message"
+	})
+	scenarioPath := writeV3BScenario(t, "v3b-delivered-wrong-subtype", fixture, true)
+
+	result, execErr := runV3BScenario(t, scenarioPath, fixture)
+	if execErr == nil {
+		t.Fatal("wrong item subtype must leave the tool result orphaned")
+	}
+	assertExpectationKindFails(t, result, "tool-result-delivered")
+	assertExpectationKindFails(t, result, "no-orphaned-tool-result")
+}
+
+func TestV3BWrongDirectionDiscardFails(t *testing.T) {
+	source := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-discarded.session.json")
+	fixture := writeMutatedV3BFixture(t, source, "tool.result.discarded", func(record map[string]any) {
+		record["direction"] = "server_to_client"
+	})
+	scenarioPath := writeV3BScenario(t, "v3b-discarded-wrong-direction", fixture, true)
+
+	result, execErr := runV3BScenario(t, scenarioPath, fixture)
+	if execErr == nil {
+		t.Fatal("wrong-direction discard must leave the tool result orphaned")
+	}
+	assertExpectationKindFails(t, result, "tool-result-discarded")
+	assertExpectationKindFails(t, result, "no-orphaned-tool-result")
+}
+
+func runV3BScenario(t *testing.T, scenarioPath, fixture string) (map[string]any, error) {
+	t.Helper()
+	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+	writer := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(writer.Stdout())
+	rootCmd.SetErr(writer.Stderr())
+	rootCmd.SetArgs([]string{"probe", "run", scenarioPath, "--replay", fixture, "--json"})
+	execErr := rootCmd.ExecuteContext(context.Background())
+	return decodeSingleV3BResult(t, writer.StdoutString()), execErr
+}
+
+func writeMutatedV3BFixture(t *testing.T, source, recordType string, mutate func(map[string]any)) string {
+	t.Helper()
+	data, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatalf("read source fixture: %v", err)
+	}
+	var capture map[string]any
+	if err := json.Unmarshal(data, &capture); err != nil {
+		t.Fatalf("decode source fixture: %v", err)
+	}
+	records, ok := capture["records"].([]any)
+	if !ok {
+		t.Fatal("source fixture records are not an array")
+	}
+	found := false
+	for _, raw := range records {
+		record, ok := raw.(map[string]any)
+		if !ok || record["type"] != recordType {
+			continue
+		}
+		mutate(record)
+		found = true
+		break
+	}
+	if !found {
+		t.Fatalf("source fixture has no %q record", recordType)
+	}
+	mutated, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		t.Fatalf("encode mutated fixture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "mutated.session.json")
+	if err := os.WriteFile(path, mutated, 0o644); err != nil {
+		t.Fatalf("write mutated fixture: %v", err)
+	}
+	return path
+}
+
 // writeV3BScenario writes an on-disk scenario JSON selecting the new
 // measurable expectations, exercising the CLI scenario-file loading path.
 func writeV3BScenario(t *testing.T, id, fixture string, expectNoOrphan bool) string {
@@ -113,7 +198,7 @@ func writeV3BScenario(t *testing.T, id, fixture string, expectNoOrphan bool) str
 		{"type": "no_orphaned_tool_result"},
 		{"type": "terminal_reason", "value": "synthetic"}
 	]`
-	if id == "v3b-discarded" {
+	if strings.HasPrefix(id, "v3b-discarded") {
 		expectations = `[
 			{"type": "tool_result_discarded", "tool_call_id": "call_v3b_weather"},
 			{"type": "no_orphaned_tool_result"},
@@ -173,4 +258,18 @@ func assertExpectationKindsPass(t *testing.T, result map[string]any, kinds ...st
 			t.Fatalf("expected outcome for kind %q missing from results: %v", kind, result)
 		}
 	}
+}
+
+func assertExpectationKindFails(t *testing.T, result map[string]any, want string) {
+	t.Helper()
+	for _, raw := range result["expectations"].([]any) {
+		outcome := raw.(map[string]any)
+		if outcome["kind"] == want {
+			if outcome["passed"] != false {
+				t.Fatalf("expectation %s must fail: %v", want, outcome)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected failed outcome for kind %q missing: %v", want, result)
 }

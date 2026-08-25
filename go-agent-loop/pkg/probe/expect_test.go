@@ -23,6 +23,9 @@ func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
 		{"latency-within-ticks", expect(ExpectLatencyWithinTicks, "", 3), ObservationSnapshot{ObservedTick: 13, HasObservedTick: true}, ObservationSnapshot{ObservedTick: 14, HasObservedTick: true}},
 		{"terminal-reason", expect(ExpectTerminalReason, "complete", 0), ObservationSnapshot{TerminalReason: "complete"}, ObservationSnapshot{TerminalReason: "cancelled"}},
 		{"frame-count", expect(ExpectFrameCount, "", 4), ObservationSnapshot{FrameCount: 4}, ObservationSnapshot{FrameCount: 0}},
+		{"tool-result-delivered", ExpectedBehavior{Type: ExpectToolResultDelivered, Kind: ExpectToolResultDelivered, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDelivered: []string{"call"}}, ObservationSnapshot{}},
+		{"tool-result-discarded", ExpectedBehavior{Type: ExpectToolResultDiscarded, Kind: ExpectToolResultDiscarded, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDiscarded: []string{"call"}}, ObservationSnapshot{}},
+		{"no-orphaned-tool-result", ExpectedBehavior{Type: ExpectNoOrphanedToolResult, Kind: ExpectNoOrphanedToolResult}, ObservationSnapshot{ToolCalls: []string{"call"}, ToolResultsDelivered: []string{"call"}}, ObservationSnapshot{ToolCalls: []string{"call"}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -98,6 +101,9 @@ func TestS4MismatchDiagnosticsCoverEveryKind(t *testing.T) {
 		{"latency-within-ticks", expect(ExpectLatencyWithinTicks, "", 3), ObservationSnapshot{ObservedTick: 14, HasObservedTick: true}, "non-negative tick delta <= 3", LogicalTime(4)},
 		{"terminal-reason", expect(ExpectTerminalReason, "complete", 0), ObservationSnapshot{TerminalReason: "cancelled"}, "complete", "cancelled"},
 		{"frame-count", expect(ExpectFrameCount, "", 3), ObservationSnapshot{FrameCount: 2}, 3, 2},
+		{"tool-result-delivered", ExpectedBehavior{Type: ExpectToolResultDelivered, Kind: ExpectToolResultDelivered, ToolCallID: "call"}, ObservationSnapshot{}, "delivered tool result for call", "none"},
+		{"tool-result-discarded", ExpectedBehavior{Type: ExpectToolResultDiscarded, Kind: ExpectToolResultDiscarded, ToolCallID: "call"}, ObservationSnapshot{}, "explicit discard event for call", "none"},
+		{"no-orphaned-tool-result", ExpectedBehavior{Type: ExpectNoOrphanedToolResult, Kind: ExpectNoOrphanedToolResult}, ObservationSnapshot{ToolCalls: []string{"call"}}, "every tool call delivered or explicitly discarded", `orphaned: ["call"]`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
