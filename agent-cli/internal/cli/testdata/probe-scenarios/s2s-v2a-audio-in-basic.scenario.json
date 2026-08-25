@@ -1,0 +1,12 @@
+{
+  "id": "s2s-v2a-audio-in-basic",
+  "name": "s2s-v2a-audio-in-basic",
+  "description": "Basic audio-in vertical: a recorded spoken utterance enters via send_audio and the session responds.",
+  "steps": [
+    {"type": "send_audio", "corpus_id": "utterance-hello-there"},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "transcript_contains", "text": "How can I help you today?"}
+  ]
+}

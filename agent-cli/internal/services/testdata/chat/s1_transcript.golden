@@ -1,0 +1,13 @@
+You: hello from scripted input
+Assistant:
+
+  Scripted assistant response.
+
+/system — Show the system prompt for this session
+  /help — Show this help message
+  /clear — Clear conversation history and start fresh
+  /skill — Load a skill's instructions (e.g. /my-skill)
+  @file — Attach a file to your message (e.g. @path/to/file.txt)
+  @dir/ — Attach a directory listing (e.g. @src/)
+
+Goodbye!

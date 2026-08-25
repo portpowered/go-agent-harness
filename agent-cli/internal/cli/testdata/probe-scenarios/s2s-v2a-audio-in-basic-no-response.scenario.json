@@ -1,0 +1,12 @@
+{
+  "id": "s2s-v2a-audio-in-basic-no-response",
+  "name": "s2s-v2a-audio-in-basic-no-response",
+  "description": "Negative case for the basic audio-in vertical: the utterance elicits no response, so the response expectation must fail.",
+  "steps": [
+    {"type": "send_audio", "corpus_id": "utterance-hello-there"},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "transcript_contains", "text": "How can I help you today?"}
+  ]
+}

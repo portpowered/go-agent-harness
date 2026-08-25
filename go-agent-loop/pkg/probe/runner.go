@@ -58,6 +58,10 @@ type RunSummary struct {
 type Runner struct {
 	Exec ExecFunc
 	Out  io.Writer
+	// CorpusLookups are passed to scenario validation so send_audio steps can
+	// resolve corpus IDs against caller-provided lookups (e.g. replay-backed
+	// offline probes whose audio lives in the recorded fixture).
+	CorpusLookups []CorpusLookup
 }
 
 // Run executes each scenario in order and returns the aggregated summary.
@@ -114,7 +118,7 @@ func (r *Runner) runOne(ctx context.Context, scenario Scenario) ScenarioResult {
 			result = failed(fmt.Errorf("scenario execution panicked: %v", recovered))
 		}
 	}()
-	if validateErr := scenario.Validate(); validateErr != nil {
+	if validateErr := scenario.Validate(r.CorpusLookups...); validateErr != nil {
 		return failed(validateErr)
 	}
 	observation, execErr := func() (observation ObservationSnapshot, err error) {
