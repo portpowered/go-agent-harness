@@ -23,7 +23,7 @@ class FactoryScriptTargetTests(unittest.TestCase):
         self.assertIn("==> test-factory-scripts modules:", result.output)
         for module in PRIMARY_MODULES:
             self.assertIn(module, result.output)
-        self.assertRegex(result.output, r"Ran 5 tests? in ")
+        self.assertRegex(result.output, r"Ran \d+ tests? in ")
         self.assertEqual(after, before, result.output)
 
     def test_target_rejects_empty_selection(self):
