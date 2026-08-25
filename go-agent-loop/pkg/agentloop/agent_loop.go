@@ -149,6 +149,10 @@ func New(opts ...Option) (*AgentLoop, error) {
 	if cfg.Mode == engine.DuplexSession {
 		pingPong := subsystems.NewPingPong(*kernelRunner.DeltaInbox, cfg.Logger)
 		hlps = append(hlps, pingPong)
+		// Forwarder delivers assembled tool results onto the provider-wire
+		// outbound path (session runner's UserEventInbox) so realtime providers
+		// observe each completed tool result exactly once. Session mode only.
+		hlps = append(hlps, subsystems.NewToolResultForwarder(modelRunner.UserEventInbox, cfg.Logger))
 	}
 
 	if cfg.Recorder != nil {
