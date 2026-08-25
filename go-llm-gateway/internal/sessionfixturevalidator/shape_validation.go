@@ -52,7 +52,10 @@ func validateSessionCaptureShapes(file string, capture gatewaytesting.SessionCap
 			continue
 		}
 
-		if audioPath, audioPayload, recognized := recognizedAudioPayload(record, recordIndex, payload); recognized && !hasNonEmptyString(audioPayload) {
+		// Committed fixtures must redact raw audio strings per hygiene policy,
+		// but recognized audio events must still carry a non-empty sanitized
+		// placeholder (e.g. an object marker) so shape stays explicit.
+		if audioPath, audioPayload, recognized := recognizedAudioPayload(record, recordIndex, payload); recognized && !hasNonEmptyAudioPayload(record.Type, audioPayload) {
 			errs = append(errs, gatewaytesting.SessionFixtureValidationError{
 				File:      file,
 				FieldPath: audioPath,
@@ -259,6 +262,23 @@ func hasRecognizedTerminal(capture gatewaytesting.SessionCapture) bool {
 func hasNonEmptyString(value any) bool {
 	text, ok := value.(string)
 	return ok && strings.TrimSpace(text) != ""
+}
+
+// hasNonEmptyAudioPayload reports whether an audio field carries a non-empty
+// payload. Output audio deltas must remain literal non-empty strings, while
+// input_audio_buffer.append records may carry a sanitized non-empty object
+// placeholder because committed fixtures redact raw input audio strings.
+func hasNonEmptyAudioPayload(eventType string, value any) bool {
+	if eventType == "input_audio_buffer.append" {
+		if text, ok := value.(string); ok {
+			return strings.TrimSpace(text) != ""
+		}
+		if object, ok := value.(map[string]any); ok {
+			return len(object) != 0
+		}
+		return false
+	}
+	return hasNonEmptyString(value)
 }
 
 func objectField(value any, key string) (map[string]any, bool) {
