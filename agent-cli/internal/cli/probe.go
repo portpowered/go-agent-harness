@@ -312,6 +312,8 @@ var expectationKindAliases = map[string]probe.ExpectationKind{
 	"tool-result-discarded":   probe.ExpectToolResultDiscarded,
 	"no_orphaned_tool_result": probe.ExpectNoOrphanedToolResult,
 	"no-orphaned-tool-result": probe.ExpectNoOrphanedToolResult,
+	"buffer_disposition":      probe.ExpectBufferDisposition,
+	"buffer-disposition":      probe.ExpectBufferDisposition,
 }
 
 func measurableExpectationKind(name string) (probe.ExpectationKind, bool) {
@@ -448,8 +450,33 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if deriveErr := deriveToolResultObservation(fixture, &observation); deriveErr != nil {
 			return probe.ObservationSnapshot{}, deriveErr
 		}
+		observation.BufferDisposition = replayBufferDisposition(fixture)
 		return observation, nil
 	}
+}
+
+// replayBufferDisposition inspects a recorded session fixture for an
+// observable disposition of the buffered input audio: an acknowledged commit
+// or an explicit discard. The empty string means the fixture ends with the
+// buffer uncommitted, which buffer-disposition expectations treat as a
+// failure.
+func replayBufferDisposition(fixture string) string {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return ""
+	}
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionServerToClient {
+			continue
+		}
+		switch record.Type {
+		case "input_audio_buffer.committed":
+			return probe.BufferDispositionCommitted
+		case "input_audio_buffer.discarded":
+			return probe.BufferDispositionDiscarded
+		}
+	}
+	return ""
 }
 
 // deriveToolResultObservation scans the recorded fixture for tool-call

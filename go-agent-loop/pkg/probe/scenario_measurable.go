@@ -7,4 +7,5 @@ func init() {
 	typedExpectationFieldsByKind[ExpectLatencyWithinTicks] = map[string]bool{"at": true}
 	typedExpectationFieldsByKind[ExpectTerminalReason] = map[string]bool{"value": true}
 	typedExpectationFieldsByKind[ExpectFrameCount] = map[string]bool{}
+	typedExpectationFieldsByKind[ExpectBufferDisposition] = map[string]bool{"value": true}
 }

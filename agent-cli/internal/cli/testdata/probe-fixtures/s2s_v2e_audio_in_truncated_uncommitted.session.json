@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-synthetic"
+  },
+  "session": {
+    "id": "sess_s2s_v2e_audio_in_truncated_uncommitted",
+    "started_at_utc": "2026-08-24T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "synthetic_audio": "dHJ1bmNhdGVkIHV0dGVyYW5jZTogaGVsbG8gdGhl"
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_s2s_v2e_audio_in_truncated_uncommitted",
+        "model": "grok-synthetic"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}

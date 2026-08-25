@@ -26,6 +26,7 @@ func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
 		{"tool-result-delivered", ExpectedBehavior{Type: ExpectToolResultDelivered, Kind: ExpectToolResultDelivered, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDelivered: []string{"call"}}, ObservationSnapshot{}},
 		{"tool-result-discarded", ExpectedBehavior{Type: ExpectToolResultDiscarded, Kind: ExpectToolResultDiscarded, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDiscarded: []string{"call"}}, ObservationSnapshot{}},
 		{"no-orphaned-tool-result", ExpectedBehavior{Type: ExpectNoOrphanedToolResult, Kind: ExpectNoOrphanedToolResult}, ObservationSnapshot{ToolCalls: []string{"call"}, ToolResultsDelivered: []string{"call"}}, ObservationSnapshot{ToolCalls: []string{"call"}}},
+		{"buffer-disposition", ExpectedBehavior{Type: ExpectBufferDisposition, Value: BufferDispositionCommitted}, ObservationSnapshot{BufferDisposition: BufferDispositionCommitted}, ObservationSnapshot{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -263,4 +264,29 @@ func expect(kind ExpectationKind, value string, count int) ExpectedBehavior {
 		e.Count = count
 	}
 	return e
+}
+
+func TestEvaluateBufferDisposition(t *testing.T) {
+	committed := ExpectedBehavior{Type: ExpectBufferDisposition, Value: BufferDispositionCommitted}
+	if err := Evaluate(committed, ObservationSnapshot{BufferDisposition: BufferDispositionCommitted}); err != nil {
+		t.Fatalf("committed observation should satisfy committed expectation: %v", err)
+	}
+	if err := Evaluate(ExpectedBehavior{Type: ExpectBufferDisposition, Value: "uncommitted"}, ObservationSnapshot{}); err == nil {
+		t.Fatal("uncommitted is not a declarable disposition")
+	}
+	err := Evaluate(committed, ObservationSnapshot{})
+	var mismatchErr *ExpectationMismatchError
+	if !errors.As(err, &mismatchErr) {
+		t.Fatalf("empty observation should mismatch committed expectation, got %v", err)
+	}
+	if mismatchErr.Actual != "uncommitted" {
+		t.Fatalf("mismatch actual = %v, want uncommitted", mismatchErr.Actual)
+	}
+	discarded := ExpectedBehavior{Type: ExpectBufferDisposition, Value: BufferDispositionDiscarded}
+	if err := Evaluate(discarded, ObservationSnapshot{BufferDisposition: BufferDispositionCommitted}); err == nil {
+		t.Fatal("committed observation must not satisfy discarded expectation")
+	}
+	if err := Evaluate(ExpectedBehavior{Type: ExpectBufferDisposition}, ObservationSnapshot{}); err == nil {
+		t.Fatal("missing declared value must be invalid")
+	}
 }

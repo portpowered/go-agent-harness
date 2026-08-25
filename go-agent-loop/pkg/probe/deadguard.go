@@ -741,7 +741,8 @@ func evaluateGuardExpectation(expectation ExpectedBehavior, observation Observat
 	switch declaredKind(expectation) {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
 		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
-		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult:
+		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
+		ExpectBufferDisposition:
 		return Evaluate(expectation, observation)
 	case ExpectText, ExpectTranscript:
 		want, err := aliasString(expectation, declaredKind(expectation), "text", expectation.Text, expectation.Value)
