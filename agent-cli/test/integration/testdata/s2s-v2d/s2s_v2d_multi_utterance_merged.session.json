@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-synthetic"
+  },
+  "session": {
+    "id": "sess_s2s_v2d_merged",
+    "started_at_utc": "2026-08-24T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-synthetic"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_s2s_v2d_merged",
+        "model": "grok-synthetic"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "audio_in.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "audio_in.append",
+        "audio_base64": "AQIDBAUGBwgJ"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 20,
+      "type": "audio_in.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "audio_in.append",
+        "audio_base64": "AQIDBAUGBwgJ"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "client_to_server",
+      "timestamp_ms": 21,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 22,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 23,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Merged first and second reply."
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 24,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "client_to_server",
+      "timestamp_ms": 30,
+      "type": "audio_in.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "audio_in.append",
+        "audio_base64": "AQIDBAUGBwgJ"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "client_to_server",
+      "timestamp_ms": 31,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 32,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 33,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Third utterance reply."
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 34,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "server_to_client",
+      "timestamp_ms": 40,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "fixture_complete"
+      }
+    }
+  ],
+  "ends_with_disconnect": true
+}
