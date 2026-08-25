@@ -294,18 +294,24 @@ var stepKindAliases = map[string]probe.StepKind{
 }
 
 var expectationKindAliases = map[string]probe.ExpectationKind{
-	"frame_count":          probe.ExpectFrameCount,
-	"frame-count":          probe.ExpectFrameCount,
-	"transcript_contains":  probe.ExpectTranscriptContains,
-	"transcript-contains":  probe.ExpectTranscriptContains,
-	"tool_called":          probe.ExpectToolCalled,
-	"tool-called":          probe.ExpectToolCalled,
-	"terminal_reason":      probe.ExpectTerminalReason,
-	"terminal-reason":      probe.ExpectTerminalReason,
-	"latency_within_ticks": probe.ExpectLatencyWithinTicks,
-	"latency-within-ticks": probe.ExpectLatencyWithinTicks,
-	"audio_energy":         probe.ExpectAudioEnergy,
-	"audio-energy":         probe.ExpectAudioEnergy,
+	"frame_count":             probe.ExpectFrameCount,
+	"frame-count":             probe.ExpectFrameCount,
+	"transcript_contains":     probe.ExpectTranscriptContains,
+	"transcript-contains":     probe.ExpectTranscriptContains,
+	"tool_called":             probe.ExpectToolCalled,
+	"tool-called":             probe.ExpectToolCalled,
+	"terminal_reason":         probe.ExpectTerminalReason,
+	"terminal-reason":         probe.ExpectTerminalReason,
+	"latency_within_ticks":    probe.ExpectLatencyWithinTicks,
+	"latency-within-ticks":    probe.ExpectLatencyWithinTicks,
+	"audio_energy":            probe.ExpectAudioEnergy,
+	"audio-energy":            probe.ExpectAudioEnergy,
+	"tool_result_delivered":   probe.ExpectToolResultDelivered,
+	"tool-result-delivered":   probe.ExpectToolResultDelivered,
+	"tool_result_discarded":   probe.ExpectToolResultDiscarded,
+	"tool-result-discarded":   probe.ExpectToolResultDiscarded,
+	"no_orphaned_tool_result": probe.ExpectNoOrphanedToolResult,
+	"no-orphaned-tool-result": probe.ExpectNoOrphanedToolResult,
 }
 
 func measurableExpectationKind(name string) (probe.ExpectationKind, bool) {
@@ -439,8 +445,47 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 			return probe.ObservationSnapshot{}, transcriptErr
 		}
 		observation.Transcript = transcript
+		if deriveErr := deriveToolResultObservation(fixture, &observation); deriveErr != nil {
+			return probe.ObservationSnapshot{}, deriveErr
+		}
 		return observation, nil
 	}
+}
+
+// deriveToolResultObservation scans the recorded fixture for tool-call
+// lifecycle events and fills the observation's barge-in/tool-result fields:
+// issued calls (server function_call_arguments.done), delivered results
+// (client conversation.item.create carrying a function_call_output), and
+// explicitly discarded results (client tool.result.discarded events).
+func deriveToolResultObservation(fixture string, observation *probe.ObservationSnapshot) error {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
+	}
+	for _, record := range capture.Records {
+		var payload struct {
+			CallID string `json:"call_id"`
+			Item   struct {
+				CallID string `json:"call_id"`
+			} `json:"item"`
+		}
+		_ = json.Unmarshal(record.Payload, &payload)
+		callID := payload.CallID
+		if callID == "" {
+			callID = payload.Item.CallID
+		}
+		switch {
+		case record.Direction == gatewaytesting.DirectionServerToClient &&
+			record.Type == "response.function_call_arguments.done" && callID != "":
+			observation.ToolCalls = append(observation.ToolCalls, callID)
+		case record.Direction == gatewaytesting.DirectionClientToServer &&
+			record.Type == "conversation.item.create" && callID != "":
+			observation.ToolResultsDelivered = append(observation.ToolResultsDelivered, callID)
+		case record.Type == "tool.result.discarded" && callID != "":
+			observation.ToolResultsDiscarded = append(observation.ToolResultsDiscarded, callID)
+		}
+	}
+	return nil
 }
 
 // replayErrorClassification classifies the first server-to-client error record
