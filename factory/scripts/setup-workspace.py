@@ -31,6 +31,10 @@ _ROOT_SYNC_THREAD_LOCKS = {}
 _ROOT_SYNC_THREAD_LOCKS_GUARD = threading.Lock()
 
 
+class WorktreePreparationError(RuntimeError):
+    """Classified, actionable failure raised during worktree preparation."""
+
+
 def run_git(*args, cwd=None, check=True, env=None):
     """Run a git command, returning stdout. Raises on failure if check=True."""
     result = subprocess.run(
@@ -759,22 +763,78 @@ def confirm_worktree_upstream_head(worktree_path, branch, upstream_ref):
     confirm_ref_matches(worktree_path, f"refs/heads/{branch}", upstream_sha)
 
 
+def registered_worktrees(repo_root):
+    """Return (path, checked-out branch or None) pairs from porcelain listing."""
+    result = run_git("worktree", "list", "--porcelain", cwd=repo_root)
+    entries = []
+    worktree_path = None
+    branch = None
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            if worktree_path is not None:
+                entries.append((worktree_path, branch))
+            worktree_path = None
+            branch = None
+            continue
+        key, _, value = line.partition(" ")
+        if key == "worktree":
+            worktree_path = Path(value)
+        elif key == "branch":
+            prefix = "refs/heads/"
+            branch = value[len(prefix):] if value.startswith(prefix) else value
+    if worktree_path is not None:
+        entries.append((worktree_path, branch))
+    return entries
+
+
+def external_worktree_blocking_branch(repo_root, branch):
+    """Return the registered worktree holding branch outside .claude/worktrees.
+
+    Registrations whose directories no longer exist are skipped: the existing
+    prune step owns them and creation must proceed normally.
+    """
+    managed_root = (Path(repo_root) / ".claude" / "worktrees").resolve()
+    for worktree_path, checked_out_branch in registered_worktrees(repo_root):
+        if checked_out_branch != branch:
+            continue
+        if not worktree_path.exists():
+            continue
+        resolved = worktree_path.resolve()
+        if resolved == managed_root or managed_root in resolved.parents:
+            continue
+        return worktree_path
+    return None
+
+
 def sync_reused_worktree_branch(repo_root, worktree_path, branch):
     """Checkout branch in a reused worktree and fast-forward when safe.
 
-    No-upstream and missing-remote-branch conditions are non-fatal. Unsafe
-    fast-forward failures raise RuntimeError for worktree-preparation reporting.
-    Returns a human-readable outcome string for logging.
+    No-upstream, missing-remote-branch, and deleted-upstream conditions are
+    non-fatal. Divergence is classified: an upstream force-move with no unique
+    local work resets to the rewritten upstream, while unique unpushed commits
+    raise a classified error naming both SHAs instead of resetting. Returns a
+    human-readable outcome string for logging.
     """
     run_git("checkout", branch, cwd=worktree_path)
 
     if branch_upstream_ref(worktree_path, branch) is None:
         return "skipped (no upstream configured)"
 
+    upstream_ref = branch_upstream_ref(worktree_path, branch)
+    # Capture the pre-sync upstream tip before any fetch (including the pull's
+    # implicit fetch) so an upstream force-move is distinguishable from local
+    # work that was never pushed.
+    pre_sync_upstream_sha = run_git(
+        "rev-parse", upstream_ref, cwd=worktree_path,
+    ).stdout.strip()
+
+    # Refresh remote-tracking state so branches deleted on origin resolve as
+    # absent below instead of being masked by a stale refs/remotes ref.
+    run_git("fetch", "--prune", "origin", cwd=repo_root, check=False)
+
     if not branch_exists_on_remote(repo_root, branch):
         return "skipped (branch has no origin ref)"
 
-    upstream_ref = branch_upstream_ref(worktree_path, branch)
     snapshot_id = stash_local_changes(
         worktree_path,
         f"setup-workspace worktree sync {branch}",
@@ -782,34 +842,69 @@ def sync_reused_worktree_branch(repo_root, worktree_path, branch):
     try:
         pull_result = run_git("pull", "--ff-only", cwd=worktree_path, check=False)
         if pull_result.returncode == 0:
-            confirm_worktree_upstream_head(worktree_path, branch, upstream_ref)
-            if snapshot_id is not None:
-                return (
-                    f"stashed local changes in snapshot {snapshot_id[:8]}, "
-                    "fast-forwarded from upstream, then restored the snapshot"
-                )
-            return "fast-forwarded from upstream"
-
-        stderr = pull_result.stderr.strip()
-        lowered = stderr.lower()
-        if "no tracking information" in lowered:
-            return "skipped (no upstream configured)"
+            local_sha = run_git(
+                "rev-parse", f"refs/heads/{branch}", cwd=worktree_path,
+            ).stdout.strip()
+            upstream_sha = run_git(
+                "rev-parse", upstream_ref, cwd=worktree_path,
+            ).stdout.strip()
+            if local_sha == upstream_sha:
+                confirm_worktree_upstream_head(worktree_path, branch, upstream_ref)
+                if snapshot_id is not None:
+                    return (
+                        f"stashed local changes in snapshot {snapshot_id[:8]}, "
+                        "fast-forwarded from upstream, then restored the snapshot"
+                    )
+                return "fast-forwarded from upstream"
+            # pull was a no-op ("Already up to date.") yet the branch differs
+            # from upstream: classify below instead of crashing on confirmation.
+        else:
+            stderr = pull_result.stderr.strip()
+            lowered = stderr.lower()
+            if "no tracking information" in lowered:
+                return "skipped (no upstream configured)"
+            if "no such ref was fetched" in lowered:
+                return "skipped (upstream branch deleted)"
 
         run_git("fetch", "origin", cwd=worktree_path)
-        local_sha = run_git("rev-parse", f"refs/heads/{branch}", cwd=worktree_path).stdout.strip()
-        upstream_sha = run_git("rev-parse", upstream_ref, cwd=worktree_path).stdout.strip()
-        if not can_fast_forward_main(worktree_path, local_sha, upstream_sha):
-            raise RuntimeError(
-                f"worktree branch update failed for {branch}: {stderr}"
+        local_sha = run_git(
+            "rev-parse", f"refs/heads/{branch}", cwd=worktree_path,
+        ).stdout.strip()
+        upstream_sha = run_git(
+            "rev-parse", upstream_ref, cwd=worktree_path,
+        ).stdout.strip()
+
+        if can_fast_forward_main(worktree_path, local_sha, upstream_sha):
+            run_git("reset", "--hard", upstream_ref, cwd=worktree_path)
+            confirm_worktree_upstream_head(worktree_path, branch, upstream_ref)
+            if snapshot_id is None:
+                return "fetch/reset --hard to upstream after pull --ff-only failed"
+            return (
+                f"stashed local changes in snapshot {snapshot_id[:8]}, then "
+                "fetch/reset --hard to upstream after pull --ff-only failed"
             )
 
-        run_git("reset", "--hard", upstream_ref, cwd=worktree_path)
-        confirm_worktree_upstream_head(worktree_path, branch, upstream_ref)
-        if snapshot_id is None:
-            return "fetch/reset --hard to upstream after pull --ff-only failed"
-        return (
-            f"stashed local changes in snapshot {snapshot_id[:8]}, then "
-            "fetch/reset --hard to upstream after pull --ff-only failed"
+        if local_sha == pre_sync_upstream_sha:
+            # Upstream force-moved while this branch held the previous tip; no
+            # unique local work exists, so adopt the rewritten upstream.
+            run_git("reset", "--hard", upstream_ref, cwd=worktree_path)
+            confirm_worktree_upstream_head(worktree_path, branch, upstream_ref)
+            if snapshot_id is None:
+                return (
+                    "upstream force-move detected; fetched and reset --hard "
+                    "to upstream"
+                )
+            return (
+                f"stashed local changes in snapshot {snapshot_id[:8]}, then "
+                "upstream force-move detected; fetched and reset --hard to upstream"
+            )
+
+        raise WorktreePreparationError(
+            f"worktree branch {branch} diverged from its upstream and cannot be "
+            f"fast-forwarded: local SHA {local_sha}, upstream SHA {upstream_sha}; "
+            "the local branch contains unique unpushed commits, so no reset was "
+            "performed. Reconcile manually (rebase onto the upstream or reset "
+            "the branch) and retry workspace setup."
         )
     finally:
         restore_stashed_changes(worktree_path, snapshot_id, f"worktree branch {branch}")
@@ -830,6 +925,16 @@ def create_or_reuse_worktree(repo_root, branch, worktree_path):
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
 
     if branch_exists_locally(repo_root, branch):
+        blocker = external_worktree_blocking_branch(repo_root, branch)
+        if blocker is not None:
+            raise WorktreePreparationError(
+                f"branch {branch} is already checked out in an external worktree "
+                f"at {blocker}, and git refuses to check out a branch in more "
+                f'than one worktree. Remove that external worktree (git worktree '
+                f'remove "{blocker}") or repoint it to another branch, then '
+                "retry workspace setup. Nothing outside this repository's "
+                "managed .claude/worktrees tree was modified."
+            )
         run_git(
             "worktree", "add", str(worktree_path), branch,
             cwd=repo_root,
