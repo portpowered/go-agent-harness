@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // SessionAudioInput carries the command-line presence bit separately from the
@@ -551,7 +552,9 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 // Incremental WAV streaming lives beside the session audio boundary so
 // .wav input streams frame-by-frame through the same raw PCM16 path without
 // buffering the whole payload. The shared pkg/wavio decoder reads whole files
-// and is deliberately not used here.
+// and is deliberately not used here for harness-rate input; only non-harness
+// rates (24 kHz) are decoded fully once so they can be resampled to the
+// harness rate before streaming.
 const (
 	sessionWAVDescriptorBytes  = 12
 	sessionWAVChunkHeaderBytes = 8
@@ -591,7 +594,7 @@ func sessionWAVFormatError(path string, reason string) error {
 
 // openSessionWAVSource validates the RIFF/fmt contract before returning so
 // every rejected format fails during preflight with zero delivered frames.
-func openSessionWAVSource(path string) (*sessionWAVSource, error) {
+func openSessionWAVSource(path string) (audio.AudioSource, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, classifySessionAudioOpenError(path, err)
@@ -605,9 +608,10 @@ func openSessionWAVSource(path string) (*sessionWAVSource, error) {
 }
 
 // newSessionWAVSource parses the RIFF descriptor and chunk headers from r and
-// returns a source positioned at the first data-chunk byte. The payload is
-// never read here; ReadFrame streams it frame by frame.
-func newSessionWAVSource(path string, r io.ReadSeekCloser) (*sessionWAVSource, error) {
+// returns a source positioned at the first data-chunk byte. Harness-rate
+// payloads stream frame by frame; 24 kHz payloads are decoded once and
+// resampled to the harness rate. The payload is otherwise never read here.
+func newSessionWAVSource(path string, r io.ReadSeekCloser) (audio.AudioSource, error) {
 	fail := func(err error) (*sessionWAVSource, error) {
 		return nil, err
 	}
@@ -624,6 +628,7 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (*sessionWAVSource, e
 	}
 
 	fmtSeen := false
+	var fmtRate uint32
 	skip := func(count int64) error {
 		if count <= 0 {
 			return nil
@@ -659,12 +664,13 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (*sessionWAVSource, e
 				return fail(sessionWAVFormatError(path, fmt.Sprintf("WAV compression format %d is not PCM", compression)))
 			case channels != audio.Channels:
 				return fail(sessionWAVFormatError(path, fmt.Sprintf("channel count is %d; want exactly %d", channels, audio.Channels)))
-			case rate != audio.SampleRate:
-				return fail(sessionWAVFormatError(path, fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", rate, audio.SampleRate)))
+			case rate != audio.SampleRate && rate != wavio.Rate24kHz:
+				return fail(sessionWAVFormatError(path, fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz or %d Hz", rate, audio.SampleRate, wavio.Rate24kHz)))
 			case bits != sessionWAVBitsPerSample:
 				return fail(sessionWAVFormatError(path, fmt.Sprintf("bit depth is %d; want exactly %d-bit PCM", bits, sessionWAVBitsPerSample)))
 			}
 			fmtSeen = true
+			fmtRate = rate
 			if err := skip(size - sessionWAVFmtChunkMinBytes); err != nil {
 				return fail(classifySessionAudioOpenError(path, err))
 			}
@@ -672,7 +678,18 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (*sessionWAVSource, e
 			if !fmtSeen {
 				return fail(sessionWAVFormatError(path, "data chunk appears before fmt chunk"))
 			}
-			return &sessionWAVSource{path: path, file: r, remaining: size}, nil
+			switch {
+			case fmtRate == audio.SampleRate:
+				return &sessionWAVSource{path: path, file: r, remaining: size}, nil
+			case fmtRate == wavio.Rate24kHz:
+				source, decodeErr := newResampledSessionWAVSource(path, r, int64(size))
+				if decodeErr != nil {
+					return fail(decodeErr)
+				}
+				return source, nil
+			default:
+				return fail(sessionWAVFormatError(path, fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz or %d Hz", fmtRate, audio.SampleRate, wavio.Rate24kHz)))
+			}
 		default:
 			if err := skip(size); err != nil {
 				return fail(classifySessionAudioOpenError(path, err))
@@ -685,6 +702,83 @@ func newSessionWAVSource(path string, r io.ReadSeekCloser) (*sessionWAVSource, e
 			}
 		}
 	}
+}
+
+// newResampledSessionWAVSource decodes a non-harness-rate (24 kHz) PCM16 data
+// chunk fully, resamples it to the harness rate, and returns an in-memory
+// source over the resampled samples so downstream streaming stays unchanged.
+func newResampledSessionWAVSource(path string, r io.ReadSeekCloser, size int64) (audio.AudioSource, error) {
+	if size%2 != 0 {
+		return nil, sessionWAVFormatError(path, "data chunk has a truncated PCM16 sample")
+	}
+	encoded := make([]byte, size)
+	if _, err := io.ReadFull(r, encoded); err != nil {
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			return nil, sessionWAVFormatError(path, "data chunk is shorter than its declared size")
+		}
+		return nil, &SessionAudioInputError{Kind: SessionAudioInputRead, Path: path, Err: err}
+	}
+	samples := make([]int16, len(encoded)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
+	}
+	resampled, err := wavio.Resample(samples, wavio.Rate24kHz, audio.SampleRate)
+	if err != nil {
+		return nil, sessionWAVFormatError(path, fmt.Sprintf("resample %d Hz payload to %d Hz: %v", wavio.Rate24kHz, audio.SampleRate, err))
+	}
+	return &sessionDecodedWAVSource{path: path, samples: resampled}, nil
+}
+
+// sessionDecodedWAVSource serves a fully decoded, harness-rate sample buffer
+// through the AudioSource contract. It mirrors sessionWAVSource semantics:
+// ReadFrame zero-pads a final short frame and returns io.EOF once the payload
+// is exhausted.
+type sessionDecodedWAVSource struct {
+	path     string
+	samples  []int16
+	position int
+	done     bool
+	closed   bool
+	mu       sync.Mutex
+}
+
+var _ audio.AudioSource = (*sessionDecodedWAVSource)(nil)
+
+func (s *sessionDecodedWAVSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	if len(buf) != audio.FrameSize {
+		return &audio.FrameSizeError{Operation: "read", Got: len(buf), Want: audio.FrameSize}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return &audio.ClosedError{Operation: "read", Path: s.path}
+	}
+	if s.done {
+		return io.EOF
+	}
+	clear(buf)
+	copy(buf, s.samples[s.position:])
+	s.position += audio.FrameSize
+	if s.position >= len(s.samples) {
+		s.done = true
+	}
+	return nil
+}
+
+// Close marks the decoded source closed. It is safe to call more than once.
+func (s *sessionDecodedWAVSource) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	s.done = true
+	return nil
 }
 
 // ReadFrame fills buf with the next data-chunk frame, zero-padding a final
