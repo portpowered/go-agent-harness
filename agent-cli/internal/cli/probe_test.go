@@ -486,3 +486,94 @@ func TestProbeRunV2AAudioInBasicFailsWithoutResponse(t *testing.T) {
 		t.Fatalf("summary does not reflect the failure: %v", summary)
 	}
 }
+
+const (
+	v2eFixture16k        = "testdata/probe-fixtures/s2s_v2e_audio_in_truncated_16k.session.json"
+	v2eFixture24k        = "testdata/probe-fixtures/s2s_v2e_audio_in_truncated_24k.session.json"
+	v2eFixtureUncommited = "testdata/probe-fixtures/s2s_v2e_audio_in_truncated_uncommitted.session.json"
+	v2eScenario16k       = "testdata/probe-scenarios/s2s-v2e-audio-in-truncated-16k.scenario.json"
+	v2eScenario24k       = "testdata/probe-scenarios/s2s-v2e-audio-in-truncated-24k.scenario.json"
+	v2eScenarioNegative  = "testdata/probe-scenarios/s2s-v2e-audio-in-truncated-uncommitted-negative.scenario.json"
+)
+
+func outcomeByKind(t *testing.T, outcomes []any, kind string) map[string]any {
+	t.Helper()
+	for _, raw := range outcomes {
+		outcome, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if outcome["kind"] == kind {
+			return outcome
+		}
+	}
+	t.Fatalf("no %q expectation outcome in %v", kind, outcomes)
+	return nil
+}
+
+func TestProbeRunV2EAudioInTruncated16kCommitsPartialUtterance(t *testing.T) {
+	run := executeCLI("probe", "run", v2eScenario16k, "--replay", v2eFixture16k, "--json")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != true || results[0]["name"] != "s2s-v2e-audio-in-truncated-16k" {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	disposition := outcomeByKind(t, results[0]["expectations"].([]any), "buffer-disposition")
+	if disposition["passed"] != true {
+		t.Fatalf("buffer disposition expectation did not pass: %v (stdout=%q)", disposition, run.stdout)
+	}
+	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
+func TestProbeRunV2EAudioInTruncated24kDiscardsPartialUtterance(t *testing.T) {
+	run := executeCLI("probe", "run", v2eScenario24k, "--replay", v2eFixture24k, "--json")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, _ := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != true || results[0]["name"] != "s2s-v2e-audio-in-truncated-24k" {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	disposition := outcomeByKind(t, results[0]["expectations"].([]any), "buffer-disposition")
+	if disposition["passed"] != true {
+		t.Fatalf("buffer disposition expectation did not pass: %v (stdout=%q)", disposition, run.stdout)
+	}
+}
+
+func TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer(t *testing.T) {
+	run := executeCLI("probe", "run", v2eScenarioNegative, "--replay", v2eFixtureUncommited, "--json")
+	if run.exitCode == 0 {
+		t.Fatalf("exit code = 0, want non-zero; stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != false || results[0]["name"] != "s2s-v2e-audio-in-truncated-uncommitted-negative" {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	disposition := outcomeByKind(t, results[0]["expectations"].([]any), "buffer-disposition")
+	if disposition["passed"] != false {
+		t.Fatalf("uncommitted buffer must fail the proof: %v", disposition)
+	}
+	actual := strings.Trim(fmt.Sprint(disposition["actual"]), "\"")
+	if actual != "uncommitted" {
+		t.Fatalf("diagnostic actual disposition = %q, want uncommitted; stdout=%q", actual, run.stdout)
+	}
+	if !strings.Contains(fmt.Sprint(disposition["expected"]), "committed") {
+		t.Fatalf("failure does not name the expected disposition: %v", disposition)
+	}
+	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+		t.Fatalf("summary does not reflect the failure: %v", summary)
+	}
+}
+
+func TestV2EScenariosReferenceCommittedTruncatedCorpus(t *testing.T) {
+	for _, name := range []string{"truncated_16k.wav", "truncated_24k.wav"} {
+		path := filepath.Join("..", "..", "..", "go-agent-loop", "testdata", "audio", name)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("committed truncated corpus fixture %s must be reused by the v2e scenarios: %v", path, err)
+		}
+	}
+}
