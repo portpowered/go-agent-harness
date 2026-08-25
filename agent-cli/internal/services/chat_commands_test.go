@@ -3,10 +3,12 @@ package services
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 )
 
@@ -181,4 +183,195 @@ func TestChatCommands_ResolutionFailuresAndEmptySkillList(t *testing.T) {
 
 func TestChatCommands_TypedFailureContractIsBlockedByCurrentDispatcher(t *testing.T) {
 	t.Skip("the current slash dispatcher renders failures as chatLineSystem output and returns no typed error; preserve this requirement for the follow-up contract change")
+}
+
+func countUserChatLines(lines []chatLine) int {
+	count := 0
+	for _, line := range lines {
+		if line.kind == chatLineUser {
+			count++
+		}
+	}
+	return count
+}
+
+func TestChatCommands_RegistryLookupContract(t *testing.T) {
+	for _, name := range []string{"system", "help", "clear"} {
+		cmd, ok := lookupChatCommand(name)
+		if !ok {
+			t.Fatalf("lookupChatCommand(%q): not found", name)
+		}
+		if cmd.Name != name {
+			t.Fatalf("lookupChatCommand(%q) returned %q", name, cmd.Name)
+		}
+		if cmd.Handler == nil {
+			t.Fatalf("builtin %q has no handler", name)
+		}
+	}
+	if _, ok := lookupChatCommand("no-such-command"); ok {
+		t.Fatal(`lookupChatCommand("no-such-command") unexpectedly matched`)
+	}
+	if _, ok := lookupChatCommand("SYSTEM"); ok {
+		t.Fatal(`lookupChatCommand("SYSTEM") unexpectedly matched; lookup must be case-sensitive`)
+	}
+}
+
+func TestChatCommands_RegistryOrderIsDispatchPrecedence(t *testing.T) {
+	names := make([]string, 0, len(chatCommands))
+	for _, cmd := range chatCommands {
+		names = append(names, cmd.Name)
+	}
+	want := []string{"system", "help", "clear"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("registry order = %v, want %v", names, want)
+	}
+}
+
+func TestChatCommands_NonSlashInputNeverReachesDispatcher(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "bare registered word goes to the LLM", input: "system"},
+		{name: "bare help word goes to the LLM", input: "help"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			harness := newChatTestHarness(t, "llm reply")
+			userLinesBefore := countUserChatLines(harness.model.lines)
+			harness.model = submitChatInput(harness.model, tt.input)
+
+			history := harness.model.ViewHistory()
+			if got := countUserChatLines(harness.model.lines); got != userLinesBefore+1 {
+				t.Fatalf("non-slash input %q added %d user-message lines, want 1 (LLM path)", tt.input, got-userLinesBefore)
+			}
+			if strings.Contains(history, "System Instructions") || strings.Contains(history, "Show this help message") {
+				t.Fatalf("non-slash input %q dispatched a registered handler: %q", tt.input, history)
+			}
+			if strings.Contains(history, "not found.") {
+				t.Fatalf("non-slash input %q took the skill fallback: %q", tt.input, history)
+			}
+			if harness.inferencer.calls != 1 {
+				t.Fatalf("non-slash input %q invoked inferencer %d times, want 1", tt.input, harness.inferencer.calls)
+			}
+		})
+	}
+}
+
+func TestChatCommands_EmptyAndWhitespaceInputIsInert(t *testing.T) {
+	harness := newChatTestHarness(t)
+	userLinesBefore := countUserChatLines(harness.model.lines)
+
+	harness.model = submitChatInput(harness.model, "")
+	harness.model = submitChatInput(harness.model, "   ")
+
+	if got := countUserChatLines(harness.model.lines); got != userLinesBefore {
+		t.Fatalf("empty/whitespace input added user-message lines")
+	}
+	if harness.inferencer.calls != 0 {
+		t.Fatalf("empty/whitespace input invoked inferencer %d times", harness.inferencer.calls)
+	}
+}
+
+// TestChatCommands_DispatcherEmptyTokenFallsThroughToSkillLookup pins the
+// dispatcher-level miss contract: an empty token (no registered name) falls
+// through to the skill-name lookup without adding a user message or calling
+// the inferencer. The REPL never forwards empty input (chat_repl.go gates on
+// TrimSpace + '/' prefix), so this exercises the dispatcher in isolation.
+func TestChatCommands_DispatcherEmptyTokenFallsThroughToSkillLookup(t *testing.T) {
+	harness := newChatTestHarness(t)
+	userLinesBefore := countUserChatLines(harness.model.lines)
+
+	updated, _ := harness.model.handleSlashCommand("")
+	model := updated.(ChatModel)
+
+	if got := countUserChatLines(model.lines); got != userLinesBefore {
+		t.Fatalf("empty-token miss added %d user-message lines", got-userLinesBefore)
+	}
+	if history := model.ViewHistory(); !strings.Contains(history, `Skill "" not found.`) {
+		t.Fatalf("empty-token history = %q", history)
+	}
+	if harness.inferencer.calls != 0 {
+		t.Fatalf("empty-token miss invoked inferencer %d times", harness.inferencer.calls)
+	}
+}
+
+func TestChatCommands_UnknownSlashMissAddsNoUserMessage(t *testing.T) {
+	harness := newChatTestHarness(t)
+	userLinesBefore := countUserChatLines(harness.model.lines)
+
+	harness.model = submitChatInput(harness.model, "/definitely-not-a-skill")
+
+	if got := countUserChatLines(harness.model.lines); got != userLinesBefore {
+		t.Fatalf("unknown slash command added %d user-message lines", got-userLinesBefore)
+	}
+	history := harness.model.ViewHistory()
+	if !strings.Contains(history, `Skill "definitely-not-a-skill" not found.`) {
+		t.Fatalf("miss history = %q", history)
+	}
+	if harness.inferencer.calls != 0 {
+		t.Fatalf("miss invoked inferencer %d times", harness.inferencer.calls)
+	}
+}
+
+func TestChatCommands_RegisteredNamesResolveAheadOfSkills(t *testing.T) {
+	harness := newChatTestHarness(t)
+	skillDir := filepath.Join(harness.globalFlags.ConfigDirPath, "skills", "help")
+	if err := os.MkdirAll(skillDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	skill := "---\nname: help\ndescription: Impostor skill shadowed by the builtin\n---\nImpostor skill body.\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skill), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	harness.model = submitChatInput(harness.model, "/help")
+
+	history := harness.model.ViewHistory()
+	if !strings.Contains(history, "Show this help message") {
+		t.Fatalf("registry /help did not resolve ahead of skill fallback: %q", history)
+	}
+	if strings.Contains(history, "[Skill loaded: help]") || strings.Contains(history, "Impostor") {
+		t.Fatalf(`skill named "help" shadowed the registered command: %q`, history)
+	}
+	if harness.inferencer.calls != 0 {
+		t.Fatalf("registered dispatch invoked inferencer %d times", harness.inferencer.calls)
+	}
+}
+
+func TestChatCommands_HelpRendersRegistryByteIdentically(t *testing.T) {
+	const want = "/system  — Show the system prompt for this session\n" +
+		"/help    — Show this help message\n" +
+		"/clear   — Clear conversation history and start fresh\n" +
+		"/skill   — Load a skill's instructions (e.g. /my-skill)\n" +
+		"@file    — Attach a file to your message (e.g. @path/to/file.txt)\n" +
+		"@dir/    — Attach a directory listing (e.g. @src/)"
+	if got := renderChatHelp(); got != want {
+		t.Fatalf("renderChatHelp() mismatch\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestChatCommands_HiddenEntriesExcludedFromRenderedHelp(t *testing.T) {
+	original := chatCommands
+	t.Cleanup(func() { chatCommands = original })
+	chatCommands = append(append([]ChatCommand{}, original...), ChatCommand{
+		Name:    "secret",
+		Summary: "Hidden test-only command",
+		Hidden:  true,
+		Handler: func(m ChatModel) (tea.Model, tea.Cmd) { return m, nil },
+	})
+
+	got := renderChatHelp()
+	if strings.Contains(got, "secret") || strings.Contains(got, "Hidden test-only command") {
+		t.Fatalf("hidden entry leaked into rendered help: %q", got)
+	}
+	for _, visible := range []string{"/system  —", "/help    —", "/clear   —"} {
+		if !strings.Contains(got, visible) {
+			t.Fatalf("visible command line %q missing from rendered help: %q", visible, got)
+		}
+	}
+	// Hidden only affects help rendering; hidden entries still dispatch.
+	if cmd, ok := lookupChatCommand("secret"); !ok || !cmd.Hidden {
+		t.Fatalf("hidden synthetic entry not resolvable for dispatch: found=%v cmd=%+v", ok, cmd)
+	}
 }

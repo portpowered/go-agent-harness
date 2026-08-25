@@ -10,22 +10,51 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 )
 
-// handleSlashCommand dispatches slash commands (/system, /help, /clear) locally.
+// ChatCommand is a typed chat slash command. Name is the token typed after the
+// leading '/', Summary is the /help description, Hidden excludes the command
+// from rendered /help output (it still dispatches), and Handler runs it.
+type ChatCommand struct {
+	Name    string
+	Summary string
+	Hidden  bool
+	Handler func(m ChatModel) (tea.Model, tea.Cmd)
+}
+
+// chatCommands is the ordered registry of built-in chat commands; dispatch
+// resolves tokens in slice order, so precedence follows this ordering.
+// Populated in init because the help handler renders from this registry,
+// which would otherwise form an initialization cycle.
+var chatCommands []ChatCommand
+
+func init() {
+	chatCommands = []ChatCommand{
+		{Name: "system", Summary: "Show the system prompt for this session", Handler: ChatModel.handleSystemCommand},
+		{Name: "help", Summary: "Show this help message", Handler: ChatModel.handleHelpCommand},
+		{Name: "clear", Summary: "Clear conversation history and start fresh", Handler: ChatModel.handleClearCommand},
+	}
+}
+
+// lookupChatCommand resolves a trimmed post-'/'-prefix token by case-sensitive
+// exact match against the ordered registry.
+func lookupChatCommand(token string) (ChatCommand, bool) {
+	for _, cmd := range chatCommands {
+		if cmd.Name == token {
+			return cmd, true
+		}
+	}
+	return ChatCommand{}, false
+}
+
+// handleSlashCommand dispatches slash commands (/system, /help, /clear) through
+// the chatCommands registry; unmatched names fall through to skill lookup.
 // It returns the updated model and any tea.Cmd to execute.
 func (m ChatModel) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
-	cmd := strings.TrimPrefix(input, "/")
-	cmd = strings.TrimSpace(cmd)
-	switch cmd {
-	case "system":
-		return m.handleSystemCommand()
-	case "help":
-		return m.handleHelpCommand()
-	case "clear":
-		return m.handleClearCommand()
-	default:
-		// Try loading as a skill name.
-		return m.handleSkillCommand(cmd)
+	token := strings.TrimSpace(strings.TrimPrefix(input, "/"))
+	if cmd, ok := lookupChatCommand(token); ok {
+		return cmd.Handler(m)
 	}
+	// Try loading as a skill name.
+	return m.handleSkillCommand(token)
 }
 
 // handleSystemCommand displays the resolved system prompt.
@@ -46,16 +75,30 @@ func (m ChatModel) handleSystemCommand() (tea.Model, tea.Cmd) {
 	return m, tea.Println(rendered)
 }
 
-const helpText = `/system  — Show the system prompt for this session
-/help    — Show this help message
-/clear   — Clear conversation history and start fresh
-/skill   — Load a skill's instructions (e.g. /my-skill)
+// chatHelpSyntaxLines are the non-command /help lines: the skill fallback
+// syntax and the @file/@dir/ attachment syntax.
+const chatHelpSyntaxLines = `/skill   — Load a skill's instructions (e.g. /my-skill)
 @file    — Attach a file to your message (e.g. @path/to/file.txt)
 @dir/    — Attach a directory listing (e.g. @src/)`
 
+// renderChatHelp assembles the /help output from the visible (non-hidden)
+// entries of chatCommands plus the static skill/attachment syntax lines,
+// padding each command token so the em-dash separators align.
+func renderChatHelp() string {
+	var b strings.Builder
+	for _, cmd := range chatCommands {
+		if cmd.Hidden {
+			continue
+		}
+		fmt.Fprintf(&b, "%-9s— %s\n", "/"+cmd.Name, cmd.Summary)
+	}
+	b.WriteString(chatHelpSyntaxLines)
+	return b.String()
+}
+
 // handleHelpCommand displays available commands and syntax.
 func (m ChatModel) handleHelpCommand() (tea.Model, tea.Cmd) {
-	helpLine := chatLine{kind: chatLineSystem, content: helpText}
+	helpLine := chatLine{kind: chatLineSystem, content: renderChatHelp()}
 	m.lines = append(m.lines, helpLine)
 	rendered := strings.TrimSuffix(renderChatLineWrapped(helpLine, m.effectiveWidth()), "\n")
 	return m, tea.Println(rendered)
