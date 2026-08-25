@@ -350,6 +350,81 @@ func TestProbeRunAbsentAuthErrorExitsNonZero(t *testing.T) {
 	}
 }
 
+func TestProbeRunErrorMalformedResponseSuiteOfflineExitZero(t *testing.T) {
+	outPath := filepath.Join(t.TempDir(), "results.jsonl")
+	summaryPath := filepath.Join(t.TempDir(), "summary.jsonl")
+	run := executeCLI("probe", "run", "--replay", probeFixtureDir, "--json",
+		"--scenario", "s2s-v6d-error-malformed-response",
+		"--out", outPath, "--summary", summaryPath)
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+
+	outBytes, readErr := os.ReadFile(outPath)
+	if readErr != nil {
+		t.Fatalf("read JSONL results: %v", readErr)
+	}
+	lines := strings.Split(strings.TrimSpace(string(outBytes)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("result line count = %d, want 2: %q", len(lines), outBytes)
+	}
+	results := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(line), &decoded); err != nil {
+			t.Fatalf("decode result line %q: %v", line, err)
+		}
+		results = append(results, decoded)
+	}
+	summaryBytes, readErr := os.ReadFile(summaryPath)
+	if readErr != nil {
+		t.Fatalf("read summary artifact: %v", readErr)
+	}
+	var summary map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(summaryBytes))), &summary); err != nil {
+		t.Fatalf("decode summary artifact %q: %v", summaryBytes, err)
+	}
+
+	malformed, healthy := map[string]bool{"s2s-v6d-error-malformed-response-malformed": true}, map[string]bool{"s2s-v6d-error-malformed-response-healthy-control": true}
+	for _, result := range results {
+		switch result["name"] {
+		case "s2s-v6d-error-malformed-response-malformed":
+			delete(malformed, result["name"].(string))
+			if result["pass"] != true || result["terminal_reason"] != "error:invalid_request" {
+				t.Fatalf("malformed case must pass with error:invalid_request: %v", result)
+			}
+		case "s2s-v6d-error-malformed-response-healthy-control":
+			delete(healthy, result["name"].(string))
+			if result["pass"] != true || result["terminal_reason"] != "disconnect" {
+				t.Fatalf("healthy control must pass with disconnect: %v", result)
+			}
+		}
+	}
+	if len(malformed) != 0 || len(healthy) != 0 {
+		t.Fatalf("missing expected cases: %v", results)
+	}
+	if summary["status"] != "pass" || summary["passed"] != float64(2) || summary["failed"] != float64(0) || summary["total"] != float64(2) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
+// TestProbeRunMalformedNegativeControlExitsNonZero is the documented negative
+// control for the v6d vertical: feeding the healthy well-formed control
+// fixture into the malformed-expectation case must fail with a non-zero exit,
+// proving the malformed assertion has discriminating power.
+func TestProbeRunMalformedNegativeControlExitsNonZero(t *testing.T) {
+	run := executeCLI("probe", "run",
+		"--replay", filepath.Join(probeFixtureDir, "s2s-v6d-error-malformed-response-healthy-control.session.json"),
+		"--json", "--scenario", "s2s-v6d-error-malformed-response-malformed")
+	if run.exitCode == 0 {
+		t.Fatalf("negative control exit code = 0, want non-zero; stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+	results, _ := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != false {
+		t.Fatalf("negative control must fail: %v", results[0])
+	}
+}
+
 func TestDeadguardBoundsHungScenarioExecution(t *testing.T) {
 	block := make(chan struct{})
 	defer close(block)
