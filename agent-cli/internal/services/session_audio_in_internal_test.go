@@ -12,6 +12,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // countingReadSeeker records how many bytes the WAV source actually consumed
@@ -299,5 +300,53 @@ func TestShouldStopAudioInputAwaitingResponseSemantics(t *testing.T) {
 				t.Fatalf("stop = %v; want %v", got, tc.wantStop)
 			}
 		})
+	}
+}
+
+// TestNewSessionWAVSourceResamples24kHz proves the 24 kHz corpus path: the
+// source decodes the payload once, resamples it to the harness rate, and
+// serves harness-rate frames with the established zero-pad/EOF semantics.
+func TestNewSessionWAVSourceResamples24kHz(t *testing.T) {
+	input := make([]int16, 24000) // one second of 24 kHz audio
+	for i := range input {
+		input[i] = int16(i % 327)
+	}
+	var encoded bytes.Buffer
+	if err := wavio.Write(&encoded, wavio.Rate24kHz, input); err != nil {
+		t.Fatalf("encode 24 kHz wav: %v", err)
+	}
+	source, err := newSessionWAVSource("utterance_24k.wav", struct {
+		io.ReadSeeker
+		io.Closer
+	}{bytes.NewReader(encoded.Bytes()), nopReadSeekCloser{}})
+	if err != nil {
+		t.Fatalf("open 24 kHz wav: %v", err)
+	}
+	defer func() { _ = source.Close() }()
+
+	var got []int16
+	frame := make([]int16, audio.FrameSize)
+	ctx := context.Background()
+	for {
+		err := source.ReadFrame(ctx, frame)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read frame: %v", err)
+		}
+		got = append(got, frame...)
+	}
+	want, err := wavio.Resample(input, wavio.Rate24kHz, audio.SampleRate)
+	if err != nil {
+		t.Fatalf("reference resample: %v", err)
+	}
+	if len(got) < len(want) || len(got)-len(want) >= audio.FrameSize {
+		t.Fatalf("resampled stream delivered %d samples, want ~%d (one padded frame tolerance)", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("resampled sample %d = %d, want %d", i, got[i], want[i])
+		}
 	}
 }
