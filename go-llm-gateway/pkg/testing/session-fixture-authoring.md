@@ -49,6 +49,16 @@ Run the validator before review from `go-llm-gateway`:
 go run ./cmd/session-fixture-validator ./pkg/testing/testdata/session-fixtures
 ```
 
+Adding or removing a committed fixture anywhere under the registered roots
+requires regenerating the checked-in fixture manifest from the repository root:
+
+```sh
+go run ./go-llm-gateway/cmd/session-fixture-validator -emit-manifest go-llm-gateway/internal/sessionfixturevalidator/testdata/committed-fixtures.manifest.json go-llm-gateway/pkg/providers/openai/testdata go-llm-gateway/pkg/testing/testdata/session-fixtures agent-cli/test/integration/testdata
+```
+
+Until you do, `TestAllCommittedSessionFixturesPassWithExactCount` fails naming
+the drifted paths and this command.
+
 ## Provenance Categories
 
 Use one of these provenance categories for committed fixtures:

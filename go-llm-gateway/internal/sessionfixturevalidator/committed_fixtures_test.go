@@ -25,12 +25,22 @@ func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 }
 
 func TestAllCommittedSessionFixturesPassWithExactCount(t *testing.T) {
-	result, err := ValidatePaths(allCommittedFixtureRoots())
+	roots := allCommittedFixtureRoots()
+	result, err := ValidatePaths(roots)
 	if err != nil {
 		t.Fatalf("validate all committed session fixture roots: %v", err)
 	}
-	if result.FilesScanned != 39 {
-		t.Fatalf("ValidatePaths scanned %d committed session fixtures, want exact count 39", result.FilesScanned)
+	manifest, err := loadFixtureManifest(repoPathFromHere(committedFixtureManifestRelPath))
+	if err != nil {
+		t.Fatalf("load committed fixture manifest: %v", err)
+	}
+	liveFiles, _, err := relativeFixtureFiles(roots)
+	if err != nil {
+		t.Fatalf("collect committed session fixtures: %v", err)
+	}
+	unregistered, stale := diffFixtureSets(liveFiles, manifest.Files)
+	if len(unregistered) > 0 || len(stale) > 0 || result.FilesScanned != manifest.Count {
+		t.Fatalf("%s", formatManifestDrift(committedFixtureManifestRelPath, result.FilesScanned, manifest.Count, unregistered, stale))
 	}
 	if len(result.Errors) != 0 {
 		t.Fatalf("all committed session fixture validation failed:\n%s", formatValidationErrors(result.Errors))
