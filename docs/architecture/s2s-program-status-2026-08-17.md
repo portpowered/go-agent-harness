@@ -39,6 +39,8 @@
 > boundary; it is not a claim about v1 text-in/audio-out, v2a basic audio-in,
 > v4c tool-error handling, or v6a auth-error handling.
 
+> **Reconciliation (2026-08-25, lane `s2s-b3-audioin-truthing`).** PR #98 closed unmerged as superseded 2026-08-24 (closure comment 5402348205): every behavior it carried landed via #143/#150/#152/#154/#156 and is formally proven by #157's hermetic CLI roundtrip proof with negative controls; #110 merged independently (`c90ff89f`, 2026-08-25) with no seam dependency. All #98-citing rows below are amended in place; the capability was re-proven empirically on clean `origin/main` = `c5f5769` (2026-08-25) — all three #157 proof tests green under `CGO_ENABLED=0 -tags=nomicrophone`.
+
 Ground truth from git + GitHub, not from the factory board (the board was
 in-memory and is gone). Everything here is reproducible with the commands in §8.
 
@@ -114,13 +116,13 @@ Ranked by **how many of the 58 not-started lanes it transitively gates.**
 | PR | lane tag | operational task | actual diff | comments | gates | verdict |
 |---|---|---|---|---|---|---|
 | **#118** | `s2s-b2-transport-grok-retype` | Retype the grok provider onto `pkg/transport` and migrate its consumers | **1 file, +7/−3** (`grok/dialer.go`) | **41** | **42 of 58** | **RESTART** |
-| **#98** | `s2s-b3-session-audio-in-file` | `agent session --audio-in` — feed a WAV into a realtime session | +1465/−0, 3 files (+10 to `cli/session.go`) | 59 | **24 of 58** | CONTINUE |
+| **#98** | `s2s-b3-session-audio-in-file` | `agent session --audio-in` — feed a WAV into a realtime session | +1465/−0, 3 files (+10 to `cli/session.go`) | 59 | **24 of 58** | **CLOSED** — superseded 2026-08-24 (reconciliation note above) |
 | **#83** | `s2s-b3-session-tool-executor-wiring` | Wire the tool executor into the realtime session path | +241/−0, 2 **new** files, touches nothing existing | 55 | 10 of 58 | **RESTART** |
 | **#97** | `s2s-b3-session-image-input` | `agent session --image` — send an image into a turn | +948/−0 (+12 to `cli/session.go`) | 56 | 7 of 58 | CONTINUE (blocked, §4.2) |
 | **#113** | `s2s-b2-audio-device-source-and-sink` | Device-backed AudioSource/sink behind the existing interface | +758/−0, 4 **new** files in `internal/audio` | 62 | 6 of 58 | CONTINUE (blocked, §4.2) |
 | **#132** | `s2s-b4-rtc-audio-track-egress` | Outbound WebRTC track, PCM16 → Opus | +1167/−0, `pkg/transport/rtc` | 28 | 6 of 58 | CONTINUE — closest to done |
 | **#133** | `s2s-b4-rtc-audio-track-ingress` | Inbound WebRTC track, Opus → PCM16 + jitter | +1381/−0, `pkg/transport/rtc` | 17 | 6 of 58 | CONTINUE — closest to done |
-| **#110** | `s2s-b3-session-recording-flags` | `--record-dir` and the both-side recording surface | +1424/−7 (only real edit: `cli/session.go`) | 62 | 1 of 58 | CONTINUE — needs #98's seam |
+| **#110** | `s2s-b3-session-recording-flags` | `--record-dir` and the both-side recording surface | +1424/−7 (only real edit: `cli/session.go`) | 62 | 1 of 58 | **MERGED** 2026-08-25 (`c90ff89f`) — no seam dependency |
 | **#107** | `s2s-lai-local-tier-conformance` | Prove which milestones LocalAI can gate vs OpenAI | +1778/−0, new `test/localai` module | 21 | 1 of 58 | CONTINUE |
 | **#116** | `s2s-b3-devices-list-command` | `agent devices list` (table + JSON) | +400/−0 — adds `cli/devices.go`, **never touches `cli/routes.go`** | 36 | 0 | **CONTINUE — one-line fix** |
 | **#77** | `s2s-b1-hermetic-test-target` | No-CGO, no-microphone CI test tier | +68/−0 (`ci.yml`, `Makefile`, doc) | 34 | 0 | **MERGE FIRST — smallest** |
@@ -140,9 +142,9 @@ None has a branch. All are blocked. Grouped by layer, with the immediate blocker
 | lane tag | operational task | waiting on |
 |---|---|---|
 | `s2s-b2-transport-recordreplay-retype` | Retype record/replay dialers onto `pkg/transport` | #118 |
-| `s2s-e2e-audio-roundtrip-proof` | MILESTONE: audio in + audio out end-to-end through the CLI | #98 |
-| `s2s-b3-session-vad-gating` | Wire the energy VAD into the session input path | #98 |
-| `s2s-b3-session-audio-in-device` | `--audio-in-device` — capture from a real mic | #98, #113 |
+| `s2s-e2e-audio-roundtrip-proof` | MILESTONE: audio in + audio out end-to-end through the CLI | delivered on main (#143/#150/#152/#154/#156/#157); #98 closed |
+| `s2s-b3-session-vad-gating` | Wire the energy VAD into the session input path | audio-in path delivered on main (#143/#150/#152/#154/#156/#157); #98 closed |
+| `s2s-b3-session-audio-in-device` | `--audio-in-device` — capture from a real mic | audio-in delivered on main (#143/#150/#152/#154/#156/#157); #98 closed, device capture still waits on #113 |
 | `s2s-b3-session-audio-out-device` | `--audio-out-device` — play to a real speaker | #113 |
 | `s2s-b3-session-default-toolset` | Default tool set for realtime sessions, `--tools` | #83 |
 | `s2s-b3-session-tool-definitions` | Tool schemas + argument validation | #83 |
@@ -179,7 +181,7 @@ delivered through**). Plus `s2s-b3-probe-live-transport` (opt-in live API) and
 
 | lane tag | operational task | chain |
 |---|---|---|
-| `s2s-e2e-audio-roundtrip-proof` | Prove audio in + out through the public CLI | #98 |
+| `s2s-e2e-audio-roundtrip-proof` | Prove audio in + out through the public CLI | delivered and proven on main (#143/#150/#152/#154/#156/#157); #98 closed |
 | `s2s-e2e-multiturn-conversation` | A 3–7 turn audio conversation that holds together | ← roundtrip-proof |
 | `s2s-e2e-tool-call-conversation` | Customer asks by voice, agent calls a specific CLI | ← multiturn + default-toolset (#83) |
 | `s2s-e2e-vision-describe` | Customer asks by voice about an image, agent describes it | ← multiturn + #97 |
@@ -273,10 +275,10 @@ and apply it to all of them:
 
 Affected: **#97** (production realtime session lacks the complete-message
 contract), **#113** (needs real WASAPI frame I/O in `device_windows.go` plus
-shared conformance infra), **#110** (needs a production seam owned by #98, a
-different lane, with no `DEPENDS_ON` edge between them), **#114** (typed
-command-error assertions, at-file path-escape, bounded scrollback — all
-production APIs).
+shared conformance infra), **#114** (typed command-error assertions, at-file
+path-escape, bounded scrollback — all production APIs). **#110** is no longer
+affected here: it merged (`c90ff89f`, 2026-08-25) after landing without any
+#98-owned seam.
 
 ### 4.3 Continue as-is
 
@@ -285,8 +287,9 @@ production APIs).
 - **#116** — widen the lease by one file (`cli/routes.go`) and it is done.
 - **#132 / #133** — self-contained in `pkg/transport/rtc`, low comment counts, no
   cross-lane dependency. Closest to merging of anything non-trivial.
-- **#98** — the second-most-valuable PR (gates 24). Verify the `+10` to
-  `cli/session.go` genuinely reaches the session path, then rebase and land.
+- **#98** — CLOSED unmerged 2026-08-24 as superseded (closure comment
+  5402348205). Every behavior landed via #143/#150/#152/#154/#156 and is proven
+  by #157; do not rebase or land it.
 - **#107** — new isolated `test/localai` module; low risk.
 
 ### 4.4 Decide, don't build
@@ -344,8 +347,9 @@ Steps 1–3 are cheap and unblock disproportionately.
    behind it, via
    `grok-retype → recordreplay-retype → probe-replay-transport →
    probe-runner-jsonl → probe-cli-surface → 28 verticals + acceptance gate`.
-5. **Land #98.** Unblocks `e2e-audio-roundtrip-proof` — the first milestone that
-   proves anything to a customer — plus 23 more.
+5. **#98 stays closed** — superseded 2026-08-24 (closure comment 5402348205);
+   the `e2e-audio-roundtrip-proof` milestone it would have unblocked is already
+   delivered and proven on main by #157's hermetic tests.
 6. **Close #68** with a decision.
 7. **Re-cut #83**, then land #132 / #133 / #107, then the §2.3 frontier.
 8. Only then does the vertical layer become submittable.
