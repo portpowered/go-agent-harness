@@ -38,6 +38,12 @@ type SessionRunOptions struct {
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
 
+	// ToolExecutor optionally injects the composed session tool executor.
+	// When nil, duplex loop construction stays byte-for-byte identical to the
+	// no-tools behavior; provider tool calls keep reaching the loop default
+	// and fail exactly as they did before this field existed.
+	ToolExecutor messages.ToolExecutor
+
 	// Diagnostics optionally receives one canonical structured record per
 	// terminal failure plus per-turn and tool-call records. Nil keeps runtime
 	// behavior byte-for-byte unchanged.

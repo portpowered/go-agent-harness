@@ -220,7 +220,7 @@ func runMultiturnTurn(t *testing.T, fixturePath, wavPath string) (string, error)
 	t.Helper()
 
 	stdout := &syncBuffer{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	cmd.SetOut(stdout)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath})

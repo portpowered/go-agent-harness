@@ -28,7 +28,7 @@ import (
 )
 
 func TestSessionCommandHelpExposesAudioInput(t *testing.T) {
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetArgs([]string{"--help"})
@@ -177,7 +177,7 @@ func TestSessionCommandAudioInputConflictUsesOwnerRegisteredDeviceFlag(t *testin
 		t.Fatal(err)
 	}
 	inferencer := &countingSessionInferencer{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.Flags().Bool("audio-in-device", false, "owner-registered device input")
 	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", validPath, "--audio-in-device"})
 	err := cmd.ExecuteContext(context.Background())
@@ -201,7 +201,7 @@ func TestSessionCommandAudioInputStreamsExactFramesAndClosesFile(t *testing.T) {
 
 	inferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(inferencer.Close)
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.SetOut(io.Discard)
 	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", path})
 	result := make(chan error, 1)
@@ -246,7 +246,7 @@ func TestSessionCommandAudioInputReadsRawStdin(t *testing.T) {
 	}
 	inferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(inferencer.Close)
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.SetIn(bytes.NewReader(pcm16Bytes(samples)))
 	cmd.SetOut(io.Discard)
 	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", "-"})
@@ -409,7 +409,7 @@ func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 	if _, err := gwtesting.NewReplayWebSocketDialer(wirePath); err != nil {
 		t.Fatalf("wire replay fixture rejected by replay dialer: %v", err)
 	}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	cmd.SetOut(io.Discard)
 	cmd.SetArgs([]string{"--replay", wirePath, "--audio-in", wavPath})
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
@@ -419,7 +419,7 @@ func TestSessionCommandAudioInputReplaysCommittedFixture(t *testing.T) {
 	// Generic proof through the committed capture: the real command must
 	// transmit every committed WAV frame, in order, byte for byte.
 	recorded := gwtesting.NewRecordingSessionInferencer(gwtesting.NewReplaySessionInferencer(capturePath))
-	genericCmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), recorded).Generate()
+	genericCmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, recorded).Generate()
 	genericCmd.SetOut(io.Discard)
 	genericCmd.SetArgs([]string{"--replay", capturePath, "--audio-in", wavPath})
 	if err := genericCmd.ExecuteContext(context.Background()); err != nil {
@@ -633,7 +633,7 @@ func TestRunSessionWithAudioInputCancellationStopsBlockingStdin(t *testing.T) {
 	reader := newBlockingContextReader()
 	inferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(inferencer.Close)
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.SetIn(reader)
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
@@ -671,7 +671,7 @@ func TestRunSessionWithAudioInputSessionTerminationStopsBlockingStdin(t *testing
 	baseInferencer := functional.NewMockSessionInferencer()
 	signaledInferencer := newConnectSignaledInferencer(baseInferencer)
 	t.Cleanup(baseInferencer.Close)
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), signaledInferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, signaledInferencer).Generate()
 	cmd.SetIn(reader)
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
@@ -713,7 +713,7 @@ func TestRunSessionWithAudioInputRejectsUninterruptibleStdin(t *testing.T) {
 	defer close(reader.release)
 	inferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(inferencer.Close)
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.SetIn(reader)
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
@@ -744,7 +744,7 @@ func TestRunSessionWithAudioInputRejectsFailedDeadlineStdin(t *testing.T) {
 	reader := &failedDeadlineReader{deadlineErr: wantDeadlineErr, started: make(chan struct{})}
 	inferencer := functional.NewMockSessionInferencer()
 	t.Cleanup(inferencer.Close)
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inferencer).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
 	cmd.SetIn(reader)
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
