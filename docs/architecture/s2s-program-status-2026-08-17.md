@@ -16,6 +16,29 @@
 > results to the provider. The positive-path test skips with that exact reason
 > and turns green automatically once that wiring lands.
 
+> **CLI-verifiable evidence contract.** The proving test is
+> `agent-cli/test/integration/session_tool_single_call_test.go`. Its command
+> shape is the real session surface (shown with the test's temporary replay
+> and output paths):
+> `agent session --audio-in go-agent-loop/testdata/audio/truncated_16k.wav --replay <t.TempDir>/tool-single-call.session.json --audio-out <t.TempDir>/response.wav --max-duration 3s`.
+> The replay is a strict, offline OpenAI Realtime WebSocket capture assembled
+> from the committed smoke capture and the committed audio corpus; it accepts
+> the exact input frames, commit, and response request before delivering one
+> `get_weather` call with `{"city":"Lisbon"}` and scripted output audio. The
+> transport-level assertion is ordered and counted: one named provider call
+> with the expected arguments, then valid non-empty output audio. The executor
+> invocation and correlated result-delivery assertions are present in the
+> positive test but remain skipped until the out-of-lease session wiring emits
+> the provider-facing result; they must then sit between the call and resumed
+> audio. The no-invocation control uses the identical CLI and audio input with
+> the call suppressed; it still emits response audio, but the shared
+> exactly-one assertion fails with a missing `get_weather` invocation.
+> The longer `tool_request_16k.wav` corpus asset is 20.5 seconds and does not
+> fit the session runtime's current three-second bounded replay window, so it
+> is not substituted silently. This evidence is specifically the v4a tool
+> boundary; it is not a claim about v1 text-in/audio-out, v2a basic audio-in,
+> v4c tool-error handling, or v6a auth-error handling.
+
 Ground truth from git + GitHub, not from the factory board (the board was
 in-memory and is gone). Everything here is reproducible with the commands in §8.
 

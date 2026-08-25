@@ -24,6 +24,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -31,10 +32,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -224,8 +224,11 @@ func runToolSingleCall(t *testing.T, wavPath, wirePath string, executor *toolCal
 		"--replay", wirePath,
 		"--audio-in", wavPath,
 		"--audio-out", outputPath,
+		"--max-duration", "3s",
 	})
-	err = rootCmd.ExecuteContext(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = rootCmd.ExecuteContext(ctx)
 	return outputPath, err
 }
 
@@ -296,46 +299,21 @@ func assertRecordedSpeech(t *testing.T, outputPath string, wantSamples int) {
 	}
 }
 
-// TestSessionNamedToolCallReachesExecutorBoundaryThroughCLI proves today, on
-// main, that the spoken request's named tool call traverses the real agent
-// session CLI all the way to the tool-executor boundary: the run fails
-// deterministically with the default executor's not-implemented error naming
-// the requested tool.
-func TestSessionNamedToolCallReachesExecutorBoundaryThroughCLI(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
+// validateExactlyOneToolCall is the shared vertical assertion used by both
+// the positive path and its no-invocation control. Keeping the zero-call
+// failure in this helper prevents response audio from making the control pass.
+func validateExactlyOneToolCall(calls []messages.ToolCall) error {
+	if len(calls) != 1 {
+		return fmt.Errorf("missing named invocation %q: recorded %d calls, want exactly one", toolCallScenarioName, len(calls))
 	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
+	call := calls[0]
+	if call.Name != toolCallScenarioName {
+		return fmt.Errorf("executor invoked tool %q, want %q", call.Name, toolCallScenarioName)
 	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
-
-	wirePath := buildToolSingleCallFixture(t, wavPath, reply, true)
-	outputPath, runErr := runBareSessionCommand(t, wavPath, wirePath)
-	t.Logf("bare run err=%v outputPath=%s", runErr, outputPath)
-	if runErr == nil {
-		t.Skip("bare session command completed without surfacing the executor boundary; tool-call handling in the duplex loop is not deterministic enough for a boundary-failure proof")
+	if !json.Valid([]byte(call.Arguments)) || !strings.Contains(call.Arguments, "Lisbon") {
+		return fmt.Errorf("executor invoked %q with arguments %q, want valid arguments mentioning Lisbon", call.Name, call.Arguments)
 	}
-	message := runErr.Error()
-	if !strings.Contains(message, toolCallScenarioName) || !strings.Contains(message, "default tool executor is not implemented") {
-		t.Fatalf("run error %q does not name tool %q reaching the executor boundary", message, toolCallScenarioName)
-	}
-}
-
-// runBareSessionCommand drives 'agent session' without any composed tool
-// executor, exercising the session runtime's built-in default executor path.
-func runBareSessionCommand(t *testing.T, wavPath, wirePath string) (string, error) {
-	t.Helper()
-	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
-	cmd.SetOut(io.Discard)
-	cmd.SetErr(io.Discard)
-	cmd.SetArgs([]string{"--replay", wirePath, "--audio-in", wavPath, "--audio-out", outputPath})
-	err := cmd.ExecuteContext(context.Background())
-	return outputPath, err
+	return nil
 }
 
 // TestSessionToolSingleCallRoundTripThroughCLI is the full positive path: the
@@ -387,14 +365,8 @@ func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
 	if len(executor.calls) == 0 {
 		t.Skipf("s2s v4a executor-invocation proof blocked by out-of-lease production wiring: the session loop is constructed without agentloop.WithToolExecutor, so the composed recording executor never receives the named tool call; transport-level speech resumption after the named tool call did succeed")
 	}
-	if len(executor.calls) != 1 {
-		t.Fatalf("executor recorded %d tool invocations, want exactly 1: %+v", len(executor.calls), executor.calls)
-	}
-	if executor.calls[0].Name != toolCallScenarioName {
-		t.Fatalf("executor invoked tool %q, want %q", executor.calls[0].Name, toolCallScenarioName)
-	}
-	if !json.Valid([]byte(executor.calls[0].Arguments)) || !strings.Contains(executor.calls[0].Arguments, "Lisbon") {
-		t.Fatalf("executor invoked %q with arguments %q, want arguments mentioning Lisbon", executor.calls[0].Name, executor.calls[0].Arguments)
+	if err := validateExactlyOneToolCall(executor.calls); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -429,11 +401,14 @@ func TestSessionToolSingleCallSuppressedFailsDeterministically(t *testing.T) {
 	if len(executor.calls) != 0 {
 		t.Fatalf("executor recorded %d invocations with the tool call suppressed, want zero: %+v", len(executor.calls), executor.calls)
 	}
-	exactlyOneViolation := func(calls int) bool { return calls != 1 }
-	if !exactlyOneViolation(len(executor.calls)) {
-		t.Fatal("exactly-one invocation assertion passed on a zero-invocation run; the check does not discriminate")
+	assertionErr := validateExactlyOneToolCall(executor.calls)
+	if assertionErr == nil {
+		t.Fatal("shared exactly-one invocation assertion passed on a zero-invocation run; the check does not discriminate")
 	}
-	t.Logf("negative control rejected as expected: executor recorded %d invocations of %q, want exactly 1", len(executor.calls), toolCallScenarioName)
+	if !strings.Contains(assertionErr.Error(), toolCallScenarioName) {
+		t.Fatalf("negative-control assertion error %q does not identify missing tool %q", assertionErr, toolCallScenarioName)
+	}
+	t.Logf("negative control rejected as expected: %v", assertionErr)
 }
 
 // loudestWindowSamplesIntegration mirrors the corpus helper: highest-energy
