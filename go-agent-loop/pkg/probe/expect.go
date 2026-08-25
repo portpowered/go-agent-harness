@@ -15,6 +15,20 @@ const (
 	ExpectTerminalReason     ExpectationKind = "terminal-reason"
 	ExpectFrameCount         ExpectationKind = "frame-count"
 
+	// ExpectToolResultDelivered asserts that the named tool call's result was
+	// observed on the client-to-provider path (the result reached the
+	// provider) after a mid-tool-call barge-in.
+	ExpectToolResultDelivered ExpectationKind = "tool-result-delivered"
+	// ExpectToolResultDiscarded asserts that the named tool call's result was
+	// explicitly discarded through an observable discard event rather than
+	// vanishing silently after a barge-in.
+	ExpectToolResultDiscarded ExpectationKind = "tool-result-discarded"
+	// ExpectNoOrphanedToolResult enforces the standing barge-in invariant:
+	// every issued tool call must be either delivered to the provider or
+	// explicitly discarded; any other outcome is an orphaned tool result and
+	// fails the run.
+	ExpectNoOrphanedToolResult ExpectationKind = "no-orphaned-tool-result"
+
 	// AudioEnergyThreshold is the PCM16 RMS boundary used by the VAD
 	// contract. Audio energy must be strictly greater than this value.
 	AudioEnergyThreshold = 300.0
@@ -31,6 +45,13 @@ type ObservationSnapshot struct {
 	PCM16Samples []int16
 	Transcript   string
 	ToolCalls    []string
+
+	// ToolResultsDelivered lists tool call IDs whose results were observed on
+	// the outbound client-to-provider path.
+	ToolResultsDelivered []string
+	// ToolResultsDiscarded lists tool call IDs whose results were explicitly
+	// discarded through an observable discard event.
+	ToolResultsDiscarded []string
 
 	ObservedTick    LogicalTime
 	HasObservedTick bool
@@ -155,6 +176,31 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		if observation.FrameCount != expectation.Count {
 			return mismatch(expectation, kind, expectation.Count, observation.FrameCount)
 		}
+	case ExpectToolResultDelivered:
+		want, err := aliasString(expectation, kind, "tool_call_id", expectation.ToolCallID, expectation.Value)
+		if err != nil {
+			return err
+		}
+		if !containsID(observation.ToolResultsDelivered, want) {
+			return mismatch(expectation, kind, "delivered tool result for "+want,
+				observedIDs(observation.ToolResultsDelivered))
+		}
+	case ExpectToolResultDiscarded:
+		want, err := aliasString(expectation, kind, "tool_call_id", expectation.ToolCallID, expectation.Value)
+		if err != nil {
+			return err
+		}
+		if !containsID(observation.ToolResultsDiscarded, want) {
+			return mismatch(expectation, kind, "explicit discard event for "+want,
+				observedIDs(observation.ToolResultsDiscarded))
+		}
+	case ExpectNoOrphanedToolResult:
+		orphaned := orphanedToolCalls(observation)
+		if len(orphaned) != 0 {
+			return mismatch(expectation, kind,
+				"every tool call delivered or explicitly discarded",
+				"orphaned: "+diagnosticValue(orphaned))
+		}
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
@@ -189,7 +235,8 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 	}
 	switch kind {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
-		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount:
+		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
+		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult:
 		return kind, nil
 	default:
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
@@ -233,6 +280,35 @@ func startTick(e ExpectedBehavior) (LogicalTime, error) {
 func observationTick(o ObservationSnapshot) (LogicalTime, bool) {
 	return o.ObservedTick, o.HasObservedTick || o.ObservedTick != 0
 }
+func containsID(ids []string, want string) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
+// orphanedToolCalls returns the tool call IDs that were neither delivered to
+// the provider nor explicitly discarded.
+func orphanedToolCalls(observation ObservationSnapshot) []string {
+	var orphaned []string
+	for _, call := range observation.ToolCalls {
+		if containsID(observation.ToolResultsDelivered, call) || containsID(observation.ToolResultsDiscarded, call) {
+			continue
+		}
+		orphaned = append(orphaned, call)
+	}
+	return orphaned
+}
+
+func observedIDs(ids []string) string {
+	if len(ids) == 0 {
+		return "none"
+	}
+	return strings.Join(ids, ", ")
+}
+
 func pcm16RMS(samples []int16) float64 {
 	if len(samples) == 0 {
 		return 0
