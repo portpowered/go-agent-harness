@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-4-v6d-malformed-response"
+  },
+  "session": {
+    "id": "sess_v6d_malformed_response",
+    "started_at_utc": "2026-08-24T00:00:00Z",
+    "fixture_provenance": "synthetic_failure"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-4-v6d-malformed-response"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_v6d_malformed_response",
+        "model": "grok-4-v6d-malformed-response"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "malformed.truncated_json",
+      "payload_type": "websocket_message",
+      "payload": {
+        "raw": "{\"type\":\"response.text.delta\",\"delta\":\"trun",
+        "note": "provider frame cut off mid-JSON; the session parser cannot decode it and must surface a typed malformed/parse-classified error"
+      }
+    }
+  ],
+  "ends_with_disconnect": true
+}

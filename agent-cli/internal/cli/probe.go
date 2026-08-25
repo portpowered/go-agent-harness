@@ -487,17 +487,28 @@ func deriveToolResultObservation(fixture string, observation *probe.ObservationS
 	return nil
 }
 
-// replayErrorClassification classifies the first server-to-client error record
-// in the fixture through the established provider error taxonomy. It returns
-// the empty string when the fixture records no provider error, so healthy
-// sessions keep their disconnect/provenance terminal reason.
+// replayErrorClassification classifies the first server-to-client failure
+// record in the fixture through the established provider error taxonomy. A
+// server-to-client frame whose type carries the "malformed." prefix encodes an
+// unparseable provider response and classifies as invalid_request — the same
+// taxonomy class the gateway assigns when a live session parser rejects a
+// provider event. Well-formed "error" records classify via their wire error
+// type/code. It returns the empty string when the fixture records no provider
+// error or malformed frame, so healthy sessions keep their
+// disconnect/provenance terminal reason.
 func replayErrorClassification(fixture string) string {
 	capture, err := gatewaytesting.LoadSessionCapture(fixture)
 	if err != nil {
 		return ""
 	}
 	for _, record := range capture.Records {
-		if record.Direction != gatewaytesting.DirectionServerToClient || record.Type != "error" {
+		if record.Direction != gatewaytesting.DirectionServerToClient {
+			continue
+		}
+		if strings.HasPrefix(record.Type, "malformed.") {
+			return providers.ErrorClassInvalidRequest
+		}
+		if record.Type != "error" {
 			continue
 		}
 		var payload struct {
