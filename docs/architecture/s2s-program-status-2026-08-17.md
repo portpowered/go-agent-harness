@@ -1,5 +1,21 @@
 # s2s program — real status and restart plan (2026-08-17)
 
+> **v4a-tool-single-call status update (2026-08-24).** The vertical's
+> CLI-verified hermetic integration proof landed in
+> `agent-cli/test/integration/session_tool_single_call_test.go` (PR:
+> s2s-v4a-tool-single-call). Proven end to end through the real `agent session`
+> CLI over the record/replay transport: a file-backed spoken request whose
+> replayed provider exchange carries exactly one named function tool call with
+> expected arguments, output speech produced after the tool call, and a
+> deterministic negative control proving the exactly-one invocation assertion
+> rejects a suppressed tool call. Remaining for full v4a "executor round trip"
+> proven status (out of this test lane's lease, filed separately): the session
+> loop in `services/session_live.go` constructs its `agentloop` without
+> `WithToolExecutor`, so the composed tool executor never executes the named
+> tool, and the realtime outbound translation does not yet forward tool
+> results to the provider. The positive-path test skips with that exact reason
+> and turns green automatically once that wiring lands.
+
 Ground truth from git + GitHub, not from the factory board (the board was
 in-memory and is gone). Everything here is reproducible with the commands in §8.
 
