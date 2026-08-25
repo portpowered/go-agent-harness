@@ -33,6 +33,7 @@ type SessionImageRunOptions struct {
 	AudioOutPath string
 	MaxDuration  time.Duration
 	TextSeed     SessionTextSeed
+	SystemPrompt string
 }
 type SessionImageCapabilities struct {
 	Model                   string
@@ -98,7 +99,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if opts.TextSeed.Present {
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 	}
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed)
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt)
 	if err != nil {
 		return err
 	}
