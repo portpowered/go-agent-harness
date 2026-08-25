@@ -382,7 +382,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		Model:             "gpt-realtime",
 		APIKey:            "test-key",
 		ConfigDir:         t.TempDir(),
-		Prompt:            "paired prompt",
+		Prompt:            "",
 		SessionInferencer: plainInferencer,
 	})
 	if err != nil {
@@ -576,7 +576,7 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 			Model:             "gpt-realtime",
 			APIKey:            "test-key",
 			ConfigDir:         t.TempDir(),
-			Prompt:            "composable prompt",
+			Prompt:            "",
 			SessionInferencer: inferencer,
 		}
 	}
