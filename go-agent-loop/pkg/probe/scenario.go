@@ -807,18 +807,15 @@ func expectationTimeValue(value ExpectedBehavior, location string) (LogicalTime,
 }
 
 var typedExpectationFieldsByKind = map[ExpectationKind]map[string]bool{
-	ExpectText:                 {"text": true},
-	ExpectTranscript:           {"text": true},
-	ExpectContains:             {"text": true},
-	ExpectAudio:                {"corpus_id": true},
-	ExpectToolCall:             {"tool_call_id": true, "tool_name": true},
-	ExpectToolResult:           {"tool_call_id": true, "result": true},
-	ExpectToolResultDelivered:  {"tool_call_id": true},
-	ExpectToolResultDiscarded:  {"tool_call_id": true},
-	ExpectNoOrphanedToolResult: {},
-	ExpectClose:                {},
-	ExpectTime:                 {"at": true},
-	ExpectEvent:                {"value": true},
+	ExpectText:       {"text": true},
+	ExpectTranscript: {"text": true},
+	ExpectContains:   {"text": true},
+	ExpectAudio:      {"corpus_id": true},
+	ExpectToolCall:   {"tool_call_id": true, "tool_name": true},
+	ExpectToolResult: {"tool_call_id": true, "result": true}, ExpectToolResultDelivered: {"tool_call_id": true},
+	ExpectToolResultDiscarded: {"tool_call_id": true}, ExpectNoOrphanedToolResult: {}, ExpectClose: {},
+	ExpectTime:  {"at": true},
+	ExpectEvent: {"value": true},
 }
 
 func rejectTypedExpectationFields(value ExpectedBehavior, location string, hasAt bool) error {
