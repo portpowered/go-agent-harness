@@ -189,6 +189,25 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			{Type: conversationItemCreateEvent, Data: data},
 			models.NewResponseCreateEvent(),
 		}, true
+	case messages.StreamTypeToolCallEnd:
+		// Tool result: send as conversation.item.create with a
+		// function_call_output item so the model observes what its tool
+		// returned. Mirrors the Grok provider translation (grok/events.go)
+		// and deliberately appends no response.create.
+		v, ok := msg.Value.(*messages.ToolCallEndValue)
+		if !ok || v == nil {
+			return nil, false
+		}
+		data, _ := json.Marshal(map[string]any{
+			"item": map[string]any{
+				"type":    "function_call_output",
+				"call_id": v.ToolCallID,
+				"output":  v.Arguments,
+			},
+		})
+		return []models.SessionEvent{
+			{Type: conversationItemCreateEvent, Data: data},
+		}, true
 	default:
 		return nil, false
 	}
