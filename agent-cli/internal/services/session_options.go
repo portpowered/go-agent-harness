@@ -35,6 +35,12 @@ type SessionRunOptions struct {
 
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   grok.WebSocketDialer
+
+	// ToolExecutor is an optional injected executor override. When nil, the
+	// session path composes one from the loaded config's tool registry.
+	ToolExecutor messages.ToolExecutor
+	// ToolDefinitions advertises the tool schemas alongside ToolExecutor.
+	ToolDefinitions []messages.ToolDefinition
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {

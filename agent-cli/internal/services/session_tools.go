@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -24,12 +26,39 @@ type sessionToolExecutor struct {
 
 var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
 
+// resolveSessionToolExecution composes the session tool executor from the
+// loaded config's tool registry, mirroring the non-session path. An injected
+// opts.ToolExecutor takes precedence. A nil/empty tool configuration yields a
+// no-tools result so sessions behave exactly as before.
+func resolveSessionToolExecution(opts SessionRunOptions) (messages.ToolExecutor, []messages.ToolDefinition) {
+	if opts.ToolExecutor != nil {
+		return opts.ToolExecutor, opts.ToolDefinitions
+	}
+	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
+	if err != nil {
+		return nil, nil
+	}
+	cfg, err := storage.Load()
+	if err != nil || len(cfg.Tools.List) == 0 {
+		return nil, nil
+	}
+	registry := tools.NewToolRegistryFromConfig(cfg)
+	if registry.Count() == 0 {
+		return nil, nil
+	}
+	return tools.NewRegistryExecutor(registry), registry.ToAgentLoopDefs()
+}
+
 // newSessionToolExecutor adapts an injected executor for use by a duplex
 // session. A non-positive timeout selects the session default.
 //
-// The session loop construction seam should pass the returned executor to
+// The session loop construction seam passes the returned executor to
 // agentloop.WithToolExecutor. Keeping the adapter at this boundary makes an
 // individual tool failure a tool result instead of a fatal loop error.
+//
+// Inner executors are expected to honor context cancellation cooperatively;
+// Go cannot terminate a goroutine that ignores its context. The adapter
+// guarantees only that the session itself continues after the deadline.
 func newSessionToolExecutor(inner messages.ToolExecutor, timeout time.Duration) *sessionToolExecutor {
 	if timeout <= 0 {
 		timeout = defaultSessionToolExecutionTimeout

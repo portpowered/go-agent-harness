@@ -20,12 +20,13 @@ import (
 type SessionCommand struct {
 	askFlags                  *flags.AskFlags
 	globalFlags               *flags.GlobalFlags
+	toolExecutorOverride      messages.ToolExecutor
 	sessionInferencerOverride messages.SessionInferencer
 }
 
 // NewSessionCommand returns the session group command constructor.
-func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
-	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, sessionInferencerOverride: sessionInferencerOverride}
+func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
+	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, toolExecutorOverride: toolExecutorOverride, sessionInferencerOverride: sessionInferencerOverride}
 }
 
 // Generate returns the cobra command for the session group.
@@ -51,6 +52,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
+				ToolExecutor:      c.toolExecutorOverride,
 			})
 		},
 	}

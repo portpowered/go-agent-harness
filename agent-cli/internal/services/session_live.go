@@ -17,20 +17,31 @@ import (
 const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 
 type sessionLoopOptions struct {
-	Prompt         string
-	CloseAfterOpen bool
-	WaitForClose   bool
-	MaxDuration    time.Duration
-	Done           <-chan struct{}
-	DoneErr        func() error
+	Prompt          string
+	CloseAfterOpen  bool
+	WaitForClose    bool
+	MaxDuration     time.Duration
+	Done            <-chan struct{}
+	DoneErr         func() error
+	ToolExecutor    messages.ToolExecutor
+	ToolDefinitions []messages.ToolDefinition
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	observedInferencer := newObservedSessionInferencer(sessionInferencer)
-	loop, err := agentloop.New(
+	loopOpts := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(observedInferencer),
-	)
+	}
+	if opts.ToolExecutor != nil {
+		loopOpts = append(loopOpts,
+			agentloop.WithTools(opts.ToolDefinitions),
+			agentloop.WithToolExecutor(opts.ToolExecutor),
+		)
+	} else {
+		loopOpts = append(loopOpts, agentloop.WithToolExecutionDisabled())
+	}
+	loop, err := agentloop.New(loopOpts...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
 	}

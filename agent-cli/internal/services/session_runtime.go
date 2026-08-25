@@ -120,7 +120,16 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
 }
 
 func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
-	return planSessionRuntimeWithFactory(opts, defaultSessionRuntimeFactory)
+	plan, err := planSessionRuntimeWithFactory(opts, defaultSessionRuntimeFactory)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	executor, defs := resolveSessionToolExecution(opts)
+	if executor != nil {
+		plan.loop.ToolExecutor = newSessionToolExecutor(executor, 0)
+		plan.loop.ToolDefinitions = defs
+	}
+	return plan, nil
 }
 
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

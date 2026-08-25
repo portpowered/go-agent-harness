@@ -32,7 +32,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, toolDefs []messages.To
 	toolCommand := cli.NewToolCommand(globalFlags)
 	interactionCommand := cli.NewInteractionCommand()
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
+	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, toolExecutor, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
