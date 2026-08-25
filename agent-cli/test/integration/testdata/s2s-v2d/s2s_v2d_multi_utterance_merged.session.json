@@ -39,10 +39,10 @@
       "sequence": 3,
       "direction": "client_to_server",
       "timestamp_ms": 10,
-      "type": "input_audio_buffer.append",
+      "type": "audio_in.append",
       "payload_type": "websocket_message",
       "payload": {
-        "type": "input_audio_buffer.append",
+        "type": "audio_in.append",
         "audio_base64": "AQIDBAUGBwgJ"
       }
     },
@@ -50,10 +50,10 @@
       "sequence": 4,
       "direction": "client_to_server",
       "timestamp_ms": 20,
-      "type": "input_audio_buffer.append",
+      "type": "audio_in.append",
       "payload_type": "websocket_message",
       "payload": {
-        "type": "input_audio_buffer.append",
+        "type": "audio_in.append",
         "audio_base64": "AQIDBAUGBwgJ"
       }
     },
@@ -102,10 +102,10 @@
       "sequence": 9,
       "direction": "client_to_server",
       "timestamp_ms": 30,
-      "type": "input_audio_buffer.append",
+      "type": "audio_in.append",
       "payload_type": "websocket_message",
       "payload": {
-        "type": "input_audio_buffer.append",
+        "type": "audio_in.append",
         "audio_base64": "AQIDBAUGBwgJ"
       }
     },
