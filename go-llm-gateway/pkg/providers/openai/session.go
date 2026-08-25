@@ -45,6 +45,10 @@ func (s *realtimeSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	if !ok {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
+	return s.sendEvents(ctx, events)
+}
+
+func (s *realtimeSession) sendEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
 	select {
 	case <-ctx.Done():
 		return sessionSendContextOutcome(ctx)
