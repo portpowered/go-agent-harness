@@ -1,0 +1,32 @@
+{
+  "id": "s2s-v2d-audio-in-multi-utterance-missegmented",
+  "name": "s2s_v2d_multi_utterance_merged",
+  "description": "Negative control: the mis-segmented fixture merges utterances one and two into a single commit/turn, so the same segmentation expectations (18 frames) must fail.",
+  "steps": [
+    {
+      "type": "send_text",
+      "text": "utterance one audio segment enters over the gap-bounded audio-in path"
+    },
+    {
+      "type": "send_text",
+      "text": "utterance two audio segment after an inter-utterance gap"
+    },
+    {
+      "type": "send_text",
+      "text": "utterance three audio segment after a second gap"
+    },
+    {
+      "type": "close"
+    }
+  ],
+  "expectations": [
+    {
+      "type": "frame_count",
+      "count": 18
+    },
+    {
+      "type": "terminal_reason",
+      "value": "disconnect"
+    }
+  ]
+}
