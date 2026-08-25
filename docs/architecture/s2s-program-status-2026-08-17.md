@@ -507,3 +507,28 @@ plus `bb85450` on the fixture-count file. Current main vertical coverage for the
 outcome-on-main axis: probe scenarios v1/v3b/error-auth only; integration tests
 `session_audioin_live_test.go` + v3b fixtures only; session-fixtures dir has v6a auth
 fixtures but no v6d malformed-response fixtures (full listing in the evidence appendix §7).
+
+## 10. Recut delivery: `s2s-v2e-audio-in-truncated-recut` — 2026-08-25
+
+Append-only section, recorded by the `s2s-v2e-audio-in-truncated-recut` lane.
+The §9 disposition of #167 (keep-and-recut, semantic union) has been executed:
+branch `s2s-v2e-audio-in-truncated-recut` descends from current `origin/main`
+(`c5f576918e23be2e9c05dade826471c724f60eea`); all seven #167 artifacts were
+carried byte-identical from head `79a54e5790a417bfaaf0807a05f668426b94c9ad`
+(blob-hash equality per artifact); the `ExpectBufferDisposition` family was
+unioned beside main's tool-result family (#170) with no arm removed anywhere
+it appears (`expect.go`, `deadguard.go`, `scenario_measurable.go`,
+`probe.go` alias map and derivation site). Orphaned heads #165/#166/#167/#168
+were never reopened, rebased, or pushed. The inherited red check is gone: the
+validator exact-count assertion passes recomputed on this head (no
+scanned-root fixture added). Direct CLI runs: 16k and 24k scenarios exit 0
+with the buffer disposition surfaced; the uncommitted-negative control exits
+non-zero with `expected "committed", actual "uncommitted"`. Full command/exit
+table: `docs/architecture/s2s-v2e-audio-in-truncated-proof.md` (recut
+appendix).
+
+**Proven verticals (CLI-verified over the hermetic replay transport):**
+
+| vertical | evidence |
+|---|---|
+| `v2e-audio-in-truncated` | Proven on the recut head 2026-08-25 — truncated_16k/24k sessions terminate within the probe deadguard with an observable buffer disposition (committed or explicitly discarded); negative control fails on a suppressed buffer commit. Tests: `TestProbeRunV2EAudioInTruncated16kCommitsPartialUtterance`, `TestProbeRunV2EAudioInTruncated24kDiscardsPartialUtterance`, `TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer` (`agent-cli/internal/cli/probe_test.go`). Reuses committed fixtures `go-agent-loop/testdata/audio/truncated_{16k,24k}.wav`; no new audio fixtures required. Details: `docs/architecture/s2s-v2e-audio-in-truncated-proof.md`. |
