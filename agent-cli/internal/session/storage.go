@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -113,9 +114,33 @@ func (s *Storage) Save(sessionID string, msgs []messages.Message) error {
 		return fmt.Errorf("marshal session: %w", err)
 	}
 	path := s.sessionPath(sessionID)
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
+		return fmt.Errorf("write session %s: %w", sessionID, &os.PathError{Op: "open", Path: path, Err: syscall.EISDIR})
+	}
+	tmp, err := os.CreateTemp(s.sessionsDir, sessionPrefix+".tmp-*")
+	if err != nil {
 		return fmt.Errorf("write session %s: %w", sessionID, err)
 	}
+	tmpName := tmp.Name()
+	defer func() {
+		if tmpName != "" {
+			os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write session %s: %w", sessionID, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("write session %s: %w", sessionID, err)
+	}
+	if err := os.Chmod(tmpName, 0600); err != nil {
+		return fmt.Errorf("write session %s: %w", sessionID, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("write session %s: %w", sessionID, err)
+	}
+	tmpName = ""
 	return nil
 }
 
