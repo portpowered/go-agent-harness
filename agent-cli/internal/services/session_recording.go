@@ -131,6 +131,7 @@ func runSessionWithRecordingDirectory(
 		}()
 		plan.loop.CloseAfterOpen = false
 		plan.loop.AudioIn = audioSource
+		plan.loop.MaxDuration = maxDuration
 	}
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
@@ -175,7 +176,12 @@ func runSessionWithRecordingDirectory(
 	if audioOutPath == "-" {
 		sessionOut = io.Discard
 	}
-	if maxDuration == 0 {
+	if audioSource != nil {
+		// The duration runner predates the shared AudioIn producer. Keep the
+		// audio-enabled path on the loop that starts and joins that producer;
+		// its MaxDuration timeout provides the same bounded session lifetime.
+		runErr = plan.run(ctx, sessionOut)
+	} else if maxDuration == 0 {
 		runErr = plan.run(ctx, sessionOut)
 	} else {
 		durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
