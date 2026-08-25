@@ -312,6 +312,63 @@ remember merged history; `origin/main` and GitHub do.
 Re-admit a lane ONLY when you can name the specific evidence that its outcome
 is missing or regressed. "It is not on the current board" is NOT evidence.
 
+## Periodic taxonomy audit — do not rely on checklist.md alone for coverage
+
+Measured 2026-08-25: this planner autonomously swept the `v2` (audio-in) and
+`v6` (error) verticals across many overnight loopback "waves," in lane-number
+order, and never once reached `v3`/`v4`/`v5`/`v7`/`v8`, WebRTC (`v9`/`v10`), or
+any of the depth-5+ program milestones (`e2e-tool-call-conversation`,
+`e2e-vision-describe`, `e2e-conversation-observability`) — 16 lanes with zero
+board presence, ever, in any session. The operator had to find and submit them
+by hand. Root cause: this workstation's "review completed evidence against...
+`checklist.md`, `meta.md`" step (above) only ever compares against its own
+working state files, which were seeded once and never diffed against the full
+intended program. A lane that never made it into `checklist.md` has no
+mechanism to ever surface, no matter how many loopback passes run.
+
+`docs/architecture/s2s-lane-manifest.md` exists to close this gap. It is a
+flat, board-name-convention list of the vertical/milestone/acceptance/WebRTC
+tail of the program (currently 43 lanes), generated from `design.md` Part 8.2
+and `docs/architecture/s2s-program-status-2026-08-17.md`, annotated with each
+lane's PR history at generation time. Treat it as a second, independent
+coverage source alongside `checklist.md` — not a replacement for it, and not a
+license to weaken the anti-duplicate-resubmission rule above.
+
+On every loopback pass, in addition to (not instead of) the normal
+`checklist.md`/`meta.md`-driven reconciliation:
+
+1. Read `docs/architecture/s2s-lane-manifest.md`. For any lane whose noted
+   history is `NEVER SUBMITTED`, re-verify it live (that annotation is a
+   snapshot, not current truth): `gh pr list --state all --search "<v-token>"`
+   using the short `v<N><letter>` token per the manifest's naming-drift
+   warning, not just the full string, plus a fresh board check. A lane
+   confirmed still untouched is a real gap, not something to wait for the
+   sequential sweep to reach organically — submit it (as its own small,
+   narrow idea, same as any other lane — this does not change batch sizing
+   philosophy).
+2. This audit is mandatory whenever the normal reconciliation pass finds
+   nothing to repair and no in-flight work would otherwise justify holding —
+   i.e. never let "submit no batch, valid work is still progressing" be the
+   final answer of a pass without first checking the manifest for an
+   untouched category. It is optional (but still worth doing periodically) on
+   passes that are already busy repairing genuine failures.
+3. If you discover a lane relevant to the program that is not yet in the
+   manifest (a new milestone, a renamed vertical, anything sourced from
+   `design.md` or the status doc that predates the manifest's generation, or
+   the original `batches/s2s-program.json`/`s2s-localai.json` full inventory
+   if you ever locate a copy of it), add it to the manifest rather than
+   silently working around the gap — keep the manifest itself the accurate,
+   living source of truth, and prefer extending it over replacing it.
+4. Update the manifest's `_(history: ...)_` annotations you act on so the next
+   pass isn't re-deriving what this pass already confirmed.
+
+This audit does not relax anything above: still verify against
+`origin/main`/`gh pr list --state merged` before admitting any lane, still
+keep batches small and narrow, still never advance a queue solely because a
+loopback fired. It only adds a second, exhaustive discovery source so no whole
+category of intended work can silently sit unaddressed for hours because it
+was never written into `checklist.md` in the first place.
+
 ## Ending your response
 
 End your response with exactly `<COMPLETE>` on its own line once this planning
