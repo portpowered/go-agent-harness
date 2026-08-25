@@ -32,6 +32,7 @@ func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags,
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
+	recordDirPath := ""
 	audioOutPath := ""
 	var maxDuration time.Duration
 	var audioIn string
@@ -39,14 +40,14 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
 		Long: "Run a bidirectional session inference capture or replay a session capture file.\n" +
-			"Use --record <file>.json to capture live session traffic, or --replay <file>.json to replay a saved capture without live provider network calls.\n\n" +
+			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n\n" +
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
 				return err
 			}
-			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" {
+			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" && recordDirPath == "" {
 				return cmd.Help()
 			}
 			sessionContext := cmd.Context()
@@ -55,11 +56,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				if capturePath == "" {
 					capturePath = c.askFlags.ReplayCapturePath
 				}
-				artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
-				sessionContext = services.WithSessionDurationArtifactPaths(sessionContext, services.SessionDurationArtifactPaths{
-					AudioPath:      artifactBase + ".wav",
-					TranscriptPath: artifactBase + ".jsonl",
-				})
+				if capturePath != "" {
+					artifactBase := strings.TrimSuffix(capturePath, filepath.Ext(capturePath))
+					sessionContext = services.WithSessionDurationArtifactPaths(sessionContext, services.SessionDurationArtifactPaths{
+						AudioPath:      artifactBase + ".wav",
+						TranscriptPath: artifactBase + ".jsonl",
+					})
+				}
 			}
 			sessionOptions := services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
@@ -77,7 +80,33 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
+			audioInput := services.SessionAudioInput{
+				Path:          audioIn,
+				Stdin:         cmd.InOrStdin(),
+				Present:       cmd.Flags().Changed("audio-in"),
+				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+			}
 			if len(c.imagePaths) > 0 {
+				if recordDirPath != "" {
+					if audioInput.Present {
+						return services.RunSessionWithImagesAndRecordingDirectoryAndAudioInput(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
+							SessionRunOptions: sessionOptions,
+							ImagePaths:        append([]string(nil), c.imagePaths...),
+							AudioOutPath:      audioOutPath,
+							MaxDuration:       maxDuration,
+							TextSeed:          seed,
+							SystemPrompt:      c.askFlags.SystemPrompt,
+						}, recordDirPath, audioInput)
+					}
+					return services.RunSessionWithImagesAndRecordingDirectory(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
+						SessionRunOptions: sessionOptions,
+						ImagePaths:        append([]string(nil), c.imagePaths...),
+						AudioOutPath:      audioOutPath,
+						MaxDuration:       maxDuration,
+						TextSeed:          seed,
+						SystemPrompt:      c.askFlags.SystemPrompt,
+					}, recordDirPath)
+				}
 				return services.RunSessionWithImages(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
 					SessionRunOptions: sessionOptions,
 					ImagePaths:        append([]string(nil), c.imagePaths...),
@@ -87,18 +116,20 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					SystemPrompt:      c.askFlags.SystemPrompt,
 				})
 			}
-			if cmd.Flags().Changed("audio-in") {
-				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, services.SessionAudioInput{
-					Path:          audioIn,
-					Stdin:         cmd.InOrStdin(),
-					Present:       true,
-					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-				}, c.askFlags.SystemPrompt)
+			if audioInput.Present {
+				if recordDirPath != "" {
+					return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, recordDirPath, audioOutPath, maxDuration, seed, audioInput, c.askFlags.SystemPrompt)
+				}
+				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, audioInput, c.askFlags.SystemPrompt)
+			}
+			if recordDirPath != "" {
+				return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, recordDirPath, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 			}
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
+	cmd.Flags().StringVar(&recordDirPath, "record-dir", "", "Record a complete both-side session directory separately from --record")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Seed the realtime session with text")
 	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
