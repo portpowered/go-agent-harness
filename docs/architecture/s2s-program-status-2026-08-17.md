@@ -439,3 +439,71 @@ walk the `relations` array (`DEPENDS_ON`, 187 edges) to recompute the frontier
 and the per-PR gating counts. Lane titles — the operational description of each
 work item — are at `.works[].payload.title`; the full assignment is in
 `.works[].payload.mission`.
+
+---
+
+
+## 9. Vertical PR disposition triage (#165–#168) — 2026-08-25
+
+Append-only section, recorded by the `s2s-vertical-pr-disposition-triage` lane.
+All four open vertical scenario PRs were dispositioned against freshly fetched
+`origin/main` = `b91bd65c0ce48bd20eaffb5a2dff9952bef33340` (2026-08-25) along the
+three axes asked: outcome-on-main (blob-for-blob), textual-vs-semantic conflict
+class, and keep-and-recut/close. Full reproducible evidence — commands, merge
+bases, per-file blob hashes, merge-tree runs, check rollups with run URLs,
+fixture-count ground truth, CI failure root causes — lives in the companion
+appendix [`s2s-vertical-pr-disposition-triage-evidence.md`](s2s-vertical-pr-disposition-triage-evidence.md).
+Per-PR actionable recut specs: `s2s-v2d-multi-utterance-recut-spec.md`,
+`s2s-v6d-error-malformed-response-recut-spec.md`,
+`s2s-v2e-audio-in-truncated-recut-spec.md`,
+`s2s-v2c-audio-in-silence-recut-spec.md` (same directory). One disposition
+comment was posted on each PR pointing here; this lane mutated nothing else on
+the four PRs.
+
+| PR | lane / outcome | outcome on main? (blob evidence) | conflict class + driver | recommendation | rationale anchor | spec / comment |
+|----|----------------|----------------------------------|--------------------------|----------------|------------------|----------------|
+| #165 | s2s-v2d-audio-in-multi-utterance | **No** — 5/6 files ABSENT_ON_MAIN; 6th DIVERGENT only in fixture exact-count constant; zero IDENTICAL blobs | **Textual**: 1 hunk, count `23` vs `22`; driver `bb85450` + `0e8184d` fixture reconciliation post-branch | **Keep and recut** → `s2s-v2d-multi-utterance-recut` (name unique 2026-08-25) | §3 self-contained-additions pattern; head checks green; no v2d artifact on main so the 2026-08-24 landed-outcome failure mode does not trigger | spec above; comment posted 2026-08-25 |
+| #166 | s2s-v6d-error-malformed-response | **No** — scenario impl + both fixtures ABSENT_ON_MAIN; v6a auth-error scenario and generic malformed-frame fixture are related but are not this outcome | **Textual**: 2 hunks (`probe.go` insertion of main's `deriveToolResultObservation` from #170/#164 at the PR's registration site; shared count hunk); union resolves | **Keep and recut** → `s2s-v6d-error-malformed-recut` (unique) | §3 pattern; head checks green; no malformed-response vertical on main | spec above; comment posted 2026-08-25 |
+| #167 | s2s-v2e-audio-in-truncated | **No** — all 8 new artifacts ABSENT_ON_MAIN; framework files DIVERGENT (two different expectation families added) | **Textual hunks at shared extension points; resolution is a semantic union** — 7 hunks in `probe.go`/`deadguard.go`/`expect.go`: #170's tool-result family vs the PR's `ExpectBufferDisposition` family; both must survive | **Keep and recut** → `s2s-v2e-audio-in-truncated-recut` (unique); red checks are inherited from stale base (count test fails identically at merge base: scanned 20 vs asserted 18) and vanish on rebase to main (green at 23) | §3 pattern; §4.7 no-force-push policy rules out fixing the orphaned branch in place; no truncated-audio artifact on main | spec above; comment posted 2026-08-25 |
+| #168 | s2s-v2c-audio-in-silence | **No** — zero main-side commits to `session_audio_in.go` since merge base; silence/noise integration proof ABSENT_ON_MAIN | **None** — clean merge (`git merge-tree` exit 0; GitHub MERGEABLE) | **Keep and recut** → `s2s-v2c-audio-in-silence-recut` (unique); cheapest of the four — only blocker is gofmt drift in its own new test file (`make fmt-fix`) | §4.7 policy (fresh branch under an active lane instead of touching the orphaned head); alternative "land as-is with maintainer fmt fix" recorded in the spec | spec above; comment posted 2026-08-25 |
+
+### Evidence appendix (key reproductions)
+
+```bash
+# fresh state
+git fetch origin --prune && git rev-parse origin/main   # b91bd65c0ce48...
+
+# per-PR metadata + checks
+gh pr view <N> --json mergeStateStatus,mergeable,headRefOid,statusCheckRollup
+# 165 DIRTY/CONFLICTING 2090fbd; ci+hermetic SUCCESS
+# 166 DIRTY/CONFLICTING c61abdd; ci+hermetic SUCCESS
+# 167 DIRTY/CONFLICTING 79a54e5; ci+hermetic FAILURE (inherited fixture-count)
+# 168 UNSTABLE/MERGEABLE 266f220; ci+hermetic FAILURE (gofmt drift only)
+
+# changed files over merge bases (165/167/168 -> 81267d6e; 166 -> b08c6da) with blob compare
+MB=$(git merge-base origin/main <head>); git diff --name-only "$MB" <head>
+git rev-parse <head>:<path>; git rev-parse origin/main:<path>   # exit code decides ABSENT_ON_MAIN
+
+# real conflict enumeration (not GitHub labels)
+git merge-tree --write-tree --name-only origin/main <head>
+# 165 -> committed_fixtures_test.go x1 hunk
+# 166 -> probe.go x1, committed_fixtures_test.go x1
+# 167 -> probe.go x3, deadguard.go x1, expect.go x3
+# 168 -> clean (exit 0)
+
+# fixture-count ground truth (temp worktrees, go-llm-gateway module)
+# 81267d6e FAIL scanned 20 want 18 | 79a54e5 FAIL identical | 2090fbd ok(22) | origin/main ok(23)
+
+# branch-name uniqueness (all empty => unique, 2026-08-25)
+git ls-remote origin refs/heads/s2s-v2d-multi-utterance-recut \
+               refs/heads/s2s-v6d-error-malformed-recut \
+               refs/heads/s2s-v2e-audio-in-truncated-recut \
+               refs/heads/s2s-v2c-audio-in-silence-recut
+```
+
+Main-side churn attribution for every conflicted file:
+`git log --oneline <merge-base>..origin/main -- <file>` → `0e8184d` (#170) everywhere,
+plus `bb85450` on the fixture-count file. Current main vertical coverage for the
+outcome-on-main axis: probe scenarios v1/v3b/error-auth only; integration tests
+`session_audioin_live_test.go` + v3b fixtures only; session-fixtures dir has v6a auth
+fixtures but no v6d malformed-response fixtures (full listing in the evidence appendix §7).
