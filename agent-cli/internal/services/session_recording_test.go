@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
@@ -327,6 +329,68 @@ func TestRunSessionWithRecordingDirectoryUsesProductionAudioInput(t *testing.T) 
 	}
 	if !clientAudio {
 		t.Fatal("recorded client transcript has no non-empty audio input frame")
+	}
+}
+
+func TestRunSessionWithImagesAndRecordingDirectoryPreservesImageTurn(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := filepath.Join(dir, "fixture.png")
+	var imageData bytes.Buffer
+	if err := png.Encode(&imageData, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatalf("encode image fixture: %v", err)
+	}
+	if err := os.WriteFile(imagePath, imageData.Bytes(), 0o600); err != nil {
+		t.Fatalf("write image fixture: %v", err)
+	}
+	inputSegments := sessionRecordingInputSegments()
+	inputPath := writeSessionRecordingInputFixture(t, inputSegments)
+
+	inferencer := newSessionRecordingRunnerInferencer([]messages.StreamMessage{
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x10, 0x00, 0x11, 0x00})},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("image response")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("image-session", "done")},
+	}, false, true)
+	destination := filepath.Join(dir, "nested", "image-recording")
+	err := RunSessionWithImagesAndRecordingDirectoryAndAudioInput(context.Background(), io.Discard, SessionImageRunOptions{
+		SessionRunOptions: SessionRunOptions{
+			Provider:          config.ProviderOpenAI,
+			Model:             "gpt-realtime",
+			APIKey:            "test-key",
+			ConfigDir:         filepath.Join(dir, "config"),
+			Prompt:            "describe the image",
+			SessionInferencer: inferencer,
+		},
+		ImagePaths: []string{imagePath},
+	}, destination, SessionAudioInput{Path: inputPath, Present: true})
+	if err != nil {
+		t.Fatalf("image recording run: %v", err)
+	}
+	if inferencer.connects != 1 || len(inferencer.sessions) != 1 {
+		t.Fatalf("connects/sessions = %d/%d, want one each", inferencer.connects, len(inferencer.sessions))
+	}
+	imageMessages := inferencer.sessions[0].imageMessagesCopy()
+	if len(imageMessages) != 1 {
+		t.Fatalf("provider image messages = %d, want one", len(imageMessages))
+	}
+	if imageMessages[0].TextContent() != "describe the image" || len(imageMessages[0].ContentParts) != 2 {
+		t.Fatalf("provider image message = %#v, want text plus image", imageMessages[0])
+	}
+	part, ok := imageMessages[0].ContentParts[1].(messages.ImagePart)
+	if !ok || !bytes.Equal(part.Bytes, imageData.Bytes()) || part.MediaType != "image/png" {
+		t.Fatalf("provider image part = %#v, want fixture bytes and image/png", imageMessages[0].ContentParts[1])
+	}
+	for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl", "manifest.json"} {
+		data, readErr := os.ReadFile(filepath.Join(destination, name))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", name, readErr)
+		}
+		if len(data) == 0 {
+			t.Fatalf("recording artifact %s is empty", name)
+		}
 	}
 }
 
@@ -815,15 +879,16 @@ type sessionRecordingRunnerSession struct {
 	done    chan struct{}
 	once    sync.Once
 
-	inputSeen    chan struct{}
-	inputOnce    sync.Once
-	audioEndSeen chan struct{}
-	audioEndOnce sync.Once
-	promptSeen   chan struct{}
-	promptOnce   sync.Once
-	sentMu       sync.Mutex
-	sent         []messages.StreamMessage
-	sendHook     func(context.Context, messages.StreamMessage)
+	inputSeen     chan struct{}
+	inputOnce     sync.Once
+	audioEndSeen  chan struct{}
+	audioEndOnce  sync.Once
+	promptSeen    chan struct{}
+	promptOnce    sync.Once
+	sentMu        sync.Mutex
+	sent          []messages.StreamMessage
+	imageMessages []messages.Message
+	sendHook      func(context.Context, messages.StreamMessage)
 }
 
 func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -845,6 +910,14 @@ func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.S
 	return true
 }
 
+func (s *sessionRecordingRunnerSession) SendMessage(_ context.Context, msg messages.Message) bool {
+	s.sentMu.Lock()
+	s.imageMessages = append(s.imageMessages, msg)
+	s.sentMu.Unlock()
+	s.promptOnce.Do(func() { close(s.promptSeen) })
+	return true
+}
+
 func (s *sessionRecordingRunnerSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }
@@ -860,6 +933,12 @@ func (s *sessionRecordingRunnerSession) sentMessagesCopy() []messages.StreamMess
 	s.sentMu.Lock()
 	defer s.sentMu.Unlock()
 	return append([]messages.StreamMessage(nil), s.sent...)
+}
+
+func (s *sessionRecordingRunnerSession) imageMessagesCopy() []messages.Message {
+	s.sentMu.Lock()
+	defer s.sentMu.Unlock()
+	return append([]messages.Message(nil), s.imageMessages...)
 }
 
 type sessionRecordingTestSession struct {

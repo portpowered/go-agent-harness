@@ -80,7 +80,33 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
+			audioInput := services.SessionAudioInput{
+				Path:          audioIn,
+				Stdin:         cmd.InOrStdin(),
+				Present:       cmd.Flags().Changed("audio-in"),
+				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+			}
 			if len(c.imagePaths) > 0 {
+				if recordDirPath != "" {
+					if audioInput.Present {
+						return services.RunSessionWithImagesAndRecordingDirectoryAndAudioInput(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
+							SessionRunOptions: sessionOptions,
+							ImagePaths:        append([]string(nil), c.imagePaths...),
+							AudioOutPath:      audioOutPath,
+							MaxDuration:       maxDuration,
+							TextSeed:          seed,
+							SystemPrompt:      c.askFlags.SystemPrompt,
+						}, recordDirPath, audioInput)
+					}
+					return services.RunSessionWithImagesAndRecordingDirectory(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
+						SessionRunOptions: sessionOptions,
+						ImagePaths:        append([]string(nil), c.imagePaths...),
+						AudioOutPath:      audioOutPath,
+						MaxDuration:       maxDuration,
+						TextSeed:          seed,
+						SystemPrompt:      c.askFlags.SystemPrompt,
+					}, recordDirPath)
+				}
 				return services.RunSessionWithImages(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
 					SessionRunOptions: sessionOptions,
 					ImagePaths:        append([]string(nil), c.imagePaths...),
@@ -90,17 +116,11 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					SystemPrompt:      c.askFlags.SystemPrompt,
 				})
 			}
-			if cmd.Flags().Changed("audio-in") {
-				input := services.SessionAudioInput{
-					Path:          audioIn,
-					Stdin:         cmd.InOrStdin(),
-					Present:       true,
-					DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-				}
+			if audioInput.Present {
 				if recordDirPath != "" {
-					return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, recordDirPath, audioOutPath, maxDuration, seed, input, c.askFlags.SystemPrompt)
+					return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, recordDirPath, audioOutPath, maxDuration, seed, audioInput, c.askFlags.SystemPrompt)
 				}
-				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, input, c.askFlags.SystemPrompt)
+				return services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, audioInput, c.askFlags.SystemPrompt)
 			}
 			if recordDirPath != "" {
 				return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, recordDirPath, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)

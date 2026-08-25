@@ -79,6 +79,101 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTex
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
 }
 
+// RunSessionWithImagesAndRecordingDirectory composes the image-turn wrapper
+// with the directory observer. The observer stays outside the image wrapper so
+// the provider still receives its optional SendMessage image turn while the
+// ordinary stream events remain available to the recording session.
+func RunSessionWithImagesAndRecordingDirectory(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionImageRunOptions,
+	directory string,
+) (runErr error) {
+	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, nil)
+}
+
+// RunSessionWithImagesAndRecordingDirectoryAndAudioInput adds the production
+// file/stdin audio source to the composed image and directory-recording path.
+func RunSessionWithImagesAndRecordingDirectoryAndAudioInput(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionImageRunOptions,
+	directory string,
+	input SessionAudioInput,
+) (runErr error) {
+	if !sessionAudioInputSelected(input) {
+		return RunSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory)
+	}
+	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, &input)
+}
+
+func runSessionWithImagesAndRecordingDirectory(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionImageRunOptions,
+	directory string,
+	audioInput *SessionAudioInput,
+) (runErr error) {
+	paths := append([]string(nil), opts.ImagePaths...)
+	if len(paths) == 0 {
+		return runSessionWithRecordingDirectory(ctx, out, opts.SessionRunOptions, directory, opts.AudioOutPath, opts.MaxDuration, opts.TextSeed, opts.SystemPrompt, true, audioInput)
+	}
+	if err := ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
+		return err
+	}
+	if err := validateSessionRecordingOptions(opts.SessionRunOptions); err != nil {
+		return err
+	}
+	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
+	if err != nil {
+		return err
+	}
+	parts, err := PrepareSessionImageParts(paths, metadata)
+	if err != nil {
+		return err
+	}
+	if opts.TextSeed.Present {
+		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+	}
+	destination, err := prepareSessionRecordingDestination(directory)
+	if err != nil {
+		return err
+	}
+	var audioSource *sessionAudioSource
+	if audioInput != nil {
+		if err := validateSessionAudioInput(*audioInput); err != nil {
+			return err
+		}
+		audioSource, err = openSessionAudioInput(*audioInput)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if closeErr := audioSource.Close(); closeErr != nil {
+				runErr = errors.Join(runErr, closeErr)
+			}
+		}()
+	}
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt)
+	if err != nil {
+		return err
+	}
+	if audioSource != nil {
+		plan.loop.CloseAfterOpen = false
+		plan.loop.AudioIn = audioSource
+		plan.loop.MaxDuration = opts.MaxDuration
+	}
+	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
+	if plan.inferencer != nil {
+		plan.inferencer = &sessionDirectoryRecordingInferencer{
+			inner:     plan.inferencer,
+			recording: recording,
+		}
+	}
+	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+	return errors.Join(runErr, recording.Finalize())
+}
+
 func runSessionWithRecordingDirectory(
 	ctx context.Context,
 	out io.Writer,
