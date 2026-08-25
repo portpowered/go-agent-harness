@@ -1,0 +1,24 @@
+[
+  {
+    "request": {
+      "method": "POST",
+      "url": "https://openrouter.ai/api/v1/chat/completions",
+      "headers": {
+        "Accept": ["application/json"],
+        "Authorization": [],
+        "Content-Type": ["application/json"],
+        "User-Agent": ["OpenAI/Go 2.1.1"]
+      },
+      "body": "{\"messages\":[{\"content\":\"Please call the v4c_unknown_tool tool on file /nonexistent/s2s-v4c/missing.txt.\",\"role\":\"user\"}],\"model\":\"z-ai/glm-4.7\",\"stream\":true}"
+    },
+    "response": {
+      "status_code": 200,
+      "status": "200 OK",
+      "headers": {
+        "Content-Type": ["text/event-stream"],
+        "Cache-Control": ["no-cache"]
+      },
+      "body": "data: {\"id\":\"chatcmpl-v4c-tool-error\",\"object\":\"chat.completion.chunk\",\"created\":1771900000,\"model\":\"z-ai/glm-4.7\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-v4c-tool-error\",\"object\":\"chat.completion.chunk\",\"created\":1771900000,\"model\":\"z-ai/glm-4.7\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_v4c_read_missing\",\"type\":\"function\",\"function\":{\"name\":\"v4c_unknown_tool\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-v4c-tool-error\",\"object\":\"chat.completion.chunk\",\"created\":1771900000,\"model\":\"z-ai/glm-4.7\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"path\\\":\\\"/nonexistent/s2s-v4c/missing.txt\\\"}\"}}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-v4c-tool-error\",\"object\":\"chat.completion.chunk\",\"created\":1771900000,\"model\":\"z-ai/glm-4.7\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: {\"id\":\"chatcmpl-v4c-tool-error\",\"object\":\"chat.completion.chunk\",\"created\":1771900000,\"model\":\"z-ai/glm-4.7\",\"choices\":[],\"usage\":{\"prompt_tokens\":42,\"completion_tokens\":13,\"total_tokens\":55}}\n\ndata: [DONE]\n\n"
+    }
+  }
+]
