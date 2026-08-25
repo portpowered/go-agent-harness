@@ -12,12 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -249,8 +251,118 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 	}
 }
 
+func TestRunSessionWithRecordingDirectoryUsesProductionAudioInput(t *testing.T) {
+	inputPath := sessionRecordingAudioFixturePath(t, "utterance.wav")
+	destination := filepath.Join(t.TempDir(), "nested", "capture")
+	inferencer := newSessionRecordingRunnerInferencerAfterAudioEnd([]messages.StreamMessage{
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x10, 0x00, 0x11, 0x00})},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("recorded response")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	})
+
+	err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
+		context.Background(),
+		io.Discard,
+		SessionRunOptions{
+			Provider:          config.ProviderOpenAI,
+			Model:             "gpt-realtime",
+			APIKey:            "test-key",
+			ConfigDir:         t.TempDir(),
+			SessionInferencer: inferencer,
+		},
+		destination,
+		"",
+		0,
+		SessionTextSeed{},
+		SessionAudioInput{Path: inputPath, Present: true},
+		"",
+	)
+	if err != nil {
+		t.Fatalf("recorded audio-input replay: %v", err)
+	}
+
+	inputEntries, err := os.ReadDir(filepath.Join(destination, "audio"))
+	if err != nil {
+		t.Fatalf("read recorded audio directory: %v", err)
+	}
+	if len(inputEntries) == 0 {
+		t.Fatal("recorded audio directory is empty; production input did not reach the recorder")
+	}
+	var inputCount int
+	for _, entry := range inputEntries {
+		if !strings.HasPrefix(entry.Name(), "in-") {
+			continue
+		}
+		inputCount++
+		data, readErr := os.ReadFile(filepath.Join(destination, "audio", entry.Name()))
+		if readErr != nil {
+			t.Fatalf("read recorded input %s: %v", entry.Name(), readErr)
+		}
+		if len(data) == 0 {
+			t.Fatalf("recorded input %s is empty", entry.Name())
+		}
+	}
+	if inputCount == 0 {
+		t.Fatal("recorded audio directory has no input segments")
+	}
+
+	clientRecords := readSessionRecordingTranscript(t, filepath.Join(destination, "client.transcript.jsonl"))
+	agentRecords := readSessionRecordingTranscript(t, filepath.Join(destination, "agent.transcript.jsonl"))
+	if len(clientRecords) == 0 || len(agentRecords) == 0 {
+		t.Fatalf("transcript records = client %d, agent %d; want both perspectives", len(clientRecords), len(agentRecords))
+	}
+	var clientAudio bool
+	for _, record := range clientRecords {
+		msg, unmarshalErr := gwtesting.UnmarshalStreamMessage(record.Payload)
+		if unmarshalErr != nil {
+			t.Fatalf("decode recorded client frame: %v", unmarshalErr)
+		}
+		if audio, ok := msg.Value.(*messages.AudioDeltaValue); ok && len(audio.Content) > 0 {
+			clientAudio = true
+			break
+		}
+	}
+	if !clientAudio {
+		t.Fatal("recorded client transcript has no non-empty audio input frame")
+	}
+}
+
+func sessionRecordingAudioFixturePath(t *testing.T, name string) string {
+	t.Helper()
+	_, sourcePath, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Join(filepath.Dir(sourcePath), "testdata", "session-audio-input", name)
+}
+
+func sessionRecordingInputSegments() [][]byte {
+	segments := make([][]byte, 2)
+	for index := range segments {
+		segment := make([]byte, audio.FrameSize*2)
+		for offset := range segment {
+			segment[offset] = byte((offset+index*17)%251 + 1)
+		}
+		segments[index] = segment
+	}
+	return segments
+}
+
+func writeSessionRecordingInputFixture(t *testing.T, segments [][]byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "input.pcm")
+	if err := os.WriteFile(path, bytes.Join(segments, nil), 0o600); err != nil {
+		t.Fatalf("write session audio input fixture: %v", err)
+	}
+	return path
+}
+
 func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *testing.T) {
-	inputSegments := [][]byte{{0x01, 0x00, 0x02, 0x00}, {0x03, 0x00}}
+	inputSegments := sessionRecordingInputSegments()
+	inputPath := writeSessionRecordingInputFixture(t, inputSegments)
 	outputSegments := [][]byte{{0x10, 0x00}, {0x11, 0x00, 0x12, 0x00}}
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue("runner-session", "gpt-realtime")},
@@ -263,7 +375,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}
 
-	plainInferencer := newSessionRecordingRunnerInferencer(events, false, true)
+	plainInferencer := newSessionRecordingRunnerInferencerAfterAudioEnd(events)
 	var plainOutput bytes.Buffer
 	plainPlan, err := planSessionRuntime(SessionRunOptions{
 		Provider:          config.ProviderOpenAI,
@@ -276,22 +388,28 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 	if err != nil {
 		t.Fatalf("plan unrecorded session: %v", err)
 	}
+	plainSource, err := openSessionAudioInput(SessionAudioInput{Path: inputPath, Present: true})
+	if err != nil {
+		t.Fatalf("open unrecorded audio input: %v", err)
+	}
+	defer plainSource.Close()
+	plainPlan.loop.CloseAfterOpen = false
+	plainPlan.loop.AudioIn = plainSource
 	if err := plainPlan.run(context.Background(), &plainOutput); err != nil {
 		t.Fatalf("run unrecorded session: %v", err)
 	}
 
 	destination := filepath.Join(t.TempDir(), "missing", "parents", "capture")
-	recordedInferencer := newSessionRecordingRunnerInferencer(events, true, true)
+	recordedInferencer := newSessionRecordingRunnerInferencerAfterAudioEnd(events)
 	var recordedOutput bytes.Buffer
-	recordedContext := withSessionRecordingAudioInput(context.Background(), inputSegments)
-	if err := RunSessionWithRecordingDirectory(recordedContext, &recordedOutput, SessionRunOptions{
+	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &recordedOutput, SessionRunOptions{
 		Provider:          config.ProviderOpenAI,
 		Model:             "gpt-realtime",
 		APIKey:            "test-key",
 		ConfigDir:         t.TempDir(),
 		Prompt:            "paired prompt",
 		SessionInferencer: recordedInferencer,
-	}, destination); err != nil {
+	}, destination, "", 0, SessionTextSeed{}, SessionAudioInput{Path: inputPath, Present: true}, ""); err != nil {
 		t.Fatalf("run recorded session: %v", err)
 	}
 	if recordedOutput.String() != plainOutput.String() {
@@ -329,14 +447,21 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 
 	recordedSession := recordedInferencer.sessions[0]
 	sent := recordedSession.sentMessagesCopy()
+	observedSent := sent
+	if len(observedSent) > 0 && observedSent[0].Type == messages.StreamTypeSessionUpdate {
+		// The injected session's initial provider configuration is sent while
+		// ConnectSession is still establishing the inner session, before the
+		// directory observer can wrap it.
+		observedSent = observedSent[1:]
+	}
 	server := append([]messages.StreamMessage{{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("runner-session", "session"),
 	}}, events...)
 	for _, side := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
 		records := readSessionRecordingTranscript(t, filepath.Join(destination, side))
-		if len(records) != len(sent)+len(server) {
-			t.Fatalf("runner %s records = %d, want %d", side, len(records), len(sent)+len(server))
+		if len(records) != len(observedSent)+len(server) {
+			t.Fatalf("runner %s records = %d, want %d", side, len(records), len(observedSent)+len(server))
 		}
 		sentIndex, serverIndex := 0, 0
 		for index, record := range records {
@@ -345,7 +470,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 			outbound := (side == "client.transcript.jsonl" && record.Direction == transcript.DirectionOut) || (side == "agent.transcript.jsonl" && record.Direction == transcript.DirectionIn)
 			var wantMessage messages.StreamMessage
 			if outbound {
-				wantMessage = sent[sentIndex]
+				wantMessage = observedSent[sentIndex]
 				sentIndex++
 				wantDirection = transcript.DirectionOut
 			} else {
@@ -372,8 +497,8 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 				t.Fatalf("runner %s record %d = %+v, want tick=%d timestamp=%s peer=%s direction=%s", side, index, record, index+1, wantTimestamp, wantPeer, wantDirection)
 			}
 		}
-		if sentIndex != len(sent) || serverIndex != len(server) {
-			t.Fatalf("runner %s consumed sent=%d/%d server=%d/%d transcript frames", side, sentIndex, len(sent), serverIndex, len(server))
+		if sentIndex != len(observedSent) || serverIndex != len(server) {
+			t.Fatalf("runner %s consumed sent=%d/%d server=%d/%d transcript frames", side, sentIndex, len(observedSent), serverIndex, len(server))
 		}
 	}
 
@@ -435,7 +560,8 @@ func TestRunSessionWithRecordingDirectoryRejectsUnwritableDestinationBeforeConne
 }
 
 func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
-	input := [][]byte{{0x01, 0x00, 0x02, 0x00}}
+	input := sessionRecordingInputSegments()
+	inputPath := writeSessionRecordingInputFixture(t, input)
 	events := []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x10, 0x00, 0x11, 0x00})},
@@ -456,14 +582,14 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 	}
 
 	directoryOnly := filepath.Join(t.TempDir(), "directory-only")
-	directoryInferencer := newSessionRecordingRunnerInferencer(events, true, true)
+	directoryInferencer := newSessionRecordingRunnerInferencerAfterAudioEnd(events)
 	var directoryOutput bytes.Buffer
-	if err := RunSessionWithRecordingDirectory(withSessionRecordingAudioInput(context.Background(), input), &directoryOutput, baseOptions(directoryInferencer), directoryOnly); err != nil {
+	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &directoryOutput, baseOptions(directoryInferencer), directoryOnly, "", 0, SessionTextSeed{}, SessionAudioInput{Path: inputPath, Present: true}, ""); err != nil {
 		t.Fatalf("directory-only run: %v", err)
 	}
 
 	fixtureOnly := filepath.Join(t.TempDir(), "fixture-only.json")
-	fixtureInferencer := newSessionRecordingRunnerInferencer(events, true, true)
+	fixtureInferencer := newSessionRecordingRunnerInferencerAfterAudioEnd(events)
 	var fixtureOutput bytes.Buffer
 	fixtureOptions := baseOptions(fixtureInferencer)
 	fixtureOptions.RecordPath = fixtureOnly
@@ -471,7 +597,13 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plan fixture-only run: %v", err)
 	}
-	fixturePlan.inferencer = &sessionRecordingInputInferencer{inner: fixturePlan.inferencer, segments: input}
+	fixtureSource, err := openSessionAudioInput(SessionAudioInput{Path: inputPath, Present: true})
+	if err != nil {
+		t.Fatalf("open fixture-only audio input: %v", err)
+	}
+	defer fixtureSource.Close()
+	fixturePlan.loop.CloseAfterOpen = false
+	fixturePlan.loop.AudioIn = fixtureSource
 	if err := fixturePlan.run(context.Background(), &fixtureOutput); err != nil {
 		fixtureCleanup()
 		t.Fatalf("fixture-only run: %v", err)
@@ -480,11 +612,11 @@ func TestSessionRecordingFlagsRemainIndependentAndComposable(t *testing.T) {
 
 	combinedDirectory := filepath.Join(t.TempDir(), "combined-directory")
 	combinedFixture := filepath.Join(t.TempDir(), "combined-fixture.json")
-	combinedInferencer := newSessionRecordingRunnerInferencer(events, true, true)
+	combinedInferencer := newSessionRecordingRunnerInferencerAfterAudioEnd(events)
 	var combinedOutput bytes.Buffer
 	combinedOptions := baseOptions(combinedInferencer)
 	combinedOptions.RecordPath = combinedFixture
-	if err := RunSessionWithRecordingDirectory(withSessionRecordingAudioInput(context.Background(), input), &combinedOutput, combinedOptions, combinedDirectory); err != nil {
+	if err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(context.Background(), &combinedOutput, combinedOptions, combinedDirectory, "", 0, SessionTextSeed{}, SessionAudioInput{Path: inputPath, Present: true}, ""); err != nil {
 		t.Fatalf("combined run: %v", err)
 	}
 	if directoryOutput.String() != combinedOutput.String() || fixtureOutput.String() != combinedOutput.String() {
@@ -529,28 +661,6 @@ func TestSessionDirectoryRecordingFinalizePreservesWriteFailureAndNoPartialBundl
 	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
 		t.Fatalf("failed destination stat error = %v, want not exist", statErr)
 	}
-}
-
-type sessionRecordingInputInferencer struct {
-	inner    messages.SessionInferencer
-	segments [][]byte
-}
-
-func (i *sessionRecordingInputInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	session, err := i.inner.ConnectSession(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, segment := range i.segments {
-		if !session.Send(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeAudioDelta,
-			Role:  messages.RoleUser,
-			Value: messages.NewAudioDeltaValue(segment),
-		}) {
-			return nil, errors.New("test fixture session rejected input audio")
-		}
-	}
-	return session, nil
 }
 
 func recordingFileBytes(t *testing.T, root string) map[string][]byte {
@@ -622,11 +732,12 @@ func assertManifestArtifacts(t *testing.T, destination string, manifest transcri
 }
 
 type sessionRecordingRunnerInferencer struct {
-	events        []messages.StreamMessage
-	waitForInput  bool
-	waitForPrompt bool
-	connects      int
-	sessions      []*sessionRecordingRunnerSession
+	events                   []messages.StreamMessage
+	waitForInput             bool
+	waitForPrompt            bool
+	waitForAudioEndAfterOpen bool
+	connects                 int
+	sessions                 []*sessionRecordingRunnerSession
 }
 
 func newSessionRecordingRunnerInferencer(events []messages.StreamMessage, waitForInput, waitForPrompt bool) *sessionRecordingRunnerInferencer {
@@ -637,27 +748,52 @@ func newSessionRecordingRunnerInferencer(events []messages.StreamMessage, waitFo
 	}
 }
 
+func newSessionRecordingRunnerInferencerAfterAudioEnd(events []messages.StreamMessage) *sessionRecordingRunnerInferencer {
+	return &sessionRecordingRunnerInferencer{
+		events:                   append([]messages.StreamMessage(nil), events...),
+		waitForAudioEndAfterOpen: true,
+	}
+}
+
 func (i *sessionRecordingRunnerInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.connects++
 	session := &sessionRecordingRunnerSession{
-		receive:    messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:       make(chan struct{}),
-		inputSeen:  make(chan struct{}),
-		promptSeen: make(chan struct{}),
+		receive:      messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:         make(chan struct{}),
+		inputSeen:    make(chan struct{}),
+		audioEndSeen: make(chan struct{}),
+		promptSeen:   make(chan struct{}),
 	}
 	i.sessions = append(i.sessions, session)
 	go func() {
-		if i.waitForInput {
+		if i.waitForAudioEndAfterOpen {
+			if !session.receive.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeSessionOpen,
+				Value: messages.NewSessionOpenValue("runner-session", "session"),
+			}) {
+				return
+			}
+			select {
+			case <-session.audioEndSeen:
+			case <-ctx.Done():
+				return
+			}
+		} else if i.waitForInput {
 			select {
 			case <-session.inputSeen:
 			case <-ctx.Done():
 				return
 			}
-		}
-		session.receive.Write(ctx, messages.StreamMessage{
+			session.receive.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeSessionOpen,
+				Value: messages.NewSessionOpenValue("runner-session", "session"),
+			})
+		} else if !session.receive.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionOpen,
 			Value: messages.NewSessionOpenValue("runner-session", "session"),
-		})
+		}) {
+			return
+		}
 		if i.waitForPrompt {
 			select {
 			case <-session.promptSeen:
@@ -679,13 +815,15 @@ type sessionRecordingRunnerSession struct {
 	done    chan struct{}
 	once    sync.Once
 
-	inputSeen  chan struct{}
-	inputOnce  sync.Once
-	promptSeen chan struct{}
-	promptOnce sync.Once
-	sentMu     sync.Mutex
-	sent       []messages.StreamMessage
-	sendHook   func(context.Context, messages.StreamMessage)
+	inputSeen    chan struct{}
+	inputOnce    sync.Once
+	audioEndSeen chan struct{}
+	audioEndOnce sync.Once
+	promptSeen   chan struct{}
+	promptOnce   sync.Once
+	sentMu       sync.Mutex
+	sent         []messages.StreamMessage
+	sendHook     func(context.Context, messages.StreamMessage)
 }
 
 func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -694,6 +832,9 @@ func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.S
 	s.sentMu.Unlock()
 	if msg.Type == messages.StreamTypeAudioDelta {
 		s.inputOnce.Do(func() { close(s.inputSeen) })
+	}
+	if msg.Type == messages.StreamTypeMessageEnd {
+		s.audioEndOnce.Do(func() { close(s.audioEndSeen) })
 	}
 	if msg.Type == messages.StreamTypeTextDelta {
 		s.promptOnce.Do(func() { close(s.promptSeen) })

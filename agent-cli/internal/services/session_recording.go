@@ -22,7 +22,7 @@ import (
 // RunSessionWithRecordingDirectory is the directory-recording entry point for
 // callers that do not need the optional audio-out, prompt, or duration seams.
 func RunSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts SessionRunOptions, directory string) error {
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, "", 0, SessionTextSeed{}, "", false)
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, "", 0, SessionTextSeed{}, "", false, nil)
 }
 
 // RunSessionWithRecordingDirectoryAndAudioOutAndTextSeedAndMaxDuration runs the
@@ -38,7 +38,7 @@ func RunSessionWithRecordingDirectoryAndAudioOutAndTextSeedAndMaxDuration(
 	maxDuration time.Duration,
 	seed SessionTextSeed,
 ) (runErr error) {
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, "", false)
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, "", false, nil)
 }
 
 // RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration
@@ -55,7 +55,28 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMax
 	seed SessionTextSeed,
 	systemPrompt string,
 ) (runErr error) {
-	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true)
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
+}
+
+// RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration
+// composes the directory observer with the production file/stdin audio-input
+// source. Audio frames travel through sessionLoopOptions.AudioIn, so the
+// recorder observes the same outbound stream that the provider receives.
+func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionRunOptions,
+	directory string,
+	audioOutPath string,
+	maxDuration time.Duration,
+	seed SessionTextSeed,
+	input SessionAudioInput,
+	systemPrompt string,
+) (runErr error) {
+	if !sessionAudioInputSelected(input) {
+		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
+	}
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
 }
 
 func runSessionWithRecordingDirectory(
@@ -68,6 +89,7 @@ func runSessionWithRecordingDirectory(
 	seed SessionTextSeed,
 	systemPrompt string,
 	withInstructions bool,
+	audioInput *SessionAudioInput,
 ) (runErr error) {
 	if strings.TrimSpace(directory) == "" {
 		if withInstructions {
@@ -92,6 +114,24 @@ func runSessionWithRecordingDirectory(
 		return err
 	}
 	defer cleanup()
+
+	var audioSource *sessionAudioSource
+	if audioInput != nil {
+		if err := validateSessionAudioInput(*audioInput); err != nil {
+			return err
+		}
+		audioSource, err = openSessionAudioInput(*audioInput)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if closeErr := audioSource.Close(); closeErr != nil {
+				runErr = errors.Join(runErr, closeErr)
+			}
+		}()
+		plan.loop.CloseAfterOpen = false
+		plan.loop.AudioIn = audioSource
+	}
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
 	if plan.inferencer != nil {
@@ -356,43 +396,12 @@ type sessionDirectoryRecordingInferencer struct {
 	recording *sessionDirectoryRecording
 }
 
-// sessionRecordingAudioInputKey is an in-package deterministic test seam for
-// feeding the same session boundary that the loop's audio-input path uses.
-// The CLI does not set it; production sessions therefore retain their normal
-// input behavior while runner tests can exercise both PCM directions without a
-// live device.
-type sessionRecordingAudioInputKey struct{}
-
-func withSessionRecordingAudioInput(ctx context.Context, segments [][]byte) context.Context {
-	return context.WithValue(ctx, sessionRecordingAudioInputKey{}, copySessionRecordingSegments(segments))
-}
-
-func sessionRecordingAudioInput(ctx context.Context) [][]byte {
-	segments, _ := ctx.Value(sessionRecordingAudioInputKey{}).([][]byte)
-	return copySessionRecordingSegments(segments)
-}
-
 func (i *sessionDirectoryRecordingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		return nil, err
 	}
-	wrapped := newSessionDirectoryRecordingSession(ctx, session, i.recording)
-	for _, segment := range sessionRecordingAudioInput(ctx) {
-		if len(segment) == 0 {
-			continue
-		}
-		msg := messages.StreamMessage{
-			Type:  messages.StreamTypeAudioDelta,
-			Role:  messages.RoleUser,
-			Value: messages.NewAudioDeltaValue(segment),
-		}
-		if !wrapped.Send(ctx, msg) {
-			i.recording.fail(recordingDestinationError(transcript.ErrRecordingWrite, "send input audio", i.recording.destination, errors.New("session rejected input audio")))
-			break
-		}
-	}
-	return wrapped, nil
+	return newSessionDirectoryRecordingSession(ctx, session, i.recording), nil
 }
 
 type sessionDirectoryRecordingSession struct {
