@@ -1,0 +1,12 @@
+{
+  "id": "s2s-v2e-audio-in-truncated-uncommitted-negative",
+  "name": "s2s-v2e-audio-in-truncated-uncommitted-negative",
+  "description": "Negative control: the truncated audio is never committed nor discarded, so the buffer-disposition expectation must fail even though the session exits cleanly.",
+  "steps": [
+    {"type": "send_audio", "corpus_id": "truncated_24k"},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "buffer-disposition", "value": "committed"}
+  ]
+}

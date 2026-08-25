@@ -1,0 +1,13 @@
+{
+  "id": "s2s-v2e-audio-in-truncated-24k",
+  "name": "s2s-v2e-audio-in-truncated-24k",
+  "description": "Truncated 24 kHz source audio cut mid-word: end of input arrives before end of speech, so the buffered audio must be explicitly discarded before a clean session close.",
+  "steps": [
+    {"type": "send_audio", "corpus_id": "truncated_24k"},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "transcript-contains", "text": "discarded"},
+    {"type": "buffer-disposition", "value": "discarded"}
+  ]
+}

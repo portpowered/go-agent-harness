@@ -1,0 +1,13 @@
+{
+  "id": "s2s-v2e-audio-in-truncated-16k",
+  "name": "s2s-v2e-audio-in-truncated-16k",
+  "description": "Truncated 16 kHz source audio cut mid-word: the buffered partial utterance must be committed and acknowledged before a clean session close.",
+  "steps": [
+    {"type": "send_audio", "corpus_id": "truncated_16k"},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "transcript-contains", "text": "partial utterance"},
+    {"type": "buffer-disposition", "value": "committed"}
+  ]
+}
