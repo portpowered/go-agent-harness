@@ -385,6 +385,36 @@ func TestDeadguardDoesNotFireForQuickHealthyExecution(t *testing.T) {
 	}
 }
 
+const (
+	v2aHappyFixture    = "testdata/probe-fixtures/s2s_v2a_audio_in_basic.session.json"
+	v2aSilentFixture   = "testdata/probe-fixtures/s2s_v2a_audio_in_basic_no_response.session.json"
+	v2aHappyScenario   = "testdata/probe-scenarios/s2s-v2a-audio-in-basic.scenario.json"
+	v2aNoRespScenario  = "testdata/probe-scenarios/s2s-v2a-audio-in-basic-no-response.scenario.json"
+	v2aExpectedReplies = "How can I help you today?"
+)
+
+func TestProbeRunV2AAudioInBasicPassesOffline(t *testing.T) {
+	run := executeCLI("probe", "run", v2aHappyScenario, "--replay", v2aHappyFixture, "--json")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != true || results[0]["name"] != "s2s-v2a-audio-in-basic" {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	outcomes := results[0]["expectations"].([]any)
+	if len(outcomes) != 1 {
+		t.Fatalf("expectation outcome count = %d, want 1", len(outcomes))
+	}
+	outcome := outcomes[0].(map[string]any)
+	if outcome["passed"] != true || outcome["kind"] != "transcript-contains" {
+		t.Fatalf("transcript expectation outcome unexpected: %v", outcome)
+	}
+	if summary["status"] != "pass" || summary["passed"] != float64(1) || summary["failed"] != float64(0) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
 func TestProbeRunS2SV1TextInAudioOutEmptyResponseFails(t *testing.T) {
 	scenario := filepath.Join(s2sScenarioDir, "s2s_v1_text_in_audio_out_empty_response.scenario.json")
 	fixture := filepath.Join(s2sFixtureDir, "s2s_v1_text_in_audio_out_empty_response.session.json")
@@ -429,5 +459,30 @@ func TestProbeRunS2SV1TextInAudioOutEmptyResponseFails(t *testing.T) {
 	var summary map[string]any
 	if json.Unmarshal(summaryBytes, &summary) != nil || summary["status"] != "fail" || summary["failed"] != float64(1) {
 		t.Fatalf("summary artifact must record the failure: %q", summaryBytes)
+	}
+}
+
+func TestProbeRunV2AAudioInBasicFailsWithoutResponse(t *testing.T) {
+	run := executeCLI("probe", "run", v2aNoRespScenario, "--replay", v2aSilentFixture, "--json")
+	if run.exitCode == 0 {
+		t.Fatalf("exit code = 0, want non-zero; stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != false || results[0]["name"] != "s2s-v2a-audio-in-basic-no-response" {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	outcomes := results[0]["expectations"].([]any)
+	if len(outcomes) != 1 {
+		t.Fatalf("expectation outcome count = %d, want 1", len(outcomes))
+	}
+	outcome := outcomes[0].(map[string]any)
+	if outcome["passed"] != false {
+		t.Fatalf("unmet expectation did not fail: %v", outcome)
+	}
+	if !strings.Contains(fmt.Sprint(outcome["expected"]), v2aExpectedReplies) {
+		t.Fatalf("failure does not name the unmet expectation: %v", outcome)
+	}
+	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+		t.Fatalf("summary does not reflect the failure: %v", summary)
 	}
 }

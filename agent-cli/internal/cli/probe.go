@@ -119,8 +119,9 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	}
 
 	runner := &probe.Runner{
-		Exec: deadguardExec(exec, probeScenarioDeadline),
-		Out:  &resultRouter{results: resultsOut, summary: summaryOut},
+		Exec:          deadguardExec(exec, probeScenarioDeadline),
+		Out:           &resultRouter{results: resultsOut, summary: summaryOut},
+		CorpusLookups: []probe.CorpusLookup{replayCorpusLookup{}},
 	}
 	summary, runErr := runner.Run(cmd.Context(), scenarios)
 	if runErr != nil {
@@ -359,10 +360,46 @@ func loadProbeScenario(data []byte) (probe.Scenario, error) {
 	}
 	scenario.Expected = scenario.Expectations
 	scenario.ExpectedBehavior = scenario.Expectations
-	if err := scenario.Validate(); err != nil {
+	if err := scenario.Validate(replayCorpusLookup{}); err != nil {
 		return probe.Scenario{}, err
 	}
 	return scenario, nil
+}
+
+// replayCorpusLookup accepts any non-empty audio corpus ID. Offline probe
+// scenarios reference synthetic utterances that have no on-disk corpus; the
+// replay fixture itself is the source of truth for the audio.
+type replayCorpusLookup struct{}
+
+func (replayCorpusLookup) Has(id string) bool { return strings.TrimSpace(id) != "" }
+
+// replayTranscript extracts the server-to-client transcript text from a
+// recorded session fixture so transcript expectations can be evaluated
+// offline.
+func replayTranscript(fixture string) (string, error) {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return "", fmt.Errorf("load replay fixture %q: %w", fixture, err)
+	}
+	var builder strings.Builder
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionServerToClient {
+			continue
+		}
+		switch record.Type {
+		case "response.text.delta", "response.audio_transcript.delta":
+		default:
+			continue
+		}
+		var envelope struct {
+			Delta string `json:"delta"`
+		}
+		if json.Unmarshal(record.Payload, &envelope) != nil {
+			continue
+		}
+		builder.WriteString(envelope.Delta)
+	}
+	return builder.String(), nil
 }
 
 // replayExecFunc returns a network-free ExecFunc that replays the recorded
@@ -397,6 +434,11 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if classification := replayErrorClassification(fixture); classification != "" {
 			observation.TerminalReason = "error:" + classification
 		}
+		transcript, transcriptErr := replayTranscript(fixture)
+		if transcriptErr != nil {
+			return probe.ObservationSnapshot{}, transcriptErr
+		}
+		observation.Transcript = transcript
 		return observation, nil
 	}
 }
