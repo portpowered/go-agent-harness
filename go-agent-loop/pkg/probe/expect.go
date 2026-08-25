@@ -15,6 +15,13 @@ const (
 	ExpectTerminalReason     ExpectationKind = "terminal-reason"
 	ExpectFrameCount         ExpectationKind = "frame-count"
 
+	// Buffer disposition values observed for buffered input audio. A session
+	// that ends with neither disposition left the buffer uncommitted.
+	BufferDispositionCommitted = "committed"
+	BufferDispositionDiscarded = "discarded"
+
+	ExpectBufferDisposition ExpectationKind = "buffer-disposition"
+
 	// AudioEnergyThreshold is the PCM16 RMS boundary used by the VAD
 	// contract. Audio energy must be strictly greater than this value.
 	AudioEnergyThreshold = 300.0
@@ -36,6 +43,10 @@ type ObservationSnapshot struct {
 	HasObservedTick bool
 	TerminalReason  string
 	FrameCount      int
+
+	// BufferDisposition records what happened to buffered input audio at
+	// session end: committed, discarded, or empty when uncommitted.
+	BufferDisposition string
 }
 
 type Observation = ObservationSnapshot
@@ -155,6 +166,21 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		if observation.FrameCount != expectation.Count {
 			return mismatch(expectation, kind, expectation.Count, observation.FrameCount)
 		}
+	case ExpectBufferDisposition:
+		want, err := aliasString(expectation, kind, "value", expectation.Value, expectation.Text)
+		if err != nil {
+			return err
+		}
+		switch want {
+		case BufferDispositionCommitted, BufferDispositionDiscarded:
+		default:
+			return invalid(expectation, kind, "value",
+				"buffer disposition must be committed or discarded")
+		}
+		if observedBufferDisposition(observation.BufferDisposition) != want {
+			return mismatch(expectation, kind, want,
+				observedBufferDisposition(observation.BufferDisposition))
+		}
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
@@ -189,7 +215,8 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 	}
 	switch kind {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
-		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount:
+		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
+		ExpectBufferDisposition:
 		return kind, nil
 	default:
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
@@ -244,6 +271,13 @@ func pcm16RMS(samples []int16) float64 {
 	}
 	return math.Sqrt(sum / float64(len(samples)))
 }
+func observedBufferDisposition(value string) string {
+	if value == "" {
+		return "uncommitted"
+	}
+	return value
+}
+
 func mismatch(e ExpectedBehavior, kind ExpectationKind, expected, actual any) error {
 	return &ExpectationMismatchError{Kind: kind, Expectation: e, Expected: expected, Actual: actual}
 }

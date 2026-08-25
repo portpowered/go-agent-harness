@@ -740,7 +740,8 @@ func evaluateGuardExpectations(scenario Scenario, observation ObservationSnapsho
 func evaluateGuardExpectation(expectation ExpectedBehavior, observation ObservationSnapshot) error {
 	switch declaredKind(expectation) {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
-		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount:
+		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
+		ExpectBufferDisposition:
 		return Evaluate(expectation, observation)
 	case ExpectText, ExpectTranscript:
 		want, err := aliasString(expectation, declaredKind(expectation), "text", expectation.Text, expectation.Value)

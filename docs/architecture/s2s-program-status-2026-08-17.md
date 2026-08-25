@@ -136,6 +136,12 @@ delivered through**). Plus `s2s-b3-probe-live-transport` (opt-in live API) and
 `v7c-metrics-reconcile` · `v8-duplex-overlap` · `v9-webrtc-device-roundtrip` ·
 `v10-webrtc-external-source`
 
+**Proven verticals (CLI-verified over the hermetic replay transport):**
+
+| vertical | evidence |
+|---|---|
+| `v2e-audio-in-truncated` | Proven 2026-08-24 — truncated_16k/24k sessions terminate within the probe deadguard with an observable buffer disposition (committed or explicitly discarded); negative control fails on a suppressed buffer commit. Tests: `TestProbeRunV2EAudioInTruncated16kCommitsPartialUtterance`, `TestProbeRunV2EAudioInTruncated24kDiscardsPartialUtterance`, `TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer` (`agent-cli/internal/cli/probe_test.go`). Reuses committed fixtures `go-agent-loop/testdata/audio/truncated_{16k,24k}.wav`; no new audio fixtures required. Details: `docs/architecture/s2s-v2e-audio-in-truncated-proof.md`. |
+
 **The milestones (5 lanes) — the things you actually asked for:**
 
 | lane tag | operational task | chain |

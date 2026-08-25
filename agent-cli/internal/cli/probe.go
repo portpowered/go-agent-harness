@@ -306,6 +306,8 @@ var expectationKindAliases = map[string]probe.ExpectationKind{
 	"latency-within-ticks": probe.ExpectLatencyWithinTicks,
 	"audio_energy":         probe.ExpectAudioEnergy,
 	"audio-energy":         probe.ExpectAudioEnergy,
+	"buffer_disposition":   probe.ExpectBufferDisposition,
+	"buffer-disposition":   probe.ExpectBufferDisposition,
 }
 
 func measurableExpectationKind(name string) (probe.ExpectationKind, bool) {
@@ -439,8 +441,33 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 			return probe.ObservationSnapshot{}, transcriptErr
 		}
 		observation.Transcript = transcript
+		observation.BufferDisposition = replayBufferDisposition(fixture)
 		return observation, nil
 	}
+}
+
+// replayBufferDisposition inspects a recorded session fixture for an
+// observable disposition of the buffered input audio: an acknowledged commit
+// or an explicit discard. The empty string means the fixture ends with the
+// buffer uncommitted, which buffer-disposition expectations treat as a
+// failure.
+func replayBufferDisposition(fixture string) string {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return ""
+	}
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionServerToClient {
+			continue
+		}
+		switch record.Type {
+		case "input_audio_buffer.committed":
+			return probe.BufferDispositionCommitted
+		case "input_audio_buffer.discarded":
+			return probe.BufferDispositionDiscarded
+		}
+	}
+	return ""
 }
 
 // replayErrorClassification classifies the first server-to-client error record
