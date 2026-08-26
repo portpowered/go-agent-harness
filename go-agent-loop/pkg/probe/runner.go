@@ -57,6 +57,7 @@ type RunSummary struct {
 	Total  int       `json:"total"`
 	Passed int       `json:"passed"`
 	Failed int       `json:"failed"`
+	Stuck  int       `json:"stuck"`
 	Status RunStatus `json:"status"`
 }
 
@@ -99,6 +100,9 @@ func (r *Runner) Run(ctx context.Context, scenarios []Scenario) (RunSummary, err
 			summary.Passed++
 		} else {
 			summary.Failed++
+		}
+		if result.Stuck {
+			summary.Stuck++
 		}
 	}
 	summary.Status = StatusFail

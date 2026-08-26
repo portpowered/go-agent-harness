@@ -76,12 +76,12 @@ func TestRunnerAllPassGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
-	if summary != (RunSummary{Total: 1, Passed: 1, Failed: 0, Status: StatusPass}) {
+	if summary != (RunSummary{Total: 1, Passed: 1, Failed: 0, Stuck: 0, Status: StatusPass}) {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 	got := buf.String()
 	want := `{"name":"all-pass","pass":true,"expectations":[{"index":0,"kind":"transcript-contains","passed":true},{"index":1,"kind":"frame-count","passed":true}],"ticks":5,"frames":3,"terminal_reason":"close","input_drop_count":0,"output_drop_count":0}` + "\n" +
-		`{"total":1,"passed":1,"failed":0,"status":"pass"}` + "\n"
+		`{"total":1,"passed":1,"failed":0,"stuck":0,"status":"pass"}` + "\n"
 	if got != want {
 		t.Fatalf("golden mismatch:\n got: %s\nwant: %s", got, want)
 	}
@@ -108,7 +108,7 @@ func TestRunnerSummaryMixedAndEmpty(t *testing.T) {
 	}
 	parts := strings.SplitN(buf.String(), "\n", 3)
 	lastLine := strings.TrimSpace(parts[2])
-	want := `{"total":2,"passed":1,"failed":1,"status":"fail"}`
+	want := `{"total":2,"passed":1,"failed":1,"stuck":0,"status":"fail"}`
 	if lastLine != want {
 		t.Fatalf("summary golden mismatch:\n got: %s\nwant: %s", lastLine, want)
 	}
@@ -122,9 +122,56 @@ func TestRunnerSummaryMixedAndEmpty(t *testing.T) {
 	if emptySummary != (RunSummary{Status: StatusFail}) {
 		t.Fatalf("zero-scenario summary wrong: %+v", emptySummary)
 	}
-	wantZero := "{\"total\":0,\"passed\":0,\"failed\":0,\"status\":\"fail\"}\n"
+	wantZero := "{\"total\":0,\"passed\":0,\"failed\":0,\"stuck\":0,\"status\":\"fail\"}\n"
 	if empty.String() != wantZero {
 		t.Fatalf("zero-scenario output wrong:\n got: %s\nwant: %s", empty.String(), wantZero)
+	}
+}
+
+func TestRunnerSummaryCountsStuckSeparatelyFromFailures(t *testing.T) {
+	stuck := passingScenario()
+	stuck.ID = "stuck"
+	executionError := passingScenario()
+	executionError.ID = "error"
+	var buf bytes.Buffer
+	runner := Runner{Exec: func(ctx context.Context, scenario Scenario) (ObservationSnapshot, error) {
+		switch scenario.ID {
+		case stuck.ID:
+			return ObservationSnapshot{}, nil
+		case executionError.ID:
+			return ObservationSnapshot{}, errors.New("execution failed")
+		default:
+			return ObservationSnapshot{
+				Transcript:      "hello",
+				TerminalReason:  "close",
+				ObservedTick:    5,
+				HasObservedTick: true,
+				FrameCount:      3,
+			}, nil
+		}
+	}, Out: &buf}
+
+	summary, err := runner.Run(context.Background(), []Scenario{passingScenario(), stuck, executionError})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	wantSummary := RunSummary{Total: 3, Passed: 1, Failed: 2, Stuck: 1, Status: StatusFail}
+	if summary != wantSummary {
+		t.Fatalf("unexpected mixed-run summary: %+v, want %+v", summary, wantSummary)
+	}
+	lines := decodeLines(t, buf.String())
+	if len(lines) != 4 {
+		t.Fatalf("expected three result lines plus summary, got %d", len(lines))
+	}
+	if lines[1]["stuck"] != true {
+		t.Fatalf("stuck scenario was not marked stuck: %v", lines[1])
+	}
+	if lines[3]["stuck"] != float64(1) {
+		t.Fatalf("summary stuck count wrong: %v", lines[3])
+	}
+	want := `{"total":3,"passed":1,"failed":2,"stuck":1,"status":"fail"}`
+	if got := strings.TrimSpace(strings.TrimSuffix(buf.String(), "\n")); !strings.HasSuffix(got, want) {
+		t.Fatalf("summary golden mismatch:\n got: %s\nwant suffix: %s", got, want)
 	}
 }
 
