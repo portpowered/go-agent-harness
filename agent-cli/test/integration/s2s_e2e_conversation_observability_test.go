@@ -9,28 +9,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // The s2s-e2e-conversation-observability lane proves that the durable
-// artifacts of the CLI session command alone — never live test
-// instrumentation — demonstrate that a multi-turn spoken conversation happened.
-// Each turn is driven through the shipped session surface exactly like the
-// depth-4 proof (one CLI invocation per turn over a replayed slice), but with
-// --record-dir so every invocation leaves a recording directory containing a
-// machine-readable session log, both-side frame transcripts, recorded input
-// utterance audio, and recorded reply audio. The assertions then re-read ONLY
-// those on-disk artifacts.
+// artifacts of one CLI session command — never live test instrumentation —
+// demonstrate that a multi-turn spoken conversation happened. The replay
+// capture below is derived from the committed depth-4 corpus, while its
+// redacted audio fields are restored at runtime. The CLI is invoked once with
+// repeatable --audio-in-turn flags, so the recording bundle contains all turns
+// in one session-log.jsonl.
 
 const (
 	// observabilityTurnCount is the number of conversation turns driven and
@@ -43,8 +41,15 @@ const (
 	observabilityRMSThreshold = 500.0
 )
 
+var observabilityInputTranscripts = []string{
+	"Remember the word ZEPHYR.",
+	"What is the weather like?",
+	"What was the word?",
+	"Spell that word backwards.",
+}
+
 // observabilityReplies are the full assistant replies each turn must show in
-// the session logs, in conversation order.
+// the session log, in conversation order.
 var observabilityReplies = []string{
 	"ZEPHYR noted. I will remember it.",
 	"Sunny and mild today.",
@@ -52,120 +57,185 @@ var observabilityReplies = []string{
 	"Backwards it is RYHPEZ.",
 }
 
-// observabilityReplyDeltas split each reply into streamed deltas so the
-// fixtures exercise delta accumulation, mirroring the depth-4 captures.
-var observabilityReplyDeltas = [][]string{
-	{"ZEPHYR noted.", " I will remember it."},
-	{"Sunny and mild", " today."},
-	{"The word was ", "ZEPHYR."},
-	{"Backwards it is ", "RYHPEZ."},
+// observabilityLogEntry is intentionally local to the proof. The test models
+// the on-disk contract rather than importing the recorder's private types.
+type observabilityLogEntry struct {
+	TurnIndex int `json:"turn_index"`
+	Input     struct {
+		Text          string   `json:"text"`
+		AudioBytes    uint64   `json:"audio_bytes"`
+		Committed     bool     `json:"committed"`
+		AudioSegments []string `json:"audio_segments"`
+	} `json:"input"`
+	Response struct {
+		Text          string   `json:"text"`
+		Complete      bool     `json:"complete"`
+		AudioBytes    uint64   `json:"audio_bytes"`
+		AudioSegments []string `json:"audio_segments"`
+	} `json:"response"`
 }
 
-// buildObservabilityTurnFixture materializes one single-turn replay fixture
-// whose outbound records expect the exact paced PCM16 frames of the committed
-// per-turn corpus WAV and whose inbound records deliver the turn's scripted
-// spoken reply: text deltas plus a terminal text.done, real voiced output
-// audio, and response.done. The reply audio reuses the turn's own corpus
-// samples, which clear the documented RMS threshold by a wide margin.
-func buildObservabilityTurnFixture(t *testing.T, turn int) string {
+// buildObservabilityReplayFixture creates one replay capture for the complete
+// conversation. The committed fixture redacts raw audio by policy and has no
+// output-audio or input-ASR payloads, so this test-only materialization adds
+// those provider observations and replaces each turn's frame placeholders
+// with the one normalized PCM payload sent by --audio-in-turn.
+func buildObservabilityReplayFixture(t *testing.T) string {
 	t.Helper()
 
-	wavPath := locateCLIFixture(t, multiturnTurnWAVs[turn-1])
-	frames := multiturnAudioFrames(t, wavPath)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed turn WAV %s: %v", wavPath, err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed turn WAV %s: %v", wavPath, err)
-	}
-	replyPCM := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(replyPCM[i*2:], uint16(sample))
-	}
-	replyB64 := base64.StdEncoding.EncodeToString(replyPCM)
+	capture := captureCopy(t, locateCLIFixture(t, multiturnPositiveFixture))
+	records := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records)+12)
+	audioTurn := 0
+	responseTurn := 0
+	appendWritten := false
+	for _, record := range capture.Records {
+		switch record.Type {
+		case "input_audio_buffer.append":
+			if appendWritten {
+				continue
+			}
+			if audioTurn >= observabilityTurnCount {
+				t.Fatalf("observability fixture has more audio turns than expected: %d", audioTurn+1)
+			}
+			record.Payload = observabilityAudioAppendPayload(t, audioTurn+1)
+			appendWritten = true
+		case "response.created":
+			responseTurn++
+			if responseTurn > observabilityTurnCount {
+				t.Fatalf("observability fixture has more responses than expected: %d", responseTurn)
+			}
+			records = append(records, observabilityInputTranscriptRecords(t, responseTurn)...)
+		case "response.output_audio.done":
+			if responseTurn == 0 {
+				t.Fatal("observability fixture has output audio before its response")
+			}
+			records = append(records, observabilityOutputAudioRecord(t, responseTurn))
+		}
 
-	sessionID := fmt.Sprintf("sess_observability_turn%d", turn)
-	responseID := fmt.Sprintf("resp_observability_turn%d", turn)
-	var records []gwtesting.CapturedSessionEvent
-	sequence := 0
-	add := func(direction gwtesting.SessionEventDirection, eventType string, payload string) {
-		sequence++
-		records = append(records, gwtesting.CapturedSessionEvent{
-			Sequence:    sequence,
-			Direction:   direction,
-			TimestampMs: int64(sequence),
-			Type:        eventType,
-			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
-			Payload:     json.RawMessage(payload),
-		})
+		records = append(records, record)
+		if record.Type == "input_audio_buffer.commit" {
+			audioTurn++
+			appendWritten = false
+		}
+	}
+	if audioTurn != observabilityTurnCount {
+		t.Fatalf("observability fixture contains %d committed audio turns, want %d", audioTurn, observabilityTurnCount)
+	}
+	if responseTurn != observabilityTurnCount {
+		t.Fatalf("observability fixture contains %d responses, want %d", responseTurn, observabilityTurnCount)
 	}
 
-	add(gwtesting.DirectionClientToServer, "session.update",
-		`{"type":"session.update","session":{"model":"gpt-realtime","type":"realtime"}}`)
-	add(gwtesting.DirectionServerToClient, "session.created",
-		fmt.Sprintf(`{"type":"session.created","session":{"id":%q,"model":"gpt-realtime"}}`, sessionID))
-	for _, frame := range frames {
-		add(gwtesting.DirectionClientToServer, "input_audio_buffer.append",
-			fmt.Sprintf(`{"type":"input_audio_buffer.append","audio":%q}`, base64.StdEncoding.EncodeToString(frame)))
+	for index := range records {
+		records[index].Sequence = index + 1
+		records[index].TimestampMs = int64(index + 1)
 	}
-	add(gwtesting.DirectionClientToServer, "input_audio_buffer.commit", `{"type":"input_audio_buffer.commit"}`)
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
-	add(gwtesting.DirectionServerToClient, "response.created",
-		fmt.Sprintf(`{"type":"response.created","response":{"id":%q}}`, responseID))
-	add(gwtesting.DirectionServerToClient, "response.output_item.added",
-		fmt.Sprintf(`{"type":"response.output_item.added","response_id":%q,"output_index":0,"item":{"type":"message","role":"assistant","id":"item_assistant_turn%d"}}`, responseID, turn))
-	for _, delta := range observabilityReplyDeltas[turn-1] {
-		add(gwtesting.DirectionServerToClient, "response.output_text.delta",
-			fmt.Sprintf(`{"type":"response.output_text.delta","delta":%q}`, delta))
-	}
-	add(gwtesting.DirectionServerToClient, "response.output_text.done",
-		fmt.Sprintf(`{"type":"response.output_text.done","text":%q}`, observabilityReplies[turn-1]))
-	add(gwtesting.DirectionServerToClient, "response.output_audio.delta",
-		fmt.Sprintf(`{"type":"response.output_audio.delta","delta":%q}`, replyB64))
-	add(gwtesting.DirectionServerToClient, "response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	add(gwtesting.DirectionServerToClient, "response.done",
-		fmt.Sprintf(`{"type":"response.done","response":{"id":%q,"status":"completed"}}`, responseID))
-	add(gwtesting.DirectionServerToClient, "session.closed",
-		fmt.Sprintf(`{"type":"session.closed","session_id":%q,"reason":"fixture_complete"}`, sessionID))
+	capture.Records = records
 
-	capture := gwtesting.SessionCapture{
-		Version:  gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime"},
-		Session:  gwtesting.SessionMetadata{ID: sessionID},
-		Records:  records,
-	}
-	path := filepath.Join(t.TempDir(), fmt.Sprintf("observability_turn%d.session.json", turn))
+	path := filepath.Join(t.TempDir(), "observability_multiturn.session.json")
 	data, err := json.MarshalIndent(capture, "", "  ")
 	if err != nil {
-		t.Fatalf("marshal observability fixture turn %d: %v", turn, err)
+		t.Fatalf("marshal observability fixture: %v", err)
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write observability fixture turn %d: %v", turn, err)
+		t.Fatalf("write observability fixture: %v", err)
 	}
 	return path
 }
 
-// runObservabilityTurn drives one conversation turn through the shipped CLI
-// session command with --record-dir. Artifacts are final when the command
-// returns because the recording bundle is finalized synchronously inside the
-// command; no stdout content participates in any assertion.
-func runObservabilityTurn(t *testing.T, fixturePath, wavPath, recordDir string) {
+func observabilityAudioAppendPayload(t *testing.T, turn int) json.RawMessage {
 	t.Helper()
+	return observabilityJSONPayload(t, map[string]any{
+		"type":  "input_audio_buffer.append",
+		"audio": base64.StdEncoding.EncodeToString(observabilityReferenceUtterance(t, turn)),
+	})
+}
 
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
-	cmd.SetOut(os.Stderr)
-	cmd.SetErr(os.Stderr)
-	cmd.SetArgs([]string{"--replay", fixturePath, "--audio-in", wavPath, "--record-dir", recordDir})
-	if err := cmd.ExecuteContext(t.Context()); err != nil {
-		t.Fatalf("session command turn over replay with --record-dir: %v", err)
+func observabilityOutputAudioRecord(t *testing.T, turn int) gwtesting.CapturedSessionEvent {
+	t.Helper()
+	return gwtesting.CapturedSessionEvent{
+		Direction:   gwtesting.DirectionServerToClient,
+		Type:        "response.output_audio.delta",
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload: observabilityJSONPayload(t, map[string]any{
+			"type":  "response.output_audio.delta",
+			"delta": base64.StdEncoding.EncodeToString(observabilityReferenceUtterance(t, turn)),
+		}),
 	}
 }
 
-// observabilityReferenceUtterance returns the exact PCM16 byte stream the
-// committed corpus WAV contributes to the wire (frame-identical to what the
-// paced file source sends), for byte comparison against recorded input audio.
+func observabilityInputTranscriptRecords(t *testing.T, turn int) []gwtesting.CapturedSessionEvent {
+	t.Helper()
+
+	text := observabilityInputTranscripts[turn-1]
+	split := strings.LastIndex(text, " ")
+	if split < 0 {
+		split = len(text)
+	}
+	return []gwtesting.CapturedSessionEvent{
+		{
+			Direction:   gwtesting.DirectionServerToClient,
+			Type:        "conversation.item.input_audio_transcription.delta",
+			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			Payload: observabilityJSONPayload(t, map[string]any{
+				"type":  "conversation.item.input_audio_transcription.delta",
+				"delta": text[:split],
+			}),
+		},
+		{
+			Direction:   gwtesting.DirectionServerToClient,
+			Type:        "conversation.item.input_audio_transcription.delta",
+			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			Payload: observabilityJSONPayload(t, map[string]any{
+				"type":  "conversation.item.input_audio_transcription.delta",
+				"delta": text[split:],
+			}),
+		},
+		{
+			Direction:   gwtesting.DirectionServerToClient,
+			Type:        "conversation.item.input_audio_transcription.completed",
+			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			Payload: observabilityJSONPayload(t, map[string]any{
+				"type":       "conversation.item.input_audio_transcription.completed",
+				"transcript": text,
+			}),
+		},
+	}
+}
+
+func observabilityJSONPayload(t *testing.T, value map[string]any) json.RawMessage {
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal observability provider event: %v", err)
+	}
+	return data
+}
+
+// runObservabilityConversation drives all four turns through one invocation
+// of the shipped CLI session command. The command writes no evidence consumed
+// by the verifier; only the finalized recording directory is returned to it.
+func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [][]byte {
+	t.Helper()
+
+	args := []string{"--replay", fixturePath, "--record-dir", recordDir}
+	references := make([][]byte, 0, observabilityTurnCount)
+	for turn := 1; turn <= observabilityTurnCount; turn++ {
+		wavPath := locateCLIFixture(t, multiturnTurnWAVs[turn-1])
+		references = append(references, observabilityReferenceUtterance(t, turn))
+		args = append(args, "--audio-in-turn", wavPath)
+	}
+
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(os.Stderr)
+	cmd.SetArgs(args)
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("multi-turn session command over replay: %v", err)
+	}
+	return references
+}
+
+// observabilityReferenceUtterance returns the exact normalized PCM16 byte
+// stream sent by the scheduled audio-input path for one corpus WAV.
 func observabilityReferenceUtterance(t *testing.T, turn int) []byte {
 	t.Helper()
 
@@ -200,139 +270,125 @@ func pcm16LERMS(pcm []byte) float64 {
 	return math.Sqrt(energy / float64(count))
 }
 
-// assertConversationArtifactEvidence reconstructs the conversation purely from
-// the on-disk recording directories under root and proves, per turn in order:
-// an intact manifest whose hashes match the emitted bytes, a session log
-// entry carrying the expected full reply text, the exact committed user
-// utterance audio, non-empty recorded reply audio above the silence threshold,
-// and at least three logged turns overall. Every violation names the turn and
-// artifact involved; all violations are returned joined.
-func assertConversationArtifactEvidence(root string, wantReplies []string, referenceUtterances [][]byte) error {
-	dirEntries, err := os.ReadDir(root)
+// assertConversationArtifactEvidence reconstructs the conversation purely
+// from one finalized recording directory and proves, per ordered session-log
+// entry: the input transcript, committed input audio, full response text,
+// non-empty recorded reply audio above the silence threshold, and manifest
+// integrity. Every violation names the turn or artifact involved; all
+// violations are returned joined so a redacted negative control can identify
+// each missing evidence class.
+func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []string, referenceUtterances [][]byte) error {
+	logPath := filepath.Join(root, "session-log.jsonl")
+	sessionLogBytes, err := os.ReadFile(logPath)
 	if err != nil {
-		return fmt.Errorf("read artifact root %s: %w", root, err)
+		return fmt.Errorf("session log unreadable: %w", err)
 	}
-	names := make([]string, 0, len(dirEntries))
-	for _, entry := range dirEntries {
-		if entry.IsDir() {
-			names = append(names, entry.Name())
-		}
+	trimmed := bytes.TrimSpace(sessionLogBytes)
+	if len(trimmed) == 0 {
+		return errors.New("session log is empty; no conversation turns are recorded")
 	}
-	sort.Strings(names)
+
+	lines := bytes.Split(trimmed, []byte("\n"))
 	var violations []error
-	if len(names) < 3 {
-		violations = append(violations, fmt.Errorf("artifact set holds %d turn directories, want >= 3", len(names)))
+	if len(lines) < 3 {
+		violations = append(violations, fmt.Errorf("session log holds %d turns, want >= 3", len(lines)))
 	}
-	if len(names) != len(wantReplies) {
-		violations = append(violations, fmt.Errorf("artifact set holds %d turn directories, want %d drove turns", len(names), len(wantReplies)))
+	if len(lines) != len(wantReplies) {
+		violations = append(violations, fmt.Errorf("session log holds %d turns, want %d driven turns", len(lines), len(wantReplies)))
 	}
-	for index, name := range names {
-		violation := assertTurnArtifactEvidence(index+1, name, filepath.Join(root, name), wantReplies[index], referenceUtterances[index])
-		if violation != nil {
-			violations = append(violations, violation)
+	if len(wantInputs) != len(wantReplies) || len(referenceUtterances) != len(wantReplies) {
+		violations = append(violations, fmt.Errorf("proof expectations are not aligned: inputs=%d replies=%d utterances=%d", len(wantInputs), len(wantReplies), len(referenceUtterances)))
+	}
+
+	entries := make([]observabilityLogEntry, 0, len(lines))
+	for index, line := range lines {
+		var entry observabilityLogEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			violations = append(violations, fmt.Errorf("session log turn %d is not valid JSON: %w", index+1, err))
+			continue
 		}
+		entries = append(entries, entry)
+	}
+
+	limit := len(entries)
+	if limit > len(wantReplies) {
+		limit = len(wantReplies)
+	}
+	for index := 0; index < limit; index++ {
+		turn := index + 1
+		entry := entries[index]
+		if entry.TurnIndex != turn {
+			violations = append(violations, fmt.Errorf("turn %d: session log turn_index = %d, want %d", turn, entry.TurnIndex, turn))
+		}
+		if index < len(wantInputs) && entry.Input.Text != wantInputs[index] {
+			violations = append(violations, fmt.Errorf("turn %d: input transcript = %q, want %q", turn, entry.Input.Text, wantInputs[index]))
+		}
+		if !entry.Input.Committed {
+			violations = append(violations, fmt.Errorf("turn %d: session log records no committed user input", turn))
+		}
+		if len(entry.Input.AudioSegments) == 0 {
+			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded input audio segments", turn))
+		} else if index < len(referenceUtterances) {
+			inputAudio, readErr := readListedRecordingSegments(root, entry.Input.AudioSegments, entry.Input.AudioBytes)
+			if readErr != nil {
+				violations = append(violations, fmt.Errorf("turn %d: input audio: %w", turn, readErr))
+			} else if !bytes.Equal(inputAudio, referenceUtterances[index]) {
+				violations = append(violations, fmt.Errorf("turn %d: recorded utterance audio (%d bytes) does not match the expected spoken utterance (%d bytes)", turn, len(inputAudio), len(referenceUtterances[index])))
+			}
+		}
+		if entry.Response.Text != wantReplies[index] {
+			violations = append(violations, fmt.Errorf("turn %d: session log reply = %q, want %q", turn, entry.Response.Text, wantReplies[index]))
+		}
+		if !entry.Response.Complete {
+			violations = append(violations, fmt.Errorf("turn %d: session log marks the reply incomplete", turn))
+		}
+		if len(entry.Response.AudioSegments) == 0 {
+			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded output audio segments", turn))
+			continue
+		}
+		outputAudio, readErr := readListedRecordingSegments(root, entry.Response.AudioSegments, entry.Response.AudioBytes)
+		if readErr != nil {
+			violations = append(violations, fmt.Errorf("turn %d: output audio: %w", turn, readErr))
+			continue
+		}
+		if len(outputAudio) == 0 {
+			violations = append(violations, fmt.Errorf("turn %d: no recorded output audio found; the reply was not captured", turn))
+		} else if rms := pcm16LERMS(outputAudio); rms <= observabilityRMSThreshold {
+			violations = append(violations, fmt.Errorf("turn %d: recorded reply RMS = %.1f, want > %.1f (silence threshold)", turn, rms, observabilityRMSThreshold))
+		}
+	}
+
+	if manifestErr := verifyManifestHashes(root); manifestErr != nil {
+		violations = append(violations, fmt.Errorf("recording manifest: %w", manifestErr))
 	}
 	return errors.Join(violations...)
 }
 
-// assertTurnArtifactEvidence verifies one turn's recording directory contents.
-func assertTurnArtifactEvidence(turn int, name, dir, wantReply string, referenceUtterance []byte) error {
-	sessionLogBytes, err := os.ReadFile(filepath.Join(dir, "session-log.jsonl"))
-	if err != nil {
-		return fmt.Errorf("%s: session log unreadable: %w", name, err)
-	}
-	raw := string(bytes.TrimSpace(sessionLogBytes))
-	lines := bytes.Split(bytes.TrimSpace(sessionLogBytes), []byte("\n"))
-	if len(lines) != 1 || len(bytes.TrimSpace(lines[0])) == 0 {
-		return fmt.Errorf("%s: session log holds %d entries (%q), want exactly 1 for a single-turn session", name, len(lines), raw)
-	}
-	var entry struct {
-		TurnIndex int `json:"turn_index"`
-		Input     struct {
-			Text          string   `json:"text"`
-			AudioBytes    uint64   `json:"audio_bytes"`
-			Committed     bool     `json:"committed"`
-			AudioSegments []string `json:"audio_segments"`
-		} `json:"input"`
-		Response struct {
-			Text          string   `json:"text"`
-			Complete      bool     `json:"complete"`
-			AudioBytes    uint64   `json:"audio_bytes"`
-			AudioSegments []string `json:"audio_segments"`
-		} `json:"response"`
-	}
-	if err := json.Unmarshal(lines[0], &entry); err != nil {
-		return fmt.Errorf("%s: decode session log entry: %w", name, err)
-	}
-	if entry.TurnIndex != 1 {
-		// Every recording directory holds exactly one single-turn session, so
-		// its log starts at the session-local index 1. The conversation ORDER
-		// is carried by the ordered turn-NN directory sequence together with
-		// the exact utterance bytes pinned inside each directory below.
-		return fmt.Errorf("%s: session log turn_index = %d, want 1 for a single-turn session; raw entry: %s", name, entry.TurnIndex, raw)
-	}
-	if !entry.Input.Committed {
-		return fmt.Errorf("%s: session log records no committed user input for this turn", name)
-	}
-	if entry.Response.Text != wantReply {
-		return fmt.Errorf("%s: session log reply = %q, want %q", name, entry.Response.Text, wantReply)
-	}
-	if !entry.Response.Complete {
-		return fmt.Errorf("%s: session log marks the reply incomplete; the turn did not finish cleanly", name)
-	}
-
-	inputAudio, err := readRecordingSegments(dir, "audio/in-", entry.Input.AudioBytes)
-	if err != nil {
-		return fmt.Errorf("%s: %w", name, err)
-	}
-	if !bytes.Equal(inputAudio, referenceUtterance) {
-		return fmt.Errorf("%s: recorded utterance audio (%d bytes) does not match the expected spoken utterance (%d bytes)", name, len(inputAudio), len(referenceUtterance))
-	}
-	outputAudio, err := readRecordingSegments(dir, "audio/out-", entry.Response.AudioBytes)
-	if err != nil {
-		return fmt.Errorf("%s: %w", name, err)
-	}
-	if len(outputAudio) == 0 {
-		return fmt.Errorf("%s: no recorded output audio found; the reply was not captured", name)
-	}
-	rms := pcm16LERMS(outputAudio)
-	if rms <= observabilityRMSThreshold {
-		return fmt.Errorf("%s: recorded reply RMS = %.1f, want > %.1f (silence threshold)", name, rms, observabilityRMSThreshold)
-	}
-
-	if violation := verifyTurnManifestHashes(dir); violation != nil {
-		return fmt.Errorf("%s: %w", name, violation)
-	}
-	return nil
-}
-
-// readRecordingSegments concatenates the named segment family inside one
-// recording directory, requiring the total size to match the expectation from
-// the session log.
-func readRecordingSegments(dir, prefix string, wantBytes uint64) ([]byte, error) {
-	matches, err := filepath.Glob(filepath.Join(dir, prefix+"*.pcm"))
-	if err != nil {
-		return nil, fmt.Errorf("list segments under %s: %w", dir, err)
-	}
-	sort.Strings(matches)
+// readListedRecordingSegments concatenates exactly the segment paths named by
+// one session-log entry and checks their total against that entry's byte count.
+func readListedRecordingSegments(dir string, segments []string, wantBytes uint64) ([]byte, error) {
 	var combined []byte
-	for _, path := range matches {
-		data, err := os.ReadFile(path)
+	for _, relative := range segments {
+		clean := filepath.Clean(filepath.FromSlash(relative))
+		if filepath.IsAbs(clean) || clean != filepath.FromSlash(relative) {
+			return nil, fmt.Errorf("segment path %q is not relative and normalized", relative)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, clean))
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
+			return nil, fmt.Errorf("read segment %s: %w", relative, err)
 		}
 		combined = append(combined, data...)
 	}
 	if uint64(len(combined)) != wantBytes {
-		return combined, fmt.Errorf("recorded %s segments hold %d bytes, session log accounts %d", prefix, len(combined), wantBytes)
+		return combined, fmt.Errorf("segments hold %d bytes, session log accounts %d", len(combined), wantBytes)
 	}
 	return combined, nil
 }
 
-// verifyTurnManifestHashes re-hashes every regular artifact listed by the
+// verifyManifestHashes re-hashes every regular artifact listed by the
 // recording manifest against its recorded digest, proving the bundle still
 // describes exactly the bytes on disk.
-func verifyTurnManifestHashes(dir string) error {
+func verifyManifestHashes(dir string) error {
 	manifestBytes, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
 		return fmt.Errorf("manifest unreadable: %w", err)
@@ -397,78 +453,72 @@ func copyArtifactTree(t *testing.T, source, destination string) {
 	}
 }
 
-// driveObservabilityConversation runs the full four-turn conversation through
-// the shipped CLI session command into fresh per-turn recording directories
-// under root and returns the reference utterance PCM per turn.
-func driveObservabilityConversation(t *testing.T, root string) [][]byte {
+func truncateSessionLog(t *testing.T, path string, keep int) {
 	t.Helper()
 
-	references := make([][]byte, 0, observabilityTurnCount)
-	for turn := 1; turn <= observabilityTurnCount; turn++ {
-		fixture := buildObservabilityTurnFixture(t, turn)
-		wavPath := locateCLIFixture(t, multiturnTurnWAVs[turn-1])
-		references = append(references, observabilityReferenceUtterance(t, turn))
-		runObservabilityTurn(t, fixture, wavPath, filepath.Join(root, fmt.Sprintf("turn-%02d", turn)))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read session log for truncation: %v", err)
 	}
-	return references
+	lines := bytes.Split(bytes.TrimSpace(data), []byte("\n"))
+	if keep <= 0 || keep > len(lines) {
+		t.Fatalf("truncate session log keep=%d with %d lines", keep, len(lines))
+	}
+	truncated := append(bytes.Join(lines[:keep], []byte("\n")), '\n')
+	if err := os.WriteFile(path, truncated, 0o644); err != nil {
+		t.Fatalf("truncate session log: %v", err)
+	}
+}
+
+func silenceBytes(n int) []byte {
+	return make([]byte, n)
 }
 
 // TestSessionCommandConversationObservabilityProvesConversationFromArtifactsOnly
-// is the lane's proof of record: after the multi-turn replayed conversation
-// completes, the recording directories left behind by the session command —
-// read exclusively, post-hoc, with no access to any live event stream —
-// reconstruct the whole conversation: ordered turns, the exact spoken
-// utterances that went in, the full replies that came out, and audible reply
-// energy above the documented silence threshold.
+// is the lane's proof of record: after one multi-turn replayed session
+// completes, the one recording bundle left by the CLI — read exclusively,
+// post-hoc, with no access to any live event stream — reconstructs the ordered
+// input transcripts and full replies and proves audible reply energy.
 func TestSessionCommandConversationObservabilityProvesConversationFromArtifactsOnly(t *testing.T) {
+	fixturePath := buildObservabilityReplayFixture(t)
 	root := t.TempDir()
-	references := driveObservabilityConversation(t, root)
+	references := runObservabilityConversation(t, fixturePath, root)
 
-	if err := assertConversationArtifactEvidence(root, observabilityReplies, references); err != nil {
+	if err := assertConversationArtifactEvidence(root, observabilityInputTranscripts, observabilityReplies, references); err != nil {
 		t.Fatalf("on-disk artifacts do not prove the conversation: %v", err)
 	}
 }
 
 // TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArtifacts
-// proves the artifact-only assertions are not vacuous: against a truncated and
-// redacted copy of the same artifact set — one turn's session log removed and
-// another turn's reply audio replaced with digital silence — the identical
-// assertion fails and names the missing evidence.
+// proves the artifact-only assertions are not vacuous: against a truncated
+// session log and redacted reply audio copied from the same combined bundle,
+// the identical assertion fails and names both missing evidence classes.
 func TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArtifacts(t *testing.T) {
+	fixturePath := buildObservabilityReplayFixture(t)
 	root := t.TempDir()
-	references := driveObservabilityConversation(t, root)
+	references := runObservabilityConversation(t, fixturePath, root)
 
 	negativeRoot := filepath.Join(t.TempDir(), "negative")
 	copyArtifactTree(t, root, negativeRoot)
-	if err := os.Remove(filepath.Join(negativeRoot, "turn-04", "session-log.jsonl")); err != nil {
-		t.Fatalf("truncate negative control session log: %v", err)
+	truncateSessionLog(t, filepath.Join(negativeRoot, "session-log.jsonl"), observabilityTurnCount-1)
+	redactedReplyPath := filepath.Join(negativeRoot, "audio", "out-001.pcm")
+	replyAudio, err := os.ReadFile(redactedReplyPath)
+	if err != nil {
+		t.Fatalf("read negative control reply audio: %v", err)
 	}
-	redactedReplyPath := filepath.Join(negativeRoot, "turn-02", "audio", "out-000.pcm")
-	if err := os.WriteFile(redactedReplyPath, silenceBytes(lenOf(redactedReplyPath)), 0o644); err != nil {
+	if err := os.WriteFile(redactedReplyPath, silenceBytes(len(replyAudio)), 0o644); err != nil {
 		t.Fatalf("redact negative control reply audio: %v", err)
 	}
 
-	err := assertConversationArtifactEvidence(negativeRoot, observabilityReplies, references)
+	err = assertConversationArtifactEvidence(negativeRoot, observabilityInputTranscripts, observabilityReplies, references)
 	if err == nil {
 		t.Fatal("artifact assertions passed on a truncated, redacted artifact set; the check is vacuous")
 	}
 	message := err.Error()
-	for _, want := range []string{"turn-04", "session log", "turn-02", "RMS"} {
-		if !bytes.Contains([]byte(message), []byte(want)) {
+	for _, want := range []string{"session log", "turn 2", "RMS"} {
+		if !strings.Contains(message, want) {
 			t.Fatalf("negative-control violation should name %q, got: %s", want, message)
 		}
 	}
 	t.Logf("negative control rejected as expected: %v", err)
-}
-
-func lenOf(path string) int {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0
-	}
-	return len(data)
-}
-
-func silenceBytes(n int) []byte {
-	return make([]byte, n)
 }
