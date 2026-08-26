@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 var (
@@ -39,6 +40,9 @@ type grokSession struct {
 
 	done      chan struct{}
 	closeOnce sync.Once
+
+	mediaMu sync.Mutex
+	media   *rtc.SessionMedia
 }
 
 func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {
@@ -204,6 +208,7 @@ func (s *grokSession) readLoop(ctx context.Context) {
 			return
 		}
 
+		_ = s.publishRTCMedia(event)
 		msgs := translateInbound(event)
 		for _, m := range msgs {
 			if !s.recvBuf.Write(ctx, m) {
@@ -268,6 +273,9 @@ func (s *grokSession) Close() error {
 	var closeErr error
 	s.closeOnce.Do(func() {
 		close(s.done)
+		if media := s.currentRTCMedia(); media != nil {
+			_ = media.Close()
+		}
 		closeErr = s.conn.Close()
 	})
 	return closeErr

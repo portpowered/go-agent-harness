@@ -156,6 +156,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			_ = s.Close()
 			return
 		}
+		_ = s.publishRTCMedia(event)
 		for _, msg := range realtimeInboundMessages(event) {
 			if !s.recvBuf.Write(ctx, msg) {
 				select {
