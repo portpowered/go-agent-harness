@@ -786,6 +786,13 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 			}
 		}()
 	}
+	if plan.closeSession != nil {
+		defer func() {
+			if err := plan.closeSession(); err != nil {
+				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
+			}
+		}()
+	}
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
 			return wrapSessionRuntimeError(plan, errors.Join(err, finalizeSessionDurationArtifacts(artifacts)))

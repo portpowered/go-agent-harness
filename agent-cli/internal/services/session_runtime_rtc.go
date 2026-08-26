@@ -120,6 +120,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 	if runtime == nil {
 		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
 	}
+	rtcInferencer := &sessionRTCRuntimeInferencer{runtime: runtime}
 
 	closeOnPlanError := func(planErr error) (sessionRuntimePlan, error) {
 		return sessionRuntimePlan{}, errors.Join(planErr, wrapSessionPhaseError("close WebRTC runtime", runtime.Close()))
@@ -187,6 +188,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 	if inner == nil {
 		return closeOnPlanError(wrapSessionRTCRuntimeError("create provider session", ErrSessionRTCRuntimeUnavailable))
 	}
+	rtcInferencer.inner = inner
 
 	return sessionRuntimePlan{
 		mode:         mode,
@@ -194,14 +196,15 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		model:        model,
 		capturePath:  opts.RecordPath,
 		announce:     announce,
-		inferencer:   &sessionRTCRuntimeInferencer{inner: inner, runtime: runtime},
+		inferencer:   rtcInferencer,
 		flushCapture: flushCapture,
 		finalize:     finalize,
 		loop: sessionLoopOptions{
 			Prompt:         opts.Prompt,
 			CloseAfterOpen: true,
 		},
-		rtcRuntime: runtime,
+		rtcRuntime:   runtime,
+		closeSession: rtcInferencer.CloseSession,
 	}, nil
 }
 
@@ -417,6 +420,9 @@ func closeSessionRTCResource(resource interface{ Close() error }) error {
 type sessionRTCRuntimeInferencer struct {
 	inner   messages.SessionInferencer
 	runtime SessionRTCRuntime
+
+	mu      sync.Mutex
+	session *sessionRTCRuntimeSession
 }
 
 var _ messages.SessionInferencer = (*sessionRTCRuntimeInferencer)(nil)
@@ -440,7 +446,27 @@ func (i *sessionRTCRuntimeInferencer) ConnectSession(ctx context.Context) (messa
 		closeErr := i.runtime.Close()
 		return nil, errors.Join(wrapSessionRTCRuntimeError("connect provider session", ErrSessionRTCRuntimeUnavailable), closeErr)
 	}
-	return &sessionRTCRuntimeSession{Session: session, runtime: i.runtime}, nil
+	wrapped := &sessionRTCRuntimeSession{Session: session, runtime: i.runtime}
+	i.mu.Lock()
+	i.session = wrapped
+	i.mu.Unlock()
+	return wrapped, nil
+}
+
+// CloseSession synchronously closes the provider session established by the
+// inferencer. It is idempotent with the model runner's deferred session close
+// and lets the service observe provider transport cleanup before returning.
+func (i *sessionRTCRuntimeInferencer) CloseSession() error {
+	if i == nil {
+		return nil
+	}
+	i.mu.Lock()
+	session := i.session
+	i.mu.Unlock()
+	if session == nil {
+		return nil
+	}
+	return session.Close()
 }
 
 type sessionRTCRuntimeSession struct {

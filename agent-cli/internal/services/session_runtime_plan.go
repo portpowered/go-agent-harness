@@ -113,6 +113,7 @@ type sessionRuntimePlan struct {
 	clockSource       platformclock.Source
 	runtime           *sessionRuntimeObservationRecorder
 	rtcRuntime        SessionRTCRuntime
+	closeSession      func() error
 	selection         SessionRuntimeSelection
 	transport         string
 	signalingEndpoint string
@@ -124,6 +125,17 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		defer func() {
 			if err := p.rtcRuntime.Close(); err != nil {
 				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC runtime", err))
+			}
+		}()
+	}
+	if p.closeSession != nil {
+		// Close the provider session before the runtime owner releases its
+		// data-plane resources. The loop may return immediately after cancelling
+		// its background engine, while the model participant's deferred close is
+		// still pending.
+		defer func() {
+			if err := p.closeSession(); err != nil {
+				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
 			}
 		}()
 	}

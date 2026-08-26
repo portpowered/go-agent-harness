@@ -385,12 +385,6 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			al.logInfo("agentloop: context cancelled, stopping turn-taking loop")
-			// RunHotLoopContinuous owns the active participants, including the
-			// session model runner whose deferred Close releases the provider
-			// connection. Wait for the engine goroutine to finish its cancellation
-			// cleanup before returning so callers never observe a live session
-			// after Run has returned.
-			<-errCh
 			return ctx.Err()
 
 		case err := <-errCh:
