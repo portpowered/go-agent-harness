@@ -550,3 +550,101 @@ func TestRunAgentLoopSession_TimeoutWorkerExitsBoundedly(t *testing.T) {
 		t.Fatalf("session did not continue after the timed-out tool:\n%s", out.String())
 	}
 }
+
+// TestSessionToolExecutor_DefaultWrapperAppliesProductionBound pins the
+// production default wiring: newSessionToolExecutor — the constructor selected
+// at the live duplex seam when no override is set — must impose the
+// documented 60s defaultSessionToolExecutionTimeout bound. The proof reads
+// the deadline handed to the inner executor, so it never waits out the bound.
+func TestSessionToolExecutor_DefaultWrapperAppliesProductionBound(t *testing.T) {
+	if defaultSessionToolExecutionTimeout != 60*time.Second {
+		t.Fatalf("defaultSessionToolExecutionTimeout = %s, want the documented 60s production default", defaultSessionToolExecutionTimeout)
+	}
+
+	var mu sync.Mutex
+	var deadlineOK bool
+	var remaining time.Duration
+	inner := sessionToolExecutorFunc(func(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		deadline, ok := ctx.Deadline()
+		deadlineOK = ok
+		if ok {
+			remaining = time.Until(deadline)
+		}
+		return messages.ToolCallResponse{Content: "ok"}, nil
+	})
+
+	response, err := newSessionToolExecutor(inner).Execute(context.Background(), messages.ToolCall{ID: "d-call", Name: "d-tool"})
+	if err != nil {
+		t.Fatalf("Execute returned Go error: %v", err)
+	}
+	if response.Content != "ok" {
+		t.Fatalf("response content = %q, want ok", response.Content)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !deadlineOK {
+		t.Fatal("default wrapper executed the tool without any deadline")
+	}
+	// The synchronous Execute call bounds scheduling noise; the observed
+	// window must be a fresh ~60s bound, not zero and not an override.
+	if remaining <= 0 || remaining > defaultSessionToolExecutionTimeout {
+		t.Fatalf("default wrapper inner deadline = %s from now, want within (0, %s]", remaining, defaultSessionToolExecutionTimeout)
+	}
+	if remaining < defaultSessionToolExecutionTimeout-time.Second {
+		t.Fatalf("default wrapper inner deadline = %s from now, want within 1s of the full %s bound", remaining, defaultSessionToolExecutionTimeout)
+	}
+}
+
+// stubPlanSessionInferencer satisfies messages.SessionInferencer so plan tests
+// can take the injected-inferencer replay branch without provider config.
+type stubPlanSessionInferencer struct{}
+
+func (stubPlanSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return nil, errors.New("stubPlanSessionInferencer never connects")
+}
+
+var _ messages.SessionInferencer = stubPlanSessionInferencer{}
+
+// TestPlanSessionRuntimeThreadsToolExecutorAndDeadlineOverride proves the
+// exported SessionRunOptions seam crosses both the composed executor and the
+// per-invocation deadline override into the duplex loop options, and that a
+// zero override keeps the production default path.
+func TestPlanSessionRuntimeThreadsToolExecutorAndDeadlineOverride(t *testing.T) {
+	executor := sessionToolExecutorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
+		return messages.ToolCallResponse{}, nil
+	})
+
+	plan, err := planSessionRuntime(SessionRunOptions{
+		ReplayPath:           "unused.json",
+		SessionInferencer:    stubPlanSessionInferencer{},
+		ToolExecutor:         executor,
+		ToolExecutionTimeout: 7 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntime: %v", err)
+	}
+	if plan.loop.ToolExecutor == nil {
+		t.Fatal("plan dropped the composed tool executor")
+	}
+	if plan.loop.ToolExecutionTimeout != 7*time.Millisecond {
+		t.Fatalf("plan.loop.ToolExecutionTimeout = %s, want 7ms", plan.loop.ToolExecutionTimeout)
+	}
+
+	defaultPlan, err := planSessionRuntime(SessionRunOptions{
+		ReplayPath:        "unused.json",
+		SessionInferencer: stubPlanSessionInferencer{},
+		ToolExecutor:      executor,
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntime without override: %v", err)
+	}
+	if defaultPlan.loop.ToolExecutor == nil {
+		t.Fatal("plan dropped the composed tool executor without an override")
+	}
+	if defaultPlan.loop.ToolExecutionTimeout != 0 {
+		t.Fatalf("plan.loop.ToolExecutionTimeout = %s without override, want 0 (production default path)", defaultPlan.loop.ToolExecutionTimeout)
+	}
+}
