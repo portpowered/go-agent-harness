@@ -193,6 +193,8 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 		case <-ctx.Done():
 			_ = s.Close()
 			return
+		case <-s.done:
+			return
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
 				s.logger.Error("grok: websocket write error", logging.Field{Key: "error", Value: err})
