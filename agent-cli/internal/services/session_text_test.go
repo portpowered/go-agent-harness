@@ -15,7 +15,7 @@ import (
 )
 
 func TestSessionCommandHelpExposesPromptSeed(t *testing.T) {
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetArgs([]string{"--help"})
@@ -83,7 +83,7 @@ func TestSessionCommandPromptPresenceMatrix(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inf := functional.NewMockSessionInferencer()
 			t.Cleanup(inf.Close)
-			cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inf).Generate()
+			cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inf).Generate()
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetArgs(tc.args)
@@ -137,7 +137,7 @@ func TestSessionCommandPromptToAudioOutput(t *testing.T) {
 	inf := functional.NewMockSessionInferencer()
 	t.Cleanup(inf.Close)
 	output := &recordingSessionOutput{}
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), inf).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inf).Generate()
 	cmd.SetOut(output)
 	cmd.SetArgs([]string{"--replay", "synthetic.json", "--prompt", "distinctive text seed for audio"})
 	result := make(chan error, 1)

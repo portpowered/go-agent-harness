@@ -312,7 +312,7 @@ func TestSessionCommand_ImageFlagCardinalityAndOrder(t *testing.T) {
 			if err := os.MkdirAll(globalFlags.ConfigDirPath, 0o755); err != nil {
 				t.Fatalf("create config dir: %v", err)
 			}
-			command := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, inf).Generate()
+			command := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, nil, inf).Generate()
 			args := []string{
 				"--record", filepath.Join(dir, tc.name, "capture.json"),
 				"--provider", "openai",
@@ -387,7 +387,7 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 			inf := &countingSessionImageInferencer{session: session}
 			globalFlags := flags.NewGlobalFlags()
 			globalFlags.ConfigDirPath = filepath.Join(dir, tc.name, "config")
-			command := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, inf).Generate()
+			command := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, nil, inf).Generate()
 			args := []string{
 				"--record", capturePath,
 				"--provider", "openai",

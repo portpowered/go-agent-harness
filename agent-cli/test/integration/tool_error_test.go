@@ -216,7 +216,7 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 		cli.NewInteractionReplayCommand(),
 		cli.NewProbeCommand(),
 		cli.NewProbeRunCommand(),
-		cli.NewSessionCommand(askFlags, globalFlags, nil),
+		cli.NewSessionCommand(askFlags, globalFlags, nil, nil),
 		cli.NewSessionShowCommand(globalFlags),
 		cli.NewSessionListCommand(globalFlags),
 		cli.NewSessionDeleteCommand(globalFlags),

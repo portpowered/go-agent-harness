@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
@@ -857,10 +856,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 	}
 	observedInferencer := newObservedSessionInferencer(admittedInferencer)
-	loop, err := agentloop.New(
-		agentloop.WithMode(engine.DuplexSession),
-		agentloop.WithSessionInferencer(observedInferencer),
-	)
+	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
 	}

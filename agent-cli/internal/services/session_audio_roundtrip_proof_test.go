@@ -175,7 +175,7 @@ func buildAudioRoundtripFixture(t *testing.T, wavPath string, replySamples []int
 func runAudioRoundtrip(t *testing.T, wavPath, wirePath string) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	cmd.SetOut(io.Discard)
 	cmd.SetArgs([]string{"--replay", wirePath, "--audio-in", wavPath, "--audio-out", outputPath})
 	err := cmd.ExecuteContext(context.Background())

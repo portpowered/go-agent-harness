@@ -142,6 +142,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.diagnostics = opts.Diagnostics
 	plan.metricsRecorder = opts.MetricsRecorder
 	plan.audioInputs = opts.AudioInputs
+	// The single composed executor crosses into every session mode (live,
+	// replay, record) here; the duplex loop construction seam decides whether
+	// tool execution is enabled. Nil keeps every plan unchanged.
+	plan.loop.ToolExecutor = opts.ToolExecutor
 	return plan, nil
 }
 

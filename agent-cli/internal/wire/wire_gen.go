@@ -35,7 +35,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	probeCommand := cli.NewProbeCommand()
 	probeRunCommand := cli.NewProbeRunCommand()
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, sessionInferencer)
+	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, toolExecutor, sessionInferencer)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
@@ -80,5 +80,5 @@ var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewCha
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewSessionCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewSessionCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

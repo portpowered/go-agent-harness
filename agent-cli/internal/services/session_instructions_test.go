@@ -202,7 +202,7 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = workspaceDir
 	askFlags := flags.NewAskFlags()
-	cmd := cli.NewSessionCommand(askFlags, globalFlags, inferencer).Generate()
+	cmd := cli.NewSessionCommand(askFlags, globalFlags, nil, inferencer).Generate()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetArgs([]string{

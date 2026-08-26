@@ -70,7 +70,7 @@ func newTestRootCommand() *cobra.Command {
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
 		NewProbeRunCommand(),
-		NewSessionCommand(askFlags, globalFlags, nil),
+		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),
 		NewSessionDeleteCommand(globalFlags),

@@ -20,13 +20,17 @@ import (
 type SessionCommand struct {
 	askFlags                  *flags.AskFlags
 	globalFlags               *flags.GlobalFlags
+	toolExecutorOverride      messages.ToolExecutor
 	sessionInferencerOverride messages.SessionInferencer
 	imagePaths                []string
 }
 
-// NewSessionCommand returns the session group command constructor.
-func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
-	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, sessionInferencerOverride: sessionInferencerOverride}
+// NewSessionCommand returns the session group command constructor. The tool
+// executor is the single composed instance from the wire graph (the same value
+// given to agent.NewExecutor); callers without one pass nil so session runs
+// keep their no-tools behavior.
+func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
+	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, toolExecutorOverride: toolExecutorOverride, sessionInferencerOverride: sessionInferencerOverride}
 }
 
 // Generate returns the cobra command for the session group.
@@ -75,6 +79,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
+				ToolExecutor:      c.toolExecutorOverride,
 			}
 			seed := services.SessionTextSeed{
 				Value:   prompt,

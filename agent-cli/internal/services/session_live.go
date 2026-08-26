@@ -31,6 +31,32 @@ type sessionLoopOptions struct {
 	// observer optionally records per-turn and terminal diagnostics from the
 	// consumed delta stream; nil keeps runtime behavior unchanged.
 	observer *sessionProgressObserver
+
+	// ToolExecutor is the composed session tool executor. When non-nil it is
+	// wrapped once by newSessionToolExecutor and handed to
+	// agentloop.WithToolExecutor so provider-originated realtime tool calls
+	// execute through the product executor instead of the loop default.
+	// Nil keeps loop construction byte-for-byte identical to today.
+	ToolExecutor messages.ToolExecutor
+
+	// ToolExecutionTimeout overrides the per-invocation adapter deadline in
+	// tests. Zero selects defaultSessionToolExecutionTimeout; production plans
+	// never set it.
+	ToolExecutionTimeout time.Duration
+}
+
+// duplexSessionLoopOptions is the single duplex loop construction seam. Both
+// the plain and duration-bounded session runners build their loops here so an
+// injected executor enables tool execution exactly once per session.
+func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opts sessionLoopOptions) []agentloop.Option {
+	loopOpts := []agentloop.Option{
+		agentloop.WithMode(engine.DuplexSession),
+		agentloop.WithSessionInferencer(observedInferencer),
+	}
+	if opts.ToolExecutor != nil {
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeout(opts.ToolExecutor, opts.ToolExecutionTimeout)))
+	}
+	return loopOpts
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
@@ -41,10 +67,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	observedInferencer := newObservedSessionInferencer(sessionInferencer)
-	loop, err := agentloop.New(
-		agentloop.WithMode(engine.DuplexSession),
-		agentloop.WithSessionInferencer(observedInferencer),
-	)
+	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
 	}
