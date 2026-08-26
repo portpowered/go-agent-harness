@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,6 +33,43 @@ type SessionToolCapabilities struct {
 // constructors and callers that intentionally inject a no-tools session keep
 // their existing behavior.
 type SessionToolCapabilitiesFactory func(*config.Config) (SessionToolCapabilities, error)
+
+const (
+	// SessionTransportWebSocket is the default session transport. Keeping the
+	// value explicit makes the command's default part of the public contract.
+	SessionTransportWebSocket = "ws"
+	// SessionTransportWebRTC selects the WebRTC session transport.
+	SessionTransportWebRTC = "webrtc"
+)
+
+// ErrInvalidSessionTransport identifies a session --transport value that the
+// CLI does not understand.
+var ErrInvalidSessionTransport = errors.New("invalid session transport")
+
+// SessionTransportError describes an invalid --transport value before any
+// session provider or transport is initialized.
+type SessionTransportError struct {
+	Value string
+}
+
+func (e *SessionTransportError) Error() string {
+	if e == nil {
+		return ErrInvalidSessionTransport.Error()
+	}
+	return fmt.Sprintf("--transport must be one of %q or %q, got %q", SessionTransportWebSocket, SessionTransportWebRTC, e.Value)
+}
+
+func (e *SessionTransportError) Unwrap() error { return ErrInvalidSessionTransport }
+
+func validateSessionTransport(raw string) (string, error) {
+	transport := strings.ToLower(strings.TrimSpace(raw))
+	switch transport {
+	case SessionTransportWebSocket, SessionTransportWebRTC:
+		return transport, nil
+	default:
+		return "", &SessionTransportError{Value: raw}
+	}
+}
 
 // SessionCommand is the session group (parent command); subcommands are wired in routes.go.
 type SessionCommand struct {
@@ -181,6 +219,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var voice string
 	recordDirPath := ""
 	audioOutPath := ""
+	transport := SessionTransportWebSocket
 	var maxDuration time.Duration
 	var waitForClose bool
 	var audioIn string
@@ -200,6 +239,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			return services.ValidateOpenAIRealtimeVoice(voice)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			selectedTransport, err := validateSessionTransport(transport)
+			if err != nil {
+				return err
+			}
 			if err := services.ValidateSessionAudioDeviceConflicts(
 				cmd.Flags().Changed("audio-in"),
 				cmd.Flags().Changed("audio-out"),
@@ -258,6 +301,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				Voice:             voice,
+				Transport:         selectedTransport,
 				SessionInferencer: c.sessionInferencerOverride,
 				ToolExecutor:      toolExecutor,
 				ToolDefinitions:   toolDefinitions,
@@ -382,6 +426,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
+	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default) or webrtc")
 	return cmd
 }
 
