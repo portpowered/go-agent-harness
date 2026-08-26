@@ -911,6 +911,14 @@ func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.S
 }
 
 func (s *sessionRecordingRunnerSession) SendMessage(_ context.Context, msg messages.Message) bool {
+	return s.sendImageMessage(msg)
+}
+
+func (s *sessionRecordingRunnerSession) SendMessageWithoutResponse(_ context.Context, msg messages.Message) bool {
+	return s.sendImageMessage(msg)
+}
+
+func (s *sessionRecordingRunnerSession) sendImageMessage(msg messages.Message) bool {
 	s.sentMu.Lock()
 	s.imageMessages = append(s.imageMessages, msg)
 	s.sentMu.Unlock()

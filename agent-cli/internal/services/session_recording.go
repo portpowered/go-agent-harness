@@ -154,7 +154,7 @@ func runSessionWithImagesAndRecordingDirectory(
 			}
 		}()
 	}
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt)
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil)
 	if err != nil {
 		return err
 	}
