@@ -33,6 +33,11 @@ type ScenarioResult struct {
 	Frames                      int                          `json:"frames"`
 	TerminalReason              string                       `json:"terminal_reason,omitempty"`
 	Error                       string                       `json:"error,omitempty"`
+	// InputDropCount and OutputDropCount report the cumulative buffer-full
+	// drops observed on the client-to-provider and provider-to-client paths,
+	// so a run can never lose messages without an assertable figure.
+	InputDropCount  uint64 `json:"input_drop_count"`
+	OutputDropCount uint64 `json:"output_drop_count"`
 }
 
 // RunStatus is the overall verdict of a probe run.
@@ -154,6 +159,8 @@ func (r *Runner) runOne(ctx context.Context, scenario Scenario) ScenarioResult {
 	result.Ticks = observation.ObservedTick
 	result.Frames = observation.FrameCount
 	result.TerminalReason = observation.TerminalReason
+	result.InputDropCount = observation.InputDrops
+	result.OutputDropCount = observation.OutputDrops
 	result.Pass = pass
 	return result
 }

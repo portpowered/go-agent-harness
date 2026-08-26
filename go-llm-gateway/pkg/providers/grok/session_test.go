@@ -233,6 +233,27 @@ func TestSession_CloseStopsDone(t *testing.T) {
 	}
 }
 
+func TestSession_WriteLoopStopsWhenClosedWithEmptyQueue(t *testing.T) {
+	session := newGrokSession(newMockConn(), logging.DummyLogger())
+	exited := make(chan struct{})
+
+	go func() {
+		session.writeLoop(context.Background())
+		close(exited)
+	}()
+
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close() returned error: %v", err)
+	}
+
+	select {
+	case <-exited:
+		// The writer observed the session shutdown signal.
+	case <-time.After(2 * time.Second):
+		t.Fatal("writeLoop did not exit after closing an idle session")
+	}
+}
+
 func TestSession_MalformedServerEvent(t *testing.T) {
 	conn := newMockConn()
 	// The message is malformed (no type field).

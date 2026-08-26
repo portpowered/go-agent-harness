@@ -11,8 +11,8 @@ import (
 func newInteractionEventsTestState() *state.LoopState {
 	return &state.LoopState{
 		Outputs: state.OutputBuffers{
-			UserInbox:        *messages.NewTypedBuffer[messages.UserRequest](8),
-			KernelDeltaInbox: *messages.NewTypedBuffer[messages.KernelDeltaRequest](16),
+			UserInbox:        messages.NewTypedBuffer[messages.UserRequest](8),
+			KernelDeltaInbox: messages.NewTypedBuffer[messages.KernelDeltaRequest](16),
 		},
 	}
 }
@@ -159,7 +159,7 @@ func TestInteractionEvents_RejectsDuplicateOrOutOfOrderSequence(t *testing.T) {
 
 func TestInteractionEvents_LoopEndRemainsAfterInteractionOutputs(t *testing.T) {
 	events := NewInteractionEvents(nil)
-	coordDelta := NewCoordinatorDelta(*messages.NewTypedBuffer[messages.KernelDeltaRequest](16), nil)
+	coordDelta := NewCoordinatorDelta(messages.NewTypedBuffer[messages.KernelDeltaRequest](16), nil)
 	ls := newInteractionEventsTestState()
 	ls.Outputs.KernelDeltaInbox = coordDelta.kernelDeltaInbox
 	ls.Inputs.InteractionEvents = []messages.InteractionEvent{

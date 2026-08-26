@@ -1,6 +1,9 @@
 package messages
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 // BufferWriteStatus identifies the observable outcome of a TypedBuffer write.
 type BufferWriteStatus string
@@ -24,9 +27,15 @@ func (o BufferWriteOutcome) OK() bool {
 }
 
 // TypedBuffer is a generic, non-blocking, channel-based message buffer for participant communication.
+//
+// Every TypedBuffer tracks a cumulative count of buffer-full drops internally,
+// so dropped writes are always observable even when no OnDrop callback was
+// registered. The counter is durable for the lifetime of the buffer and safe
+// for concurrent use.
 type TypedBuffer[T any] struct {
 	ch     chan T
-	onDrop func()
+	onDrop func(T)
+	drops  atomic.Int64
 }
 
 func NewTypedBuffer[T any](capacity int) *TypedBuffer[T] {
@@ -37,11 +46,19 @@ func NewTypedBuffer[T any](capacity int) *TypedBuffer[T] {
 }
 
 // SetOnDrop registers a callback that fires when Write drops a message because
-// the buffer is full. The callback is not invoked when Write returns false due
-// to context cancellation. Only the buffer-full path calls fn, so there is no
-// allocation overhead on the success path.
-func (b *TypedBuffer[T]) SetOnDrop(fn func()) {
+// the buffer is full. The callback receives the dropped message so observers
+// can log its kind. It is not invoked when Write returns false due to context
+// cancellation. Only the buffer-full path calls fn, so there is no allocation
+// overhead on the success path.
+func (b *TypedBuffer[T]) SetOnDrop(fn func(T)) {
 	b.onDrop = fn
+}
+
+// Drops returns the cumulative number of messages dropped because the buffer
+// was full, counted since construction. The count only grows: succeeded,
+// cancelled, and timed-out writes never increment it.
+func (b *TypedBuffer[T]) Drops() int64 {
+	return b.drops.Load()
 }
 
 // Write sends data into the buffer. Context-aware: returns false if ctx is cancelled or buffer is full. Non-blocking when buffer has space.
@@ -66,8 +83,12 @@ func (b *TypedBuffer[T]) WriteContext(ctx context.Context, data T) BufferWriteOu
 	case <-ctx.Done():
 		return bufferWriteContextOutcome(ctx)
 	default:
+		// Count the drop before invoking the observer so the callback
+		// reports the cumulative count including this drop: the counter is
+		// the durable evidence, the callback is optional.
+		b.drops.Add(1)
 		if b.onDrop != nil {
-			b.onDrop()
+			b.onDrop(data)
 		}
 		return BufferWriteOutcome{Status: BufferWriteBufferFull}
 	}

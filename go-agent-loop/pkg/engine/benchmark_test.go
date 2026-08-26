@@ -48,7 +48,7 @@ func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *par
 	kernelRunner := participants.NewKernelRunner(nil, bufCap)
 
 	coord := subsystems.NewCoordinator(nil)
-	coordDelta := subsystems.NewCoordinatorDelta(*kernelRunner.DeltaInbox, nil)
+	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, nil)
 	hlps := []subsystems.Subsystem{coord, coordDelta}
 
 	eng := NewEngine(ModeAskOnce, nil, hlps, modelRunner, toolRunner, userRunner, kernelRunner, nil)
@@ -168,7 +168,7 @@ func BenchmarkExecute(b *testing.B) {
 			kernelRunner := participants.NewKernelRunner(nil, bufCap)
 
 			coord := subsystems.NewCoordinator(nil)
-			coordDelta := subsystems.NewCoordinatorDelta(*kernelRunner.DeltaInbox, nil)
+			coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, nil)
 			hlps := []subsystems.Subsystem{coord, coordDelta}
 
 			eng := NewEngine(ModeAskOnce, nil, hlps, modelRunner, toolRunner, userRunner, kernelRunner, nil)

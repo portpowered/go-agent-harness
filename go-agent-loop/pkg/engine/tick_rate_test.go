@@ -44,7 +44,7 @@ func newTickRateTestEngine(tickRate time.Duration) (*Engine, *participants.Kerne
 	kernelRunner := participants.NewKernelRunner(nil, bufCap)
 
 	coord := subsystems.NewCoordinator(nil)
-	coordDelta := subsystems.NewCoordinatorDelta(*kernelRunner.DeltaInbox, nil)
+	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, nil)
 	interruptHandler := subsystems.NewInterruptHandler(modelRunner, toolRunner, nil)
 	hlps := []subsystems.Subsystem{interruptHandler, coord, coordDelta}
 

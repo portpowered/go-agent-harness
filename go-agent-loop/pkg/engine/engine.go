@@ -65,16 +65,16 @@ func NewEngine(
 ) *Engine {
 	var outputs state.OutputBuffers
 	if toolRunner != nil && toolRunner.Inbox != nil {
-		outputs.ToolInbox = *toolRunner.Inbox
+		outputs.ToolInbox = toolRunner.Inbox
 	}
 	if userRunner != nil && userRunner.Inbox != nil {
-		outputs.UserInbox = *userRunner.Inbox
+		outputs.UserInbox = userRunner.Inbox
 	}
 	if modelRunner != nil && modelRunner.Inbox != nil {
-		outputs.ModelInbox = *modelRunner.Inbox
+		outputs.ModelInbox = modelRunner.Inbox
 	}
 	if kernelRunner != nil && kernelRunner.DeltaInbox != nil {
-		outputs.KernelDeltaInbox = *kernelRunner.DeltaInbox
+		outputs.KernelDeltaInbox = kernelRunner.DeltaInbox
 	}
 	e := &Engine{
 		subsystems:   orderedSubsystems(hlps),

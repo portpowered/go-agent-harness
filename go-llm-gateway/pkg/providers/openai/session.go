@@ -7,15 +7,25 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-var _ messages.Session = (*realtimeSession)(nil)
+var (
+	_ messages.Session                  = (*realtimeSession)(nil)
+	_ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
+	_ messages.SessionDropCounters      = (*realtimeSession)(nil)
+)
 
 type realtimeSession struct {
-	conn    transport.Conn
-	logger  logging.Logger
-	sendCh  chan models.SessionEvent
+	conn   transport.Conn
+	logger logging.Logger
+	// sendQueue buffers outbound wire events (client-to-provider, the
+	// session's input path). Overflow drops are counted by the buffer itself
+	// and logged through the default drop observer attached below.
+	sendQueue *messages.TypedBuffer[models.SessionEvent]
+	// recvBuf buffers translated inbound events (provider-to-client, the
+	// session's output path).
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
 	done      chan struct{}
@@ -25,13 +35,15 @@ type realtimeSession struct {
 var _ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
 
 func newRealtimeSession(conn transport.Conn, logger logging.Logger) *realtimeSession {
-	return &realtimeSession{
-		conn:    conn,
-		logger:  logger,
-		sendCh:  make(chan models.SessionEvent, 64),
-		recvBuf: messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:    make(chan struct{}),
+	s := &realtimeSession{
+		conn:      conn,
+		logger:    logger,
+		sendQueue: messages.NewTypedBuffer[models.SessionEvent](64),
+		recvBuf:   messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:      make(chan struct{}),
 	}
+	providers.AttachSessionDropLoggers(logger, s.sendQueue, s.recvBuf)
+	return s
 }
 
 func (s *realtimeSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -62,14 +74,13 @@ func (s *realtimeSession) sendEvents(ctx context.Context, events []models.Sessio
 			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 		default:
 		}
-		select {
-		case <-ctx.Done():
-			return sessionSendContextOutcome(ctx)
-		case <-s.done:
-			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-		case s.sendCh <- event:
-		default:
+		outcome := s.sendQueue.WriteContext(ctx, event)
+		switch outcome.Status {
+		case messages.BufferWriteSucceeded:
+		case messages.BufferWriteBufferFull:
 			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+		default:
+			return sessionSendContextOutcome(ctx)
 		}
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
@@ -86,6 +97,12 @@ func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome 
 func (s *realtimeSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.recvBuf
 }
+
+// InputDrops reports cumulative drops on the client-to-provider send queue.
+func (s *realtimeSession) InputDrops() int64 { return s.sendQueue.Drops() }
+
+// OutputDrops reports cumulative drops on the provider-to-client receive buffer.
+func (s *realtimeSession) OutputDrops() int64 { return s.recvBuf.Drops() }
 
 func (s *realtimeSession) Done() <-chan struct{} {
 	return s.done

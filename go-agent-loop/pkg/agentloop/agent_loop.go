@@ -99,25 +99,25 @@ func New(opts ...Option) (*AgentLoop, error) {
 
 	// Set OnDrop callbacks so operators are alerted when buffers are full.
 	if cfg.Logger != nil {
-		modelRunner.Inbox.SetOnDrop(func() {
+		modelRunner.Inbox.SetOnDrop(func(_ messages.InferenceRequest) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "model.Inbox"}, logging.Field{Key: "type", Value: "InferenceRequest"})
 		})
-		modelRunner.DeltaOutbox.SetOnDrop(func() {
+		modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "model.DeltaOutbox"}, logging.Field{Key: "type", Value: "StreamMessage"})
 		})
-		toolRunner.Inbox.SetOnDrop(func() {
+		toolRunner.Inbox.SetOnDrop(func(_ messages.ToolBatchRequest) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "tool.Inbox"}, logging.Field{Key: "type", Value: "ToolBatchRequest"})
 		})
-		toolRunner.DeltaOutbox.SetOnDrop(func() {
+		toolRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "tool.DeltaOutbox"}, logging.Field{Key: "type", Value: "StreamMessage"})
 		})
-		userRunner.Inbox.SetOnDrop(func() {
+		userRunner.Inbox.SetOnDrop(func(_ messages.UserRequest) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "user.Inbox"}, logging.Field{Key: "type", Value: "UserRequest"})
 		})
-		userRunner.Outbox.SetOnDrop(func() {
+		userRunner.Outbox.SetOnDrop(func(_ messages.UserResponse) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "user.Outbox"}, logging.Field{Key: "type", Value: "UserResponse"})
 		})
-		kernelRunner.DeltaInbox.SetOnDrop(func() {
+		kernelRunner.DeltaInbox.SetOnDrop(func(_ messages.KernelDeltaRequest) {
 			cfg.Logger.Warn("buffer drop", logging.Field{Key: "buffer", Value: "kernel.DeltaInbox"}, logging.Field{Key: "type", Value: "KernelDeltaRequest"})
 		})
 	}
@@ -136,7 +136,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 	// FIFO queue, eliminating ordering races. Coordinator runs first (tick group 0)
 	// and enqueues full messages; CoordinatorDelta runs second (tick group 5) and
 	// enqueues LOOP.END, ensuring it always arrives after all messages.
-	coordDelta := subsystems.NewCoordinatorDelta(*kernelRunner.DeltaInbox, cfg.Logger)
+	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, cfg.Logger)
 	hlps = append(hlps, coordDelta)
 
 	coord := subsystems.NewCoordinator(cfg.Logger)
@@ -147,7 +147,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 
 	// PingPong is only useful in session mode where keepalive pings are expected.
 	if cfg.Mode == engine.DuplexSession {
-		pingPong := subsystems.NewPingPong(*kernelRunner.DeltaInbox, cfg.Logger)
+		pingPong := subsystems.NewPingPong(kernelRunner.DeltaInbox, cfg.Logger)
 		hlps = append(hlps, pingPong)
 	}
 

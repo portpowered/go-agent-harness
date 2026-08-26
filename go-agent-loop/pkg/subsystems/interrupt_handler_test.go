@@ -30,7 +30,7 @@ func buildLoopStateWithPartialModelDeltas(text string) *state.LoopState {
 	s.History.CurrentModelDeltaCount = len(partialDeltas)
 	s.History.CurrentPassID = 1
 	s.Outputs = state.OutputBuffers{
-		ModelInbox: *messages.NewTypedBuffer[messages.InferenceRequest](8),
+		ModelInbox: messages.NewTypedBuffer[messages.InferenceRequest](8),
 	}
 	return s
 }
@@ -52,7 +52,7 @@ func TestInterruptHandler_NoInterrupt(t *testing.T) {
 	h := NewInterruptHandler(model, tool, nil)
 
 	ls := &state.LoopState{}
-	ls.Outputs.ModelInbox = *messages.NewTypedBuffer[messages.InferenceRequest](8)
+	ls.Outputs.ModelInbox = messages.NewTypedBuffer[messages.InferenceRequest](8)
 
 	if err := h.Execute(context.Background(), ls); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -165,7 +165,7 @@ func TestInterruptHandler_InterruptWithNoPartial(t *testing.T) {
 
 	// No model deltas in flight.
 	ls := &state.LoopState{}
-	ls.Outputs.ModelInbox = *messages.NewTypedBuffer[messages.InferenceRequest](8)
+	ls.Outputs.ModelInbox = messages.NewTypedBuffer[messages.InferenceRequest](8)
 	ls.History.CurrentPassID = 1
 	ls.Inputs.UserControlPlaneMessage = []messages.Message{makeInterruptMessage("")}
 

@@ -12,13 +12,13 @@ import (
 // PingPong responds to ping control plane messages with PONG stream events.
 // It is only active in DuplexSession; in other modes Execute is a no-op.
 type PingPong struct {
-	kernelDeltaInbox messages.TypedBuffer[messages.KernelDeltaRequest]
+	kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest]
 	logger           logging.Logger
 }
 
 // NewPingPong creates a PingPong subsystem that writes pong events to the
 // given kernel delta inbox.
-func NewPingPong(kernelDeltaInbox messages.TypedBuffer[messages.KernelDeltaRequest], logger logging.Logger) *PingPong {
+func NewPingPong(kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest], logger logging.Logger) *PingPong {
 	return &PingPong{
 		kernelDeltaInbox: kernelDeltaInbox,
 		logger:           logger,

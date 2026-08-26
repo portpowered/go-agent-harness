@@ -13,10 +13,10 @@ import (
 func newCoordinatorTestState() *state.LoopState {
 	return &state.LoopState{
 		Outputs: state.OutputBuffers{
-			ToolInbox:        *messages.NewTypedBuffer[messages.ToolBatchRequest](8),
-			UserInbox:        *messages.NewTypedBuffer[messages.UserRequest](8),
-			ModelInbox:       *messages.NewTypedBuffer[messages.InferenceRequest](8),
-			KernelDeltaInbox: *messages.NewTypedBuffer[messages.KernelDeltaRequest](8),
+			ToolInbox:        messages.NewTypedBuffer[messages.ToolBatchRequest](8),
+			UserInbox:        messages.NewTypedBuffer[messages.UserRequest](8),
+			ModelInbox:       messages.NewTypedBuffer[messages.InferenceRequest](8),
+			KernelDeltaInbox: messages.NewTypedBuffer[messages.KernelDeltaRequest](8),
 		},
 	}
 }
