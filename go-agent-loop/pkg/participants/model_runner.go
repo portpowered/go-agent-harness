@@ -220,6 +220,12 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, audioStreaming bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool) {
 	// Track model audio streaming state for barge-in detection.
 	switch msg.Type {
+	case messages.StreamTypeMessageStart:
+		// hasOutput and responseCompleted describe the current response, not
+		// the lifetime of the persistent session. Reset them at each response
+		// boundary so a later disconnect is classified from the latest turn.
+		hasOutput = false
+		responseCompleted = false
 	case messages.StreamTypeAudioStart:
 		audioStreaming = true
 	case messages.StreamTypeAudioEnd, messages.StreamTypeMessageEnd:

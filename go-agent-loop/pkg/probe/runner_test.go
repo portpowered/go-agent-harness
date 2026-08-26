@@ -91,6 +91,41 @@ func TestRunnerAllPassGolden(t *testing.T) {
 	}
 }
 
+func TestRunnerEmitsObservedTerminalTriple(t *testing.T) {
+	scenario := Scenario{
+		ID:    "terminal-triple",
+		Steps: []Step{{Type: StepClose}},
+		Expectations: []ExpectedBehavior{
+			{Type: ExpectTerminalReason, Value: "disconnect"},
+			{Type: ExpectTerminalProvenance, Value: "provider"},
+			{Type: ExpectOutputState, Value: "partial"},
+		},
+	}
+	var buf bytes.Buffer
+	runner := Runner{
+		Exec: func(context.Context, Scenario) (ObservationSnapshot, error) {
+			return ObservationSnapshot{
+				TerminalReason:     "disconnect",
+				TerminalProvenance: "provider",
+				OutputState:        "partial",
+			}, nil
+		},
+		Out: &buf,
+	}
+	if summary, err := runner.Run(context.Background(), []Scenario{scenario}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	} else if summary.Status != StatusPass {
+		t.Fatalf("summary = %+v, want pass", summary)
+	}
+
+	lines := decodeLines(t, buf.String())
+	if lines[0]["terminal_reason"] != "disconnect" ||
+		lines[0]["terminal_provenance"] != "provider" ||
+		lines[0]["output_state"] != "partial" {
+		t.Fatalf("result omitted terminal triple: %v", lines[0])
+	}
+}
+
 func TestRunnerSummaryMixedAndEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	runner := Runner{Exec: func(ctx context.Context, s Scenario) (ObservationSnapshot, error) {

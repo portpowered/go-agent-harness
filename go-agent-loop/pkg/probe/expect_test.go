@@ -46,6 +46,54 @@ func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
 	}
 }
 
+func TestTerminalExpectationsRejectEmptyAndConflictingAliases(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectation ExpectedBehavior
+		field       string
+	}{
+		{
+			name:        "reason missing",
+			expectation: ExpectedBehavior{Type: ExpectTerminalReason},
+			field:       "reason",
+		},
+		{
+			name:        "reason aliases disagree",
+			expectation: ExpectedBehavior{Type: ExpectTerminalReason, Value: "disconnect", Text: "complete"},
+			field:       "reason",
+		},
+		{
+			name:        "provenance missing",
+			expectation: ExpectedBehavior{Type: ExpectTerminalProvenance},
+			field:       "provenance",
+		},
+		{
+			name:        "provenance aliases disagree",
+			expectation: ExpectedBehavior{Type: ExpectTerminalProvenance, Value: "provider", Text: "loop"},
+			field:       "provenance",
+		},
+		{
+			name:        "output state missing",
+			expectation: ExpectedBehavior{Type: ExpectOutputState},
+			field:       "output state",
+		},
+		{
+			name:        "output state aliases disagree",
+			expectation: ExpectedBehavior{Type: ExpectOutputState, Value: "partial", Text: "complete"},
+			field:       "output state",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := Evaluate(test.expectation, ObservationSnapshot{})
+			var validation *ExpectationValidationError
+			if !errors.As(err, &validation) || validation.Field != test.field {
+				t.Fatalf("validation error = %v, want field %q", err, test.field)
+			}
+		})
+	}
+}
+
 func TestAudioEnergyIsStrictlyAboveThresholdAndRejectsEmptyAudio(t *testing.T) {
 	e := expect(ExpectAudioEnergy, "", 0)
 	utterance := corpusPCM16(t, "utt_short_16k.wav")
