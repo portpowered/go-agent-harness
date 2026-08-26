@@ -432,14 +432,15 @@ type sessionDirectoryRecording struct {
 	metadata    transcript.RecordingMetadata
 	writeFile   transcript.RecordingWriteFile
 
-	mu        sync.Mutex
-	eventMu   sync.Mutex
-	tick      uint64
-	client    bytes.Buffer
-	agent     bytes.Buffer
-	input     [][]byte
-	output    [][]byte
-	recordErr error
+	mu           sync.Mutex
+	eventMu      sync.Mutex
+	tick         uint64
+	client       bytes.Buffer
+	agent        bytes.Buffer
+	input        [][]byte
+	output       [][]byte
+	recordErr    error
+	conversation sessionConversationCollector
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -648,9 +649,13 @@ func (r *sessionDirectoryRecording) observePayloadLocked(msg messages.StreamMess
 		segment := append([]byte(nil), audio...)
 		if outbound {
 			r.input = append(r.input, segment)
+			r.conversation.observe(msg, outbound, len(r.input)-1, -1)
 		} else {
 			r.output = append(r.output, segment)
+			r.conversation.observe(msg, outbound, -1, len(r.output)-1)
 		}
+	} else {
+		r.conversation.observe(msg, outbound, -1, -1)
 	}
 }
 
@@ -681,12 +686,19 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			r.mu.Unlock()
 			return
 		}
+		sessionLog, sessionLogErr := sessionConversationLogJSON(&r.conversation)
+		if sessionLogErr != nil {
+			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode session log", r.destination, sessionLogErr)
+			r.mu.Unlock()
+			return
+		}
 		config := transcript.RecordingConfig{
 			Destination:      r.destination,
 			ClientTranscript: append([]byte(nil), r.client.Bytes()...),
 			AgentTranscript:  append([]byte(nil), r.agent.Bytes()...),
 			InputSegments:    copySessionRecordingSegments(r.input),
 			OutputSegments:   copySessionRecordingSegments(r.output),
+			SessionLog:       sessionLog,
 			Metadata:         r.metadata,
 			WriteFile:        r.writeFile,
 		}

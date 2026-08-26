@@ -125,6 +125,7 @@ func TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM(t *testing
 		"audio/out-001.pcm",
 		"client.transcript.jsonl",
 		"manifest.json",
+		"session-log.jsonl",
 	}
 	if !reflect.DeepEqual(entries, wantEntries) {
 		t.Fatalf("recording entries = %v, want %v", entries, wantEntries)
@@ -187,12 +188,13 @@ func TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM(t *testing
 	if !reflect.DeepEqual(manifest.InputDevice, recording.metadata.InputDevice) || !reflect.DeepEqual(manifest.OutputDevice, recording.metadata.OutputDevice) {
 		t.Fatalf("manifest devices = input:%+v output:%+v, want input:%+v output:%+v", manifest.InputDevice, manifest.OutputDevice, recording.metadata.InputDevice, recording.metadata.OutputDevice)
 	}
-	if len(manifest.Artifacts) != 6 {
-		t.Fatalf("manifest artifacts = %d, want 6", len(manifest.Artifacts))
+	if len(manifest.Artifacts) != 7 {
+		t.Fatalf("manifest artifacts = %d, want 7", len(manifest.Artifacts))
 	}
 	wantArtifacts := []string{
 		"client.transcript.jsonl",
 		"agent.transcript.jsonl",
+		"session-log.jsonl",
 		"audio/in-000.pcm",
 		"audio/in-001.pcm",
 		"audio/out-000.pcm",
@@ -495,6 +497,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		"audio/out-001.pcm",
 		"client.transcript.jsonl",
 		"manifest.json",
+		"session-log.jsonl",
 	}
 	if got := recordingEntries(t, destination); !reflect.DeepEqual(got, wantEntries) {
 		t.Fatalf("runner recording entries = %v, want %v", got, wantEntries)
@@ -583,6 +586,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 	assertManifestArtifacts(t, destination, manifest, []string{
 		"client.transcript.jsonl",
 		"agent.transcript.jsonl",
+		"session-log.jsonl",
 		"audio/in-000.pcm",
 		"audio/in-001.pcm",
 		"audio/out-000.pcm",
