@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // ConnectSession establishes an OpenAI Realtime WebSocket session through the
@@ -116,7 +117,22 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 				return
 			default:
 			}
+			if ctx.Err() != nil {
+				_ = s.Close()
+				return
+			}
+			if !transport.IsInjectedFault(err) {
+				_ = s.Close()
+				return
+			}
 			s.logger.Error("openai realtime: websocket read error", logging.Field{Key: "error", Value: err})
+			// A transport close is a provider-visible terminal failure. Preserve
+			// the typed read error in the stream so callers can distinguish an
+			// abrupt close from an intentional session shutdown.
+			s.recvBuf.WriteTerminal(messages.StreamMessage{
+				Type:  messages.StreamTypeError,
+				Value: providers.NewStreamTransportErrorValue(err),
+			})
 			_ = s.Close()
 			return
 		}
@@ -127,7 +143,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			// An unparseable provider frame is a protocol violation, not a
 			// skippable event: surface a classified terminal ERROR so consumers
 			// can diagnose the failure instead of silently losing the stream.
-			_ = s.recvBuf.Write(ctx, messages.StreamMessage{
+			s.recvBuf.WriteTerminal(messages.StreamMessage{
 				Type: messages.StreamTypeError,
 				Value: messages.NewErrorValueWithTerminal(
 					fmt.Sprintf("malformed provider event: %v", err),

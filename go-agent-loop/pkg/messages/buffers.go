@@ -94,6 +94,37 @@ func (b *TypedBuffer[T]) WriteContext(ctx context.Context, data T) BufferWriteOu
 	}
 }
 
+// WriteTerminal delivers a terminal record even when the normal buffer is
+// full. Terminal records are part of the session lifecycle contract, so the
+// oldest queued ordinary record is evicted when necessary rather than
+// allowing the terminal record to disappear silently. The method keeps the
+// existing channel-backed buffer visible to Chan callers and remains
+// non-blocking.
+func (b *TypedBuffer[T]) WriteTerminal(data T) bool {
+	if b == nil {
+		return false
+	}
+	for {
+		select {
+		case b.ch <- data:
+			return true
+		default:
+		}
+
+		// The buffer was full at the first select. Evict one queued value and
+		// retry; a concurrent reader or writer may win the race, so loop until
+		// the terminal value is actually present.
+		select {
+		case evicted := <-b.ch:
+			b.drops.Add(1)
+			if b.onDrop != nil {
+				b.onDrop(evicted)
+			}
+		default:
+		}
+	}
+}
+
 func bufferWriteContextOutcome(ctx context.Context) BufferWriteOutcome {
 	err := ctx.Err()
 	if err == context.DeadlineExceeded {
