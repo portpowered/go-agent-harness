@@ -166,6 +166,11 @@ type RecordingConfig struct {
 	InputSegments  [][]byte
 	OutputSegments [][]byte
 
+	// SessionLog is an optional machine-readable conversation log (JSONL).
+	// When non-empty it is emitted as session-log.jsonl next to the
+	// transcripts and included in manifest hashes and layout verification.
+	SessionLog []byte
+
 	Metadata    RecordingMetadata
 	Corpus      []CorpusHash
 	Credentials []string
@@ -273,6 +278,11 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	if err := write("agent.transcript.jsonl", redactor.apply(normalized.agentTranscript)); err != nil {
 		return err
 	}
+	if len(normalized.sessionLog) > 0 {
+		if err := write("session-log.jsonl", redactor.apply(normalized.sessionLog)); err != nil {
+			return err
+		}
+	}
 	for index, segment := range normalized.inputSegments {
 		path := fmt.Sprintf("audio/in-%03d.pcm", index)
 		if err := write(path, segment); err != nil {
@@ -320,6 +330,7 @@ type normalizedRecording struct {
 	agentTranscript  []byte
 	inputSegments    [][]byte
 	outputSegments   [][]byte
+	sessionLog       []byte
 	metadata         RecordingMetadata
 	corpus           []CorpusHash
 	artifactPaths    []string
@@ -366,7 +377,12 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		writeFile = defaultRecordingWriteFile
 	}
 	artifactPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl"}
-	expectedPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl", "audio"}
+	expectedPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl"}
+	if len(config.SessionLog) > 0 {
+		artifactPaths = append(artifactPaths, "session-log.jsonl")
+		expectedPaths = append(expectedPaths, "session-log.jsonl")
+	}
+	expectedPaths = append(expectedPaths, "audio")
 	for index := range inputSegments {
 		path := fmt.Sprintf("audio/in-%03d.pcm", index)
 		artifactPaths = append(artifactPaths, path)
@@ -384,6 +400,7 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		agentTranscript:  append([]byte(nil), agentTranscript...),
 		inputSegments:    copySegments(inputSegments),
 		outputSegments:   copySegments(outputSegments),
+		sessionLog:       append([]byte(nil), config.SessionLog...),
 		metadata:         metadata,
 		corpus:           append([]CorpusHash(nil), corpus...),
 		artifactPaths:    artifactPaths,
