@@ -51,6 +51,7 @@ type sessionRuntimeFactory struct {
 	newOpenAISessionInf       func(config.OpenAIConfig, transport.Dialer) (messages.SessionInferencer, error)
 	newGrokSessionWithTools   func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
 	newOpenAISessionWithTools func(config.OpenAIConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newRTCRuntime             SessionRTCRuntimeFactory
 }
 
 var defaultSessionRuntimeFactory = sessionRuntimeFactory{
@@ -111,13 +112,21 @@ type sessionRuntimePlan struct {
 	audioInputs       []ScheduledAudioInput
 	clockSource       platformclock.Source
 	runtime           *sessionRuntimeObservationRecorder
+	rtcRuntime        SessionRTCRuntime
 	selection         SessionRuntimeSelection
 	transport         string
 	signalingEndpoint string
 	mediaSource       string
 }
 
-func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
+func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
+	if p.rtcRuntime != nil {
+		defer func() {
+			if err := p.rtcRuntime.Close(); err != nil {
+				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC runtime", err))
+			}
+		}()
+	}
 	if p.announce != "" {
 		if _, err := fmt.Fprintln(out, p.announce); err != nil {
 			return err
@@ -179,7 +188,12 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	plan, err := planSessionRuntimeMode(opts, factory)
+	var plan sessionRuntimePlan
+	if selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
+		plan, err = planWebRTCSessionRuntime(opts, selection, factory)
+	} else {
+		plan, err = planSessionRuntimeMode(opts, factory)
+	}
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -202,6 +216,9 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.transport = selection.Transport
 	plan.signalingEndpoint = selection.SignalingEndpoint
 	plan.mediaSource = selection.MediaSource
+	if plan.rtcRuntime == nil && selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
+		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
+	}
 	return plan, nil
 }
 

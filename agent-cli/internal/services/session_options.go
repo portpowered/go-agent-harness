@@ -108,6 +108,11 @@ type SessionRunOptions struct {
 	Prompt            string
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
+	// RTCRuntimeFactory optionally supplies the service-owned WebRTC runtime
+	// constructor. A nil value keeps the WebSocket path unchanged; selecting
+	// WebRTC without a factory returns an explicit setup error rather than
+	// silently falling back to WebSocket.
+	RTCRuntimeFactory SessionRTCRuntimeFactory
 
 	// Transport selects the live session runtime. Empty preserves the existing
 	// WebSocket default. The value is retained as supplied in the option
