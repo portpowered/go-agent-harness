@@ -116,7 +116,11 @@ type DeviceSource struct {
 var _ AudioSource = (*DeviceSource)(nil)
 
 func NewDeviceSource(registry DeviceRegistry, id DeviceID) (*DeviceSource, error) {
-	handle, err := acquireDevice(registry, id, DirectionInput)
+	resolvedID, err := resolveDeviceIDForOpen(registry, id, DirectionInput)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := acquireDevice(registry, resolvedID, DirectionInput)
 	if err != nil {
 		return nil, err
 	}
@@ -124,9 +128,19 @@ func NewDeviceSource(registry DeviceRegistry, id DeviceID) (*DeviceSource, error
 	bytes, hasBytes := handle.(deviceByteReader)
 	if !hasFrames && !hasBytes {
 		_ = handle.Close()
-		return nil, &DeviceCapabilityError{ID: id, Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}
+		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSource{newDeviceAdapter(handle, id, DirectionInput), frames, bytes}, nil
+	return &DeviceSource{newDeviceAdapter(handle, resolvedID, DirectionInput), frames, bytes}, nil
+}
+
+// DeviceID returns the stable ID acquired by the source. When the source was
+// opened with an empty selector, this is the ID returned by the registry's
+// directional default.
+func (s *DeviceSource) DeviceID() DeviceID {
+	if s == nil || s.adapter == nil {
+		return ""
+	}
+	return s.adapter.id
 }
 
 func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
