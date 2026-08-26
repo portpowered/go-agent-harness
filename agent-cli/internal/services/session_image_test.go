@@ -491,6 +491,14 @@ func newRecordingSessionImageSession() *recordingSessionImageSession {
 }
 
 func (s *recordingSessionImageSession) SendMessage(ctx context.Context, message messages.Message) bool {
+	return s.sendMessage(ctx, message)
+}
+
+func (s *recordingSessionImageSession) SendMessageWithoutResponse(ctx context.Context, message messages.Message) bool {
+	return s.sendMessage(ctx, message)
+}
+
+func (s *recordingSessionImageSession) sendMessage(ctx context.Context, message messages.Message) bool {
 	s.mu.Lock()
 	s.messages = append(s.messages, message)
 	onMessage := s.onMessage

@@ -65,16 +65,6 @@
       "sequence": 4,
       "direction": "client_to_server",
       "timestamp_ms": 3,
-      "type": "response.create",
-      "payload_type": "websocket_message",
-      "payload": {
-        "type": "response.create"
-      }
-    },
-    {
-      "sequence": 5,
-      "direction": "client_to_server",
-      "timestamp_ms": 4,
       "type": "input_audio_buffer.append",
       "payload_type": "websocket_message",
       "payload": {
@@ -86,9 +76,9 @@
       }
     },
     {
-      "sequence": 6,
+      "sequence": 5,
       "direction": "client_to_server",
-      "timestamp_ms": 5,
+      "timestamp_ms": 4,
       "type": "input_audio_buffer.commit",
       "payload_type": "websocket_message",
       "payload": {
@@ -96,9 +86,9 @@
       }
     },
     {
-      "sequence": 7,
+      "sequence": 6,
       "direction": "client_to_server",
-      "timestamp_ms": 6,
+      "timestamp_ms": 5,
       "type": "response.create",
       "payload_type": "websocket_message",
       "payload": {
@@ -106,9 +96,9 @@
       }
     },
     {
-      "sequence": 8,
+      "sequence": 7,
       "direction": "server_to_client",
-      "timestamp_ms": 7,
+      "timestamp_ms": 6,
       "type": "response.created",
       "payload_type": "websocket_message",
       "payload": {
@@ -119,9 +109,9 @@
       }
     },
     {
-      "sequence": 9,
+      "sequence": 8,
       "direction": "server_to_client",
-      "timestamp_ms": 8,
+      "timestamp_ms": 7,
       "type": "response.output_audio_transcript.delta",
       "payload_type": "websocket_message",
       "payload": {
@@ -130,9 +120,9 @@
       }
     },
     {
-      "sequence": 10,
+      "sequence": 9,
       "direction": "server_to_client",
-      "timestamp_ms": 9,
+      "timestamp_ms": 8,
       "type": "response.output_audio_transcript.delta",
       "payload_type": "websocket_message",
       "payload": {
@@ -141,9 +131,9 @@
       }
     },
     {
-      "sequence": 11,
+      "sequence": 10,
       "direction": "server_to_client",
-      "timestamp_ms": 10,
+      "timestamp_ms": 9,
       "type": "response.output_audio_transcript.done",
       "payload_type": "websocket_message",
       "payload": {
@@ -152,23 +142,20 @@
       }
     },
     {
-      "sequence": 12,
+      "sequence": 11,
       "direction": "server_to_client",
-      "timestamp_ms": 11,
+      "timestamp_ms": 10,
       "type": "response.output_audio.delta",
       "payload_type": "websocket_message",
       "payload": {
         "type": "response.output_audio.delta",
-        "delta": {
-          "redacted": true,
-          "note": "scripted spoken reply PCM16 samples injected at load"
-        }
+        "delta": "scripted spoken reply PCM16 samples injected at load"
       }
     },
     {
-      "sequence": 13,
+      "sequence": 12,
       "direction": "server_to_client",
-      "timestamp_ms": 12,
+      "timestamp_ms": 11,
       "type": "response.output_audio.done",
       "payload_type": "websocket_message",
       "payload": {
@@ -176,9 +163,9 @@
       }
     },
     {
-      "sequence": 14,
+      "sequence": 13,
       "direction": "server_to_client",
-      "timestamp_ms": 13,
+      "timestamp_ms": 12,
       "type": "response.done",
       "payload_type": "websocket_message",
       "payload": {
@@ -190,9 +177,9 @@
       }
     },
     {
-      "sequence": 15,
+      "sequence": 14,
       "direction": "server_to_client",
-      "timestamp_ms": 14,
+      "timestamp_ms": 13,
       "type": "session.closed",
       "payload_type": "websocket_message",
       "payload": {

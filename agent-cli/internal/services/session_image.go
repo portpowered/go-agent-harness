@@ -77,6 +77,14 @@ type SessionImageMessageSender interface {
 	SendMessage(context.Context, messages.Message) bool
 }
 
+// SessionImageMessageSenderWithoutResponse queues a multimodal user item
+// without starting a model response. Audio-enabled image sessions use this
+// seam so the subsequent audio end-of-turn can commit the complete voice and
+// image turn and request exactly one response.
+type SessionImageMessageSenderWithoutResponse interface {
+	SendMessageWithoutResponse(context.Context, messages.Message) bool
+}
+
 func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) (runErr error) {
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
@@ -99,13 +107,13 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if opts.TextSeed.Present {
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 	}
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt)
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
 	}
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
-func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string) (sessionRuntimePlan, string, error) {
+func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
 	var (
 		plan         sessionRuntimePlan
 		err          error
@@ -126,7 +134,12 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
 	firstTurn := make(chan error, 1)
-	plan.inferencer = &sessionImageInferencer{inner: plan.inferencer, parts: cloneSessionImageParts(parts), firstTurn: firstTurn}
+	plan.inferencer = &sessionImageInferencer{
+		inner:         plan.inferencer,
+		parts:         cloneSessionImageParts(parts),
+		firstTurn:     firstTurn,
+		deferResponse: deferResponse,
+	}
 	plan.loop.awaitFirstTurn = firstTurn
 	if seed.Present {
 		wirePrompt := nextSessionTextWirePrompt()
@@ -323,6 +336,10 @@ type sessionImageInferencer struct {
 	// queue, or the rejection error. Buffered so signaling never blocks the
 	// model runner goroutine; nil keeps direct construction sites unchanged.
 	firstTurn chan error
+	// deferResponse queues only the image item when audio input will complete
+	// the turn. False preserves the immediate response for image-only and
+	// text+image sessions.
+	deferResponse bool
 }
 
 func (i *sessionImageInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -330,7 +347,12 @@ func (i *sessionImageInferencer) ConnectSession(ctx context.Context) (messages.S
 	if err != nil {
 		return nil, err
 	}
-	return &sessionImageSession{Session: session, parts: cloneSessionImageParts(i.parts), firstTurn: i.firstTurn}, nil
+	return &sessionImageSession{
+		Session:       session,
+		parts:         cloneSessionImageParts(i.parts),
+		firstTurn:     i.firstTurn,
+		deferResponse: i.deferResponse,
+	}, nil
 }
 
 type sessionImageSession struct {
@@ -339,7 +361,8 @@ type sessionImageSession struct {
 	mu    sync.Mutex
 	// firstTurn is the shared acceptance signal consumed by the session
 	// loop's awaitFirstTurn; see sessionImageInferencer.
-	firstTurn chan error
+	firstTurn     chan error
+	deferResponse bool
 }
 
 func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -358,7 +381,7 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 		if text == sessionImageOnlyPrompt {
 			text = ""
 		}
-		sent := sendSessionImageTurn(ctx, s.Session, text, parts)
+		sent := sendSessionImageTurn(ctx, s.Session, text, parts, !s.deferResponse)
 		s.signalFirstTurn(sent)
 		return sent
 	}
@@ -383,16 +406,12 @@ func (s *sessionImageSession) signalFirstTurn(sent bool) {
 
 // SendSessionImageTurn attaches validated parts to one reusable user turn.
 func SendSessionImageTurn(ctx context.Context, session messages.Session, text string, parts []messages.ImagePart) error {
-	if sendSessionImageTurn(ctx, session, text, parts) {
+	if sendSessionImageTurn(ctx, session, text, parts, true) {
 		return nil
 	}
 	return fmt.Errorf("%w: provider session rejected image turn", ErrSessionImageSend)
 }
-func sendSessionImageTurn(ctx context.Context, session messages.Session, text string, parts []messages.ImagePart) bool {
-	sender, ok := session.(SessionImageMessageSender)
-	if !ok {
-		return false
-	}
+func sendSessionImageTurn(ctx context.Context, session messages.Session, text string, parts []messages.ImagePart, requestResponse bool) bool {
 	content := make([]messages.ContentPart, 0, len(parts)+1)
 	if text != "" {
 		content = append(content, messages.TextPart{Text: text})
@@ -400,7 +419,13 @@ func sendSessionImageTurn(ctx context.Context, session messages.Session, text st
 	for _, part := range parts {
 		content = append(content, messages.ImagePart{Bytes: append([]byte(nil), part.Bytes...), MediaType: part.MediaType})
 	}
-	return sender.SendMessage(ctx, messages.Message{Role: messages.RoleUser, ContentParts: content})
+	message := messages.Message{Role: messages.RoleUser, ContentParts: content}
+	if requestResponse {
+		sender, ok := session.(SessionImageMessageSender)
+		return ok && sender.SendMessage(ctx, message)
+	}
+	sender, ok := session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, message)
 }
 func cloneSessionImageParts(parts []messages.ImagePart) []messages.ImagePart {
 	cloned := slices.Clone(parts)
