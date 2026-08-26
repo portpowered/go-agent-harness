@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -16,10 +19,61 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 const deviceProbeExpectedTranscript = "device round trip"
+
+const deviceProbeScenarioPath = "testdata/probe-scenarios/s2s-v9-webrtc-device-roundtrip.scenario.json"
+
+// TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI proves the device-tier
+// entry point through the production router. The default test registry is
+// intentionally headless, so this exercises the documented SKIP contract
+// without opening hardware or requiring provider credentials.
+func TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI(t *testing.T) {
+	run := executeCLI("probe", "run", filepath.Clean(deviceProbeScenarioPath), "--devices", "real", "--json")
+	if run.exitCode != 0 {
+		t.Fatalf("device-tier probe exit code = %d, want successful skip; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(run.stdout)), &result); err != nil {
+		t.Fatalf("decode device-tier result %q: %v", run.stdout, err)
+	}
+	if result["name"] != "s2s-v9-webrtc-device-roundtrip" || result["status"] != string(audio.DeviceProbeStatusSkip) {
+		t.Fatalf("device-tier result = %v, want v9 scenario SKIP", result)
+	}
+	if result["reason_code"] != string(audio.DeviceProbeSkipNoDevices) || result["reason"] != "no audio input or output device" {
+		t.Fatalf("device-tier skip = %v, want stable no-device code and reason", result)
+	}
+	var summary map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(run.stderr)), &summary); err != nil {
+		t.Fatalf("decode device-tier summary %q: %v", run.stderr, err)
+	}
+	if summary["status"] != string(audio.DeviceProbeStatusSkip) || summary["skipped"] != float64(1) || summary["failed"] != float64(0) {
+		t.Fatalf("device-tier summary = %v, want one skipped scenario and no failures", summary)
+	}
+}
+
+func TestS2SV9ScenarioLoadsThroughProbeSchema(t *testing.T) {
+	data, err := os.ReadFile(deviceProbeScenarioPath)
+	if err != nil {
+		t.Fatalf("read committed v9 scenario: %v", err)
+	}
+	scenario, err := loadProbeScenario(data)
+	if err != nil {
+		t.Fatalf("load committed v9 scenario: %v", err)
+	}
+	if scenario.ID != "s2s-v9-webrtc-device-roundtrip" || len(scenario.Steps) != 2 || len(scenario.Expectations) != 2 {
+		t.Fatalf("loaded v9 scenario = %#v, want one audio step, one close, and two expectations", scenario)
+	}
+	if scenario.Steps[0].Type != probe.StepSendAudio || scenario.Steps[1].Type != probe.StepClose {
+		t.Fatalf("v9 steps = %#v, want send_audio followed by close", scenario.Steps)
+	}
+	if scenario.Expectations[0].Type != probe.ExpectAudioEnergy || scenario.Expectations[1].Type != probe.ExpectTranscriptContains {
+		t.Fatalf("v9 expectations = %#v, want audio energy and transcript assertions", scenario.Expectations)
+	}
+}
 
 // TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession exercises the device-tier
 // capture boundary with the shared registry, the real RTC Opus tracks, and the

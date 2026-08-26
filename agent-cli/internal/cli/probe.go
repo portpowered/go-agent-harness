@@ -74,10 +74,12 @@ func NewProbeRunCommand(registries ...audio.DeviceRegistry) *ProbeRunCommand {
 func (c *ProbeRunCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [scenario-path...]",
-		Short: "Run probe scenarios against recorded fixtures",
+		Short: "Run probe scenarios against recorded fixtures or device hardware",
 		Long: "Load probe scenarios and execute them through the JSONL probe runner over recorded\n" +
 			"session fixtures. Execution never dials the network. One JSON result line per scenario\n" +
 			"is written to --out (default stdout) followed by one summary line to --summary (default stderr).\n\n" +
+			"For the T2 device tier, pass --devices real to enumerate the shared audio device registry\n" +
+			"before execution; hosts without both directions receive a machine-readable SKIP result.\n\n" +
 			"The command exits non-zero when any scenario fails.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
