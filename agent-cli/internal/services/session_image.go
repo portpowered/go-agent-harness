@@ -113,6 +113,59 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	}
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
+
+// RunSessionWithImagesAndAudioInput composes the ordinary image session path
+// with the production file/stdin audio source. The image item is queued
+// without a response request; the finite audio source owns the single
+// end-of-turn commit and response boundary.
+func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput) (runErr error) {
+	if !sessionAudioInputSelected(input) {
+		return RunSessionWithImages(ctx, out, opts)
+	}
+	paths := append([]string(nil), opts.ImagePaths...)
+	if len(paths) == 0 {
+		return RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx, out, opts.SessionRunOptions, opts.AudioOutPath, opts.MaxDuration, opts.TextSeed, input, opts.SystemPrompt)
+	}
+	if err := ValidateSessionMaxDuration(opts.MaxDuration); err != nil {
+		return err
+	}
+	if err := validateSessionRunOptions(opts.SessionRunOptions); err != nil {
+		return err
+	}
+	if err := validateSessionAudioInput(input); err != nil {
+		return err
+	}
+	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
+	if err != nil {
+		return err
+	}
+	parts, err := PrepareSessionImageParts(paths, metadata)
+	if err != nil {
+		return err
+	}
+	if opts.TextSeed.Present {
+		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+	}
+	audioSource, err := openSessionAudioInput(input)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := audioSource.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}()
+
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
+	if err != nil {
+		return err
+	}
+	plan.loop.CloseAfterOpen = false
+	plan.loop.AudioIn = audioSource
+	plan.loop.MaxDuration = opts.MaxDuration
+	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
+}
+
 func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, error) {
 	var (
 		plan         sessionRuntimePlan
@@ -168,7 +221,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 		if opts.AudioOutPath == "-" {
 			out = io.Discard
 		}
-		if opts.MaxDuration == 0 {
+		if opts.MaxDuration == 0 || plan.loop.AudioIn != nil {
 			runErr = plan.run(ctx, out)
 		} else {
 			runErr = runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
@@ -181,7 +234,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	}
 	if opts.TextSeed.Present {
 		output := &sessionTextOutput{writer: out}
-		if opts.MaxDuration == 0 {
+		if opts.MaxDuration == 0 || plan.loop.AudioIn != nil {
 			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value, audioOut: output}
 			return errors.Join(plan.run(ctx, output), output.errorValue())
 		}

@@ -211,6 +211,14 @@ func buildVisionDescribeFixture(t *testing.T, transcript []string) string {
 // the captured stdout. It waits for the terminal close marker so
 // asynchronous terminal formatting is always observed.
 func runVisionDescribeSession(t *testing.T, fixturePath, wavPath, imagePath, audioOutPath string) (string, error) {
+	return runVisionDescribeSessionMode(t, fixturePath, wavPath, imagePath, audioOutPath, true)
+}
+
+func runVisionDescribeSessionWithoutRecordingDirectory(t *testing.T, fixturePath, wavPath, imagePath string) (string, error) {
+	return runVisionDescribeSessionMode(t, fixturePath, wavPath, imagePath, "", false)
+}
+
+func runVisionDescribeSessionMode(t *testing.T, fixturePath, wavPath, imagePath, audioOutPath string, withRecordingDirectory bool) (string, error) {
 	t.Helper()
 	stdout := &syncBuffer{}
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
@@ -222,7 +230,9 @@ func runVisionDescribeSession(t *testing.T, fixturePath, wavPath, imagePath, aud
 		"--model", "gpt-realtime",
 		"--audio-in", wavPath,
 		"--image", imagePath,
-		"--record-dir", t.TempDir(),
+	}
+	if withRecordingDirectory {
+		args = append(args, "--record-dir", t.TempDir())
 	}
 	if audioOutPath != "" {
 		args = append(args, "--audio-out", audioOutPath)
@@ -400,6 +410,28 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 	rms := math.Sqrt(energy / float64(len(reply)))
 	if rms < 500.0 {
 		t.Fatalf("recorded reply RMS = %.1f, want > 500 (non-silent spoken reply); %d samples", rms, len(reply))
+	}
+}
+
+// TestSessionCommandVisionDescribeWithoutRecordingDirectoryStreamsCombinedTurn
+// exercises the ordinary public image-plus-audio invocation. The replay
+// transport requires every client frame in order, so a premature image-only
+// response or an omitted audio commit fails this test before the grounded
+// transcript can be observed.
+func TestSessionCommandVisionDescribeWithoutRecordingDirectoryStreamsCombinedTurn(t *testing.T) {
+	fixture := buildVisionDescribeFixture(t, nil)
+	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
+	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
+		t.Fatalf("write synthetic image: %v", err)
+	}
+
+	out, runErr := runVisionDescribeSessionWithoutRecordingDirectory(t, fixture, wavPath, imagePath)
+	if runErr != nil {
+		t.Fatalf("ordinary image-plus-audio session failed: %v\nstdout:\n%s", runErr, out)
+	}
+	if err := assertVisionDescribeGrounded(out); err != nil {
+		t.Fatal(err)
 	}
 }
 
