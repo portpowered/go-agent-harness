@@ -115,6 +115,7 @@ func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, co
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
 		NewProbeRunCommand(),
+		NewProbeGateCommand(),
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),

@@ -19,8 +19,9 @@ type Router struct {
 	InteractionCommand       *InteractionCommand
 	InteractionReplayCommand *InteractionReplayCommand
 
-	ProbeCommand    *ProbeCommand
-	ProbeRunCommand *ProbeRunCommand
+	ProbeCommand     *ProbeCommand
+	ProbeRunCommand  *ProbeRunCommand
+	ProbeGateCommand *ProbeGateCommand
 
 	SessionCommand       *SessionCommand
 	SessionShowCommand   *SessionShowCommand
@@ -42,6 +43,7 @@ func NewRouter(
 	interactionReplayCommand *InteractionReplayCommand,
 	probeCommand *ProbeCommand,
 	probeRunCommand *ProbeRunCommand,
+	probeGateCommand *ProbeGateCommand,
 	sessionCommand *SessionCommand,
 	sessionShowCommand *SessionShowCommand,
 	sessionListCommand *SessionListCommand,
@@ -59,6 +61,7 @@ func NewRouter(
 		InteractionReplayCommand: interactionReplayCommand,
 		ProbeCommand:             probeCommand,
 		ProbeRunCommand:          probeRunCommand,
+		ProbeGateCommand:         probeGateCommand,
 		SessionCommand:           sessionCommand,
 		SessionShowCommand:       sessionShowCommand,
 		SessionListCommand:       sessionListCommand,
@@ -82,6 +85,7 @@ func (r *Router) BuildRoot() *cobra.Command {
 
 	probeGroup := NewPath("probe", r.ProbeCommand.Generate())
 	probeGroup.AddCommand(NewPath("run [scenario-path...]", r.ProbeRunCommand.Generate()))
+	probeGroup.AddCommand(NewPath("gate --out <result.jsonl>...", r.ProbeGateCommand.Generate()))
 	root.AddCommand(probeGroup)
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())
