@@ -49,7 +49,7 @@ type GoalInputSourceKind string
 
 const (
 	GoalInputSourceEmbeddedAsset GoalInputSourceKind = "embedded_asset"
-	GoalInputAssetRedApple                           = "red-apple-image"
+	GoalInputAssetRedApple       string              = "red-apple-image"
 )
 
 // GoalInputSource is catalog-owned non-text input. Data is decoded from the
