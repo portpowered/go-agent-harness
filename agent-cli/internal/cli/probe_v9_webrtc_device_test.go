@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"math"
 	"sync"
 	"testing"
@@ -10,15 +12,18 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
-// TestS2SV9WebRTCDeviceCaptureProvesRegistryToRemoteTrack exercises the
-// device-tier capture boundary with the shared registry and the real RTC Opus
-// track. The virtual registry is the deterministic stand-in for a hardware
-// host: its input/output pair preserves the same DeviceSource/DeviceSink
-// ownership and frame contracts while keeping ordinary CI network-free.
-func TestS2SV9WebRTCDeviceCaptureProvesRegistryToRemoteTrack(t *testing.T) {
+// TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession exercises the device-tier
+// capture boundary with the shared registry, the real RTC Opus tracks, and the
+// session model runner. The virtual registry is the deterministic stand-in for
+// a hardware host: its input/output pair preserves the same DeviceSource/
+// DeviceSink ownership and frame contracts while keeping ordinary CI
+// network-free.
+func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {
 		t.Fatalf("create device registry: %v", err)
@@ -74,6 +79,18 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToRemoteTrack(t *testing.T) {
 	}
 	defer func() { _ = track.Close() }()
 
+	// The session runner is the same production boundary used by the live
+	// session loop. It records the outbound messages so this proof observes
+	// audio and the end-of-turn event after the media track, rather than merely
+	// decoding a packet in the test.
+	session := newDeviceProbeSession()
+	runner := participants.NewSessionModelRunner(&deviceProbeSessionInferencer{session: session}, 8, nil)
+	sessionContext, sessionCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer sessionCancel()
+	participant := participants.NewActiveParticipant(messages.Model, runner)
+	participant.Start(sessionContext)
+	defer participant.Stop()
+
 	wantInput := voicedDeviceProbeFrame()
 	if err := sink.WriteFrame(context.Background(), wantInput); err != nil {
 		t.Fatalf("scripted device frame write: %v", err)
@@ -96,24 +113,70 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToRemoteTrack(t *testing.T) {
 		t.Fatalf("commit captured frame to WebRTC track: %v", err)
 	}
 
-	remote, err := peers.readRemoteTrack()
+	remote, err := peers.waitRemoteTrack()
 	if err != nil {
 		t.Fatalf("receive remote WebRTC track: %v", err)
 	}
+	if remote.Kind() != webrtc.RTPCodecTypeAudio {
+		t.Fatalf("remote track kind = %s, want audio", remote.Kind())
+	}
+
 	decoder, err := rtc.NewRTCOpusDecoder()
 	if err != nil {
 		t.Fatalf("create RTC Opus decoder: %v", err)
 	}
 	defer func() { _ = decoder.Close() }()
-	decoded, err := decoder.Decode(remote.Payload)
+	// Pion exposes RTP attributes alongside the packet; the harness seam
+	// deliberately keeps those protocol details out of InboundTrack.
+	// deviceProbeRTPPacketSource performs that boundary adaptation.
+	inbound, err := rtc.NewInboundTrack(deviceProbeRTPPacketSource{track: remote}, decoder, rtc.InboundTrackConfig{
+		SampleRate:    audio.SampleRate,
+		FrameDuration: rtc.OpusFrameDuration,
+		JitterDepth:   rtc.OpusFrameDuration,
+	})
 	if err != nil {
-		t.Fatalf("decode remote WebRTC packet: %v", err)
+		t.Fatalf("bind remote track to session input: %v", err)
 	}
-	if got := pcm16ProbeRMS(decoded); got <= 300 {
-		t.Fatalf("remote decoded PCM RMS = %.2f, want voiced energy above 300", got)
+	defer func() { _ = inbound.Close() }()
+
+	gotSessionInput, err := inbound.ReadFrame(sessionContext)
+	if err != nil {
+		t.Fatalf("read active session input track: %v", err)
 	}
-	if peers.remoteTrack == nil || peers.remoteTrack.Kind() != webrtc.RTPCodecTypeAudio {
-		t.Fatalf("remote track = %#v, want an audio track", peers.remoteTrack)
+	if got := pcm16ProbeRMS(gotSessionInput.Samples); got <= 300 {
+		t.Fatalf("session input RMS = %.2f, want voiced energy above 300", got)
+	}
+	wantSessionSamples := int(int64(audio.SampleRate) * int64(rtc.OpusFrameDuration) / int64(time.Second))
+	if len(gotSessionInput.Samples) != wantSessionSamples {
+		t.Fatalf("session input samples = %d, want one 20 ms 16 kHz frame", len(gotSessionInput.Samples))
+	}
+
+	pcm := pcm16ProbeBytes(gotSessionInput.Samples)
+	select {
+	case runner.UserAudioInbox <- pcm:
+	case <-sessionContext.Done():
+		t.Fatalf("send captured audio to session: %v", sessionContext.Err())
+	}
+	audioMessage := readDeviceProbeSessionMessage(t, sessionContext, session.sent)
+	if audioMessage.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("session audio message type = %s, want %s", audioMessage.Type, messages.StreamTypeAudioDelta)
+	}
+	audioValue, ok := audioMessage.Value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("session audio message value = %T, want *messages.AudioDeltaValue", audioMessage.Value)
+	}
+	if !bytes.Equal(audioValue.Content, pcm) {
+		t.Fatalf("session audio bytes differ from active input track: got %d bytes, want %d", len(audioValue.Content), len(pcm))
+	}
+
+	select {
+	case runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd}:
+	case <-sessionContext.Done():
+		t.Fatalf("send captured turn boundary to session: %v", sessionContext.Err())
+	}
+	turnMessage := readDeviceProbeSessionMessage(t, sessionContext, session.sent)
+	if turnMessage.Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("session turn message type = %s, want %s after audio", turnMessage.Type, messages.StreamTypeMessageEnd)
 	}
 
 	observations := registry.Observations()
@@ -133,6 +196,15 @@ func (w deviceProbeRTPWriter) WriteRTP(ctx context.Context, packet *rtp.Packet) 
 	default:
 	}
 	return w.track.WriteRTP(packet)
+}
+
+type deviceProbeRTPPacketSource struct {
+	track *webrtc.TrackRemote
+}
+
+func (s deviceProbeRTPPacketSource) ReadRTP() (*rtp.Packet, error) {
+	packet, _, err := s.track.ReadRTP()
+	return packet, err
 }
 
 type deviceProbePeerPair struct {
@@ -240,15 +312,13 @@ func newDeviceProbePeerPair(t *testing.T) (*deviceProbePeerPair, error) {
 	}, nil
 }
 
-func (p *deviceProbePeerPair) readRemoteTrack() (*rtp.Packet, error) {
+func (p *deviceProbePeerPair) waitRemoteTrack() (*webrtc.TrackRemote, error) {
 	select {
 	case p.remoteTrack = <-p.remoteReady:
 	case <-time.After(3 * time.Second):
 		return nil, context.DeadlineExceeded
 	}
-	p.remoteTrack.SetReadDeadline(time.Now().Add(3 * time.Second))
-	packet, _, err := p.remoteTrack.ReadRTP()
-	return packet, err
+	return p.remoteTrack, nil
 }
 
 func voicedDeviceProbeFrame() []int16 {
@@ -269,4 +339,66 @@ func pcm16ProbeRMS(samples []int16) float64 {
 		sum += value * value
 	}
 	return math.Sqrt(sum / float64(len(samples)))
+}
+
+func pcm16ProbeBytes(samples []int16) []byte {
+	pcm := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
+	}
+	return pcm
+}
+
+type deviceProbeSessionInferencer struct {
+	session messages.Session
+}
+
+func (i *deviceProbeSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return i.session, nil
+}
+
+type deviceProbeSession struct {
+	sent    chan messages.StreamMessage
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	once    sync.Once
+}
+
+func newDeviceProbeSession() *deviceProbeSession {
+	return &deviceProbeSession{
+		sent:    make(chan messages.StreamMessage, 8),
+		receive: messages.NewTypedBuffer[messages.StreamMessage](8),
+		done:    make(chan struct{}),
+	}
+}
+
+func (s *deviceProbeSession) Send(ctx context.Context, message messages.StreamMessage) bool {
+	select {
+	case s.sent <- message:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (s *deviceProbeSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *deviceProbeSession) Done() <-chan struct{} { return s.done }
+
+func (s *deviceProbeSession) Close() error {
+	s.once.Do(func() { close(s.done) })
+	return nil
+}
+
+func readDeviceProbeSessionMessage(t *testing.T, ctx context.Context, messagesCh <-chan messages.StreamMessage) messages.StreamMessage {
+	t.Helper()
+	select {
+	case message := <-messagesCh:
+		return message
+	case <-ctx.Done():
+		t.Fatalf("read session message: %v", ctx.Err())
+		return messages.StreamMessage{}
+	}
 }
