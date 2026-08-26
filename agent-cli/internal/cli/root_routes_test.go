@@ -56,6 +56,10 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"Use \"agent [command] --help\" for more information about a command.\n"
 
 func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
+	return newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(fleetExecutor...))
+}
+
+func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetCommand) *cobra.Command {
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
@@ -73,7 +77,7 @@ func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
 		NewProbeRunCommand(),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
-		NewProbeFleetCommand(fleetExecutor...),
+		probeFleetCommand,
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),

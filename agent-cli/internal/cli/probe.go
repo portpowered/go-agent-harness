@@ -728,56 +728,67 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 				return probe.ObservationSnapshot{}, err
 			}
 		}
-		var report gatewaytesting.SessionReplayProbeReport
-		if injected {
-			report, err = gatewaytesting.RunSessionReplayProbeFromCapture(ctx, replayCapture)
-		} else {
-			report, err = gatewaytesting.RunSessionReplayProbe(ctx, fixture)
-		}
-		if err != nil {
-			return probe.ObservationSnapshot{}, err
-		}
-		observation := probe.ObservationSnapshot{
-			FrameCount:     len(report.Observations),
-			ObservedTick:   probe.LogicalTime(report.OutboundTicks),
-			TerminalReason: report.Provenance,
-		}
-		observation.HasObservedTick = true
-		if report.EndsWithDisconnect {
-			observation.TerminalReason = "disconnect"
-		}
-		if classification := replayErrorClassificationFromCapture(replayCapture); classification != "" {
-			observation.TerminalReason = "error:" + classification
-		}
-		if scenarioDeclaresTerminalMetadata(scenario) {
-			terminalReason, terminalProvenance, outputState := replayTerminalTriple(replayCapture)
-			observation.TerminalReason = terminalReason
-			observation.TerminalProvenance = terminalProvenance
-			observation.OutputState = outputState
-		}
-		observation.Transcript = replayTranscriptFromCapture(replayCapture)
-		if deriveErr := deriveToolResultObservationFromCapture(replayCapture, &observation); deriveErr != nil {
-			return probe.ObservationSnapshot{}, deriveErr
-		}
-		if deriveErr := deriveBargeInObservationFromCapture(replayCapture, &observation); deriveErr != nil {
-			return probe.ObservationSnapshot{}, deriveErr
-		}
-		if deriveErr := deriveResponseCancelObservationFromCapture(replayCapture, &observation); deriveErr != nil {
-			return probe.ObservationSnapshot{}, deriveErr
-		}
-		observation.BufferDisposition = replayBufferDispositionFromCapture(replayCapture)
-		if scenarioDeclaresMetricsReconciliation(scenario) {
-			metricsSeries, metricsErr := collectReplayMetricsEvidence(ctx, fixture, scenarioSendText(scenario))
-			if metricsErr != nil {
-				return probe.ObservationSnapshot{}, fmt.Errorf("collect metrics evidence: %w", metricsErr)
-			}
-			if scenario.ID == probe.ScenarioIDS2SV7AMetricsModalityOvercount {
-				injectMetricsOvercount(metricsSeries)
-			}
-			observation.Metrics = metricsSeries
-		}
-		return observation, nil
+		return observationFromSessionCapture(ctx, scenario, replayCapture, fixture, !injected)
 	}
+}
+
+// observationFromSessionCapture validates and derives the probe evidence from
+// one captured session. Replay and live executions use the same observation
+// contract; the live path passes its freshly recorded capture here without
+// replacing its provider-produced audio frames.
+func observationFromSessionCapture(ctx context.Context, scenario probe.Scenario, capture gatewaytesting.SessionCapture, sourcePath string, validateSource bool) (probe.ObservationSnapshot, error) {
+	var (
+		report gatewaytesting.SessionReplayProbeReport
+		err    error
+	)
+	if validateSource {
+		report, err = gatewaytesting.RunSessionReplayProbe(ctx, sourcePath)
+	} else {
+		report, err = gatewaytesting.RunSessionReplayProbeFromCapture(ctx, capture)
+	}
+	if err != nil {
+		return probe.ObservationSnapshot{}, err
+	}
+	observation := probe.ObservationSnapshot{
+		FrameCount:     len(report.Observations),
+		ObservedTick:   probe.LogicalTime(report.OutboundTicks),
+		TerminalReason: report.Provenance,
+	}
+	observation.HasObservedTick = true
+	if report.EndsWithDisconnect {
+		observation.TerminalReason = "disconnect"
+	}
+	if classification := replayErrorClassificationFromCapture(capture); classification != "" {
+		observation.TerminalReason = "error:" + classification
+	}
+	if scenarioDeclaresTerminalMetadata(scenario) {
+		terminalReason, terminalProvenance, outputState := replayTerminalTriple(capture)
+		observation.TerminalReason = terminalReason
+		observation.TerminalProvenance = terminalProvenance
+		observation.OutputState = outputState
+	}
+	observation.Transcript = replayTranscriptFromCapture(capture)
+	if deriveErr := deriveToolResultObservationFromCapture(capture, &observation); deriveErr != nil {
+		return probe.ObservationSnapshot{}, deriveErr
+	}
+	if deriveErr := deriveBargeInObservationFromCapture(capture, &observation); deriveErr != nil {
+		return probe.ObservationSnapshot{}, deriveErr
+	}
+	if deriveErr := deriveResponseCancelObservationFromCapture(capture, &observation); deriveErr != nil {
+		return probe.ObservationSnapshot{}, deriveErr
+	}
+	observation.BufferDisposition = replayBufferDispositionFromCapture(capture)
+	if scenarioDeclaresMetricsReconciliation(scenario) {
+		metricsSeries, metricsErr := collectReplayMetricsEvidence(ctx, sourcePath, scenarioSendText(scenario))
+		if metricsErr != nil {
+			return probe.ObservationSnapshot{}, fmt.Errorf("collect metrics evidence: %w", metricsErr)
+		}
+		if scenario.ID == probe.ScenarioIDS2SV7AMetricsModalityOvercount {
+			injectMetricsOvercount(metricsSeries)
+		}
+		observation.Metrics = metricsSeries
+	}
+	return observation, nil
 }
 
 // deriveResponseCancelObservationFromCapture scans the capture for

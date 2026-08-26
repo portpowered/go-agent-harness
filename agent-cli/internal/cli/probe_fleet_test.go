@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 )
 
 func writeFleetManifest(t *testing.T, path string, manifest fleet.Manifest) {
@@ -26,6 +27,20 @@ func writeFleetManifest(t *testing.T, path string, manifest fleet.Manifest) {
 
 func executeCLIWithFleetExecutor(executor fleet.EntryExecutor, args ...string) cliExecution {
 	root := newTestRootCommand(executor)
+	var stdout, stderr strings.Builder
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(args)
+
+	exitCode := 0
+	if root.Execute() != nil {
+		exitCode = 1
+	}
+	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
+}
+
+func executeCLIWithProbeFleetCommand(command *ProbeFleetCommand, args ...string) cliExecution {
+	root := newTestRootCommandWithProbeFleetCommand(command)
 	var stdout, stderr strings.Builder
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
@@ -69,6 +84,56 @@ func TestProbeFleetRunsEveryEntryAndPrintsCoordinates(t *testing.T) {
 	}
 	if !strings.Contains(run.stderr, "fleet: 2/2 entries passed (pass)") {
 		t.Fatalf("summary missing: %q", run.stderr)
+	}
+}
+
+func TestProbeFleetDispatchesLiveEntryThroughSessionRuntime(t *testing.T) {
+	dir := t.TempDir()
+	scenario := writeProbeScenario(t, dir, "session_healthy_multiturn_audio", len(probeFixtureObservation(t).Observations))
+	manifest, err := fleet.Compose(fleet.ComposeInput{
+		ScenarioFiles: []string{scenario},
+		Transports:    []fleet.Transport{fleet.TransportLive},
+		RepeatCount:   1,
+		Concurrency:   1,
+	})
+	if err != nil {
+		t.Fatalf("compose fleet: %v", err)
+	}
+	manifestPath := filepath.Join(dir, "fleet.json")
+	writeFleetManifest(t, manifestPath, manifest)
+
+	var gotOptions services.SessionRunOptions
+	var gotInput services.SessionAudioInput
+	command := NewProbeFleetCommand()
+	command.LiveSessionRunner = func(_ context.Context, _ io.Writer, options services.SessionRunOptions, input services.SessionAudioInput) error {
+		gotOptions = options
+		gotInput = input
+		capture, readErr := os.ReadFile(probeSessionFixture)
+		if readErr != nil {
+			return readErr
+		}
+		return os.WriteFile(options.RecordPath, capture, 0o600)
+	}
+
+	run := executeCLIWithProbeFleetCommand(command,
+		"--config-dir", filepath.Join(dir, "config"),
+		"probe", "fleet", "--manifest", manifestPath,
+		"--provider", "grok", "--model", "grok-test", "--api-key", "test-key", "--base-url", "wss://grok.test",
+	)
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	if !strings.Contains(run.stdout, "fleet: pass scenario=session_healthy_multiturn_audio transport=live repeat=0") {
+		t.Fatalf("live entry was not reported as passing: %q", run.stdout)
+	}
+	if gotOptions.Provider != "grok" || gotOptions.Model != "grok-test" || !gotOptions.ModelProvided || gotOptions.APIKey != "test-key" || gotOptions.BaseURL != "wss://grok.test" {
+		t.Fatalf("live session options = %+v, want command flags", gotOptions)
+	}
+	if gotOptions.ConfigDir != filepath.Join(dir, "config") || filepath.Ext(gotOptions.RecordPath) != ".json" {
+		t.Fatalf("live session config/capture = %q/%q, want inherited config dir and JSON capture", gotOptions.ConfigDir, gotOptions.RecordPath)
+	}
+	if gotInput.Present || gotInput.Path != "" {
+		t.Fatalf("text-only live scenario audio input = %+v, want absent", gotInput)
 	}
 }
 
