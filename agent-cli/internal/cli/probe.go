@@ -53,14 +53,21 @@ type ProbeRunCommand struct {
 	Scenarios   []string
 	Record      string
 	Replay      string
+	Devices     string
 	OutPath     string
 	SummaryPath string
 	JSONOut     bool
+
+	deviceRegistry audio.DeviceRegistry
 }
 
 // NewProbeRunCommand returns the probe run command constructor.
-func NewProbeRunCommand() *ProbeRunCommand {
-	return &ProbeRunCommand{}
+func NewProbeRunCommand(registries ...audio.DeviceRegistry) *ProbeRunCommand {
+	registry := newDefaultDeviceRegistry()
+	if len(registries) > 0 && registries[0] != nil {
+		registry = registries[0]
+	}
+	return &ProbeRunCommand{deviceRegistry: registry}
 }
 
 // Generate returns the cobra command for probe run.
@@ -80,6 +87,7 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 	cmd.Flags().StringArrayVar(&c.Scenarios, "scenario", nil, "Scenario file path (repeatable)")
 	cmd.Flags().StringVar(&c.Record, "record", "", "Record fixtures to path (recording is unsupported for offline probe runs)")
 	cmd.Flags().StringVar(&c.Replay, "replay", "", "Replay fixture path or directory of recorded session fixtures")
+	cmd.Flags().StringVar(&c.Devices, "devices", "", "Run the device-tier probe against real audio devices")
 	cmd.Flags().StringVar(&c.OutPath, "out", "", "Path for per-scenario JSONL result lines (default stdout)")
 	cmd.Flags().StringVar(&c.SummaryPath, "summary", "", "Path for the summary artifact (default stderr)")
 	cmd.Flags().BoolVar(&c.JSONOut, "json", false, "Emit pure machine-readable output without human-readable decoration")
@@ -89,6 +97,21 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	if c.Record != "" {
 		return fmt.Errorf("--record is not supported for offline probe runs; use --replay with recorded fixtures")
+	}
+	if c.Devices != "" {
+		if c.Devices != "real" {
+			return fmt.Errorf("unsupported --devices value %q; want real", c.Devices)
+		}
+		if len(probeSelections(positional, c.Scenarios)) == 0 {
+			return fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
+		}
+		availability, err := audio.ProbeDeviceAvailability(c.deviceRegistry)
+		if err != nil {
+			return fmt.Errorf("device probe availability: %w", err)
+		}
+		if availability.Status == audio.DeviceProbeStatusSkip {
+			return c.writeDeviceProbeSkip(cmd, positional, availability)
+		}
 	}
 	if strings.TrimSpace(c.Replay) == "" {
 		return fmt.Errorf("--replay <fixture-path-or-dir> is required to select recorded fixtures")
@@ -139,6 +162,20 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		return fmt.Errorf("%d of %d probe scenarios failed", summary.Failed, summary.Total)
 	}
 	return nil
+}
+
+func probeSelections(positional, flags []string) []string {
+	raw := append(append([]string{}, positional...), flags...)
+	selections := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, selection := range raw {
+		if _, exists := seen[selection]; exists {
+			continue
+		}
+		seen[selection] = struct{}{}
+		selections = append(selections, selection)
+	}
+	return selections
 }
 
 // resultRouter routes each verbatim runner line either to the results
