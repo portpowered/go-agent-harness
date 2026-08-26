@@ -100,10 +100,10 @@ func (r RTCDeviceBindingRequest) selected() bool {
 	return r.inputSelected() || r.outputSelected()
 }
 
-// RTCDeviceBinding owns the registry-backed endpoints used by an RTC session.
-// The track/media owner is responsible for starting Source.Pump and Sink.Pump;
-// this object owns only the selected local devices and releases them exactly
-// once.
+// RTCDeviceBinding owns the registry-backed local endpoints used by an RTC
+// session. The session runtime starts Source.Pump and Sink.Pump against the
+// provider-owned media endpoints; this object owns only the selected local
+// devices and releases them exactly once.
 type RTCDeviceBinding struct {
 	Source *RTCDeviceSource
 	Sink   *RTCDeviceSink

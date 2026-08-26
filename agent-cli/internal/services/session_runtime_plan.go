@@ -145,6 +145,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		return err
 	}
 	if deviceBinding != nil {
+		p.loop.rtcDeviceBinding = deviceBinding
 		defer func() {
 			runErr = errors.Join(runErr, deviceBinding.Close())
 		}()
