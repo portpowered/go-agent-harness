@@ -118,6 +118,8 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 
 	audioStreaming := false // true between AUDIO.START and AUDIO.END from the model
 	sessionClosed := false
+	hasOutput := false
+	responseCompleted := false
 
 	for {
 		select {
@@ -129,9 +131,18 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				if !ok {
 					break
 				}
-				audioStreaming, sessionClosed = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed)
+				audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
 			}
 			if !sessionClosed {
+				terminalProvenance := messages.TerminalProvenanceProvider
+				terminalOutputState := outputState(hasOutput)
+				if responseCompleted {
+					// Preserve the existing session teardown contract after a
+					// completed response. A transport close before any response
+					// boundary remains provider-authored and uses observed output.
+					terminalProvenance = messages.TerminalProvenanceSession
+					terminalOutputState = messages.TerminalOutputNotApplicable
+				}
 				r.DeltaOutbox.Write(ctx, messages.StreamMessage{
 					Type: messages.StreamTypeSessionClose,
 					Value: messages.NewSessionCloseValueWithTerminal(
@@ -139,8 +150,8 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 						"provider_closed",
 						"transport",
 						messages.TerminalReasonProviderClose,
-						messages.TerminalProvenanceSession,
-						messages.TerminalOutputNotApplicable,
+						terminalProvenance,
+						terminalOutputState,
 					),
 				})
 			}
@@ -201,21 +212,27 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			audioStreaming, sessionClosed = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed)
+			audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
 		}
 	}
 }
 
-func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, audioStreaming bool, sessionClosed bool) (bool, bool) {
+func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, audioStreaming bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool) {
 	// Track model audio streaming state for barge-in detection.
 	switch msg.Type {
 	case messages.StreamTypeAudioStart:
 		audioStreaming = true
 	case messages.StreamTypeAudioEnd, messages.StreamTypeMessageEnd:
 		audioStreaming = false
+		if msg.Type == messages.StreamTypeMessageEnd {
+			responseCompleted = true
+		}
 	case messages.StreamTypeSessionClose:
 		sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)
+	}
+	if isOutputDelta(msg) {
+		hasOutput = true
 	}
 	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
 	// session parameters (model, instructions, modalities) if set.
@@ -226,7 +243,7 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		})
 	}
 	r.DeltaOutbox.Write(ctx, msg)
-	return audioStreaming, sessionClosed
+	return audioStreaming, sessionClosed, hasOutput, responseCompleted
 }
 
 func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMessage {

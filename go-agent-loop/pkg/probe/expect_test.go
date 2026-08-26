@@ -22,6 +22,8 @@ func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
 		{"tool-called", expect(ExpectToolCalled, "calendar", 0), ObservationSnapshot{ToolCalls: []string{"weather", "calendar"}}, ObservationSnapshot{ToolCalls: []string{"weather"}}},
 		{"latency-within-ticks", expect(ExpectLatencyWithinTicks, "", 3), ObservationSnapshot{ObservedTick: 13, HasObservedTick: true}, ObservationSnapshot{ObservedTick: 14, HasObservedTick: true}},
 		{"terminal-reason", expect(ExpectTerminalReason, "complete", 0), ObservationSnapshot{TerminalReason: "complete"}, ObservationSnapshot{TerminalReason: "cancelled"}},
+		{"terminal-provenance", expect(ExpectTerminalProvenance, "provider", 0), ObservationSnapshot{TerminalProvenance: "provider"}, ObservationSnapshot{TerminalProvenance: "loop"}},
+		{"output-state", expect(ExpectOutputState, "partial", 0), ObservationSnapshot{OutputState: "partial"}, ObservationSnapshot{OutputState: "none"}},
 		{"frame-count", expect(ExpectFrameCount, "", 4), ObservationSnapshot{FrameCount: 4}, ObservationSnapshot{FrameCount: 0}},
 		{"tool-result-delivered", ExpectedBehavior{Type: ExpectToolResultDelivered, Kind: ExpectToolResultDelivered, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDelivered: []string{"call"}}, ObservationSnapshot{}},
 		{"tool-result-discarded", ExpectedBehavior{Type: ExpectToolResultDiscarded, Kind: ExpectToolResultDiscarded, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDiscarded: []string{"call"}}, ObservationSnapshot{}},
@@ -105,6 +107,8 @@ func TestS4MismatchDiagnosticsCoverEveryKind(t *testing.T) {
 		{"tool-called", expect(ExpectToolCalled, "calendar", 0), ObservationSnapshot{ToolCalls: []string{"weather"}}, "calendar", []string{"weather"}},
 		{"latency-within-ticks", expect(ExpectLatencyWithinTicks, "", 3), ObservationSnapshot{ObservedTick: 14, HasObservedTick: true}, "non-negative tick delta <= 3", LogicalTime(4)},
 		{"terminal-reason", expect(ExpectTerminalReason, "complete", 0), ObservationSnapshot{TerminalReason: "cancelled"}, "complete", "cancelled"},
+		{"terminal-provenance", expect(ExpectTerminalProvenance, "provider", 0), ObservationSnapshot{TerminalProvenance: "loop"}, "provider", "loop"},
+		{"output-state", expect(ExpectOutputState, "partial", 0), ObservationSnapshot{OutputState: "none"}, "partial", "none"},
 		{"frame-count", expect(ExpectFrameCount, "", 3), ObservationSnapshot{FrameCount: 2}, 3, 2},
 		{"tool-result-delivered", ExpectedBehavior{Type: ExpectToolResultDelivered, Kind: ExpectToolResultDelivered, ToolCallID: "call"}, ObservationSnapshot{}, "delivered tool result for call", "none"},
 		{"tool-result-discarded", ExpectedBehavior{Type: ExpectToolResultDiscarded, Kind: ExpectToolResultDiscarded, ToolCallID: "call"}, ObservationSnapshot{}, "explicit discard event for call", "none"},
@@ -144,7 +148,7 @@ func TestScenarioResultsPreserveOrderAndRejectNoOpEvidence(t *testing.T) {
 	passing := ObservationSnapshot{
 		PCM16Samples: []int16{1000, -1000}, Transcript: "ready",
 		ToolCalls: []string{"calendar"}, ObservedTick: 13, HasObservedTick: true,
-		TerminalReason: "complete", FrameCount: 4,
+		TerminalReason: "complete", TerminalProvenance: "provider", OutputState: "complete", FrameCount: 4,
 	}
 	for index, result := range EvaluateScenario(scenario, passing) {
 		if result.Index != index || result.Kind != expectations[index].Type || !result.Passed || result.Err != nil {
@@ -295,6 +299,8 @@ func expect(kind ExpectationKind, value string, count int) ExpectedBehavior {
 	case ExpectToolCalled:
 		e.ToolName = value
 	case ExpectTerminalReason:
+		e.Value = value
+	case ExpectTerminalProvenance, ExpectOutputState:
 		e.Value = value
 	case ExpectLatencyWithinTicks:
 		e.At, e.HasAt, e.Count = 10, true, count

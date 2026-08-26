@@ -739,7 +739,8 @@ func evaluateGuardExpectations(scenario Scenario, observation ObservationSnapsho
 func evaluateGuardExpectation(expectation ExpectedBehavior, observation ObservationSnapshot) error {
 	switch declaredKind(expectation) {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
-		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
+		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance,
+		ExpectOutputState, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
 		ExpectBufferDisposition, ExpectMetricsReconcile,
 		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel:
