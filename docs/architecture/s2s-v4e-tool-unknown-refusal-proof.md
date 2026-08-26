@@ -63,7 +63,7 @@ assertion discriminates instead of labeling every tool call as unknown:
 
 - The committed control pair
   (`s2s-v4e-tool-registered.session.json` /
-  `s2s-v4e-tool-registered.scenario.json`) preserves the positive interaction
+  `s2s-v4e/s2s-v4e-tool-registered.scenario.json`) preserves the positive interaction
   shape but requests `read_file`, a name present in the active registry.
 - Both scenario documents declare identical expectation blocks, and the test
   asserts the two blocks stay identical, so the control cannot weaken or
@@ -104,12 +104,12 @@ $ /tmp/agent --config-dir /tmp/agent-cfg session --replay \
 # exit 0
 
 $ /tmp/agent probe run \
-    test/integration/testdata/s2s-v4e-tool-unknown.scenario.json \
+    test/integration/testdata/s2s-v4e/s2s-v4e-tool-unknown.scenario.json \
     --replay test/integration/testdata/s2s-v4e-tool-unknown.session.json --json
 # exit 0; result line "pass":true then summary "status":"pass"
 
 $ /tmp/agent probe run \
-    test/integration/testdata/s2s-v4e-tool-registered.scenario.json \
+    test/integration/testdata/s2s-v4e/s2s-v4e-tool-registered.scenario.json \
     --replay test/integration/testdata/s2s-v4e-tool-registered.session.json --json
 # exit 1; result line "pass":false with transcript_contains
 # expected-vs-actual, summary "status":"fail"

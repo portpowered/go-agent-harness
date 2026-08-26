@@ -21,9 +21,9 @@ import (
 // or network connection is needed by any command under test.
 const (
 	unknownToolFixture     = "s2s-v4e-tool-unknown.session.json"
-	unknownToolScenario    = "s2s-v4e-tool-unknown.scenario.json"
+	unknownToolScenario    = "s2s-v4e/s2s-v4e-tool-unknown.scenario.json"
 	registeredToolFixture  = "s2s-v4e-tool-registered.session.json"
-	registeredToolScenario = "s2s-v4e-tool-registered.scenario.json"
+	registeredToolScenario = "s2s-v4e/s2s-v4e-tool-registered.scenario.json"
 	unknownToolName        = "s2s_v4e_unregistered_tool"
 	registeredToolName     = "read_file"
 )
