@@ -20,10 +20,10 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, inferencer, sessionInferencer)
+	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, inferencer, sessionInferencer)
 	executor := agent.NewExecutor(toolExecutor, toolDefs, inferencer, v...)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
@@ -37,7 +37,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	probeRunCommand := cli.NewProbeRunCommand()
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
-	sessionCommand := cli.NewSessionCommand(askFlags, globalFlags, toolExecutor, sessionInferencer)
+	sessionCommand := cli.NewSessionCommandWithRuntime(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
@@ -59,6 +59,7 @@ func provideModelValidation(
 	audioSource AudioSource,
 	audioSink AudioSink,
 	clockSource Clock,
+	runtimeObserver SessionRuntimeObserver,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
 ) []bool {
@@ -70,6 +71,7 @@ func provideModelValidation(
 			audioSource:       audioSource,
 			audioSink:         audioSink,
 			clockSource:       clockSource,
+			runtimeObserver:   runtimeObserver,
 			inferencer:        inferencer,
 			sessionInferencer: sessionInferencer,
 		})
@@ -82,5 +84,5 @@ var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewCha
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewSessionCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewSessionCommandWithRuntime, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

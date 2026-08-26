@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
@@ -49,6 +50,14 @@ type SessionRunOptions struct {
 	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
 	// production plans never set it, so live behavior is unchanged.
 	ToolExecutionTimeout time.Duration
+
+	// Clock stamps runtime observations. A nil clock uses the host clock. The
+	// generated CLI supplies the composed clock so replay and recording
+	// observers can correlate events across command instances.
+	Clock platformclock.Source
+	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
+	// from the session command. Nil keeps the runtime observationally silent.
+	RuntimeObserver SessionRuntimeObserver
 
 	// Diagnostics optionally receives one canonical structured record per
 	// terminal failure plus per-turn and tool-call records. Nil keeps runtime

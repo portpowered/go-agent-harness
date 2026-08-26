@@ -43,6 +43,10 @@ type sessionLoopOptions struct {
 	// tests. Zero selects defaultSessionToolExecutionTimeout; production plans
 	// never set it.
 	ToolExecutionTimeout time.Duration
+
+	// runtime stamps audio input and lifecycle observations from inside the
+	// session command. Nil keeps the existing runtime path unchanged.
+	runtime *sessionRuntimeObservationRecorder
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both

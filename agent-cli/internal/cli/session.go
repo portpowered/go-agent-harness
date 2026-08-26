@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +24,8 @@ type SessionCommand struct {
 	toolExecutorOverride      messages.ToolExecutor
 	sessionInferencerOverride messages.SessionInferencer
 	streamObserver            services.SessionStreamObserver
+	clockSource               platformclock.Source
+	runtimeObserver           services.SessionRuntimeObserver
 	imagePaths                []string
 }
 
@@ -31,7 +34,28 @@ type SessionCommand struct {
 // given to agent.NewExecutor); callers without one pass nil so session runs
 // keep their no-tools behavior.
 func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
-	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, toolExecutorOverride: toolExecutorOverride, sessionInferencerOverride: sessionInferencerOverride}
+	return NewSessionCommandWithRuntime(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, nil, nil)
+}
+
+// NewSessionCommandWithRuntime constructs the session command with the
+// composed clock and optional runtime observation sink. The legacy constructor
+// above remains for callers that do not need runtime evidence.
+func NewSessionCommandWithRuntime(
+	askFlags *flags.AskFlags,
+	globalFlags *flags.GlobalFlags,
+	toolExecutorOverride messages.ToolExecutor,
+	sessionInferencerOverride messages.SessionInferencer,
+	clockSource platformclock.Source,
+	runtimeObserver services.SessionRuntimeObserver,
+) *SessionCommand {
+	return &SessionCommand{
+		askFlags:                  askFlags,
+		globalFlags:               globalFlags,
+		toolExecutorOverride:      toolExecutorOverride,
+		sessionInferencerOverride: sessionInferencerOverride,
+		clockSource:               clockSource,
+		runtimeObserver:           runtimeObserver,
+	}
 }
 
 // SetSessionStreamObserver adds an optional observer for deltas consumed by a
@@ -92,6 +116,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				SessionInferencer: c.sessionInferencerOverride,
 				ToolExecutor:      c.toolExecutorOverride,
 				StreamObserver:    c.streamObserver,
+				Clock:             c.clockSource,
+				RuntimeObserver:   c.runtimeObserver,
 			}
 			seed := services.SessionTextSeed{
 				Value:   prompt,

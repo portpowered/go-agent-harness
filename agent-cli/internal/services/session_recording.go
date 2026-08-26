@@ -159,6 +159,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		return err
 	}
 	if audioSource != nil {
+		audioSource.bindRuntime(plan.runtime)
 		plan.loop.CloseAfterOpen = false
 		plan.loop.AudioIn = audioSource
 		plan.loop.MaxDuration = opts.MaxDuration
@@ -227,6 +228,7 @@ func runSessionWithRecordingDirectory(
 		plan.loop.CloseAfterOpen = false
 		plan.loop.AudioIn = audioSource
 		plan.loop.MaxDuration = maxDuration
+		audioSource.bindRuntime(plan.runtime)
 	}
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
@@ -244,7 +246,7 @@ func runSessionWithRecordingDirectory(
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}
-		audioOutput = &sessionAudioOutput{sink: sink}
+		audioOutput = &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 		if plan.inferencer != nil {
 			wirePrompt := ""
 			if seed.Present {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -35,7 +36,6 @@ const (
 	v8RunTimeout                = 2 * time.Second
 	v8VADThreshold              = 300.0
 	v8TurnBound                 = 2
-	v8ObservedTurns             = 1
 	v8PCMFrameBytes             = audio.FrameSize * 2
 )
 
@@ -58,7 +58,6 @@ type v8Crossing struct {
 }
 
 type v8CrossingCoordinator struct {
-	clock       *clock.Deterministic
 	overlapTick uint64
 
 	mu            sync.Mutex
@@ -71,9 +70,8 @@ type v8CrossingCoordinator struct {
 	deliveryOnce  sync.Once
 }
 
-func newV8CrossingCoordinator(logicalClock *clock.Deterministic) *v8CrossingCoordinator {
+func newV8CrossingCoordinator() *v8CrossingCoordinator {
 	return &v8CrossingCoordinator{
-		clock:         logicalClock,
 		overlapTick:   v8OverlapTick,
 		nextDirection: "A-to-B",
 		aToBReady:     make(chan struct{}),
@@ -90,7 +88,7 @@ func (c *v8CrossingCoordinator) releaseDelivery() {
 	c.deliveryOnce.Do(func() { close(c.deliveryReady) })
 }
 
-func (c *v8CrossingCoordinator) stamp(direction string, emitted, delivered []byte) (v8Crossing, error) {
+func (c *v8CrossingCoordinator) record(direction string, tick uint64, timestamp time.Time, emitted, delivered []byte) (v8Crossing, error) {
 	if direction == "B-to-A" {
 		select {
 		case <-c.aToBReady:
@@ -109,15 +107,18 @@ func (c *v8CrossingCoordinator) stamp(direction string, emitted, delivered []byt
 	if direction != c.nextDirection {
 		return v8Crossing{}, fmt.Errorf("crossing order %s arrived while expecting %s", direction, c.nextDirection)
 	}
-	if c.clock.Tick() != c.overlapTick {
-		return v8Crossing{}, fmt.Errorf("crossing %s stamped at logical tick %d, want overlap tick %d", direction, c.clock.Tick(), c.overlapTick)
+	if tick != c.overlapTick {
+		return v8Crossing{}, fmt.Errorf("crossing %s observed at logical tick %d, want overlap tick %d", direction, tick, c.overlapTick)
+	}
+	if timestamp.IsZero() {
+		return v8Crossing{}, fmt.Errorf("crossing %s has no runtime timestamp", direction)
 	}
 
 	crossing := v8Crossing{
 		Sequence:  len(c.crossings) + 1,
 		Direction: direction,
-		Tick:      c.clock.Tick(),
-		Timestamp: c.clock.Now(),
+		Tick:      tick,
+		Timestamp: timestamp,
 		Emitted:   append([]byte(nil), emitted...),
 		Delivered: append([]byte(nil), delivered...),
 	}
@@ -153,6 +154,7 @@ type v8PCMBridge struct {
 	receiver    *v8RecordingView
 	silence     []byte
 	mutateFirst bool
+	runtimeOut  chan services.SessionRuntimeObservation
 
 	packets chan v8BridgePacket
 	mu      sync.Mutex
@@ -169,6 +171,23 @@ func newV8PCMBridge(coordinator *v8CrossingCoordinator, direction string, sender
 		silence:     append([]byte(nil), silence...),
 		mutateFirst: mutateFirst,
 		packets:     make(chan v8BridgePacket, 2),
+		runtimeOut:  make(chan services.SessionRuntimeObservation, 1),
+	}
+}
+
+func (b *v8PCMBridge) acceptRuntimeOutput(observation services.SessionRuntimeObservation) {
+	select {
+	case b.runtimeOut <- observation:
+	case <-b.coordinator.abort:
+	}
+}
+
+func (b *v8PCMBridge) nextRuntimeOutput() (services.SessionRuntimeObservation, error) {
+	select {
+	case observation := <-b.runtimeOut:
+		return observation, nil
+	case <-b.coordinator.abort:
+		return services.SessionRuntimeObservation{}, context.Canceled
 	}
 }
 
@@ -193,7 +212,17 @@ func (b *v8PCMBridge) write(data []byte) (int, error) {
 		}
 		delivered = append([]byte(nil), b.silence...)
 	}
-	crossing, err := b.coordinator.stamp(b.direction, emitted, delivered)
+	outputObservation, err := b.nextRuntimeOutput()
+	if err != nil {
+		return 0, err
+	}
+	if outputObservation.Kind != services.SessionRuntimeObservationAudioOutput {
+		return 0, fmt.Errorf("%s runtime observation kind = %q, want %q", b.direction, outputObservation.Kind, services.SessionRuntimeObservationAudioOutput)
+	}
+	if !bytes.Equal(outputObservation.Payload, emitted) {
+		return 0, fmt.Errorf("%s runtime audio output payload differs from the CLI writer payload: runtime hash=%s writer hash=%s", b.direction, v8PCMHash(outputObservation.Payload), v8PCMHash(emitted))
+	}
+	crossing, err := b.coordinator.record(b.direction, outputObservation.Tick, outputObservation.Timestamp, emitted, delivered)
 	if err != nil {
 		return 0, err
 	}
@@ -261,6 +290,40 @@ func (b *v8PCMBridge) observedEOF() bool {
 	return b.eofRead
 }
 
+type v8RuntimeObserver struct {
+	outputBridge *v8PCMBridge
+
+	mu           sync.Mutex
+	observations []services.SessionRuntimeObservation
+}
+
+func (o *v8RuntimeObserver) ObserveSessionRuntime(observation services.SessionRuntimeObservation) {
+	if o == nil {
+		return
+	}
+	observation.Payload = append([]byte(nil), observation.Payload...)
+	o.mu.Lock()
+	o.observations = append(o.observations, observation)
+	o.mu.Unlock()
+	if observation.Kind == services.SessionRuntimeObservationAudioOutput && o.outputBridge != nil {
+		o.outputBridge.acceptRuntimeOutput(observation)
+	}
+}
+
+func (o *v8RuntimeObserver) snapshot() []services.SessionRuntimeObservation {
+	if o == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	observations := make([]services.SessionRuntimeObservation, len(o.observations))
+	for i, observation := range o.observations {
+		observations[i] = observation
+		observations[i].Payload = append([]byte(nil), observation.Payload...)
+	}
+	return observations
+}
+
 type v8PCMWriter struct{ bridge *v8PCMBridge }
 
 func (w v8PCMWriter) Write(data []byte) (int, error) { return w.bridge.write(data) }
@@ -320,12 +383,13 @@ func (v *v8RecordingView) snapshot() []v8ViewRecord {
 }
 
 type v8TerminalFact struct {
-	Clean       bool   `json:"clean"`
-	Turns       int    `json:"turns"`
-	FinalTick   uint64 `json:"final_tick"`
-	InputEOF    bool   `json:"input_eof"`
-	OutputFrame bool   `json:"output_frame"`
-	Error       string `json:"error,omitempty"`
+	Clean          bool      `json:"clean"`
+	Turns          int       `json:"turns"`
+	FinalTick      uint64    `json:"final_tick"`
+	FinalTimestamp time.Time `json:"final_timestamp"`
+	InputEOF       bool      `json:"input_eof"`
+	OutputFrame    bool      `json:"output_frame"`
+	Error          string    `json:"error,omitempty"`
 }
 
 type v8ViewArtifact struct {
@@ -342,11 +406,10 @@ type v8HarnessResult struct {
 	ReplayPath  string
 	Err         error
 	Elapsed     time.Duration
-	Terminal    v8TerminalFact
+	Runtime     []services.SessionRuntimeObservation
 }
 
 type v8DuplexRun struct {
-	clock      *clock.Deterministic
 	base       time.Time
 	crossings  []v8Crossing
 	harnesses  map[string]v8HarnessResult
@@ -368,6 +431,11 @@ func v8PCMStats(payload []byte) (string, float64) {
 		energy += float64(sample) * float64(sample)
 	}
 	return hex.EncodeToString(digest[:]), math.Sqrt(energy / float64(len(payload)/2))
+}
+
+func v8PCMHash(payload []byte) string {
+	hash, _ := v8PCMStats(payload)
+	return hash
 }
 
 func v8PCM16Bytes(samples []int16) []byte {
@@ -518,11 +586,14 @@ func writeV8ReplayCapture(t *testing.T, path, sessionID, instruction string, out
 	}
 }
 
-func newV8CLI(t *testing.T, logicalClock *clock.Deterministic) *cli.AgentCLI {
+func newV8CLI(t *testing.T, logicalClock *clock.Deterministic, observer *v8RuntimeObserver) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(wire.NewPortSwap(wire.PortClock, logicalClock))
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortClock, logicalClock),
+		wire.NewPortSwap(wire.PortSessionRuntimeObserver, observer),
+	)
 	if err != nil {
-		t.Fatalf("initialize v8 CLI with shared clock: %v", err)
+		t.Fatalf("initialize v8 CLI with shared clock and runtime observer: %v", err)
 	}
 	return agentCLI
 }
@@ -532,7 +603,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	base := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
 	logicalClock := clock.NewDeterministic(base, v8TickDuration)
 	logicalClock.AdvanceTo(v8OverlapTick)
-	coordinator := newV8CrossingCoordinator(logicalClock)
+	coordinator := newV8CrossingCoordinator()
 
 	silencePath := v8AudioFixturePath(t, "silence_16k.wav")
 	silenceWAV, err := os.ReadFile(silencePath)
@@ -556,6 +627,8 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	}
 	aToBBridge := newV8PCMBridge(coordinator, "A-to-B", views["A/client"], views["B/agent"], silenceFrame, mutateFirst)
 	bToABridge := newV8PCMBridge(coordinator, "B-to-A", views["B/client"], views["A/agent"], silenceFrame, false)
+	aObserver := &v8RuntimeObserver{outputBridge: aToBBridge}
+	bObserver := &v8RuntimeObserver{outputBridge: bToABridge}
 
 	runDir := t.TempDir()
 	aReplay := filepath.Join(runDir, "harness-a.session.json")
@@ -568,18 +641,19 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	writeV8ReplayCapture(t, bReplay, "s2s-v8-harness-b", v8HarnessBInstruction, bToA, replayedAToB)
 
 	// Construct both generated shipped CLIs before starting either command and
-	// pass the same *clock.Deterministic identity through both composition
-	// graphs. The goroutines execute only `agent session`; no loop, provider, or
-	// replay helper is the evidence path.
-	aCLI := newV8CLI(t, logicalClock)
-	bCLI := newV8CLI(t, logicalClock)
+	// pass the same *clock.Deterministic identity and a runtime observer through
+	// both composition graphs. The goroutines execute only `agent session`; no
+	// loop, provider, or replay helper is the evidence path. The observer is
+	// fed by the session runtime itself, including its clock-stamped output.
+	aCLI := newV8CLI(t, logicalClock, aObserver)
+	bCLI := newV8CLI(t, logicalClock, bObserver)
 
 	ctx, cancel := context.WithTimeout(context.Background(), v8RunTimeout)
 	defer cancel()
 	results := make(chan v8HarnessResult, 2)
 	startGate := make(chan struct{})
 	var wg sync.WaitGroup
-	start := func(name, instruction, replayPath string, input io.Reader, output io.Writer, commandCLI *cli.AgentCLI) {
+	start := func(name, instruction, replayPath string, input io.Reader, output io.Writer, commandCLI *cli.AgentCLI, observer *v8RuntimeObserver) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -603,11 +677,12 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 				ReplayPath:  replayPath,
 				Err:         root.ExecuteContext(ctx),
 				Elapsed:     time.Since(started),
+				Runtime:     observer.snapshot(),
 			}
 		}()
 	}
-	start("A", v8HarnessAInstruction, aReplay, v8PCMReader{bridge: bToABridge}, v8PCMWriter{bridge: aToBBridge}, aCLI)
-	start("B", v8HarnessBInstruction, bReplay, v8PCMReader{bridge: aToBBridge}, v8PCMWriter{bridge: bToABridge}, bCLI)
+	start("A", v8HarnessAInstruction, aReplay, v8PCMReader{bridge: bToABridge}, v8PCMWriter{bridge: aToBBridge}, aCLI, aObserver)
+	start("B", v8HarnessBInstruction, bReplay, v8PCMReader{bridge: aToBBridge}, v8PCMWriter{bridge: bToABridge}, bCLI, bObserver)
 	close(startGate)
 
 	harnesses := make(map[string]v8HarnessResult, 2)
@@ -634,9 +709,8 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	}
 	wg.Wait()
 
-	finalTick := logicalClock.AdvanceTo(v8OverlapTickLimit)
+	finalTick := uint64(0)
 	run := v8DuplexRun{
-		clock:      logicalClock,
 		base:       base,
 		crossings:  coordinator.snapshot(),
 		harnesses:  harnesses,
@@ -646,11 +720,19 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 		turnsBound: v8TurnBound,
 	}
 	for name, result := range harnesses {
+		terminalObservation, err := v8RuntimeObservation(result.Runtime, services.SessionRuntimeObservationTerminal)
+		if err != nil {
+			t.Fatalf("harness %s terminal runtime observation: %v", name, err)
+		}
 		terminal := v8TerminalFact{
-			Clean:     result.Err == nil,
-			Turns:     v8ObservedTurns,
-			FinalTick: finalTick,
-			Error:     errorString(result.Err),
+			Clean:          terminalObservation.Clean,
+			Turns:          terminalObservation.TurnsCompleted,
+			FinalTick:      terminalObservation.Tick,
+			FinalTimestamp: terminalObservation.Timestamp,
+			Error:          terminalObservation.Error,
+		}
+		if terminal.FinalTick > finalTick {
+			finalTick = terminal.FinalTick
 		}
 		if name == "A" {
 			terminal.InputEOF = bToABridge.observedEOF()
@@ -661,6 +743,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 		}
 		run.terminal[name] = terminal
 	}
+	run.finalTick = finalTick
 	for name, view := range views {
 		terminal := run.terminal[view.Harness]
 		viewPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+".json")
@@ -671,11 +754,20 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	return run
 }
 
-func errorString(err error) string {
-	if err == nil {
-		return ""
+func v8RuntimeObservation(observations []services.SessionRuntimeObservation, kind services.SessionRuntimeObservationKind) (services.SessionRuntimeObservation, error) {
+	var found services.SessionRuntimeObservation
+	count := 0
+	for _, observation := range observations {
+		if observation.Kind != kind {
+			continue
+		}
+		found = observation
+		count++
 	}
-	return err.Error()
+	if count != 1 {
+		return services.SessionRuntimeObservation{}, fmt.Errorf("runtime observation %q count = %d, want exactly one", kind, count)
+	}
+	return found, nil
 }
 
 func appendArtifactPaths(artifacts map[string]string, viewName, jsonPath, wavPath string) map[string]string {
@@ -761,6 +853,31 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		if !bytes.Equal(crossing.Delivered, want) || deliveredRMS <= v8VADThreshold {
 			return v8PCMFailure(crossing, want, crossing.Delivered, "peer input")
 		}
+
+		sender, receiver := "A", "B"
+		if crossing.Direction == "B-to-A" {
+			sender, receiver = "B", "A"
+		}
+		outputObservation, err := v8RuntimeObservation(run.harnesses[sender].Runtime, services.SessionRuntimeObservationAudioOutput)
+		if err != nil {
+			return fmt.Errorf("harness %s output runtime observation: %w", sender, err)
+		}
+		if outputObservation.Tick != crossing.Tick || !outputObservation.Timestamp.Equal(crossing.Timestamp) {
+			return fmt.Errorf("%s runtime output timing differs from crossing: runtime tick=%d timestamp=%s, crossing tick=%d timestamp=%s", crossing.Direction, outputObservation.Tick, outputObservation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
+		}
+		if !bytes.Equal(outputObservation.Payload, crossing.Emitted) {
+			return v8PCMFailure(crossing, crossing.Emitted, outputObservation.Payload, "runtime output")
+		}
+		inputObservation, err := v8RuntimeObservation(run.harnesses[receiver].Runtime, services.SessionRuntimeObservationAudioInput)
+		if err != nil {
+			return fmt.Errorf("harness %s input runtime observation: %w", receiver, err)
+		}
+		if inputObservation.Tick != crossing.Tick || !inputObservation.Timestamp.Equal(crossing.Timestamp) {
+			return fmt.Errorf("%s runtime input timing differs from crossing: runtime tick=%d timestamp=%s, crossing tick=%d timestamp=%s", crossing.Direction, inputObservation.Tick, inputObservation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
+		}
+		if !bytes.Equal(inputObservation.Payload, crossing.Delivered) {
+			return v8PCMFailure(crossing, crossing.Delivered, inputObservation.Payload, "runtime input")
+		}
 	}
 
 	if run.crossings[0].Tick != run.crossings[1].Tick {
@@ -784,6 +901,30 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		}
 		if terminal.Turns > run.turnsBound || terminal.FinalTick > v8OverlapTickLimit {
 			return fmt.Errorf("harness %s exceeded turn/tick bounds: %+v", name, terminal)
+		}
+		turnObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, services.SessionRuntimeObservationTurnCompleted)
+		if err != nil {
+			return fmt.Errorf("harness %s turn runtime observation: %w", name, err)
+		}
+		if turnObservation.TurnsCompleted != terminal.Turns {
+			return fmt.Errorf("harness %s completed-turn observation = %d, terminal observation = %d", name, turnObservation.TurnsCompleted, terminal.Turns)
+		}
+		if terminal.Turns == 0 {
+			return fmt.Errorf("harness %s terminal observation reported no completed turns", name)
+		}
+		terminalObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, services.SessionRuntimeObservationTerminal)
+		if err != nil {
+			return fmt.Errorf("harness %s terminal runtime observation: %w", name, err)
+		}
+		if terminalObservation.Tick != terminal.FinalTick || !terminalObservation.Timestamp.Equal(terminal.FinalTimestamp) {
+			return fmt.Errorf("harness %s terminal fact differs from runtime observation", name)
+		}
+		wantTerminalTime := run.base.Add(time.Duration(terminal.FinalTick) * v8TickDuration)
+		if !terminal.FinalTimestamp.Equal(wantTerminalTime) {
+			return fmt.Errorf("harness %s terminal tick %d timestamp=%s, want deterministic timestamp %s", name, terminal.FinalTick, terminal.FinalTimestamp.Format(time.RFC3339Nano), wantTerminalTime.Format(time.RFC3339Nano))
+		}
+		if (run.harnesses[name].Err == nil) != terminalObservation.Clean {
+			return fmt.Errorf("harness %s runtime clean=%t disagrees with CLI error=%v", name, terminalObservation.Clean, run.harnesses[name].Err)
 		}
 	}
 	aTerminal, aTerminalOK := run.terminal["A"]

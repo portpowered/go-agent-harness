@@ -51,24 +51,32 @@ added to the committed fixture corpus. The test reuses the committed
 non-silent 480-sample PCM16 frames (16 kHz mono). It also reuses
 `silence_16k.wav` for the negative control.
 
-Both CLIs receive the same `*clock.Deterministic` instance through the
-composition port swap. Its timeline is:
+Both CLIs receive the same `*clock.Deterministic` instance and a runtime
+observer through composition port swaps. The session runtime emits the
+clock-stamped audio-output, audio-input, completed-turn, and terminal events
+to that observer. The coordinator only orders/gates the two raw streams and
+retains the runtime-provided crossing facts; it does not invent their ticks,
+timestamps, turn count, or terminal state. The timeline is:
 
 | Property | Value |
 |---|---|
 | Base timestamp | `2026-08-26T12:00:00Z` |
 | Tick duration | `10ms` |
 | First/overlap crossing | logical tick `7` |
-| Final asserted tick | logical tick `8` |
+| Positive-run terminal tick | observed logical tick `7` |
+| Terminal tick bound | `<= 8` |
 | Command bound | `1s` per `agent session` |
 | Orchestrator bound | `2s`, plus a bounded cleanup window |
 | Observed turns / allowed bound | `1` / `2` |
 
 The coordinator retains exactly two crossings in order: A-to-B and B-to-A.
-Both are stamped at tick 7, so their derived timestamp is exactly
-`2026-08-26T12:00:00.070Z`; this is the declared overlapping speech window.
-The verifier requires both emitted and delivered PCM to equal the expected
-non-silent frame and to exceed the corpus VAD threshold (RMS > 300).
+Both runtime output observations report tick 7, so their runtime-derived
+timestamp is exactly `2026-08-26T12:00:00.070Z`; this is the declared
+overlapping speech window. The verifier independently matches the sender's
+runtime output and receiver's runtime input events to each retained crossing,
+including exact PCM bytes, tick, and timestamp. It requires both emitted and
+delivered PCM to equal the expected non-silent frame and to exceed the corpus
+VAD threshold (RMS > 300).
 
 ## Four-view parity and lifecycle evidence
 
@@ -86,10 +94,12 @@ The JSON records payload bytes, SHA-256, RMS, direction, order, logical tick,
 and deterministic timestamp. Sender/client and peer/agent views are compared
 cross-harness (`A/client` ↔ `B/agent`, `B/client` ↔ `A/agent`) for exact
 payload identity and all metadata. The JSON and WAV artifacts are then read
-back and checked against the live recordings. Both terminal fact sets must
-match and report clean CLI return, one observed turn, input EOF, output frame,
-and final tick 8. The test also waits for the accepted goroutine baseline
-tolerance after each run.
+back and checked against the live recordings. Each CLI's runtime observation
+stream must contain exactly one output, one input, one completed-turn, and one
+terminal event. Terminal facts are copied from that terminal event and must
+match across harnesses, report a clean CLI return, one completed turn, input
+EOF, output frame, and the observed terminal tick within the bound. The test
+also waits for the accepted goroutine baseline tolerance after each run.
 
 ## Negative control
 

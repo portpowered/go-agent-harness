@@ -35,17 +35,20 @@ const (
 	PortAudioSink = "audio-sink"
 	// PortClock is the required time source after defaulting.
 	PortClock = "clock"
+	// PortSessionRuntimeObserver is the optional command-runtime evidence sink.
+	PortSessionRuntimeObserver = "session-runtime-observer"
 
 	// The *PortName constants make the port contract discoverable to callers
 	// that prefer a name-oriented vocabulary.
-	ToolExecutorPortName      = PortToolExecutor
-	TransportDialerPortName   = PortTransportDialer
-	InferencerPortName        = PortInferencer
-	SessionInferencerPortName = PortSessionInferencer
-	DeviceRegistryPortName    = PortDeviceRegistry
-	AudioSourcePortName       = PortAudioSource
-	AudioSinkPortName         = PortAudioSink
-	ClockPortName             = PortClock
+	ToolExecutorPortName           = PortToolExecutor
+	TransportDialerPortName        = PortTransportDialer
+	InferencerPortName             = PortInferencer
+	SessionInferencerPortName      = PortSessionInferencer
+	DeviceRegistryPortName         = PortDeviceRegistry
+	AudioSourcePortName            = PortAudioSource
+	AudioSinkPortName              = PortAudioSink
+	ClockPortName                  = PortClock
+	SessionRuntimeObserverPortName = PortSessionRuntimeObserver
 )
 
 var (
@@ -142,6 +145,7 @@ type CompositionOption func(*compositionOptions) error
 type compositionOptions struct {
 	inferencer           messages.Inferencer
 	sessionInferencer    messages.SessionInferencer
+	runtimeObserver      SessionRuntimeObserver
 	relaxModelValidation bool
 }
 
@@ -158,6 +162,15 @@ func WithInferencer(inferencer messages.Inferencer) CompositionOption {
 func WithSessionInferencer(inferencer messages.SessionInferencer) CompositionOption {
 	return func(options *compositionOptions) error {
 		options.sessionInferencer = inferencer
+		return nil
+	}
+}
+
+// WithSessionRuntimeObserver supplies the optional command-runtime evidence
+// sink used by hermetic callers that need clock-stamped session observations.
+func WithSessionRuntimeObserver(observer SessionRuntimeObserver) CompositionOption {
+	return func(options *compositionOptions) error {
+		options.runtimeObserver = observer
 		return nil
 	}
 }
@@ -204,6 +217,7 @@ func ComposeAgentCLI(
 		audioSource:       audioSource,
 		audioSink:         audioSink,
 		clockSource:       clockSource,
+		runtimeObserver:   compositionOptions.runtimeObserver,
 		inferencer:        compositionOptions.inferencer,
 		sessionInferencer: compositionOptions.sessionInferencer,
 	}
@@ -222,6 +236,7 @@ func ComposeAgentCLI(
 		values.audioSource,
 		values.audioSink,
 		values.clockSource,
+		values.runtimeObserver,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -301,6 +316,7 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		values.audioSource,
 		values.audioSink,
 		values.clockSource,
+		values.runtimeObserver,
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
@@ -367,6 +383,7 @@ type compositionValues struct {
 	audioSource       AudioSource
 	audioSink         AudioSink
 	clockSource       Clock
+	runtimeObserver   SessionRuntimeObserver
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
 	defaultCalls      map[string]int
@@ -511,6 +528,22 @@ func livePortDefinitions() []portDefinition {
 					return
 				}
 				values.clockSource = value.(Clock)
+			},
+		},
+		{
+			descriptor: PortDescriptor{
+				Name:     PortSessionRuntimeObserver,
+				Required: false,
+				Type:     reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem(),
+			},
+			value:        func(values *compositionValues) any { return values.runtimeObserver },
+			defaultValue: func(*tools.ToolRegistry) any { return nil },
+			assign: func(values *compositionValues, value any) {
+				if value == nil {
+					values.runtimeObserver = nil
+					return
+				}
+				values.runtimeObserver = value.(SessionRuntimeObserver)
 			},
 		},
 	}
