@@ -76,12 +76,12 @@ func TestRunnerAllPassGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
-	if summary != (RunSummary{Total: 1, Passed: 1, Failed: 0, Status: StatusPass}) {
+	if summary != (RunSummary{Total: 1, Passed: 1, Failed: 0, Stuck: 0, Status: StatusPass}) {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 	got := buf.String()
 	want := `{"name":"all-pass","pass":true,"expectations":[{"index":0,"kind":"transcript-contains","passed":true},{"index":1,"kind":"frame-count","passed":true}],"ticks":5,"frames":3,"terminal_reason":"close","input_drop_count":0,"output_drop_count":0}` + "\n" +
-		`{"total":1,"passed":1,"failed":0,"status":"pass"}` + "\n"
+		`{"total":1,"passed":1,"failed":0,"stuck":0,"status":"pass"}` + "\n"
 	if got != want {
 		t.Fatalf("golden mismatch:\n got: %s\nwant: %s", got, want)
 	}
@@ -108,7 +108,7 @@ func TestRunnerSummaryMixedAndEmpty(t *testing.T) {
 	}
 	parts := strings.SplitN(buf.String(), "\n", 3)
 	lastLine := strings.TrimSpace(parts[2])
-	want := `{"total":2,"passed":1,"failed":1,"status":"fail"}`
+	want := `{"total":2,"passed":1,"failed":1,"stuck":0,"status":"fail"}`
 	if lastLine != want {
 		t.Fatalf("summary golden mismatch:\n got: %s\nwant: %s", lastLine, want)
 	}
@@ -122,9 +122,56 @@ func TestRunnerSummaryMixedAndEmpty(t *testing.T) {
 	if emptySummary != (RunSummary{Status: StatusFail}) {
 		t.Fatalf("zero-scenario summary wrong: %+v", emptySummary)
 	}
-	wantZero := "{\"total\":0,\"passed\":0,\"failed\":0,\"status\":\"fail\"}\n"
+	wantZero := "{\"total\":0,\"passed\":0,\"failed\":0,\"stuck\":0,\"status\":\"fail\"}\n"
 	if empty.String() != wantZero {
 		t.Fatalf("zero-scenario output wrong:\n got: %s\nwant: %s", empty.String(), wantZero)
+	}
+}
+
+func TestRunnerSummaryCountsStuckSeparatelyFromFailures(t *testing.T) {
+	stuck := passingScenario()
+	stuck.ID = "stuck"
+	executionError := passingScenario()
+	executionError.ID = "error"
+	var buf bytes.Buffer
+	runner := Runner{Exec: func(ctx context.Context, scenario Scenario) (ObservationSnapshot, error) {
+		switch scenario.ID {
+		case stuck.ID:
+			return ObservationSnapshot{}, nil
+		case executionError.ID:
+			return ObservationSnapshot{}, errors.New("execution failed")
+		default:
+			return ObservationSnapshot{
+				Transcript:      "hello",
+				TerminalReason:  "close",
+				ObservedTick:    5,
+				HasObservedTick: true,
+				FrameCount:      3,
+			}, nil
+		}
+	}, Out: &buf}
+
+	summary, err := runner.Run(context.Background(), []Scenario{passingScenario(), stuck, executionError})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	wantSummary := RunSummary{Total: 3, Passed: 1, Failed: 2, Stuck: 1, Status: StatusFail}
+	if summary != wantSummary {
+		t.Fatalf("unexpected mixed-run summary: %+v, want %+v", summary, wantSummary)
+	}
+	lines := decodeLines(t, buf.String())
+	if len(lines) != 4 {
+		t.Fatalf("expected three result lines plus summary, got %d", len(lines))
+	}
+	if lines[1]["stuck"] != true {
+		t.Fatalf("stuck scenario was not marked stuck: %v", lines[1])
+	}
+	if lines[3]["stuck"] != float64(1) {
+		t.Fatalf("summary stuck count wrong: %v", lines[3])
+	}
+	want := `{"total":3,"passed":1,"failed":2,"stuck":1,"status":"fail"}`
+	if got := strings.TrimSpace(strings.TrimSuffix(buf.String(), "\n")); !strings.HasSuffix(got, want) {
+		t.Fatalf("summary golden mismatch:\n got: %s\nwant suffix: %s", got, want)
 	}
 }
 
@@ -169,10 +216,69 @@ func TestRunnerFailingExpectationDetailAndIsolation(t *testing.T) {
 	}
 }
 
+func TestRunnerClassifiesOnlyEmptySuccessfulObservationsAsStuck(t *testing.T) {
+	scenario := passingScenario()
+	cases := []struct {
+		name        string
+		observation ObservationSnapshot
+		wantStuck   bool
+	}{
+		{name: "empty", wantStuck: true},
+		{name: "audio samples", observation: ObservationSnapshot{PCM16Samples: []int16{0}}},
+		{name: "frames", observation: ObservationSnapshot{FrameCount: 1}},
+		{name: "transcript", observation: ObservationSnapshot{Transcript: "hello"}},
+		{name: "tool call", observation: ObservationSnapshot{ToolCalls: []string{"lookup"}}},
+		{name: "delivered tool result", observation: ObservationSnapshot{ToolResultsDelivered: []string{"call-1"}}},
+		{name: "discarded tool result", observation: ObservationSnapshot{ToolResultsDiscarded: []string{"call-1"}}},
+		{name: "terminal reason", observation: ObservationSnapshot{TerminalReason: "complete"}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			runner := Runner{Exec: func(context.Context, Scenario) (ObservationSnapshot, error) {
+				return test.observation, nil
+			}, Out: &buf}
+			if _, err := runner.Run(context.Background(), []Scenario{scenario}); err != nil {
+				t.Fatalf("Run failed: %v", err)
+			}
+			record := decodeLines(t, buf.String())[0]
+			stuck, hasStuck := record["stuck"].(bool)
+			if !hasStuck {
+				stuck = false
+			}
+			if stuck != test.wantStuck {
+				t.Fatalf("JSONL stuck = %t, want %t: %v", stuck, test.wantStuck, record)
+			}
+			if test.wantStuck {
+				if record["stuck_reason"] == "" {
+					t.Fatal("stuck result has no human-readable reason")
+				}
+				if record["pass"] != false {
+					t.Fatal("stuck result unexpectedly passed")
+				}
+				return
+			}
+			if _, present := record["stuck_reason"]; present {
+				t.Fatalf("non-stuck result has a stuck reason: %v", record)
+			}
+		})
+	}
+}
+
 func panickedScenario() Scenario {
 	s := passingScenario()
 	s.ID = "panicked"
 	return s
+}
+
+func assertNoStuckMarker(t *testing.T, result map[string]any) {
+	t.Helper()
+	if _, present := result["stuck"]; present {
+		t.Fatalf("failure record unexpectedly contains stuck marker: %v", result)
+	}
+	if _, present := result["stuck_reason"]; present {
+		t.Fatalf("failure record unexpectedly contains stuck reason: %v", result)
+	}
 }
 
 func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
@@ -197,7 +303,7 @@ func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run returned error instead of reporting failures: %v", err)
 	}
-	if summary.Total != 4 || summary.Passed != 1 || summary.Failed != 3 || summary.Status != StatusFail {
+	if summary.Total != 4 || summary.Passed != 1 || summary.Failed != 3 || summary.Stuck != 0 || summary.Status != StatusFail {
 		t.Fatalf("summary wrong: %+v", summary)
 	}
 	lines := decodeLines(t, buf.String())
@@ -212,6 +318,7 @@ func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 		if detail, _ := result["error"].(string); detail == "" {
 			t.Fatalf("line %d missing failure detail: %v", index, result)
 		}
+		assertNoStuckMarker(t, result)
 	}
 	if !strings.Contains(lines[3]["error"].(string), "panicked") {
 		t.Fatalf("panic not reported as failure detail: %v", lines[3])

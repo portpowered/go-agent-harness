@@ -28,6 +28,8 @@ type ScenarioExpectationOutcome struct {
 type ScenarioResult struct {
 	Name                        string                       `json:"name"`
 	Pass                        bool                         `json:"pass"`
+	Stuck                       bool                         `json:"stuck,omitempty"`
+	StuckReason                 string                       `json:"stuck_reason,omitempty"`
 	ScenarioExpectationOutcomes []ScenarioExpectationOutcome `json:"expectations"`
 	Ticks                       LogicalTime                  `json:"ticks"`
 	Frames                      int                          `json:"frames"`
@@ -48,11 +50,14 @@ const (
 	StatusFail RunStatus = "fail"
 )
 
+const stuckObservationReason = "execution completed without observable output evidence or a terminal reason"
+
 // RunSummary is the final machine-readable summary object of a run.
 type RunSummary struct {
 	Total  int       `json:"total"`
 	Passed int       `json:"passed"`
 	Failed int       `json:"failed"`
+	Stuck  int       `json:"stuck"`
 	Status RunStatus `json:"status"`
 }
 
@@ -95,6 +100,9 @@ func (r *Runner) Run(ctx context.Context, scenarios []Scenario) (RunSummary, err
 			summary.Passed++
 		} else {
 			summary.Failed++
+		}
+		if result.Stuck {
+			summary.Stuck++
 		}
 	}
 	summary.Status = StatusFail
@@ -162,7 +170,22 @@ func (r *Runner) runOne(ctx context.Context, scenario Scenario) ScenarioResult {
 	result.InputDropCount = observation.InputDrops
 	result.OutputDropCount = observation.OutputDrops
 	result.Pass = pass
+	if isStuckObservation(observation) {
+		result.Pass = false
+		result.Stuck = true
+		result.StuckReason = stuckObservationReason
+	}
 	return result
+}
+
+func isStuckObservation(observation ObservationSnapshot) bool {
+	return len(observation.PCM16Samples) == 0 &&
+		observation.Transcript == "" &&
+		len(observation.ToolCalls) == 0 &&
+		len(observation.ToolResultsDelivered) == 0 &&
+		len(observation.ToolResultsDiscarded) == 0 &&
+		observation.FrameCount <= 0 &&
+		observation.TerminalReason == ""
 }
 
 func scenarioName(scenario Scenario) string {
