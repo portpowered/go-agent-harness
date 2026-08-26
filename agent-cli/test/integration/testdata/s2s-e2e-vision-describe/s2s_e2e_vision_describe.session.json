@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime"
+  },
+  "session": {
+    "id": "sess_s2s_e2e_vision_describe",
+    "started_at_utc": "2026-08-26T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "gpt-realtime",
+          "type": "realtime"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session": {
+          "id": "sess_s2s_e2e_vision_describe",
+          "model": "gpt-realtime"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 2,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_image",
+              "image_url": {
+                "redacted": true,
+                "note": "deterministic 4x4 vision-describe PNG (magenta top-left pixel, cyan bottom-right pixel, navy fill) injected as a data URL at load"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 3,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "spoken question PCM16 frames injected from the committed corpus WAV at load"
+        }
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "client_to_server",
+      "timestamp_ms": 4,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "client_to_server",
+      "timestamp_ms": 5,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "resp_vision_describe"
+        }
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 7,
+      "type": "response.output_audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio_transcript.delta",
+        "delta": "The picture is a four by four grid "
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 8,
+      "type": "response.output_audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio_transcript.delta",
+        "delta": "with a magenta pixel in the top left corner and a cyan pixel in the bottom right corner."
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 9,
+      "type": "response.output_audio_transcript.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio_transcript.done",
+        "transcript": "The picture is a four by four grid with a magenta pixel in the top left corner and a cyan pixel in the bottom right corner."
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 10,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "delta": "scripted spoken reply PCM16 samples injected at load"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 11,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 12,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "resp_vision_describe",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "server_to_client",
+      "timestamp_ms": 13,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "session_id": "sess_s2s_e2e_vision_describe",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}

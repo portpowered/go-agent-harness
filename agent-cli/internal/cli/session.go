@@ -150,6 +150,16 @@ func (c *SessionCommand) Generate() *cobra.Command {
 						SystemPrompt:      c.askFlags.SystemPrompt,
 					}, recordDirPath)
 				}
+				if audioInput.Present {
+					return services.RunSessionWithImagesAndAudioInput(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
+						SessionRunOptions: sessionOptions,
+						ImagePaths:        append([]string(nil), c.imagePaths...),
+						AudioOutPath:      audioOutPath,
+						MaxDuration:       maxDuration,
+						TextSeed:          seed,
+						SystemPrompt:      c.askFlags.SystemPrompt,
+					}, audioInput)
+				}
 				return services.RunSessionWithImages(sessionContext, cmd.OutOrStdout(), services.SessionImageRunOptions{
 					SessionRunOptions: sessionOptions,
 					ImagePaths:        append([]string(nil), c.imagePaths...),

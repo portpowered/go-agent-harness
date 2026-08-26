@@ -107,6 +107,42 @@ func TestRealtimeSessionSendMessage_WireOrderAndFidelity(t *testing.T) {
 	}
 }
 
+func TestRealtimeSessionSendMessageWithoutResponse_QueuesOnlyMessageItem(t *testing.T) {
+	session, conn := newWireSeamSession(t)
+	msg := messages.Message{
+		Role: messages.RoleUser,
+		ContentParts: []messages.ContentPart{
+			messages.TextPart{Text: "describe this image after my question"},
+			messages.ImagePart{Bytes: []byte{0x89, 'P', 'N', 'G'}, MediaType: "image/png"},
+		},
+	}
+	if !session.SendMessageWithoutResponse(context.Background(), msg) {
+		t.Fatal("SendMessageWithoutResponse returned false for a complete image turn")
+	}
+
+	var written [][]byte
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		written = conn.getClientMessages()
+		if len(written) == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(written) != 1 {
+		t.Fatalf("wire events = %d, want only conversation.item.create", len(written))
+	}
+	var item struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(written[0], &item); err != nil {
+		t.Fatalf("unmarshal conversation.item.create: %v", err)
+	}
+	if item.Type != "conversation.item.create" {
+		t.Fatalf("queued event type = %q, want conversation.item.create", item.Type)
+	}
+}
+
 func TestRealtimeSessionSendMessage_RejectsIncompleteMessages(t *testing.T) {
 	session, conn := newWireSeamSession(t)
 	cases := map[string]messages.Message{

@@ -16,6 +16,26 @@ import (
 
 const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 
+// sessionFirstTurnAckTimeout bounds how long the SESSION.OPEN handler waits
+// for the first user turn acceptance before failing the run instead of
+// streaming user audio over an unacknowledged turn.
+const sessionFirstTurnAckTimeout = 30 * time.Second
+
+// awaitSessionFirstTurn blocks until the session's first user turn is
+// accepted (nil), the run is cancelled, or the bounded wait expires.
+func awaitSessionFirstTurn(ctx context.Context, ack <-chan error) error {
+	timer := time.NewTimer(sessionFirstTurnAckTimeout)
+	defer timer.Stop()
+	select {
+	case err := <-ack:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return errors.New("timed out awaiting session first user turn acceptance")
+	}
+}
+
 type sessionLoopOptions struct {
 	Prompt         string
 	CloseAfterOpen bool
@@ -27,6 +47,14 @@ type sessionLoopOptions struct {
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
 	AudioIn *sessionAudioSource
+
+	// awaitFirstTurn optionally blocks the SESSION.OPEN handler until the
+	// session's first user turn (the realtime image turn) has been accepted
+	// by the provider session's outbound queue. Without it, streamed user
+	// audio can overtake the still-propagating prompt turn and reorder the
+	// customer's question after their speech on the wire. Nil preserves
+	// existing behavior for every non-image session path.
+	awaitFirstTurn <-chan error
 
 	// observer optionally records per-turn and terminal diagnostics from the
 	// consumed delta stream; nil keeps runtime behavior unchanged.
@@ -216,6 +244,11 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
 					}
 					opts.observer.noteUserTextInput(opts.Prompt)
+					if opts.awaitFirstTurn != nil {
+						if err := awaitSessionFirstTurn(runCtx, opts.awaitFirstTurn); err != nil {
+							return errors.Join(fmt.Errorf("send session first turn: %w", err), stop())
+						}
+					}
 				}
 				if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !closeSent {
 					closeSent = true
