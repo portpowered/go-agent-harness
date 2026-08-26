@@ -14,6 +14,7 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -256,6 +257,83 @@ func NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg config.OpenAIConfi
 		sessionGateway,
 		inference.WithSessionModel(sessionCfg.Model),
 	), nil
+}
+
+// NewLiveSessionInferencer builds the audio-capable realtime session used by
+// device-tier probes. Unlike the ordinary session constructors, this helper
+// supplies the provider's audio formats and rates in the initial request so a
+// device bridge can send and receive PCM without relying on a later control
+// message to change the wire contract.
+func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (messages.SessionInferencer, string, error) {
+	providerName := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
+	if providerName == "" {
+		return nil, "", fmt.Errorf("--devices real requires a realtime session provider; pass --provider openai or --provider grok")
+	}
+	opts.Provider = providerName
+
+	var (
+		model  string
+		config models.SessionConfig
+	)
+	switch providerName {
+	case sessionProviderOpenAI:
+		sessionCfg, err := resolveOpenAIRealtimeSessionConfig(opts)
+		if err != nil {
+			return nil, "", err
+		}
+		model = sessionCfg.Model
+		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		providerOpts := []oaiprovider.Option{
+			oaiprovider.WithAPIKey(sessionCfg.APIKey),
+			oaiprovider.WithModel(sessionCfg.Model),
+			oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
+		}
+		if opts.WebSocketDialer != nil {
+			providerOpts = append(providerOpts, oaiprovider.WithWebSocketDialer(opts.WebSocketDialer))
+		} else {
+			providerOpts = append(providerOpts, oaiprovider.WithWebSocketDialer(oaiprovider.NewDefaultWebSocketDialer()))
+		}
+		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
+		if err != nil {
+			return nil, "", fmt.Errorf("create OpenAI realtime session gateway: %w", err)
+		}
+		return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config})), model, nil
+	case sessionProviderGrok:
+		sessionCfg, err := resolveGrokSessionConfig(opts)
+		if err != nil {
+			return nil, "", err
+		}
+		model = sessionCfg.Model
+		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey)}
+		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
+			providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
+		}
+		if opts.WebSocketDialer != nil {
+			providerOpts = append(providerOpts, grok.WithWebSocketDialer(opts.WebSocketDialer))
+		} else {
+			providerOpts = append(providerOpts, grok.WithWebSocketDialer(grok.NewDefaultWebSocketDialer()))
+		}
+		providerGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(grok.New(providerOpts...)))
+		if err != nil {
+			return nil, "", fmt.Errorf("create Grok realtime session gateway: %w", err)
+		}
+		return inference.NewSessionGatewayInferencer(providerGateway, inference.WithSessionRequest(inference.SessionRequest{Config: config})), model, nil
+	default:
+		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
+	}
+}
+
+func deviceProbeSessionConfig(model, instructions string, input, output models.AudioFormat) models.SessionConfig {
+	return models.SessionConfig{
+		Model:                 model,
+		Modalities:            []models.SessionModality{models.SessionModalityText, models.SessionModalityAudio},
+		Instructions:          instructions,
+		InputAudioFormat:      input,
+		OutputAudioFormat:     output,
+		InputAudioSampleRate:  models.SampleRate24000,
+		OutputAudioSampleRate: models.SampleRate24000,
+	}
 }
 
 func openAIRealtimeURL(sessionCfg config.OpenAIConfig) string {

@@ -64,9 +64,13 @@ func NewRouter(
 	if len(acceptanceCommands) > 0 && acceptanceCommands[0] != nil {
 		acceptanceCommand = acceptanceCommands[0]
 	}
+	deviceRegistry := newDefaultDeviceRegistry()
+	if probeRunCommand != nil && probeRunCommand.deviceRegistry != nil {
+		deviceRegistry = probeRunCommand.deviceRegistry
+	}
 	return &Router{
 		Flags:                    flags,
-		deviceRegistry:           newDefaultDeviceRegistry(),
+		deviceRegistry:           deviceRegistry,
 		RootCommand:              rootCommand,
 		AskCommand:               askCommand,
 		ChatCommand:              chatCommand,

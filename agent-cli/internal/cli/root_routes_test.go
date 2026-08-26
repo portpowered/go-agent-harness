@@ -65,6 +65,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	chatFlags := flags.NewChatFlags()
+	testDeviceRegistry := defaultTestDeviceRegistry{}
 
 	router := NewRouter(
 		globalFlags,
@@ -75,7 +76,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommand(),
+		NewProbeRunCommand(testDeviceRegistry),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,
@@ -87,9 +88,8 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewConfigAddLocalCommand(globalFlags),
 	)
 	// Root command tests must not depend on the workstation's physical audio
-	// endpoints. Production composition uses the host registry; this fixture
-	// intentionally models a headless host.
-	router.deviceRegistry = defaultTestDeviceRegistry{}
+	// endpoints. NewRouter carries the fixture registry from ProbeRunCommand
+	// into the devices route; production composition uses the host registry.
 	return NewAgentCLI(router).Generate()
 }
 

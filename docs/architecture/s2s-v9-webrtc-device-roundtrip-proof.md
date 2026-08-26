@@ -51,5 +51,14 @@ coverage. A hardware acceptance host must run the T2 command with its real
 registry/device-binding implementation; hosts without both directions take the
 recorded SKIP path.
 
+`TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput` additionally invokes
+the production `runDeviceProbeScenario` executor. Its hermetic session seam
+stands in for the live provider while the executor still opens both selected
+registry devices, negotiates both local WebRTC Opus links, forwards captured
+audio through `participants.NewSessionModelRunner`, writes provider audio to
+the selected sink, and returns the output/transcript observation consumed by
+the command's normal probe evaluator. The command constructor uses the live
+OpenAI/Grok session factory for the hardware path.
+
 The named negative controls fail with diagnostics that include the observed
 RMS and threshold for silent output, or the exact empty/mismatched transcript.
