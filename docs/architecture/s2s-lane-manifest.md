@@ -32,7 +32,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-v6b-error-disconnect` — a midstream disconnect reports the correct terminal reason, provenance, and output-state _(history: NEVER SUBMITTED)_
 - `s2s-v6c-error-rate-limit` — a provider rate-limit response surfaces as a typed, observable error _(history: NEVER SUBMITTED)_
 - `s2s-v6d-error-malformed-response` — a malformed provider response is detected and surfaced as a typed error, not a hang or panic _(history: #166:CLOSED)_
-- `s2s-v7a-metrics-modality` — per-modality metrics (audio/text/tool token counts) are emitted and reconcile against the observed delta stream _(history: NEVER SUBMITTED)_
+- `s2s-v7a-metrics-modality` — per-modality metrics (audio/text/tool token counts) are emitted and reconcile against the observed delta stream _(history: PR #187 MERGED 2026-08-26)_
 - `s2s-v7b-buffer-logs` — input and output buffer overflow/drop events are counted and observably logged, never silent _(history: NEVER SUBMITTED)_
 - `s2s-v7c-metrics-reconcile` — the token counter and per-modality metrics reconcile EXACTLY with the observed delta stream _(history: NEVER SUBMITTED)_
 - `s2s-v8-duplex-overlap` — two harnesses, different instructions, each side's PCM output driving the other's PCM input, one shared Deterministic clock, both sides recorded, parity-compared, clean leak-free termination _(history: NEVER SUBMITTED)_
@@ -53,7 +53,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-acc-probe-goal-catalog` — a catalog of customer goals the acceptance probe fleet drives against _(history: NEVER SUBMITTED)_
 - `s2s-acc-probe-stuck-detection` — the probe fleet detects and reports a session that got stuck, not just one that errored _(history: NEVER SUBMITTED)_
 - `s2s-acc-probe-friction-report` — a friction report synthesized from probe fleet runs _(history: NEVER SUBMITTED)_
-- `s2s-acc-fleet-gate` — the fleet-wide pass/fail gate combining all acceptance probes _(history: NEVER SUBMITTED)_
+- `s2s-acc-fleet-gate` — the fleet-wide pass/fail gate combining all acceptance probes _(history: PR #190 MERGED 2026-08-26; main 58727d6)_
 - `s2s-b4-fleet-composer` — fleet manifest composing every committed scenario x transport x repeats x concurrency, no silent caps _(history: NEVER SUBMITTED)_
 - `s2s-b4-fault-injection` — transport-seam faults (mid-stream close, delayed/dropped frames, slow consumer, ICE failure) demonstrated to change observed session behavior _(history: NEVER SUBMITTED)_
 
@@ -64,6 +64,8 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-b4-rtc-transport-parity` — one scenario run over WS and over RTC produces the same Projection; a behavioral difference between transports is a failure _(history: NEVER SUBMITTED)_
 
 ## Never-submitted at manifest generation time
+
+UPDATE 2026-08-26: every lane below except `s2s-v2b-audio-in-long` (OPEN PR #185) was verified still unsubmitted and admitted in batch `s2s-post-restart-taxonomy-20260826` (28 ideas + loopback). Check board/PR history before re-admitting any of them.
 
 - `s2s-v2b-audio-in-long`
 - `s2s-v3a-barge-in-basic`
