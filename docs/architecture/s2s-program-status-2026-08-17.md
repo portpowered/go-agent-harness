@@ -79,19 +79,26 @@ microphones, WebRTC, and the entire probe/acceptance layer are all unreachable.
   `session_audio_in.go`, `session_image.go`, or `session_tools.go`. Those files
   exist **only inside the 15 open PRs**.
 
-### 1.1 v10 WebRTC external source — CLI-proven status (updated 2026-08-26)
+### 1.1 v10 WebRTC external source — bounded evidence and owner handoff (updated 2026-08-26)
 
-v10 is recorded as proven only through the following two hermetic T1 CLI
-integration cases (plus their dead-source control), all under
-`agent-cli/test/integration/`. No credentialed or live-camera claim is made.
+The in-lease v10 evidence package is recorded below, but the complete shipped
+CLI claim remains pending. `origin/main` does not register `agent media`, and
+this checkout has no public `look()` operation or nil-track safety contract.
+Those production surfaces belong to the owning CLI/media lanes; this vertical
+does not recreate them. No credentialed or live-camera claim is made.
 
-- Command surfaces (actual argv through the real root router):
-  `agent media probe go2rtc://<loopback>/api/ws?src=v10-tuya-main` and
+- Reachable command surface (actual argv through the real root router):
   `agent session --replay <synthetic capture> --audio-in - --audio-out <wav>`.
-- Concrete tests:
+  The intended `agent media probe go2rtc://<loopback>/api/ws?src=v10-tuya-main`
+  command is documented for the owning root-route lane, but is not claimed as
+  reachable by this vertical's final head.
+- Concrete tests under `agent-cli/test/integration/`:
   `TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI`,
-  `TestWebrtcAudioOnlySourceReportsLookUnavailableThroughRealCLI`, and
-  `TestWebrtcDeadSourceFailsPositiveDeliveryAssertions`.
+  `TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy`, and
+  `TestWebrtcDeadSourceFailsPositiveDeliveryAssertions`. The first two use
+  the real root session command; the loopback fixture independently records
+  the media negotiation and per-track packet activity that the owning media
+  CLI must expose.
 - Provider replay fixture: a synthetic `.session.json` assembled from the
   shared smoke handshake (`openai_realtime_smoke.session.json`) whose
   `input_audio_buffer.append` records carry the exact bridged source frames;
@@ -103,24 +110,23 @@ integration cases (plus their dead-source control), all under
   m-line stripped from the answer. Source audio is μ-law encoded from the
   loudest window of committed `go-agent-loop/testdata/audio/utt_short_16k.wav`
   (no new binary fixture).
-- Observed track facts: exactly one negotiated audio track
-  (`Audio codec: PCMU`, `Sample rate: 8000`, `Channels: 1`) with one video
-  track for the camera (`Video presence: true`) and none for audio-only
-  (`Video presence: false`, look() unavailable in the same report).
+- Fixture-observed track facts: exactly one audio section in both offer and
+  answer (`PCMU`, 8000 Hz, mono) and one video section plus at least three
+  video packets for the camera; exactly one audio section, no video section,
+  and zero video packets for audio-only. The camera predicate rejects the
+  audio-only shape with explicit absent-video and `look()`-unavailable text;
+  that predicate is a negative control, not a public `look()` invocation.
 - Non-silent audio and terminal signals: bridged source RMS energy > 500, a
   recorded reply WAV that is non-silent within bounded duration,
   `[session closed: fixture_complete]` plus exit status 0 inside a hard 45 s
-  parent deadline.
-- Audio-only negative-control failure condition: applying the camera case's
-  video-track/look-available assertion to the audio-only observation fails
-  specifically naming absent video and unavailable look(); a dead
-  (frame-less) source yields typed `ErrSourceUnreachable` and cannot satisfy
-  the positive audio-delivery assertion.
+  parent deadline. The dead-source control negotiates but sends no media and
+  cannot satisfy the positive audio-delivery assertion.
 
 Scope: T1 only — a loopback go2rtc-compatible source over the replayed
 provider transport. This evidence does not duplicate v1 text-in/audio-out,
 v2a basic audio-in, v6a auth failure, or v9 physical-device roundtrip
-coverage.
+coverage. The remaining root-route and public `look()` contracts are explicit
+out-of-lease follow-up work for their owning lanes.
 
 ---
 

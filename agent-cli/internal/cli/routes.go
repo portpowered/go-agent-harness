@@ -138,10 +138,6 @@ func (r *Router) BuildRoot() *cobra.Command {
 	devicesGroup.AddCommand(NewPath("list", NewDevicesListCommand(registry).Generate()))
 	root.AddCommand(devicesGroup)
 
-	mediaGroup := NewPath("media", NewMediaCommand().Generate())
-	mediaGroup.AddCommand(NewPath("probe <url>", NewMediaProbeCommand().Generate()))
-	root.AddCommand(mediaGroup)
-
 	cmd := root.CreateCommand()
 	cmd.PersistentFlags().CountVarP(&r.Flags.VerboseMode, "verbose", "v", "Enable verbose output (use -v for info, -vv for debug)")
 	cmd.PersistentFlags().StringVarP(&r.Flags.ConfigDirPath, "config-dir", "C", r.Flags.ConfigDirPath, "Directory for agent CLI config (default: ~/.agent-cli)")
