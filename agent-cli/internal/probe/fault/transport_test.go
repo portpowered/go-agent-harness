@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -96,6 +97,101 @@ func TestWrapDialerAppliesMidStreamCloseToEveryConnection(t *testing.T) {
 	}
 }
 
+func TestWrapConnDropsSelectedReadAndWriteFramesAndReportsEvidence(t *testing.T) {
+	readInner := newFaultTestConn([]faultTestFrame{
+		{Type: 1, Payload: []byte("first")},
+		{Type: 2, Payload: []byte("dropped")},
+		{Type: 1, Payload: []byte("third")},
+	})
+	readConn, err := WrapConn(readInner, WithDropReadFrames(2))
+	if err != nil {
+		t.Fatalf("WrapConn(read): %v", err)
+	}
+
+	for index, want := range []faultTestFrame{
+		{Type: 1, Payload: []byte("first")},
+		{Type: 1, Payload: []byte("third")},
+	} {
+		gotType, gotPayload, readErr := readConn.ReadMessage()
+		if readErr != nil {
+			t.Fatalf("ReadMessage[%d]: %v", index, readErr)
+		}
+		if gotType != want.Type || string(gotPayload) != string(want.Payload) {
+			t.Fatalf("ReadMessage[%d] = (%d, %q), want (%d, %q)", index, gotType, gotPayload, want.Type, want.Payload)
+		}
+	}
+
+	readStats := readConn.Stats()
+	if readStats.ReadAttempts != 3 || readStats.ReadFrames != 2 || readStats.DroppedReadFrames != 1 {
+		t.Fatalf("read stats = %#v, want attempts=3 frames=2 dropped=1", readStats)
+	}
+	if len(readStats.Drops) != 1 || readStats.Drops[0] != (FrameEvent{Direction: DirectionInbound, Frame: 2}) {
+		t.Fatalf("read drop events = %#v, want inbound frame 2", readStats.Drops)
+	}
+
+	writeInner := newFaultTestConn(nil)
+	writeConn, err := WrapConn(writeInner, WithDropWriteFrames(2))
+	if err != nil {
+		t.Fatalf("WrapConn(write): %v", err)
+	}
+	for index := 1; index <= 3; index++ {
+		if writeErr := writeConn.WriteMessage(index, []byte{byte(index)}); writeErr != nil {
+			t.Fatalf("WriteMessage[%d]: %v", index, writeErr)
+		}
+	}
+
+	writeStats := writeConn.Stats()
+	if writeStats.WriteAttempts != 3 || writeStats.WrittenFrames != 2 || writeStats.DroppedWriteFrames != 1 {
+		t.Fatalf("write stats = %#v, want attempts=3 written=2 dropped=1", writeStats)
+	}
+	writes := writeInner.Writes()
+	if len(writes) != 2 || writes[0].Type != 1 || writes[1].Type != 3 {
+		t.Fatalf("forwarded writes = %#v, want frame types [1 3]", writes)
+	}
+	if len(writeStats.Drops) != 1 || writeStats.Drops[0] != (FrameEvent{Direction: DirectionOutbound, Frame: 2}) {
+		t.Fatalf("write drop events = %#v, want outbound frame 2", writeStats.Drops)
+	}
+}
+
+func TestWrapConnDelaysSelectedFramesOnLogicalClock(t *testing.T) {
+	logicalClock := platformclock.NewDeterministic(time.Time{}, time.Millisecond)
+	inner := newFaultTestConn([]faultTestFrame{
+		{Type: 1, Payload: []byte("immediate")},
+		{Type: 1, Payload: []byte("delayed")},
+	})
+	conn, err := WrapConn(
+		inner,
+		WithClock(logicalClock),
+		WithReadFrameDelay(2*time.Millisecond, 2),
+	)
+	if err != nil {
+		t.Fatalf("WrapConn: %v", err)
+	}
+
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("immediate ReadMessage: %v", err)
+	}
+	if got := logicalClock.Tick(); got != 0 {
+		t.Fatalf("logical clock after immediate frame = %d, want 0", got)
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("delayed ReadMessage: %v", err)
+	}
+	if got := logicalClock.Tick(); got != 2 {
+		t.Fatalf("logical clock after delayed frame = %d, want 2", got)
+	}
+
+	stats := conn.Stats()
+	if stats.DelayedReadFrames != 1 || len(stats.Delays) != 1 {
+		t.Fatalf("delay stats = %#v, want one delayed read", stats)
+	}
+	delay := stats.Delays[0]
+	if delay.Direction != DirectionInbound || delay.Frame != 2 || delay.Duration != 2*time.Millisecond ||
+		delay.BeforeTick != 0 || delay.AfterTick != 2 {
+		t.Fatalf("delay event = %#v, want inbound frame 2 from tick 0 to 2", delay)
+	}
+}
+
 func TestMidStreamCloseChangesGrokSessionOutcomeFromCleanCompletion(t *testing.T) {
 	clean := runFaultScenario(t)
 	faulted := runFaultScenario(t, WithMidStreamCloseAfter(3))
@@ -136,24 +232,91 @@ func TestMidStreamCloseChangesGrokSessionOutcomeFromCleanCompletion(t *testing.T
 	}
 }
 
+func TestDroppedFrameChangesGrokSessionOutcomeAndReportsDrop(t *testing.T) {
+	clean := runFaultScenario(t)
+	faulted := runFaultScenario(t, WithDropReadFrames(3))
+
+	if clean.err != nil || faulted.err != nil {
+		t.Fatalf("clean/faulted scenario errors = %v/%v", clean.err, faulted.err)
+	}
+	if !clean.sawMessageEnd || !faulted.sawMessageEnd {
+		t.Fatalf("clean/faulted completion = %v/%v; messages=%#v/%#v", clean.sawMessageEnd, faulted.sawMessageEnd, clean.messages, faulted.messages)
+	}
+	if !clean.sawTextDelta {
+		t.Fatalf("clean scenario did not contain the scripted text delta: %#v", clean.messages)
+	}
+	if faulted.sawTextDelta {
+		t.Fatalf("dropped scenario retained the scripted text delta: %#v", faulted.messages)
+	}
+	if len(clean.messages) == len(faulted.messages) {
+		t.Fatalf("dropped scenario did not change message stream length: clean=%#v faulted=%#v", clean.messages, faulted.messages)
+	}
+
+	stats := faulted.faultConn.Stats()
+	if stats.DroppedReadFrames != 1 || stats.ReadAttempts != 4 || stats.ReadFrames != 3 {
+		t.Fatalf("faulted drop stats = %#v, want one dropped frame from four attempts", stats)
+	}
+	if len(stats.Drops) != 1 || stats.Drops[0].Direction != DirectionInbound || stats.Drops[0].Frame != 3 {
+		t.Fatalf("faulted drop evidence = %#v, want inbound frame 3", stats.Drops)
+	}
+}
+
+func TestDelayedFrameChangesGrokLogicalTimelineAndReportsDelay(t *testing.T) {
+	clean := runFaultScenario(t)
+	logicalClock := platformclock.NewDeterministic(time.Time{}, time.Millisecond)
+	faulted := runFaultScenario(t, WithClock(logicalClock), WithReadFrameDelay(2*time.Millisecond, 3))
+
+	if clean.err != nil || faulted.err != nil {
+		t.Fatalf("clean/faulted scenario errors = %v/%v", clean.err, faulted.err)
+	}
+	if !clean.sawMessageEnd || !faulted.sawMessageEnd {
+		t.Fatalf("clean/faulted completion = %v/%v", clean.sawMessageEnd, faulted.sawMessageEnd)
+	}
+	if len(clean.messages) != len(faulted.messages) {
+		t.Fatalf("delay changed message count unexpectedly: clean=%d faulted=%d", len(clean.messages), len(faulted.messages))
+	}
+	for index := range clean.messages {
+		if clean.messages[index].Type != faulted.messages[index].Type {
+			t.Fatalf("message type[%d] = %q, want clean %q", index, faulted.messages[index].Type, clean.messages[index].Type)
+		}
+	}
+	if got := logicalClock.Tick(); got != 2 {
+		t.Fatalf("logical clock after delayed scenario = %d, want 2", got)
+	}
+
+	stats := faulted.faultConn.Stats()
+	if stats.DelayedReadFrames != 1 || len(stats.Delays) != 1 {
+		t.Fatalf("faulted delay stats = %#v, want one delayed frame", stats)
+	}
+	delay := stats.Delays[0]
+	if delay.Direction != DirectionInbound || delay.Frame != 3 || delay.Duration != 2*time.Millisecond ||
+		delay.BeforeTick != 0 || delay.AfterTick != 2 {
+		t.Fatalf("faulted delay evidence = %#v, want inbound frame 3 from tick 0 to 2", delay)
+	}
+}
+
 type faultScenarioResult struct {
 	messages      []messages.StreamMessage
 	sawMessageEnd bool
 	sawError      bool
+	sawTextDelta  bool
 	errorValue    *messages.ErrorValue
+	faultConn     *Conn
 	err           error
 }
 
 func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
 	t.Helper()
-	inner := &faultTestDialer{conn: newFaultTestConn(faultScenarioFrames())}
-	var dialer transport.Dialer = inner
+	rawConn := newFaultTestConn(faultScenarioFrames())
+	var dialer transport.Dialer = &staticFaultDialer{conn: rawConn}
+	var faultConn *Conn
 	if len(options) > 0 {
-		wrapped, err := WrapDialer(inner, options...)
+		wrapped, err := WrapConn(rawConn, options...)
 		if err != nil {
-			t.Fatalf("WrapDialer: %v", err)
+			t.Fatalf("WrapConn: %v", err)
 		}
-		dialer = wrapped
+		faultConn = wrapped
+		dialer = &staticFaultDialer{conn: wrapped}
 	}
 	provider := grok.New(
 		grok.WithAPIKey("fault-test-key"),
@@ -164,11 +327,11 @@ func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
 	defer cancel()
 	session, err := provider.ConnectSession(ctx, structSessionConfig())
 	if err != nil {
-		return faultScenarioResult{err: err}
+		return faultScenarioResult{faultConn: faultConn, err: err}
 	}
 	defer func() { _ = session.Close() }()
 
-	result := faultScenarioResult{}
+	result := faultScenarioResult{faultConn: faultConn}
 	for {
 		msg, ok := session.Receive().ReadBlockingContext(ctx)
 		if !ok {
@@ -177,6 +340,8 @@ func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
 		}
 		result.messages = append(result.messages, msg)
 		switch msg.Type {
+		case messages.StreamTypeTextDelta:
+			result.sawTextDelta = true
 		case messages.StreamTypeMessageEnd:
 			result.sawMessageEnd = true
 			return result
@@ -214,6 +379,7 @@ type faultTestFrame struct {
 type faultTestConn struct {
 	mu        sync.Mutex
 	frames    []faultTestFrame
+	writes    []faultTestFrame
 	readIdx   int
 	closed    bool
 	closeCh   chan struct{}
@@ -247,13 +413,24 @@ func (c *faultTestConn) ReadMessage() (int, []byte, error) {
 	return 0, nil, io.EOF
 }
 
-func (c *faultTestConn) WriteMessage(_ int, _ []byte) error {
+func (c *faultTestConn) WriteMessage(messageType int, payload []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
 		return io.ErrClosedPipe
 	}
+	c.writes = append(c.writes, faultTestFrame{Type: messageType, Payload: append([]byte(nil), payload...)})
 	return nil
+}
+
+func (c *faultTestConn) Writes() []faultTestFrame {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	writes := make([]faultTestFrame, len(c.writes))
+	for index, frame := range c.writes {
+		writes[index] = faultTestFrame{Type: frame.Type, Payload: append([]byte(nil), frame.Payload...)}
+	}
+	return writes
 }
 
 func (c *faultTestConn) Close() error {
@@ -277,6 +454,16 @@ type faultTestDialer struct {
 	conn     *faultTestConn
 	endpoint string
 	headers  map[string]string
+}
+
+type staticFaultDialer struct {
+	conn transport.Conn
+}
+
+var _ transport.Dialer = (*staticFaultDialer)(nil)
+
+func (d *staticFaultDialer) Dial(string, map[string]string) (transport.Conn, error) {
+	return d.conn, nil
 }
 
 var _ transport.Dialer = (*faultTestDialer)(nil)
