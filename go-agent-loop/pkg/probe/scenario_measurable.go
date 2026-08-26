@@ -8,4 +8,5 @@ func init() {
 	typedExpectationFieldsByKind[ExpectTerminalReason] = map[string]bool{"value": true}
 	typedExpectationFieldsByKind[ExpectFrameCount] = map[string]bool{}
 	typedExpectationFieldsByKind[ExpectBufferDisposition] = map[string]bool{"value": true}
+	typedExpectationFieldsByKind[ExpectMetricsReconcile] = map[string]bool{}
 }

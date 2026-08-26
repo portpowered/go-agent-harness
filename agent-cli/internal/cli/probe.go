@@ -451,6 +451,16 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 			return probe.ObservationSnapshot{}, deriveErr
 		}
 		observation.BufferDisposition = replayBufferDisposition(fixture)
+		if scenarioDeclaresMetricsReconciliation(scenario) {
+			metricsSeries, metricsErr := collectReplayMetricsEvidence(ctx, fixture, scenarioSendText(scenario))
+			if metricsErr != nil {
+				return probe.ObservationSnapshot{}, fmt.Errorf("collect metrics evidence: %w", metricsErr)
+			}
+			if scenario.ID == probe.ScenarioIDS2SV7AMetricsModalityOvercount {
+				injectMetricsOvercount(metricsSeries)
+			}
+			observation.Metrics = metricsSeries
+		}
 		return observation, nil
 	}
 }

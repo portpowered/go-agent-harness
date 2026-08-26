@@ -46,6 +46,10 @@ Canonical record events (`Event` field values):
   (`MESSAGE.END` boundary), carrying that turn's byte accounting.
 - `session_tool_call_unexecutable` — one per provider tool-call event that the
   session runtime cannot execute (the runtime has no tool executor).
+- `session_metrics` — exactly one per session run, emitted after the final
+  delta it summarizes crosses, carrying the terminal per-direction and
+  per-modality byte matrix plus provider-reported token usage when the
+  provider delivered any on `MESSAGE.END`.
 
 ## Stable field reference
 
@@ -76,6 +80,18 @@ included in any field.
 | `input_text_bytes` | User prompt text bytes attributed to this turn. |
 | `output_audio_bytes` | Assistant audio bytes delivered during this turn. |
 | `output_text_bytes` | Assistant text/transcript bytes delivered during this turn. |
+| `output_tool_bytes` | Provider tool-call argument bytes streamed during this turn. |
+
+### `session_metrics` fields
+
+The terminal matrix reports the lifetime total of every byte-accounting field
+above (`input_audio_bytes`, `input_text_bytes`, `output_audio_bytes`,
+`output_text_bytes`, `output_tool_bytes`) plus `provider`, `model`, and
+`turns_completed`. When the provider reported nonzero token usage on any
+`MESSAGE.END`, the record also carries `provider_prompt_tokens`,
+`provider_completion_tokens`, and `provider_total_tokens`; zero-valued provider
+usage stays absent. Byte counts and token counts measure different units and
+are surfaced side by side, never assumed equal.
 
 ### `session_tool_call_unexecutable` fields
 
@@ -89,13 +105,14 @@ included in any field.
 
 ## Metrics series semantics
 
-The recorder keeps four `(direction, modality)` series; each observation adds
-one count and the payload's byte size:
+The recorder keeps five `(direction, modality)` series per direction; each
+observation adds one count and the payload's byte size:
 
 | Responder vocabulary | Series key | Direction / Modality constants |
 | --- | --- | --- |
 | Microphone/user audio sent upstream | `input/audio` | `metrics.DirectionInput`, `metrics.ModalityAudio` |
 | User prompt text sent upstream | `input/text` | `metrics.DirectionInput`, `metrics.ModalityText` |
+| Provider tool-call arguments streamed downstream | `output/tool` | `metrics.DirectionOutput`, `metrics.ModalityTool` |
 | Assistant audio received downstream | `output/audio` | `metrics.DirectionOutput`, `metrics.ModalityAudio` |
 | Assistant text/transcript received downstream | `output/text` | `metrics.DirectionOutput`, `metrics.ModalityText` |
 

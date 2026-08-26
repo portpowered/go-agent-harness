@@ -38,6 +38,9 @@ const (
 	ModalityText Modality = "text"
 	// ModalityImage identifies image input bytes.
 	ModalityImage Modality = "image"
+	// ModalityTool identifies tool-call activity, measured as the streamed
+	// argument bytes of provider tool calls.
+	ModalityTool Modality = "tool"
 
 	// Audio is a concise alias for ModalityAudio.
 	Audio Modality = ModalityAudio
@@ -45,12 +48,14 @@ const (
 	Text Modality = ModalityText
 	// Image is a concise alias for ModalityImage.
 	Image Modality = ModalityImage
+	// Tool is a concise alias for ModalityTool.
+	Tool Modality = ModalityTool
 )
 
 // Valid reports whether m is one of the modalities supported by this package.
 func (m Modality) Valid() bool {
 	switch m {
-	case ModalityAudio, ModalityText, ModalityImage:
+	case ModalityAudio, ModalityText, ModalityImage, ModalityTool:
 		return true
 	default:
 		return false
@@ -64,7 +69,7 @@ func SupportedDirections() []Direction {
 
 // SupportedModalities returns the supported modalities in deterministic order.
 func SupportedModalities() []Modality {
-	return []Modality{ModalityAudio, ModalityText, ModalityImage}
+	return []Modality{ModalityAudio, ModalityText, ModalityImage, ModalityTool}
 }
 
 // SeriesKey identifies one direction-and-modality metric series.
