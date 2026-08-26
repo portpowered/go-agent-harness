@@ -294,26 +294,30 @@ var stepKindAliases = map[string]probe.StepKind{
 }
 
 var expectationKindAliases = map[string]probe.ExpectationKind{
-	"frame_count":             probe.ExpectFrameCount,
-	"frame-count":             probe.ExpectFrameCount,
-	"transcript_contains":     probe.ExpectTranscriptContains,
-	"transcript-contains":     probe.ExpectTranscriptContains,
-	"tool_called":             probe.ExpectToolCalled,
-	"tool-called":             probe.ExpectToolCalled,
-	"terminal_reason":         probe.ExpectTerminalReason,
-	"terminal-reason":         probe.ExpectTerminalReason,
-	"latency_within_ticks":    probe.ExpectLatencyWithinTicks,
-	"latency-within-ticks":    probe.ExpectLatencyWithinTicks,
-	"audio_energy":            probe.ExpectAudioEnergy,
-	"audio-energy":            probe.ExpectAudioEnergy,
-	"tool_result_delivered":   probe.ExpectToolResultDelivered,
-	"tool-result-delivered":   probe.ExpectToolResultDelivered,
-	"tool_result_discarded":   probe.ExpectToolResultDiscarded,
-	"tool-result-discarded":   probe.ExpectToolResultDiscarded,
-	"no_orphaned_tool_result": probe.ExpectNoOrphanedToolResult,
-	"no-orphaned-tool-result": probe.ExpectNoOrphanedToolResult,
-	"buffer_disposition":      probe.ExpectBufferDisposition,
-	"buffer-disposition":      probe.ExpectBufferDisposition,
+	"frame_count":              probe.ExpectFrameCount,
+	"frame-count":              probe.ExpectFrameCount,
+	"transcript_contains":      probe.ExpectTranscriptContains,
+	"transcript-contains":      probe.ExpectTranscriptContains,
+	"tool_called":              probe.ExpectToolCalled,
+	"tool-called":              probe.ExpectToolCalled,
+	"terminal_reason":          probe.ExpectTerminalReason,
+	"terminal-reason":          probe.ExpectTerminalReason,
+	"latency_within_ticks":     probe.ExpectLatencyWithinTicks,
+	"latency-within-ticks":     probe.ExpectLatencyWithinTicks,
+	"audio_energy":             probe.ExpectAudioEnergy,
+	"audio-energy":             probe.ExpectAudioEnergy,
+	"tool_result_delivered":    probe.ExpectToolResultDelivered,
+	"tool-result-delivered":    probe.ExpectToolResultDelivered,
+	"tool_result_discarded":    probe.ExpectToolResultDiscarded,
+	"tool-result-discarded":    probe.ExpectToolResultDiscarded,
+	"no_orphaned_tool_result":  probe.ExpectNoOrphanedToolResult,
+	"no-orphaned-tool-result":  probe.ExpectNoOrphanedToolResult,
+	"buffer_disposition":       probe.ExpectBufferDisposition,
+	"buffer-disposition":       probe.ExpectBufferDisposition,
+	"barge_in_cancel_once":     probe.ExpectBargeInCancelOnce,
+	"barge-in-cancel-once":     probe.ExpectBargeInCancelOnce,
+	"message_counts_reconcile": probe.ExpectMessageCountsReconcile,
+	"message-counts-reconcile": probe.ExpectMessageCountsReconcile,
 }
 
 func measurableExpectationKind(name string) (probe.ExpectationKind, bool) {
@@ -450,6 +454,9 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if deriveErr := deriveToolResultObservation(fixture, &observation); deriveErr != nil {
 			return probe.ObservationSnapshot{}, deriveErr
 		}
+		if deriveErr := deriveBargeInObservation(fixture, &observation); deriveErr != nil {
+			return probe.ObservationSnapshot{}, deriveErr
+		}
 		observation.BufferDisposition = replayBufferDisposition(fixture)
 		if scenarioDeclaresMetricsReconciliation(scenario) {
 			metricsSeries, metricsErr := collectReplayMetricsEvidence(ctx, fixture, scenarioSendText(scenario))
@@ -522,6 +529,77 @@ func deriveToolResultObservation(fixture string, observation *probe.ObservationS
 		}
 	}
 	return nil
+}
+
+// deriveBargeInObservation scans the recorded fixture for the repeated-barge-in
+// lifecycle (s2s v3c) and fills the observation's reconciliation evidence:
+// committed user turns (client input_audio_buffer.commit or a client
+// conversation.item.create carrying a message item), created responses,
+// delivered assistant turns (response.done on an uninterrupted response),
+// cancellation events (client response.cancel), deltas leaking after their
+// response was cancelled or outside any live response, and any response still
+// streaming when the fixture ends.
+func deriveBargeInObservation(fixture string, observation *probe.ObservationSnapshot) error {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
+	}
+	inFlight, cancelled := false, false
+	for _, record := range capture.Records {
+		switch {
+		case record.Direction == gatewaytesting.DirectionClientToServer &&
+			record.Type == "input_audio_buffer.commit":
+			observation.UserTurnsCommitted++
+		case record.Direction == gatewaytesting.DirectionClientToServer &&
+			record.Type == "conversation.item.create":
+			var payload struct {
+				Item struct {
+					Type string `json:"type"`
+				} `json:"item"`
+			}
+			if json.Unmarshal(record.Payload, &payload) == nil && payload.Item.Type == "message" {
+				observation.UserTurnsCommitted++
+			}
+		case record.Direction == gatewaytesting.DirectionServerToClient &&
+			record.Type == "response.created":
+			observation.ResponsesCreated++
+			inFlight, cancelled = true, false
+		case record.Direction == gatewaytesting.DirectionServerToClient &&
+			isTranscriptDeltaEventType(record.Type):
+			if !inFlight || cancelled {
+				observation.PostCancelDeltas++
+			}
+		case record.Direction == gatewaytesting.DirectionClientToServer &&
+			record.Type == "response.cancel":
+			observation.ResponseCancels++
+			if !inFlight || cancelled {
+				observation.SpuriousCancels++
+			} else {
+				observation.ResponsesCancelled++
+				cancelled = true
+			}
+		case record.Direction == gatewaytesting.DirectionServerToClient &&
+			record.Type == "response.done":
+			if inFlight && !cancelled {
+				observation.AssistantTurnsDelivered++
+			}
+			inFlight, cancelled = false, false
+		}
+	}
+	observation.InFlightAtEnd = inFlight
+	return nil
+}
+
+// isTranscriptDeltaEventType reports whether the wire event carries one
+// streamed transcript delta of an in-flight response.
+func isTranscriptDeltaEventType(eventType string) bool {
+	switch eventType {
+	case "response.text.delta", "response.audio_transcript.delta",
+		"response.output_text.delta", "response.output_audio_transcript.delta":
+		return true
+	default:
+		return false
+	}
 }
 
 // replayErrorClassification classifies the first server-to-client failure
