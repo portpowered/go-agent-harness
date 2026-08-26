@@ -77,7 +77,7 @@ var CliSet = wire.NewSet(
 	cli.NewProbeFleetCommand,
 	provideFleetEntryExecutors,
 	provideAcceptanceCommands,
-	cli.NewSessionCommandWithRuntime,
+	cli.NewSessionCommandWithRuntimeAndDeviceRegistry,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,
 	cli.NewSessionDeleteCommand,

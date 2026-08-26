@@ -219,12 +219,15 @@ func (r *devicesTestRegistry) Open(audio.DeviceID) (audio.OpenedDevice, error) {
 }
 
 func TestDevicesListRegisteredInProductionRoot(t *testing.T) {
+	if _, err := newDefaultDeviceRegistry().List(); err != nil {
+		t.Skipf("platform audio registry unavailable: %v", err)
+	}
 	table := executeCLI("devices", "list")
 	if table.exitCode != 0 || table.stderr != "" {
 		t.Fatalf("devices list = (%d, %q), want exit 0 and empty stderr; stdout=%q", table.exitCode, table.stderr, table.stdout)
 	}
-	if table.stdout != "INPUT\nOUTPUT\nNo audio devices found.\n" {
-		t.Fatalf("production table output = %q, want retained headings plus empty note on the default registry", table.stdout)
+	if !strings.HasPrefix(table.stdout, "INPUT\n") || !strings.Contains(table.stdout, "\nOUTPUT\n") {
+		t.Fatalf("production table output = %q, want directional headings from the platform registry", table.stdout)
 	}
 
 	jsonResult := executeCLI("devices", "list", "--json")
@@ -235,7 +238,9 @@ func TestDevicesListRegisteredInProductionRoot(t *testing.T) {
 	if err := json.Unmarshal([]byte(jsonResult.stdout), &response); err != nil {
 		t.Fatalf("production root JSON invalid: %v", err)
 	}
-	if len(response.Devices) != 0 {
-		t.Fatalf("production root devices = %#v, want the default registry to enumerate as empty", response.Devices)
+	for _, device := range response.Devices {
+		if device.ID == "" || device.Name == "" || device.Direction == "" {
+			t.Fatalf("production root returned incomplete device %#v", device)
+		}
 	}
 }
