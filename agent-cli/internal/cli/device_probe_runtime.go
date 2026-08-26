@@ -43,12 +43,29 @@ type deviceProbeRuntimeOptions struct {
 	// constructor leaves it nil, which selects the configured live provider.
 	SessionInferencer messages.SessionInferencer
 	Instructions      string
-	WebSocketDialer   transport.Dialer
+	// InstructionsObserved is a hermetic observation seam for proving that the
+	// authored device-input contract reaches session construction.
+	InstructionsObserved func(string)
+	WebSocketDialer      transport.Dialer
+}
+
+// deviceProbeInputPlan is the explicit hardware-input contract carried by a
+// device-tier scenario. The corpus ID identifies the authored utterance used
+// by the corresponding offline lane; Utterance tells the operator exactly
+// what must be spoken into the selected physical microphone. The device path
+// never injects the corpus WAV into the session.
+type deviceProbeInputPlan struct {
+	CorpusID  string
+	Utterance string
 }
 
 func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availability audio.DeviceProbeAvailability, registry audio.DeviceRegistry, opts deviceProbeRuntimeOptions) (observation probe.ObservationSnapshot, runErr error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	inputPlan, err := scenarioDeviceProbeInput(scenario)
+	if err != nil {
+		return observation, err
 	}
 	if availability.Status != audio.DeviceProbeStatusReady {
 		return observation, fmt.Errorf("device probe cannot run with availability status %q", availability.Status)
@@ -87,7 +104,10 @@ func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availa
 
 	instructions := opts.Instructions
 	if strings.TrimSpace(instructions) == "" {
-		instructions = deviceProbeInstructions(scenario)
+		instructions = deviceProbeInstructionsForInput(inputPlan, scenarioDeviceProbeTranscript(scenario))
+	}
+	if opts.InstructionsObserved != nil {
+		opts.InstructionsObserved(instructions)
 	}
 	inferencer := opts.SessionInferencer
 	if inferencer == nil {
@@ -551,8 +571,30 @@ func scenarioDeviceProbeTranscript(scenario probe.Scenario) string {
 	return "device round trip"
 }
 
-func deviceProbeInstructions(scenario probe.Scenario) string {
-	return fmt.Sprintf("This is an automated audio device probe. Listen to the microphone and respond by saying exactly %q. Keep the response short.", scenarioDeviceProbeTranscript(scenario))
+func scenarioDeviceProbeInput(scenario probe.Scenario) (deviceProbeInputPlan, error) {
+	corpusID, ok := scenarioReplayCorpusID(scenario)
+	if !ok {
+		return deviceProbeInputPlan{}, fmt.Errorf("device probe scenario must contain exactly one send_audio step with a committed audio corpus")
+	}
+	for _, step := range scenario.Steps {
+		kind := step.Kind
+		if kind == "" {
+			kind = step.Type
+		}
+		if kind != probe.StepSendAudio {
+			continue
+		}
+		utterance := strings.TrimSpace(step.Text)
+		if utterance == "" {
+			return deviceProbeInputPlan{}, fmt.Errorf("device probe send_audio step for corpus %q must declare text for the manual microphone utterance", corpusID)
+		}
+		return deviceProbeInputPlan{CorpusID: corpusID, Utterance: utterance}, nil
+	}
+	return deviceProbeInputPlan{}, fmt.Errorf("device probe scenario corpus %q has no send_audio step", corpusID)
+}
+
+func deviceProbeInstructionsForInput(input deviceProbeInputPlan, response string) string {
+	return fmt.Sprintf("This is a T2 real-device probe. Speak the authored utterance %q (corpus_id %q) into the selected physical microphone. The probe reads that microphone; it does not inject a WAV or replay fixture. After recognizing the utterance, respond by saying exactly %q. Keep the response short.", input.Utterance, input.CorpusID, response)
 }
 
 func captureLiveDeviceProbeInput(ctx context.Context, source *audio.DeviceSource, link *liveDeviceProbeMediaLink, runner *participants.ModelRunner) (int, float64, error) {

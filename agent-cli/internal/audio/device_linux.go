@@ -55,11 +55,14 @@ func newLinuxDeviceRegistry(enumerate func() ([]linuxDeviceRecord, error)) *Linu
 
 func (r *LinuxDeviceRegistry) List() ([]Device, error) {
 	records, err := r.snapshot()
+	if err != nil {
+		return nil, err
+	}
 	devices := make([]Device, len(records))
 	for i := range records {
 		devices[i] = records[i].Device
 	}
-	return devices, err
+	return devices, nil
 }
 func (r *LinuxDeviceRegistry) Default(direction Direction) (Device, error) {
 	if err := ValidateDirection(direction); err != nil {

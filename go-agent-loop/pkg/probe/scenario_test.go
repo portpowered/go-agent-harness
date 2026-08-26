@@ -14,7 +14,7 @@ const representativeScenario = `{
   "description": "portable greeting",
   "steps": [
     {"type": "send_text", "text": "hello"},
-    {"type": "send_audio", "corpus_id": "greeting-audio"},
+    {"type": "send_audio", "corpus_id": "greeting-audio", "text": "hello from the microphone"},
     {"type": "send_tool_result", "tool_call_id": "call-1", "tool_name": "weather", "result": {"ok": true}},
     {"type": "advance_to", "at": 10},
     {"type": "wait", "duration": 5},
@@ -68,6 +68,9 @@ func TestLoadRepresentativeScenarioPreservesTypedOrder(t *testing.T) {
 	}
 	if got := scenario.Steps[1].Corpus.CorpusID; got != "greeting-audio" {
 		t.Errorf("corpus ID: got %q", got)
+	}
+	if got := scenario.Steps[1].Text; got != "hello from the microphone" {
+		t.Errorf("manual audio utterance: got %q", got)
 	}
 	if got := scenario.Steps[2].ToolCallID; got != "call-1" {
 		t.Errorf("tool call ID: got %q", got)
@@ -263,7 +266,6 @@ func TestTypedPayloadsAreRejectedPerVariant(t *testing.T) {
 		loc  string
 	}{
 		{"send text with audio", Step{Type: StepSendText, Text: "hello", CorpusID: "a"}, "steps[0].corpus_id"},
-		{"send audio with text", Step{Type: StepSendAudio, CorpusID: "a", Text: "hello"}, "steps[0].text"},
 		{"send tool result with time", Step{Type: StepSendToolResult, ToolCallID: "call", Result: json.RawMessage(`{}`), At: 1}, "steps[0].at"},
 		{"advance with text", Step{Type: StepAdvanceTo, At: 1, Text: "hello"}, "steps[0].text"},
 		{"wait with call ID", Step{Type: StepWait, Duration: 1, ToolCallID: "call"}, "steps[0].tool_call_id"},

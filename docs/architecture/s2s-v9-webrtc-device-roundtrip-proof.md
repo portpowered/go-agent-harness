@@ -23,6 +23,16 @@ human-readable `reason`; the summary also reports `status: "skip"` and exits
 successfully. `--out` and `--summary` can be used to record those JSONL
 artifacts separately.
 
+The `send_audio` step in this scenario is an explicit manual hardware-input
+contract: its `corpus_id` names the committed offline counterpart and its
+`text` field is the utterance the operator must speak into the selected
+microphone. The live command does not inject that WAV or silently substitute a
+replay fixture. It puts the authored text and corpus identity into the realtime
+session instructions, then captures the physical microphone through the
+selected device, WebRTC track, and session runner. A hardware run must
+therefore use a speaker who says exactly “The timer is ready for the next
+step.”
+
 `TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI` executes this exact
 route through the production Cobra router and asserts the no-device result.
 The test uses the repository's intentionally headless default registry, so it
@@ -52,13 +62,14 @@ registry/device-binding implementation; hosts without both directions take the
 recorded SKIP path.
 
 `TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput` additionally invokes
-the production `runDeviceProbeScenario` executor. Its hermetic session seam
-stands in for the live provider while the executor still opens both selected
-registry devices, negotiates both local WebRTC Opus links, forwards captured
-audio through `participants.NewSessionModelRunner`, writes provider audio to
-the selected sink, and returns the output/transcript observation consumed by
-the command's normal probe evaluator. The command constructor uses the live
-OpenAI/Grok session factory for the hardware path.
+the production `runDeviceProbeScenario` executor with the committed
+`utterance-hello-there` corpus seeded through the virtual device binding. Its
+hermetic session seam stands in for the live provider while the executor still
+opens both selected registry devices, negotiates both local WebRTC Opus links,
+forwards the authored input frames through `participants.NewSessionModelRunner`,
+writes provider audio to the selected sink, and returns the output/transcript
+observation consumed by the command's normal probe evaluator. The command
+constructor uses the live OpenAI/Grok session factory for the hardware path.
 
 The named negative controls fail with diagnostics that include the observed
 RMS and threshold for silent output, or the exact empty/mismatched transcript.

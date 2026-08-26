@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -100,6 +101,39 @@ func TestDeviceProbeWithDevicesExecutesReadyPath(t *testing.T) {
 	}
 }
 
+func TestDeviceProbeReadyPathUsesDeadguard(t *testing.T) {
+	input, err := audio.NewDevice(audio.VirtualBackendName, "input", "Microphone", audio.DirectionInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := audio.NewDevice(audio.VirtualBackendName, "output", "Speaker", audio.DirectionOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := &cobra.Command{Use: "agent", SilenceUsage: true, SilenceErrors: true}
+	probeCommand := NewProbeCommand().Generate()
+	run := NewProbeRunCommand(&deviceProbeRegistry{devices: []audio.Device{input, output}})
+	run.deviceProbeDeadline = 25 * time.Millisecond
+	run.deviceProbeExec = func(ctx context.Context, _ probe.Scenario, _ audio.DeviceProbeAvailability) (probe.ObservationSnapshot, error) {
+		<-ctx.Done()
+		return probe.ObservationSnapshot{}, ctx.Err()
+	}
+	probeCommand.AddCommand(run.Generate())
+	root.AddCommand(probeCommand)
+	root.SetArgs([]string{"probe", "run", deviceProbeScenarioPath, "--devices", "real", "--json"})
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+
+	err = root.Execute()
+	if err == nil {
+		t.Fatal("device ready path succeeded, want deadguard timeout")
+	}
+	if !strings.Contains(stdout.String(), "deadguard") && !strings.Contains(stderr.String(), "deadguard") {
+		t.Fatalf("deadguard diagnostic missing from command output: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
 func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
 	if err != nil {
@@ -108,6 +142,29 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	availability, err := audio.ProbeDeviceAvailability(registry)
 	if err != nil {
 		t.Fatalf("probe virtual availability: %v", err)
+	}
+	scenario, err := loadProbeScenario(mustReadDeviceProbeScenario(t))
+	if err != nil {
+		t.Fatalf("load device scenario: %v", err)
+	}
+	inputPlan, err := scenarioDeviceProbeInput(scenario)
+	if err != nil {
+		t.Fatalf("device input contract: %v", err)
+	}
+	corpusPath, err := replayCorpusPath(inputPlan.CorpusID)
+	if err != nil {
+		t.Fatalf("locate authored input corpus: %v", err)
+	}
+	corpusWAV, err := os.ReadFile(corpusPath)
+	if err != nil {
+		t.Fatalf("read authored input corpus: %v", err)
+	}
+	rate, corpusSamples, err := wavio.Read(bytes.NewReader(corpusWAV))
+	if err != nil {
+		t.Fatalf("decode authored input corpus: %v", err)
+	}
+	if rate != wavio.Rate16kHz {
+		t.Fatalf("authored input corpus rate = %d, want %d", rate, wavio.Rate16kHz)
 	}
 	input, err := registry.Default(audio.DirectionInput)
 	if err != nil {
@@ -125,9 +182,22 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		t.Fatalf("open seeded input source: %v", err)
 	}
 	defer func() { _ = seed.Close() }()
-	for i := 0; i < 8; i++ {
-		if err := seed.WriteFrame(context.Background(), voicedDeviceProbeFrame()); err != nil {
-			t.Fatalf("seed microphone frame %d: %v", i, err)
+	const seededDeviceFrameCount = 8
+	corpusStart := -1
+	for offset := 0; offset+seededDeviceFrameCount*audio.FrameSize <= len(corpusSamples); offset += audio.FrameSize {
+		if liveDeviceProbeRMS(corpusSamples[offset:offset+audio.FrameSize]) > audio.DefaultVADConfig.EnergyThreshold {
+			corpusStart = offset
+			break
+		}
+	}
+	if corpusStart < 0 {
+		t.Fatalf("authored input corpus has no voiced frame window")
+	}
+	for i := 0; i < seededDeviceFrameCount; i++ {
+		frameStart := corpusStart + i*audio.FrameSize
+		frame := append([]int16(nil), corpusSamples[frameStart:frameStart+audio.FrameSize]...)
+		if err := seed.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatalf("seed authored microphone frame %d: %v", i, err)
 		}
 	}
 
@@ -143,7 +213,8 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		t.Fatalf("resample response: %v", err)
 	}
 	responsePCM := pcm16ProbeBytes(response)
-	audioObserved := make(chan []byte, 1)
+	audioObserved := make(chan []byte, 32)
+	var observedInstructions string
 	runContext, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	go func() {
@@ -152,10 +223,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 			case message := <-session.sent:
 				if message.Type == messages.StreamTypeAudioDelta {
 					if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil {
-						select {
-						case audioObserved <- append([]byte(nil), value.Content...):
-						default:
-						}
+						audioObserved <- append([]byte(nil), value.Content...)
 					}
 					continue
 				}
@@ -180,25 +248,41 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		}
 	}()
 
-	scenario, err := loadProbeScenario(mustReadDeviceProbeScenario(t))
-	if err != nil {
-		t.Fatalf("load device scenario: %v", err)
-	}
 	observation, err := runDeviceProbeScenario(runContext, scenario, availability, registry, deviceProbeRuntimeOptions{
-		SessionInferencer: &deviceProbeSessionInferencer{session: session},
-		CaptureTime:       750 * time.Millisecond,
+		SessionInferencer:    &deviceProbeSessionInferencer{session: session},
+		CaptureTime:          750 * time.Millisecond,
+		InstructionsObserved: func(instructions string) { observedInstructions = instructions },
 	})
 	if err != nil {
 		t.Fatalf("run device probe runtime: %v", err)
 	}
 	var capturedAudio []byte
-	select {
-	case capturedAudio = <-audioObserved:
-	case <-runContext.Done():
-		t.Fatalf("runtime did not forward microphone audio to the session: %v", runContext.Err())
+drainAudio:
+	for {
+		select {
+		case chunk := <-audioObserved:
+			capturedAudio = append(capturedAudio, chunk...)
+		default:
+			break drainAudio
+		}
 	}
 	if len(capturedAudio) == 0 || len(capturedAudio)%2 != 0 {
 		t.Fatalf("runtime forwarded microphone audio payload of %d bytes, want non-empty PCM16", len(capturedAudio))
+	}
+	wantProviderFrames := seededDeviceFrameCount * audio.FrameSize / deviceProbeInputFrameSamples
+	wantAudioBytes := wantProviderFrames * deviceProbeProviderFrameSamples * 2
+	if len(capturedAudio) != wantAudioBytes {
+		t.Fatalf("runtime forwarded %d authored PCM bytes, want %d bytes from %d seeded device frames", len(capturedAudio), wantAudioBytes, seededDeviceFrameCount)
+	}
+	capturedSamples := make([]int16, len(capturedAudio)/2)
+	for i := range capturedSamples {
+		capturedSamples[i] = int16(binary.LittleEndian.Uint16(capturedAudio[i*2:]))
+	}
+	if liveDeviceProbeRMS(capturedSamples) <= audio.DefaultVADConfig.EnergyThreshold {
+		t.Fatalf("runtime forwarded authored input RMS = %.2f, want voiced corpus input above %.2f", liveDeviceProbeRMS(capturedSamples), audio.DefaultVADConfig.EnergyThreshold)
+	}
+	if !strings.Contains(observedInstructions, inputPlan.CorpusID) || !strings.Contains(observedInstructions, inputPlan.Utterance) {
+		t.Fatalf("session instructions = %q, want authored corpus %q and utterance %q", observedInstructions, inputPlan.CorpusID, inputPlan.Utterance)
 	}
 	if len(observation.PCM16Samples) == 0 || liveDeviceProbeRMS(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
 		t.Fatalf("runtime output samples/RMS = %d/%.2f, want non-silent output", len(observation.PCM16Samples), liveDeviceProbeRMS(observation.PCM16Samples))

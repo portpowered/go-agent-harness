@@ -479,7 +479,7 @@ func parseStep(raw json.RawMessage, index int) (Step, error) {
 	}
 	allowed := map[StepKind]map[string]bool{
 		StepSendText:       {"text": true, "value": true},
-		StepSendAudio:      {"corpus_id": true, "corpusID": true, "corpus": true},
+		StepSendAudio:      {"corpus_id": true, "corpusID": true, "corpus": true, "text": true},
 		StepSendToolResult: {"tool_call_id": true, "toolCallID": true, "tool_name": true, "toolName": true, "result": true, "tool_result": true, "value": true},
 		StepAdvanceTo:      {"at": true, "time": true, "logical_time": true, "logicalTime": true},
 		StepWait:           {"duration": true}, StepClose: {},
@@ -496,6 +496,10 @@ func parseStep(raw json.RawMessage, index int) (Step, error) {
 		}
 	case StepSendAudio:
 		step.CorpusID, err = corpusID(fields, location)
+		if err != nil {
+			return Step{}, err
+		}
+		step.Text, err = optionalString(fields, location, "text")
 		if err != nil {
 			return Step{}, err
 		}
@@ -1063,10 +1067,6 @@ func validateStep(step Step, kind StepKind, index int) error {
 			return makeError(CategoryMissingField, location+".corpus_id", "required field is missing")
 		}
 		if err := rejectStepFields(location, kind,
-			struct {
-				name      string
-				populated bool
-			}{"text", step.Text != ""},
 			struct {
 				name      string
 				populated bool

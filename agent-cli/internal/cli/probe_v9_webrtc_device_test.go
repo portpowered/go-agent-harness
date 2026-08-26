@@ -70,6 +70,13 @@ func TestS2SV9ScenarioLoadsThroughProbeSchema(t *testing.T) {
 	if scenario.Steps[0].Type != probe.StepSendAudio || scenario.Steps[1].Type != probe.StepClose {
 		t.Fatalf("v9 steps = %#v, want send_audio followed by close", scenario.Steps)
 	}
+	input, err := scenarioDeviceProbeInput(scenario)
+	if err != nil {
+		t.Fatalf("device input contract: %v", err)
+	}
+	if input.CorpusID != "utterance-hello-there" || input.Utterance != "The timer is ready for the next step." {
+		t.Fatalf("device input contract = %#v, want authored corpus and utterance", input)
+	}
 	if scenario.Expectations[0].Type != probe.ExpectAudioEnergy || scenario.Expectations[1].Type != probe.ExpectTranscriptContains {
 		t.Fatalf("v9 expectations = %#v, want audio energy and transcript assertions", scenario.Expectations)
 	}

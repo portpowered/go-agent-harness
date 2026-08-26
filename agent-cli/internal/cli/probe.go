@@ -64,8 +64,9 @@ type ProbeRunCommand struct {
 	SummaryPath string
 	JSONOut     bool
 
-	deviceRegistry  audio.DeviceRegistry
-	deviceProbeExec DeviceProbeExecFunc
+	deviceRegistry      audio.DeviceRegistry
+	deviceProbeExec     DeviceProbeExecFunc
+	deviceProbeDeadline time.Duration
 }
 
 // DeviceProbeExecFunc runs one validated scenario against the selected device
@@ -80,9 +81,10 @@ func NewProbeRunCommand(registries ...audio.DeviceRegistry) *ProbeRunCommand {
 		registry = registries[0]
 	}
 	command := &ProbeRunCommand{
-		deviceRegistry: registry,
-		Provider:       "openai",
-		CaptureTime:    deviceProbeDefaultCaptureDuration,
+		deviceRegistry:      registry,
+		Provider:            "openai",
+		CaptureTime:         deviceProbeDefaultCaptureDuration,
+		deviceProbeDeadline: probeScenarioDeadline,
 	}
 	command.deviceProbeExec = func(ctx context.Context, scenario probe.Scenario, availability audio.DeviceProbeAvailability) (probe.ObservationSnapshot, error) {
 		return runDeviceProbeScenario(ctx, scenario, availability, command.deviceRegistry, deviceProbeRuntimeOptions{
@@ -153,9 +155,9 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		if err != nil {
 			return err
 		}
-		return c.runScenarios(cmd, scenarios, func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
+		return c.runScenarios(cmd, scenarios, deadguardExec(func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
 			return c.deviceProbeExec(ctx, scenario, availability)
-		})
+		}, c.deviceProbeDeadline))
 	}
 	if strings.TrimSpace(c.Replay) == "" {
 		return fmt.Errorf("--replay <fixture-path-or-dir> is required to select recorded fixtures")
