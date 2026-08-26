@@ -1,16 +1,21 @@
 # S2S v7c — exact session metrics reconciliation
 
-Status: **proven in-repo** (2026-08-26).
+Status: **in-lease evidence delivered; final proof blocked by a production
+snapshot exposure outside this lane's changed-path lease** (2026-08-26).
 
-The v7c claim is gated on both reconciliation tests passing together. The
-positive test proves the complete CLI observation; the expected-failing test
-proves that removing one observed delta makes the same oracle reject the run.
-Neither test claims live-provider behavior, sibling-vertical coverage, or
-approximate reconciliation.
+The lane has delivered the bounded CLI replay and the expected-failing
+independent-ledger control, but it does not claim v7c proven. The public
+`agent session` route exposes a stream observer and user-facing duration
+artifacts, while the production final `metrics.Snapshot` and
+`session_metrics` token fields are not exposed through that route. The public
+`agent probe run` result also serializes expectation outcomes rather than its
+internal metric series. Comparing another fold of a rendered stream would
+therefore be self-referential and is intentionally not described as the final
+proof.
 
-## Reproducible proof surface
+## Evidence delivered in this lease
 
-The focused proof is
+The focused evidence is
 `agent-cli/test/integration/session_metrics_reconcile_test.go`:
 
 - `TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession`
@@ -25,83 +30,35 @@ agent session --replay <temporary>/metrics_reconcile.session.json \
 ```
 
 The route is the production CLI composition initialized by
-`wire.InitializeMockAgentCLI`; the positive-path system under test is the
-command, not an internal session runner, probe executor, agent loop, token
-counter, or metrics helper. Replay supplies the transport, so the test needs
-no credentials and makes no live network request. The test also wraps command
-execution in a 30-second context deadguard.
+`wire.InitializeMockAgentCLI`; replay supplies the transport, so the test
+needs no credentials and makes no live network request. The command is also
+wrapped in a 30-second context deadguard.
 
-The replay capture is assembled in the test's temporary directory as
-`metrics_reconcile.session.json`. It reuses the committed
+The temporary capture reuses the committed
 `go-agent-loop/testdata/audio/utt_short_16k.wav` corpus file, splitting its
-decoded PCM into two output-audio deltas. No new audio fixture or raw audio is
-embedded in the capture. The normalized stream contains a non-empty text turn,
-a two-delta non-empty audio turn, and the final `SESSION.CLOSE` boundary with
-reason `fixture_complete`. Successful command output includes
-`[session closed: fixture_complete]`; `--max-duration 2s` is only the bounded
-guard and is not the expected terminal reason.
+decoded PCM into two output-audio deltas. The normalized stream carries a
+non-empty text turn, a two-delta audio turn, usage-bearing `MESSAGE.END`
+boundaries, and the final `SESSION.CLOSE` reason `fixture_complete`.
 
-## Independent ledger and token oracle
+The accounting ledger used by the test is captured directly from the
+command's supported `AgentCLI.SetSessionStreamObserver` seam. The duration
+JSONL and WAV files are validated as command-owned output artifacts and the
+explicit `--audio-out` WAV is checked against the reused corpus PCM. The
+independent side is still folded from the replay capture, including all
+supported direction/modality zero series and exact usage fields.
 
-The test retains ordered `StreamMessage` records in two separate ledgers:
+## Exact oracle and negative control
 
-1. The fixture ledger is decoded directly from the replay capture.
-2. The command ledger is decoded from the CLI-owned normalized duration JSONL
-   artifact written beside the temporary capture.
+The in-lease oracle treats each `MESSAGE.END` usage value as incremental per
+completed turn and sums prompt, completion, total, and reasoning fields. It
+requires prompt plus completion to equal total. For metrics it groups every
+supported direction/modality key and compares event count and byte total with
+no tolerance or non-zero-only shortcut.
 
-The two ledgers are folded independently before comparison. The fold recognizes
-text/transcript deltas, audio deltas, and usage-bearing `MESSAGE.END` records;
-it does not derive token values from payload byte counts.
-
-`MESSAGE.END` usage is incremental per completed assistant turn. The token
-oracle appends each usage closure that belongs to a turn with an observed
-non-empty output payload, then sums these fields exactly:
-
-- `PromptTokens` → token input
-- `CompletionTokens` → token output
-- `TotalTokens` → token total
-- `ReasoningTokens` → token reasoning detail
-
-Each closure must satisfy `PromptTokens + CompletionTokens = TotalTokens`, and
-the folded input plus folded output must equal the folded total. The positive
-fixture has two usage closures: `(11, 7, 18)` for text and `(3, 5, 8)` for
-audio, so the folded totals are input `14`, output `12`, and total `26`.
-Closure count and every available token field are compared exactly. There is
-no tolerance, rounding, approximation, or nonzero-only shortcut.
-
-## Exact metric oracle
-
-For every key in the cross-product of `metrics.SupportedDirections()` and
-`metrics.SupportedModalities()`, the fold records event count and byte total.
-Text and transcript deltas are `output/text`; audio deltas are
-`output/audio`. The supported but unobserved series are initialized and must
-remain exact zero:
-
-| Series | Expected observation in this proof |
-| --- | --- |
-| `input/audio` | `event_count=0`, `total_bytes=0` |
-| `input/text` | `event_count=0`, `total_bytes=0` |
-| `input/image` | `event_count=0`, `total_bytes=0` |
-| `output/audio` | `event_count=2`, `total_bytes=265500` (the complete decoded PCM from `utt_short_16k.wav`) |
-| `output/text` | `event_count=1`, `total_bytes=16` |
-| `output/image` | `event_count=0`, `total_bytes=0` |
-
-The command-owned duration artifact is compared with the independently folded
-fixture for every row. The test additionally verifies that both the duration
-WAV and the explicit `--audio-out` WAV contain exactly the fixture PCM, and
-that output text is present. Any difference reports the stable series or token
-field plus exact `expected` and `actual` values.
-
-## Missing-delta negative control
-
-The control first runs and reconciles the same CLI observation successfully.
-It then changes exactly one condition: **remove one non-empty output-text delta
-from the independent observed ledger while leaving captured counters
-unchanged**. The command ledger and its captured accounting are not mutated.
-
-The mutated ledger remains structurally valid, but its first text turn no
-longer has an attributable output payload, so the shared exact-equality verdict
-must reject it with these exact differences:
+The control first verifies a successful CLI replay, then changes exactly one
+condition: **remove one non-empty output-text delta from the independent
+observed ledger while leaving the command-captured ledger unchanged**. The
+same exact comparator must reject the mutation with these values:
 
 ```text
 token total: expected 8, actual 26
@@ -109,9 +66,30 @@ output/text event_count: expected 0, actual 1
 output/text total_bytes: expected 0, actual 16
 ```
 
-The test asserts this rejection as an expected failure. A replay divergence,
-missing fixture, network access, panic, or timeout is a setup failure—not a
-passing negative-control result.
+This is an oracle-mutation control over the CLI-observed stream. It does not
+claim that the unchanged ledger is the production final token counter or
+metrics snapshot; that distinction is the unresolved contract below.
+
+## Required out-of-lease production contract
+
+To complete v7c, an owner of the production CLI surface must expose one
+supported final observation for a real `agent session` or `agent probe run`
+execution containing:
+
+1. the production token/accounting totals, including cumulative versus
+   incremental usage semantics; and
+2. the production `metrics.Snapshot` for every direction/modality series,
+   including exact zero series.
+
+The current `SessionRunOptions.MetricsRecorder` and
+`SessionRunOptions.Diagnostics` injection points live below the public CLI;
+the current probe path consumes them internally and does not emit the
+snapshot/token fields in its JSON result. Adding or threading that public
+exposure through the session/probe production files is outside this lane's
+allowed paths (`agent-cli/test/integration/**`, `docs/architecture/**`, and
+additive-only `go-agent-loop/testdata/audio/**`). The operator should file
+that production contract as a separate work item, then update this test to
+compare the independent raw replay fold with the captured final snapshot.
 
 ## Offline rerun
 
@@ -121,7 +99,6 @@ From the repository root, run:
 (cd agent-cli && go test ./test/integration -run 'TestSessionCommandMetricsReconcile' -count=1)
 ```
 
-This command runs both the positive proof and the expected-failing control
-without provider credentials or network access. The contract does not extend
-to live providers, other S2S verticals, or approximate/threshold-based
-accounting.
+This runs the bounded public CLI evidence and its expected-failing control
+without provider credentials or network access. It does not claim live
+provider behavior, sibling-vertical coverage, or approximate reconciliation.
