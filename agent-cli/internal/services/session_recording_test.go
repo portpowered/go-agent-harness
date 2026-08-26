@@ -376,6 +376,9 @@ func TestRunSessionWithImagesAndRecordingDirectoryPreservesImageTurn(t *testing.
 	if len(imageMessages) != 1 {
 		t.Fatalf("provider image messages = %d, want one", len(imageMessages))
 	}
+	if requests := inferencer.sessions[0].imageResponseRequestsCopy(); len(requests) != 1 || requests[0] {
+		t.Fatalf("audio-enabled image turn response requests = %v, want one item-only request", requests)
+	}
 	if imageMessages[0].TextContent() != "describe the image" || len(imageMessages[0].ContentParts) != 2 {
 		t.Fatalf("provider image message = %#v, want text plus image", imageMessages[0])
 	}
@@ -879,16 +882,17 @@ type sessionRecordingRunnerSession struct {
 	done    chan struct{}
 	once    sync.Once
 
-	inputSeen     chan struct{}
-	inputOnce     sync.Once
-	audioEndSeen  chan struct{}
-	audioEndOnce  sync.Once
-	promptSeen    chan struct{}
-	promptOnce    sync.Once
-	sentMu        sync.Mutex
-	sent          []messages.StreamMessage
-	imageMessages []messages.Message
-	sendHook      func(context.Context, messages.StreamMessage)
+	inputSeen             chan struct{}
+	inputOnce             sync.Once
+	audioEndSeen          chan struct{}
+	audioEndOnce          sync.Once
+	promptSeen            chan struct{}
+	promptOnce            sync.Once
+	sentMu                sync.Mutex
+	sent                  []messages.StreamMessage
+	imageMessages         []messages.Message
+	imageResponseRequests []bool
+	sendHook              func(context.Context, messages.StreamMessage)
 }
 
 func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -911,16 +915,17 @@ func (s *sessionRecordingRunnerSession) Send(ctx context.Context, msg messages.S
 }
 
 func (s *sessionRecordingRunnerSession) SendMessage(_ context.Context, msg messages.Message) bool {
-	return s.sendImageMessage(msg)
+	return s.sendImageMessage(msg, true)
 }
 
 func (s *sessionRecordingRunnerSession) SendMessageWithoutResponse(_ context.Context, msg messages.Message) bool {
-	return s.sendImageMessage(msg)
+	return s.sendImageMessage(msg, false)
 }
 
-func (s *sessionRecordingRunnerSession) sendImageMessage(msg messages.Message) bool {
+func (s *sessionRecordingRunnerSession) sendImageMessage(msg messages.Message, requestResponse bool) bool {
 	s.sentMu.Lock()
 	s.imageMessages = append(s.imageMessages, msg)
+	s.imageResponseRequests = append(s.imageResponseRequests, requestResponse)
 	s.sentMu.Unlock()
 	s.promptOnce.Do(func() { close(s.promptSeen) })
 	return true
@@ -947,6 +952,12 @@ func (s *sessionRecordingRunnerSession) imageMessagesCopy() []messages.Message {
 	s.sentMu.Lock()
 	defer s.sentMu.Unlock()
 	return append([]messages.Message(nil), s.imageMessages...)
+}
+
+func (s *sessionRecordingRunnerSession) imageResponseRequestsCopy() []bool {
+	s.sentMu.Lock()
+	defer s.sentMu.Unlock()
+	return append([]bool(nil), s.imageResponseRequests...)
 }
 
 type sessionRecordingTestSession struct {
