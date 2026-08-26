@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	acceptanceprobe "github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
 	loopprobe "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
@@ -17,11 +18,17 @@ type AcceptanceProbeRunner interface {
 	Run(context.Context, loopprobe.AcceptanceInput) (loopprobe.AcceptanceVerdict, error)
 }
 
+// DefaultAcceptanceProbeTimeout bounds a command-line acceptance probe. A
+// caller embedding the command may set ProbeAcceptanceCommand.Timeout to a
+// different positive duration for a known test or acceptance environment.
+const DefaultAcceptanceProbeTimeout = 30 * time.Second
+
 // ProbeAcceptanceCommand runs exactly one blind acceptance probe. Its only
 // user inputs are the executable path and plain-English goal; the runner
 // provisions the empty working directory.
 type ProbeAcceptanceCommand struct {
-	Runner AcceptanceProbeRunner
+	Runner  AcceptanceProbeRunner
+	Timeout time.Duration
 }
 
 // AcceptanceProbeCommand is a compatibility spelling for callers that name
@@ -68,7 +75,13 @@ func (c *ProbeAcceptanceCommand) run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("acceptance probe runner is not configured")
 	}
 	input := loopprobe.AcceptanceInput{BinaryPath: args[0], Goal: args[1]}
-	verdict, runErr := c.Runner.Run(cmd.Context(), input)
+	timeout := c.Timeout
+	if timeout <= 0 {
+		timeout = DefaultAcceptanceProbeTimeout
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+	defer cancel()
+	verdict, runErr := c.Runner.Run(ctx, input)
 	if verdict.Goal != "" || verdict.ScenarioResult.Name != "" {
 		if err := json.NewEncoder(cmd.OutOrStdout()).Encode(verdict); err != nil {
 			return fmt.Errorf("write acceptance probe verdict: %w", err)

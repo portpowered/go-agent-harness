@@ -46,7 +46,7 @@ func TestRunnerProvidesBlindInputAndRecordsArtifacts(t *testing.T) {
 			},
 		}, nil
 	}}
-	runner := NewRunner(transport, nil)
+	runner := NewRunner(transport, recordedArtifactVerifier())
 	runner.ArtifactRoot = artifactParent
 
 	for range 2 {
@@ -131,7 +131,7 @@ func TestAcceptanceProbeNullAgentFailsAndPositiveAgentPasses(t *testing.T) {
 					SubjectiveRating: loopprobe.SubjectiveEasy,
 				},
 			}, nil
-		}), nil)
+		}), recordedArtifactVerifier())
 		runner.ArtifactRoot = t.TempDir()
 
 		verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: goal})
@@ -163,7 +163,7 @@ func TestAcceptanceProbeNullAgentFailsAndPositiveAgentPasses(t *testing.T) {
 					SubjectiveRating:      loopprobe.SubjectiveWorkable,
 				},
 			}, nil
-		}), nil)
+		}), recordedArtifactVerifier())
 		runner.ArtifactRoot = t.TempDir()
 
 		verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: goal})
@@ -204,7 +204,7 @@ func TestAcceptanceProbeSeparatesArtifactAndSubjectiveGates(t *testing.T) {
 					CheckedClaim:          "checked claim",
 					SubjectiveRating:      tt.rating,
 				}}, nil
-			}), nil)
+			}), recordedArtifactVerifier())
 			runner.ArtifactRoot = t.TempDir()
 
 			verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "Check the result"})
@@ -221,15 +221,74 @@ func TestAcceptanceProbeSeparatesArtifactAndSubjectiveGates(t *testing.T) {
 	}
 }
 
+func TestRecordedArtifactVerifierFailsClosedAndRejectsUnrelatedClaim(t *testing.T) {
+	binary := acceptanceTestBinary(t)
+
+	t.Run("no goal-aware checker", func(t *testing.T) {
+		runner := NewRunner(TransportFunc(func(_ context.Context, _ loopprobe.AcceptanceInput, artifacts ArtifactSet) (RunResult, error) {
+			if err := os.WriteFile(filepath.Join(artifacts.WorkingDirectory, "result.txt"), []byte("unrelated claim"), 0o600); err != nil {
+				t.Fatalf("write artifact: %v", err)
+			}
+			return RunResult{Report: loopprobe.AcceptanceAgentReport{
+				ObjectiveArtifactPath: "result.txt",
+				CheckedClaim:          "unrelated claim",
+				SubjectiveRating:      loopprobe.SubjectiveEasy,
+			}}, nil
+		}), nil)
+		runner.ArtifactRoot = t.TempDir()
+
+		verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "create the requested result"})
+		if err != nil {
+			t.Fatalf("Run() error = %v, want a recorded failed verdict", err)
+		}
+		if verdict.Pass || verdict.ObjectiveEvidence.Verified || !strings.Contains(verdict.Error, ErrGoalVerificationUnavailable.Error()) {
+			t.Fatalf("verdict = %+v, want fail-closed goal-verification error", verdict)
+		}
+	})
+
+	t.Run("goal checker rejects unrelated claim", func(t *testing.T) {
+		verifier := RecordedArtifactVerifier{
+			VerifyGoal: func(_ context.Context, input loopprobe.AcceptanceInput, data []byte) error {
+				if input.Goal == "create the requested result" && !strings.Contains(string(data), "requested result created") {
+					return errors.New("artifact describes an unrelated result")
+				}
+				return nil
+			},
+		}
+		runner := NewRunner(TransportFunc(func(_ context.Context, _ loopprobe.AcceptanceInput, artifacts ArtifactSet) (RunResult, error) {
+			if err := os.WriteFile(filepath.Join(artifacts.WorkingDirectory, "result.txt"), []byte("unrelated claim"), 0o600); err != nil {
+				t.Fatalf("write artifact: %v", err)
+			}
+			return RunResult{Report: loopprobe.AcceptanceAgentReport{
+				ObjectiveArtifactPath: "result.txt",
+				CheckedClaim:          "unrelated claim",
+				SubjectiveRating:      loopprobe.SubjectiveEasy,
+			}}, nil
+		}), verifier)
+		runner.ArtifactRoot = t.TempDir()
+
+		verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "create the requested result"})
+		if err != nil {
+			t.Fatalf("Run() error = %v, want a recorded failed verdict", err)
+		}
+		if verdict.Pass || verdict.ObjectiveEvidence.Verified || !strings.Contains(verdict.Error, loopprobe.ErrObjectiveEvidenceMismatch.Error()) {
+			t.Fatalf("verdict = %+v, want unrelated-claim failure", verdict)
+		}
+	})
+}
+
 func TestReplayTransportUsesTheAcceptancePipeline(t *testing.T) {
 	fixturePath := filepath.Join(t.TempDir(), "positive.acceptance.json")
 	fixture := ReplayFixture{
 		Input:      &loopprobe.AcceptanceInput{Goal: "Replay this goal"},
-		Stdout:     "replay goal attained\n",
+		Stdout:     "replay process output\n",
 		Transcript: "{\"event\":\"completed\"}\n",
+		WorkspaceFiles: map[string]string{
+			"result.txt": "replay goal attained\n",
+		},
 		Report: loopprobe.AcceptanceAgentReport{
 			ClaimedSuccess:        true,
-			ObjectiveArtifactPath: "stdout.txt",
+			ObjectiveArtifactPath: "result.txt",
 			CheckedClaim:          "replay goal attained",
 			SubjectiveRating:      loopprobe.SubjectiveEasy,
 		},
@@ -242,7 +301,7 @@ func TestReplayTransportUsesTheAcceptancePipeline(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	runner, err := NewReplayRunner(fixturePath, nil)
+	runner, err := NewReplayRunner(fixturePath, recordedArtifactVerifier())
 	if err != nil {
 		t.Fatalf("NewReplayRunner() error = %v", err)
 	}
@@ -296,7 +355,7 @@ func TestAcceptanceProbeTypedErrorPaths(t *testing.T) {
 	t.Run("probe crash", func(t *testing.T) {
 		runner := NewRunner(TransportFunc(func(context.Context, loopprobe.AcceptanceInput, ArtifactSet) (RunResult, error) {
 			return RunResult{}, errors.New("simulated crash")
-		}), nil)
+		}), recordedArtifactVerifier())
 		runner.ArtifactRoot = t.TempDir()
 		verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "run"})
 		if err == nil || !errors.Is(err, ErrProbeAgentCrashed) {
@@ -319,7 +378,7 @@ func TestAcceptanceProbeTypedErrorPaths(t *testing.T) {
 				SubjectiveRating:      loopprobe.SubjectiveEasy,
 				TerminalState:         loopprobe.AcceptanceCompleted,
 			}}, nil
-		}), nil)
+		}), recordedArtifactVerifier())
 		runner.ArtifactRoot = t.TempDir()
 		verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "run"})
 		if err != nil {
@@ -350,7 +409,7 @@ func TestAcceptanceProbeTypedErrorPaths(t *testing.T) {
 		defer cancel()
 		runner := NewRunner(TransportFunc(func(ctx context.Context, _ loopprobe.AcceptanceInput, _ ArtifactSet) (RunResult, error) {
 			return RunResult{}, ctx.Err()
-		}), nil)
+		}), recordedArtifactVerifier())
 		runner.ArtifactRoot = t.TempDir()
 		verdict, err := runner.Run(ctx, loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "run"})
 		if err == nil || !errors.Is(err, ErrProbeAgentStuck) {
@@ -358,6 +417,26 @@ func TestAcceptanceProbeTypedErrorPaths(t *testing.T) {
 		}
 		if verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream {
 			t.Fatalf("terminal state = %q, want stuck-pending-downstream", verdict.TerminalState)
+		}
+	})
+
+	t.Run("replay rejects unsafe workspace file", func(t *testing.T) {
+		fixturePath := filepath.Join(t.TempDir(), "unsafe.acceptance.json")
+		data, marshalErr := json.Marshal(ReplayFixture{WorkspaceFiles: map[string]string{"../outside.txt": "unsafe"}})
+		if marshalErr != nil {
+			t.Fatalf("marshal fixture: %v", marshalErr)
+		}
+		if writeErr := os.WriteFile(fixturePath, data, 0o600); writeErr != nil {
+			t.Fatalf("write fixture: %v", writeErr)
+		}
+		runner, newErr := NewReplayRunner(fixturePath, recordedArtifactVerifier())
+		if newErr != nil {
+			t.Fatalf("NewReplayRunner() error = %v", newErr)
+		}
+		runner.ArtifactRoot = t.TempDir()
+		_, runErr := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: binary, Goal: "run"})
+		if runErr == nil || !errors.Is(runErr, ErrReplayFixtureInvalid) {
+			t.Fatalf("Run() error = %v, want invalid replay fixture", runErr)
 		}
 	})
 }
@@ -372,7 +451,7 @@ func TestLiveTransportCapturesARealProcess(t *testing.T) {
 		t.Fatalf("write process fixture: %v", err)
 	}
 
-	runner := NewLiveRunner(nil)
+	runner := NewLiveRunner(recordedArtifactVerifier())
 	runner.ArtifactRoot = t.TempDir()
 	verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: path, Goal: "Make the live result"})
 	if err != nil {
@@ -404,7 +483,7 @@ printf '%s\n' '{"claimed_success":true,"objective_artifact_path":"result.txt","c
 		t.Fatalf("write process fixture: %v", err)
 	}
 
-	runner := NewLiveRunner(nil)
+	runner := NewLiveRunner(recordedArtifactVerifier())
 	runner.ArtifactRoot = t.TempDir()
 	verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: path, Goal: "Run without parent workspace context"})
 	if err != nil {
@@ -427,4 +506,12 @@ func acceptanceTestBinary(t *testing.T) string {
 		t.Fatalf("locate test binary: %v", err)
 	}
 	return binary
+}
+
+func recordedArtifactVerifier() ObjectiveVerifier {
+	return RecordedArtifactVerifier{
+		VerifyGoal: func(context.Context, loopprobe.AcceptanceInput, []byte) error {
+			return nil
+		},
+	}
 }

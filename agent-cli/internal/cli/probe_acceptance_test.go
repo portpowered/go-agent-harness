@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	acceptanceprobe "github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
@@ -22,11 +25,16 @@ func (f acceptanceCommandRunnerFunc) Run(ctx context.Context, input loopprobe.Ac
 	return f(ctx, input)
 }
 
-func newTestRootCommandWithAcceptance(runner AcceptanceProbeRunner) *cobra.Command {
+func newTestRootCommandWithAcceptance(runner AcceptanceProbeRunner, timeouts ...time.Duration) *cobra.Command {
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	chatFlags := flags.NewChatFlags()
+
+	acceptanceCommand := NewProbeAcceptanceCommand(runner)
+	if len(timeouts) > 0 {
+		acceptanceCommand.Timeout = timeouts[0]
+	}
 
 	router := NewRouter(
 		globalFlags,
@@ -45,7 +53,7 @@ func newTestRootCommandWithAcceptance(runner AcceptanceProbeRunner) *cobra.Comma
 		NewSessionDeleteCommand(globalFlags),
 		NewConfigCommand(),
 		NewConfigAddLocalCommand(globalFlags),
-		NewProbeAcceptanceCommand(runner),
+		acceptanceCommand,
 	)
 	return NewAgentCLI(router).Generate()
 }
@@ -112,6 +120,71 @@ func TestProbeAcceptanceFailurePrintsVerdictAndReturnsNonZero(t *testing.T) {
 	}
 }
 
+func TestProbeAcceptanceTimeoutReturnsStuckVerdict(t *testing.T) {
+	runner := acceptanceCommandRunnerFunc(func(ctx context.Context, input loopprobe.AcceptanceInput) (loopprobe.AcceptanceVerdict, error) {
+		<-ctx.Done()
+		verdict := loopprobe.EvaluateAcceptance(
+			input.Goal,
+			loopprobe.AcceptanceAgentReport{SubjectiveRating: loopprobe.SubjectiveEasy, TerminalState: loopprobe.AcceptanceStuckPendingDownstream},
+			loopprobe.ObjectiveEvidence{},
+			loopprobe.AcceptanceTransportLive,
+		)
+		return verdict, &acceptanceprobe.ExecutionError{Kind: acceptanceprobe.ErrProbeAgentStuck, Cause: ctx.Err()}
+	})
+	root := newTestRootCommandWithAcceptance(runner, 20*time.Millisecond)
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetArgs([]string{"probe", "acceptance", "probe-agent", "wait forever"})
+
+	started := time.Now()
+	err := root.ExecuteContext(context.Background())
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("timeout command took %s", elapsed)
+	}
+	if err == nil || !errors.Is(err, acceptanceprobe.ErrProbeAgentStuck) {
+		t.Fatalf("error = %v, want stuck error", err)
+	}
+	var verdict loopprobe.AcceptanceVerdict
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &verdict); decodeErr != nil {
+		t.Fatalf("decode verdict %q: %v", stdout.String(), decodeErr)
+	}
+	if verdict.Pass || verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream || verdict.TerminalReason != "stuck" {
+		t.Fatalf("verdict = %+v, want non-passing stuck verdict", verdict)
+	}
+}
+
+func TestProbeAcceptanceLiveTimeoutStopsHangingBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sleep executable fixture is POSIX-specific")
+	}
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skipf("sleep executable is unavailable: %v", err)
+	}
+
+	runner := acceptanceprobe.NewLiveRunner(nil)
+	runner.ArtifactRoot = t.TempDir()
+	root := newTestRootCommandWithAcceptance(runner, 40*time.Millisecond)
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetArgs([]string{"probe", "acceptance", "sleep", "60"})
+
+	started := time.Now()
+	err := root.ExecuteContext(context.Background())
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("hanging binary took %s to stop", elapsed)
+	}
+	if err == nil || !errors.Is(err, acceptanceprobe.ErrProbeAgentStuck) {
+		t.Fatalf("error = %v, want stuck error", err)
+	}
+	var verdict loopprobe.AcceptanceVerdict
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &verdict); decodeErr != nil {
+		t.Fatalf("decode verdict %q: %v", stdout.String(), decodeErr)
+	}
+	if verdict.Pass || verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream {
+		t.Fatalf("verdict = %+v, want non-passing stuck verdict", verdict)
+	}
+}
+
 func TestProbeAcceptanceCLIControlsUseRecordedArtifacts(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -123,6 +196,9 @@ func TestProbeAcceptanceCLIControlsUseRecordedArtifacts(t *testing.T) {
 			name = "positive agent"
 		}
 		t.Run(name, func(t *testing.T) {
+			verifier := acceptanceprobe.RecordedArtifactVerifier{
+				VerifyGoal: func(context.Context, loopprobe.AcceptanceInput, []byte) error { return nil },
+			}
 			runner := acceptanceprobe.NewRunner(acceptanceprobe.TransportFunc(func(_ context.Context, _ loopprobe.AcceptanceInput, artifacts acceptanceprobe.ArtifactSet) (acceptanceprobe.RunResult, error) {
 				report := loopprobe.AcceptanceAgentReport{
 					ClaimedSuccess:   true,
@@ -136,7 +212,7 @@ func TestProbeAcceptanceCLIControlsUseRecordedArtifacts(t *testing.T) {
 					report.CheckedClaim = "goal complete"
 				}
 				return acceptanceprobe.RunResult{Report: report}, nil
-			}), nil)
+			}), verifier)
 			runner.ArtifactRoot = t.TempDir()
 			root := newTestRootCommandWithAcceptance(runner)
 			var stdout bytes.Buffer

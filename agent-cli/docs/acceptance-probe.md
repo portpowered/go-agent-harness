@@ -7,11 +7,18 @@ containing only `PWD` for that working directory, captures stdout/stderr,
 transcript, exit status, and files created in that directory, and prints one
 machine-readable verdict record.
 
-The verdict passes only when both conditions hold:
+The verdict passes only when all of these conditions hold:
 
 - the report names a non-empty artifact and checked claim that the recorded
   artifact actually contains; and
 - the report's subjective rating is `easy` or `workable`.
+
+The production runner also requires a goal-aware `RecordedArtifactVerifier`
+checker (or another `ObjectiveVerifier`) to independently establish that the
+recorded bytes satisfy the plain-English goal. The default zero-value verifier
+fails closed because a probe-selected substring is not proof that the goal was
+attained. The goal-catalog lane supplies that checker through the existing
+runner injection seam.
 
 `confusing`, missing, or unknown ratings fail. A claimed success without a
 verifiable artifact also fails. The verdict retains the existing probe result
@@ -20,7 +27,8 @@ as a result line by downstream probe tooling. `run_directory` points to the
 durable captured artifacts.
 
 The live and replay paths share the same runner. Replay callers construct a
-`probe.ReplayFixture` and pass `probe.NewReplayRunner` to
+`probe.ReplayFixture` with any workspace-created evidence in its safe relative
+`workspace_files` map and pass `probe.NewReplayRunner` to
 `cli.NewProbeAcceptanceCommand`; this changes only the transport, not the
 command or verdict contract. A live probe executable reports its acceptance
 claim as the final JSON line on stdout, for example:

@@ -19,18 +19,19 @@ import (
 )
 
 var (
-	ErrBinaryMissing            = errors.New("acceptance probe binary is missing")
-	ErrBinaryNotExecutable      = errors.New("acceptance probe binary is not executable")
-	ErrGoalMissing              = errors.New("acceptance probe goal is missing")
-	ErrUnknownGoal              = errors.New("acceptance probe goal is unknown")
-	ErrWorkingDirectoryInvalid  = errors.New("acceptance probe working directory is invalid")
-	ErrWorkingDirectoryNotEmpty = errors.New("acceptance probe working directory is not empty")
-	ErrProbeAgentCrashed        = errors.New("acceptance probe agent crashed")
-	ErrProbeAgentStuck          = errors.New("acceptance probe agent is stuck")
-	ErrReplayMismatch           = errors.New("acceptance probe replay input mismatch")
-	ErrReplayFixtureInvalid     = errors.New("acceptance probe replay fixture is invalid")
-	ErrArtifactWrite            = errors.New("acceptance probe artifact write failed")
-	ErrUnsafeArtifactPath       = errors.New("acceptance probe artifact path is unsafe")
+	ErrBinaryMissing               = errors.New("acceptance probe binary is missing")
+	ErrBinaryNotExecutable         = errors.New("acceptance probe binary is not executable")
+	ErrGoalMissing                 = errors.New("acceptance probe goal is missing")
+	ErrUnknownGoal                 = errors.New("acceptance probe goal is unknown")
+	ErrWorkingDirectoryInvalid     = errors.New("acceptance probe working directory is invalid")
+	ErrWorkingDirectoryNotEmpty    = errors.New("acceptance probe working directory is not empty")
+	ErrProbeAgentCrashed           = errors.New("acceptance probe agent crashed")
+	ErrProbeAgentStuck             = errors.New("acceptance probe agent is stuck")
+	ErrReplayMismatch              = errors.New("acceptance probe replay input mismatch")
+	ErrReplayFixtureInvalid        = errors.New("acceptance probe replay fixture is invalid")
+	ErrArtifactWrite               = errors.New("acceptance probe artifact write failed")
+	ErrUnsafeArtifactPath          = errors.New("acceptance probe artifact path is unsafe")
+	ErrGoalVerificationUnavailable = errors.New("acceptance probe goal-aware verifier is not installed")
 )
 
 // InputError identifies which of the three blind-probe inputs was invalid.
@@ -190,36 +191,51 @@ func (a ArtifactSet) Path(relative string) (string, error) {
 	return path, nil
 }
 
-// RecordedArtifactVerifier is the default generic verifier. A probe reports a
-// relative artifact and an exact claim; this verifier reads the actual file,
-// rejects empty/symlinked artifacts, and requires the claim to occur in the
-// recorded bytes. Goal-specific catalog lanes can provide a stricter verifier
-// without changing the runner or CLI contract.
-type RecordedArtifactVerifier struct{}
+// GoalVerificationFunc independently checks whether the recorded artifact
+// proves the input goal. The callback must derive its decision from input.Goal
+// and the recorded artifact bytes; it must not trust report.CheckedClaim as a
+// goal definition.
+type GoalVerificationFunc func(context.Context, loopprobe.AcceptanceInput, []byte) error
 
-func (RecordedArtifactVerifier) Verify(_ context.Context, _ loopprobe.AcceptanceInput, artifacts ArtifactSet, report loopprobe.AcceptanceAgentReport) (loopprobe.ObjectiveEvidence, error) {
+// RecordedArtifactVerifier reads a probe-selected artifact and requires a
+// goal-aware checker before it can mark evidence verified. The zero value is
+// deliberately fail-closed because a generic substring check cannot establish
+// that a plain-English goal was attained. Goal-catalog lanes install
+// VerifyGoal without changing the runner or CLI contract.
+type RecordedArtifactVerifier struct {
+	VerifyGoal GoalVerificationFunc
+}
+
+func (v RecordedArtifactVerifier) Verify(ctx context.Context, input loopprobe.AcceptanceInput, artifacts ArtifactSet, report loopprobe.AcceptanceAgentReport) (loopprobe.ObjectiveEvidence, error) {
 	relative := strings.TrimSpace(report.ObjectiveArtifactPath)
 	claim := strings.TrimSpace(report.CheckedClaim)
 	if relative == "" || claim == "" {
 		return loopprobe.ObjectiveEvidence{}, loopprobe.ErrObjectiveEvidenceAbsent
 	}
+	evidence := loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}
 	path, err := artifacts.Path(relative)
 	if err != nil {
-		return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}, fmt.Errorf("%w: %v", loopprobe.ErrObjectiveEvidenceMismatch, err)
+		return evidence, fmt.Errorf("%w: %v", loopprobe.ErrObjectiveEvidenceMismatch, err)
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}, fmt.Errorf("%w: read %q: %v", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
+		return evidence, fmt.Errorf("%w: read %q: %v", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}, fmt.Errorf("%w: %q is not a regular artifact", loopprobe.ErrObjectiveEvidenceMismatch, relative)
+		return evidence, fmt.Errorf("%w: %q is not a regular artifact", loopprobe.ErrObjectiveEvidenceMismatch, relative)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}, fmt.Errorf("%w: read %q: %v", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
+		return evidence, fmt.Errorf("%w: read %q: %v", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
 	}
 	if len(data) == 0 || !bytes.Contains(data, []byte(claim)) {
-		return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}, fmt.Errorf("%w: artifact %q does not contain checked claim", loopprobe.ErrObjectiveEvidenceMismatch, relative)
+		return evidence, fmt.Errorf("%w: artifact %q does not contain checked claim", loopprobe.ErrObjectiveEvidenceMismatch, relative)
+	}
+	if v.VerifyGoal == nil {
+		return evidence, ErrGoalVerificationUnavailable
+	}
+	if err := v.VerifyGoal(ctx, input, data); err != nil {
+		return evidence, fmt.Errorf("%w: goal %q was not verified: %v", loopprobe.ErrObjectiveEvidenceMismatch, input.Goal, err)
 	}
 	return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim, Verified: true}, nil
 }
@@ -609,6 +625,9 @@ func runLiveProcess(ctx context.Context, input loopprobe.AcceptanceInput) (RunRe
 	}
 	result.Report = parseAgentReport(result.Stdout)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return result, ctxErr
+		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			return result, nil
@@ -647,13 +666,14 @@ func parseAgentReport(data []byte) loopprobe.AcceptanceAgentReport {
 // Input fields are optional so one fixture can be reused for dynamic temporary
 // directories, but any field present is matched exactly.
 type ReplayFixture struct {
-	Input      *loopprobe.AcceptanceInput      `json:"input,omitempty"`
-	Stdout     string                          `json:"stdout"`
-	Stderr     string                          `json:"stderr"`
-	Transcript string                          `json:"transcript,omitempty"`
-	ExitCode   int                             `json:"exit_code"`
-	Report     loopprobe.AcceptanceAgentReport `json:"report"`
-	Error      string                          `json:"error,omitempty"`
+	Input          *loopprobe.AcceptanceInput      `json:"input,omitempty"`
+	Stdout         string                          `json:"stdout"`
+	Stderr         string                          `json:"stderr"`
+	Transcript     string                          `json:"transcript,omitempty"`
+	ExitCode       int                             `json:"exit_code"`
+	Report         loopprobe.AcceptanceAgentReport `json:"report"`
+	WorkspaceFiles map[string]string               `json:"workspace_files,omitempty"`
+	Error          string                          `json:"error,omitempty"`
 }
 
 // ReplayTransport returns recorded process observations without dialing a
@@ -674,7 +694,7 @@ func NewReplayTransport(path string) (*ReplayTransport, error) {
 	return &ReplayTransport{Fixture: fixture}, nil
 }
 
-func (t *ReplayTransport) Run(ctx context.Context, input loopprobe.AcceptanceInput, _ ArtifactSet) (RunResult, error) {
+func (t *ReplayTransport) Run(ctx context.Context, input loopprobe.AcceptanceInput, artifacts ArtifactSet) (RunResult, error) {
 	if err := ctx.Err(); err != nil {
 		return RunResult{}, err
 	}
@@ -687,6 +707,9 @@ func (t *ReplayTransport) Run(ctx context.Context, input loopprobe.AcceptanceInp
 			(expected.WorkingDirectory != "" && expected.WorkingDirectory != input.WorkingDirectory) {
 			return RunResult{}, &ExecutionError{Kind: ErrReplayMismatch, Cause: fmt.Errorf("fixture input does not match resolved probe input")}
 		}
+	}
+	if err := materializeReplayWorkspaceFiles(artifacts, t.Fixture.WorkspaceFiles); err != nil {
+		return RunResult{}, &ExecutionError{Kind: ErrReplayFixtureInvalid, Cause: err}
 	}
 	result := RunResult{
 		ExitCode:   t.Fixture.ExitCode,
@@ -702,4 +725,25 @@ func (t *ReplayTransport) Run(ctx context.Context, input loopprobe.AcceptanceInp
 		return result, &ExecutionError{Kind: ErrProbeAgentCrashed, Cause: errors.New(t.Fixture.Error)}
 	}
 	return result, nil
+}
+
+func materializeReplayWorkspaceFiles(artifacts ArtifactSet, files map[string]string) error {
+	for relative, data := range files {
+		path, err := artifacts.Path(relative)
+		if err != nil {
+			return fmt.Errorf("workspace file %q: %w", relative, err)
+		}
+		if _, err := os.Lstat(path); err == nil {
+			return fmt.Errorf("workspace file %q is declared more than once", relative)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("inspect workspace file %q: %w", relative, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return fmt.Errorf("create workspace file directory for %q: %w", relative, err)
+		}
+		if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+			return fmt.Errorf("write workspace file %q: %w", relative, err)
+		}
+	}
+	return nil
 }

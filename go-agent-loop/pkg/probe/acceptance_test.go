@@ -94,3 +94,46 @@ func TestEvaluateAcceptanceRejectsConfusingAndNonTerminalReports(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluateAcceptanceRequiresEvidenceRatingAndKnownTerminalState(t *testing.T) {
+	tests := []struct {
+		name     string
+		report   AcceptanceAgentReport
+		evidence ObjectiveEvidence
+		want     string
+	}{
+		{
+			name: "missing objective evidence",
+			report: AcceptanceAgentReport{
+				SubjectiveRating: SubjectiveEasy,
+				TerminalState:    AcceptanceCompleted,
+			},
+			want: ErrObjectiveEvidenceAbsent.Error(),
+		},
+		{
+			name: "missing subjective rating",
+			report: AcceptanceAgentReport{
+				TerminalState: AcceptanceCompleted,
+			},
+			evidence: ObjectiveEvidence{Verified: true},
+			want:     ErrSubjectiveRatingMissing.Error(),
+		},
+		{
+			name: "unknown terminal state",
+			report: AcceptanceAgentReport{
+				SubjectiveRating: SubjectiveEasy,
+				TerminalState:    AcceptanceTerminalState("unknown"),
+			},
+			evidence: ObjectiveEvidence{Verified: true},
+			want:     ErrAcceptanceTerminalState.Error(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			verdict := EvaluateAcceptance("goal", tt.report, tt.evidence, AcceptanceTransportLive)
+			if verdict.Pass || !strings.Contains(verdict.Error, tt.want) {
+				t.Fatalf("verdict = %+v, want failing reason %q", verdict, tt.want)
+			}
+		})
+	}
+}
