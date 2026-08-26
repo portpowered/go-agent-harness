@@ -49,7 +49,7 @@ func newBackpressureTestEngine() *backpressureTestState {
 	kernelRunner := participants.NewKernelRunner(nil, bufCap)
 
 	coord := subsystems.NewCoordinator(nil)
-	coordDelta := subsystems.NewCoordinatorDelta(*kernelRunner.DeltaInbox, nil)
+	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, nil)
 	hlps := []subsystems.Subsystem{coord, coordDelta}
 
 	eng := NewEngine(
@@ -85,7 +85,7 @@ func TestBackpressure_ModelDeltaOutboxSaturated(t *testing.T) {
 	ctx := context.Background()
 
 	var dropCount atomic.Int64
-	ts.modelRunner.DeltaOutbox.SetOnDrop(func() {
+	ts.modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 		dropCount.Add(1)
 	})
 
@@ -146,7 +146,7 @@ func TestBackpressure_ModelDeltasSaturateDuringStreaming(t *testing.T) {
 	defer cancel()
 
 	var dropCount atomic.Int64
-	ts.modelRunner.DeltaOutbox.SetOnDrop(func() {
+	ts.modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 		dropCount.Add(1)
 	})
 
@@ -194,7 +194,7 @@ func TestBackpressure_ToolDeltaOutboxSaturated(t *testing.T) {
 	ctx := context.Background()
 
 	var dropCount atomic.Int64
-	ts.toolRunner.DeltaOutbox.SetOnDrop(func() {
+	ts.toolRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 		dropCount.Add(1)
 	})
 
@@ -234,7 +234,7 @@ func TestBackpressure_UserOutboxSaturated(t *testing.T) {
 	ctx := context.Background()
 
 	var dropCount atomic.Int64
-	ts.userRunner.Outbox.SetOnDrop(func() {
+	ts.userRunner.Outbox.SetOnDrop(func(_ messages.UserResponse) {
 		dropCount.Add(1)
 	})
 
@@ -265,7 +265,7 @@ func TestBackpressure_UserInboxSaturated(t *testing.T) {
 	ctx := context.Background()
 
 	var dropCount atomic.Int64
-	ts.userRunner.Inbox.SetOnDrop(func() {
+	ts.userRunner.Inbox.SetOnDrop(func(_ messages.UserRequest) {
 		dropCount.Add(1)
 	})
 
@@ -303,7 +303,7 @@ func TestBackpressure_KernelDeltaInboxSaturated(t *testing.T) {
 	ctx := context.Background()
 
 	var dropCount atomic.Int64
-	ts.kernelRunner.DeltaInbox.SetOnDrop(func() {
+	ts.kernelRunner.DeltaInbox.SetOnDrop(func(_ messages.KernelDeltaRequest) {
 		dropCount.Add(1)
 	})
 
@@ -352,13 +352,13 @@ func TestBackpressure_OnDropCallbackIntegration(t *testing.T) {
 	var userInboxDrops, userOutboxDrops atomic.Int64
 	var kernelInboxDrops atomic.Int64
 
-	ts.modelRunner.Inbox.SetOnDrop(func() { modelInboxDrops.Add(1) })
-	ts.modelRunner.DeltaOutbox.SetOnDrop(func() { modelOutboxDrops.Add(1) })
-	ts.toolRunner.Inbox.SetOnDrop(func() { toolInboxDrops.Add(1) })
-	ts.toolRunner.DeltaOutbox.SetOnDrop(func() { toolOutboxDrops.Add(1) })
-	ts.userRunner.Inbox.SetOnDrop(func() { userInboxDrops.Add(1) })
-	ts.userRunner.Outbox.SetOnDrop(func() { userOutboxDrops.Add(1) })
-	ts.kernelRunner.DeltaInbox.SetOnDrop(func() { kernelInboxDrops.Add(1) })
+	ts.modelRunner.Inbox.SetOnDrop(func(_ messages.InferenceRequest) { modelInboxDrops.Add(1) })
+	ts.modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) { modelOutboxDrops.Add(1) })
+	ts.toolRunner.Inbox.SetOnDrop(func(_ messages.ToolBatchRequest) { toolInboxDrops.Add(1) })
+	ts.toolRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) { toolOutboxDrops.Add(1) })
+	ts.userRunner.Inbox.SetOnDrop(func(_ messages.UserRequest) { userInboxDrops.Add(1) })
+	ts.userRunner.Outbox.SetOnDrop(func(_ messages.UserResponse) { userOutboxDrops.Add(1) })
+	ts.kernelRunner.DeltaInbox.SetOnDrop(func(_ messages.KernelDeltaRequest) { kernelInboxDrops.Add(1) })
 
 	// Saturate each buffer (capacity 1) with 2 writes: 1 succeeds, 1 drops.
 	ts.modelRunner.Inbox.Write(ctx, messages.InferenceRequest{})
@@ -414,7 +414,7 @@ func TestBackpressure_ContextCancelDoesNotTriggerOnDrop(t *testing.T) {
 	ts := newBackpressureTestEngine()
 
 	var dropCount atomic.Int64
-	ts.modelRunner.DeltaOutbox.SetOnDrop(func() {
+	ts.modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 		dropCount.Add(1)
 	})
 
@@ -446,7 +446,7 @@ func TestBackpressure_RecoveryAfterSaturation(t *testing.T) {
 	defer cancel()
 
 	var dropCount atomic.Int64
-	ts.modelRunner.DeltaOutbox.SetOnDrop(func() {
+	ts.modelRunner.DeltaOutbox.SetOnDrop(func(_ messages.StreamMessage) {
 		dropCount.Add(1)
 	})
 

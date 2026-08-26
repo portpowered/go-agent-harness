@@ -163,10 +163,7 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 			return
 		case <-s.done:
 			return
-		case event, ok := <-s.sendCh:
-			if !ok {
-				return
-			}
+		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
 				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})
 				_ = s.Close()

@@ -49,13 +49,13 @@ const (
 
 type OutputBuffers struct {
 	// Messsages that we are instructing the tool to execute.
-	ToolInbox messages.TypedBuffer[messages.ToolBatchRequest]
+	ToolInbox *messages.TypedBuffer[messages.ToolBatchRequest]
 	// Messages we want to tell the user to execute
-	UserInbox messages.TypedBuffer[messages.UserRequest]
+	UserInbox *messages.TypedBuffer[messages.UserRequest]
 	// Messages we want to tell the agent to execute
-	ModelInbox messages.TypedBuffer[messages.InferenceRequest]
+	ModelInbox *messages.TypedBuffer[messages.InferenceRequest]
 	// Messages to the kernel deltas.
-	KernelDeltaInbox messages.TypedBuffer[messages.KernelDeltaRequest]
+	KernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest]
 	// These are buffers that we write out to as a consequence of the current tick.
 }
 

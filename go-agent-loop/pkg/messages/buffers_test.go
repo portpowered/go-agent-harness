@@ -3,6 +3,8 @@ package messages
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -102,7 +104,7 @@ func TestTypedBuffer_WriteContextOutcomes(t *testing.T) {
 func TestTypedBuffer_OnDropCalledWhenFull(t *testing.T) {
 	buf := NewTypedBuffer[string](1)
 	dropCount := 0
-	buf.SetOnDrop(func() {
+	buf.SetOnDrop(func(_ string) {
 		dropCount++
 	})
 
@@ -118,7 +120,7 @@ func TestTypedBuffer_OnDropCalledWhenFull(t *testing.T) {
 func TestTypedBuffer_OnDropNotCalledOnSuccess(t *testing.T) {
 	buf := NewTypedBuffer[string](10)
 	called := false
-	buf.SetOnDrop(func() {
+	buf.SetOnDrop(func(_ string) {
 		called = true
 	})
 
@@ -131,7 +133,7 @@ func TestTypedBuffer_OnDropNotCalledOnSuccess(t *testing.T) {
 func TestTypedBuffer_OnDropNotCalledOnContextCancel(t *testing.T) {
 	buf := NewTypedBuffer[string](10)
 	called := false
-	buf.SetOnDrop(func() {
+	buf.SetOnDrop(func(_ string) {
 		called = true
 	})
 
@@ -149,6 +151,91 @@ func TestTypedBuffer_OnDropNilSafe(t *testing.T) {
 	// No OnDrop set — should not panic
 	buf.Write(context.Background(), "first")
 	buf.Write(context.Background(), "second") // buffer full, no callback set
+}
+
+func TestTypedBuffer_DropCountsWithoutObserver(t *testing.T) {
+	buf := NewTypedBuffer[string](1)
+	// No OnDrop registered: the built-in counter is the only evidence.
+	if !buf.Write(context.Background(), "first") {
+		t.Fatal("initial write failed")
+	}
+	for i := range 3 {
+		if buf.Write(context.Background(), "overflow") {
+			t.Fatalf("write %d succeeded on a full buffer", i)
+		}
+	}
+	if got := buf.Drops(); got != 3 {
+		t.Fatalf("Drops() = %d, want 3", got)
+	}
+	// Draining the buffer must not reset or change the cumulative count.
+	if _, ok := buf.Read(); !ok {
+		t.Fatal("read from filled buffer failed")
+	}
+	if !buf.Write(context.Background(), "after drain") {
+		t.Fatal("write after drain failed")
+	}
+	if got := buf.Drops(); got != 3 {
+		t.Fatalf("Drops() after drain = %d, want still 3", got)
+	}
+}
+
+func TestTypedBuffer_DropCountOnlyOnBufferFullPath(t *testing.T) {
+	buf := NewTypedBuffer[string](1)
+	if !buf.Write(context.Background(), "kept") {
+		t.Fatal("successful write reported failure")
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if outcome := buf.WriteContext(cancelled, "cancelled"); outcome.Status != BufferWriteCancelled {
+		t.Fatalf("cancelled write returned %+v", outcome)
+	}
+	timedOut, timeout := context.WithTimeout(context.Background(), 0)
+	defer timeout()
+	if outcome := buf.WriteContext(timedOut, "timed out"); outcome.Status != BufferWriteTimedOut {
+		t.Fatalf("timed-out write returned %+v", outcome)
+	}
+	if got := buf.Drops(); got != 0 {
+		t.Fatalf("Drops() = %d after success/cancel/timeout writes, want 0", got)
+	}
+	if outcome := buf.WriteContext(context.Background(), "dropped"); outcome.Status != BufferWriteBufferFull {
+		t.Fatalf("buffer-full write returned %+v", outcome)
+	}
+	if got := buf.Drops(); got != 1 {
+		t.Fatalf("Drops() = %d after one buffer-full write, want 1", got)
+	}
+}
+
+func TestTypedBuffer_ConcurrentWritersAccurateDropCount(t *testing.T) {
+	const (
+		writers    = 8
+		writesEach = 200
+	)
+	buf := NewTypedBuffer[int](4)
+	var delivered atomic.Int64
+	var observed atomic.Int64
+	buf.SetOnDrop(func(_ int) { observed.Add(1) })
+
+	var wg sync.WaitGroup
+	for range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range writesEach {
+				if buf.Write(context.Background(), i) {
+					delivered.Add(1)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	want := int64(writers * writesEach)
+	if got := buf.Drops(); got != observed.Load() {
+		t.Fatalf("Drops() = %d disagrees with observer count %d", got, observed.Load())
+	}
+	if total := delivered.Load() + buf.Drops(); total != want {
+		t.Fatalf("delivered %d + dropped %d = %d, want %d", delivered.Load(), buf.Drops(), total, want)
+	}
 }
 
 func TestTypedBuffer_WriteCancelledContext(t *testing.T) {

@@ -13,9 +13,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-// Ensure grokSession satisfies messages.Session at compile time.
-var _ messages.Session = (*grokSession)(nil)
-var _ messages.SessionSendOutcomeSender = (*grokSession)(nil)
+var (
+	_ messages.Session                  = (*grokSession)(nil)
+	_ messages.SessionSendOutcomeSender = (*grokSession)(nil)
+	_ messages.SessionDropCounters      = (*grokSession)(nil)
+)
 
 // grokSession wraps a WebSocket connection as a bidirectional StreamMessage session.
 // It translates between agent loop StreamMessages and the Grok wire protocol
@@ -25,12 +27,14 @@ type grokSession struct {
 	conn   transport.Conn
 	logger logging.Logger
 
-	// sendCh is the internal queue for outbound wire events (SessionEvent).
-	// Populated by Send() after translating from StreamMessage.
-	sendCh chan models.SessionEvent
+	// sendQueue buffers outbound wire events (client-to-provider, the
+	// session's input path). Overflow drops are counted by the buffer itself
+	// and logged through the default drop observer attached in newGrokSession.
+	sendQueue *messages.TypedBuffer[models.SessionEvent]
 
 	// recvBuf is the inbound typed buffer of translated StreamMessages.
-	// Populated by readLoop() after translating from wire events.
+	// Populated by readLoop() after translating from wire events; it is the
+	// provider-to-client output path of the session.
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
 	done      chan struct{}
@@ -38,13 +42,15 @@ type grokSession struct {
 }
 
 func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {
-	return &grokSession{
-		conn:    conn,
-		logger:  logger,
-		sendCh:  make(chan models.SessionEvent, 64),
-		recvBuf: messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:    make(chan struct{}),
+	s := &grokSession{
+		conn:      conn,
+		logger:    logger,
+		sendQueue: messages.NewTypedBuffer[models.SessionEvent](64),
+		recvBuf:   messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:      make(chan struct{}),
 	}
+	providers.AttachSessionDropLoggers(logger, s.sendQueue, s.recvBuf)
+	return s
 }
 
 // start launches the read and write goroutines.
@@ -85,10 +91,16 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 		return sessionSendContextOutcome(ctx)
 	case <-s.done:
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-	case s.sendCh <- event:
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	default:
+	}
+	outcome := s.sendQueue.WriteContext(ctx, event)
+	switch outcome.Status {
+	case messages.BufferWriteSucceeded:
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	case messages.BufferWriteBufferFull:
 		return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+	default:
+		return sessionSendContextOutcome(ctx)
 	}
 }
 
@@ -105,6 +117,12 @@ func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome 
 func (s *grokSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.recvBuf
 }
+
+// InputDrops reports cumulative drops on the client-to-provider send queue.
+func (s *grokSession) InputDrops() int64 { return s.sendQueue.Drops() }
+
+// OutputDrops reports cumulative drops on the provider-to-client receive buffer.
+func (s *grokSession) OutputDrops() int64 { return s.recvBuf.Drops() }
 
 // Done returns a channel closed when the session terminates.
 func (s *grokSession) Done() <-chan struct{} {
@@ -168,19 +186,14 @@ func (s *grokSession) readLoop(ctx context.Context) {
 	}
 }
 
-// writeLoop reads events from sendCh and writes them to the WebSocket.
+// writeLoop reads events from the send queue and writes them to the WebSocket.
 func (s *grokSession) writeLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			_ = s.Close()
 			return
-		case <-s.done:
-			return
-		case event, ok := <-s.sendCh:
-			if !ok {
-				return
-			}
+		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
 				s.logger.Error("grok: websocket write error", logging.Field{Key: "error", Value: err})
 				_ = s.Close()

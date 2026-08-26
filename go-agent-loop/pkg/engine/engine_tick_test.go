@@ -42,7 +42,7 @@ func newTickTestEngine() *tickTestState {
 	kernelRunner := participants.NewKernelRunner(nil, bufCap)
 
 	coord := subsystems.NewCoordinator(nil)
-	coordDelta := subsystems.NewCoordinatorDelta(*kernelRunner.DeltaInbox, nil)
+	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, nil)
 	hlps := []subsystems.Subsystem{coord, coordDelta}
 
 	eng := NewEngine(

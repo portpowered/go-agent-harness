@@ -58,7 +58,7 @@ func FuzzTypedBufferConservationAndOrdering(f *testing.F) {
 		buffer := NewTypedBuffer[fuzzBufferValue](capacity)
 
 		dropCount := 0
-		buffer.SetOnDrop(func() {
+		buffer.SetOnDrop(func(_ fuzzBufferValue) {
 			dropCount++
 		})
 
@@ -190,7 +190,7 @@ func FuzzTypedBufferConservationAndOrdering(f *testing.F) {
 func TestTypedBufferFullDropsNewest(t *testing.T) {
 	buffer := NewTypedBuffer[int](1)
 	var dropCount atomic.Int64
-	buffer.SetOnDrop(func() {
+	buffer.SetOnDrop(func(_ int) {
 		dropCount.Add(1)
 	})
 
@@ -292,7 +292,7 @@ func TestTypedBufferWriteContextCancellationAfterInitialCheck(t *testing.T) {
 		t.Fatalf("setup write returned %+v", outcome)
 	}
 	var dropCount atomic.Int64
-	buffer.SetOnDrop(func() {
+	buffer.SetOnDrop(func(_ int) {
 		dropCount.Add(1)
 	})
 
@@ -325,7 +325,7 @@ func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 	t.Helper()
 	buffer := NewTypedBuffer[concurrentBufferValue](concurrentBufferCapacity)
 	var dropCount atomic.Int64
-	buffer.SetOnDrop(func() {
+	buffer.SetOnDrop(func(_ concurrentBufferValue) {
 		dropCount.Add(1)
 	})
 
@@ -484,7 +484,7 @@ func TestTypedBufferCloseDuringWrite(t *testing.T) {
 	for iteration := 0; iteration < cancellationRaceIterations; iteration++ {
 		buffer := NewTypedBuffer[int](1)
 		var dropCount atomic.Int64
-		buffer.SetOnDrop(func() {
+		buffer.SetOnDrop(func(_ int) {
 			dropCount.Add(1)
 		})
 		ctx, cancel := context.WithCancel(context.Background())

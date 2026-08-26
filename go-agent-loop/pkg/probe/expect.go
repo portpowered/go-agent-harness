@@ -73,6 +73,13 @@ type ObservationSnapshot struct {
 	BufferDisposition string
 	// Metrics carries one reconciliation pair per direction/modality series.
 	Metrics []MetricsSeries
+
+	// InputDrops is the cumulative count of buffer-full drops on the
+	// client-to-provider send path observed over the run.
+	InputDrops uint64
+	// OutputDrops is the cumulative count of buffer-full drops on the
+	// provider-to-client receive path observed over the run.
+	OutputDrops uint64
 }
 
 type Observation = ObservationSnapshot

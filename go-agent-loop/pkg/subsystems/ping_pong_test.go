@@ -11,7 +11,7 @@ import (
 
 // TestPingPongSubsystem_EmitsPong directly tests the PingPong subsystem.
 func TestPingPongSubsystem_EmitsPong(t *testing.T) {
-	inbox := *messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
+	inbox := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
 	pp := NewPingPong(inbox, nil)
 
 	ls := &state.LoopState{
@@ -52,7 +52,7 @@ func TestPingPongSubsystem_EmitsPong(t *testing.T) {
 
 // TestPingPongSubsystem_NoOpInNonSession verifies ping/pong is a no-op outside DuplexSession.
 func TestPingPongSubsystem_NoOpInNonSession(t *testing.T) {
-	inbox := *messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
+	inbox := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
 	pp := NewPingPong(inbox, nil)
 
 	ls := &state.LoopState{
@@ -81,7 +81,7 @@ func TestPingPongSubsystem_NoOpInNonSession(t *testing.T) {
 
 // TestPingPongSubsystem_MultiplePings verifies multiple pings produce multiple pongs.
 func TestPingPongSubsystem_MultiplePings(t *testing.T) {
-	inbox := *messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
+	inbox := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
 	pp := NewPingPong(inbox, nil)
 
 	pingMsg := messages.Message{

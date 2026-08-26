@@ -12,7 +12,7 @@ import (
 func newCoordinatorDeltaTestState() *state.LoopState {
 	return &state.LoopState{
 		Outputs: state.OutputBuffers{
-			KernelDeltaInbox: *messages.NewTypedBuffer[messages.KernelDeltaRequest](16),
+			KernelDeltaInbox: messages.NewTypedBuffer[messages.KernelDeltaRequest](16),
 		},
 	}
 }
@@ -21,7 +21,7 @@ func newCoordinatorDeltaTestState() *state.LoopState {
 
 func TestCoordinatorDelta_ForwardsModelDeltas(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.ModelInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hello")},
@@ -52,7 +52,7 @@ func TestCoordinatorDelta_ForwardsModelDeltas(t *testing.T) {
 
 func TestCoordinatorDelta_ForwardsToolDeltas(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.ToolInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("tool output")},
@@ -73,7 +73,7 @@ func TestCoordinatorDelta_ForwardsToolDeltas(t *testing.T) {
 
 func TestCoordinatorDelta_ForwardsUserDeltas(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.UserInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("user input")},
@@ -94,7 +94,7 @@ func TestCoordinatorDelta_ForwardsUserDeltas(t *testing.T) {
 
 func TestCoordinatorDelta_ForwardsAllSourcesInOrder(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](16)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.ModelInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("model")},
@@ -127,7 +127,7 @@ func TestCoordinatorDelta_ForwardsAllSourcesInOrder(t *testing.T) {
 
 func TestCoordinatorDelta_EmitsLoopEndOnTermination(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.TerminateLoop = true
 
@@ -152,7 +152,7 @@ func TestCoordinatorDelta_EmitsLoopEndOnTermination(t *testing.T) {
 
 func TestCoordinatorDelta_LoopEndAfterDeltas(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.ModelInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("data")},
@@ -184,7 +184,7 @@ func TestCoordinatorDelta_LoopEndAfterDeltas(t *testing.T) {
 
 func TestCoordinatorDelta_NoLoopEndWhenNotTerminating(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.TerminateLoop = false
 	ls.Inputs.ModelInputDelta = []messages.StreamMessage{
@@ -208,7 +208,7 @@ func TestCoordinatorDelta_NoLoopEndWhenNotTerminating(t *testing.T) {
 
 func TestCoordinatorDelta_DuplexSessionClientCloseHasTerminalMetadata(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Mode = state.DuplexSession
 	ls.SessionID = "session-1"
@@ -250,7 +250,7 @@ func TestCoordinatorDelta_DuplexSessionClientCloseHasTerminalMetadata(t *testing
 
 func TestCoordinatorDelta_DuplexSessionStopHasCancellationMetadata(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Mode = state.DuplexSession
 	ls.SessionID = "session-1"
@@ -288,7 +288,7 @@ func TestCoordinatorDelta_DuplexSessionStopHasCancellationMetadata(t *testing.T)
 
 func TestCoordinatorDelta_NoInputsNoOutput(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 
 	if err := cd.Execute(context.Background(), ls); err != nil {
@@ -304,7 +304,7 @@ func TestCoordinatorDelta_NoInputsNoOutput(t *testing.T) {
 
 func TestCoordinatorDelta_PreservesLoopPassID(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.ModelInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("a"), LoopPassID: 5},
@@ -325,7 +325,7 @@ func TestCoordinatorDelta_PreservesLoopPassID(t *testing.T) {
 
 func TestCoordinatorDelta_PreservesActorID(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.ToolInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("x"), ActorID: messages.Tool},
@@ -346,7 +346,7 @@ func TestCoordinatorDelta_PreservesActorID(t *testing.T) {
 
 func TestCoordinatorDelta_PreservesGlobalIndex(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](8)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	ls := newCoordinatorDeltaTestState()
 	ls.Inputs.UserInputDelta = []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("z"), GlobalIndex: 42},
@@ -369,7 +369,7 @@ func TestCoordinatorDelta_PreservesGlobalIndex(t *testing.T) {
 
 func TestCoordinatorDelta_TickGroup(t *testing.T) {
 	buf := messages.NewTypedBuffer[messages.KernelDeltaRequest](1)
-	cd := NewCoordinatorDelta(*buf, nil)
+	cd := NewCoordinatorDelta(buf, nil)
 	if cd.TickGroup() != TickGroupCoordinatorDelta {
 		t.Errorf("TickGroup: got %d, want %d", cd.TickGroup(), TickGroupCoordinatorDelta)
 	}

@@ -11,11 +11,11 @@ import (
 // CoordinatorDelta consumes streaming delta messages from the current tick inputs
 // and dispatches them to the kernel participant's delta inbox for IO delivery.
 type CoordinatorDelta struct {
-	kernelDeltaInbox messages.TypedBuffer[messages.KernelDeltaRequest]
+	kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest]
 	logger           logging.Logger
 }
 
-func NewCoordinatorDelta(kernelDeltaInbox messages.TypedBuffer[messages.KernelDeltaRequest], logger logging.Logger) *CoordinatorDelta {
+func NewCoordinatorDelta(kernelDeltaInbox *messages.TypedBuffer[messages.KernelDeltaRequest], logger logging.Logger) *CoordinatorDelta {
 	return &CoordinatorDelta{
 		kernelDeltaInbox: kernelDeltaInbox,
 		logger:           logger,
