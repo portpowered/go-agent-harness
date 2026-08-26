@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -101,8 +103,8 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err := source.ReadFrame(readContext, gotInput); err != nil {
 		t.Fatalf("selected device capture read: %v", err)
 	}
-	if got := pcm16ProbeRMS(gotInput); got <= 300 {
-		t.Fatalf("captured input RMS = %.2f, want voiced energy above 300", got)
+	if err := assertDeviceProbeEnergy("captured input", gotInput); err != nil {
+		t.Fatal(err)
 	}
 
 	// The device contract emits 30 ms frames at 16 kHz, while one RTC Opus
@@ -143,8 +145,8 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read active session input track: %v", err)
 	}
-	if got := pcm16ProbeRMS(gotSessionInput.Samples); got <= 300 {
-		t.Fatalf("session input RMS = %.2f, want voiced energy above 300", got)
+	if err := assertDeviceProbeEnergy("session input", gotSessionInput.Samples); err != nil {
+		t.Fatal(err)
 	}
 	wantSessionSamples := int(int64(audio.SampleRate) * int64(rtc.OpusFrameDuration) / int64(time.Second))
 	if len(gotSessionInput.Samples) != wantSessionSamples {
@@ -179,9 +181,145 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 		t.Fatalf("session turn message type = %s, want %s after audio", turnMessage.Type, messages.StreamTypeMessageEnd)
 	}
 
+	// The provider-side response is delivered through the same production
+	// session runner boundary as a live session. Route its raw PCM delta to the
+	// selected output device, while the tap records the exact frame accepted by
+	// the device sink. The virtual registry loops that output back to the
+	// selected input, allowing this CI-safe proof to observe the emitted frame
+	// through the same registry binding surface.
+	responseSamples := voicedDeviceProbeFrame()
+	responsePCM := pcm16ProbeBytes(responseSamples)
+	for _, responseMessage := range []messages.StreamMessage{
+		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
+		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageEnd},
+	} {
+		if !session.receive.Write(sessionContext, responseMessage) {
+			t.Fatalf("queue session response event %s: %v", responseMessage.Type, sessionContext.Err())
+		}
+	}
+	responseDelta := readDeviceProbeDelta(t, sessionContext, runner.DeltaOutbox, messages.StreamTypeAudioDelta)
+	responseValue, ok := responseDelta.Value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("response audio delta value = %T, want *messages.AudioDeltaValue", responseDelta.Value)
+	}
+	if !bytes.Equal(responseValue.Content, responsePCM) {
+		t.Fatalf("response audio bytes changed before speaker emission: got %d bytes, want %d", len(responseValue.Content), len(responsePCM))
+	}
+
+	outputTap := &deviceProbeOutputTap{sink: sink}
+	if err := outputTap.WriteFrame(sessionContext, responseSamples); err != nil {
+		t.Fatalf("write session response to selected output device: %v", err)
+	}
+	emitted := make([]int16, audio.FrameSize)
+	if err := source.ReadFrame(sessionContext, emitted); err != nil {
+		t.Fatalf("tap selected output device emission: %v", err)
+	}
+	if !bytes.Equal(pcm16ProbeBytes(emitted), responsePCM) {
+		t.Fatalf("emitted speaker frame changed: got %d bytes, want %d", len(pcm16ProbeBytes(emitted)), len(responsePCM))
+	}
+	if err := assertDeviceProbeEnergy("speaker output", emitted); err != nil {
+		t.Fatal(err)
+	}
+	if got := outputTap.LastRMS(); got != pcm16ProbeRMS(emitted) {
+		t.Fatalf("speaker tap RMS = %.2f, loopback RMS = %.2f, want equal measurements", got, pcm16ProbeRMS(emitted))
+	}
+
 	observations := registry.Observations()
 	if observations.OpenCount != 2 || observations.ReleaseCount != 0 {
 		t.Fatalf("registry observations before cleanup = %+v, want two opens and live handles", observations)
+	}
+}
+
+// TestS2SV9WebRTCDeviceOutputSilenceFailsEnergyAssertion is the negative
+// control for the output proof. A silent frame still reaches the selected
+// output sink and loopback, but the exact device-tier assertion must reject it
+// and include the measured RMS and established VAD threshold in its error.
+func TestS2SV9WebRTCDeviceOutputSilenceFailsEnergyAssertion(t *testing.T) {
+	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("create device registry: %v", err)
+	}
+	input, err := registry.Default(audio.DirectionInput)
+	if err != nil {
+		t.Fatalf("select default input device: %v", err)
+	}
+	output, err := registry.Default(audio.DirectionOutput)
+	if err != nil {
+		t.Fatalf("select default output device: %v", err)
+	}
+	source, err := audio.NewDeviceSource(registry, input.ID)
+	if err != nil {
+		t.Fatalf("open selected input %q: %v", input.ID, err)
+	}
+	defer func() { _ = source.Close() }()
+	sink, err := audio.NewDeviceSink(registry, output.ID)
+	if err != nil {
+		t.Fatalf("open selected output %q: %v", output.ID, err)
+	}
+	defer func() { _ = sink.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	silence := make([]int16, audio.FrameSize)
+	if err := sink.WriteFrame(ctx, silence); err != nil {
+		t.Fatalf("write silent output frame: %v", err)
+	}
+	emitted := make([]int16, audio.FrameSize)
+	if err := source.ReadFrame(ctx, emitted); err != nil {
+		t.Fatalf("read silent output loopback: %v", err)
+	}
+	violation := assertDeviceProbeEnergy("speaker output", emitted)
+	if violation == nil {
+		t.Fatal("silent speaker output passed the energy assertion")
+	}
+	if !strings.Contains(violation.Error(), "speaker output RMS = 0.00") ||
+		!strings.Contains(violation.Error(), fmt.Sprintf("want > %.2f", audio.DefaultVADConfig.EnergyThreshold)) {
+		t.Fatalf("silence assertion error = %q, want measured RMS and threshold", violation)
+	}
+}
+
+type deviceProbeOutputTap struct {
+	sink audio.AudioSink
+	rms  []float64
+}
+
+func (t *deviceProbeOutputTap) WriteFrame(ctx context.Context, frame []int16) error {
+	if err := t.sink.WriteFrame(ctx, frame); err != nil {
+		return err
+	}
+	t.rms = append(t.rms, pcm16ProbeRMS(frame))
+	return nil
+}
+
+func (t *deviceProbeOutputTap) LastRMS() float64 {
+	if len(t.rms) == 0 {
+		return 0
+	}
+	return t.rms[len(t.rms)-1]
+}
+
+func assertDeviceProbeEnergy(label string, samples []int16) error {
+	rms := pcm16ProbeRMS(samples)
+	threshold := audio.DefaultVADConfig.EnergyThreshold
+	if rms <= threshold {
+		return fmt.Errorf("%s RMS = %.2f, want > %.2f (silence threshold)", label, rms, threshold)
+	}
+	return nil
+}
+
+func readDeviceProbeDelta(t *testing.T, ctx context.Context, out *messages.TypedBuffer[messages.StreamMessage], want messages.StreamMessageType) messages.StreamMessage {
+	t.Helper()
+	for {
+		message, ok := out.ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatalf("read session delta %s: %v", want, ctx.Err())
+			return messages.StreamMessage{}
+		}
+		if message.Type == want {
+			return message
+		}
 	}
 }
 
