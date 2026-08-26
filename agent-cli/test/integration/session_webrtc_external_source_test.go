@@ -202,18 +202,12 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 	serverEvent("response.output_audio_transcript.done", string(donePayload))
 	serverEvent("response.output_audio.delta", string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
+	serverEvent("session.closed", `{"type":"session.closed","session_id":"`+externalSourceSessionID+`","reason":"fixture_complete"}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_v10_external_source","status":"completed"}}`)
 
 	baseCapture.Session.ID = externalSourceSessionID
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
-		Sequence:    len(records) + 1,
-		Direction:   gwtesting.DirectionServerToClient,
-		TimestampMs: int64(len(records)),
-		Type:        "session.closed",
-		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
-		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"` + externalSourceSessionID + `","reason":"fixture_complete"}`),
-	})
+	baseCapture.Records = records
 	wirePath := filepath.Join(t.TempDir(), "v10-external-source.session.json")
 	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
 	if err != nil {
