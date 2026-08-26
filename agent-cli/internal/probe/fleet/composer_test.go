@@ -135,6 +135,114 @@ func TestManifestRoundTripsAndRejectsMissingEntries(t *testing.T) {
 	}
 }
 
+func TestComposeRejectsPlanThatWouldBeTruncated(t *testing.T) {
+	dir := t.TempDir()
+	first := writeScenario(t, dir, "first")
+	second := writeScenario(t, dir, "second")
+
+	_, err := Compose(ComposeInput{
+		ScenarioFiles: []string{first, second},
+		Transports:    []Transport{TransportReplay, TransportLive},
+		RepeatCount:   2,
+		Concurrency:   1,
+		MaxEntries:    7,
+	})
+	if err == nil {
+		t.Fatal("over-limit plan unexpectedly composed")
+	}
+	if !errors.Is(err, ErrEntryLimitExceeded) {
+		t.Fatalf("error = %v, want ErrEntryLimitExceeded", err)
+	}
+	var limitErr *EntryLimitError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("error = %v, want EntryLimitError", err)
+	}
+	if limitErr.Requested != 8 || limitErr.Limit != 7 || limitErr.Dropped != 1 {
+		t.Fatalf("limit error = %+v, want requested=8 limit=7 dropped=1", limitErr)
+	}
+	if !strings.Contains(err.Error(), "would drop 1 entries") || !strings.Contains(err.Error(), "max_entries") {
+		t.Fatalf("error = %v, want dropped count and field", err)
+	}
+}
+
+func TestComposeRecordsEntryLimitOverrideAndKeepsFullPlan(t *testing.T) {
+	dir := t.TempDir()
+	first := writeScenario(t, dir, "first")
+	second := writeScenario(t, dir, "second")
+
+	manifest, err := Compose(ComposeInput{
+		ScenarioFiles:           []string{first, second},
+		Transports:              []Transport{TransportReplay, TransportLive},
+		RepeatCount:             2,
+		Concurrency:             1,
+		MaxEntries:              7,
+		AllowEntryLimitOverride: true,
+	})
+	if err != nil {
+		t.Fatalf("Compose with explicit limit override: %v", err)
+	}
+	if manifest.EntryCount() != 8 || manifest.EntryLimit != 7 || !manifest.EntryLimitOverridden {
+		t.Fatalf("manifest = %+v, want 8 entries, limit 7, and recorded override", manifest)
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("overridden manifest should validate: %v", err)
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"entry_limit_overridden":true`) {
+		t.Fatalf("manifest JSON = %s, want recorded limit override", data)
+	}
+	decoded, err := ParseManifest(data)
+	if err != nil {
+		t.Fatalf("ParseManifest overridden output: %v", err)
+	}
+	if !reflect.DeepEqual(manifest, decoded) {
+		t.Fatalf("overridden manifest changed after round trip: got %+v, want %+v", decoded, manifest)
+	}
+	decoded.EntryLimitOverridden = false
+	err = decoded.Validate()
+	if !errors.Is(err, ErrEntryLimitExceeded) || !strings.Contains(err.Error(), "would drop 1 entries") {
+		t.Fatalf("manifest without override validated with error = %v, want entry-limit rejection", err)
+	}
+}
+
+func TestComposeAtEntryLimitComposesWithoutOverride(t *testing.T) {
+	path := writeScenario(t, t.TempDir(), "scenario")
+	manifest, err := Compose(ComposeInput{
+		ScenarioFiles: []string{path},
+		Transports:    []Transport{TransportReplay},
+		RepeatCount:   2,
+		Concurrency:   1,
+		MaxEntries:    2,
+	})
+	if err != nil {
+		t.Fatalf("Compose at entry limit: %v", err)
+	}
+	if manifest.EntryCount() != 2 || manifest.EntryLimit != 2 || manifest.EntryLimitOverridden {
+		t.Fatalf("manifest = %+v, want full plan at limit without override", manifest)
+	}
+}
+
+func TestComposeRejectsNegativeEntryLimit(t *testing.T) {
+	path := writeScenario(t, t.TempDir(), "scenario")
+	_, err := Compose(ComposeInput{
+		ScenarioFiles: []string{path},
+		Transports:    []Transport{TransportReplay},
+		RepeatCount:   1,
+		Concurrency:   1,
+		MaxEntries:    -1,
+	})
+	if !errors.Is(err, ErrInvalidEntryLimit) {
+		t.Fatalf("error = %v, want ErrInvalidEntryLimit", err)
+	}
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) || validationErr.Field != "max_entries" {
+		t.Fatalf("error = %v, validation = %+v, want max_entries field", err, validationErr)
+	}
+}
+
 func TestComposeRejectsMalformedScenarioIdentity(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken.scenario.json")

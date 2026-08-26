@@ -18,6 +18,9 @@ const (
 	// ManifestVersion is retained as a descriptive alias for callers that use
 	// version terminology rather than schema terminology.
 	ManifestVersion = SchemaVersion
+	// DefaultMaxEntries bounds a composed fleet unless the operator explicitly
+	// acknowledges a larger plan with ComposeInput.AllowEntryLimitOverride.
+	DefaultMaxEntries = 10_000
 )
 
 // Transport identifies the execution path for one manifest entry.
@@ -44,6 +47,8 @@ var (
 	ErrDuplicateTransport = errors.New("fleet manifest contains duplicate transports")
 	ErrDuplicateEntry     = errors.New("fleet manifest contains duplicate entries")
 	ErrEntryCountOverflow = errors.New("fleet manifest entry count overflows int")
+	ErrInvalidEntryLimit  = errors.New("invalid fleet entry limit")
+	ErrEntryLimitExceeded = errors.New("fleet manifest entry limit exceeded")
 )
 
 // ValidationError identifies the exact manifest or composition field that
@@ -54,6 +59,38 @@ type ValidationError struct {
 	Value   string
 	Problem string
 	Cause   error
+}
+
+// EntryLimitError reports a plan that would be reduced by an entry limit.
+// Requested is the complete cross-product size, Limit is the configured bound,
+// and Dropped is the number of entries that a truncating implementation would
+// have omitted. The composer returns this error before allocating entries.
+type EntryLimitError struct {
+	Field     string
+	Requested int
+	Limit     int
+	Dropped   int
+}
+
+func (e *EntryLimitError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf(
+		"fleet manifest field %q would drop %d entries: expanded plan has %d entries but the limit is %d; set AllowEntryLimitOverride to compose the full plan",
+		e.Field, e.Dropped, e.Requested, e.Limit,
+	)
+}
+
+func (e *EntryLimitError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return ErrEntryLimitExceeded
+}
+
+func (e *EntryLimitError) Is(target error) bool {
+	return e != nil && (target == ErrEntryLimitExceeded || target == ErrInvalidManifest)
 }
 
 func (e *ValidationError) Error() string {
@@ -129,7 +166,11 @@ type Manifest struct {
 	Transports    []Transport   `json:"transports"`
 	RepeatCount   int           `json:"repeat_count"`
 	Concurrency   int           `json:"concurrency"`
-	Entries       []Entry       `json:"entries"`
+	EntryLimit    int           `json:"entry_limit"`
+	// EntryLimitOverridden records that the operator explicitly allowed the
+	// composed cross product to exceed EntryLimit.
+	EntryLimitOverridden bool    `json:"entry_limit_overridden,omitempty"`
+	Entries              []Entry `json:"entries"`
 }
 
 // EntryCount returns the number of explicit execution entries.
@@ -154,6 +195,9 @@ func (m Manifest) Validate() error {
 	}
 	if m.Concurrency <= 0 {
 		return validation("concurrency", fmt.Sprint(m.Concurrency), "must be greater than zero", ErrInvalidConcurrency)
+	}
+	if m.EntryLimit < 0 {
+		return validation("entry_limit", fmt.Sprint(m.EntryLimit), "must not be negative", ErrInvalidEntryLimit)
 	}
 
 	for index, scenario := range m.Scenarios {
@@ -189,6 +233,15 @@ func (m Manifest) Validate() error {
 	if len(m.Entries) != wantCount {
 		return validation("entries", fmt.Sprint(len(m.Entries)),
 			fmt.Sprintf("must contain exactly %d entries for the declared cross product", wantCount), ErrInvalidManifest)
+	}
+	limit := m.EntryLimit
+	if limit == 0 {
+		// A zero value keeps manifests produced before the limit field was
+		// introduced readable, while still applying the current default bound.
+		limit = DefaultMaxEntries
+	}
+	if wantCount > limit && !m.EntryLimitOverridden {
+		return newEntryLimitError("entry_limit", wantCount, limit)
 	}
 
 	seen := make(map[string]struct{}, len(m.Entries))

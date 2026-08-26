@@ -19,6 +19,12 @@ type ComposeInput struct {
 	Transports    []Transport
 	RepeatCount   int
 	Concurrency   int
+	// MaxEntries is an optional per-composition bound. Zero uses
+	// DefaultMaxEntries. A bound is checked before any entries are allocated.
+	MaxEntries int
+	// AllowEntryLimitOverride acknowledges that the complete cross product may
+	// exceed MaxEntries and records that acknowledgement in the manifest.
+	AllowEntryLimitOverride bool
 }
 
 // Options is a compatibility alias for callers that prefer option language.
@@ -52,14 +58,23 @@ func (Composer) Compose(input ComposeInput) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, validation("entries", "", "declared cross product is too large", ErrEntryCountOverflow)
 	}
+	entryLimit, err := resolveEntryLimit(input.MaxEntries)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if entryCount > entryLimit && !input.AllowEntryLimitOverride {
+		return Manifest{}, newEntryLimitError("max_entries", entryCount, entryLimit)
+	}
 
 	manifest := Manifest{
-		SchemaVersion: SchemaVersion,
-		Scenarios:     scenarios,
-		Transports:    transports,
-		RepeatCount:   input.RepeatCount,
-		Concurrency:   input.Concurrency,
-		Entries:       make([]Entry, 0, entryCount),
+		SchemaVersion:        SchemaVersion,
+		Scenarios:            scenarios,
+		Transports:           transports,
+		RepeatCount:          input.RepeatCount,
+		Concurrency:          input.Concurrency,
+		EntryLimit:           entryLimit,
+		EntryLimitOverridden: input.AllowEntryLimitOverride,
+		Entries:              make([]Entry, 0, entryCount),
 	}
 	for _, scenario := range scenarios {
 		for _, transport := range transports {
@@ -222,4 +237,23 @@ func crossProductCount(scenarioCount, transportCount, repeatCount int) (int, err
 		return 0, ErrEntryCountOverflow
 	}
 	return partial * repeatCount, nil
+}
+
+func resolveEntryLimit(raw int) (int, error) {
+	if raw < 0 {
+		return 0, validation("max_entries", fmt.Sprint(raw), "must not be negative", ErrInvalidEntryLimit)
+	}
+	if raw == 0 {
+		return DefaultMaxEntries, nil
+	}
+	return raw, nil
+}
+
+func newEntryLimitError(field string, requested, limit int) *EntryLimitError {
+	return &EntryLimitError{
+		Field:     field,
+		Requested: requested,
+		Limit:     limit,
+		Dropped:   requested - limit,
+	}
 }
