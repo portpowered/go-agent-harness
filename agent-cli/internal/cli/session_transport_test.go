@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 func TestSessionCommandTransportHelpDocumentsSupportedValues(t *testing.T) {
@@ -201,4 +206,120 @@ func TestValidateSessionMediaSourceRejectsEmptyExplicitValue(t *testing.T) {
 	if !strings.Contains(err.Error(), "--media-source") {
 		t.Fatalf("error %q does not name --media-source", err)
 	}
+}
+
+func TestSessionCommandRunsSelectedWebRTCTransport(t *testing.T) {
+	const (
+		signaling = "loopback://cli-signaling"
+		media     = "fixture://cli-media"
+	)
+
+	inferencer := newCLITestSessionInferencer()
+	runtime := &cliTestRTCRuntime{}
+	owner := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer)
+	var got services.SessionRuntimeSelection
+	owner.SetSessionRTCRuntimeFactory(func(selection services.SessionRuntimeSelection) (services.SessionRTCRuntime, error) {
+		got = selection
+		return runtime, nil
+	})
+
+	command := owner.Generate()
+	var out bytes.Buffer
+	command.SetOut(&out)
+	command.SetArgs([]string{
+		"--provider", "grok",
+		"--record", filepath.Join(t.TempDir(), "cli-webrtc.session.json"),
+		"--transport", "webrtc",
+		"--signaling", signaling,
+		"--media-source", media,
+		"complete the CLI turn",
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := command.ExecuteContext(ctx); err != nil {
+		t.Fatalf("WebRTC session command: %v", err)
+	}
+
+	if got != (services.SessionRuntimeSelection{
+		Transport:         services.SessionTransportWebRTC,
+		SignalingEndpoint: signaling,
+		MediaSource:       media,
+	}) {
+		t.Fatalf("runtime selection = %#v, want transport/signaling/media values from CLI", got)
+	}
+	if gotStarts := runtime.startCount(); gotStarts != 1 {
+		t.Fatalf("RTC runtime starts = %d, want one selected WebRTC runtime", gotStarts)
+	}
+	if !strings.Contains(out.String(), "rtc CLI completed turn") {
+		t.Fatalf("CLI output does not contain completed turn:\n%s", out.String())
+	}
+}
+
+type cliTestRTCRuntime struct {
+	mu     sync.Mutex
+	starts int
+}
+
+func (r *cliTestRTCRuntime) Start(context.Context) (services.SessionRTCDataPlane, error) {
+	r.mu.Lock()
+	r.starts++
+	r.mu.Unlock()
+	return nil, nil
+}
+
+func (r *cliTestRTCRuntime) startCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.starts
+}
+
+func (r *cliTestRTCRuntime) Close() error { return nil }
+
+type cliTestSessionInferencer struct {
+	session *cliTestSession
+}
+
+func newCLITestSessionInferencer() *cliTestSessionInferencer {
+	session := &cliTestSession{
+		receive: messages.NewTypedBuffer[messages.StreamMessage](32),
+		done:    make(chan struct{}),
+	}
+	session.receive.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("cli-webrtc", "fixture"),
+	})
+	return &cliTestSessionInferencer{session: session}
+}
+
+func (i *cliTestSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return i.session, nil
+}
+
+type cliTestSession struct {
+	receive      *messages.TypedBuffer[messages.StreamMessage]
+	done         chan struct{}
+	responseOnce sync.Once
+	closeOnce    sync.Once
+}
+
+func (s *cliTestSession) Send(ctx context.Context, _ messages.StreamMessage) bool {
+	s.responseOnce.Do(func() {
+		for _, msg := range []messages.StreamMessage{
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("rtc CLI completed turn")},
+			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("cli-webrtc", "completed")},
+		} {
+			s.receive.Write(ctx, msg)
+		}
+	})
+	return true
+}
+
+func (s *cliTestSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.receive }
+
+func (s *cliTestSession) Done() <-chan struct{} { return s.done }
+
+func (s *cliTestSession) Close() error {
+	s.closeOnce.Do(func() { close(s.done) })
+	return nil
 }

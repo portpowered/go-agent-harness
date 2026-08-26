@@ -155,6 +155,7 @@ type SessionCommand struct {
 	sessionInferencerOverride messages.SessionInferencer
 	sessionToolCapabilities   SessionToolCapabilitiesFactory
 	streamObserver            services.SessionStreamObserver
+	rtcRuntimeFactory         services.SessionRTCRuntimeFactory
 	clockSource               platformclock.Source
 	runtimeObserver           services.SessionRuntimeObserver
 	deviceRegistry            audio.DeviceRegistry
@@ -289,6 +290,18 @@ func (c *SessionCommand) SetDeviceRegistry(registry audio.DeviceRegistry) {
 	c.deviceRegistry = registry
 }
 
+// SetSessionRTCRuntimeFactory supplies the protocol-owning WebRTC runtime to
+// the session command. The generated production graph leaves this unset until
+// a concrete RTC composition is available; tests and embedding callers can
+// provide the existing service-owned runtime seam without changing CLI flag
+// parsing or falling back to WebSocket.
+func (c *SessionCommand) SetSessionRTCRuntimeFactory(factory services.SessionRTCRuntimeFactory) {
+	if c == nil {
+		return
+	}
+	c.rtcRuntimeFactory = factory
+}
+
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
@@ -386,6 +399,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Prompt:            strings.Join(args, " "),
 				Voice:             voice,
 				Transport:         selectedTransport,
+				Signaling:         signaling,
+				MediaSource:       mediaSource,
+				RTCRuntimeFactory: c.rtcRuntimeFactory,
 				SessionInferencer: c.sessionInferencerOverride,
 				ToolExecutor:      toolExecutor,
 				ToolDefinitions:   toolDefinitions,
