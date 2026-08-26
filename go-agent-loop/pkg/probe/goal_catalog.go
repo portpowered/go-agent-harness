@@ -196,92 +196,44 @@ func ValidateGoalCatalog(catalog GoalCatalog) error { return catalog.Validate() 
 // ValidateCatalog is the concise spelling of ValidateGoalCatalog.
 func ValidateCatalog(catalog GoalCatalog) error { return ValidateGoalCatalog(catalog) }
 
+func catalogValidationError(index int, goalID, field string, kind error, reason string) error {
+	return &GoalCatalogValidationError{Index: index, GoalID: goalID, Field: field, Kind: kind, Reason: reason}
+}
+
 // Validate checks the catalog's structural invariants and returns the first
 // failure in deterministic slice order.
 func (c GoalCatalog) Validate() error {
 	if len(c) == 0 {
-		return &GoalCatalogValidationError{
-			Index:  -1,
-			Field:  "goals",
-			Kind:   ErrEmptyGoalCatalog,
-			Reason: "must contain at least one goal",
-		}
+		return catalogValidationError(-1, "", "goals", ErrEmptyGoalCatalog, "must contain at least one goal")
 	}
 
 	seen := make(map[string]int, len(c))
 	for index, goal := range c {
 		if strings.TrimSpace(goal.ID) == "" {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				Field:  "id",
-				Kind:   ErrBlankGoalID,
-				Reason: "must be non-empty",
-			}
+			return catalogValidationError(index, "", "id", ErrBlankGoalID, "must be non-empty")
 		}
 		if firstIndex, ok := seen[goal.ID]; ok {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "id",
-				Kind:   ErrDuplicateGoalID,
-				Reason: fmt.Sprintf("duplicates goal at index %d", firstIndex),
-			}
+			return catalogValidationError(index, goal.ID, "id", ErrDuplicateGoalID, fmt.Sprintf("duplicates goal at index %d", firstIndex))
 		}
 		seen[goal.ID] = index
 
 		if strings.TrimSpace(goal.Text) == "" {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "text",
-				Kind:   ErrBlankGoalText,
-				Reason: "must be non-empty plain English",
-			}
+			return catalogValidationError(index, goal.ID, "text", ErrBlankGoalText, "must be non-empty plain English")
 		}
 		if strings.TrimSpace(string(goal.Capability)) == "" {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "capability",
-				Kind:   ErrBlankGoalCapability,
-				Reason: "must name a supported capability area",
-			}
+			return catalogValidationError(index, goal.ID, "capability", ErrBlankGoalCapability, "must name a supported capability area")
 		}
 		if !isSupportedCapability(goal.Capability) {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "capability",
-				Kind:   ErrUnknownGoalCapability,
-				Reason: fmt.Sprintf("%q is not supported", goal.Capability),
-			}
+			return catalogValidationError(index, goal.ID, "capability", ErrUnknownGoalCapability, fmt.Sprintf("%q is not supported", goal.Capability))
 		}
 		if reason := blindProbeGoalTextViolation(goal.Text); reason != "" {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "text",
-				Kind:   ErrGoalTextNotBlindProbeReady,
-				Reason: reason,
-			}
+			return catalogValidationError(index, goal.ID, "text", ErrGoalTextNotBlindProbeReady, reason)
 		}
 		if strings.TrimSpace(goal.Expectation.ArtifactClass) == "" {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "expectation.artifact_class",
-				Kind:   ErrMissingGoalExpectation,
-				Reason: "must name the recorded artifact class",
-			}
+			return catalogValidationError(index, goal.ID, "expectation.artifact_class", ErrMissingGoalExpectation, "must name the recorded artifact class")
 		}
 		if strings.TrimSpace(goal.Expectation.Description) == "" {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: goal.ID,
-				Field:  "expectation.description",
-				Kind:   ErrMissingGoalExpectation,
-				Reason: "must describe objective recorded evidence",
-			}
+			return catalogValidationError(index, goal.ID, "expectation.description", ErrMissingGoalExpectation, "must describe objective recorded evidence")
 		}
 		if goal.Capability == CapabilityMultimodalInput {
 			if goal.InputSource == nil {
@@ -301,22 +253,10 @@ func (c GoalCatalog) Validate() error {
 	for _, required := range requiredGoalDefinitions {
 		index, ok := seen[required.id]
 		if !ok {
-			return &GoalCatalogValidationError{
-				Index:  -1,
-				GoalID: required.id,
-				Field:  "id",
-				Kind:   ErrMissingGoalID,
-				Reason: "required by the shipped acceptance catalog",
-			}
+			return catalogValidationError(-1, required.id, "id", ErrMissingGoalID, "required by the shipped acceptance catalog")
 		}
 		if c[index].Capability != required.capability {
-			return &GoalCatalogValidationError{
-				Index:  index,
-				GoalID: required.id,
-				Field:  "capability",
-				Kind:   ErrGoalCapabilityMismatch,
-				Reason: fmt.Sprintf("must be %q", required.capability),
-			}
+			return catalogValidationError(index, required.id, "capability", ErrGoalCapabilityMismatch, fmt.Sprintf("must be %q", required.capability))
 		}
 	}
 	return nil
