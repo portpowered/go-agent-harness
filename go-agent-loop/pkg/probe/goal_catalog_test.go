@@ -83,6 +83,118 @@ func TestLoadGoalCatalogIsDeterministicAcrossCalls(t *testing.T) {
 	}
 }
 
+func TestGoalAccessorsAndValidationAliasesPreserveCatalogValues(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+	goal := catalog[0]
+	if goal.GoalText() != goal.Text {
+		t.Fatalf("GoalText() = %q, want exact goal text %q", goal.GoalText(), goal.Text)
+	}
+	if goal.CapabilityArea() != goal.Capability {
+		t.Fatalf("CapabilityArea() = %q, want %q", goal.CapabilityArea(), goal.Capability)
+	}
+	if err := probe.ValidateCatalog(catalog); err != nil {
+		t.Fatalf("ValidateCatalog: %v", err)
+	}
+}
+
+func TestGoalCatalogValidationRejectsMalformedIdentityCapabilityAndInput(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		mutate    func(*probe.Goal)
+		wantKind  error
+		wantField string
+	}{
+		{
+			name: "blank ID",
+			mutate: func(goal *probe.Goal) {
+				goal.ID = " \t"
+			},
+			wantKind:  probe.ErrBlankGoalID,
+			wantField: "id",
+		},
+		{
+			name: "blank capability",
+			mutate: func(goal *probe.Goal) {
+				goal.Capability = " \t"
+			},
+			wantKind:  probe.ErrBlankGoalCapability,
+			wantField: "capability",
+		},
+		{
+			name: "unknown capability",
+			mutate: func(goal *probe.Goal) {
+				goal.Capability = "unsupported"
+			},
+			wantKind:  probe.ErrUnknownGoalCapability,
+			wantField: "capability",
+		},
+		{
+			name: "input on non-multimodal goal",
+			mutate: func(goal *probe.Goal) {
+				goal.InputSource = &probe.GoalInputSource{
+					Kind:      probe.GoalInputSourceEmbeddedAsset,
+					AssetID:   probe.GoalInputAssetRedApple,
+					MediaType: "image/png",
+					Data:      []byte("asset"),
+				}
+			},
+			wantKind:  probe.ErrInvalidGoalInputSource,
+			wantField: "input_source",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := append(probe.GoalCatalog(nil), catalog...)
+			test.mutate(&candidate[0])
+
+			err := candidate.Validate()
+			if err == nil {
+				t.Fatal("malformed catalog unexpectedly passed validation")
+			}
+			if !errors.Is(err, probe.ErrInvalidGoalCatalog) || !errors.Is(err, test.wantKind) {
+				t.Fatalf("error identity: %v", err)
+			}
+			var validationErr *probe.GoalCatalogValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error type: %T", err)
+			}
+			if validationErr.Field != test.wantField {
+				t.Fatalf("diagnostic field = %q, want %q", validationErr.Field, test.wantField)
+			}
+		})
+	}
+}
+
+func TestGoalCatalogValidationErrorFormatsNilAndBareDiagnostics(t *testing.T) {
+	var nilValidationErr *probe.GoalCatalogValidationError
+	if got := nilValidationErr.Error(); got != "<nil>" {
+		t.Fatalf("nil validation error string = %q, want %q", got, "<nil>")
+	}
+	if got := nilValidationErr.Unwrap(); got != nil {
+		t.Fatalf("nil validation error unwrap = %v, want nil", got)
+	}
+	if nilValidationErr.Is(probe.ErrInvalidGoalCatalog) {
+		t.Fatal("nil validation error unexpectedly matched invalid-catalog sentinel")
+	}
+
+	bare := &probe.GoalCatalogValidationError{Index: -1, Kind: probe.ErrEmptyGoalCatalog}
+	if got := bare.Error(); got != "catalog: invalid" {
+		t.Fatalf("bare validation error string = %q, want %q", got, "catalog: invalid")
+	}
+	if got := bare.Unwrap(); got != probe.ErrEmptyGoalCatalog {
+		t.Fatalf("bare validation error unwrap = %v, want %v", got, probe.ErrEmptyGoalCatalog)
+	}
+}
+
 func TestGoalCatalogRunInputsCoverValidatedGoalsExactlyOnceAndDeterministically(t *testing.T) {
 	catalog, err := probe.LoadGoalCatalog()
 	if err != nil {
