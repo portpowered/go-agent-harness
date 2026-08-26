@@ -169,6 +169,55 @@ func TestRunnerFailingExpectationDetailAndIsolation(t *testing.T) {
 	}
 }
 
+func TestRunnerClassifiesOnlyEmptySuccessfulObservationsAsStuck(t *testing.T) {
+	scenario := passingScenario()
+	cases := []struct {
+		name        string
+		observation ObservationSnapshot
+		wantStuck   bool
+	}{
+		{name: "empty", wantStuck: true},
+		{name: "audio samples", observation: ObservationSnapshot{PCM16Samples: []int16{0}}},
+		{name: "frames", observation: ObservationSnapshot{FrameCount: 1}},
+		{name: "transcript", observation: ObservationSnapshot{Transcript: "hello"}},
+		{name: "tool call", observation: ObservationSnapshot{ToolCalls: []string{"lookup"}}},
+		{name: "delivered tool result", observation: ObservationSnapshot{ToolResultsDelivered: []string{"call-1"}}},
+		{name: "discarded tool result", observation: ObservationSnapshot{ToolResultsDiscarded: []string{"call-1"}}},
+		{name: "terminal reason", observation: ObservationSnapshot{TerminalReason: "complete"}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			runner := Runner{Exec: func(context.Context, Scenario) (ObservationSnapshot, error) {
+				return test.observation, nil
+			}, Out: &buf}
+			if _, err := runner.Run(context.Background(), []Scenario{scenario}); err != nil {
+				t.Fatalf("Run failed: %v", err)
+			}
+			record := decodeLines(t, buf.String())[0]
+			stuck, hasStuck := record["stuck"].(bool)
+			if !hasStuck {
+				stuck = false
+			}
+			if stuck != test.wantStuck {
+				t.Fatalf("JSONL stuck = %t, want %t: %v", stuck, test.wantStuck, record)
+			}
+			if test.wantStuck {
+				if record["stuck_reason"] == "" {
+					t.Fatal("stuck result has no human-readable reason")
+				}
+				if record["pass"] != false {
+					t.Fatal("stuck result unexpectedly passed")
+				}
+				return
+			}
+			if _, present := record["stuck_reason"]; present {
+				t.Fatalf("non-stuck result has a stuck reason: %v", record)
+			}
+		})
+	}
+}
+
 func panickedScenario() Scenario {
 	s := passingScenario()
 	s.ID = "panicked"
