@@ -19,6 +19,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
+const deviceProbeExpectedTranscript = "device round trip"
+
 // TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession exercises the device-tier
 // capture boundary with the shared registry, the real RTC Opus tracks, and the
 // session model runner. The virtual registry is the deterministic stand-in for
@@ -191,6 +193,9 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	responsePCM := pcm16ProbeBytes(responseSamples)
 	for _, responseMessage := range []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device ")},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("round trip")},
+		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(deviceProbeExpectedTranscript)},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
 		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageEnd},
@@ -198,6 +203,13 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 		if !session.receive.Write(sessionContext, responseMessage) {
 			t.Fatalf("queue session response event %s: %v", responseMessage.Type, sessionContext.Err())
 		}
+	}
+	recognizedTranscript, err := readDeviceProbeTranscript(t, sessionContext, runner.DeltaOutbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if violation := assertDeviceProbeTranscript(recognizedTranscript, deviceProbeExpectedTranscript); violation != nil {
+		t.Fatal(violation)
 	}
 	responseDelta := readDeviceProbeDelta(t, sessionContext, runner.DeltaOutbox, messages.StreamTypeAudioDelta)
 	responseValue, ok := responseDelta.Value.(*messages.AudioDeltaValue)
@@ -229,6 +241,30 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	observations := registry.Observations()
 	if observations.OpenCount != 2 || observations.ReleaseCount != 0 {
 		t.Fatalf("registry observations before cleanup = %+v, want two opens and live handles", observations)
+	}
+}
+
+// TestS2SV9WebRTCDeviceTranscriptAssertionReportsActualText is the negative
+// control for transcript validation. Empty and unrelated recognition results
+// must fail with the observed text so a device-tier failure remains actionable.
+func TestS2SV9WebRTCDeviceTranscriptAssertionReportsActualText(t *testing.T) {
+	tests := []struct {
+		name   string
+		actual string
+	}{
+		{name: "empty", actual: ""},
+		{name: "mismatched", actual: "unrelated recognition"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			violation := assertDeviceProbeTranscript(tc.actual, deviceProbeExpectedTranscript)
+			if violation == nil {
+				t.Fatalf("transcript %q passed validation for expected %q", tc.actual, deviceProbeExpectedTranscript)
+			}
+			if !strings.Contains(violation.Error(), fmt.Sprintf("recognized transcript = %q", tc.actual)) {
+				t.Fatalf("transcript violation = %q, want actual transcript %q", violation, tc.actual)
+			}
+		})
 	}
 }
 
@@ -307,6 +343,48 @@ func assertDeviceProbeEnergy(label string, samples []int16) error {
 		return fmt.Errorf("%s RMS = %.2f, want > %.2f (silence threshold)", label, rms, threshold)
 	}
 	return nil
+}
+
+func assertDeviceProbeTranscript(actual, expected string) error {
+	actual = strings.TrimSpace(actual)
+	expected = strings.TrimSpace(expected)
+	if actual == "" {
+		return fmt.Errorf("recognized transcript = %q, want non-empty text matching scripted utterance %q", actual, expected)
+	}
+	if expected == "" || !strings.Contains(strings.ToLower(actual), strings.ToLower(expected)) {
+		return fmt.Errorf("recognized transcript = %q, want text matching scripted utterance %q", actual, expected)
+	}
+	return nil
+}
+
+func readDeviceProbeTranscript(t *testing.T, ctx context.Context, out *messages.TypedBuffer[messages.StreamMessage]) (string, error) {
+	t.Helper()
+	var deltas strings.Builder
+	for {
+		message, ok := out.ReadBlockingContext(ctx)
+		if !ok {
+			return "", fmt.Errorf("read recognized transcript: %w", ctx.Err())
+		}
+		switch message.Type {
+		case messages.StreamTypeTranscriptDelta:
+			value, ok := message.Value.(*messages.TranscriptDeltaValue)
+			if !ok {
+				return "", fmt.Errorf("recognized transcript delta value = %T, want *messages.TranscriptDeltaValue", message.Value)
+			}
+			deltas.WriteString(value.Text)
+		case messages.StreamTypeTranscriptEnd:
+			value, ok := message.Value.(*messages.TranscriptEndValue)
+			if !ok {
+				return "", fmt.Errorf("recognized transcript end value = %T, want *messages.TranscriptEndValue", message.Value)
+			}
+			if value.FullText != "" {
+				return value.FullText, nil
+			}
+			return deltas.String(), nil
+		case messages.StreamTypeMessageEnd:
+			return deltas.String(), fmt.Errorf("recognized transcript missing TRANSCRIPT.END before MESSAGE.END; actual transcript = %q", deltas.String())
+		}
+	}
 }
 
 func readDeviceProbeDelta(t *testing.T, ctx context.Context, out *messages.TypedBuffer[messages.StreamMessage], want messages.StreamMessageType) messages.StreamMessage {
@@ -505,7 +583,7 @@ type deviceProbeSession struct {
 func newDeviceProbeSession() *deviceProbeSession {
 	return &deviceProbeSession{
 		sent:    make(chan messages.StreamMessage, 8),
-		receive: messages.NewTypedBuffer[messages.StreamMessage](8),
+		receive: messages.NewTypedBuffer[messages.StreamMessage](16),
 		done:    make(chan struct{}),
 	}
 }
