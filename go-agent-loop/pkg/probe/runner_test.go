@@ -271,6 +271,16 @@ func panickedScenario() Scenario {
 	return s
 }
 
+func assertNoStuckMarker(t *testing.T, result map[string]any) {
+	t.Helper()
+	if _, present := result["stuck"]; present {
+		t.Fatalf("failure record unexpectedly contains stuck marker: %v", result)
+	}
+	if _, present := result["stuck_reason"]; present {
+		t.Fatalf("failure record unexpectedly contains stuck reason: %v", result)
+	}
+}
+
 func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 	malformed := Scenario{ID: "malformed"}
 	abortedErr := errors.New("replay divergence at sequence 4")
@@ -293,7 +303,7 @@ func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run returned error instead of reporting failures: %v", err)
 	}
-	if summary.Total != 4 || summary.Passed != 1 || summary.Failed != 3 || summary.Status != StatusFail {
+	if summary.Total != 4 || summary.Passed != 1 || summary.Failed != 3 || summary.Stuck != 0 || summary.Status != StatusFail {
 		t.Fatalf("summary wrong: %+v", summary)
 	}
 	lines := decodeLines(t, buf.String())
@@ -308,6 +318,7 @@ func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 		if detail, _ := result["error"].(string); detail == "" {
 			t.Fatalf("line %d missing failure detail: %v", index, result)
 		}
+		assertNoStuckMarker(t, result)
 	}
 	if !strings.Contains(lines[3]["error"].(string), "panicked") {
 		t.Fatalf("panic not reported as failure detail: %v", lines[3])
