@@ -396,6 +396,10 @@ func TestTickState_BufferOccupancyAfterDispatch(t *testing.T) {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}
 	ts.writeModelDeltas(ctx, deltas)
+	// The coordinator only dispatches batches when a real tool executor is
+	// configured; enable it so this dispatch-focused assertion keeps its
+	// subject.
+	ts.engine.State().LoopState.ToolExecutionAvailable = true
 
 	// Tick through all 4 deltas.
 	if err := ts.engine.TickN(ctx, 4); err != nil {

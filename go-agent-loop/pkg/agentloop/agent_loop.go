@@ -169,6 +169,10 @@ func New(opts ...Option) (*AgentLoop, error) {
 	}
 
 	eng := engine.NewEngine(cfg.Mode, cfg.Logger, hlps, modelRunner, toolRunner, userRunner, kernelRunner, cfg.Tools)
+	// Record real executor availability so subsystems can distinguish
+	// executable tool calls from provider-issued calls that cannot run: the
+	// fallback runner above is idle plumbing, not a public executor.
+	eng.State().LoopState.ToolExecutionAvailable = cfg.ToolExecutor != nil
 	eng.SetInteractionRunner(interactionRunner)
 	eng.State().LoopState.InferenceDefaults = cfg.InferenceDefaults
 	if cfg.TickRate > 0 {

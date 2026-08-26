@@ -79,20 +79,32 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		// Reasoning-only messages are recorded above but do not trigger further actions.
 		hasFinalResponse := false
 		for _, message := range curr.Inputs.ModelOutputMessage {
-			if len(message.ToolCalls) > 0 {
+			switch {
+			case len(message.ToolCalls) > 0 && !curr.ToolExecutionAvailable:
+				// No tool executor is configured for this loop, so a
+				// provider-issued tool call cannot be executed. Deliver the
+				// message like a final response instead of dispatching a
+				// batch into the idle default executor, whose guaranteed
+				// failure surfaces as a racy terminal error after the
+				// response already completed.
+				c.logInfo("Coordinator: model tool call without a configured executor delivered as final response",
+					logging.Field{Key: "tool_calls", Value: len(message.ToolCalls)})
+				curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: message})
+				hasFinalResponse = true
+			case len(message.ToolCalls) > 0:
 				c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
 				curr.History.CurrentPassID++
 				curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{
 					Calls:      message.ToolCalls,
 					LoopPassID: curr.History.CurrentPassID,
 				})
-			} else if !message.HasOnlyReasoning() {
+			case !message.HasOnlyReasoning():
 				c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
 				curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{
 					Message: message,
 				})
 				hasFinalResponse = true
-			} else {
+			default:
 				c.logInfo("Coordinator: model reasoning output message", logging.Field{Key: "message", Value: message})
 			}
 		}

@@ -1,0 +1,62 @@
+{
+  "project": "s2s-v4f-tool-during-audio",
+  "branchName": "s2s-v4f-tool-during-audio",
+  "description": "Implement the s2s lane manifest vertical s2s-v4f-tool-during-audio: a tool call issued while audio is still streaming in does not corrupt or drop the in-flight audio turn, proven as a hermetic record/replay integration test through the public agent session CLI path, with a negative control proving corruption/drop detection.",
+  "context": {
+    "customerAsk": "Implement the lane per docs/architecture/s2s-lane-manifest.md so that a tool call issued while audio is still streaming in neither corrupts nor drops the in-flight audio turn. Verify against origin/main before merging that this lane's outcome is genuinely present and covered by tests; follow existing s2s test/lane conventions in this repo. One narrow vertical slice — do not expand scope to neighboring lanes.",
+    "problem": "In a speech-to-speech session the model can emit a function tool call while output audio deltas are mid-stream. If any layer drops, reorders, or truncates buffered audio when the interleaved tool event arrives, users hear clipped or garbled speech around every tool use. Nothing on main proves the interleaving is handled: no test exercises a tool call arriving between streamed audio deltas of the same response.",
+    "solution": "Add a deterministic record/replay fixture whose server-to-client side streams part of an output-audio response, interleaves one named function tool call mid-stream, then resumes the remaining audio deltas before terminal completion. Drive it through the real 'agent session' CLI path and assert from recorded artifacts that all audio deltas survive intact (count/order/content), the tool call appears in order, the turn terminates cleanly, plus a negative control proving a corrupted/dropped turn fails deterministically."
+  },
+  "acceptanceCriteria": [
+    "A hermetic integration test drives the public agent session CLI over a record/replay fixture where one named function tool call is interleaved mid-way through a streamed output-audio response, and observes every audio delta of that response intact (count, order, byte-exact PCM content) across the interleaving boundary",
+    "The interleaved tool call (name + arguments) is observably present in the replayed provider exchange in order relative to the surrounding audio deltas, and the turn terminates cleanly with no hang or wedged buffer",
+    "A negative control proves the assertions fail deterministically with a specific message when in-flight audio is corrupted or dropped at the interleaving point",
+    "No production behavior regression: all pre-existing tests on main still pass; any genuine runtime defect exposed by the test is fixed minimally within this lane and called out in the PR description",
+    "Quality gate: typecheck passes, tests pass, and there are no NEW lint violations relative to current main — the gates green on main (backend-size, pkg-maint, pkg-file-count, pkg-structure, vet) stay green",
+    "Delivery loop completed: the implementation stage finishes after its final head is pushed, the PR is open, CI has started, and all blocking review feedback is addressed (implementation must not poll or re-check CI after that finish line); the review stage owns driving CI to terminal-and-passing, resolving merge conflicts, and merging the PR — merge remains the lane-wide completion boundary. CI-run evidence goes in a PR comment, never in a commit"
+  ],
+  "userStories": [
+    {
+      "id": "s2s-v4f-tool-during-audio-001",
+      "title": "Interleaved tool/audio record-replay scenario fixture",
+      "description": "As a developer, I need a deterministic record/replay fixture that streams output audio deltas, interleaves exactly one named function tool call mid-stream within the same response, then resumes the remaining audio deltas and completes, so the interleaving is reproducible in tests.",
+      "acceptanceCriteria": [
+        "Fixture builder follows the conventions of agent-cli/test/integration/session_tool_single_call_test.go: client side expects paced frames of a committed corpus WAV via input_audio_buffer.append/commit/response.create; server side delivers partial audio deltas -> one named function tool call (name + arguments) -> remaining audio deltas of the same response -> terminal completed response",
+        "Fixture is fully deterministic (no wall-clock/network dependence) and reuses existing committed corpus audio; no new binary assets added",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "s2s-v4f-tool-during-audio-002",
+      "title": "In-flight audio turn survives an interleaved tool call",
+      "description": "As a user speaking to the agent, I want my assistant's spoken reply to remain complete and intelligible even when the model issues a tool call mid-sentence, so I never hear clipped or corrupted speech.",
+      "acceptanceCriteria": [
+        "Driving the real 'agent session' CLI over the fixture yields every expected output-audio delta of the response, in order, with byte-exact PCM content across the tool-call interleaving boundary (none missing, duplicated, reordered, or truncated)",
+        "The interleaved tool call (name + arguments) is observably present in the replayed exchange in order relative to the surrounding audio deltas",
+        "The response terminates cleanly with a terminal/completed event; the session produces a non-empty final state with no hang or wedge",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "s2s-v4f-tool-during-audio-003",
+      "title": "Negative control detects corruption or drop",
+      "description": "As a maintainer, I need proof the assertions actually bite, so a future regression that drops or corrupts the in-flight audio cannot pass the lane silently.",
+      "acceptanceCriteria": [
+        "A variant fixture that corrupts (or drops) audio deltas at the interleaving point causes the test to fail deterministically with a specific assertion message identifying the affected delta range",
+        "The negative control failure mode is asserted (the test asserts that tampering fails), matching the negative-control convention used by sibling s2s lanes",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
