@@ -1,0 +1,38 @@
+[
+  {
+    "id": "text-helpful-answer",
+    "text": "Ask the assistant to explain how to make a cup of tea in three short steps.",
+    "capability": "text_interaction",
+    "expectation": {
+      "artifact_class": "text response record",
+      "description": "A recorded assistant text response contains the requested three-step explanation."
+    }
+  },
+  {
+    "id": "audio-spoken-answer",
+    "text": "Ask the assistant a short question and listen to its spoken answer.",
+    "capability": "audio_interaction",
+    "expectation": {
+      "artifact_class": "audio recording",
+      "description": "A recorded audio response contains non-empty spoken output for the question."
+    }
+  },
+  {
+    "id": "tool-list-current-folder",
+    "text": "Ask the assistant to tell you which files are in the current folder.",
+    "capability": "tool_use",
+    "expectation": {
+      "artifact_class": "tool invocation record",
+      "description": "A recorded tool invocation lists the current folder with the requested arguments."
+    }
+  },
+  {
+    "id": "multimodal-describe-picture",
+    "text": "Give the assistant a picture of a red apple and ask it to describe what it sees.",
+    "capability": "multimodal_input",
+    "expectation": {
+      "artifact_class": "described-image record",
+      "description": "A recorded image interaction contains a description grounded in the supplied picture."
+    }
+  }
+]
