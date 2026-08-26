@@ -92,7 +92,7 @@ func TestLoadRepresentativeScenarioPreservesTypedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	want := `{"id":"greeting","description":"portable greeting","steps":[{"type":"send_text","text":"hello"},{"type":"send_audio","corpus_id":"greeting-audio"},{"type":"send_tool_result","tool_call_id":"call-1","tool_name":"weather","result":{"ok":true}},{"type":"advance_to","at":10},{"type":"wait","duration":5},{"type":"close"}],"expectations":[{"type":"text","text":"ready"},{"type":"tool_result","tool_call_id":"call-1","result":{"ok":true}},{"type":"audio","corpus_id":"greeting-audio"},{"type":"time","at":15},{"type":"close"}]}`
+	want := `{"id":"greeting","description":"portable greeting","steps":[{"type":"send_text","text":"hello"},{"type":"send_audio","corpus_id":"greeting-audio","text":"hello from the microphone"},{"type":"send_tool_result","tool_call_id":"call-1","tool_name":"weather","result":{"ok":true}},{"type":"advance_to","at":10},{"type":"wait","duration":5},{"type":"close"}],"expectations":[{"type":"text","text":"ready"},{"type":"tool_result","tool_call_id":"call-1","result":{"ok":true}},{"type":"audio","corpus_id":"greeting-audio"},{"type":"time","at":15},{"type":"close"}]}`
 	if string(got) != want {
 		t.Fatalf("normalized JSON:\n got  %s\n want %s", got, want)
 	}
