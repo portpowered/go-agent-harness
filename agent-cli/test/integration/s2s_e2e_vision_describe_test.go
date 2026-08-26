@@ -413,12 +413,13 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 	}
 }
 
-// TestSessionCommandVisionDescribeWithoutRecordingDirectoryStreamsCombinedTurn
-// exercises the ordinary public image-plus-audio invocation. The replay
-// transport requires every client frame in order, so a premature image-only
-// response or an omitted audio commit fails this test before the grounded
-// transcript can be observed.
-func TestSessionCommandVisionDescribeWithoutRecordingDirectoryStreamsCombinedTurn(t *testing.T) {
+// TestVisionDescribeFixtureDrivesPublicSessionCommand is story 001's
+// observable fixture proof: the committed capture is re-injected and driven
+// through the ordinary public session command without a recording directory.
+// The replay transport requires every client frame in order, so a premature
+// image-only response or an omitted audio commit fails this test before the
+// grounded transcript can be observed.
+func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
 	fixture := buildVisionDescribeFixture(t, nil)
 	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
