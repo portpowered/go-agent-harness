@@ -320,6 +320,55 @@ model:
 	}
 }
 
+func TestPlanSessionRuntime_WebSocketDoesNotConstructRTCRuntime(t *testing.T) {
+	configDir := t.TempDir()
+	writeSessionConfigFile(t, configDir, `
+model:
+  provider: grok
+  grok:
+    model: grok-websocket-test
+    api_key: test-key
+`)
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		SessionInferencer: &selectionTestInferencer{},
+		Transport:         SessionTransportWebSocket,
+		Provider:          config.ProviderGrok,
+		ConfigDir:         configDir,
+	}, sessionRuntimeFactory{
+		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
+			t.Fatal("WebSocket planning constructed an RTC runtime")
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+	}
+	if plan.rtcRuntime != nil {
+		t.Fatal("WebSocket plan retained an RTC runtime")
+	}
+}
+
+func TestPlanSessionRuntime_ReplayDoesNotConstructLiveRTCRuntime(t *testing.T) {
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+		ReplayPath:        "synthetic.session.json",
+		SessionInferencer: &selectionTestInferencer{},
+		Transport:         SessionTransportWebRTC,
+		Signaling:         "loopback://replay/sentinel",
+		MediaSource:       "fixture://replay/sentinel",
+	}, sessionRuntimeFactory{
+		newRTCRuntime: func(SessionRuntimeSelection) (SessionRTCRuntime, error) {
+			t.Fatal("replay planning constructed a live RTC runtime")
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+	}
+	if plan.rtcRuntime != nil {
+		t.Fatal("replay plan retained a live RTC runtime")
+	}
+}
+
 type testRTCSignaling struct {
 	close func() error
 }
