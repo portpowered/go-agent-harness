@@ -77,7 +77,7 @@ func buildAgentBinary(t *testing.T) string {
 	return binaryPath
 }
 
-func runAgentBinary(t *testing.T, binaryPath string, args ...string) agentProcessResult {
+func runAgentCLIBinary(t *testing.T, binaryPath string, args ...string) agentProcessResult {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), toolUnknownProcessDeadline)
 	defer cancel()
@@ -179,7 +179,7 @@ func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
 	scenario := locateUnknownToolFixture(t, unknownToolScenario)
 	configDir := t.TempDir()
 
-	registry := runAgentBinary(t, binaryPath, "--config-dir", configDir, "tool", "--list")
+	registry := runAgentCLIBinary(t, binaryPath, "--config-dir", configDir, "tool", "--list")
 	if registry.ExitCode != 0 {
 		t.Fatalf("tool --list failed: exit=%d stdout=%q stderr=%q", registry.ExitCode, registry.Stdout, registry.Stderr)
 	}
@@ -190,7 +190,7 @@ func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
 		t.Fatalf("positive fixture tool %q unexpectedly appears in active CLI registry: %q", unknownToolName, registry.Stdout)
 	}
 
-	session := runAgentBinary(t, binaryPath,
+	session := runAgentCLIBinary(t, binaryPath,
 		"--config-dir", configDir,
 		"session",
 		"--replay", fixture,
@@ -211,7 +211,7 @@ func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
 		t.Fatalf("session output is missing the healthy post-refusal terminal boundary:\n%s", session.Stdout)
 	}
 
-	probe := runAgentBinary(t, binaryPath,
+	probe := runAgentCLIBinary(t, binaryPath,
 		"probe", "run", scenario,
 		"--replay", fixture,
 		"--json",
@@ -249,7 +249,7 @@ func TestRegisteredToolControlRejectsUnknownRefusalExpectation(t *testing.T) {
 
 	assertSameExpectationsAsPositiveScenario(t)
 
-	control := runAgentBinary(t, binaryPath,
+	control := runAgentCLIBinary(t, binaryPath,
 		"probe", "run", scenario,
 		"--replay", fixture,
 		"--json",
