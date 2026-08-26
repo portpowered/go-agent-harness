@@ -61,6 +61,38 @@ func (e *SessionTransportError) Error() string {
 
 func (e *SessionTransportError) Unwrap() error { return ErrInvalidSessionTransport }
 
+// SessionSignalingError identifies an invalid relationship between the
+// --transport and --signaling flags before session setup begins.
+type SessionSignalingError struct {
+	Transport string
+	Missing   bool
+}
+
+func (e *SessionSignalingError) Error() string {
+	if e == nil {
+		return ErrSessionSignalingRequiresWebRTC.Error()
+	}
+	if e.Missing {
+		return fmt.Sprintf("--transport %q requires --signaling <endpoint>; provide both --transport and --signaling", e.Transport)
+	}
+	return fmt.Sprintf("--signaling requires --transport %q; got --transport %q (the --signaling and --transport flags are incompatible)", SessionTransportWebRTC, e.Transport)
+}
+
+func (e *SessionSignalingError) Unwrap() error {
+	if e != nil && e.Missing {
+		return ErrSessionWebRTCRequiresSignaling
+	}
+	return ErrSessionSignalingRequiresWebRTC
+}
+
+// ErrSessionSignalingRequiresWebRTC identifies --signaling used without the
+// WebRTC transport.
+var ErrSessionSignalingRequiresWebRTC = errors.New("session signaling requires WebRTC transport")
+
+// ErrSessionWebRTCRequiresSignaling identifies WebRTC selected without an
+// endpoint for its signaling exchange.
+var ErrSessionWebRTCRequiresSignaling = errors.New("WebRTC session transport requires signaling")
+
 func validateSessionTransport(raw string) (string, error) {
 	transport := strings.ToLower(strings.TrimSpace(raw))
 	switch transport {
@@ -220,6 +252,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	recordDirPath := ""
 	audioOutPath := ""
 	transport := SessionTransportWebSocket
+	signaling := ""
 	var maxDuration time.Duration
 	var waitForClose bool
 	var audioIn string
@@ -241,6 +274,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selectedTransport, err := validateSessionTransport(transport)
 			if err != nil {
+				return err
+			}
+			if err := validateSessionSignaling(selectedTransport, signaling, cmd.Flags().Changed("signaling")); err != nil {
 				return err
 			}
 			if err := services.ValidateSessionAudioDeviceConflicts(
@@ -427,7 +463,18 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
 	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default) or webrtc")
+	cmd.Flags().StringVar(&signaling, "signaling", "", "WebRTC signaling endpoint; requires --transport webrtc, and --transport webrtc requires this flag")
 	return cmd
+}
+
+func validateSessionSignaling(transport, signaling string, provided bool) error {
+	if provided && transport != SessionTransportWebRTC {
+		return &SessionSignalingError{Transport: transport}
+	}
+	if transport == SessionTransportWebRTC && strings.TrimSpace(signaling) == "" {
+		return &SessionSignalingError{Transport: transport, Missing: true}
+	}
+	return nil
 }
 
 // getSessionStorage resolves workspace from global flags and returns session storage.

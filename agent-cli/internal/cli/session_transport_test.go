@@ -20,8 +20,17 @@ func TestSessionCommandTransportHelpDocumentsSupportedValues(t *testing.T) {
 		t.Fatalf("session --help: %v", err)
 	}
 	help := out.String()
-	if !strings.Contains(help, "--transport string") || !strings.Contains(help, "ws") || !strings.Contains(help, "webrtc") {
-		t.Fatalf("session help does not document --transport values:\n%s", help)
+	for _, want := range []string{
+		"--transport string",
+		"ws",
+		"webrtc",
+		"--signaling string",
+		"requires --transport webrtc",
+		"--transport webrtc requires this flag",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("session help does not document %q:\n%s", want, help)
+		}
 	}
 }
 
@@ -65,5 +74,63 @@ func TestValidateSessionTransportNormalizesSupportedValues(t *testing.T) {
 				t.Fatalf("normalized transport = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+func TestSessionCommandSignalingWithoutWebRTCIsRejectedBeforeSessionSetup(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	command.SetArgs([]string{"--signaling", "loopback"})
+
+	err := command.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("--signaling without --transport webrtc returned nil")
+	}
+	var signalingErr *SessionSignalingError
+	if !errors.As(err, &signalingErr) {
+		t.Fatalf("error type = %T, want *SessionSignalingError: %v", err, err)
+	}
+	if !errors.Is(err, ErrSessionSignalingRequiresWebRTC) {
+		t.Fatalf("error does not preserve signaling classification: %v", err)
+	}
+	for _, want := range []string{"--signaling", "--transport", "webrtc", "ws"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+}
+
+func TestSessionCommandWebRTCWithoutSignalingIsRejectedBeforeSessionSetup(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	command.SetArgs([]string{"--transport", "webrtc"})
+
+	err := command.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("--transport webrtc without --signaling returned nil")
+	}
+	var signalingErr *SessionSignalingError
+	if !errors.As(err, &signalingErr) {
+		t.Fatalf("error type = %T, want *SessionSignalingError: %v", err, err)
+	}
+	if !errors.Is(err, ErrSessionWebRTCRequiresSignaling) {
+		t.Fatalf("error does not preserve missing-signaling classification: %v", err)
+	}
+	for _, want := range []string{"--transport", "webrtc", "--signaling"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+}
+
+func TestSessionCommandAcceptsWebRTCWithSignaling(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	var out bytes.Buffer
+	command.SetOut(&out)
+	command.SetArgs([]string{"--transport", "webrtc", "--signaling", " loopback "})
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("--transport webrtc --signaling loopback: %v", err)
+	}
+	if !strings.Contains(out.String(), "Usage:") {
+		t.Fatalf("accepted transport selection did not reach the normal session help path: %q", out.String())
 	}
 }
