@@ -58,7 +58,7 @@ func (Composer) Compose(input ComposeInput) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, validation("entries", "", "declared cross product is too large", ErrEntryCountOverflow)
 	}
-	entryLimit, err := resolveEntryLimit(input.MaxEntries)
+	entryLimit, err := resolveEntryLimit(input.MaxEntries, input.AllowEntryLimitOverride)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -239,12 +239,15 @@ func crossProductCount(scenarioCount, transportCount, repeatCount int) (int, err
 	return partial * repeatCount, nil
 }
 
-func resolveEntryLimit(raw int) (int, error) {
+func resolveEntryLimit(raw int, overridden bool) (int, error) {
 	if raw < 0 {
 		return 0, validation("max_entries", fmt.Sprint(raw), "must not be negative", ErrInvalidEntryLimit)
 	}
 	if raw == 0 {
 		return DefaultMaxEntries, nil
+	}
+	if raw > DefaultMaxEntries && !overridden {
+		return 0, newEntryLimitOverrideError("max_entries", raw)
 	}
 	return raw, nil
 }

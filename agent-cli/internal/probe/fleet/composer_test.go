@@ -243,6 +243,52 @@ func TestComposeRejectsNegativeEntryLimit(t *testing.T) {
 	}
 }
 
+func TestComposeRejectsRaisedEntryLimitWithoutOverride(t *testing.T) {
+	path := writeScenario(t, t.TempDir(), "scenario")
+	_, err := Compose(ComposeInput{
+		ScenarioFiles: []string{path},
+		Transports:    []Transport{TransportReplay},
+		RepeatCount:   DefaultMaxEntries + 1,
+		Concurrency:   1,
+		MaxEntries:    DefaultMaxEntries * 2,
+	})
+	if !errors.Is(err, ErrEntryLimitOverrideRequired) {
+		t.Fatalf("error = %v, want ErrEntryLimitOverrideRequired", err)
+	}
+	var overrideErr *EntryLimitOverrideError
+	if !errors.As(err, &overrideErr) {
+		t.Fatalf("error = %v, want EntryLimitOverrideError", err)
+	}
+	if overrideErr.Field != "max_entries" || overrideErr.Limit != DefaultMaxEntries*2 || overrideErr.Default != DefaultMaxEntries {
+		t.Fatalf("override error = %+v, want max_entries raised above default", overrideErr)
+	}
+	if !strings.Contains(err.Error(), "above the default") || !strings.Contains(err.Error(), "AllowEntryLimitOverride") {
+		t.Fatalf("error = %v, want raised-bound guidance", err)
+	}
+}
+
+func TestManifestRejectsRaisedEntryLimitWithoutOverride(t *testing.T) {
+	path := writeScenario(t, t.TempDir(), "scenario")
+	manifest, err := Compose(ComposeInput{
+		ScenarioFiles: []string{path},
+		Transports:    []Transport{TransportReplay},
+		RepeatCount:   1,
+		Concurrency:   1,
+	})
+	if err != nil {
+		t.Fatalf("Compose: %v", err)
+	}
+	manifest.EntryLimit = DefaultMaxEntries + 1
+	validationErr := manifest.Validate()
+	if !errors.Is(validationErr, ErrEntryLimitOverrideRequired) {
+		t.Fatalf("error = %v, want ErrEntryLimitOverrideRequired", validationErr)
+	}
+	var overrideErr *EntryLimitOverrideError
+	if !errors.As(validationErr, &overrideErr) || overrideErr.Field != "entry_limit" {
+		t.Fatalf("error = %v, override error = %+v, want entry_limit field", validationErr, overrideErr)
+	}
+}
+
 func TestComposeRejectsMalformedScenarioIdentity(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken.scenario.json")

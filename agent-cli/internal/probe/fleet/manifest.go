@@ -37,18 +37,19 @@ const (
 )
 
 var (
-	ErrInvalidManifest    = errors.New("invalid fleet manifest")
-	ErrUnknownTransport   = errors.New("unknown fleet transport")
-	ErrInvalidRepeatCount = errors.New("invalid fleet repeat count")
-	ErrInvalidConcurrency = errors.New("invalid fleet concurrency")
-	ErrNoScenarios        = errors.New("fleet manifest requires at least one scenario")
-	ErrNoTransports       = errors.New("fleet manifest requires at least one transport")
-	ErrDuplicateScenario  = errors.New("fleet manifest contains duplicate scenarios")
-	ErrDuplicateTransport = errors.New("fleet manifest contains duplicate transports")
-	ErrDuplicateEntry     = errors.New("fleet manifest contains duplicate entries")
-	ErrEntryCountOverflow = errors.New("fleet manifest entry count overflows int")
-	ErrInvalidEntryLimit  = errors.New("invalid fleet entry limit")
-	ErrEntryLimitExceeded = errors.New("fleet manifest entry limit exceeded")
+	ErrInvalidManifest            = errors.New("invalid fleet manifest")
+	ErrUnknownTransport           = errors.New("unknown fleet transport")
+	ErrInvalidRepeatCount         = errors.New("invalid fleet repeat count")
+	ErrInvalidConcurrency         = errors.New("invalid fleet concurrency")
+	ErrNoScenarios                = errors.New("fleet manifest requires at least one scenario")
+	ErrNoTransports               = errors.New("fleet manifest requires at least one transport")
+	ErrDuplicateScenario          = errors.New("fleet manifest contains duplicate scenarios")
+	ErrDuplicateTransport         = errors.New("fleet manifest contains duplicate transports")
+	ErrDuplicateEntry             = errors.New("fleet manifest contains duplicate entries")
+	ErrEntryCountOverflow         = errors.New("fleet manifest entry count overflows int")
+	ErrInvalidEntryLimit          = errors.New("invalid fleet entry limit")
+	ErrEntryLimitExceeded         = errors.New("fleet manifest entry limit exceeded")
+	ErrEntryLimitOverrideRequired = errors.New("fleet manifest entry limit override required")
 )
 
 // ValidationError identifies the exact manifest or composition field that
@@ -70,6 +71,37 @@ type EntryLimitError struct {
 	Requested int
 	Limit     int
 	Dropped   int
+}
+
+// EntryLimitOverrideError reports a caller-supplied bound that raises the
+// effective limit above DefaultMaxEntries without an explicit acknowledgement.
+// The bound is rejected even when the current plan happens to fit below it, so
+// callers cannot silently change the documented default for future plans.
+type EntryLimitOverrideError struct {
+	Field   string
+	Limit   int
+	Default int
+}
+
+func (e *EntryLimitOverrideError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf(
+		"fleet manifest field %q raises the entry limit to %d above the default %d; set AllowEntryLimitOverride to acknowledge the raised bound",
+		e.Field, e.Limit, e.Default,
+	)
+}
+
+func (e *EntryLimitOverrideError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return ErrEntryLimitOverrideRequired
+}
+
+func (e *EntryLimitOverrideError) Is(target error) bool {
+	return e != nil && (target == ErrEntryLimitOverrideRequired || target == ErrInvalidManifest)
 }
 
 func (e *EntryLimitError) Error() string {
@@ -199,6 +231,9 @@ func (m Manifest) Validate() error {
 	if m.EntryLimit < 0 {
 		return validation("entry_limit", fmt.Sprint(m.EntryLimit), "must not be negative", ErrInvalidEntryLimit)
 	}
+	if m.EntryLimit > DefaultMaxEntries && !m.EntryLimitOverridden {
+		return newEntryLimitOverrideError("entry_limit", m.EntryLimit)
+	}
 
 	for index, scenario := range m.Scenarios {
 		field := fmt.Sprintf("scenarios[%d]", index)
@@ -319,4 +354,8 @@ func ParseTransport(raw string) (Transport, error) {
 
 func validation(field, value, problem string, cause error) *ValidationError {
 	return &ValidationError{Field: field, Value: value, Problem: problem, Cause: cause}
+}
+
+func newEntryLimitOverrideError(field string, limit int) *EntryLimitOverrideError {
+	return &EntryLimitOverrideError{Field: field, Limit: limit, Default: DefaultMaxEntries}
 }
