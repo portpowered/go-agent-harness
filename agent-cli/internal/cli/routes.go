@@ -37,8 +37,6 @@ type Router struct {
 
 	ConfigCommand         *ConfigCommand
 	ConfigAddLocalCommand *ConfigAddLocalCommand
-
-	deviceRegistry audio.DeviceRegistry
 }
 
 // NewRouter constructs a Router with the given dependencies.
@@ -96,7 +94,6 @@ func NewRouter(
 		SessionDeleteCommand:     sessionDeleteCommand,
 		ConfigCommand:            configCommand,
 		ConfigAddLocalCommand:    configAddLocalCommand,
-		deviceRegistry:           deviceRegistry,
 	}
 }
 
