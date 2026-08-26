@@ -38,6 +38,7 @@ func newTestRootCommandWithAcceptance(runner AcceptanceProbeRunner) *cobra.Comma
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
 		NewProbeRunCommand(),
+		NewProbeGateCommand(),
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),
