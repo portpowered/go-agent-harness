@@ -25,13 +25,14 @@ the session inferencer connects. Composition itself remains inert: no config
 file is loaded and no request-scoped filtered registry is built until command
 execution.
 
-## Hermetic evidence
+## Hermetic behavioral evidence
 
 `agent-cli/test/integration/s2s_prereq_session_config_tool_filter_test.go`
 drives the real CLI router with normal argv and a temporary `--config-dir`. It
 replaces only the external session inferencer with a deterministic in-memory
 port and retains the production registry-backed executor. The matrix observes
-advertised definitions, call IDs, correlated results, and terminal behavior:
+the runtime contract through advertised definitions, call IDs, correlated
+results, and terminal behavior:
 
 - empty list: `sleep` is advertised and
   `prereq-default-sleep` with `{"duration":"0s"}` returns exactly

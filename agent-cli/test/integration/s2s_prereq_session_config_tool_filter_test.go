@@ -76,7 +76,7 @@ tools:
 
 			sessionInferencer := newSessionConfigToolInferencer(tc.calls)
 			var resultMu sync.Mutex
-			advertised := map[string]bool{}
+			var advertised map[string]bool
 			var resultText strings.Builder
 			results := make([]sessionConfigToolResult, 0, len(tc.calls))
 			currentResult := make(map[string]string)
