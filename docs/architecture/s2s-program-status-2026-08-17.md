@@ -79,6 +79,49 @@ microphones, WebRTC, and the entire probe/acceptance layer are all unreachable.
   `session_audio_in.go`, `session_image.go`, or `session_tools.go`. Those files
   exist **only inside the 15 open PRs**.
 
+### 1.1 v10 WebRTC external source — CLI-proven status (updated 2026-08-26)
+
+v10 is recorded as proven only through the following two hermetic T1 CLI
+integration cases (plus their dead-source control), all under
+`agent-cli/test/integration/`. No credentialed or live-camera claim is made.
+
+- Command surfaces (actual argv through the real root router):
+  `agent media probe go2rtc://<loopback>/api/ws?src=v10-tuya-main` and
+  `agent session --replay <synthetic capture> --audio-in - --audio-out <wav>`.
+- Concrete tests:
+  `TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI`,
+  `TestWebrtcAudioOnlySourceReportsLookUnavailableThroughRealCLI`, and
+  `TestWebrtcDeadSourceFailsPositiveDeliveryAssertions`.
+- Provider replay fixture: a synthetic `.session.json` assembled from the
+  shared smoke handshake (`openai_realtime_smoke.session.json`) whose
+  `input_audio_buffer.append` records carry the exact bridged source frames;
+  the replay transport diverges on any dropped or distorted frame, so a
+  session that did not consume the source audio byte-exactly cannot pass.
+- go2rtc/WebRTC source shapes: loopback go2rtc-compatible signaling
+  (`/api/ws` with `webrtc/offer|answer`). Camera = PCMU/8000/mono audio track
+  plus an H.264 video track; audio-only = the PCMU track with the video
+  m-line stripped from the answer. Source audio is μ-law encoded from the
+  loudest window of committed `go-agent-loop/testdata/audio/utt_short_16k.wav`
+  (no new binary fixture).
+- Observed track facts: exactly one negotiated audio track
+  (`Audio codec: PCMU`, `Sample rate: 8000`, `Channels: 1`) with one video
+  track for the camera (`Video presence: true`) and none for audio-only
+  (`Video presence: false`, look() unavailable in the same report).
+- Non-silent audio and terminal signals: bridged source RMS energy > 500, a
+  recorded reply WAV that is non-silent within bounded duration,
+  `[session closed: fixture_complete]` plus exit status 0 inside a hard 45 s
+  parent deadline.
+- Audio-only negative-control failure condition: applying the camera case's
+  video-track/look-available assertion to the audio-only observation fails
+  specifically naming absent video and unavailable look(); a dead
+  (frame-less) source yields typed `ErrSourceUnreachable` and cannot satisfy
+  the positive audio-delivery assertion.
+
+Scope: T1 only — a loopback go2rtc-compatible source over the replayed
+provider transport. This evidence does not duplicate v1 text-in/audio-out,
+v2a basic audio-in, v6a auth failure, or v9 physical-device roundtrip
+coverage.
+
 ---
 
 ## 2. Inventory
