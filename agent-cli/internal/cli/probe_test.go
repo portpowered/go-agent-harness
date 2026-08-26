@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 const probeSessionFixture = "../../../go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
@@ -651,4 +653,180 @@ func TestV2EScenariosReferenceCommittedTruncatedCorpus(t *testing.T) {
 			t.Fatalf("committed truncated corpus fixture %s must be reused by the v2e scenarios: %v", path, err)
 		}
 	}
+}
+
+const (
+	v3aFixture16k            = "testdata/probe-fixtures/s2s-v3a-barge-in-basic-cancelled-16k.session.json"
+	v3aFixture24k            = "testdata/probe-fixtures/s2s-v3a-barge-in-basic-cancelled-24k.session.json"
+	v3aFixtureNoInterruption = "testdata/probe-fixtures/s2s-v3a-barge-in-basic-no-interruption.session.json"
+
+	// v3aCancelTick16k/24k are the outbound logical ticks on which
+	// RESPONSE.CANCEL crosses the client-to-provider path in the committed
+	// fixtures: one tick after the interrupting audio for the 16 kHz capture,
+	// exactly two ticks (the bound boundary) for the 24 kHz capture.
+	v3aCancelTick16k = 3
+	v3aCancelTick24k = 4
+)
+
+func TestProbeRunV3ABargeInCancelled16kCancelsInFlightResponse(t *testing.T) {
+	run := executeCLI("probe", "run", "s2s-v3a-barge-in-basic-cancelled-16k", "--replay", v3aFixture16k, "--json")
+	assertV3ACancelledRun(t, run, "s2s-v3a-barge-in-basic-cancelled-16k", v3aCancelTick16k)
+}
+
+func TestProbeRunV3ABargeInCancelled24kCancelsWithinBound(t *testing.T) {
+	run := executeCLI("probe", "run", "s2s-v3a-barge-in-basic-cancelled-24k", "--replay", v3aFixture24k, "--json")
+	assertV3ACancelledRun(t, run, "s2s-v3a-barge-in-basic-cancelled-24k", v3aCancelTick24k)
+}
+
+func TestProbeRunV3ANoInterruptionControlCompletesWithoutCancel(t *testing.T) {
+	run := executeCLI("probe", "run", "s2s-v3a-barge-in-basic-no-interruption", "--replay", v3aFixtureNoInterruption, "--json")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != true || results[0]["name"] != "s2s-v3a-barge-in-basic-no-interruption" {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	cancelOutcomes := v3aOutcomesByKind(t, results[0], "response-cancel")
+	if len(cancelOutcomes) != 1 {
+		t.Fatalf("no-interruption control declares %d response-cancel outcomes, want 1", len(cancelOutcomes))
+	}
+	if cancelOutcomes[0]["passed"] != true {
+		t.Fatalf("asserted absence must pass on an uninterrupted session: %v", cancelOutcomes[0])
+	}
+	if summary["status"] != "pass" || summary["failed"] != float64(0) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
+// TestProbeRunV3ANegativeControlFailsWhenCancelSuppressed is the negative
+// control verified once: the interrupting fixture is delivered but the cancel
+// path is broken (the RESPONSE.CANCEL record is removed), and the run must
+// fail with a clear expectation-mismatch reason naming the missing cancel.
+func TestProbeRunV3ANegativeControlFailsWhenCancelSuppressed(t *testing.T) {
+	source, err := os.ReadFile(v3aFixture16k)
+	if err != nil {
+		t.Fatalf("read committed v3a fixture: %v", err)
+	}
+	var capture map[string]any
+	if err := json.Unmarshal(source, &capture); err != nil {
+		t.Fatalf("decode committed v3a fixture: %v", err)
+	}
+	records := capture["records"].([]any)
+	broken := make([]any, 0, len(records))
+	for _, record := range records {
+		if record.(map[string]any)["type"] == "response.cancel" {
+			continue
+		}
+		broken = append(broken, record)
+	}
+	capture["records"] = broken
+	fixture := filepath.Join(t.TempDir(), "s2s-v3a-barge-in-basic-cancelled-16k.session.json")
+	encoded, err := json.Marshal(capture)
+	if err != nil {
+		t.Fatalf("encode broken fixture: %v", err)
+	}
+	if err := os.WriteFile(fixture, encoded, 0o644); err != nil {
+		t.Fatalf("write broken fixture: %v", err)
+	}
+
+	run := executeCLI("probe", "run", "s2s-v3a-barge-in-basic-cancelled-16k", "--replay", fixture, "--json")
+	if run.exitCode == 0 {
+		t.Fatalf("suppressed cancel must fail the run; stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+	results, _ := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	for _, outcome := range v3aOutcomesByKind(t, results[0], "response-cancel") {
+		message := fmt.Sprint(outcome["error"])
+		if !strings.Contains(message, `probe expectation "response-cancel" mismatch`) ||
+			!strings.Contains(message, "RESPONSE.CANCEL observed") {
+			t.Fatalf("failure must name the missing cancel clearly: %v", outcome)
+		}
+	}
+}
+
+// TestV3AScenariosReferenceCommittedOverlapCorpus proves both sample-rate
+// variants of the interrupting barge-in input load from the committed corpus
+// at go-agent-loop/testdata/audio and carry real speech energy at their
+// recorded rates — the same overlap_* utterances the scenarios reference.
+func TestV3AScenariosReferenceCommittedOverlapCorpus(t *testing.T) {
+	for _, variant := range []struct {
+		name         string
+		wantRate     int
+		wantSilentAt float64
+	}{
+		{name: "overlap_16k.wav", wantRate: 16000},
+		{name: "overlap_24k.wav", wantRate: 24000},
+	} {
+		path := filepath.Join("..", "..", "..", "go-agent-loop", "testdata", "audio", variant.name)
+		file, err := os.Open(path)
+		if err != nil {
+			t.Fatalf("committed overlap corpus %s must load: %v", path, err)
+		}
+		rate, samples, err := wavio.Read(file)
+		closeErr := file.Close()
+		if err != nil {
+			t.Fatalf("decode overlap corpus %s: %v", path, err)
+		}
+		if closeErr != nil {
+			t.Fatalf("close overlap corpus %s: %v", path, closeErr)
+		}
+		if rate != variant.wantRate {
+			t.Fatalf("overlap corpus %s sample rate = %d, want %d", variant.name, rate, variant.wantRate)
+		}
+		if len(samples) == 0 {
+			t.Fatalf("overlap corpus %s decodes to no PCM16 samples", variant.name)
+		}
+		var sum float64
+		for _, sample := range samples {
+			sum += float64(sample) * float64(sample)
+		}
+		rms := math.Sqrt(sum / float64(len(samples)))
+		if rms <= probe.AudioEnergyThreshold {
+			t.Fatalf("overlap corpus %s RMS = %.2f must exceed the VAD threshold %.2f to plausibly barge in",
+				variant.name, rms, probe.AudioEnergyThreshold)
+		}
+	}
+}
+
+func assertV3ACancelledRun(t *testing.T, run cliExecution, name string, wantCancelTicks int) {
+	t.Helper()
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	if results[0]["pass"] != true || results[0]["name"] != name {
+		t.Fatalf("unexpected result line: %v", results[0])
+	}
+	cancelOutcomes := v3aOutcomesByKind(t, results[0], "response-cancel")
+	if len(cancelOutcomes) != 2 {
+		t.Fatalf("%s declares %d response-cancel outcomes, want presence + bounded latency", name, len(cancelOutcomes))
+	}
+	for _, outcome := range cancelOutcomes {
+		if outcome["passed"] != true {
+			t.Fatalf("%s cancel expectation failed despite an in-flight cancellation: %v", name, outcome)
+		}
+	}
+	if got := results[0]["ticks"]; got != float64(wantCancelTicks) {
+		t.Fatalf("%s final tick count = %v, want %d (cancel lands on the last outbound frame)", name, got, wantCancelTicks)
+	}
+	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+		t.Fatalf("unexpected summary: %v", summary)
+	}
+}
+
+// v3aOutcomesByKind returns every expectation outcome of one kind in result order.
+func v3aOutcomesByKind(t *testing.T, result map[string]any, kind string) []map[string]any {
+	t.Helper()
+	raw, ok := result["expectations"].([]any)
+	if !ok {
+		t.Fatalf("result carries no expectation outcomes: %v", result)
+	}
+	outcomes := make([]map[string]any, 0, len(raw))
+	for _, candidate := range raw {
+		outcome := candidate.(map[string]any)
+		if outcome["kind"] == kind {
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	return outcomes
 }

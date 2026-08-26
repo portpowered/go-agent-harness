@@ -32,13 +32,23 @@ const (
 	// explicitly discarded; any other outcome is an orphaned tool result and
 	// fails the run.
 	ExpectNoOrphanedToolResult ExpectationKind = "no-orphaned-tool-result"
+	// ExpectResponseCancel asserts the barge-in contract on the
+	// client-to-provider path: either that RESPONSE.CANCEL was observed
+	// (optionally within a bounded tick window of an interrupting input), or
+	// — via the ResponseCancelNone variant — that no cancellation was
+	// emitted during an uninterrupted run.
+	ExpectResponseCancel ExpectationKind = "response-cancel"
 
 	// Buffer disposition values observed for buffered input audio. A session
 	// that ends with neither disposition left the buffer uncommitted.
-	BufferDispositionCommitted = "committed"
-	BufferDispositionDiscarded = "discarded"
+	BufferDispositionCommitted                 = "committed"
+	BufferDispositionDiscarded                 = "discarded"
+	ExpectBufferDisposition    ExpectationKind = "buffer-disposition"
 
-	ExpectBufferDisposition ExpectationKind = "buffer-disposition"
+	// Response-cancel variants select what a response-cancel expectation
+	// asserts. The empty value defaults to ResponseCancelObserved.
+	ResponseCancelObserved = "cancelled"
+	ResponseCancelNone     = "none"
 
 	// ExpectBargeInCancelOnce enforces the repeated-barge-in invariant
 	// (s2s v3c): every response.cancel terminates exactly one live in-flight
@@ -83,6 +93,11 @@ type ObservationSnapshot struct {
 	HasObservedTick bool
 	TerminalReason  string
 	FrameCount      int
+	// ResponseCancelTick is the logical tick at which RESPONSE.CANCEL crossed
+	// the outbound client-to-provider path; meaningful only when
+	// HasResponseCancel is true.
+	ResponseCancelTick LogicalTime
+	HasResponseCancel  bool
 
 	// Repeated-barge-in reconciliation evidence (s2s v3c), derived from the
 	// recorded event stream: committed user turns, delivered assistant
@@ -289,6 +304,10 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		return evaluateBargeInCancelOnce(expectation, observation)
 	case ExpectMessageCountsReconcile:
 		return evaluateMessageCountsReconciliation(expectation, observation)
+	case ExpectResponseCancel:
+		if err := evaluateResponseCancel(expectation, kind, observation); err != nil {
+			return err
+		}
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
@@ -326,7 +345,7 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
 		ExpectBufferDisposition, ExpectMetricsReconcile,
-		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile:
+		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel:
 		return kind, nil
 	default:
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
@@ -369,6 +388,59 @@ func startTick(e ExpectedBehavior) (LogicalTime, error) {
 }
 func observationTick(o ObservationSnapshot) (LogicalTime, bool) {
 	return o.ObservedTick, o.HasObservedTick || o.ObservedTick != 0
+}
+
+// evaluateResponseCancel implements the response-cancel contract. The
+// ResponseCancelNone variant asserts that no RESPONSE.CANCEL crossed the
+// client-to-provider path; every other declaration asserts presence,
+// optionally bounded to a maximum tick delta from the declared start tick
+// (the interrupting input's tick) to the observed cancel tick.
+func evaluateResponseCancel(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot) error {
+	want := expectation.Value
+	if want == "" {
+		want = expectation.Text
+	}
+	if expectation.Value != "" && expectation.Text != "" && expectation.Value != expectation.Text {
+		return invalid(expectation, kind, "value", "value aliases disagree")
+	}
+	hasStart := expectation.HasAt || expectation.At != 0 || expectation.Time != 0
+	if !hasStart && expectation.Count != 0 {
+		return invalid(expectation, kind, "count", "count requires a declared start tick")
+	}
+	switch want {
+	case "", ResponseCancelObserved:
+		if !observation.HasResponseCancel {
+			return mismatch(expectation, kind,
+				"RESPONSE.CANCEL observed on the client-to-provider path", "none")
+		}
+		if !hasStart {
+			return nil
+		}
+		start, err := startTick(expectation)
+		if err != nil {
+			return err
+		}
+		bounded := fmt.Sprintf("non-negative cancel tick delta <= %d", expectation.Count)
+		if observation.ResponseCancelTick < start {
+			return mismatch(expectation, kind, bounded,
+				fmt.Sprintf("cancel tick %d precedes start tick %d", observation.ResponseCancelTick, start))
+		}
+		if delta := observation.ResponseCancelTick - start; delta > LogicalTime(expectation.Count) {
+			return mismatch(expectation, kind, bounded, delta)
+		}
+	case ResponseCancelNone:
+		if hasStart {
+			return invalid(expectation, kind, "at", "absence assertions take no latency bound")
+		}
+		if observation.HasResponseCancel {
+			return mismatch(expectation, kind, "no RESPONSE.CANCEL on the client-to-provider path",
+				fmt.Sprintf("cancel observed at tick %d", observation.ResponseCancelTick))
+		}
+	default:
+		return invalid(expectation, kind, "value",
+			"response-cancel variant must be cancelled or none")
+	}
+	return nil
 }
 func containsID(ids []string, want string) bool {
 	for _, id := range ids {

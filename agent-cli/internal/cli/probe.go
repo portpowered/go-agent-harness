@@ -318,6 +318,8 @@ var expectationKindAliases = map[string]probe.ExpectationKind{
 	"barge-in-cancel-once":     probe.ExpectBargeInCancelOnce,
 	"message_counts_reconcile": probe.ExpectMessageCountsReconcile,
 	"message-counts-reconcile": probe.ExpectMessageCountsReconcile,
+	"response_cancel":         probe.ExpectResponseCancel,
+	"response-cancel":         probe.ExpectResponseCancel,
 }
 
 func measurableExpectationKind(name string) (probe.ExpectationKind, bool) {
@@ -457,6 +459,9 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if deriveErr := deriveBargeInObservation(fixture, &observation); deriveErr != nil {
 			return probe.ObservationSnapshot{}, deriveErr
 		}
+		if deriveErr := deriveResponseCancelObservation(fixture, &observation); deriveErr != nil {
+			return probe.ObservationSnapshot{}, deriveErr
+		}
 		observation.BufferDisposition = replayBufferDisposition(fixture)
 		if scenarioDeclaresMetricsReconciliation(scenario) {
 			metricsSeries, metricsErr := collectReplayMetricsEvidence(ctx, fixture, scenarioSendText(scenario))
@@ -469,6 +474,44 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 			observation.Metrics = metricsSeries
 		}
 		return observation, nil
+	}
+}
+
+// deriveResponseCancelObservation scans the recorded fixture for
+// RESPONSE.CANCEL frames on the outbound client-to-provider path and fills the
+// observation's barge-in cancel fields. A frame's logical tick is its 1-based
+// ordinal among all client-to-server frames, matching the replay probe's
+// outbound tick counting. The first observed cancel wins; later duplicates do
+// not move the recorded tick.
+func deriveResponseCancelObservation(fixture string, observation *probe.ObservationSnapshot) error {
+	capture, err := gatewaytesting.LoadSessionCapture(fixture)
+	if err != nil {
+		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
+	}
+	tick := probe.LogicalTime(0)
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionClientToServer {
+			continue
+		}
+		tick++
+		if observation.HasResponseCancel || !isResponseCancelEventType(record.Type) {
+			continue
+		}
+		observation.HasResponseCancel = true
+		observation.ResponseCancelTick = tick
+	}
+	return nil
+}
+
+// isResponseCancelEventType reports whether a fixture event type encodes a
+// RESPONSE.CANCEL on either wire spelling: the raw provider websocket type or
+// the stream-message type.
+func isResponseCancelEventType(eventType string) bool {
+	switch eventType {
+	case "response.cancel", "RESPONSE.CANCEL":
+		return true
+	default:
+		return false
 	}
 }
 
