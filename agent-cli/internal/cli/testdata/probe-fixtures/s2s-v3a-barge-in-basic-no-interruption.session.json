@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-synthetic-v3a-no-interruption"
+  },
+  "session": {
+    "id": "sess_v3a_no_interruption",
+    "started_at_utc": "2026-08-26T00:00:00Z",
+    "fixture_provenance": "synthetic",
+    "description": "Barge-in basic negative control: the assistant audio response streams to completion with no user audio arriving, so the session plays through without any RESPONSE.CANCEL on the client-to-provider path."
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-synthetic-v3a-no-interruption"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_v3a_no_interruption",
+        "model": "grok-synthetic-v3a-no-interruption"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "delta": "c3ludGhldGljIGFzc2lzdGFudCBzdHJlYW1pbmcgYXVkaW8="
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "delta": "c3ludGhldGljIGFzc2lzdGFudCBmaW5pc2hpbmcgYXVkaW8="
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 7,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}

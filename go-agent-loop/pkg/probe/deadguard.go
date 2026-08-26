@@ -742,7 +742,7 @@ func evaluateGuardExpectation(expectation ExpectedBehavior, observation Observat
 		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
 		ExpectBufferDisposition, ExpectMetricsReconcile,
-		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile:
+		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel:
 		return Evaluate(expectation, observation)
 	case ExpectText, ExpectTranscript:
 		want, err := aliasString(expectation, declaredKind(expectation), "text", expectation.Text, expectation.Value)

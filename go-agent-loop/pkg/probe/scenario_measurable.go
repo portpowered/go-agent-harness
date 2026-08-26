@@ -9,4 +9,5 @@ func init() {
 	typedExpectationFieldsByKind[ExpectFrameCount] = map[string]bool{}
 	typedExpectationFieldsByKind[ExpectBufferDisposition] = map[string]bool{"value": true}
 	typedExpectationFieldsByKind[ExpectMetricsReconcile] = map[string]bool{}
+	typedExpectationFieldsByKind[ExpectResponseCancel] = map[string]bool{"value": true, "at": true}
 }

@@ -27,6 +27,10 @@ func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
 		{"tool-result-discarded", ExpectedBehavior{Type: ExpectToolResultDiscarded, Kind: ExpectToolResultDiscarded, ToolCallID: "call"}, ObservationSnapshot{ToolResultsDiscarded: []string{"call"}}, ObservationSnapshot{}},
 		{"no-orphaned-tool-result", ExpectedBehavior{Type: ExpectNoOrphanedToolResult, Kind: ExpectNoOrphanedToolResult}, ObservationSnapshot{ToolCalls: []string{"call"}, ToolResultsDelivered: []string{"call"}}, ObservationSnapshot{ToolCalls: []string{"call"}}},
 		{"buffer-disposition", ExpectedBehavior{Type: ExpectBufferDisposition, Value: BufferDispositionCommitted}, ObservationSnapshot{BufferDisposition: BufferDispositionCommitted}, ObservationSnapshot{}},
+		{"response-cancel", ExpectedBehavior{Type: ExpectResponseCancel, Kind: ExpectResponseCancel},
+			ObservationSnapshot{HasResponseCancel: true, ResponseCancelTick: 3}, ObservationSnapshot{}},
+		{"response-cancel-absence", ExpectedBehavior{Type: ExpectResponseCancel, Kind: ExpectResponseCancel, Value: ResponseCancelNone},
+			ObservationSnapshot{}, ObservationSnapshot{HasResponseCancel: true, ResponseCancelTick: 2}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -214,6 +218,40 @@ func TestLatencyRejectsNegativeStartsAndAvoidsTickOverflow(t *testing.T) {
 	}
 }
 
+func TestLatencyWithoutDeclaredStartUsesInterruptAndCancelTicks(t *testing.T) {
+	expectation := ExpectedBehavior{Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks, Count: 2}
+	observation := ObservationSnapshot{
+		InterruptTick:      11,
+		HasInterruptTick:   true,
+		ResponseCancelTick: 13,
+		HasResponseCancel:  true,
+		ObservedTick:       100,
+		HasObservedTick:    true,
+	}
+	if err := Evaluate(expectation, observation); err != nil {
+		t.Fatalf("dynamic latency should use the interrupt and cancel ticks: %v", err)
+	}
+
+	late := observation
+	late.ResponseCancelTick = 14
+	if err := Evaluate(expectation, late); err == nil || !strings.Contains(err.Error(), "tick delta") {
+		t.Fatalf("late cancellation must violate the dynamic bound: %v", err)
+	}
+
+	missingCancel := observation
+	missingCancel.HasResponseCancel = false
+	if err := Evaluate(expectation, missingCancel); err == nil || !strings.Contains(err.Error(), "RESPONSE.CANCEL") {
+		t.Fatalf("dynamic latency must require the cancellation event: %v", err)
+	}
+
+	missingInterrupt := observation
+	missingInterrupt.HasInterruptTick = false
+	missingInterrupt.InterruptTick = 0
+	if err := Evaluate(expectation, missingInterrupt); err == nil || !strings.Contains(err.Error(), "interrupting input tick") {
+		t.Fatalf("dynamic latency must require the actual append tick: %v", err)
+	}
+}
+
 func TestDiagnosticErrorsAndEvaluationWrapper(t *testing.T) {
 	if err := EvaluateExpectation(expect(ExpectTranscriptContains, "ready", 0), ObservationSnapshot{Transcript: "ready"}); err != nil {
 		t.Fatalf("evaluation wrapper: %v", err)
@@ -288,5 +326,64 @@ func TestEvaluateBufferDisposition(t *testing.T) {
 	}
 	if err := Evaluate(ExpectedBehavior{Type: ExpectBufferDisposition}, ObservationSnapshot{}); err == nil {
 		t.Fatal("missing declared value must be invalid")
+	}
+}
+func TestEvaluateResponseCancelVariants(t *testing.T) {
+	presence := ExpectedBehavior{Type: ExpectResponseCancel, Kind: ExpectResponseCancel}
+	cancelled := ObservationSnapshot{HasResponseCancel: true, ResponseCancelTick: 3}
+	if err := Evaluate(presence, cancelled); err != nil {
+		t.Fatalf("observed cancel must satisfy presence: %v", err)
+	}
+	if err := Evaluate(ExpectedBehavior{Type: ExpectResponseCancel, Value: ResponseCancelObserved}, cancelled); err != nil {
+		t.Fatalf("explicit cancelled variant must satisfy presence: %v", err)
+	}
+
+	err := Evaluate(presence, ObservationSnapshot{})
+	var mismatchErr *ExpectationMismatchError
+	if !errors.As(err, &mismatchErr) || !errors.Is(err, ErrExpectationMismatch) {
+		t.Fatalf("missing cancel must mismatch: %v", err)
+	}
+	if !strings.Contains(mismatchErr.Error(), "response-cancel") {
+		t.Fatalf("mismatch diagnostic must name the kind: %v", err)
+	}
+
+	absence := ExpectedBehavior{Type: ExpectResponseCancel, Kind: ExpectResponseCancel, Value: ResponseCancelNone}
+	if err := Evaluate(absence, ObservationSnapshot{}); err != nil {
+		t.Fatalf("no cancel must satisfy absence: %v", err)
+	}
+	err = Evaluate(absence, cancelled)
+	if !errors.As(err, &mismatchErr) || !errors.Is(err, ErrExpectationMismatch) {
+		t.Fatalf("observed cancel must violate absence: %v", err)
+	}
+	if !strings.Contains(mismatchErr.Actual.(string), "tick 3") {
+		t.Fatalf("absence violation must carry the cancel tick: %v", mismatchErr.Error())
+	}
+
+	bounded := ExpectedBehavior{Type: ExpectResponseCancel, Kind: ExpectResponseCancel, At: 2, HasAt: true, Count: 2}
+	if err := Evaluate(bounded, ObservationSnapshot{HasResponseCancel: true, ResponseCancelTick: 4}); err != nil {
+		t.Fatalf("cancel within the tick bound must pass: %v", err)
+	}
+	err = Evaluate(bounded, ObservationSnapshot{HasResponseCancel: true, ResponseCancelTick: 5})
+	if !errors.As(err, &mismatchErr) {
+		t.Fatalf("cancel beyond the tick bound must fail: %v", err)
+	}
+	if mismatchErr.Actual != LogicalTime(3) {
+		t.Fatalf("exceeded delta diagnostic = %v, want 3", mismatchErr.Actual)
+	}
+	if err := Evaluate(bounded, ObservationSnapshot{HasResponseCancel: true, ResponseCancelTick: 1}); !strings.Contains(err.Error(), "precedes start tick") {
+		t.Fatalf("cancel before the start tick must fail: %v", err)
+	}
+
+	for _, invalid := range []ExpectedBehavior{
+		{Type: ExpectResponseCancel, Count: 2},
+		{Type: ExpectResponseCancel, Value: ResponseCancelNone, At: 2, HasAt: true},
+		{Type: ExpectResponseCancel, Value: "maybe"},
+		{Type: ExpectResponseCancel, Value: ResponseCancelNone, Text: "cancelled"},
+	} {
+		err := Evaluate(invalid, cancelled)
+		var validationErr *ExpectationValidationError
+		if !errors.As(err, &validationErr) || !errors.Is(err, ErrInvalidExpectation) {
+			t.Fatalf("declaration %#v must be invalid, got %v", invalid, err)
+		}
 	}
 }

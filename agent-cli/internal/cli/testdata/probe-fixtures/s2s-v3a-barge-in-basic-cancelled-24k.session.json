@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-synthetic-v3a-24k"
+  },
+  "session": {
+    "id": "sess_v3a_cancelled_24k",
+    "started_at_utc": "2026-08-26T00:00:00Z",
+    "fixture_provenance": "synthetic",
+    "description": "Barge-in basic (24 kHz): the overlap_24k utterance streams as two appends starting on outbound tick 2 while the assistant audio response streams; the client cancels the in-flight response at tick 4, exactly two ticks after the interrupting audio (the bound boundary)."
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-synthetic-v3a-24k"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_v3a_cancelled_24k",
+        "model": "grok-synthetic-v3a-24k"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "delta": "c3ludGhldGljIGFzc2lzdGFudCBzdHJlYW1pbmcgYXVkaW8="
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "client_to_server",
+      "timestamp_ms": 4,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "synthetic_audio": "b3ZlcmxhcF8yNGsgdXNlciBzcGVlY2ggYXJyaXZlcyBtaWQtcmVzcG9uc2UgY2h1bmsgb25l"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "client_to_server",
+      "timestamp_ms": 6,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "synthetic_audio": "b3ZlcmxhcF8yNGsgdXNlciBzcGVlY2ggY2h1bmsgdHdv"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "client_to_server",
+      "timestamp_ms": 7,
+      "type": "response.cancel",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.cancel"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 8,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 9,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}

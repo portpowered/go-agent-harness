@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,9 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 	"github.com/spf13/cobra"
 )
 
@@ -167,7 +172,7 @@ func loadReplayFixtures(replay string) (map[string]string, error) {
 		return nil, fmt.Errorf("read replay fixture directory %q: %w", replay, readErr)
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".session.json") {
 			continue
 		}
 		path := filepath.Join(replay, entry.Name())
@@ -214,9 +219,15 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 		}
 	}
 	for _, fixture := range fixtures {
-		if _, err := gatewaytesting.LoadSessionCapture(fixture); err != nil {
-			return nil, nil, fmt.Errorf("invalid replay fixture %q: %w", fixture, err)
+		validationErrs := gatewaytesting.ValidateSessionCaptureFile(fixture)
+		if len(validationErrs) == 0 {
+			continue
 		}
+		messages := make([]string, 0, len(validationErrs))
+		for _, validationErr := range validationErrs {
+			messages = append(messages, validationErr.Error())
+		}
+		return nil, nil, fmt.Errorf("invalid replay fixture %q: %s", fixture, strings.Join(messages, "; "))
 	}
 	return scenarios, replayExecFunc(fixtures), nil
 }
@@ -318,6 +329,8 @@ var expectationKindAliases = map[string]probe.ExpectationKind{
 	"barge-in-cancel-once":     probe.ExpectBargeInCancelOnce,
 	"message_counts_reconcile": probe.ExpectMessageCountsReconcile,
 	"message-counts-reconcile": probe.ExpectMessageCountsReconcile,
+	"response_cancel":          probe.ExpectResponseCancel,
+	"response-cancel":          probe.ExpectResponseCancel,
 }
 
 func measurableExpectationKind(name string) (probe.ExpectationKind, bool) {
@@ -378,21 +391,288 @@ func loadProbeScenario(data []byte) (probe.Scenario, error) {
 	return scenario, nil
 }
 
-// replayCorpusLookup accepts any non-empty audio corpus ID. Offline probe
-// scenarios reference synthetic utterances that have no on-disk corpus; the
-// replay fixture itself is the source of truth for the audio.
+type replayCorpusSpec struct {
+	filename   string
+	sampleRate int
+}
+
+// replayCorpusSpecs is the finite set of corpus IDs understood by the offline
+// probe runner. The v2a/v2e and v3a IDs map to committed WAVs; v3c keeps its
+// named synthetic IDs because that vertical's replay fixtures intentionally
+// carry their own synthetic event stream.
+var replayCorpusSpecs = map[string]replayCorpusSpec{
+	"utterance-hello-there": {filename: "utt_short_16k.wav", sampleRate: wavio.Rate16kHz},
+	"truncated_16k":         {filename: "truncated_16k.wav", sampleRate: wavio.Rate16kHz},
+	"truncated_24k":         {filename: "truncated_24k.wav", sampleRate: wavio.Rate24kHz},
+	"overlap_16k":           {filename: "overlap_16k.wav", sampleRate: wavio.Rate16kHz},
+	"overlap_24k":           {filename: "overlap_24k.wav", sampleRate: wavio.Rate24kHz},
+}
+
+var replaySyntheticCorpusIDs = map[string]struct{}{
+	"v3c-utterance-1": {},
+	"v3c-utterance-2": {},
+	"v3c-utterance-3": {},
+}
+
+// replayCorpusLookup accepts only corpus IDs declared by the offline probe
+// contract. An arbitrary non-empty ID must not make a scenario appear
+// executable when no corpus or fixture-backed synthetic identity exists.
 type replayCorpusLookup struct{}
 
-func (replayCorpusLookup) Has(id string) bool { return strings.TrimSpace(id) != "" }
-
-// replayTranscript extracts the server-to-client transcript text from a
-// recorded session fixture so transcript expectations can be evaluated
-// offline.
-func replayTranscript(fixture string) (string, error) {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return "", fmt.Errorf("load replay fixture %q: %w", fixture, err)
+func (replayCorpusLookup) Has(id string) bool {
+	if _, ok := replayCorpusSpecs[id]; ok {
+		return true
 	}
+	_, ok := replaySyntheticCorpusIDs[id]
+	return ok
+}
+
+func replayCorpusPath(id string) (string, error) {
+	spec, ok := replayCorpusSpecs[id]
+	if !ok {
+		return "", fmt.Errorf("audio corpus %q has no committed WAV mapping", id)
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("locate committed audio corpus %q: %w", id, err)
+	}
+	for directory := workingDir; ; directory = filepath.Dir(directory) {
+		candidate := filepath.Join(directory, "go-agent-loop", "testdata", "audio", spec.filename)
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			return candidate, nil
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			break
+		}
+	}
+	return "", fmt.Errorf("audio corpus %q is not available under go-agent-loop/testdata/audio", id)
+}
+
+// scenarioReplayCorpusID returns the single real corpus a replay can inject.
+// Synthetic multi-turn corpora (such as v3c's three named utterances) remain
+// represented by their authored fixture events; the v3a and earlier
+// single-audio cases resolve to committed WAVs here.
+func scenarioReplayCorpusID(scenario probe.Scenario) (string, bool) {
+	var corpusID string
+	count := 0
+	for _, step := range scenario.Steps {
+		kind := step.Kind
+		if kind == "" {
+			kind = step.Type
+		}
+		if kind != probe.StepSendAudio {
+			continue
+		}
+		count++
+		candidate := step.CorpusID
+		if candidate == "" {
+			candidate = step.Corpus.CorpusID
+		}
+		if corpusID == "" {
+			corpusID = candidate
+		}
+		if corpusID != candidate {
+			return "", false
+		}
+	}
+	if count != 1 {
+		return "", false
+	}
+	if _, ok := replayCorpusSpecs[corpusID]; !ok {
+		return "", false
+	}
+	return corpusID, true
+}
+
+func replayRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
+	if len(record.Payload) != 0 {
+		return record.Payload
+	}
+	return record.Data
+}
+
+// injectReplayCorpusAudio creates the short-lived capture used by the replay
+// probe. Committed fixtures retain sanitized placeholders; this function
+// resolves their scenario corpus to the committed WAV and replaces append
+// payloads with frame-sized, little-endian PCM. When a cancellation is
+// present, the original append slots stay before it so the observed cancel
+// latency remains tied to the actual first append; remaining frames follow the
+// cancel as continued user input.
+func injectReplayCorpusAudio(capture gatewaytesting.SessionCapture, corpusID string) (gatewaytesting.SessionCapture, error) {
+	spec, ok := replayCorpusSpecs[corpusID]
+	if !ok {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("audio corpus %q has no replay injection mapping", corpusID)
+	}
+	path, err := replayCorpusPath(corpusID)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, err
+	}
+	wavBytes, err := os.ReadFile(path)
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("read audio corpus %q: %w", corpusID, err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("decode audio corpus %q: %w", corpusID, err)
+	}
+	if rate != spec.sampleRate {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("audio corpus %q sample rate = %d, want %d", corpusID, rate, spec.sampleRate)
+	}
+	if len(samples) == 0 {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("audio corpus %q contains no PCM16 samples", corpusID)
+	}
+	frames := replayPCMFrames(samples)
+	appendSlots := 0
+	hasCancel := false
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionClientToServer {
+			continue
+		}
+		if record.Type == "input_audio_buffer.append" {
+			appendSlots++
+		}
+		if isResponseCancelEventType(record.Type) {
+			hasCancel = true
+		}
+	}
+	if appendSlots == 0 {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("replay fixture has no input_audio_buffer.append slot for corpus %q", corpusID)
+	}
+	if hasCancel && len(frames) < appendSlots {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("audio corpus %q has %d frames but replay fixture reserves %d append slots before response.cancel", corpusID, len(frames), appendSlots)
+	}
+
+	records := make([]gatewaytesting.CapturedSessionEvent, 0, len(capture.Records)+len(frames)-appendSlots)
+	frameIndex := 0
+	firstAppend := true
+	suffixInserted := false
+	for _, record := range capture.Records {
+		if record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "input_audio_buffer.append" {
+			if hasCancel {
+				if suffixInserted {
+					continue
+				}
+				appendRecord, frameErr := replayAudioAppendRecord(record, frames[frameIndex])
+				if frameErr != nil {
+					return gatewaytesting.SessionCapture{}, frameErr
+				}
+				records = append(records, appendRecord)
+				frameIndex++
+			} else if firstAppend {
+				for _, frame := range frames {
+					appendRecord, frameErr := replayAudioAppendRecord(record, frame)
+					if frameErr != nil {
+						return gatewaytesting.SessionCapture{}, frameErr
+					}
+					records = append(records, appendRecord)
+				}
+				frameIndex = len(frames)
+			}
+			firstAppend = false
+			continue
+		}
+		records = append(records, record)
+		if hasCancel && !suffixInserted && record.Direction == gatewaytesting.DirectionClientToServer && isResponseCancelEventType(record.Type) {
+			for frameIndex < len(frames) {
+				appendRecord, frameErr := replayAudioAppendRecord(record, frames[frameIndex])
+				if frameErr != nil {
+					return gatewaytesting.SessionCapture{}, frameErr
+				}
+				records = append(records, appendRecord)
+				frameIndex++
+			}
+			suffixInserted = true
+		}
+	}
+	if frameIndex != len(frames) {
+		return gatewaytesting.SessionCapture{}, fmt.Errorf("replay fixture did not receive all %q PCM frames: injected %d of %d", corpusID, frameIndex, len(frames))
+	}
+	for index := range records {
+		records[index].Sequence = index + 1
+	}
+	injected := capture
+	injected.Records = records
+	if err := validateInjectedReplayAudio(injected, frames); err != nil {
+		return gatewaytesting.SessionCapture{}, err
+	}
+	return injected, nil
+}
+
+func replayPCMFrames(samples []int16) [][]byte {
+	frames := make([][]byte, 0, (len(samples)+audio.FrameSize-1)/audio.FrameSize)
+	for start := 0; start < len(samples); start += audio.FrameSize {
+		frame := make([]int16, audio.FrameSize)
+		copy(frame, samples[start:])
+		frames = append(frames, replayPCM16LE(frame))
+	}
+	return frames
+}
+
+func replayPCM16LE(samples []int16) []byte {
+	encoded := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
+	}
+	return encoded
+}
+
+func replayAudioAppendRecord(template gatewaytesting.CapturedSessionEvent, pcm []byte) (gatewaytesting.CapturedSessionEvent, error) {
+	payload, err := json.Marshal(struct {
+		Type  string `json:"type"`
+		Audio string `json:"audio"`
+	}{Type: "input_audio_buffer.append", Audio: base64.StdEncoding.EncodeToString(pcm)})
+	if err != nil {
+		return gatewaytesting.CapturedSessionEvent{}, fmt.Errorf("encode replay audio append: %w", err)
+	}
+	template.PayloadType = gatewaytesting.SessionPayloadTypeWebSocketMessage
+	template.Payload = payload
+	template.Data = nil
+	template.Type = "input_audio_buffer.append"
+	return template, nil
+}
+
+func validateInjectedReplayAudio(capture gatewaytesting.SessionCapture, frames [][]byte) error {
+	actual := make([]byte, 0, len(frames)*audio.FrameSize*2)
+	appendCount := 0
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != "input_audio_buffer.append" {
+			continue
+		}
+		appendCount++
+		var event struct {
+			Type  string `json:"type"`
+			Audio string `json:"audio"`
+		}
+		if err := json.Unmarshal(replayRecordPayload(record), &event); err != nil {
+			return fmt.Errorf("decode injected input_audio_buffer.append payload: %w", err)
+		}
+		if event.Type != "input_audio_buffer.append" || event.Audio == "" {
+			return fmt.Errorf("injected input_audio_buffer.append payload is missing its audio field")
+		}
+		pcm, err := base64.StdEncoding.DecodeString(event.Audio)
+		if err != nil {
+			return fmt.Errorf("decode injected input audio: %w", err)
+		}
+		actual = append(actual, pcm...)
+	}
+	expected := make([]byte, 0, len(frames)*audio.FrameSize*2)
+	for _, frame := range frames {
+		expected = append(expected, frame...)
+	}
+	if appendCount != len(frames) {
+		return fmt.Errorf("injected replay has %d append payloads for %d PCM frames", appendCount, len(frames))
+	}
+	if !bytes.Equal(actual, expected) {
+		return fmt.Errorf("injected replay append payloads do not equal the resolved corpus PCM")
+	}
+	return nil
+}
+
+// replayTranscriptFromCapture extracts the server-to-client transcript text
+// from a loaded session capture so transcript expectations can be evaluated
+// offline.
+func replayTranscriptFromCapture(capture gatewaytesting.SessionCapture) string {
 	var builder strings.Builder
 	for _, record := range capture.Records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
@@ -406,12 +686,12 @@ func replayTranscript(fixture string) (string, error) {
 		var envelope struct {
 			Delta string `json:"delta"`
 		}
-		if json.Unmarshal(record.Payload, &envelope) != nil {
+		if json.Unmarshal(replayRecordPayload(record), &envelope) != nil {
 			continue
 		}
 		builder.WriteString(envelope.Delta)
 	}
-	return builder.String(), nil
+	return builder.String()
 }
 
 // replayExecFunc returns a network-free ExecFunc that replays the recorded
@@ -430,7 +710,24 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if !ok {
 			return probe.ObservationSnapshot{}, fmt.Errorf("no recorded fixture matches scenario %q", scenarioName(scenario))
 		}
-		report, err := gatewaytesting.RunSessionReplayProbe(ctx, fixture)
+		capture, err := gatewaytesting.LoadSessionCapture(fixture)
+		if err != nil {
+			return probe.ObservationSnapshot{}, fmt.Errorf("load replay fixture %q: %w", fixture, err)
+		}
+		replayCapture := capture
+		corpusID, injected := scenarioReplayCorpusID(scenario)
+		if injected {
+			replayCapture, err = injectReplayCorpusAudio(capture, corpusID)
+			if err != nil {
+				return probe.ObservationSnapshot{}, err
+			}
+		}
+		var report gatewaytesting.SessionReplayProbeReport
+		if injected {
+			report, err = gatewaytesting.RunSessionReplayProbeFromCapture(ctx, replayCapture)
+		} else {
+			report, err = gatewaytesting.RunSessionReplayProbe(ctx, fixture)
+		}
 		if err != nil {
 			return probe.ObservationSnapshot{}, err
 		}
@@ -443,21 +740,20 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		if report.EndsWithDisconnect {
 			observation.TerminalReason = "disconnect"
 		}
-		if classification := replayErrorClassification(fixture); classification != "" {
+		if classification := replayErrorClassificationFromCapture(replayCapture); classification != "" {
 			observation.TerminalReason = "error:" + classification
 		}
-		transcript, transcriptErr := replayTranscript(fixture)
-		if transcriptErr != nil {
-			return probe.ObservationSnapshot{}, transcriptErr
-		}
-		observation.Transcript = transcript
-		if deriveErr := deriveToolResultObservation(fixture, &observation); deriveErr != nil {
+		observation.Transcript = replayTranscriptFromCapture(replayCapture)
+		if deriveErr := deriveToolResultObservationFromCapture(replayCapture, &observation); deriveErr != nil {
 			return probe.ObservationSnapshot{}, deriveErr
 		}
-		if deriveErr := deriveBargeInObservation(fixture, &observation); deriveErr != nil {
+		if deriveErr := deriveBargeInObservationFromCapture(replayCapture, &observation); deriveErr != nil {
 			return probe.ObservationSnapshot{}, deriveErr
 		}
-		observation.BufferDisposition = replayBufferDisposition(fixture)
+		if deriveErr := deriveResponseCancelObservationFromCapture(replayCapture, &observation); deriveErr != nil {
+			return probe.ObservationSnapshot{}, deriveErr
+		}
+		observation.BufferDisposition = replayBufferDispositionFromCapture(replayCapture)
 		if scenarioDeclaresMetricsReconciliation(scenario) {
 			metricsSeries, metricsErr := collectReplayMetricsEvidence(ctx, fixture, scenarioSendText(scenario))
 			if metricsErr != nil {
@@ -472,16 +768,54 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 	}
 }
 
-// replayBufferDisposition inspects a recorded session fixture for an
+// deriveResponseCancelObservationFromCapture scans the capture for
+// RESPONSE.CANCEL frames on the outbound client-to-provider path and fills
+// the observation's barge-in cancel fields. A frame's logical tick is its
+// 1-based ordinal among all client-to-server frames, matching the replay
+// probe's outbound tick counting. The first observed cancel wins; later
+// duplicates do not move the recorded tick.
+func deriveResponseCancelObservationFromCapture(capture gatewaytesting.SessionCapture, observation *probe.ObservationSnapshot) error {
+	tick := probe.LogicalTime(0)
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionClientToServer {
+			continue
+		}
+		tick++
+		if !observation.HasInterruptTick && isInputAudioAppendEventType(record.Type) {
+			observation.HasInterruptTick = true
+			observation.InterruptTick = tick
+		}
+		if observation.HasResponseCancel || !isResponseCancelEventType(record.Type) {
+			continue
+		}
+		observation.HasResponseCancel = true
+		observation.ResponseCancelTick = tick
+	}
+	return nil
+}
+
+func isInputAudioAppendEventType(eventType string) bool {
+	return eventType == "input_audio_buffer.append"
+}
+
+// isResponseCancelEventType reports whether a fixture event type encodes a
+// RESPONSE.CANCEL on either wire spelling: the raw provider websocket type or
+// the stream-message type.
+func isResponseCancelEventType(eventType string) bool {
+	switch eventType {
+	case "response.cancel", "RESPONSE.CANCEL":
+		return true
+	default:
+		return false
+	}
+}
+
+// replayBufferDispositionFromCapture inspects a session capture for an
 // observable disposition of the buffered input audio: an acknowledged commit
-// or an explicit discard. The empty string means the fixture ends with the
+// or an explicit discard. The empty string means the capture ends with the
 // buffer uncommitted, which buffer-disposition expectations treat as a
 // failure.
-func replayBufferDisposition(fixture string) string {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return ""
-	}
+func replayBufferDispositionFromCapture(capture gatewaytesting.SessionCapture) string {
 	for _, record := range capture.Records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
 			continue
@@ -496,16 +830,12 @@ func replayBufferDisposition(fixture string) string {
 	return ""
 }
 
-// deriveToolResultObservation scans the recorded fixture for tool-call
+// deriveToolResultObservationFromCapture scans the capture for tool-call
 // lifecycle events and fills the observation's barge-in/tool-result fields:
 // issued calls (server function_call_arguments.done), delivered results
 // (client conversation.item.create carrying a function_call_output), and
 // explicitly discarded results (client tool.result.discarded events).
-func deriveToolResultObservation(fixture string, observation *probe.ObservationSnapshot) error {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
-	}
+func deriveToolResultObservationFromCapture(capture gatewaytesting.SessionCapture, observation *probe.ObservationSnapshot) error {
 	for _, record := range capture.Records {
 		var payload struct {
 			CallID string `json:"call_id"`
@@ -514,7 +844,7 @@ func deriveToolResultObservation(fixture string, observation *probe.ObservationS
 				CallID string `json:"call_id"`
 			} `json:"item"`
 		}
-		_ = json.Unmarshal(record.Payload, &payload)
+		_ = json.Unmarshal(replayRecordPayload(record), &payload)
 		switch {
 		case record.Direction == gatewaytesting.DirectionServerToClient &&
 			record.Type == "response.function_call_arguments.done" && payload.CallID != "":
@@ -531,19 +861,15 @@ func deriveToolResultObservation(fixture string, observation *probe.ObservationS
 	return nil
 }
 
-// deriveBargeInObservation scans the recorded fixture for the repeated-barge-in
-// lifecycle (s2s v3c) and fills the observation's reconciliation evidence:
-// committed user turns (client input_audio_buffer.commit or a client
-// conversation.item.create carrying a message item), created responses,
-// delivered assistant turns (response.done on an uninterrupted response),
-// cancellation events (client response.cancel), deltas leaking after their
-// response was cancelled or outside any live response, and any response still
-// streaming when the fixture ends.
-func deriveBargeInObservation(fixture string, observation *probe.ObservationSnapshot) error {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
-	}
+// deriveBargeInObservationFromCapture scans the capture for the
+// repeated-barge-in lifecycle (s2s v3c) and fills the observation's
+// reconciliation evidence: committed user turns (client
+// input_audio_buffer.commit or a client conversation.item.create carrying a
+// message item), created responses, delivered assistant turns (response.done
+// on an uninterrupted response), cancellation events (client response.cancel),
+// deltas leaking after their response was cancelled or outside any live
+// response, and any response still streaming when the capture ends.
+func deriveBargeInObservationFromCapture(capture gatewaytesting.SessionCapture, observation *probe.ObservationSnapshot) error {
 	inFlight, cancelled := false, false
 	for _, record := range capture.Records {
 		switch {
@@ -557,7 +883,7 @@ func deriveBargeInObservation(fixture string, observation *probe.ObservationSnap
 					Type string `json:"type"`
 				} `json:"item"`
 			}
-			if json.Unmarshal(record.Payload, &payload) == nil && payload.Item.Type == "message" {
+			if json.Unmarshal(replayRecordPayload(record), &payload) == nil && payload.Item.Type == "message" {
 				observation.UserTurnsCommitted++
 			}
 		case record.Direction == gatewaytesting.DirectionServerToClient &&
@@ -602,20 +928,16 @@ func isTranscriptDeltaEventType(eventType string) bool {
 	}
 }
 
-// replayErrorClassification classifies the first server-to-client failure
-// record in the fixture through the established provider error taxonomy. A
+// replayErrorClassificationFromCapture classifies the first server-to-client
+// failure record through the established provider error taxonomy. A
 // server-to-client frame whose type carries the "malformed." prefix encodes an
 // unparseable provider response and classifies as invalid_request — the same
 // taxonomy class the gateway assigns when a live session parser rejects a
 // provider event. Well-formed "error" records classify via their wire error
-// type/code. It returns the empty string when the fixture records no provider
+// type/code. It returns the empty string when the capture records no provider
 // error or malformed frame, so healthy sessions keep their
 // disconnect/provenance terminal reason.
-func replayErrorClassification(fixture string) string {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return ""
-	}
+func replayErrorClassificationFromCapture(capture gatewaytesting.SessionCapture) string {
 	for _, record := range capture.Records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
 			continue
@@ -632,7 +954,7 @@ func replayErrorClassification(fixture string) string {
 				Code string `json:"code"`
 			} `json:"error"`
 		}
-		if json.Unmarshal(record.Payload, &payload) != nil {
+		if json.Unmarshal(replayRecordPayload(record), &payload) != nil {
 			continue
 		}
 		if classification := providers.SessionErrorClassification(payload.Error.Type, payload.Error.Code); classification != "" {
