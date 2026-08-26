@@ -18,7 +18,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-v2e-audio-in-truncated` — truncated_* clips terminate cleanly, no wedged buffer _(history: #167:CLOSED, #179:MERGED)_
 - `s2s-v3a-barge-in-basic` — overlap_* cancels the in-flight response at the provider; latency measured in ticks _(history: NEVER SUBMITTED)_
 - `s2s-v3b-barge-in-during-tool` — interruption mid-tool-call does not orphan the tool result _(history: #164:CLOSED)_
-- `s2s-v3c-barge-in-repeated` — repeated interruption; message counts reconcile, no loss or duplication _(history: NEVER SUBMITTED)_
+- `s2s-v3c-barge-in-repeated` — repeated interruption; message counts reconcile, no loss or duplication _(history: #195:OPEN)_
 - `s2s-v4a-tool-single-call` — call -> executor -> result reaches the provider -> speech resumes _(history: #163:MERGED)_
 - `s2s-v4b-tool-parallel-calls` — concurrent tool calls all succeed, results correctly paired back to their calls _(history: NEVER SUBMITTED)_
 - `s2s-v4c-tool-error` — a tool call failure surfaces as a typed, observable error _(history: #162:MERGED)_

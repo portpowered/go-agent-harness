@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 )
 
@@ -39,6 +40,21 @@ const (
 
 	ExpectBufferDisposition ExpectationKind = "buffer-disposition"
 
+	// ExpectBargeInCancelOnce enforces the repeated-barge-in invariant
+	// (s2s v3c): every response.cancel terminates exactly one live in-flight
+	// response — no double cancels, no stray cancels, no response left
+	// streaming at session end. An optional Count pins the exact number of
+	// interruptions the session must record.
+	ExpectBargeInCancelOnce ExpectationKind = "barge-in-cancel-once"
+	// ExpectMessageCountsReconcile asserts the session's cumulative
+	// transcript/message composition equals an explicitly declared expected
+	// composition such as
+	// "user_turns=7,assistant_delivered=4,cancelled_responses=3":
+	// every committed user turn survives exactly once, every delivered
+	// assistant turn appears exactly once, and cancelled turns leak no
+	// post-cancel deltas.
+	ExpectMessageCountsReconcile ExpectationKind = "message-counts-reconcile"
+
 	// AudioEnergyThreshold is the PCM16 RMS boundary used by the VAD
 	// contract. Audio energy must be strictly greater than this value.
 	AudioEnergyThreshold = 300.0
@@ -68,6 +84,20 @@ type ObservationSnapshot struct {
 	TerminalReason  string
 	FrameCount      int
 
+	// Repeated-barge-in reconciliation evidence (s2s v3c), derived from the
+	// recorded event stream: committed user turns, delivered assistant
+	// turns, and per-response cancel bookkeeping. PostCancelDeltas counts
+	// transcript deltas observed after their response was cancelled or
+	// outside any live response — the duplication symptom of a cancelled
+	// turn re-emitting content.
+	UserTurnsCommitted      int
+	AssistantTurnsDelivered int
+	ResponsesCreated        int
+	ResponsesCancelled      int
+	ResponseCancels         int
+	SpuriousCancels         int
+	PostCancelDeltas        int
+	InFlightAtEnd           bool
 	// BufferDisposition records what happened to buffered input audio at
 	// session end: committed, discarded, or empty when uncommitted.
 	BufferDisposition string
@@ -248,6 +278,10 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		}
 	case ExpectMetricsReconcile:
 		return evaluateMetricsReconciliation(expectation, observation.Metrics)
+	case ExpectBargeInCancelOnce:
+		return evaluateBargeInCancelOnce(expectation, observation)
+	case ExpectMessageCountsReconcile:
+		return evaluateMessageCountsReconciliation(expectation, observation)
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
@@ -284,7 +318,8 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
 		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
-		ExpectBufferDisposition, ExpectMetricsReconcile:
+		ExpectBufferDisposition, ExpectMetricsReconcile,
+		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile:
 		return kind, nil
 	default:
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
@@ -409,6 +444,123 @@ func evaluateMetricsReconciliation(expectation ExpectedBehavior, series []Metric
 				fmt.Sprintf("%s observed delta sum %d", key, entry.ObservedDeltas),
 				fmt.Sprintf("%s reported total %d", key, entry.ReportedTotal))
 		}
+	}
+	return nil
+}
+
+// evaluateBargeInCancelOnce enforces cancel-exactly-once termination for
+// interrupted responses: every observed cancel terminates one live in-flight
+// response, nothing is left streaming at session end, and an optional
+// declared Count pins the exact interruption total the session must record.
+func evaluateBargeInCancelOnce(expectation ExpectedBehavior, observation ObservationSnapshot) error {
+	kind := declaredKind(expectation)
+	if expectation.Count < 0 {
+		return invalid(expectation, kind, "count", "expected cancel count must not be negative")
+	}
+	if observation.SpuriousCancels != 0 {
+		return mismatch(expectation, kind,
+			"every cancel terminates exactly one live in-flight response",
+			fmt.Sprintf("%d stray or duplicate cancels", observation.SpuriousCancels))
+	}
+	if observation.InFlightAtEnd {
+		return mismatch(expectation, kind,
+			"no response left in flight at session end",
+			"a response was still streaming when the session ended")
+	}
+	if observation.ResponsesCancelled != observation.ResponseCancels {
+		return mismatch(expectation, kind,
+			fmt.Sprintf("distinct cancelled responses = %d cancel events", observation.ResponseCancels),
+			fmt.Sprintf("distinct cancelled responses = %d", observation.ResponsesCancelled))
+	}
+	if expectation.Count > 0 && observation.ResponseCancels != expectation.Count {
+		return mismatch(expectation, kind, expectation.Count, observation.ResponseCancels)
+	}
+	return nil
+}
+
+// messageCountComponent is one declared key/value pair of an expected
+// transcript/message composition.
+type messageCountComponent struct {
+	key  string
+	want int
+}
+
+// parseMessageCountComposition parses a declared composition spec of the
+// form "user_turns=7,assistant_delivered=4" into ordered components. Keys
+// outside the known vocabulary and malformed or negative counts are errors.
+func parseMessageCountComposition(spec string) ([]messageCountComponent, error) {
+	var components []messageCountComponent
+	for _, raw := range strings.Split(spec, ",") {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+		key, value, found := strings.Cut(entry, "=")
+		key = strings.TrimSpace(key)
+		if !found || key == "" || strings.TrimSpace(value) == "" {
+			return nil, fmt.Errorf("composition entry %q must be <key>=<count>", entry)
+		}
+		want, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || want < 0 {
+			return nil, fmt.Errorf("composition entry %q must carry a non-negative integer count", entry)
+		}
+		switch key {
+		case "user_turns", "assistant_delivered", "responses_created",
+			"cancelled_responses", "cancel_events", "post_cancel_deltas":
+		default:
+			return nil, fmt.Errorf("unknown composition key %q", key)
+		}
+		components = append(components, messageCountComponent{key: key, want: want})
+	}
+	if len(components) == 0 {
+		return nil, fmt.Errorf("declared composition %q selects no components", spec)
+	}
+	return components, nil
+}
+
+// observedMessageCount projects one composition key onto its observed counter.
+func observedMessageCount(key string, observation ObservationSnapshot) int {
+	switch key {
+	case "user_turns":
+		return observation.UserTurnsCommitted
+	case "assistant_delivered":
+		return observation.AssistantTurnsDelivered
+	case "responses_created":
+		return observation.ResponsesCreated
+	case "cancelled_responses":
+		return observation.ResponsesCancelled
+	case "cancel_events":
+		return observation.ResponseCancels
+	case "post_cancel_deltas":
+		return observation.PostCancelDeltas
+	}
+	return -1
+}
+
+// evaluateMessageCountsReconciliation compares every declared composition
+// component against its observed counter. The failure names every diverging
+// component with expected-vs-actual values so duplication and loss are both
+// diagnosable from the result line.
+func evaluateMessageCountsReconciliation(expectation ExpectedBehavior, observation ObservationSnapshot) error {
+	kind := declaredKind(expectation)
+	spec, err := aliasString(expectation, kind, "composition", expectation.Value, expectation.Text)
+	if err != nil {
+		return err
+	}
+	components, parseErr := parseMessageCountComposition(spec)
+	if parseErr != nil {
+		return invalid(expectation, kind, "value", parseErr.Error())
+	}
+	var divergences []string
+	for _, component := range components {
+		got := observedMessageCount(component.key, observation)
+		if got != component.want {
+			divergences = append(divergences,
+				fmt.Sprintf("%s: expected %d, actual %d", component.key, component.want, got))
+		}
+	}
+	if len(divergences) != 0 {
+		return mismatch(expectation, kind, spec, strings.Join(divergences, "; "))
 	}
 	return nil
 }

@@ -1,0 +1,504 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-4-v3c-duplicated-turn"
+  },
+  "session": {
+    "id": "sess_v3c_duplicated_turn",
+    "started_at_utc": "2026-08-26T00:00:00Z",
+    "fixture_provenance": "synthetic_failure"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 1,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-4-v3c-repeated"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_v3c-repeated",
+        "model": "grok-4-v3c-repeated"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 3,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 4,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_t1"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Reply one begins, and continues streaming"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 7,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "client_to_server",
+      "timestamp_ms": 8,
+      "type": "response.cancel",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.cancel"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "client_to_server",
+      "timestamp_ms": 9,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 11,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_t1_replacement"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 12,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Interrupted reply for turn one."
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 13,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "client_to_server",
+      "timestamp_ms": 14,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "client_to_server",
+      "timestamp_ms": 15,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "server_to_client",
+      "timestamp_ms": 16,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_t2"
+      }
+    },
+    {
+      "sequence": 17,
+      "direction": "server_to_client",
+      "timestamp_ms": 17,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Reply two begins, and continues streaming"
+      }
+    },
+    {
+      "sequence": 18,
+      "direction": "server_to_client",
+      "timestamp_ms": 18,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 19,
+      "direction": "client_to_server",
+      "timestamp_ms": 19,
+      "type": "response.cancel",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.cancel"
+      }
+    },
+    {
+      "sequence": 20,
+      "direction": "client_to_server",
+      "timestamp_ms": 20,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 21,
+      "direction": "client_to_server",
+      "timestamp_ms": 21,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 22,
+      "direction": "server_to_client",
+      "timestamp_ms": 22,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_t2_replacement"
+      }
+    },
+    {
+      "sequence": 23,
+      "direction": "server_to_client",
+      "timestamp_ms": 23,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Interrupted reply for turn two."
+      }
+    },
+    {
+      "sequence": 24,
+      "direction": "server_to_client",
+      "timestamp_ms": 24,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 25,
+      "direction": "client_to_server",
+      "timestamp_ms": 25,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 26,
+      "direction": "client_to_server",
+      "timestamp_ms": 26,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 27,
+      "direction": "server_to_client",
+      "timestamp_ms": 27,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_t3"
+      }
+    },
+    {
+      "sequence": 28,
+      "direction": "server_to_client",
+      "timestamp_ms": 28,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Reply three begins, and continues streaming"
+      }
+    },
+    {
+      "sequence": 29,
+      "direction": "server_to_client",
+      "timestamp_ms": 29,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 30,
+      "direction": "client_to_server",
+      "timestamp_ms": 30,
+      "type": "response.cancel",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.cancel"
+      }
+    },
+    {
+      "sequence": 31,
+      "direction": "client_to_server",
+      "timestamp_ms": 31,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 32,
+      "direction": "client_to_server",
+      "timestamp_ms": 32,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 33,
+      "direction": "server_to_client",
+      "timestamp_ms": 33,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_t3_replacement"
+      }
+    },
+    {
+      "sequence": 34,
+      "direction": "server_to_client",
+      "timestamp_ms": 34,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Interrupted reply for turn three."
+      }
+    },
+    {
+      "sequence": 35,
+      "direction": "server_to_client",
+      "timestamp_ms": 35,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 36,
+      "direction": "client_to_server",
+      "timestamp_ms": 36,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.append",
+        "audio": {
+          "redacted": true,
+          "note": "synthetic PCM16 tone; raw input audio redacted from committed fixtures"
+        }
+      }
+    },
+    {
+      "sequence": 37,
+      "direction": "client_to_server",
+      "timestamp_ms": 37,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 38,
+      "direction": "server_to_client",
+      "timestamp_ms": 38,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_final"
+      }
+    },
+    {
+      "sequence": 39,
+      "direction": "server_to_client",
+      "timestamp_ms": 39,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Final complete reply."
+      }
+    },
+    {
+      "sequence": 40,
+      "direction": "server_to_client",
+      "timestamp_ms": 40,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 41,
+      "direction": "server_to_client",
+      "timestamp_ms": 41,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response_id": "resp_v3c_final_duplicate"
+      }
+    },
+    {
+      "sequence": 42,
+      "direction": "server_to_client",
+      "timestamp_ms": 42,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "Final complete reply."
+      }
+    },
+    {
+      "sequence": 43,
+      "direction": "server_to_client",
+      "timestamp_ms": 43,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 44,
+      "direction": "server_to_client",
+      "timestamp_ms": 44,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}
