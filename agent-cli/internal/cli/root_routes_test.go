@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,7 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  -v, --verbose count       Enable verbose output (use -v for info, -vv for debug)\n\n" +
 	"Use \"agent [command] --help\" for more information about a command.\n"
 
-func newTestRootCommand() *cobra.Command {
+func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
@@ -72,7 +73,7 @@ func newTestRootCommand() *cobra.Command {
 		NewProbeRunCommand(),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
-		NewProbeFleetCommand(),
+		NewProbeFleetCommand(fleetExecutor...),
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),

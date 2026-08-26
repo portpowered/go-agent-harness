@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +22,20 @@ func writeFleetManifest(t *testing.T, path string, manifest fleet.Manifest) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write fleet manifest: %v", err)
 	}
+}
+
+func executeCLIWithFleetExecutor(executor fleet.EntryExecutor, args ...string) cliExecution {
+	root := newTestRootCommand(executor)
+	var stdout, stderr strings.Builder
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(args)
+
+	exitCode := 0
+	if root.Execute() != nil {
+		exitCode = 1
+	}
+	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
 }
 
 func TestProbeFleetRunsEveryEntryAndPrintsCoordinates(t *testing.T) {
@@ -84,5 +101,77 @@ func TestProbeFleetReportsFailureAndContinuesOtherEntries(t *testing.T) {
 	}
 	if !strings.Contains(run.stderr, "fleet: 1/2 entries passed (fail)") || !strings.Contains(run.stderr, "1 of 2 fleet entries failed") {
 		t.Fatalf("failure summary missing: %q", run.stderr)
+	}
+}
+
+func TestProbeFleetJSONReconcilesEveryManifestEntry(t *testing.T) {
+	dir := t.TempDir()
+	observationCount := len(probeFixtureObservation(t).Observations)
+	first := writeProbeScenario(t, dir, "fleet-first", observationCount)
+	second := writeProbeScenario(t, dir, "fleet-second", observationCount)
+	manifest, err := fleet.Compose(fleet.ComposeInput{
+		ScenarioFiles: []string{first, second},
+		Transports:    []fleet.Transport{fleet.TransportLive, fleet.TransportReplay},
+		RepeatCount:   2,
+		Concurrency:   3,
+	})
+	if err != nil {
+		t.Fatalf("compose fleet: %v", err)
+	}
+	manifestPath := filepath.Join(dir, "fleet.json")
+	writeFleetManifest(t, manifestPath, manifest)
+
+	failedID := manifest.Entries[len(manifest.Entries)-1].ID
+	run := executeCLIWithFleetExecutor(func(_ context.Context, entry fleet.Entry) (fleet.EntryOutcome, error) {
+		if entry.ID == failedID {
+			return fleet.EntryOutcome{}, errors.New("synthetic fleet failure")
+		}
+		return fleet.EntryOutcome{Pass: true}, nil
+	}, "probe", "fleet", "--manifest", manifestPath, "--json")
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+
+	var result fleet.Result
+	decoder := json.NewDecoder(strings.NewReader(run.stdout))
+	if err := decoder.Decode(&result); err != nil {
+		t.Fatalf("decode fleet JSON: %v; stdout=%q", err, run.stdout)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		t.Fatalf("fleet JSON contains multiple documents: err=%v trailing=%v", err, trailing)
+	}
+
+	wantTotal := 2 * 2 * 2
+	if result.Total != wantTotal || result.Total != manifest.EntryCount() {
+		t.Fatalf("total = %d, want manifest entry count %d", result.Total, manifest.EntryCount())
+	}
+	if result.Passed != wantTotal-1 || result.Failed != 1 || result.Passed+result.Failed != result.Total {
+		t.Fatalf("counts = passed %d failed %d total %d, want %d/%d/%d", result.Passed, result.Failed, result.Total, wantTotal-1, 1, wantTotal)
+	}
+	if result.Status != "fail" {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if len(result.Entries) != manifest.EntryCount() {
+		t.Fatalf("result entry count = %d, want %d", len(result.Entries), manifest.EntryCount())
+	}
+
+	seen := make(map[string]struct{}, len(result.Entries))
+	for index, got := range result.Entries {
+		want := manifest.Entries[index]
+		if _, exists := seen[got.ID]; exists {
+			t.Fatalf("duplicate result ID %q", got.ID)
+		}
+		seen[got.ID] = struct{}{}
+		if got.ID != want.ID || got.ScenarioID != want.ScenarioID || got.ScenarioPath != want.ScenarioPath || got.Transport != want.Transport || got.RepeatIndex != want.RepeatIndex {
+			t.Fatalf("result[%d] coordinates = %+v, want entry %+v", index, got, want)
+		}
+		wantPass := want.ID != failedID
+		if got.Pass != wantPass {
+			t.Fatalf("result[%d] pass = %t, want %t", index, got.Pass, wantPass)
+		}
+	}
+	if len(seen) != manifest.EntryCount() {
+		t.Fatalf("unique result IDs = %d, want %d", len(seen), manifest.EntryCount())
 	}
 }
