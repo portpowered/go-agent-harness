@@ -143,6 +143,14 @@ func NewReplayWebSocketDialer(path string) (*ReplayWebSocketDialer, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewReplayWebSocketDialerFromCapture(capture)
+}
+
+// NewReplayWebSocketDialerFromCapture builds a replay dialer from an already
+// decoded capture. Callers that construct an ephemeral capture may use this
+// seam after validating the source fixture; unlike the path-based constructor,
+// it cannot apply file-level fixture hygiene to data that is not on disk.
+func NewReplayWebSocketDialerFromCapture(capture SessionCapture) (*ReplayWebSocketDialer, error) {
 	for _, evt := range capture.Records {
 		if evt.PayloadType != SessionPayloadTypeWebSocketMessage {
 			return nil, fmt.Errorf("session capture contains %q payload; expected %q", evt.PayloadType, SessionPayloadTypeWebSocketMessage)

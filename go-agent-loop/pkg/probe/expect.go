@@ -93,6 +93,12 @@ type ObservationSnapshot struct {
 	HasObservedTick bool
 	TerminalReason  string
 	FrameCount      int
+	// InterruptTick is the logical tick at which the first interrupting
+	// input_audio_buffer.append crossed the outbound client-to-provider path.
+	// It is used as the implicit start of a latency-within-ticks expectation
+	// when the expectation deliberately leaves its start tick dynamic.
+	InterruptTick    LogicalTime
+	HasInterruptTick bool
 	// ResponseCancelTick is the logical tick at which RESPONSE.CANCEL crossed
 	// the outbound client-to-provider path; meaningful only when
 	// HasResponseCancel is true.
@@ -221,14 +227,33 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		}
 		return mismatch(expectation, kind, want, append([]string(nil), observation.ToolCalls...))
 	case ExpectLatencyWithinTicks:
-		start, err := startTick(expectation)
-		if err != nil {
-			return err
-		}
 		if expectation.Count < 0 {
 			return invalid(expectation, kind, "count", "maximum tick delta must not be negative")
 		}
-		observed, ok := observationTick(observation)
+		declaredStart := expectation.HasAt || expectation.At != 0 || expectation.Time != 0
+		var start LogicalTime
+		if !declaredStart {
+			if !observation.HasInterruptTick && observation.InterruptTick == 0 {
+				return mismatch(expectation, kind, "interrupting input tick", "missing input_audio_buffer.append tick")
+			}
+			start = observation.InterruptTick
+			if start < 0 {
+				return mismatch(expectation, kind, "non-negative interrupting input tick", start)
+			}
+		} else {
+			var err error
+			start, err = startTick(expectation)
+			if err != nil {
+				return err
+			}
+		}
+		var observed LogicalTime
+		var ok bool
+		if !declaredStart && !observation.HasResponseCancel {
+			return mismatch(expectation, kind,
+				"RESPONSE.CANCEL observed after the interrupting input", "none")
+		}
+		observed, ok = observationTick(observation)
 		if !ok {
 			return mismatch(expectation, kind,
 				fmt.Sprintf("non-negative tick delta <= %d", expectation.Count), "missing observed tick")
@@ -387,6 +412,12 @@ func startTick(e ExpectedBehavior) (LogicalTime, error) {
 	return start, nil
 }
 func observationTick(o ObservationSnapshot) (LogicalTime, bool) {
+	// A latency expectation paired with response-cancel measures the cancel
+	// event, not the final outbound tick of the whole replay. This keeps the
+	// reported session length independent from the event being timed.
+	if o.HasResponseCancel {
+		return o.ResponseCancelTick, true
+	}
 	return o.ObservedTick, o.HasObservedTick || o.ObservedTick != 0
 }
 

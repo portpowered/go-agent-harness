@@ -218,6 +218,40 @@ func TestLatencyRejectsNegativeStartsAndAvoidsTickOverflow(t *testing.T) {
 	}
 }
 
+func TestLatencyWithoutDeclaredStartUsesInterruptAndCancelTicks(t *testing.T) {
+	expectation := ExpectedBehavior{Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks, Count: 2}
+	observation := ObservationSnapshot{
+		InterruptTick:      11,
+		HasInterruptTick:   true,
+		ResponseCancelTick: 13,
+		HasResponseCancel:  true,
+		ObservedTick:       100,
+		HasObservedTick:    true,
+	}
+	if err := Evaluate(expectation, observation); err != nil {
+		t.Fatalf("dynamic latency should use the interrupt and cancel ticks: %v", err)
+	}
+
+	late := observation
+	late.ResponseCancelTick = 14
+	if err := Evaluate(expectation, late); err == nil || !strings.Contains(err.Error(), "tick delta") {
+		t.Fatalf("late cancellation must violate the dynamic bound: %v", err)
+	}
+
+	missingCancel := observation
+	missingCancel.HasResponseCancel = false
+	if err := Evaluate(expectation, missingCancel); err == nil || !strings.Contains(err.Error(), "RESPONSE.CANCEL") {
+		t.Fatalf("dynamic latency must require the cancellation event: %v", err)
+	}
+
+	missingInterrupt := observation
+	missingInterrupt.HasInterruptTick = false
+	missingInterrupt.InterruptTick = 0
+	if err := Evaluate(expectation, missingInterrupt); err == nil || !strings.Contains(err.Error(), "interrupting input tick") {
+		t.Fatalf("dynamic latency must require the actual append tick: %v", err)
+	}
+}
+
 func TestDiagnosticErrorsAndEvaluationWrapper(t *testing.T) {
 	if err := EvaluateExpectation(expect(ExpectTranscriptContains, "ready", 0), ObservationSnapshot{Transcript: "ready"}); err != nil {
 		t.Fatalf("evaluation wrapper: %v", err)

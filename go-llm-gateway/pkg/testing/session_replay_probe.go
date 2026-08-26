@@ -47,7 +47,20 @@ func RunSessionReplayProbe(ctx context.Context, fixturePath string) (SessionRepl
 	if err != nil {
 		return SessionReplayProbeReport{}, fmt.Errorf("load replay session fixture: %w", err)
 	}
-	dialer, err := NewReplayWebSocketDialer(fixturePath)
+	return runSessionReplayProbe(ctx, fixturePath, capture)
+}
+
+// RunSessionReplayProbeFromCapture replays an already decoded capture without
+// applying committed-file hygiene. It is intended for callers that validate a
+// committed source capture, construct a short-lived in-memory variant (for
+// example by injecting real PCM into placeholder append records), and then
+// need the same deterministic replay observations.
+func RunSessionReplayProbeFromCapture(ctx context.Context, capture SessionCapture) (SessionReplayProbeReport, error) {
+	return runSessionReplayProbe(ctx, "<in-memory>", capture)
+}
+
+func runSessionReplayProbe(ctx context.Context, fixture string, capture SessionCapture) (SessionReplayProbeReport, error) {
+	dialer, err := NewReplayWebSocketDialerFromCapture(capture)
 	if err != nil {
 		return SessionReplayProbeReport{}, fmt.Errorf("open replay dialer: %w", err)
 	}
@@ -57,7 +70,7 @@ func RunSessionReplayProbe(ctx context.Context, fixturePath string) (SessionRepl
 	}
 
 	report := SessionReplayProbeReport{
-		Fixture:            fixturePath,
+		Fixture:            fixture,
 		Provider:           capture.Provider.Name,
 		Model:              capture.Provider.Model,
 		Provenance:         capture.Session.FixtureProvenance,

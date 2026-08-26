@@ -34,11 +34,6 @@ const (
 	v3aCorpus16k = "overlap_16k"
 	v3aCorpus24k = "overlap_24k"
 
-	// v3aInterruptTick is the outbound logical tick on which the recorded
-	// fixtures deliver the first interrupting user-audio frame (tick 1 is the
-	// session.update that opens every capture).
-	v3aInterruptTick LogicalTime = 2
-
 	// v3aCancelBoundTicks bounds how many ticks may pass between the
 	// interrupting audio and the observed RESPONSE.CANCEL.
 	v3aCancelBoundTicks = 2
@@ -52,8 +47,10 @@ func init() {
 	cancelledExpectations := func() []ExpectedBehavior {
 		return []ExpectedBehavior{
 			{Type: ExpectResponseCancel, Kind: ExpectResponseCancel},
-			{Type: ExpectResponseCancel, Kind: ExpectResponseCancel,
-				At: v3aInterruptTick, HasAt: true, Count: v3aCancelBoundTicks},
+			// The latency expectation intentionally omits At. The replay
+			// observation supplies the actual first append tick, and the
+			// evaluator measures through the observed response cancel tick.
+			{Type: ExpectLatencyWithinTicks, Kind: ExpectLatencyWithinTicks, Count: v3aCancelBoundTicks},
 			{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "synthetic"},
 		}
 	}

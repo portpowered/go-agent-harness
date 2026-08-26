@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -11,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
@@ -661,9 +665,8 @@ const (
 	v3aFixtureNoInterruption = "testdata/probe-fixtures/s2s-v3a-barge-in-basic-no-interruption.session.json"
 
 	// v3aCancelTick16k/24k are the outbound logical ticks on which
-	// RESPONSE.CANCEL crosses the client-to-provider path in the committed
-	// fixtures: one tick after the interrupting audio for the 16 kHz capture,
-	// exactly two ticks (the bound boundary) for the 24 kHz capture.
+	// RESPONSE.CANCEL crosses the client-to-provider path after replay injects
+	// the committed overlap corpus frames.
 	v3aCancelTick16k = 3
 	v3aCancelTick24k = 4
 )
@@ -788,6 +791,113 @@ func TestV3AScenariosReferenceCommittedOverlapCorpus(t *testing.T) {
 	}
 }
 
+// TestV3AReplayInjectsCompleteOverlapCorpusPCM proves that the positive replay
+// path replaces sanitized append placeholders with every frame from the
+// committed overlap WAV. The cancel remains in its recorded position while
+// the rest of the user's utterance continues through the same replay wire.
+func TestV3AReplayInjectsCompleteOverlapCorpusPCM(t *testing.T) {
+	tests := []struct {
+		name       string
+		fixture    string
+		corpusID   string
+		wantRate   int
+		wantCancel probe.LogicalTime
+	}{
+		{name: "16k", fixture: v3aFixture16k, corpusID: "overlap_16k", wantRate: wavio.Rate16kHz, wantCancel: v3aCancelTick16k},
+		{name: "24k", fixture: v3aFixture24k, corpusID: "overlap_24k", wantRate: wavio.Rate24kHz, wantCancel: v3aCancelTick24k},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capture, err := gatewaytesting.LoadSessionCapture(test.fixture)
+			if err != nil {
+				t.Fatalf("load source capture: %v", err)
+			}
+			injected, err := injectReplayCorpusAudio(capture, test.corpusID)
+			if err != nil {
+				t.Fatalf("inject corpus: %v", err)
+			}
+
+			corpusPath, err := replayCorpusPath(test.corpusID)
+			if err != nil {
+				t.Fatalf("resolve corpus: %v", err)
+			}
+			wavBytes, err := os.ReadFile(corpusPath)
+			if err != nil {
+				t.Fatalf("read corpus: %v", err)
+			}
+			rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+			if err != nil {
+				t.Fatalf("decode corpus: %v", err)
+			}
+			if rate != test.wantRate {
+				t.Fatalf("corpus rate = %d, want %d", rate, test.wantRate)
+			}
+
+			want := make([]byte, 0, ((len(samples)+audio.FrameSize-1)/audio.FrameSize)*audio.FrameSize*2)
+			got := make([]byte, 0, cap(want))
+			appendCount := 0
+			for start := 0; start < len(samples); start += audio.FrameSize {
+				frame := make([]int16, audio.FrameSize)
+				copy(frame, samples[start:])
+				encoded := make([]byte, len(frame)*2)
+				for index, sample := range frame {
+					binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
+				}
+				want = append(want, encoded...)
+			}
+			for _, record := range injected.Records {
+				if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != "input_audio_buffer.append" {
+					continue
+				}
+				appendCount++
+				var event struct {
+					Audio string `json:"audio"`
+				}
+				if err := json.Unmarshal(record.Payload, &event); err != nil {
+					t.Fatalf("decode injected append: %v", err)
+				}
+				pcm, err := base64.StdEncoding.DecodeString(event.Audio)
+				if err != nil {
+					t.Fatalf("decode injected PCM: %v", err)
+				}
+				got = append(got, pcm...)
+			}
+			wantFrames := (len(samples) + audio.FrameSize - 1) / audio.FrameSize
+			if appendCount != wantFrames {
+				t.Fatalf("injected append count = %d, want %d", appendCount, wantFrames)
+			}
+			if !bytes.Equal(got, want) {
+				t.Fatalf("injected append PCM differs from the complete corpus: got %d bytes, want %d", len(got), len(want))
+			}
+
+			var observation probe.ObservationSnapshot
+			if err := deriveResponseCancelObservationFromCapture(injected, &observation); err != nil {
+				t.Fatalf("derive cancel observation: %v", err)
+			}
+			if !observation.HasInterruptTick || observation.InterruptTick != 2 {
+				t.Fatalf("interrupt tick = %d (present=%t), want actual first append tick 2", observation.InterruptTick, observation.HasInterruptTick)
+			}
+			if !observation.HasResponseCancel || observation.ResponseCancelTick != test.wantCancel {
+				t.Fatalf("cancel tick = %d (present=%t), want %d", observation.ResponseCancelTick, observation.HasResponseCancel, test.wantCancel)
+			}
+		})
+	}
+}
+
+func TestReplayCorpusLookupRejectsUnknownIDs(t *testing.T) {
+	lookup := replayCorpusLookup{}
+	for _, id := range []string{"", "made-up-corpus", "overlap_16k.wav"} {
+		if lookup.Has(id) {
+			t.Fatalf("unknown corpus ID %q was accepted", id)
+		}
+	}
+	for _, id := range []string{"overlap_16k", "overlap_24k", "truncated_16k", "truncated_24k", "utterance-hello-there", "v3c-utterance-1"} {
+		if !lookup.Has(id) {
+			t.Fatalf("known corpus ID %q was rejected", id)
+		}
+	}
+}
+
 func assertV3ACancelledRun(t *testing.T, run cliExecution, name string, wantCancelTicks int) {
 	t.Helper()
 	if run.exitCode != 0 {
@@ -798,16 +908,18 @@ func assertV3ACancelledRun(t *testing.T, run cliExecution, name string, wantCanc
 		t.Fatalf("unexpected result line: %v", results[0])
 	}
 	cancelOutcomes := v3aOutcomesByKind(t, results[0], "response-cancel")
-	if len(cancelOutcomes) != 2 {
-		t.Fatalf("%s declares %d response-cancel outcomes, want presence + bounded latency", name, len(cancelOutcomes))
+	if len(cancelOutcomes) != 1 {
+		t.Fatalf("%s declares %d response-cancel outcomes, want one presence assertion", name, len(cancelOutcomes))
 	}
-	for _, outcome := range cancelOutcomes {
-		if outcome["passed"] != true {
-			t.Fatalf("%s cancel expectation failed despite an in-flight cancellation: %v", name, outcome)
-		}
+	if cancelOutcomes[0]["passed"] != true {
+		t.Fatalf("%s cancel expectation failed despite an in-flight cancellation: %v", name, cancelOutcomes[0])
 	}
-	if got := results[0]["ticks"]; got != float64(wantCancelTicks) {
-		t.Fatalf("%s final tick count = %v, want %d (cancel lands on the last outbound frame)", name, got, wantCancelTicks)
+	latencyOutcomes := v3aOutcomesByKind(t, results[0], "latency-within-ticks")
+	if len(latencyOutcomes) != 1 || latencyOutcomes[0]["passed"] != true {
+		t.Fatalf("%s latency expectation failed despite an in-flight cancellation: %v", name, latencyOutcomes)
+	}
+	if got := results[0]["ticks"]; got.(float64) < float64(wantCancelTicks) {
+		t.Fatalf("%s final tick count = %v, want at least cancel tick %d", name, got, wantCancelTicks)
 	}
 	if summary["status"] != "pass" || summary["passed"] != float64(1) {
 		t.Fatalf("unexpected summary: %v", summary)

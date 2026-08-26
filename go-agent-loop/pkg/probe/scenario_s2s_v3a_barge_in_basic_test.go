@@ -53,9 +53,15 @@ func TestS2SV3ABargeInSuiteRegistersAndValidates(t *testing.T) {
 	if len(cancelled.Steps) != 3 || !stepHasCorpus(cancelled.Steps[1]) || cancelled.Steps[1].CorpusID != v3aCorpus16k {
 		t.Fatalf("cancelled-16k must deliver the overlap_16k interrupting audio: %+v", cancelled.Steps)
 	}
+	if len(cancelled.Expectations) < 2 || cancelled.Expectations[1].Type != ExpectLatencyWithinTicks || cancelled.Expectations[1].HasAt {
+		t.Fatalf("cancelled-16k must declare latency separately with a dynamic start tick: %+v", cancelled.Expectations)
+	}
 	cancelled24 := findV3AScenario(t, ScenarioIDS2SV3ABargeInBasicCancelled24k)
 	if cancelled24.Steps[1].CorpusID != v3aCorpus24k {
 		t.Fatalf("cancelled-24k must deliver the overlap_24k interrupting audio: %+v", cancelled24.Steps)
+	}
+	if len(cancelled24.Expectations) < 2 || cancelled24.Expectations[1].Type != ExpectLatencyWithinTicks || cancelled24.Expectations[1].HasAt {
+		t.Fatalf("cancelled-24k must declare latency separately with a dynamic start tick: %+v", cancelled24.Expectations)
 	}
 	noInterruption := findV3AScenario(t, ScenarioIDS2SV3ABargeInBasicNoInterruption)
 	for _, step := range noInterruption.Steps {
@@ -76,10 +82,10 @@ func TestS2SV3ACancelledCasesPassThroughRunner(t *testing.T) {
 			Exec: func(ctx context.Context, s Scenario) (ObservationSnapshot, error) {
 				return ObservationSnapshot{
 					TerminalReason:     "synthetic",
+					InterruptTick:      11,
+					HasInterruptTick:   true,
 					HasResponseCancel:  true,
-					ResponseCancelTick: v3aInterruptTick + 1,
-					ObservedTick:       4,
-					HasObservedTick:    true,
+					ResponseCancelTick: 12,
 				}, nil
 			}}
 
@@ -88,7 +94,7 @@ func TestS2SV3ACancelledCasesPassThroughRunner(t *testing.T) {
 			t.Fatalf("%s must pass when the cancel is observed within bounds: %v", id, outcome)
 		}
 		kinds := outcomeKinds(t, outcome)
-		wantKinds := []ExpectationKind{ExpectResponseCancel, ExpectResponseCancel, ExpectTerminalReason}
+		wantKinds := []ExpectationKind{ExpectResponseCancel, ExpectLatencyWithinTicks, ExpectTerminalReason}
 		if len(kinds) != len(wantKinds) {
 			t.Fatalf("%s outcome kinds = %v, want %v", id, kinds, wantKinds)
 		}
@@ -133,8 +139,10 @@ func TestS2SV3ALatencyBoundRejectsLateCancellation(t *testing.T) {
 		Exec: func(ctx context.Context, s Scenario) (ObservationSnapshot, error) {
 			return ObservationSnapshot{
 				TerminalReason:     "synthetic",
+				InterruptTick:      11,
+				HasInterruptTick:   true,
 				HasResponseCancel:  true,
-				ResponseCancelTick: v3aInterruptTick + v3aCancelBoundTicks + 1,
+				ResponseCancelTick: 14,
 			}, nil
 		}}
 
@@ -143,7 +151,7 @@ func TestS2SV3ALatencyBoundRejectsLateCancellation(t *testing.T) {
 		t.Fatalf("late cancellation must violate the tick bound: %v", outcome)
 	}
 	errText := firstFailedOutcomeError(t, outcome)
-	if !strings.Contains(errText, "cancel tick delta") {
+	if !strings.Contains(errText, "tick delta") {
 		t.Fatalf("failure must report the bounded cancel-tick delta: %s", errText)
 	}
 }
