@@ -58,8 +58,8 @@ type Close struct{}
 type Step struct {
 	Type       StepKind             `json:"type"`
 	Kind       StepKind             `json:"-"`
-	Text       string               `json:"text,omitempty"`
 	CorpusID   string               `json:"corpus_id,omitempty"`
+	Text       string               `json:"text,omitempty"`
 	Corpus     AudioCorpusReference `json:"-"`
 	ToolCallID string               `json:"tool_call_id,omitempty"`
 	ToolName   string               `json:"tool_name,omitempty"`
