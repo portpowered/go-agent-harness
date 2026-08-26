@@ -95,22 +95,26 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 }
 
 type sessionRuntimePlan struct {
-	mode            sessionRuntimeMode
-	provider        string
-	model           string
-	capturePath     string
-	loopOut         io.Writer
-	inferencer      messages.SessionInferencer
-	loop            sessionLoopOptions
-	announce        string
-	flushCapture    func() error
-	finalize        func(context.Context, io.Writer) error
-	diagnostics     SessionDiagnosticSink
-	metricsRecorder metrics.Recorder
-	streamObserver  SessionStreamObserver
-	audioInputs     []ScheduledAudioInput
-	clockSource     platformclock.Source
-	runtime         *sessionRuntimeObservationRecorder
+	mode              sessionRuntimeMode
+	provider          string
+	model             string
+	capturePath       string
+	loopOut           io.Writer
+	inferencer        messages.SessionInferencer
+	loop              sessionLoopOptions
+	announce          string
+	flushCapture      func() error
+	finalize          func(context.Context, io.Writer) error
+	diagnostics       SessionDiagnosticSink
+	metricsRecorder   metrics.Recorder
+	streamObserver    SessionStreamObserver
+	audioInputs       []ScheduledAudioInput
+	clockSource       platformclock.Source
+	runtime           *sessionRuntimeObservationRecorder
+	selection         SessionRuntimeSelection
+	transport         string
+	signalingEndpoint string
+	mediaSource       string
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
@@ -171,6 +175,10 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 }
 
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	selection, err := resolveSessionRuntimeSelection(opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
 	plan, err := planSessionRuntimeMode(opts, factory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -190,6 +198,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// The per-invocation adapter deadline override crosses with the executor;
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
+	plan.selection = selection
+	plan.transport = selection.Transport
+	plan.signalingEndpoint = selection.SignalingEndpoint
+	plan.mediaSource = selection.MediaSource
 	return plan, nil
 }
 
