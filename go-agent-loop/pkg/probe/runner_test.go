@@ -80,7 +80,7 @@ func TestRunnerAllPassGolden(t *testing.T) {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 	got := buf.String()
-	want := `{"name":"all-pass","pass":true,"expectations":[{"index":0,"kind":"transcript-contains","passed":true},{"index":1,"kind":"frame-count","passed":true}],"ticks":5,"frames":3,"terminal_reason":"close"}` + "\n" +
+	want := `{"name":"all-pass","pass":true,"expectations":[{"index":0,"kind":"transcript-contains","passed":true},{"index":1,"kind":"frame-count","passed":true}],"ticks":5,"frames":3,"terminal_reason":"close","input_drop_count":0,"output_drop_count":0}` + "\n" +
 		`{"total":1,"passed":1,"failed":0,"status":"pass"}` + "\n"
 	if got != want {
 		t.Fatalf("golden mismatch:\n got: %s\nwant: %s", got, want)
