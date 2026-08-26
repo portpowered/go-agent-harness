@@ -11,11 +11,6 @@ import (
 	"strings"
 )
 
-// StuckTerminalReason is the terminal-reason marker emitted by the probe
-// dead-session guard. Stuck results remain failures in the health totals while
-// also being counted separately in FrictionReport.Stuck.
-const StuckTerminalReason = "stuck"
-
 var (
 	// ErrMalformedReport identifies a JSONL line that is neither a ScenarioResult
 	// nor a complete RunSummary.
