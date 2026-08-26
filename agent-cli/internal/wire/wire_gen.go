@@ -40,7 +40,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	probeReportCommand := cli.NewProbeReportCommand()
 	v2 := provideFleetEntryExecutors()
 	probeFleetCommand := cli.NewProbeFleetCommand(v2...)
-	sessionCommand := cli.NewSessionCommandWithRuntime(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver)
+	sessionToolCapabilities := provideSessionToolCapabilitiesFactory(toolExecutor)
+	sessionCommand := cli.NewSessionCommandWithRuntimeAndToolCapabilities(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver, sessionToolCapabilities)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
@@ -98,5 +99,5 @@ func provideAcceptanceCommands() []*cli.ProbeAcceptanceCommand { return nil }
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
 	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
-	provideAcceptanceCommands, cli.NewSessionCommandWithRuntime, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	provideAcceptanceCommands, provideSessionToolCapabilitiesFactory, cli.NewSessionCommandWithRuntimeAndToolCapabilities, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

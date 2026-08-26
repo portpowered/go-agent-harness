@@ -95,29 +95,36 @@ func NewSessionUpdatedValue(sessionID string) *SessionUpdatedValue {
 // Set in AgentLoopConfig via WithSessionConfig; the model runner sends this
 // automatically after SESSION.CREATED.
 type SessionUpdateConfig struct {
-	Instructions string   // system prompt / instructions for the session
-	Model        string   // model name (e.g. "grok-3")
-	Modalities   []string // input/output modalities (e.g. ["audio", "text"])
+	Instructions string           // system prompt / instructions for the session
+	Model        string           // model name (e.g. "grok-3")
+	Modalities   []string         // input/output modalities (e.g. ["audio", "text"])
+	Tools        []ToolDefinition // tool definitions advertised by the session
 }
 
 // SessionUpdateValue is the value for SESSION.UPDATE (outbound), used to send
 // a session configuration update to the inference provider.
 type SessionUpdateValue struct {
-	Type         string   `json:"type"`                   // "session_update"
-	Instructions string   `json:"instructions,omitempty"` // system prompt
-	Model        string   `json:"model,omitempty"`        // model name
-	Modalities   []string `json:"modalities,omitempty"`   // input/output modalities
+	Type         string           `json:"type"`                   // "session_update"
+	Instructions string           `json:"instructions,omitempty"` // system prompt
+	Model        string           `json:"model,omitempty"`        // model name
+	Modalities   []string         `json:"modalities,omitempty"`   // input/output modalities
+	Tools        []ToolDefinition `json:"tools,omitempty"`        // advertised tool definitions
 }
 
 func (*SessionUpdateValue) streamMessageValue() {}
 
 // NewSessionUpdateValue returns a SESSION.UPDATE value from a SessionUpdateConfig.
 func NewSessionUpdateValue(cfg *SessionUpdateConfig) *SessionUpdateValue {
+	tools := append([]ToolDefinition(nil), cfg.Tools...)
+	for i := range tools {
+		tools[i].Parameters = append([]ToolParameter(nil), cfg.Tools[i].Parameters...)
+	}
 	return &SessionUpdateValue{
 		Type:         "session_update",
 		Instructions: cfg.Instructions,
 		Model:        cfg.Model,
 		Modalities:   cfg.Modalities,
+		Tools:        tools,
 	}
 }
 

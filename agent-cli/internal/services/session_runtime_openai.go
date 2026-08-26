@@ -28,7 +28,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
-	sessionInferencer, err := factory.newOpenAISessionInf(sessionCfg, recordingDialer)
+	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -62,10 +62,13 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if strings.TrimSpace(model) == "" {
 		model = openAIRealtimeModel
 	}
-	sessionInferencer, err := factory.newOpenAISessionInf(config.OpenAIConfig{
+	// A websocket replay owns its historical initial session.update payload.
+	// The selected definitions still reach the replay loop through plan.loop,
+	// but must not add a new outbound payload that would invalidate the capture.
+	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, replayDialer)
+	}, replayDialer, nil)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -89,10 +92,14 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg, dialer, nil)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	opts := make([]oaiprovider.Option, 0, 1)
 	opts = append(opts, oaiprovider.WithWebSocketDialer(dialer))
-	return NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg, opts...)
+	return NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg, toolDefinitions, opts...)
 }

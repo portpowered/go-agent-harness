@@ -46,6 +46,14 @@ type SessionRunOptions struct {
 	// no-tools behavior; provider tool calls keep reaching the loop default
 	// and fail exactly as they did before this field existed.
 	ToolExecutor messages.ToolExecutor
+	// ToolDefinitions is the config-filtered tool surface advertised to the
+	// session provider and the duplex agent loop. It must be derived from the
+	// same config snapshot as ToolExecutor.
+	ToolDefinitions []messages.ToolDefinition
+	// LoadedConfig is the config snapshot used to derive session capabilities.
+	// When present, provider resolution reuses it instead of loading config a
+	// second time during runtime planning.
+	LoadedConfig *config.Config
 
 	// ToolExecutionTimeout overrides the per-invocation session tool adapter
 	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
@@ -116,6 +124,9 @@ func effectiveSessionProvider(opts SessionRunOptions) string {
 	if strings.TrimSpace(opts.Provider) != "" {
 		return opts.Provider
 	}
+	if opts.LoadedConfig != nil {
+		return opts.LoadedConfig.Model.Provider
+	}
 	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
 	if err != nil {
 		return ""
@@ -128,14 +139,16 @@ func effectiveSessionProvider(opts SessionRunOptions) string {
 }
 
 func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error) {
-	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
-	if err != nil {
-		return config.GrokConfig{}, fmt.Errorf("failed to initialize config: %w", err)
-	}
-
-	loadedCfg, err := storage.Load()
-	if err != nil {
-		return config.GrokConfig{}, fmt.Errorf("failed to load config: %w", err)
+	loadedCfg := opts.LoadedConfig
+	if loadedCfg == nil {
+		storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
+		if err != nil {
+			return config.GrokConfig{}, fmt.Errorf("failed to initialize config: %w", err)
+		}
+		loadedCfg, err = storage.Load()
+		if err != nil {
+			return config.GrokConfig{}, fmt.Errorf("failed to load config: %w", err)
+		}
 	}
 	if strings.TrimSpace(opts.Provider) == "" && !strings.EqualFold(loadedCfg.Model.Provider, sessionProviderGrok) {
 		return config.GrokConfig{}, fmt.Errorf("--record requires --provider grok for live session inference")
@@ -163,14 +176,16 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelError(opts.Model)
 	}
 
-	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
-	if err != nil {
-		return config.OpenAIConfig{}, fmt.Errorf("failed to initialize config: %w", err)
-	}
-
-	loadedCfg, err := storage.Load()
-	if err != nil {
-		return config.OpenAIConfig{}, fmt.Errorf("failed to load config: %w", err)
+	loadedCfg := opts.LoadedConfig
+	if loadedCfg == nil {
+		storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
+		if err != nil {
+			return config.OpenAIConfig{}, fmt.Errorf("failed to initialize config: %w", err)
+		}
+		loadedCfg, err = storage.Load()
+		if err != nil {
+			return config.OpenAIConfig{}, fmt.Errorf("failed to load config: %w", err)
+		}
 	}
 	if strings.TrimSpace(opts.Provider) == "" && !strings.EqualFold(loadedCfg.Model.Provider, sessionProviderOpenAI) {
 		return config.OpenAIConfig{}, fmt.Errorf("--record requires --provider openai for OpenAI realtime session inference")
@@ -218,6 +233,13 @@ func NewGrokSessionInferencer(sessionCfg config.GrokConfig) (messages.SessionInf
 
 // NewGrokSessionInferencerWithOptions builds the session-capable Grok realtime inferencer.
 func NewGrokSessionInferencerWithOptions(sessionCfg config.GrokConfig, opts ...grok.Option) (messages.SessionInferencer, error) {
+	return NewGrokSessionInferencerWithToolsAndOptions(sessionCfg, nil, opts...)
+}
+
+// NewGrokSessionInferencerWithToolsAndOptions builds a Grok realtime
+// inferencer with the selected tool definitions in its initial session
+// configuration.
+func NewGrokSessionInferencerWithToolsAndOptions(sessionCfg config.GrokConfig, toolDefinitions []messages.ToolDefinition, opts ...grok.Option) (messages.SessionInferencer, error) {
 	providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey)}
 	if strings.TrimSpace(sessionCfg.BaseURL) != "" {
 		providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))
@@ -227,10 +249,11 @@ func NewGrokSessionInferencerWithOptions(sessionCfg config.GrokConfig, opts ...g
 	if err != nil {
 		return nil, fmt.Errorf("create Grok session gateway: %w", err)
 	}
-	return inference.NewSessionGatewayInferencer(
-		sessionGateway,
-		inference.WithSessionModel(sessionCfg.Model),
-	), nil
+	inferenceOpts := []inference.SessionOption{inference.WithSessionModel(sessionCfg.Model)}
+	if len(toolDefinitions) > 0 {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
+	}
+	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
 // NewOpenAIRealtimeSessionInferencer builds the session-capable OpenAI realtime inferencer.
@@ -240,6 +263,13 @@ func NewOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig) (message
 
 // NewOpenAIRealtimeSessionInferencerWithOptions builds the OpenAI realtime inferencer.
 func NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg config.OpenAIConfig, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
+	return NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg, nil, opts...)
+}
+
+// NewOpenAIRealtimeSessionInferencerWithToolsAndOptions builds an OpenAI
+// realtime inferencer with the selected tool definitions in its initial
+// session configuration.
+func NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg config.OpenAIConfig, toolDefinitions []messages.ToolDefinition, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
 	if !isOpenAIRealtimeModel(sessionCfg.Model) {
 		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
 	}
@@ -253,10 +283,11 @@ func NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg config.OpenAIConfi
 	if err != nil {
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 	}
-	return inference.NewSessionGatewayInferencer(
-		sessionGateway,
-		inference.WithSessionModel(sessionCfg.Model),
-	), nil
+	inferenceOpts := []inference.SessionOption{inference.WithSessionModel(sessionCfg.Model)}
+	if len(toolDefinitions) > 0 {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
+	}
+	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
 // NewLiveSessionInferencer builds the audio-capable realtime session used by

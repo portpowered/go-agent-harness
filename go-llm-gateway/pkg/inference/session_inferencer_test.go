@@ -103,6 +103,23 @@ func TestSessionGatewayInferencer_ConnectSession(t *testing.T) {
 	}
 }
 
+func TestSessionGatewayInferencer_WithSessionToolsDefensivelyCopies(t *testing.T) {
+	tools := []models.ToolDefinition{{
+		Name:        "read_file",
+		Description: "Read a file",
+		Parameters:  []models.ToolParameter{{Name: "path", Type: "string", Required: true}},
+	}}
+	si := NewSessionGatewayInferencer(&mockSessionGateway{session: newMockSession()}, WithSessionTools(tools))
+
+	tools[0].Name = "mutated"
+	tools[0].Parameters[0].Name = "mutated-path"
+
+	got := si.Request().Config.Tools
+	if len(got) != 1 || got[0].Name != "read_file" || len(got[0].Parameters) != 1 || got[0].Parameters[0].Name != "path" {
+		t.Fatalf("session tools = %#v, want an immutable read_file definition", got)
+	}
+}
+
 func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *testing.T) {
 	sess := newMockSession()
 	gw := &mockSessionGateway{session: sess}
