@@ -29,8 +29,8 @@ func TestAllCommittedSessionFixturesPassWithExactCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate all committed session fixture roots: %v", err)
 	}
-	if result.FilesScanned != 32 {
-		t.Fatalf("ValidatePaths scanned %d committed session fixtures, want exact count 32", result.FilesScanned)
+	if result.FilesScanned != 35 {
+		t.Fatalf("ValidatePaths scanned %d committed session fixtures, want exact count 35", result.FilesScanned)
 	}
 	if len(result.Errors) != 0 {
 		t.Fatalf("all committed session fixture validation failed:\n%s", formatValidationErrors(result.Errors))
