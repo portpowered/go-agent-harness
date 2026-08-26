@@ -542,16 +542,6 @@ func faultScenarioFrames() []faultTestFrame {
 	}
 }
 
-func audioFaultScenarioFrames() []faultTestFrame {
-	return []faultTestFrame{
-		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-audio-session","model":"grok-fault-injection"}`)},
-		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
-		{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)},
-		{Type: 1, Payload: []byte(`{"type":"response.audio.done"}`)},
-		{Type: 1, Payload: []byte(`{"type":"response.done"}`)},
-	}
-}
-
 func audioBurstScenarioFrames() []faultTestFrame {
 	frames := []faultTestFrame{
 		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-audio-burst","model":"grok-fault-injection"}`)},
