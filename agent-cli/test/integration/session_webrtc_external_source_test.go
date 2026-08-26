@@ -732,8 +732,11 @@ func (o *webrtcSourceObservation) recordAudioFrame() {
 func (o *webrtcSourceObservation) recordVideoFrame() {
 	o.Lock()
 	o.videoFrameCount++
+	videoFrames := o.videoFrameCount
 	o.Unlock()
-	o.videoFrameOnce.Do(func() { close(o.videoFrameDelivered) })
+	if videoFrames >= externalSourceVideoPackets {
+		o.videoFrameOnce.Do(func() { close(o.videoFrameDelivered) })
+	}
 }
 
 func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *webrtcSourceObservation, func()) {
