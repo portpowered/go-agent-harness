@@ -30,6 +30,10 @@ const (
 	// SessionDiagnosticEventToolCall is emitted per provider tool-call event
 	// that cannot be executed by the session runtime.
 	SessionDiagnosticEventToolCall = "session_tool_call_unexecutable"
+	// SessionDiagnosticEventMetrics is emitted exactly once per session run
+	// after the final delta crosses, carrying the terminal per-direction and
+	// per-modality byte matrix plus provider-reported token usage.
+	SessionDiagnosticEventMetrics = "session_metrics"
 )
 
 // Stable field keys for canonical diagnostic records.
@@ -50,6 +54,11 @@ const (
 	fieldInputTextBytes   = "input_text_bytes"
 	fieldOutputAudioBytes = "output_audio_bytes"
 	fieldOutputTextBytes  = "output_text_bytes"
+	fieldOutputToolBytes  = "output_tool_bytes"
+
+	fieldProviderPromptTokens     = "provider_prompt_tokens"
+	fieldProviderCompletionTokens = "provider_completion_tokens"
+	fieldProviderTotalTokens      = "provider_total_tokens"
 
 	fieldToolName              = "tool_name"
 	fieldToolCallID            = "tool_call_id"
@@ -109,10 +118,28 @@ type audioTurnCounters struct {
 	inputText  uint64
 	outAudio   uint64
 	outText    uint64
+	outTool    uint64
 }
 
 func (c *audioTurnCounters) reset() {
-	c.inputAudio, c.inputText, c.outAudio, c.outText = 0, 0, 0, 0
+	c.inputAudio, c.inputText, c.outAudio, c.outText, c.outTool = 0, 0, 0, 0, 0
+}
+
+// account advances exactly one direction-and-modality series; every counted
+// byte reaches both counter instances through the observer seam.
+func (c *audioTurnCounters) account(direction metrics.Direction, modality metrics.Modality, n uint64) {
+	switch {
+	case direction == metrics.DirectionInput && modality == metrics.ModalityAudio:
+		c.inputAudio += n
+	case direction == metrics.DirectionInput && modality == metrics.ModalityText:
+		c.inputText += n
+	case direction == metrics.DirectionOutput && modality == metrics.ModalityAudio:
+		c.outAudio += n
+	case direction == metrics.DirectionOutput && modality == metrics.ModalityText:
+		c.outText += n
+	case direction == metrics.DirectionOutput && modality == metrics.ModalityTool:
+		c.outTool += n
+	}
 }
 
 // sessionProgressObserver derives metrics observations and diagnostic records
@@ -120,19 +147,30 @@ func (c *audioTurnCounters) reset() {
 // runner's single consumer goroutine; no internal locking is required except
 // for the exactly-once terminal emission guard.
 type sessionProgressObserver struct {
-	sink     SessionDiagnosticSink
-	recorder metrics.Recorder
-	provider string
-	model    string
-
+	sink           SessionDiagnosticSink
+	recorder       metrics.Recorder
+	provider       string
+	model          string
 	sawSessionOpen bool
 	turnsCompleted int
 	counters       audioTurnCounters
+	totals         audioTurnCounters
 	pendingInputs  []ScheduledAudioInput
+
+	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
+	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
+	// is counted only when no deltas preceded it.
+	toolDeltaSeen bool
+
+	usagePrompt     uint64
+	usageCompletion uint64
+	usageTotal      uint64
+	usageSeen       bool
 
 	failure *failureFacts
 
-	emitOnce sync.Once
+	emitOnce    sync.Once
+	metricsOnce sync.Once
 }
 
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {
@@ -144,13 +182,19 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 	}
 }
 
-// record forwards one byte observation to the metrics recorder. Recording
-// failures are diagnostics-only and never alter session behavior.
-func (o *sessionProgressObserver) record(direction metrics.Direction, modality metrics.Modality, n int) {
-	if o.recorder == nil || n <= 0 {
+// account is the single observation seam: every counted byte crosses here
+// exactly once, forwarding to the metrics recorder and advancing both the
+// per-turn counters and the lifetime totals in one step. Recording failures
+// are diagnostics-only and never alter session behavior.
+func (o *sessionProgressObserver) account(direction metrics.Direction, modality metrics.Modality, n int) {
+	if o == nil || n <= 0 {
 		return
 	}
-	_ = o.recorder.Record(direction, modality, int64(n))
+	if o.recorder != nil {
+		_ = o.recorder.Record(direction, modality, int64(n))
+	}
+	o.counters.account(direction, modality, uint64(n))
+	o.totals.account(direction, modality, uint64(n))
 }
 
 // scheduleAudioInputs registers caller-scheduled user audio injections.
@@ -171,20 +215,27 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.SessionOpenValue:
 		o.sawSessionOpen = true
 	case *messages.AudioDeltaValue:
-		o.record(metrics.DirectionOutput, metrics.ModalityAudio, len(v.Content))
-		o.counters.outAudio += uint64(len(v.Content))
+		o.account(metrics.DirectionOutput, metrics.ModalityAudio, len(v.Content))
 	case *messages.TextDeltaValue:
-		o.record(metrics.DirectionOutput, metrics.ModalityText, len(v.Content))
-		o.counters.outText += uint64(len(v.Content))
+		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Content))
 	case *messages.TranscriptDeltaValue:
-		o.record(metrics.DirectionOutput, metrics.ModalityText, len(v.Text))
-		o.counters.outText += uint64(len(v.Text))
+		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Text))
+	case *messages.ToolCallStartValue:
+		o.toolDeltaSeen = false
+	case *messages.ToolCallDeltaValue:
+		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
+		o.toolDeltaSeen = true
+	case *messages.ToolCallEndValue:
+		o.emitToolCallRecord(v)
+		if !o.toolDeltaSeen {
+			o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.Arguments))
+		}
+		o.toolDeltaSeen = false
 	case *messages.MessageEndValue:
+		o.noteProviderUsage(v.Usage)
 		o.completeTurn()
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
-	case *messages.ToolCallEndValue:
-		o.emitToolCallRecord(v)
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
 	}
@@ -196,8 +247,7 @@ func (o *sessionProgressObserver) noteUserTextInput(text string) {
 	if o == nil || text == "" {
 		return
 	}
-	o.record(metrics.DirectionInput, metrics.ModalityText, len(text))
-	o.counters.inputText += uint64(len(text))
+	o.account(metrics.DirectionInput, metrics.ModalityText, len(text))
 }
 
 // dispatchScheduledInputs delivers due scheduled audio through the loop's
@@ -212,8 +262,25 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 		if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
 			continue
 		}
-		o.record(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
-		o.counters.inputAudio += uint64(len(input.PCM))
+		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
+	}
+}
+
+// noteProviderUsage accumulates the provider-reported token usage delivered on
+// MESSAGE.END so the terminal metrics matrix can surface both accounting
+// sources side by side.
+func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
+	if o == nil {
+		return
+	}
+	if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens < 0 {
+		return
+	}
+	o.usagePrompt += uint64(usage.PromptTokens)
+	o.usageCompletion += uint64(usage.CompletionTokens)
+	o.usageTotal += uint64(usage.TotalTokens)
+	if usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 {
+		o.usageSeen = true
 	}
 }
 
@@ -226,6 +293,7 @@ func (o *sessionProgressObserver) completeTurn() {
 			Fields: map[string]string{
 				fieldTurnIndex:        strconv.Itoa(o.turnsCompleted),
 				fieldInputAudioBytes:  strconv.FormatUint(o.counters.inputAudio, 10),
+				fieldOutputToolBytes:  strconv.FormatUint(o.counters.outTool, 10),
 				fieldInputTextBytes:   strconv.FormatUint(o.counters.inputText, 10),
 				fieldOutputAudioBytes: strconv.FormatUint(o.counters.outAudio, 10),
 				fieldOutputTextBytes:  strconv.FormatUint(o.counters.outText, 10),
@@ -394,7 +462,40 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 // termination paths read as plain returns.
 func (o *sessionProgressObserver) finish(err error) error {
 	o.emitTerminal(err)
+	o.emitMetricsMatrix()
 	return err
+}
+
+// emitMetricsMatrix emits the terminal per-direction/per-modality byte matrix
+// exactly once per run, after every delta it summarizes has crossed. The
+// provider-reported message-end token usage rides alongside so operators can
+// compare both accounting sources; byte counts and token counts measure
+// different units and are not expected to be numerically equal.
+func (o *sessionProgressObserver) emitMetricsMatrix() {
+	if o == nil || o.sink == nil {
+		return
+	}
+	o.metricsOnce.Do(func() {
+		fields := map[string]string{
+			fieldProvider:         o.provider,
+			fieldModel:            o.model,
+			fieldTurnsCompleted:   strconv.Itoa(o.turnsCompleted),
+			fieldInputAudioBytes:  strconv.FormatUint(o.totals.inputAudio, 10),
+			fieldInputTextBytes:   strconv.FormatUint(o.totals.inputText, 10),
+			fieldOutputAudioBytes: strconv.FormatUint(o.totals.outAudio, 10),
+			fieldOutputTextBytes:  strconv.FormatUint(o.totals.outText, 10),
+			fieldOutputToolBytes:  strconv.FormatUint(o.totals.outTool, 10),
+		}
+		if o.usageSeen {
+			fields[fieldProviderPromptTokens] = strconv.FormatUint(o.usagePrompt, 10)
+			fields[fieldProviderCompletionTokens] = strconv.FormatUint(o.usageCompletion, 10)
+			fields[fieldProviderTotalTokens] = strconv.FormatUint(o.usageTotal, 10)
+		}
+		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
+			Event:  SessionDiagnosticEventMetrics,
+			Fields: fields,
+		})
+	})
 }
 
 func deriveOutputState(sawSessionOpen bool, turnsCompleted int) string {

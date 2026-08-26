@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-synthetic-v7a"
+  },
+  "session": {
+    "id": "sess_s2s_v7a_metrics_modality",
+    "started_at_utc": "2026-08-25T00:00:00Z",
+    "fixture_provenance": "synthetic_failure"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-synthetic-v7a"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_s2s_v7a_metrics_modality",
+        "model": "grok-synthetic-v7a"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 2,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "What is the weather in Paris?"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio.delta",
+        "delta": "AQIDBAUG"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "response.audio_transcript.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.audio_transcript.delta",
+        "delta": "It is sunny in Paris."
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 7,
+      "type": "response.function_call_arguments.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.function_call_arguments.delta",
+        "call_id": "call_weather_001",
+        "delta": "{\"city\":"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 8,
+      "type": "response.function_call_arguments.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.function_call_arguments.delta",
+        "call_id": "call_weather_001",
+        "delta": "\"Paris\"}"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 9,
+      "type": "response.function_call_arguments.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.function_call_arguments.done",
+        "call_id": "call_weather_001",
+        "name": "get_weather",
+        "arguments": "{\"city\":\"Paris\"}"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 10,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}

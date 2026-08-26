@@ -723,7 +723,6 @@ func scenarioSupportsSilence(scenario Scenario) bool {
 	}
 	return false
 }
-
 func evaluateGuardExpectations(scenario Scenario, observation ObservationSnapshot) []ExpectationResult {
 	expectations := scenario.expectedValues()
 	results := make([]ExpectationResult, len(expectations))
@@ -742,7 +741,7 @@ func evaluateGuardExpectation(expectation ExpectedBehavior, observation Observat
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
 		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
-		ExpectBufferDisposition:
+		ExpectBufferDisposition, ExpectMetricsReconcile:
 		return Evaluate(expectation, observation)
 	case ExpectText, ExpectTranscript:
 		want, err := aliasString(expectation, declaredKind(expectation), "text", expectation.Text, expectation.Value)

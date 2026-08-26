@@ -14,6 +14,9 @@ const (
 	ExpectLatencyWithinTicks ExpectationKind = "latency-within-ticks"
 	ExpectTerminalReason     ExpectationKind = "terminal-reason"
 	ExpectFrameCount         ExpectationKind = "frame-count"
+	// ExpectMetricsReconcile requires the emitted per-direction/per-modality
+	// metric matrix to equal the summed observed delta stream exactly.
+	ExpectMetricsReconcile ExpectationKind = "metrics-reconcile"
 
 	// ExpectToolResultDelivered asserts that the named tool call's result was
 	// observed on the client-to-provider path (the result reached the
@@ -68,9 +71,25 @@ type ObservationSnapshot struct {
 	// BufferDisposition records what happened to buffered input audio at
 	// session end: committed, discarded, or empty when uncommitted.
 	BufferDisposition string
+	// Metrics carries one reconciliation pair per direction/modality series.
+	Metrics []MetricsSeries
 }
 
 type Observation = ObservationSnapshot
+
+// MetricsSeries reconciles one direction-and-modality metric series: the
+// ReportedTotal emitted by the session's final metric matrix must equal
+// ObservedDeltas, the exact sum of that series' structured stream deltas.
+type MetricsSeries struct {
+	Direction      string
+	Modality       string
+	ObservedDeltas int64
+	ReportedTotal  int64
+}
+
+func (s MetricsSeries) key() string {
+	return s.Direction + "/" + s.Modality
+}
 
 // ExpectationMismatchError identifies a failed predicate and retains its
 // structured expectation, expected value, and actual value.
@@ -227,6 +246,8 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 			return mismatch(expectation, kind, want,
 				observedBufferDisposition(observation.BufferDisposition))
 		}
+	case ExpectMetricsReconcile:
+		return evaluateMetricsReconciliation(expectation, observation.Metrics)
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
@@ -263,7 +284,7 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
 		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
-		ExpectBufferDisposition:
+		ExpectBufferDisposition, ExpectMetricsReconcile:
 		return kind, nil
 	default:
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
@@ -370,4 +391,24 @@ func diagnosticValue(value any) string {
 	default:
 		return fmt.Sprintf("%v", value)
 	}
+}
+
+// evaluateMetricsReconciliation enforces exact equality between the emitted
+// metric matrix and the summed observed delta stream. Every provided series
+// must carry identical observed and reported values; the failure names the
+// offending series with both values.
+func evaluateMetricsReconciliation(expectation ExpectedBehavior, series []MetricsSeries) error {
+	if len(series) == 0 {
+		return mismatch(expectation, ExpectMetricsReconcile,
+			"per-direction/per-modality metric series", "none provided")
+	}
+	for _, entry := range series {
+		if entry.ObservedDeltas != entry.ReportedTotal {
+			key := entry.key()
+			return mismatch(expectation, ExpectMetricsReconcile,
+				fmt.Sprintf("%s observed delta sum %d", key, entry.ObservedDeltas),
+				fmt.Sprintf("%s reported total %d", key, entry.ReportedTotal))
+		}
+	}
+	return nil
 }
