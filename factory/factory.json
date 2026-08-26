@@ -576,8 +576,8 @@
       "model": "opencode/ox-alpha",
       "name": "planner",
       "stopToken": "<COMPLETE>",
-      "timeout": "10m",
-      "type": "AGENT_WORKER"
+      "type": "AGENT_WORKER",
+      "timeout": "2h"
     },
     {
       "executorProvider": "ACP",
@@ -586,8 +586,8 @@
       "model": "opencode/ox-alpha",
       "name": "ideafier",
       "stopToken": "<COMPLETE>",
-      "timeout": "10m",
-      "type": "AGENT_WORKER"
+      "type": "AGENT_WORKER",
+      "timeout": "2h"
     },
     {
       "executorProvider": "ACP",
@@ -595,8 +595,8 @@
       "model": "opencode/ox-alpha",
       "name": "reviewer",
       "stopToken": "<COMPLETE>",
-      "timeout": "10m",
-      "type": "AGENT_WORKER"
+      "type": "AGENT_WORKER",
+      "timeout": "2h"
     }
   ],
   "workstations": [
