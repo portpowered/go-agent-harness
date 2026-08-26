@@ -28,6 +28,7 @@ type Router struct {
 	ProbeReportCommand     *ProbeReportCommand
 	ProbeAcceptanceCommand *ProbeAcceptanceCommand
 	ProbeFleetCommand      *ProbeFleetCommand
+	MediaCommand           *MediaCommand
 
 	SessionCommand       *SessionCommand
 	SessionShowCommand   *SessionShowCommand
@@ -83,6 +84,7 @@ func NewRouter(
 		ProbeReportCommand:       probeReportCommand,
 		ProbeAcceptanceCommand:   acceptanceCommand,
 		ProbeFleetCommand:        probeFleetCommand,
+		MediaCommand:             NewMediaCommand(),
 		SessionCommand:           sessionCommand,
 		SessionShowCommand:       sessionShowCommand,
 		SessionListCommand:       sessionListCommand,
@@ -111,6 +113,12 @@ func (r *Router) BuildRoot() *cobra.Command {
 	probeGroup.AddCommand(NewPath("acceptance <binary> <goal>", r.ProbeAcceptanceCommand.Generate()))
 	probeGroup.AddCommand(NewPath("fleet --manifest <file>", r.ProbeFleetCommand.Generate()))
 	root.AddCommand(probeGroup)
+
+	mediaCommand := r.MediaCommand
+	if mediaCommand == nil {
+		mediaCommand = NewMediaCommand()
+	}
+	root.AddCommand(NewPath("media", mediaCommand.Generate()))
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())
 	sessionGroup.AddCommand(NewPath("show <session-id>", r.SessionShowCommand.Generate()))

@@ -27,6 +27,7 @@ const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurabl
 	"  devices     Discover available audio devices\n" +
 	"  help        Help about any command\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
+	"  media       Inspect external media sources\n" +
 	"  probe       Run deterministic offline probes\n" +
 	"  session     Run or manage agent sessions\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
@@ -46,6 +47,7 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  devices     Discover available audio devices\n" +
 	"  help        Help about any command\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
+	"  media       Inspect external media sources\n" +
 	"  probe       Run deterministic offline probes\n" +
 	"  session     Run or manage agent sessions\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
@@ -178,6 +180,9 @@ func TestRouteHelpExecutionContracts(t *testing.T) {
 		{name: "interaction", args: []string{"interaction", "--help"}, usage: "agent interaction", description: "Inspect provider-neutral gateway interactions."},
 		{name: "interaction replay", args: []string{"interaction", "replay", "--help"}, usage: "agent interaction replay <fixture-path>", description: "Load a normalized PNIG interaction fixture"},
 		{name: "probe fleet", args: []string{"probe", "fleet", "--help"}, usage: "agent probe fleet --manifest <file>", description: "Execute every entry in a fleet manifest"},
+		{name: "media", args: []string{"media", "--help"}, usage: "agent media", description: "Inspect external media sources"},
+		{name: "media probe", args: []string{"media", "probe", "--help"}, usage: "agent media probe <url>", description: "Probe an external go2rtc or RTSP media source"},
+		{name: "media look", args: []string{"media", "look", "--help"}, usage: "agent media look <url>", description: "Observe one visual frame from an external media source"},
 		{name: "probe report", args: []string{"probe", "report", "--help"}, usage: "agent probe report --out <result.jsonl>...", description: "Aggregate probe result artifacts into a friction report"},
 		{name: "session", args: []string{"session", "--help"}, usage: "agent session", description: "Run a bidirectional session inference capture"},
 		{name: "session show", args: []string{"session", "show", "--help"}, usage: "agent session show <session-id>", description: "Load and print the conversation history"},

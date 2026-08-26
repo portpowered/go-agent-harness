@@ -179,6 +179,75 @@ func TestMediaProbeCommandRejectsFrameLessGo2RTC(t *testing.T) {
 	}
 }
 
+func TestMediaLookRootArgvReportsCameraObservation(t *testing.T) {
+	rawURL, observed, cleanup := startCLIGo2RTCFixture(t)
+	defer cleanup()
+
+	root := newTestRootCommand()
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"media", "look", rawURL})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := root.ExecuteContext(ctx); err != nil {
+		t.Fatalf("root media look error = %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("root media look stderr = %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Source: "+rawURL) || !strings.Contains(stdout.String(), "Look status: available") || !strings.Contains(stdout.String(), "Media type: video/H264") || !strings.Contains(stdout.String(), "Observation bytes: 4") {
+		t.Fatalf("camera look output = %q", stdout.String())
+	}
+	observed.waitFor(t, observed.videoFrameDelivered, "go2rtc video frame delivery")
+}
+
+func TestMediaLookRootArgvReportsAudioOnlyUnavailable(t *testing.T) {
+	rawURL, _, cleanup := startCLIGo2RTCFixtureWithMedia(t, true, false)
+	defer cleanup()
+
+	root := newTestRootCommand()
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"media", "look", rawURL})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := root.ExecuteContext(ctx); err != nil {
+		t.Fatalf("root audio-only media look error = %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("root audio-only media look stderr = %q", stderr.String())
+	}
+	want := "Look status: unavailable\nReason: no_video_track\n"
+	if !strings.Contains(stdout.String(), want) || strings.Contains(stdout.String(), "Observation bytes:") || strings.Contains(stdout.String(), "Media type:") {
+		t.Fatalf("audio-only look output = %q", stdout.String())
+	}
+}
+
+func TestMediaProbeRootArgvReportsNegotiatedCameraCapabilities(t *testing.T) {
+	rawURL, _, cleanup := startCLIGo2RTCFixture(t)
+	defer cleanup()
+
+	root := newTestRootCommand()
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"media", "probe", rawURL})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := root.ExecuteContext(ctx); err != nil {
+		t.Fatalf("root media probe error = %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("root media probe stderr = %q", stderr.String())
+	}
+	want := "Source: " + rawURL + "\nAudio codec: PCMU\nSample rate: 8000\nChannels: 1\nVideo presence: true\n"
+	if stdout.String() != want {
+		t.Fatalf("root media probe output = %q, want %q", stdout.String(), want)
+	}
+}
+
 func TestMediaProbeCredentialRedactionAcrossArtifacts(t *testing.T) {
 	const password = "s6-distinctive-password"
 	rawURL, _, cleanupCLI := startCLIRTSPFixture(t, password)
@@ -387,11 +456,12 @@ func readCLIRTSPRequest(reader *bufio.Reader) (string, string, map[string]string
 
 type cliGo2RTCObservation struct {
 	sync.Mutex
-	path, source              string
-	frameCount                int
-	negotiated                chan struct{}
-	frameDelivered            chan struct{}
-	negotiatedOnce, frameOnce sync.Once
+	path, source                        string
+	frameCount, videoFrameCount         int
+	negotiated                          chan struct{}
+	frameDelivered, videoFrameDelivered chan struct{}
+	negotiatedOnce, frameOnce           sync.Once
+	videoFrameOnce                      sync.Once
 }
 
 func startCLIGo2RTCFixture(t *testing.T, sendFrames ...bool) (string, *cliGo2RTCObservation, func()) {
@@ -400,9 +470,15 @@ func startCLIGo2RTCFixture(t *testing.T, sendFrames ...bool) (string, *cliGo2RTC
 	if len(sendFrames) > 0 {
 		frames = sendFrames[0]
 	}
+	return startCLIGo2RTCFixtureWithMedia(t, frames, frames)
+}
+
+func startCLIGo2RTCFixtureWithMedia(t *testing.T, sendAudio, sendVideo bool) (string, *cliGo2RTCObservation, func()) {
+	t.Helper()
 	observed := &cliGo2RTCObservation{
-		negotiated:     make(chan struct{}),
-		frameDelivered: make(chan struct{}),
+		negotiated:          make(chan struct{}),
+		frameDelivered:      make(chan struct{}),
+		videoFrameDelivered: make(chan struct{}),
 	}
 	handlerDone := make(chan struct{})
 	fixtureContext, cancelFixture := context.WithCancel(context.Background())
@@ -468,6 +544,16 @@ func startCLIGo2RTCFixture(t *testing.T, sendFrames ...bool) (string, *cliGo2RTC
 		if _, err = pc.AddTrack(audio); err != nil {
 			return
 		}
+		var video *webrtc.TrackLocalStaticRTP
+		if sendVideo {
+			video, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, "video", "cli-fixture")
+			if err != nil {
+				return
+			}
+			if _, err = pc.AddTrack(video); err != nil {
+				return
+			}
+		}
 		if err = pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer.Value}); err != nil {
 			return
 		}
@@ -495,13 +581,20 @@ func startCLIGo2RTCFixture(t *testing.T, sendFrames ...bool) (string, *cliGo2RTC
 		case <-handlerContext.Done():
 			return
 		}
-		if frames {
-			for i := 0; i < 2; i++ {
+		for i := 0; i < 3; i++ {
+			if sendAudio {
 				packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}
 				if err = audio.WriteRTP(packet); err != nil {
 					return
 				}
 				observed.recordFrame(len(packet.Payload))
+			}
+			if sendVideo {
+				packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 3000)}, Payload: []byte{0x65, byte(i + 1), 0x01, 0x02}}
+				if err = video.WriteRTP(packet); err != nil {
+					return
+				}
+				observed.recordVideoFrame(len(packet.Payload))
 			}
 		}
 		<-handlerContext.Done()
@@ -543,6 +636,16 @@ func (o *cliGo2RTCObservation) recordFrame(payloadSize int) {
 	o.frameCount++
 	o.Unlock()
 	o.frameOnce.Do(func() { close(o.frameDelivered) })
+}
+
+func (o *cliGo2RTCObservation) recordVideoFrame(payloadSize int) {
+	if payloadSize == 0 {
+		return
+	}
+	o.Lock()
+	o.videoFrameCount++
+	o.Unlock()
+	o.videoFrameOnce.Do(func() { close(o.videoFrameDelivered) })
 }
 
 func (o *cliGo2RTCObservation) waitFor(t *testing.T, event <-chan struct{}, name string) {
