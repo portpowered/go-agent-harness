@@ -57,7 +57,7 @@ func TestTypedBuffer_WriteFull(t *testing.T) {
 func TestTypedBuffer_WriteTerminalEvictsWhenFull(t *testing.T) {
 	buf := NewTypedBuffer[string](1)
 	var drops int
-	buf.SetOnDrop(func() { drops++ })
+	buf.SetOnDrop(func(_ string) { drops++ })
 	if !buf.Write(context.Background(), "ordinary") {
 		t.Fatal("ordinary write should succeed")
 	}
@@ -67,6 +67,9 @@ func TestTypedBuffer_WriteTerminalEvictsWhenFull(t *testing.T) {
 	}
 	if drops != 1 {
 		t.Fatalf("drop callback count = %d, want 1 evicted ordinary record", drops)
+	}
+	if got := buf.Drops(); got != 1 {
+		t.Fatalf("buffer drop count = %d, want 1 evicted ordinary record", got)
 	}
 	if got := buf.Len(); got != 1 {
 		t.Fatalf("buffer length = %d, want 1", got)

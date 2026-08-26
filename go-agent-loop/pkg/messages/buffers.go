@@ -115,9 +115,10 @@ func (b *TypedBuffer[T]) WriteTerminal(data T) bool {
 		// retry; a concurrent reader or writer may win the race, so loop until
 		// the terminal value is actually present.
 		select {
-		case <-b.ch:
+		case evicted := <-b.ch:
+			b.drops.Add(1)
 			if b.onDrop != nil {
-				b.onDrop()
+				b.onDrop(evicted)
 			}
 		default:
 		}
