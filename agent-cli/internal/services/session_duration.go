@@ -1027,51 +1027,87 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if !ok {
 				return finish(durationExpired, nil)
 			}
-			if durationExpired && msg.Type == messages.StreamTypeSessionClose {
-				msg, durationTerminalWritten = maxDurationTerminalMessage(msg)
+			result, msgErr := processDurationLoopMessage(runCtx, loop, out, msg, opts, durationExpired, promptSent, closeSent, durationTerminalWritten, artifacts)
+			promptSent = result.promptSent
+			closeSent = result.closeSent
+			durationTerminalWritten = result.durationTerminalWritten
+			if msgErr != nil {
+				return finish(false, msgErr)
 			}
-			opts.observer.observe(msg)
-			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
-				return finish(false, err)
-			}
-			if msg.Type == messages.StreamTypeSessionOpen && !durationExpired {
-				if opts.Prompt != "" && !promptSent {
-					promptSent = true
-					userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
-					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
-						return finish(false, fmt.Errorf("send session message: %w", err))
-					}
-					opts.observer.noteUserTextInput(opts.Prompt)
-				}
-				if opts.CloseAfterOpen && opts.Prompt == "" && !closeSent {
-					closeSent = true
-					if err := sendSessionClose(runCtx, loop); err != nil {
-						return finish(false, err)
-					}
-				}
-			}
-			if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
-				if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
-					return finish(false, err)
-				}
-			}
-			if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !closeSent {
-				closeSent = true
-				if err := sendSessionClose(runCtx, loop); err != nil {
-					return finish(false, err)
-				}
-			}
-			if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
-				closeSent = true
-				if err := sendSessionClose(runCtx, loop); err != nil {
-					return finish(false, err)
-				}
-			}
-			if shouldStopSessionLoop(msg, opts, closeSent) && (!durationExpired || msg.Type == messages.StreamTypeSessionClose) {
-				return finish(durationExpired, nil)
+			if result.stop {
+				return finish(result.planned, nil)
 			}
 		}
 	}
+}
+
+type sessionDurationMessageResult struct {
+	promptSent              bool
+	closeSent               bool
+	durationTerminalWritten bool
+	stop                    bool
+	planned                 bool
+}
+
+func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle) (sessionDurationMessageResult, error) {
+	result := sessionDurationMessageResult{
+		promptSent:              promptSent,
+		closeSent:               closeSent,
+		durationTerminalWritten: durationTerminalWritten,
+	}
+	if durationExpired && msg.Type == messages.StreamTypeSessionClose {
+		msg, result.durationTerminalWritten = maxDurationTerminalMessage(msg)
+	}
+	opts.observer.observe(msg)
+	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
+		return result, err
+	}
+	if msg.Type == messages.StreamTypeSessionOpen && !durationExpired {
+		if opts.Prompt != "" && !result.promptSent {
+			result.promptSent = true
+			userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
+			if err := loop.Send(ctx, []messages.Message{userMsg}); err != nil {
+				return result, fmt.Errorf("send session message: %w", err)
+			}
+			opts.observer.noteUserTextInput(opts.Prompt)
+		}
+		if opts.CloseAfterOpen && opts.Prompt == "" && !result.closeSent {
+			result.closeSent = true
+			if err := sendSessionClose(ctx, loop); err != nil {
+				return result, err
+			}
+		}
+	}
+	var err error
+	result.closeSent, err = processDurationScheduledMessage(ctx, loop, msg, opts, result.closeSent)
+	if err != nil {
+		return result, err
+	}
+	if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent {
+		result.closeSent = true
+		if err := sendSessionClose(ctx, loop); err != nil {
+			return result, err
+		}
+	}
+	result.stop = shouldStopSessionLoop(msg, opts, result.closeSent) && (!durationExpired || msg.Type == messages.StreamTypeSessionClose)
+	result.planned = durationExpired
+	return result, nil
+}
+
+func processDurationScheduledMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, opts sessionLoopOptions, closeSent bool) (bool, error) {
+	if msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeMessageEnd {
+		return closeSent, nil
+	}
+	if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
+		return closeSent, err
+	}
+	if !opts.CloseAfterScheduledAudio || msg.Type != messages.StreamTypeMessageEnd || !opts.observer.scheduledAudioComplete() || closeSent {
+		return closeSent, nil
+	}
+	if err := sendSessionClose(ctx, loop); err != nil {
+		return closeSent, err
+	}
+	return true, nil
 }
 
 func sessionDurationTimerReady(timerCh <-chan time.Time) bool {
