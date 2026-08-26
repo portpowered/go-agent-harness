@@ -22,6 +22,7 @@ type SessionCommand struct {
 	globalFlags               *flags.GlobalFlags
 	toolExecutorOverride      messages.ToolExecutor
 	sessionInferencerOverride messages.SessionInferencer
+	streamObserver            services.SessionStreamObserver
 	imagePaths                []string
 }
 
@@ -31,6 +32,16 @@ type SessionCommand struct {
 // keep their no-tools behavior.
 func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
 	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, toolExecutorOverride: toolExecutorOverride, sessionInferencerOverride: sessionInferencerOverride}
+}
+
+// SetSessionStreamObserver adds an optional observer for deltas consumed by a
+// session loop. It is primarily useful to verify emitted tool-result streams
+// through the CLI composition root without changing normal command output.
+func (c *SessionCommand) SetSessionStreamObserver(observer services.SessionStreamObserver) {
+	if c == nil {
+		return
+	}
+	c.streamObserver = observer
 }
 
 // Generate returns the cobra command for the session group.
@@ -80,6 +91,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
 				ToolExecutor:      c.toolExecutorOverride,
+				StreamObserver:    c.streamObserver,
 			}
 			seed := services.SessionTextSeed{
 				Value:   prompt,

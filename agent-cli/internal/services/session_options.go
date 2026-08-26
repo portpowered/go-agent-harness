@@ -56,6 +56,9 @@ type SessionRunOptions struct {
 	Diagnostics SessionDiagnosticSink
 	// MetricsRecorder optionally receives per-direction stream observations.
 	MetricsRecorder metrics.Recorder
+	// StreamObserver optionally receives every session stream delta after it
+	// crosses the session loop boundary. Nil keeps runtime behavior unchanged.
+	StreamObserver SessionStreamObserver
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
 	AudioInputs []ScheduledAudioInput

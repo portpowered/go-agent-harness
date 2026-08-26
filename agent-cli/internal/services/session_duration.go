@@ -789,6 +789,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 	if plan.loopOut != nil {
 		loopOut = plan.loopOut
 	}
+	plan.configureLoopObserver(&plan.loop)
 	var runErr error
 	if plan.inferencer != nil {
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)

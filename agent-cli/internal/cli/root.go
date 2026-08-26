@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +19,16 @@ func NewAgentCLI(router *Router) *AgentCLI {
 // Generate returns the root cobra command (same shape as port CLI for tests).
 func (c *AgentCLI) Generate() *cobra.Command {
 	return c.router.BuildRoot()
+}
+
+// SetSessionStreamObserver installs an optional observer on the composed
+// session command before Generate/Execute. The default nil observer preserves
+// the existing CLI behavior.
+func (c *AgentCLI) SetSessionStreamObserver(observer services.SessionStreamObserver) {
+	if c == nil || c.router == nil || c.router.SessionCommand == nil {
+		return
+	}
+	c.router.SessionCommand.SetSessionStreamObserver(observer)
 }
 
 // RootCommand holds the root "agent" command. Subcommands and persistent flags are wired in routes.go.

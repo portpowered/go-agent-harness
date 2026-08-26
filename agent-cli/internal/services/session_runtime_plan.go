@@ -84,6 +84,7 @@ type sessionRuntimePlan struct {
 	finalize        func(context.Context, io.Writer) error
 	diagnostics     SessionDiagnosticSink
 	metricsRecorder metrics.Recorder
+	streamObserver  SessionStreamObserver
 	audioInputs     []ScheduledAudioInput
 }
 
@@ -98,11 +99,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
 		loopOut = p.loopOut
 	}
 	loop := p.loop
-	if p.diagnostics != nil || p.metricsRecorder != nil {
-		obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
-		obs.scheduleAudioInputs(p.audioInputs)
-		loop.observer = obs
-	}
+	p.configureLoopObserver(&loop)
 	if p.inferencer != nil {
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
 			if p.flushCapture != nil {
@@ -130,6 +127,19 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
 	return nil
 }
 
+// configureLoopObserver installs the shared stream observer for every session
+// runner mode, including the duration-bounded path which executes plan.loop
+// directly instead of calling plan.run.
+func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
+	if loop == nil || (p.diagnostics == nil && p.metricsRecorder == nil && p.streamObserver == nil) {
+		return
+	}
+	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
+	obs.streamObserver = p.streamObserver
+	obs.scheduleAudioInputs(p.audioInputs)
+	loop.observer = obs
+}
+
 func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 	return planSessionRuntimeWithFactory(opts, defaultSessionRuntimeFactory)
 }
@@ -141,6 +151,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	}
 	plan.diagnostics = opts.Diagnostics
 	plan.metricsRecorder = opts.MetricsRecorder
+	plan.streamObserver = opts.StreamObserver
 	plan.audioInputs = opts.AudioInputs
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether

@@ -89,6 +89,12 @@ type SessionDiagnosticSink interface {
 	RecordSessionDiagnostic(SessionDiagnosticRecord)
 }
 
+// SessionStreamObserver receives every stream delta consumed by a session
+// runner, including tool-result deltas emitted after the session tool adapter
+// has normalized their call identity. It is an optional observation seam and
+// does not alter session behavior when nil.
+type SessionStreamObserver func(messages.StreamMessage)
+
 // ScheduledAudioInput schedules one raw PCM user-audio injection through the
 // loop's existing audio-input seam (AgentLoop.SendAudioInput). The injection
 // fires as soon as AfterCompletedTurns assistant turns have completed, and its
@@ -149,6 +155,7 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 type sessionProgressObserver struct {
 	sink           SessionDiagnosticSink
 	recorder       metrics.Recorder
+	streamObserver SessionStreamObserver
 	provider       string
 	model          string
 	sawSessionOpen bool
@@ -210,6 +217,9 @@ func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInp
 func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
+	}
+	if o.streamObserver != nil {
+		o.streamObserver(msg)
 	}
 	switch v := msg.Value.(type) {
 	case *messages.SessionOpenValue:

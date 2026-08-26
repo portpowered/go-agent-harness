@@ -14,7 +14,8 @@ package integration
 //     calls are observed in-flight, so a sequential executor deadlocks the
 //     bounded run instead of passing, and the completion order is forced to
 //     the reverse of request order purely with channel gating (no sleeps),
-//   - every executor response echoes its own call ID with its own content,
+//   - the post-adapter tool-result deltas emitted by the real session loop carry
+//     exactly one result for each originating call ID with that call's content,
 //   - the replayed exchange proves the executed results flowed back into the
 //     model-facing conversation state: the follow-up
 //     conversation.item.create/response.create pair that opens the second
@@ -24,8 +25,9 @@ package integration
 //     blocks the second turn's inbound frames behind those exact outbound
 //     events,
 //   - resumed output speech is produced in that post-tool turn,
-//   - a negative control swaps one result's ToolCallID at the executor
-//     boundary and proves the shared pairing assertion fails deterministically.
+//   - a negative control swaps one result's content at the executor boundary,
+//     while the production adapter restores the originating call ID, and the
+//     downstream emitted-result assertion rejects the mismatch deterministically.
 //
 // Why prompt-seeded instead of v4a's file-backed audio-in: the audio-in runner
 // stops the session at the first terminal response frame, which cancels an
@@ -235,9 +237,10 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 // request order may complete only after the last one has completed (forcing
 // completion order to be the reverse of request order). No wall-clock sleeps.
 //
-// swapPairing corrupts exactly one result attribution at the executor boundary
-// for the negative control: the first request-order call's response is returned
-// carrying the second call's ID and content.
+// swapPairing corrupts exactly one result at the executor boundary for the
+// negative control: the first request-order call's response is returned with
+// the second call's identity and content. The session adapter normalizes the
+// identity back to the originating call, but cannot mask the wrong content.
 type parallelToolExecutor struct {
 	expectedIDs []string
 	swapPairing bool
@@ -307,9 +310,9 @@ func (e *parallelToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 	}
 
 	if e.swapPairing && call.ID == parallelCallAlphaID {
-		// Negative control only: attribute the first call's result wholesale
-		// to the second call — its ID, its tool name, and its content —
-		// leaving the second result untouched.
+		// Negative control only: deliberately cross-wire the raw executor
+		// response. The production adapter must restore the originating ID
+		// and name, while the wrong content must still be rejected downstream.
 		response.ToolCallID = parallelCallBravoID
 		response.Name = parallelCallBravoName
 		response.Content = parallelResultContent[parallelCallBravoID]
@@ -339,14 +342,10 @@ func copyParallelCalls(src map[string]messages.ToolCall) map[string]messages.Too
 	return dst
 }
 
-// validatePairedParallelToolResults is the shared vertical pairing assertion
-// used by both the positive path and its swapped-pairing control: every
-// expected call was executed exactly once with its fixture name and arguments,
-// and every returned response carries exactly one expected call ID paired with
-// exactly that call's own result content, 1:1 with no phantoms or duplicates.
-// Keeping the failure here lets the swapped-pairing control fail on the same
-// code path the positive assertion validates.
-func validatePairedParallelToolResults(arrivals, completions []string, returned []messages.ToolCallResponse, calls map[string]messages.ToolCall) error {
+// validateParallelToolInvocations asserts the executor-side facts that are
+// independent of result delivery: every expected call arrived exactly once
+// with its fixture name and arguments.
+func validateParallelToolInvocations(arrivals []string, calls map[string]messages.ToolCall) error {
 	if len(arrivals) != len(parallelRequestOrder) {
 		return fmt.Errorf("executor observed %d arrivals %v, want exactly %d calls %v", len(arrivals), arrivals, len(parallelRequestOrder), parallelRequestOrder)
 	}
@@ -370,30 +369,118 @@ func validatePairedParallelToolResults(arrivals, completions []string, returned 
 			return fmt.Errorf("call %q invoked with arguments %q, want %q", id, call.Arguments, wantArgs)
 		}
 	}
-	if len(returned) != len(parallelRequestOrder) {
-		return fmt.Errorf("executor returned %d responses %v, want exactly %d", len(returned), describeResponses(returned), len(parallelRequestOrder))
+	return nil
+}
+
+// parallelStreamObserver captures the actual session-loop deltas after the
+// CLI's session tool adapter and before output rendering. Keeping all deltas
+// lets the validator reject a missing RoleTool marker rather than filtering a
+// malformed result out before checking it.
+type parallelStreamObserver struct {
+	mu     sync.Mutex
+	deltas []messages.StreamMessage
+}
+
+func (o *parallelStreamObserver) observe(msg messages.StreamMessage) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.deltas = append(o.deltas, msg)
+	o.mu.Unlock()
+}
+
+func (o *parallelStreamObserver) snapshot() []messages.StreamMessage {
+	if o == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]messages.StreamMessage(nil), o.deltas...)
+}
+
+// validateObservedParallelToolResults validates the post-adapter tool-result
+// stream emitted by ToolRunner. It reconstructs the same tool messages that
+// the ordering engine feeds into the follow-up inference request, then checks
+// that the two observable messages preserve the ID-to-content mapping.
+func validateObservedParallelToolResults(allDeltas []messages.StreamMessage) error {
+	var toolDeltas []messages.StreamMessage
+	for _, delta := range allDeltas {
+		if delta.Role == messages.RoleTool {
+			toolDeltas = append(toolDeltas, delta)
+		}
+	}
+	if len(toolDeltas) == 0 {
+		return fmt.Errorf("session loop emitted no RoleTool deltas")
+	}
+
+	seenDeltaIDs := map[string]int{}
+	for _, delta := range toolDeltas {
+		switch delta.Value.(type) {
+		case *messages.TextStartValue, *messages.TextDeltaValue, *messages.TextEndValue:
+			if delta.ToolCallId == "" {
+				return fmt.Errorf("observed %s tool-result delta has no ToolCallID", delta.Type)
+			}
+			if _, expected := parallelResultContent[delta.ToolCallId]; !expected {
+				return fmt.Errorf("observed %s tool-result delta has unknown ToolCallID %q", delta.Type, delta.ToolCallId)
+			}
+			seenDeltaIDs[delta.ToolCallId]++
+		}
+	}
+	if len(seenDeltaIDs) != len(parallelRequestOrder) {
+		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder)
+	}
+
+	observedMessages := messages.ReconstructToolMessagesFromDeltas(toolDeltas)
+	if len(observedMessages) != len(parallelRequestOrder) {
+		return fmt.Errorf("reconstructed %d tool-result messages, want exactly %d: %v", len(observedMessages), len(parallelRequestOrder), describeMessages(observedMessages))
 	}
 	contentByCall := map[string]string{}
-	for _, resp := range returned {
-		call, executed := calls[resp.ToolCallID]
-		if !executed {
-			return fmt.Errorf("response attributed to unknown call %q; executed calls were %v", resp.ToolCallID, parallelRequestOrder)
+	for _, observed := range observedMessages {
+		if observed.Role != messages.RoleTool {
+			return fmt.Errorf("reconstructed message has role %q, want %q", observed.Role, messages.RoleTool)
 		}
-		wantContent := parallelResultContent[resp.ToolCallID]
-		if resp.Content != wantContent {
-			return fmt.Errorf("result for call %q carries content %q, want its own content %q", resp.ToolCallID, resp.Content, wantContent)
+		id := observed.ToolCallID
+		if _, expected := parallelResultContent[id]; !expected {
+			return fmt.Errorf("reconstructed result has unknown ToolCallID %q", id)
 		}
-		if call.Name != "" && resp.Name != "" && resp.Name != call.Name {
-			return fmt.Errorf("result for call %q names tool %q, want %q", resp.ToolCallID, resp.Name, call.Name)
+		if _, duplicate := contentByCall[id]; duplicate {
+			return fmt.Errorf("reconstructed duplicate result for call %q", id)
 		}
-		contentByCall[resp.ToolCallID] = resp.Content
+		content := observed.TextContent()
+		want := parallelResultContent[id]
+		if content != want {
+			owner := parallelContentOwner(content)
+			if owner != "" && owner != id {
+				return fmt.Errorf("observed result for call %q carries content owned by call %q (%q), want its own content %q", id, owner, content, want)
+			}
+			return fmt.Errorf("observed result for call %q carries content %q, want its own content %q", id, content, want)
+		}
+		contentByCall[id] = content
 	}
 	for _, id := range parallelRequestOrder {
 		if _, paired := contentByCall[id]; !paired {
-			return fmt.Errorf("no result paired back to call %q; responses were %v (cross-wired or lost)", id, describeResponses(returned))
+			return fmt.Errorf("no observed result paired back to call %q; reconstructed messages were %s", id, describeMessages(observedMessages))
 		}
 	}
 	return nil
+}
+
+func parallelContentOwner(content string) string {
+	for id, want := range parallelResultContent {
+		if content == want {
+			return id
+		}
+	}
+	return ""
+}
+
+func describeMessages(messagesToDescribe []messages.Message) string {
+	parts := make([]string, 0, len(messagesToDescribe))
+	for _, message := range messagesToDescribe {
+		parts = append(parts, fmt.Sprintf("{id:%s content:%s}", message.ToolCallID, message.TextContent()))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 func parallelExpectedIdentity(id string) (name, args string) {
@@ -415,12 +502,15 @@ func describeResponses(resps []messages.ToolCallResponse) string {
 // through the same composition root as production with the given executor
 // swapped into the tool-executor port — over the hermetic record/replay
 // transport with a seeded user prompt and recorded audio-out.
-func runParallelToolCalls(t *testing.T, wirePath string, executor *parallelToolExecutor) (string, error) {
+func runParallelToolCalls(t *testing.T, wirePath string, executor *parallelToolExecutor, observer *parallelStreamObserver) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
 	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
+	}
+	if observer != nil {
+		agentCLI.SetSessionStreamObserver(observer.observe)
 	}
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
@@ -593,8 +683,9 @@ func TestSessionParallelToolCallsRoundTripThroughCLI(t *testing.T) {
 	reply := loudestWindowSamplesIntegration(t, samples, parallelReplySamples)
 
 	executor := newParallelToolExecutor()
+	streamObserver := &parallelStreamObserver{}
 	wirePath := buildParallelToolCallsFixture(t, reply)
-	outputPath, runErr := runParallelToolCalls(t, wirePath, executor)
+	outputPath, runErr := runParallelToolCalls(t, wirePath, executor, streamObserver)
 	if runErr != nil {
 		t.Fatalf("agent session over replay failed: %v", runErr)
 	}
@@ -620,10 +711,15 @@ func TestSessionParallelToolCallsRoundTripThroughCLI(t *testing.T) {
 
 	arrivals, completions, returned, calls := executor.snapshot()
 
-	// Exactly-once execution, inbound identity pairing, and 1:1 result pairing.
-	if err := validatePairedParallelToolResults(arrivals, completions, returned, calls); err != nil {
+	// Exactly-once execution and inbound identity pairing.
+	if err := validateParallelToolInvocations(arrivals, calls); err != nil {
 		t.Fatalf("tool execution/pairing assertion failed: %v\narrivals=%v completions=%v responses=%s",
 			err, arrivals, completions, describeResponses(returned))
+	}
+	// Post-adapter output pairing: these are the deltas emitted by the real
+	// session loop after sessionToolExecutor has normalized each response ID.
+	if err := validateObservedParallelToolResults(streamObserver.snapshot()); err != nil {
+		t.Fatalf("post-adapter tool-result pairing assertion failed: %v", err)
 	}
 
 	// Reversed completion order relative to request order, forced by channel
@@ -676,8 +772,9 @@ func TestSessionParallelToolCallsSwappedPairingFailsDeterministically(t *testing
 
 	executor := newParallelToolExecutor()
 	executor.swapPairing = true
+	streamObserver := &parallelStreamObserver{}
 	wirePath := buildParallelToolCallsFixture(t, reply)
-	outputPath, runErr := runParallelToolCalls(t, wirePath, executor)
+	outputPath, runErr := runParallelToolCalls(t, wirePath, executor, streamObserver)
 	if runErr != nil {
 		t.Fatalf("swapped-pairing control should complete the session deterministically, got run error: %v", runErr)
 	}
@@ -688,10 +785,13 @@ func TestSessionParallelToolCallsSwappedPairingFailsDeterministically(t *testing
 		t.Fatalf("swapped-pairing control fixture delivered %d exchange tool calls, want 2 (control must isolate pairing, not issuance)", len(exchangeCalls))
 	}
 
-	arrivals, completions, returned, calls := executor.snapshot()
-	assertionErr := validatePairedParallelToolResults(arrivals, completions, returned, calls)
+	arrivals, _, returned, calls := executor.snapshot()
+	if err := validateParallelToolInvocations(arrivals, calls); err != nil {
+		t.Fatalf("swapped-pairing control changed tool issuance instead of result content: %v", err)
+	}
+	assertionErr := validateObservedParallelToolResults(streamObserver.snapshot())
 	if assertionErr == nil {
-		t.Fatalf("shared pairing assertion passed on a swapped-pairing run; responses were %s — the check does not discriminate", describeResponses(returned))
+		t.Fatalf("post-adapter pairing assertion passed on a swapped-content run; executor responses were %s — the check does not discriminate", describeResponses(returned))
 	}
 	if !strings.Contains(assertionErr.Error(), parallelCallAlphaID) || !strings.Contains(assertionErr.Error(), parallelCallBravoID) {
 		t.Fatalf("pairing assertion error %q does not identify both involved call IDs %q and %q", assertionErr, parallelCallAlphaID, parallelCallBravoID)
