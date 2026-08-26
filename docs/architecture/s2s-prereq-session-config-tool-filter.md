@@ -34,6 +34,11 @@ port and retains the production registry-backed executor. The matrix observes
 the runtime contract through advertised definitions, call IDs, correlated
 results, and terminal behavior:
 
+The positive and malformed-config assertions are implemented by
+`TestSessionConfigToolFilterThroughRealCLI` and
+`TestSessionConfigToolFilterRejectsInvalidConfigBeforeConnect`, respectively;
+both are observable CLI/session outcomes rather than source-structure checks.
+
 - empty list: `sleep` is advertised and
   `prereq-default-sleep` with `{"duration":"0s"}` returns exactly
   `Slept for 0s (no-op).`;
