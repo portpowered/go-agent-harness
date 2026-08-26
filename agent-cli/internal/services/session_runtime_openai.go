@@ -76,7 +76,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
-			WaitForClose: captureHasEvent(opts.ReplayPath, sessionClosedEventType),
+			WaitForClose: opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
 			MaxDuration:  3 * time.Second,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {

@@ -76,7 +76,7 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
 			Prompt:       opts.Prompt,
-			WaitForClose: grokReplayCaptureHasSessionClose(opts.ReplayPath),
+			WaitForClose: opts.WaitForClose || grokReplayCaptureHasSessionClose(opts.ReplayPath),
 			MaxDuration:  3 * time.Second,
 			Done:         replayDialer.Done(),
 			DoneErr:      replayDialer.Err,

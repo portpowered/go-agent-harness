@@ -40,6 +40,49 @@ func TestSessionConversationCollectorRecordsOrderedTurns(t *testing.T) {
 	}
 }
 
+func TestSessionConversationCollectorRecordsUserAudioTranscriptSeparately(t *testing.T) {
+	collector := &sessionConversationCollector{}
+	collector.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleUser,
+		Value: messages.NewAudioDeltaValue([]byte{1, 2, 3, 4}),
+	}, true, 0, -1)
+	collector.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleUser,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}, true, -1, -1)
+	collector.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTranscriptDelta,
+		Role:  messages.RoleUser,
+		Value: messages.NewTranscriptDeltaValue("hello "),
+	}, false, -1, -1)
+	collector.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTranscriptEnd,
+		Role:  messages.RoleUser,
+		Value: messages.NewTranscriptEndValue("hello world"),
+	}, false, -1, -1)
+	collector.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("reply"),
+	}, false, -1, -1)
+	collector.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}, false, -1, -1)
+
+	log, err := sessionConversationLogJSON(collector)
+	if err != nil {
+		t.Fatalf("render session log: %v", err)
+	}
+	want := "{\"turn_index\":1,\"input\":{\"text\":\"hello world\",\"audio_bytes\":4,\"committed\":true,\"audio_segments\":[\"audio/in-000.pcm\"]},\"response\":{\"text\":\"reply\",\"complete\":true,\"audio_bytes\":0}}\n"
+	if string(log) != want {
+		t.Fatalf("session log = %q, want %q", log, want)
+	}
+}
+
 func TestSessionConversationCollectorPrefersFullTranscriptAndFlagsPartialTurn(t *testing.T) {
 	collector := &sessionConversationCollector{}
 	collector.observe(messages.StreamMessage{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("interim")}, false, -1, -1)

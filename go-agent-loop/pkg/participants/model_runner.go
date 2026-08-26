@@ -122,6 +122,18 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 	responseCompleted := false
 
 	for {
+		// User audio and control events are queued by the session loop after
+		// it observes a completed response. Give those pending inputs a
+		// deterministic transport turn before accepting the next inbound
+		// provider event, so a scheduled audio turn cannot be interleaved
+		// ahead of its own commit/response.create boundary.
+		handled, closed := r.forwardPendingSessionInputs(ctx, session, &audioStreaming)
+		if closed {
+			return nil
+		}
+		if handled {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -160,48 +172,12 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			// Barge-in: new user audio while model is streaming an audio response.
-			if audioStreaming {
-				session.Send(ctx, messages.StreamMessage{
-					Type:  messages.StreamTypeResponseCancel,
-					Value: messages.NewResponseCancelValue(),
-				})
-				audioStreaming = false
-			}
-			// Forward the user audio to the inference provider.
-			session.Send(ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeAudioDelta,
-				Value: messages.NewAudioDeltaValue(pcm),
-			})
+			r.forwardSessionAudio(ctx, session, pcm, &audioStreaming)
 		case evt, ok := <-r.UserEventInbox:
 			if !ok {
 				return nil
 			}
-			// Preserve caller ordering: any user audio enqueued before this
-			// event must reach the session first, so drain the buffered audio
-			// inbox without blocking before forwarding the control-plane turn.
-			for drained := true; drained; {
-				drained = false
-				select {
-				case pcm, ok := <-r.UserAudioInbox:
-					if !ok {
-						continue
-					}
-					if audioStreaming {
-						session.Send(ctx, messages.StreamMessage{
-							Type:  messages.StreamTypeResponseCancel,
-							Value: messages.NewResponseCancelValue(),
-						})
-						audioStreaming = false
-					}
-					session.Send(ctx, messages.StreamMessage{
-						Type:  messages.StreamTypeAudioDelta,
-						Value: messages.NewAudioDeltaValue(pcm),
-					})
-					drained = true
-				default:
-				}
-			}
+			r.drainSessionAudio(ctx, session, &audioStreaming)
 			session.Send(ctx, evt)
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
@@ -215,6 +191,61 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
 		}
 	}
+}
+
+// forwardPendingSessionInputs gives queued user audio/control messages
+// priority over the provider receive path. It returns whether it forwarded
+// anything and whether either user inbox was closed.
+func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, audioStreaming *bool) (handled, closed bool) {
+	for {
+		select {
+		case pcm, ok := <-r.UserAudioInbox:
+			if !ok {
+				return true, true
+			}
+			r.forwardSessionAudio(ctx, session, pcm, audioStreaming)
+			handled = true
+		case evt, ok := <-r.UserEventInbox:
+			if !ok {
+				return true, true
+			}
+			r.drainSessionAudio(ctx, session, audioStreaming)
+			session.Send(ctx, evt)
+			handled = true
+		default:
+			return handled, false
+		}
+	}
+}
+
+func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, audioStreaming *bool) {
+	for {
+		select {
+		case pcm, ok := <-r.UserAudioInbox:
+			if !ok {
+				return
+			}
+			r.forwardSessionAudio(ctx, session, pcm, audioStreaming)
+		default:
+			return
+		}
+	}
+}
+
+func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, audioStreaming *bool) {
+	// Barge-in: new user audio while model is streaming an audio response.
+	if *audioStreaming {
+		session.Send(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeResponseCancel,
+			Value: messages.NewResponseCancelValue(),
+		})
+		*audioStreaming = false
+	}
+	// Forward the user audio to the inference provider.
+	session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue(pcm),
+	})
 }
 
 func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, audioStreaming bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool) {

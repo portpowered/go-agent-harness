@@ -103,6 +103,10 @@ type SessionStreamObserver func(messages.StreamMessage)
 type ScheduledAudioInput struct {
 	AfterCompletedTurns int
 	PCM                 []byte
+	// EndOfTurn sends MESSAGE.END after this input so realtime providers
+	// commit the audio and create one response before the next scheduled turn.
+	// The zero value preserves the diagnostics-only injection behavior.
+	EndOfTurn bool
 }
 
 // failureFacts holds the typed terminal facts captured from the first
@@ -274,6 +278,9 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 			continue
 		}
 		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
+		if input.EndOfTurn {
+			_ = loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+		}
 	}
 }
 

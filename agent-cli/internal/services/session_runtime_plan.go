@@ -185,7 +185,8 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 			inferencer: opts.SessionInferencer,
 			loop: sessionLoopOptions{
 				Prompt:         opts.Prompt,
-				CloseAfterOpen: true,
+				CloseAfterOpen: !opts.WaitForClose,
+				WaitForClose:   opts.WaitForClose,
 				MaxDuration:    3 * time.Second,
 			},
 		}, nil

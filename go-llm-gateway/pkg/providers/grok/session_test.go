@@ -121,6 +121,28 @@ func TestSession_ReceiveTranscriptDelta(t *testing.T) {
 	}
 }
 
+func TestSession_ReceiveInputAudioTranscriptWithUserRole(t *testing.T) {
+	conn := newMockConn()
+	conn.addServerEvent("conversation.item.input_audio_transcription.delta", map[string]any{
+		"delta": "hello ",
+	})
+
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	got := readFromSession(t, ctx, session)
+	if got.Type != messages.StreamTypeTranscriptDelta || got.Role != messages.RoleUser {
+		t.Fatalf("type/role: got %q/%q, want %q/%q", got.Type, got.Role, messages.StreamTypeTranscriptDelta, messages.RoleUser)
+	}
+	value, ok := got.Value.(*messages.TranscriptDeltaValue)
+	if !ok || value.Text != "hello " {
+		t.Fatalf("input transcript delta: got %#v", got.Value)
+	}
+}
+
 func TestSession_ReceiveFunctionCallDone(t *testing.T) {
 	conn := newMockConn()
 	conn.addServerEvent("response.function_call_arguments.done", map[string]any{

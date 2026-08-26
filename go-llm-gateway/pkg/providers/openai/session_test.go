@@ -490,6 +490,8 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	conn := newMockWebSocketConn()
 	audioB64 := base64.StdEncoding.EncodeToString([]byte("audio-chunk"))
 	conn.addServerEvent("response.created", nil)
+	conn.addServerEvent("conversation.item.input_audio_transcription.delta", map[string]any{"delta": "hello "})
+	conn.addServerEvent("conversation.item.input_audio_transcription.completed", map[string]any{"transcript": "hello world"})
 	conn.addServerEvent("response.output_text.delta", map[string]any{"delta": "hello"})
 	conn.addServerEvent("response.output_audio.delta", map[string]any{
 		"delta":  audioB64,
@@ -537,6 +539,8 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 
 	wantTypes := []messages.StreamMessageType{
 		messages.StreamTypeMessageStart,
+		messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd,
 		messages.StreamTypeTextDelta,
 		messages.StreamTypeAudioDelta,
 		messages.StreamTypeTranscriptDelta,
@@ -562,12 +566,12 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 			t.Fatalf("event %d type: got %q, want %q", i, gotMessages[i].Type, want)
 		}
 	}
-	if text, ok := gotMessages[1].Value.(*messages.TextDeltaValue); !ok || text.Content != "hello" {
-		t.Fatalf("text delta: got %#v", gotMessages[1].Value)
+	if text, ok := gotMessages[3].Value.(*messages.TextDeltaValue); !ok || text.Content != "hello" {
+		t.Fatalf("text delta: got %#v", gotMessages[3].Value)
 	}
-	audio, ok := gotMessages[2].Value.(*messages.AudioDeltaValue)
+	audio, ok := gotMessages[4].Value.(*messages.AudioDeltaValue)
 	if !ok {
-		t.Fatalf("audio delta: got %T", gotMessages[2].Value)
+		t.Fatalf("audio delta: got %T", gotMessages[4].Value)
 	}
 	if string(audio.Content) != "audio-chunk" {
 		t.Fatalf("audio content: got %q", string(audio.Content))
@@ -575,19 +579,26 @@ func TestConnectSession_NormalizesOpenAIRealtimeEventsInOrder(t *testing.T) {
 	if audio.MediaType != "audio/pcm" {
 		t.Fatalf("audio media type: got %q, want audio/pcm", audio.MediaType)
 	}
-	if gotMessages[5].ToolCallId != "call-weather" {
-		t.Fatalf("tool delta call id: got %q", gotMessages[5].ToolCallId)
+	if gotMessages[7].ToolCallId != "call-weather" {
+		t.Fatalf("tool delta call id: got %q", gotMessages[7].ToolCallId)
 	}
-	toolDone, ok := gotMessages[6].Value.(*messages.ToolCallEndValue)
+	if gotMessages[1].Role != messages.RoleUser || gotMessages[2].Role != messages.RoleUser {
+		t.Fatalf("input transcript roles: got %q and %q, want user", gotMessages[1].Role, gotMessages[2].Role)
+	}
+	inputTranscript, ok := gotMessages[2].Value.(*messages.TranscriptEndValue)
+	if !ok || inputTranscript.FullText != "hello world" {
+		t.Fatalf("input transcript end: got %#v", gotMessages[2].Value)
+	}
+	toolDone, ok := gotMessages[8].Value.(*messages.ToolCallEndValue)
 	if !ok {
-		t.Fatalf("tool end: got %T", gotMessages[6].Value)
+		t.Fatalf("tool end: got %T", gotMessages[8].Value)
 	}
 	if toolDone.ToolCallID != "call-weather" || toolDone.Name != "lookup_weather" || toolDone.Arguments != `{"city":"Seattle"}` {
 		t.Fatalf("tool end value: got %#v", toolDone)
 	}
-	sessionClose, ok := gotMessages[11].Value.(*messages.SessionCloseValue)
+	sessionClose, ok := gotMessages[13].Value.(*messages.SessionCloseValue)
 	if !ok {
-		t.Fatalf("session close: got %T", gotMessages[11].Value)
+		t.Fatalf("session close: got %T", gotMessages[13].Value)
 	}
 	if sessionClose.SessionID != "sess-openai-normalize" || sessionClose.Reason != "fixture_complete" {
 		t.Fatalf("session close value: got %#v", sessionClose)

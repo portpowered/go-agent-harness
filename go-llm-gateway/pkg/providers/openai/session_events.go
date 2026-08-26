@@ -94,10 +94,19 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		if text == "" {
 			return nil
 		}
-		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue(text)}}
 	case models.SessionEventResponseOutputAudioTranscriptDone:
 		text := firstStringField(event.Data, "transcript")
-		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue(text)}}
+	case models.SessionEventConversationItemInputAudioTranscriptionDelta:
+		text := firstStringField(event.Data, "delta")
+		if text == "" {
+			return nil
+		}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue(text)}}
+	case models.SessionEventConversationItemInputAudioTranscriptionCompleted:
+		text := firstStringField(event.Data, "transcript")
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue(text)}}
 	case models.SessionEventResponseFunctionCallArgumentsDelta:
 		partial := firstStringField(event.Data, "delta")
 		if partial == "" {

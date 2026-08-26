@@ -79,6 +79,33 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTex
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
 }
 
+// RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration
+// drives multiple finite audio files through one persistent recorded session.
+// The existing singular audio-input entry point remains unchanged for callers
+// that want one paced source and one response.
+func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionRunOptions,
+	directory string,
+	audioOutPath string,
+	maxDuration time.Duration,
+	seed SessionTextSeed,
+	audioPaths []string,
+	systemPrompt string,
+) error {
+	if len(audioPaths) == 0 {
+		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
+	}
+	scheduled, err := prepareScheduledAudioInputs(audioPaths)
+	if err != nil {
+		return err
+	}
+	opts.AudioInputs = scheduled
+	opts.WaitForClose = true
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
+}
+
 // RunSessionWithImagesAndRecordingDirectory composes the image-turn wrapper
 // with the directory observer. The observer stays outside the image wrapper so
 // the provider still receives its optional SendMessage image turn while the

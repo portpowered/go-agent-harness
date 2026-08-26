@@ -43,6 +43,8 @@ type sessionConversationLogEntry struct {
 // progress. It is owned by the recording finalizer's mutex domain.
 type sessionConversationTurn struct {
 	inputText        string
+	inputTranscript  strings.Builder
+	inputFullText    string
 	inputAudioBytes  uint64
 	inputCommitted   bool
 	inputSegments    []string
@@ -57,7 +59,7 @@ type sessionConversationTurn struct {
 // turn; empty bracket turns (for example a bare session handshake) are not
 // logged at all.
 func (t *sessionConversationTurn) observed() bool {
-	return t.inputText != "" || t.inputAudioBytes > 0 || t.responseDeltas.Len() > 0 || t.responseFullText != "" || t.outputAudioBytes > 0
+	return t.inputText != "" || t.inputTranscript.Len() > 0 || t.inputFullText != "" || t.inputAudioBytes > 0 || t.responseDeltas.Len() > 0 || t.responseFullText != "" || t.outputAudioBytes > 0
 }
 
 // sessionConversationCollector reduces observed stream messages into ordered
@@ -113,14 +115,22 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 			return
 		}
 		if transcript, ok := msg.Value.(*messages.TranscriptDeltaValue); ok && transcript != nil {
-			turn.responseDeltas.WriteString(transcript.Text)
+			if msg.Role == messages.RoleUser {
+				turn.inputTranscript.WriteString(transcript.Text)
+			} else {
+				turn.responseDeltas.WriteString(transcript.Text)
+			}
 		}
 	case messages.StreamTypeTranscriptEnd:
 		if outbound {
 			return
 		}
 		if transcript, ok := msg.Value.(*messages.TranscriptEndValue); ok && transcript != nil && transcript.FullText != "" {
-			turn.responseFullText = transcript.FullText
+			if msg.Role == messages.RoleUser {
+				turn.inputFullText = transcript.FullText
+			} else {
+				turn.responseFullText = transcript.FullText
+			}
 		}
 	case messages.StreamTypeMessageEnd:
 		if outbound {
@@ -145,6 +155,12 @@ func (c *sessionConversationCollector) entries() []sessionConversationLogEntry {
 	}
 	log := make([]sessionConversationLogEntry, 0, len(all))
 	for index, turn := range all {
+		inputText := turn.inputText
+		if turn.inputFullText != "" {
+			inputText = turn.inputFullText
+		} else if turn.inputTranscript.Len() > 0 {
+			inputText = turn.inputTranscript.String()
+		}
 		text := turn.responseFullText
 		if text == "" {
 			text = turn.responseDeltas.String()
@@ -152,7 +168,7 @@ func (c *sessionConversationCollector) entries() []sessionConversationLogEntry {
 		log = append(log, sessionConversationLogEntry{
 			TurnIndex: index + 1,
 			Input: sessionConversationTurnInput{
-				Text:          turn.inputText,
+				Text:          inputText,
 				AudioBytes:    turn.inputAudioBytes,
 				Committed:     turn.inputCommitted,
 				AudioSegments: turn.inputSegments,

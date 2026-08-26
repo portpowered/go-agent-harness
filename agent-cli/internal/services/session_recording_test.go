@@ -334,6 +334,95 @@ func TestRunSessionWithRecordingDirectoryUsesProductionAudioInput(t *testing.T) 
 	}
 }
 
+func TestRunSessionWithRecordingDirectoryAudioFilesKeepsOnePersistentConversation(t *testing.T) {
+	audioPaths := make([]string, 0, 3)
+	for index := 0; index < 3; index++ {
+		pcm := make([]byte, audio.FrameSize*2)
+		for byteIndex := range pcm {
+			pcm[byteIndex] = byte((index+1)*31 + byteIndex%127)
+		}
+		audioPaths = append(audioPaths, writeSessionRecordingInputFixture(t, [][]byte{pcm}))
+	}
+
+	assistantAudio := []byte{0x20, 0x00, 0x21, 0x00}
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("first ")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("first utterance")},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("first reply")},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(assistantAudio)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("second ")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("second utterance")},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second reply")},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(assistantAudio)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("third ")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("third utterance")},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("third reply")},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(assistantAudio)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("persistent-session", "done")},
+	}
+	inferencer := newPersistentSessionRecordingInferencer([][]messages.StreamMessage{
+		events[0:6],
+		events[6:12],
+		events[12:18],
+	})
+	destination := filepath.Join(t.TempDir(), "persistent", "capture")
+	err := RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+		context.Background(),
+		io.Discard,
+		SessionRunOptions{
+			Provider:          config.ProviderOpenAI,
+			Model:             "gpt-realtime",
+			APIKey:            "test-key",
+			ConfigDir:         t.TempDir(),
+			SessionInferencer: inferencer,
+		},
+		destination,
+		"",
+		0,
+		SessionTextSeed{},
+		audioPaths,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("persistent audio-file session: %v", err)
+	}
+	if inferencer.connects != 1 {
+		t.Fatalf("connects = %d, want one persistent session", inferencer.connects)
+	}
+
+	logBytes, err := os.ReadFile(filepath.Join(destination, "session-log.jsonl"))
+	if err != nil {
+		t.Fatalf("read persistent session log: %v", err)
+	}
+	var entries []sessionConversationLogEntry
+	for _, line := range bytes.Split(bytes.TrimSpace(logBytes), []byte("\n")) {
+		var entry sessionConversationLogEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			t.Fatalf("decode persistent session log line: %v", err)
+		}
+		entries = append(entries, entry)
+	}
+	if len(entries) != len(audioPaths) {
+		t.Fatalf("session log entries = %d, want %d in one bundle", len(entries), len(audioPaths))
+	}
+	wantInputs := []string{"first utterance", "second utterance", "third utterance"}
+	wantReplies := []string{"first reply", "second reply", "third reply"}
+	for index, entry := range entries {
+		if entry.TurnIndex != index+1 || entry.Input.Text != wantInputs[index] || entry.Response.Text != wantReplies[index] {
+			t.Errorf("entry %d = %+v, want turn=%d input=%q response=%q", index, entry, index+1, wantInputs[index], wantReplies[index])
+		}
+		if !entry.Input.Committed || entry.Input.AudioBytes == 0 || !entry.Response.Complete {
+			t.Errorf("entry %d completeness = %+v, want committed audio and complete response", index+1, entry)
+		}
+	}
+}
+
 func TestRunSessionWithImagesAndRecordingDirectoryPreservesImageTurn(t *testing.T) {
 	dir := t.TempDir()
 	imagePath := filepath.Join(dir, "fixture.png")
@@ -997,6 +1086,71 @@ func (s *sessionRecordingTestSession) Close() error {
 	return nil
 }
 
+type persistentSessionRecordingInferencer struct {
+	turns    [][]messages.StreamMessage
+	connects int
+}
+
+func newPersistentSessionRecordingInferencer(turns [][]messages.StreamMessage) *persistentSessionRecordingInferencer {
+	return &persistentSessionRecordingInferencer{turns: turns}
+}
+
+func (i *persistentSessionRecordingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.connects++
+	session := &persistentSessionRecordingSession{
+		turns:   i.turns,
+		receive: messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:    make(chan struct{}),
+	}
+	if !session.receive.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("persistent-session", "session"),
+	}) {
+		return nil, ctx.Err()
+	}
+	return session, nil
+}
+
+type persistentSessionRecordingSession struct {
+	turns   [][]messages.StreamMessage
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	once    sync.Once
+	turn    int
+}
+
+func (s *persistentSessionRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeMessageEnd || s.turn >= len(s.turns) {
+		return true
+	}
+	for _, event := range s.turns[s.turn] {
+		if !s.receive.Write(ctx, event) {
+			return false
+		}
+	}
+	s.turn++
+	if s.turn == len(s.turns) {
+		return s.receive.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeSessionClose,
+			Value: messages.NewSessionCloseValue("persistent-session", "done"),
+		})
+	}
+	return true
+}
+
+func (s *persistentSessionRecordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *persistentSessionRecordingSession) Done() <-chan struct{} {
+	return s.done
+}
+
+func (s *persistentSessionRecordingSession) Close() error {
+	s.once.Do(func() { close(s.done) })
+	return nil
+}
+
 type countingSessionRecordingInferencer struct{ connects int }
 
 func (i *countingSessionRecordingInferencer) ConnectSession(context.Context) (messages.Session, error) {
@@ -1054,3 +1208,4 @@ func threeRecordingDigits(index int) string {
 
 var _ messages.Session = (*sessionRecordingTestSession)(nil)
 var _ messages.SessionInferencer = (*countingSessionRecordingInferencer)(nil)
+var _ messages.SessionInferencer = (*persistentSessionRecordingInferencer)(nil)
