@@ -215,6 +215,7 @@ func TestCoordinator_ToolOutputIncreasesPassID(t *testing.T) {
 func TestCoordinator_ModelOutputWithToolCallsDispatchesToolBatch(t *testing.T) {
 	c := NewCoordinator(nil)
 	ls := newCoordinatorTestState()
+	ls.ToolExecutionAvailable = true
 	ls.Inputs.ModelOutputMessage = []messages.Message{
 		{
 			Role:         messages.RoleAssistant,
@@ -254,6 +255,7 @@ func TestCoordinator_ModelToolCallIncreasesPassID(t *testing.T) {
 	c := NewCoordinator(nil)
 	ls := newCoordinatorTestState()
 	ls.History.CurrentPassID = 5
+	ls.ToolExecutionAvailable = true
 	ls.Inputs.ModelOutputMessage = []messages.Message{
 		{
 			Role:      messages.RoleAssistant,
@@ -271,6 +273,37 @@ func TestCoordinator_ModelToolCallIncreasesPassID(t *testing.T) {
 	batch, _ := ls.Outputs.ToolInbox.Read()
 	if batch.LoopPassID != 6 {
 		t.Errorf("ToolBatchRequest.LoopPassID: got %d, want 6", batch.LoopPassID)
+	}
+}
+
+func TestCoordinator_ModelToolCallWithoutExecutorDeliversAsFinalResponse(t *testing.T) {
+	// Regression for the s2s-v4f-tool-during-audio lane: a realtime provider
+	// may issue a function tool call even though the loop has no tool
+	// executor wired. Dispatching that call into the idle default executor
+	// always fails, and the resulting terminal error raced session shutdown.
+	// The coordinator must deliver such messages as final responses instead.
+	c := NewCoordinator(nil)
+	ls := newCoordinatorTestState()
+	ls.Inputs.ModelOutputMessage = []messages.Message{
+		{
+			Role:      messages.RoleAssistant,
+			ToolCalls: []messages.ToolCall{{ID: "tc1", Name: "get_weather", Arguments: `{"city":"Lisbon"}`}},
+		},
+	}
+
+	if err := c.Execute(context.Background(), ls); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := ls.Outputs.ToolInbox.Read(); ok {
+		t.Error("ToolBatchRequest must not be dispatched when no tools are configured")
+	}
+	req, ok := ls.Outputs.UserInbox.Read()
+	if !ok {
+		t.Fatal("expected UserRequest delivery when tool calls cannot execute")
+	}
+	if len(req.Message.ToolCalls) != 1 || req.Message.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("delivered message = %+v, want the original tool-call message", req.Message)
 	}
 }
 

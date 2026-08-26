@@ -28,8 +28,14 @@ type LoopState struct {
 	// SessionID identifies the current session (set in DuplexSession only).
 	SessionID string
 	// Tools configuration for inference requests
-	Tools     []messages.ToolDefinition
-	Lifecycle LoopLifecycleState
+	Tools []messages.ToolDefinition
+	// ToolExecutionAvailable reports whether the loop was constructed with a
+	// real tool executor. When false, a provider-issued tool call cannot be
+	// executed and the Coordinator must not dispatch batches into the idle
+	// default executor, whose guaranteed failure would surface as a terminal
+	// error racing session shutdown.
+	ToolExecutionAvailable bool
+	Lifecycle              LoopLifecycleState
 	// InferenceDefaults holds default parameters applied to every InferenceRequest.
 	InferenceDefaults *messages.InferenceDefaults
 	// TodoQueue holds deferred messages (e.g. continuation nudges) to be processed
