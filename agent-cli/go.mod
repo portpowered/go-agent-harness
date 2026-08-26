@@ -15,6 +15,7 @@ require (
 	github.com/knadh/koanf/providers/structs v1.0.0
 	github.com/knadh/koanf/v2 v2.3.2
 	github.com/mattn/go-runewidth v0.0.19
+	github.com/pion/webrtc/v4 v4.2.18
 	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.1
 	github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.1
 	github.com/spf13/cobra v1.9.1
