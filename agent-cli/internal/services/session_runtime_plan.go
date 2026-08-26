@@ -146,6 +146,9 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// replay, record) here; the duplex loop construction seam decides whether
 	// tool execution is enabled. Nil keeps every plan unchanged.
 	plan.loop.ToolExecutor = opts.ToolExecutor
+	// The per-invocation adapter deadline override crosses with the executor;
+	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
+	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	return plan, nil
 }
 

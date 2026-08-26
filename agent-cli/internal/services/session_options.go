@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -43,6 +44,11 @@ type SessionRunOptions struct {
 	// no-tools behavior; provider tool calls keep reaching the loop default
 	// and fail exactly as they did before this field existed.
 	ToolExecutor messages.ToolExecutor
+
+	// ToolExecutionTimeout overrides the per-invocation session tool adapter
+	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
+	// production plans never set it, so live behavior is unchanged.
+	ToolExecutionTimeout time.Duration
 
 	// Diagnostics optionally receives one canonical structured record per
 	// terminal failure plus per-turn and tool-call records. Nil keeps runtime
