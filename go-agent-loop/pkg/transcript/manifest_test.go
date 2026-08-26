@@ -174,6 +174,62 @@ func TestRecordingBundleNumbersAudioDirectionsIndependently(t *testing.T) {
 	}
 }
 
+func TestRecordingBundleEmitsOptionalSessionLog(t *testing.T) {
+	t.Run("present", func(t *testing.T) {
+		destination := filepath.Join(t.TempDir(), "recording")
+		sessionLog := []byte("{\"turn_index\":1}\n{\"turn_index\":2}\n")
+		if err := WriteRecordingBundle(RecordingConfig{
+			Destination:      destination,
+			ClientTranscript: []byte("client\n"),
+			AgentTranscript:  []byte("agent\n"),
+			InputSegments:    [][]byte{{1, 2}},
+			OutputSegments:   [][]byte{{3, 4}},
+			SessionLog:       sessionLog,
+		}); err != nil {
+			t.Fatalf("WriteRecordingBundle: %v", err)
+		}
+		want := []string{
+			"agent.transcript.jsonl", "audio", "audio/in-000.pcm", "audio/out-000.pcm",
+			"client.transcript.jsonl", "manifest.json", "session-log.jsonl",
+		}
+		if got := recordingEntries(t, destination); !equalStrings(got, want) {
+			t.Fatalf("bundle entries = %v, want %v", got, want)
+		}
+		if got := readBundleFile(t, destination, "session-log.jsonl"); !bytes.Equal(got, sessionLog) {
+			t.Fatalf("session-log.jsonl = %q, want %q", got, sessionLog)
+		}
+		var manifest RecordingManifest
+		manifestBytes := readBundleFile(t, destination, "manifest.json")
+		if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+			t.Fatalf("decode manifest: %v", err)
+		}
+		found := false
+		for _, artifact := range manifest.Artifacts {
+			if artifact.Path == "session-log.jsonl" {
+				found = true
+				sum := sha256.Sum256(sessionLog)
+				if artifact.SHA256 != hex.EncodeToString(sum[:]) {
+					t.Fatalf("session-log hash = %s, want %s", artifact.SHA256, hex.EncodeToString(sum[:]))
+				}
+			}
+		}
+		if !found {
+			t.Fatal("manifest artifacts missing session-log.jsonl")
+		}
+	})
+	t.Run("absent when empty", func(t *testing.T) {
+		destination := filepath.Join(t.TempDir(), "recording")
+		if err := WriteRecordingBundle(testRecordingConfig(destination)); err != nil {
+			t.Fatalf("WriteRecordingBundle: %v", err)
+		}
+		for _, entry := range recordingEntries(t, destination) {
+			if entry == "session-log.jsonl" {
+				t.Fatal("empty SessionLog must not emit session-log.jsonl")
+			}
+		}
+	})
+}
+
 func TestRecordingBundleFailureIdentitiesAndRetry(t *testing.T) {
 	t.Run("existing non-empty destination", func(t *testing.T) {
 		destination := filepath.Join(t.TempDir(), "recording")

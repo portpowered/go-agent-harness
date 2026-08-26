@@ -99,6 +99,12 @@ const (
 	SessionEventInputAudioBufferSpeechStarted SessionEventType = "input_audio_buffer.speech_started"
 	// SessionEventInputAudioBufferSpeechStopped signals VAD detected speech end.
 	SessionEventInputAudioBufferSpeechStopped SessionEventType = "input_audio_buffer.speech_stopped"
+	// SessionEventConversationItemInputAudioTranscriptionDelta delivers an
+	// incremental transcript of the user's committed audio input.
+	SessionEventConversationItemInputAudioTranscriptionDelta SessionEventType = "conversation.item.input_audio_transcription.delta"
+	// SessionEventConversationItemInputAudioTranscriptionCompleted signals
+	// that the user's committed audio transcript is complete.
+	SessionEventConversationItemInputAudioTranscriptionCompleted SessionEventType = "conversation.item.input_audio_transcription.completed"
 	// SessionEventResponseCreated confirms a response is being generated.
 	SessionEventResponseCreated SessionEventType = "response.created"
 	// SessionEventResponseDone signals a response is complete.

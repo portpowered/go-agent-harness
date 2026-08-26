@@ -311,6 +311,63 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 	return &sessionAudioSource{source: source, path: input.Path, reader: inputReader, paced: true, send: input.SendAudioInput, endOfTurn: input.SendEndOfTurn}, nil
 }
 
+// prepareScheduledAudioInputs loads a finite sequence of audio files for one
+// persistent session. Each file becomes one queued user turn; the runtime
+// emits its MESSAGE.END boundary after the bytes so the next file is not
+// merged into the same provider response.
+func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) {
+	inputs := make([]ScheduledAudioInput, 0, len(paths))
+	for index, path := range paths {
+		input := SessionAudioInput{Path: path, Present: true}
+		if err := validateSessionAudioInput(input); err != nil {
+			return nil, err
+		}
+		pcm, err := readSessionAudioInputPCM(input)
+		if err != nil {
+			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, err)
+		}
+		inputs = append(inputs, ScheduledAudioInput{
+			AfterCompletedTurns: index,
+			PCM:                 pcm,
+			EndOfTurn:           true,
+		})
+	}
+	return inputs, nil
+}
+
+// readSessionAudioInputPCM decodes one CLI audio input using the same source
+// implementation as --audio-in, but returns its normalized 16 kHz PCM bytes
+// for a scheduled persistent-session turn.
+func readSessionAudioInputPCM(input SessionAudioInput) (pcm []byte, runErr error) {
+	source, err := openSessionAudioInput(input)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := source.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}()
+
+	frame := make([]int16, audio.FrameSize)
+	var encoded bytes.Buffer
+	for {
+		clear(frame)
+		if err := source.source.ReadFrame(context.Background(), frame); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, &SessionAudioInputError{Kind: SessionAudioInputRead, Path: input.Path, Err: err}
+		}
+		frameBytes := make([]byte, len(frame)*2)
+		for index, sample := range frame {
+			binary.LittleEndian.PutUint16(frameBytes[index*2:], uint16(sample))
+		}
+		_, _ = encoded.Write(frameBytes)
+	}
+	return encoded.Bytes(), nil
+}
+
 func classifySessionAudioOpenError(path string, err error) error {
 	kind := SessionAudioInputUnreadable
 	switch {

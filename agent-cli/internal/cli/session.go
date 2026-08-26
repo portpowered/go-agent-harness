@@ -75,18 +75,20 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	audioOutPath := ""
 	var maxDuration time.Duration
 	var audioIn string
+	var audioInTurns []string
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
 		Long: "Run a bidirectional session inference capture or replay a session capture file.\n" +
-			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n\n" +
+			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
+			"Use repeatable audio-in-turn paths with record-dir to replay multiple finite spoken turns through one persistent session.\n\n" +
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
 				return err
 			}
-			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" && recordDirPath == "" {
+			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" && recordDirPath == "" && len(audioInTurns) == 0 {
 				return cmd.Help()
 			}
 			sessionContext := cmd.Context()
@@ -128,6 +130,28 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Stdin:         cmd.InOrStdin(),
 				Present:       cmd.Flags().Changed("audio-in"),
 				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+			}
+			if len(audioInTurns) > 0 {
+				if audioInput.Present || audioInput.DevicePresent {
+					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
+				}
+				if recordDirPath == "" {
+					return fmt.Errorf("--audio-in-turn requires --record-dir")
+				}
+				if len(c.imagePaths) > 0 {
+					return fmt.Errorf("--audio-in-turn cannot be combined with --image")
+				}
+				return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+					sessionContext,
+					cmd.OutOrStdout(),
+					sessionOptions,
+					recordDirPath,
+					audioOutPath,
+					maxDuration,
+					seed,
+					audioInTurns,
+					c.askFlags.SystemPrompt,
+				)
 			}
 			if len(c.imagePaths) > 0 {
 				if recordDirPath != "" {
@@ -191,6 +215,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
+	cmd.Flags().StringArrayVar(&audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
 	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")

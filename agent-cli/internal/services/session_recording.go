@@ -79,6 +79,33 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTex
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
 }
 
+// RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration
+// drives multiple finite audio files through one persistent recorded session.
+// The existing singular audio-input entry point remains unchanged for callers
+// that want one paced source and one response.
+func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionRunOptions,
+	directory string,
+	audioOutPath string,
+	maxDuration time.Duration,
+	seed SessionTextSeed,
+	audioPaths []string,
+	systemPrompt string,
+) error {
+	if len(audioPaths) == 0 {
+		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
+	}
+	scheduled, err := prepareScheduledAudioInputs(audioPaths)
+	if err != nil {
+		return err
+	}
+	opts.AudioInputs = scheduled
+	opts.WaitForClose = true
+	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
+}
+
 // RunSessionWithImagesAndRecordingDirectory composes the image-turn wrapper
 // with the directory observer. The observer stays outside the image wrapper so
 // the provider still receives its optional SendMessage image turn while the
@@ -432,14 +459,15 @@ type sessionDirectoryRecording struct {
 	metadata    transcript.RecordingMetadata
 	writeFile   transcript.RecordingWriteFile
 
-	mu        sync.Mutex
-	eventMu   sync.Mutex
-	tick      uint64
-	client    bytes.Buffer
-	agent     bytes.Buffer
-	input     [][]byte
-	output    [][]byte
-	recordErr error
+	mu           sync.Mutex
+	eventMu      sync.Mutex
+	tick         uint64
+	client       bytes.Buffer
+	agent        bytes.Buffer
+	input        [][]byte
+	output       [][]byte
+	recordErr    error
+	conversation sessionConversationCollector
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -648,9 +676,13 @@ func (r *sessionDirectoryRecording) observePayloadLocked(msg messages.StreamMess
 		segment := append([]byte(nil), audio...)
 		if outbound {
 			r.input = append(r.input, segment)
+			r.conversation.observe(msg, outbound, len(r.input)-1, -1)
 		} else {
 			r.output = append(r.output, segment)
+			r.conversation.observe(msg, outbound, -1, len(r.output)-1)
 		}
+	} else {
+		r.conversation.observe(msg, outbound, -1, -1)
 	}
 }
 
@@ -681,12 +713,19 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			r.mu.Unlock()
 			return
 		}
+		sessionLog, sessionLogErr := sessionConversationLogJSON(&r.conversation)
+		if sessionLogErr != nil {
+			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode session log", r.destination, sessionLogErr)
+			r.mu.Unlock()
+			return
+		}
 		config := transcript.RecordingConfig{
 			Destination:      r.destination,
 			ClientTranscript: append([]byte(nil), r.client.Bytes()...),
 			AgentTranscript:  append([]byte(nil), r.agent.Bytes()...),
 			InputSegments:    copySessionRecordingSegments(r.input),
 			OutputSegments:   copySessionRecordingSegments(r.output),
+			SessionLog:       sessionLog,
 			Metadata:         r.metadata,
 			WriteFile:        r.writeFile,
 		}
