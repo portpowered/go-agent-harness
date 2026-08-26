@@ -377,17 +377,17 @@
   "name": "factory",
   "resources": [
     {
-      "capacity": 30,
+      "capacity": 60,
       "id": "executor-slot",
       "name": "executor-slot"
     },
     {
-      "capacity": 8,
+      "capacity": 16,
       "id": "concurrent-planners",
       "name": "concurrent-planners"
     },
     {
-      "capacity": 10,
+      "capacity": 20,
       "id": "review-slot",
       "name": "review-slot"
     }
@@ -554,11 +554,9 @@
   "workers": [
     {
       "executorProvider": "ACP",
-      "modelProvider": "opencode-acp",
-      "model": "opencode/ox-alpha",
+      "modelProvider": "omp-acp",
       "name": "processor",
       "stopToken": "<COMPLETE>",
-      "timeout": "10m",
       "type": "AGENT_WORKER"
     },
     {
