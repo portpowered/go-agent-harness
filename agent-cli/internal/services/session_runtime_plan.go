@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -86,6 +87,8 @@ type sessionRuntimePlan struct {
 	metricsRecorder metrics.Recorder
 	streamObserver  SessionStreamObserver
 	audioInputs     []ScheduledAudioInput
+	clockSource     platformclock.Source
+	runtime         *sessionRuntimeObservationRecorder
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
@@ -131,11 +134,12 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) error {
 // runner mode, including the duration-bounded path which executes plan.loop
 // directly instead of calling plan.run.
 func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
-	if loop == nil || (p.diagnostics == nil && p.metricsRecorder == nil && p.streamObserver == nil) {
+	if loop == nil || (p.diagnostics == nil && p.metricsRecorder == nil && p.streamObserver == nil && p.runtime == nil) {
 		return
 	}
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
 	obs.streamObserver = p.streamObserver
+	obs.runtime = p.runtime
 	obs.scheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }
@@ -153,6 +157,9 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.metricsRecorder = opts.MetricsRecorder
 	plan.streamObserver = opts.StreamObserver
 	plan.audioInputs = opts.AudioInputs
+	plan.clockSource = platformclock.Ensure(opts.Clock)
+	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
+	plan.loop.runtime = plan.runtime
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether
 	// tool execution is enabled. Nil keeps every plan unchanged.

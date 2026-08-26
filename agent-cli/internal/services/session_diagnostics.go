@@ -156,6 +156,7 @@ type sessionProgressObserver struct {
 	sink           SessionDiagnosticSink
 	recorder       metrics.Recorder
 	streamObserver SessionStreamObserver
+	runtime        *sessionRuntimeObservationRecorder
 	provider       string
 	model          string
 	sawSessionOpen bool
@@ -297,6 +298,7 @@ func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
 // completeTurn closes the current turn boundary and emits the per-turn record.
 func (o *sessionProgressObserver) completeTurn() {
 	o.turnsCompleted++
+	o.runtime.turnCompleted(o.turnsCompleted)
 	if o.sink != nil {
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event: SessionDiagnosticEventTurn,
@@ -471,8 +473,12 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 // finish emits the terminal diagnostic record and returns err unchanged so
 // termination paths read as plain returns.
 func (o *sessionProgressObserver) finish(err error) error {
+	if o == nil {
+		return err
+	}
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
+	o.runtime.terminal(o.turnsCompleted, err)
 	return err
 }
 

@@ -141,7 +141,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", audioPath, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink}
+	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioPath, closeErr))

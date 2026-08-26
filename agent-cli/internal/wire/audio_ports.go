@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
@@ -27,6 +28,14 @@ type AudioSink interface {
 
 // Clock is the shared platform time-source contract.
 type Clock = clock.Source
+
+// SessionRuntimeObserver is the optional runtime evidence sink used by
+// hermetic command-level tests. It observes events emitted from inside the
+// shipped session command, alongside the composed Clock.
+type SessionRuntimeObserver = services.SessionRuntimeObserver
+
+// SessionRuntimeObservation is the value delivered by SessionRuntimeObserver.
+type SessionRuntimeObservation = services.SessionRuntimeObservation
 
 // The legacy CLI initializers do not yet own audio devices. These inert values
 // keep those compatibility entry points constructible without opening a

@@ -69,6 +69,10 @@ type recordingClock struct {
 
 func (c *recordingClock) Now() time.Time { return c.now }
 
+type recordingSessionRuntimeObserver struct{}
+
+func (recordingSessionRuntimeObserver) ObserveSessionRuntime(SessionRuntimeObservation) {}
+
 type recordingInferencer struct {
 	calls    int
 	response string
@@ -391,6 +395,7 @@ func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 				reflect.TypeOf((*AudioSource)(nil)).Elem(),
 				reflect.TypeOf((*AudioSink)(nil)).Elem(),
 				reflect.TypeOf((*Clock)(nil)).Elem(),
+				reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem(),
 				reflect.TypeOf((*transport.Dialer)(nil)).Elem():
 				if definition.descriptor.Name == PortTransportDialer {
 					if got := replacement.(*recordingDialer).dials.Load(); got != 0 {
@@ -481,6 +486,8 @@ func replacementForPortType(t *testing.T, portType reflect.Type) any {
 		return &recordingAudioSink{}
 	case portType == reflect.TypeOf((*Clock)(nil)).Elem():
 		return &recordingClock{now: time.Unix(456, 0)}
+	case portType == reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem():
+		return recordingSessionRuntimeObserver{}
 	case portType == reflect.TypeOf((*transport.Dialer)(nil)).Elem():
 		return &recordingDialer{}
 	default:
@@ -633,6 +640,14 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 					}
 					if sessionInferencer.connects != 1 {
 						t.Fatalf("supplied %q connects = %d, want exactly 1", definition.descriptor.Name, sessionInferencer.connects)
+					}
+				})
+			case reflect.TypeOf((*SessionRuntimeObserver)(nil)).Elem():
+				t.Run("available_with_option", func(t *testing.T) {
+					observer := recordingSessionRuntimeObserver{}
+					root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithSessionRuntimeObserver(observer))
+					if err != nil || root == nil {
+						t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 					}
 				})
 			default:

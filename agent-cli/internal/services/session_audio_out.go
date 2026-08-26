@@ -56,7 +56,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink}
+	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
@@ -119,7 +119,7 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 	if err != nil {
 		return fmt.Errorf("--audio-out %q: %w", path, err)
 	}
-	audioOut := &sessionAudioOutput{sink: sink}
+	audioOut := &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 	defer func() {
 		if closeErr := audioOut.close(); closeErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", path, closeErr))
@@ -172,7 +172,8 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 }
 
 type sessionAudioOutput struct {
-	sink audio.AudioSink
+	sink    audio.AudioSink
+	runtime *sessionRuntimeObservationRecorder
 
 	mu        sync.Mutex
 	closed    bool
@@ -435,6 +436,11 @@ func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte) err
 	if o.closed {
 		return audio.ErrClosed
 	}
+	// Observe the exact validated PCM at the CLI output boundary before the
+	// underlying sink is called. This lets a coupled runtime consume the
+	// command's own clock-stamped output event rather than inventing metadata
+	// around the writer.
+	o.runtime.audioOutput(content)
 	writer, ok := o.sink.(sessionAudioSamplesWriter)
 	if !ok {
 		return fmt.Errorf("PCM16 audio output cannot stream a %d-sample delta", len(samples))

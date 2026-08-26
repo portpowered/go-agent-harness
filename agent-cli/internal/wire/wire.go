@@ -23,6 +23,7 @@ func provideModelValidation(
 	audioSource AudioSource,
 	audioSink AudioSink,
 	clockSource Clock,
+	runtimeObserver SessionRuntimeObserver,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
 ) []bool {
@@ -34,6 +35,7 @@ func provideModelValidation(
 			audioSource:       audioSource,
 			audioSink:         audioSink,
 			clockSource:       clockSource,
+			runtimeObserver:   runtimeObserver,
 			inferencer:        inferencer,
 			sessionInferencer: sessionInferencer,
 		})
@@ -62,7 +64,7 @@ var CliSet = wire.NewSet(
 	cli.NewProbeRunCommand,
 	cli.NewProbeGateCommand,
 	cli.NewProbeReportCommand,
-	cli.NewSessionCommand,
+	cli.NewSessionCommandWithRuntime,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,
 	cli.NewSessionDeleteCommand,
@@ -82,6 +84,7 @@ func assembleAgentCLI(
 	audioSource AudioSource,
 	audioSink AudioSink,
 	clockSource Clock,
+	runtimeObserver SessionRuntimeObserver,
 	toolDefs []messages.ToolDefinition,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,

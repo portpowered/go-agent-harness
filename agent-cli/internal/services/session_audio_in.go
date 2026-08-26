@@ -208,6 +208,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	if err != nil {
 		return err
 	}
+	source.bindRuntime(plan.runtime)
 	if input.MaxDuration > 0 {
 		plan.loop.MaxDuration = input.MaxDuration
 	}
@@ -220,7 +221,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 		if sinkErr != nil {
 			return fmt.Errorf("--audio-out %q: %w", audioOutPath, sinkErr)
 		}
-		audioOutput = &sessionAudioOutput{sink: sink}
+		audioOutput = &sessionAudioOutput{sink: sink, runtime: plan.runtime}
 		defer func() {
 			if closeErr := audioOutput.close(); closeErr != nil {
 				runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
@@ -334,6 +335,7 @@ type sessionAudioSource struct {
 	paced     bool
 	send      func(context.Context, []byte) error
 	endOfTurn func(context.Context) error
+	runtime   *sessionRuntimeObservationRecorder
 	once      sync.Once
 	err       error
 }
@@ -341,6 +343,12 @@ type sessionAudioSource struct {
 func (s *sessionAudioSource) bindContext(ctx context.Context) {
 	if s.reader != nil {
 		s.reader.bindContext(ctx)
+	}
+}
+
+func (s *sessionAudioSource) bindRuntime(runtime *sessionRuntimeObservationRecorder) {
+	if s != nil {
+		s.runtime = runtime
 	}
 }
 
@@ -487,6 +495,7 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		if err := send(ctx, pcm); err != nil {
 			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
 		}
+		source.runtime.audioInput(pcm)
 	}
 }
 
