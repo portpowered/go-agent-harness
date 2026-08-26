@@ -1,4 +1,4 @@
-//go:build (!linux && !darwin && !windows) || ((linux || darwin) && (!cgo || nomicrophone))
+//go:build (!linux && !darwin && !windows) || ((linux || darwin) && (!cgo || nomicrophone)) || (windows && nomicrophone)
 
 package audio
 
