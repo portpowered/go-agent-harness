@@ -25,8 +25,9 @@ import (
 )
 
 const (
-	DefaultMediaSourceTimeout = 5 * time.Second
-	RedactionMarker           = "<redacted>"
+	DefaultMediaSourceTimeout       = 5 * time.Second
+	DefaultVisualObservationTimeout = 500 * time.Millisecond
+	RedactionMarker                 = "<redacted>"
 )
 
 type SourceKind string
@@ -269,6 +270,7 @@ type MediaStream struct {
 	Inbound, Media InboundMedia
 	Capabilities   MediaCapabilities
 	close          func() error
+	look           func(context.Context) (VisualObservation, error)
 	once           sync.Once
 	closeErr       error
 }
@@ -280,6 +282,31 @@ func (s *MediaStream) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	}
 	return s.Inbound.ReadFrame(ctx)
 }
+
+// Look returns one caller-owned visual observation from the stream. A source
+// without an attached video track returns an unavailable result with no error;
+// it does not invalidate the stream's audio endpoint. Implementations must
+// return the caller's context error unchanged when the observation is
+// blocked and that context is cancelled or reaches its deadline.
+func (s *MediaStream) Look(ctx context.Context) (VisualObservation, error) {
+	if s == nil || s.look == nil {
+		return VisualObservation{Source: sourceOfStream(s), Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}, nil
+	}
+	return s.look(ctx)
+}
+
+// Observe is an equivalent descriptive name for Look.
+func (s *MediaStream) Observe(ctx context.Context) (VisualObservation, error) {
+	return s.Look(ctx)
+}
+
+func sourceOfStream(s *MediaStream) string {
+	if s == nil {
+		return ""
+	}
+	return s.Capabilities.Source
+}
+
 func (s *MediaStream) Close() error {
 	if s == nil {
 		return nil
@@ -298,6 +325,30 @@ func boundedSourceContext(ctx context.Context) (context.Context, context.CancelF
 		ctx = context.Background()
 	}
 	return context.WithTimeout(ctx, DefaultMediaSourceTimeout)
+}
+
+func boundedVisualContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, DefaultVisualObservationTimeout)
+}
+
+func callerContextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+func unavailableVisual(source string) VisualObservation {
+	return VisualObservation{Source: source, Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}
 }
 
 func (s MediaSource) Open(ctx context.Context) (*MediaStream, error) {
@@ -332,6 +383,25 @@ func (s MediaSource) Probe(ctx context.Context) (MediaCapabilities, error) {
 	}
 	return stream.Capabilities.normalized(), nil
 }
+
+// Look opens the source, returns one visual observation, and closes every
+// resource owned by the temporary stream before returning. An audio-only
+// source is represented by a successful unavailable result rather than a
+// source error.
+func (s MediaSource) Look(ctx context.Context) (VisualObservation, error) {
+	stream, err := s.Open(ctx)
+	if err != nil {
+		return VisualObservation{Source: s.identity}, err
+	}
+	defer stream.Close()
+	return stream.Look(ctx)
+}
+
+// Observe is an equivalent descriptive name for Look.
+func (s MediaSource) Observe(ctx context.Context) (VisualObservation, error) {
+	return s.Look(ctx)
+}
+
 func ProbeMediaSource(ctx context.Context, raw string) (MediaCapabilities, error) {
 	s, err := ParseMediaSource(raw)
 	if err != nil {
@@ -341,6 +411,31 @@ func ProbeMediaSource(ctx context.Context, raw string) (MediaCapabilities, error
 }
 func ProbeSource(ctx context.Context, raw string) (MediaCapabilities, error) {
 	return ProbeMediaSource(ctx, raw)
+}
+
+// LookMediaSource parses, opens, observes, and closes one external media
+// source. The returned observation contains only the source's safe identity.
+func LookMediaSource(ctx context.Context, raw string) (VisualObservation, error) {
+	s, err := ParseMediaSource(raw)
+	if err != nil {
+		return VisualObservation{}, err
+	}
+	return s.Look(ctx)
+}
+
+// LookSource is a concise alias for LookMediaSource.
+func LookSource(ctx context.Context, raw string) (VisualObservation, error) {
+	return LookMediaSource(ctx, raw)
+}
+
+// ObserveMediaSource is an equivalent descriptive alias for LookMediaSource.
+func ObserveMediaSource(ctx context.Context, raw string) (VisualObservation, error) {
+	return LookMediaSource(ctx, raw)
+}
+
+// ObserveSource is an equivalent descriptive alias for ObserveMediaSource.
+func ObserveSource(ctx context.Context, raw string) (VisualObservation, error) {
+	return LookMediaSource(ctx, raw)
 }
 func OpenMediaSource(ctx context.Context, raw string) (*MediaStream, error) {
 	s, err := ParseMediaSource(raw)
@@ -375,10 +470,13 @@ func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 		_ = ws.Close()
 		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
 	}
-	inbound := newPionInbound(func() error { _ = ws.Close(); return pc.Close() })
+	inbound := newPionInbound(func() error { _ = ws.Close(); return pc.Close() }, s.identity)
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		if track.Kind() == webrtc.RTPCodecTypeAudio {
+		switch track.Kind() {
+		case webrtc.RTPCodecTypeAudio:
 			inbound.attach(track)
+		case webrtc.RTPCodecTypeVideo:
+			inbound.attachVideo(track)
 		}
 	})
 	for _, kind := range []webrtc.RTPCodecType{webrtc.RTPCodecTypeAudio, webrtc.RTPCodecTypeVideo} {
@@ -433,16 +531,18 @@ func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 		_ = inbound.Close()
 		return nil, sourceError(SourceErrorNoAudio, s.identity, nil)
 	}
+	inbound.setVideoNegotiated(video)
 	if err = pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
 		_ = inbound.Close()
 		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
 	}
 	caps := (MediaCapabilities{Source: s.identity, AudioCodec: codec, SampleRate: rate, Channels: channels, Video: video}).normalized()
-	return &MediaStream{Inbound: inbound, Media: inbound, Capabilities: caps, close: inbound.Close}, nil
+	return &MediaStream{Inbound: inbound, Media: inbound, Capabilities: caps, close: inbound.Close, look: inbound.Look}, nil
 }
 
 func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) {
-	section := ""
+	section, audioDirection, videoDirection := "", "", ""
+	videoSenderEvidence := false
 	for _, raw := range strings.Split(strings.ReplaceAll(sdp, "\r\n", "\n"), "\n") {
 		line := strings.TrimSpace(raw)
 		switch {
@@ -452,6 +552,12 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 			video, section = true, "video"
 		case strings.HasPrefix(line, "m="):
 			section = ""
+		case section == "audio" && isSDPMediaDirection(line):
+			audioDirection = strings.TrimPrefix(line, "a=")
+		case section == "video" && isSDPMediaDirection(line):
+			videoDirection = strings.TrimPrefix(line, "a=")
+		case section == "video" && (strings.HasPrefix(line, "a=ssrc:") || strings.HasPrefix(line, "a=msid:")):
+			videoSenderEvidence = true
 		case section == "audio" && strings.HasPrefix(line, "a=rtpmap:"):
 			parts := strings.Fields(strings.TrimPrefix(line, "a=rtpmap:"))
 			if len(parts) != 2 {
@@ -469,6 +575,18 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 			}
 		}
 	}
+	if audioDirection == "recvonly" || audioDirection == "inactive" {
+		audio = false
+	}
+	if videoDirection == "recvonly" || videoDirection == "inactive" {
+		video = false
+	} else if videoDirection != "" && !videoSenderEvidence {
+		// Pion can retain a video m-line for a recv-only transceiver even when
+		// the source attached no video track. Sender metadata is the
+		// negotiated-track evidence that distinguishes that shape from a real
+		// camera sender.
+		video = false
+	}
 	if audio && codec == "" {
 		codec, rate, channels = "PCMU", 8000, 1
 	}
@@ -478,25 +596,71 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 	return
 }
 
-type pionInbound struct {
-	frames chan PCMFrame
-	done   chan struct{}
-	once   sync.Once
-	close  func() error
-	mu     sync.Mutex
-	seen   bool
+func isSDPMediaDirection(line string) bool {
+	switch line {
+	case "a=sendrecv", "a=sendonly", "a=recvonly", "a=inactive":
+		return true
+	default:
+		return false
+	}
 }
 
-func newPionInbound(closeFn func() error) *pionInbound {
-	return &pionInbound{frames: make(chan PCMFrame, 8), done: make(chan struct{}), close: closeFn}
+type pionInbound struct {
+	frames          chan PCMFrame
+	visuals         chan pionVisualFrame
+	done            chan struct{}
+	once            sync.Once
+	close           func() error
+	mu              sync.Mutex
+	audioSeen       bool
+	videoSeen       bool
+	videoNegotiated bool
+	videoMediaType  string
+	videoReady      chan struct{}
+	videoReadyOnce  sync.Once
+	source          string
 }
-func (m *pionInbound) attach(track *webrtc.TrackRemote) {
+
+type pionVisualFrame struct {
+	mediaType string
+	bytes     []byte
+}
+
+func newPionInbound(closeFn func() error, source ...string) *pionInbound {
+	identity := ""
+	if len(source) > 0 {
+		identity = source[0]
+	}
+	return &pionInbound{
+		frames:     make(chan PCMFrame, 8),
+		visuals:    make(chan pionVisualFrame, 8),
+		done:       make(chan struct{}),
+		close:      closeFn,
+		videoReady: make(chan struct{}),
+		source:     identity,
+	}
+}
+
+func (m *pionInbound) setVideoNegotiated(negotiated bool) {
 	m.mu.Lock()
-	if m.seen {
+	m.videoNegotiated = negotiated
+	m.mu.Unlock()
+}
+
+func (m *pionInbound) attach(track *webrtc.TrackRemote) {
+	m.attachAudio(track)
+}
+
+func (m *pionInbound) attachAudio(track *webrtc.TrackRemote) {
+	if track == nil {
+		return
+	}
+	m.mu.Lock()
+	if m.audioSeen {
 		m.mu.Unlock()
 		return
 	}
-	m.seen = true
+	m.audioSeen = true
 	m.mu.Unlock()
 	go func() {
 		for {
@@ -516,6 +680,99 @@ func (m *pionInbound) attach(track *webrtc.TrackRemote) {
 		}
 	}()
 }
+
+func (m *pionInbound) attachVideo(track *webrtc.TrackRemote) {
+	if track == nil {
+		return
+	}
+	mediaType := track.Codec().MimeType
+	m.mu.Lock()
+	if m.videoSeen {
+		m.mu.Unlock()
+		return
+	}
+	m.videoSeen = true
+	m.videoMediaType = mediaType
+	m.videoReadyOnce.Do(func() { close(m.videoReady) })
+	m.mu.Unlock()
+	go func() {
+		for {
+			packet, _, err := track.ReadRTP()
+			if err != nil {
+				return
+			}
+			if packet == nil || len(packet.Payload) == 0 {
+				continue
+			}
+			payload := append([]byte(nil), packet.Payload...)
+			select {
+			case m.visuals <- pionVisualFrame{mediaType: mediaType, bytes: payload}:
+			case <-m.done:
+				return
+			}
+		}
+	}()
+}
+
+func (m *pionInbound) Look(ctx context.Context) (VisualObservation, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	m.mu.Lock()
+	negotiated, attached, mediaType, ready := m.videoNegotiated, m.videoSeen, m.videoMediaType, m.videoReady
+	m.mu.Unlock()
+	if !negotiated && !attached {
+		return VisualObservation{Source: m.source, Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}, nil
+	}
+	if err := callerContextError(ctx); err != nil {
+		return VisualObservation{}, err
+	}
+	lookCtx, cancel := context.WithTimeout(ctx, DefaultVisualObservationTimeout)
+	defer cancel()
+	if !attached {
+		select {
+		case <-ready:
+			m.mu.Lock()
+			mediaType = m.videoMediaType
+			m.mu.Unlock()
+		case <-m.done:
+			if err := ctx.Err(); err != nil {
+				return VisualObservation{}, err
+			}
+			return VisualObservation{Source: m.source, Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}, nil
+		case <-lookCtx.Done():
+			if err := ctx.Err(); err != nil {
+				return VisualObservation{}, err
+			}
+			return VisualObservation{Source: m.source, Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}, nil
+		}
+	}
+	for {
+		select {
+		case frame := <-m.visuals:
+			if len(frame.bytes) == 0 {
+				continue
+			}
+			if mediaType == "" {
+				m.mu.Lock()
+				mediaType = m.videoMediaType
+				m.mu.Unlock()
+			}
+			return VisualObservation{Source: m.source, Status: VisualObservationAvailable, MediaType: mediaType, Bytes: append([]byte(nil), frame.bytes...)}, nil
+		case <-m.done:
+			if err := ctx.Err(); err != nil {
+				return VisualObservation{}, err
+			}
+			return VisualObservation{Source: m.source, Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}, nil
+		case <-lookCtx.Done():
+			if err := ctx.Err(); err != nil {
+				return VisualObservation{}, err
+			}
+			return VisualObservation{Source: m.source, Status: VisualObservationUnavailable, Reason: VisualObservationReasonNoVideoTrack}, nil
+		}
+	}
+}
+
 func (m *pionInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -540,8 +797,9 @@ func (m *pionInbound) Close() error {
 }
 
 type rtspTrack struct {
-	control string
-	audio   bool
+	control   string
+	audio     bool
+	mediaType string
 }
 type rtspClient struct {
 	conn                     net.Conn
@@ -604,7 +862,8 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	if len(tracks) == 0 {
 		tracks = []rtspTrack{{control: c.uri, audio: true}}
 	}
-	audioChannel := -1
+	audioChannel, videoChannel := -1, -1
+	videoMediaType := ""
 	for i := range tracks {
 		setup, setupErr := c.request(ctx, "SETUP", tracks[i].control, map[string]string{"Transport": fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)})
 		if setupErr != nil || setup.code < 200 || setup.code >= 300 {
@@ -616,6 +875,9 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 		}
 		if tracks[i].audio {
 			audioChannel = i * 2
+		} else if video {
+			videoChannel = i * 2
+			videoMediaType = tracks[i].mediaType
 		}
 	}
 	if audioChannel < 0 {
@@ -631,9 +893,9 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 		_ = conn.Close()
 		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
 	}
-	inbound := &rtspInbound{client: c, audioChannel: audioChannel, codec: codec}
+	inbound := &rtspInbound{client: c, audioChannel: audioChannel, codec: codec, videoChannel: videoChannel, videoMediaType: videoMediaType, source: s.identity}
 	caps := (MediaCapabilities{Source: s.identity, AudioCodec: codec, SampleRate: rate, Channels: channels, Video: video}).normalized()
-	return &MediaStream{Inbound: inbound, Media: inbound, Capabilities: caps, close: inbound.Close}, nil
+	return &MediaStream{Inbound: inbound, Media: inbound, Capabilities: caps, close: inbound.Close, look: inbound.Look}, nil
 }
 
 func (c *rtspClient) request(ctx context.Context, method, uri string, headers map[string]string) (rtspResponse, error) {
@@ -693,21 +955,31 @@ func (c *rtspClient) readResponse() (rtspResponse, error) {
 	return r, err
 }
 func parseRTSPTracks(sdp, base, fallback string) []rtspTrack {
-	section := ""
+	section, mediaType := "", ""
 	tracks := []rtspTrack{}
 	for _, raw := range strings.Split(strings.ReplaceAll(sdp, "\r\n", "\n"), "\n") {
 		line := strings.TrimSpace(raw)
 		switch {
 		case strings.HasPrefix(line, "m=audio "):
-			section = "audio"
+			section, mediaType = "audio", ""
 		case strings.HasPrefix(line, "m=video "):
-			section = "video"
+			section, mediaType = "video", ""
 		case strings.HasPrefix(line, "m="):
-			section = ""
+			section, mediaType = "", ""
+		case section != "" && strings.HasPrefix(line, "a=rtpmap:"):
+			parts := strings.Fields(strings.TrimPrefix(line, "a=rtpmap:"))
+			if len(parts) != 2 {
+				continue
+			}
+			values := strings.Split(parts[1], "/")
+			if len(values) < 1 || strings.EqualFold(values[0], "telephone-event") {
+				continue
+			}
+			mediaType = section + "/" + strings.ToUpper(values[0])
 		case strings.HasPrefix(line, "a=control:") && section != "":
 			control := strings.TrimPrefix(line, "a=control:")
 			if control != "" && control != "*" {
-				tracks = append(tracks, rtspTrack{control: joinRTSPControl(base, fallback, control), audio: section == "audio"})
+				tracks = append(tracks, rtspTrack{control: joinRTSPControl(base, fallback, control), audio: section == "audio", mediaType: mediaType})
 			}
 		}
 	}
@@ -735,34 +1007,44 @@ func joinRTSPControl(base, fallback, control string) string {
 }
 
 type rtspInbound struct {
-	client       *rtspClient
-	audioChannel int
-	codec        string
-	once         sync.Once
+	client         *rtspClient
+	audioChannel   int
+	videoChannel   int
+	codec          string
+	videoMediaType string
+	source         string
+	mu             sync.Mutex
+	pendingAudio   []PCMFrame
+	pendingVisuals []VisualObservation
+	once           sync.Once
 }
 
 func (r *rtspInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	stop := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = r.client.conn.SetReadDeadline(time.Now())
-		case <-stop:
-		}
-	}()
-	defer close(stop)
+	if err := callerContextError(ctx); err != nil {
+		return PCMFrame{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.pendingAudio) > 0 {
+		frame := r.pendingAudio[0]
+		r.pendingAudio = r.pendingAudio[1:]
+		return frame, nil
+	}
 	for {
-		channel, payload, err := r.readPacket()
+		channel, payload, err := r.readPacketContext(ctx)
 		if err != nil {
-			if ctx.Err() != nil {
-				return PCMFrame{}, ctx.Err()
+			if contextErr := callerContextError(ctx); contextErr != nil {
+				return PCMFrame{}, contextErr
 			}
 			return PCMFrame{}, err
 		}
 		if channel != r.audioChannel {
+			if channel == r.videoChannel && len(payload) > 0 {
+				r.pendingVisuals = append(r.pendingVisuals, r.visualObservation(payload))
+			}
 			continue
 		}
 		samples := decodeAudio(r.codec, payload)
@@ -771,6 +1053,73 @@ func (r *rtspInbound) ReadFrame(ctx context.Context) (PCMFrame, error) {
 		}
 	}
 }
+
+func (r *rtspInbound) Look(ctx context.Context) (VisualObservation, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if r.videoChannel < 0 {
+		return unavailableVisual(r.source), nil
+	}
+	if err := callerContextError(ctx); err != nil {
+		return VisualObservation{}, err
+	}
+	lookCtx, cancel := boundedVisualContext(ctx)
+	defer cancel()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.pendingVisuals) > 0 {
+		observation := r.pendingVisuals[0]
+		r.pendingVisuals = r.pendingVisuals[1:]
+		return observation, nil
+	}
+	for {
+		channel, payload, err := r.readPacketContext(lookCtx)
+		if err != nil {
+			if contextErr := callerContextError(ctx); contextErr != nil {
+				return VisualObservation{}, contextErr
+			}
+			return unavailableVisual(r.source), nil
+		}
+		if channel == r.audioChannel {
+			samples := decodeAudio(r.codec, payload)
+			if len(samples) > 0 {
+				r.pendingAudio = append(r.pendingAudio, PCMFrame{Samples: samples})
+			}
+			continue
+		}
+		if channel != r.videoChannel || len(payload) == 0 {
+			continue
+		}
+		return r.visualObservation(payload), nil
+	}
+}
+
+func (r *rtspInbound) visualObservation(payload []byte) VisualObservation {
+	return VisualObservation{Source: r.source, Status: VisualObservationAvailable, MediaType: r.videoMediaType, Bytes: append([]byte(nil), payload...)}
+}
+
+func (r *rtspInbound) readPacketContext(ctx context.Context) (int, []byte, error) {
+	if err := callerContextError(ctx); err != nil {
+		return 0, nil, err
+	}
+	if r.client == nil || r.client.reader == nil {
+		return 0, nil, errors.New("RTSP client is not initialized")
+	}
+	stop := make(chan struct{})
+	if r.client.conn != nil {
+		go func() {
+			select {
+			case <-ctx.Done():
+				_ = r.client.conn.SetReadDeadline(time.Now())
+			case <-stop:
+			}
+		}()
+	}
+	defer close(stop)
+	return r.readPacket()
+}
+
 func (r *rtspInbound) readPacket() (int, []byte, error) {
 	marker, err := r.client.reader.ReadByte()
 	if err != nil {
@@ -793,7 +1142,14 @@ func (r *rtspInbound) readPacket() (int, []byte, error) {
 	}
 	return int(header[0]), packet.Payload, nil
 }
-func (r *rtspInbound) Close() error { r.once.Do(func() { _ = r.client.conn.Close() }); return nil }
+func (r *rtspInbound) Close() error {
+	r.once.Do(func() {
+		if r.client != nil && r.client.conn != nil {
+			_ = r.client.conn.Close()
+		}
+	})
+	return nil
+}
 
 func decodeAudio(codec string, payload []byte) []int16 {
 	if len(payload) == 0 {
