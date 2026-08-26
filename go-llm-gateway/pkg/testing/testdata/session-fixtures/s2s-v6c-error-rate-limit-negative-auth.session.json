@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-4-v6c-error-rate-limit"
+  },
+  "session": {
+    "id": "sess_v6c_rate_limit_negative_auth",
+    "started_at_utc": "2026-08-25T00:00:00Z",
+    "fixture_provenance": "synthetic_failure"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-4-v6c-error-rate-limit"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "error",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "error",
+        "error": {
+          "type": "invalid_api_key",
+          "code": "invalid_api_key",
+          "message": "Invalid API key provided"
+        }
+      }
+    }
+  ],
+  "ends_with_disconnect": true
+}

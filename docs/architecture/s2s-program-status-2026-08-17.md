@@ -536,3 +536,22 @@ appendix).
 | vertical | evidence |
 |---|---|
 | `v2e-audio-in-truncated` | Proven on the recut head 2026-08-25 — truncated_16k/24k sessions terminate within the probe deadguard with an observable buffer disposition (committed or explicitly discarded); negative control fails on a suppressed buffer commit. Tests: `TestProbeRunV2EAudioInTruncated16kCommitsPartialUtterance`, `TestProbeRunV2EAudioInTruncated24kDiscardsPartialUtterance`, `TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer` (`agent-cli/internal/cli/probe_test.go`). Reuses committed fixtures `go-agent-loop/testdata/audio/truncated_{16k,24k}.wav`; no new audio fixtures required. Details: `docs/architecture/s2s-v2e-audio-in-truncated-proof.md`. |
+
+## 11. Vertical delivery: `s2s-v6c-error-rate-limit` — 2026-08-25
+
+Append-only section, recorded by the `s2s-v6c-error-rate-limit` lane.
+The rate-limit vertical is proven on the lane head: the registered
+`s2s-v6c-error-rate-limit-throttled` case replays a committed
+rate_limit_error/rate_limit_exceeded capture through the production
+`agent probe run` route offline and exits zero with
+`terminal_reason=error:rate_limited`; feeding the comparable invalid_api_key
+and invalid_request_error/bad_request controls into the unchanged expectation
+fails closed with observed `error:authentication` /
+`error:provider_rejected`, so throttle classification is distinct from v6a
+(auth), v6b (disconnect), and v6d (malformed). Hermetic T1 only — no
+live-provider, network, or retry/backoff claim. Tests:
+`TestV6CErrorRateLimitThrottledExitsZeroOffline` and siblings
+(`agent-cli/test/integration/s2s_v6c_error_rate_limit_test.go`). Artifacts:
+`go-agent-loop/pkg/probe/scenario_error_rate_limit.go` plus three captures in
+`go-llm-gateway/pkg/testing/testdata/session-fixtures/`. Details:
+`docs/architecture/s2s-v6c-error-rate-limit.md`.
