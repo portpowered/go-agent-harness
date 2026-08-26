@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/spf13/cobra"
@@ -85,7 +86,23 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewConfigCommand(),
 		NewConfigAddLocalCommand(globalFlags),
 	)
+	// Root command tests must not depend on the workstation's physical audio
+	// endpoints. Production composition uses the host registry; this fixture
+	// intentionally models a headless host.
+	router.deviceRegistry = defaultTestDeviceRegistry{}
 	return NewAgentCLI(router).Generate()
+}
+
+type defaultTestDeviceRegistry struct{}
+
+func (defaultTestDeviceRegistry) List() ([]audio.Device, error) { return nil, nil }
+
+func (defaultTestDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
+	return audio.Device{}, audio.NewNoDefaultDeviceError(direction)
+}
+
+func (defaultTestDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
+	return nil, audio.NewDeviceNotFoundError(id)
 }
 
 func executeCLI(args ...string) cliExecution {

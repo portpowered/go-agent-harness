@@ -145,7 +145,27 @@ func enumerateLinuxDevices() ([]linuxDeviceRecord, error) {
 	if len(selected) > 0 {
 		return selected, nil
 	}
+	if len(errs) == 0 || allLinuxBackendErrorsUnavailable(errs) {
+		return []linuxDeviceRecord{}, nil
+	}
 	return nil, errors.Join(append(errs, errors.New("no usable ALSA or PulseAudio endpoints"))...)
+}
+
+func allLinuxBackendErrorsUnavailable(errs []error) bool {
+	for _, err := range errs {
+		if !isLinuxBackendUnavailable(err) {
+			return false
+		}
+	}
+	return true
+}
+
+func isLinuxBackendUnavailable(err error) bool {
+	return errors.Is(err, malgo.ErrNoBackend) ||
+		errors.Is(err, malgo.ErrNoDevice) ||
+		errors.Is(err, malgo.ErrDoesNotExist) ||
+		errors.Is(err, malgo.ErrUnavailable) ||
+		errors.Is(err, malgo.ErrFailedToInitBackend)
 }
 func enumerateLinuxBackend(backend malgo.Backend, name string) (records []linuxDeviceRecord, err error) {
 	ctx, err := malgo.InitContext([]malgo.Backend{backend}, malgo.ContextConfig{Alsa: malgo.AlsaContextConfig{UseVerboseDeviceEnumeration: 1}}, nil)

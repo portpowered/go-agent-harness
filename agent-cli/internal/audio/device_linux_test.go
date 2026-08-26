@@ -5,11 +5,41 @@ package audio
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/gen2brain/malgo"
 )
+
+func TestLinuxBackendUnavailableClassification(t *testing.T) {
+	known := []error{
+		fmt.Errorf("pulse init: %w", malgo.ErrNoBackend),
+		fmt.Errorf("alsa init: %w", malgo.ErrFailedToInitBackend),
+	}
+	if !allLinuxBackendErrorsUnavailable(known) {
+		t.Fatalf("known unavailable backend errors were not classified as unavailable: %v", known)
+	}
+	if allLinuxBackendErrorsUnavailable([]error{errors.New("permission denied while enumerating devices")}) {
+		t.Fatal("genuine enumeration error was classified as a no-device condition")
+	}
+}
+
+func TestLinuxRegistryPreservesGenuineEnumerationError(t *testing.T) {
+	want := errors.New("enumeration permission denied")
+	registry := newLinuxDeviceRegistry(func() ([]linuxDeviceRecord, error) {
+		return nil, want
+	})
+	devices, err := registry.List()
+	if !errors.Is(err, want) {
+		t.Fatalf("List error = %v, want wrapped enumeration error %v", err, want)
+	}
+	if devices != nil {
+		t.Fatalf("List devices = %#v, want nil on genuine enumeration failure", devices)
+	}
+}
 
 func TestLinuxStableDirectionalIDs(t *testing.T) {
 	alsaIn := mustLinuxRecord(linuxAlsaBackend, "hw:0,0", "ALSA input", DirectionInput, true)

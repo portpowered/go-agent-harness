@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/spf13/cobra"
 )
@@ -8,6 +9,8 @@ import (
 // Router defines the routes and wiring for all agent CLI commands.
 type Router struct {
 	Flags *flags.GlobalFlags
+
+	deviceRegistry audio.DeviceRegistry
 
 	RootCommand *RootCommand
 
@@ -63,6 +66,7 @@ func NewRouter(
 	}
 	return &Router{
 		Flags:                    flags,
+		deviceRegistry:           newDefaultDeviceRegistry(),
 		RootCommand:              rootCommand,
 		AskCommand:               askCommand,
 		ChatCommand:              chatCommand,
@@ -115,7 +119,11 @@ func (r *Router) BuildRoot() *cobra.Command {
 	root.AddCommand(configGroup)
 
 	devicesGroup := NewPath("devices", NewDevicesCommand().Generate())
-	devicesGroup.AddCommand(NewPath("list", NewDevicesListCommand(newDefaultDeviceRegistry()).Generate()))
+	registry := r.deviceRegistry
+	if registry == nil {
+		registry = newDefaultDeviceRegistry()
+	}
+	devicesGroup.AddCommand(NewPath("list", NewDevicesListCommand(registry).Generate()))
 	root.AddCommand(devicesGroup)
 
 	cmd := root.CreateCommand()
