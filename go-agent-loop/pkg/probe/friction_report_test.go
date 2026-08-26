@@ -220,3 +220,77 @@ func TestAggregateFrictionReportMissingReaderIsTyped(t *testing.T) {
 		t.Fatalf("error = %+v, want input-level ErrMissingReportReader", reportErr)
 	}
 }
+
+func TestAggregateFrictionReportRejectsNullPassWithSourceAndLine(t *testing.T) {
+	_, err := AggregateFrictionReport(reportInput("null-pass.jsonl", `{"name":"broken","pass":null}`))
+	var reportErr *FrictionReportError
+	if !errors.As(err, &reportErr) {
+		t.Fatalf("error = %v, want *FrictionReportError", err)
+	}
+	if reportErr.Source != "null-pass.jsonl" || reportErr.Line != 1 {
+		t.Fatalf("error context = %+v, want null-pass.jsonl:1", reportErr)
+	}
+	if !errors.Is(err, ErrMalformedReport) || !strings.Contains(err.Error(), "pass field must be a boolean") {
+		t.Fatalf("error = %v, want typed malformed boolean error", err)
+	}
+}
+
+func TestAggregateFrictionReportClassifiesFallbackErrorMessages(t *testing.T) {
+	cases := []struct {
+		class   string
+		message string
+	}{
+		{class: "authentication", message: "request was unauthorized"},
+		{class: "rate_limited", message: "too many requests"},
+		{class: "unsupported_request", message: "unsupported model"},
+		{class: "invalid_request", message: "bad request body"},
+		{class: "replay_mismatch", message: "replay divergence detected"},
+		{class: "replay_incomplete", message: "incomplete replay"},
+		{class: "cancellation", message: "request canceled by caller"},
+		{class: "transport", message: "network connection reset"},
+		{class: "timeout", message: "deadline exceeded"},
+		{class: "panic", message: "provider panic"},
+		{class: "unknown", message: "unexpected provider failure"},
+	}
+	results := make([]ScenarioResult, 0, len(cases))
+	for _, testCase := range cases {
+		results = append(results, ScenarioResult{
+			Name:  testCase.class,
+			Error: testCase.message,
+		})
+	}
+
+	report := AggregateScenarioResults(results)
+	if report.Total != len(cases) || report.Failed != len(cases) || report.Passed != 0 {
+		t.Fatalf("fallback classification totals = %+v", report)
+	}
+	if len(report.ErrorClasses) != len(cases) {
+		t.Fatalf("error classes = %#v, want %d classes", report.ErrorClasses, len(cases))
+	}
+	wantClasses := make(map[string]struct{}, len(cases))
+	for _, testCase := range cases {
+		wantClasses[testCase.class] = struct{}{}
+	}
+	for _, got := range report.ErrorClasses {
+		if _, ok := wantClasses[got.Class]; !ok || got.Count != 1 {
+			t.Fatalf("unexpected error class = %+v", got)
+		}
+	}
+}
+
+func TestAggregateAliasUsesScenarioAggregation(t *testing.T) {
+	report := Aggregate([]ScenarioResult{{Name: "alias", Pass: true}})
+	if report.Total != 1 || report.Passed != 1 || report.Failed != 0 || len(report.Scenarios) != 1 {
+		t.Fatalf("Aggregate result = %+v", report)
+	}
+}
+
+func TestFrictionReportErrorNilMethods(t *testing.T) {
+	var reportErr *FrictionReportError
+	if got := reportErr.Error(); got != "<nil>" {
+		t.Fatalf("nil Error() = %q, want <nil>", got)
+	}
+	if got := reportErr.Unwrap(); got != nil {
+		t.Fatalf("nil Unwrap() = %v, want nil", got)
+	}
+}

@@ -367,9 +367,9 @@ func validateScenarioResultLine(line []byte, result ScenarioResult) error {
 	if _, ok := fields["pass"]; !ok {
 		return errors.New("scenario result requires a pass field")
 	}
-	var pass bool
-	if err := json.Unmarshal(fields["pass"], &pass); err != nil {
-		return fmt.Errorf("scenario result pass field: %w", err)
+	passToken := bytes.TrimSpace(fields["pass"])
+	if !bytes.Equal(passToken, []byte("true")) && !bytes.Equal(passToken, []byte("false")) {
+		return errors.New("scenario result pass field must be a boolean")
 	}
 	return nil
 }

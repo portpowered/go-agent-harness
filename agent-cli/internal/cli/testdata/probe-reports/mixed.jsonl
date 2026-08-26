@@ -2,4 +2,4 @@
 {"name":"transcript-miss","pass":false,"expectations":[{"index":0,"kind":"transcript-contains","passed":false,"expected":"ready","actual":"","error":"probe expectation mismatch"},{"index":1,"kind":"frame-count","passed":false,"expected":"2","actual":"0","error":"probe expectation mismatch"}],"ticks":2,"frames":0,"terminal_reason":"error:transport","error":"connection reset"}
 {"name":"transcript-miss","pass":false,"expectations":[{"index":0,"kind":"transcript-contains","passed":false,"expected":"ready","actual":"busy","error":"probe expectation mismatch"}],"ticks":2,"frames":0,"terminal_reason":"disconnect"}
 {"name":"stuck-session","pass":true,"expectations":[],"ticks":0,"frames":0,"terminal_reason":"stuck"}
-{"total":4,"passed":2,"failed":2,"status":"fail"}
+{"total":4,"passed":1,"failed":3,"status":"fail"}
