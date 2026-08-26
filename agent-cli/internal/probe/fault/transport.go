@@ -36,7 +36,8 @@ const (
 	DirectionWrite = DirectionOutbound
 )
 
-// LogicalClock is the clock contract required by deterministic frame delays.
+// LogicalClock is the clock contract required by deterministic frame timing
+// faults.
 // The repository's *clock.Deterministic satisfies this interface. A delay
 // advances logical ticks until the configured duration has elapsed; it never
 // waits on host time.
@@ -65,6 +66,17 @@ type DelayEvent struct {
 	AfterTick  uint64
 }
 
+// StallEvent records a bounded logical stall before an egress frame is
+// delivered to the provider session. Egress is the provider-to-client
+// direction, so its direction is always DirectionInbound.
+type StallEvent struct {
+	Direction  FrameDirection
+	Frame      int
+	Duration   time.Duration
+	BeforeTick uint64
+	AfterTick  uint64
+}
+
 // FaultStats is a race-safe snapshot of observable frame-fault evidence. The
 // event slices are copied by Stats, so callers may retain and inspect a
 // snapshot without synchronizing with the connection.
@@ -78,9 +90,11 @@ type FaultStats struct {
 	DroppedWriteFrames int
 	DelayedReadFrames  int
 	DelayedWriteFrames int
+	StalledReadFrames  int
 
 	Drops  []FrameEvent
 	Delays []DelayEvent
+	Stalls []StallEvent
 }
 
 // MidStreamCloseError identifies the deterministic point at which a wrapped
@@ -124,11 +138,18 @@ type frameDelay struct {
 	enabled  bool
 }
 
+type consumerStall struct {
+	frameSelector
+	duration time.Duration
+	enabled  bool
+}
+
 type config struct {
 	midStreamCloseAfter *int
 	clock               LogicalClock
 	drops               map[FrameDirection]frameSelector
 	delays              map[FrameDirection]frameDelay
+	slowConsumer        consumerStall
 }
 
 // WithMidStreamCloseAfter configures a close before the first frame after
@@ -150,8 +171,9 @@ func WithMidStreamClose(afterFrames int) Option {
 	return WithMidStreamCloseAfter(afterFrames)
 }
 
-// WithClock supplies the deterministic clock used by frame-delay options.
-// A delay option without a clock is rejected when the wrapper is built.
+// WithClock supplies the deterministic clock used by frame-delay and
+// slow-consumer options. A timing option without a clock is rejected when the
+// wrapper is built.
 func WithClock(source LogicalClock) Option {
 	return func(cfg *config) error {
 		if source == nil {
@@ -233,6 +255,26 @@ func WithWriteFrameDelay(delay time.Duration, frameNumbers ...int) Option {
 	return WithDelayFrames(DirectionOutbound, delay, frameNumbers...)
 }
 
+// WithSlowConsumer stalls selected provider-to-client (egress) frames for a
+// bounded duration on the configured logical clock. With no frame numbers,
+// every egress frame is stalled. It never sleeps on host time.
+func WithSlowConsumer(duration time.Duration, frameNumbers ...int) Option {
+	selected := append([]int(nil), frameNumbers...)
+	return func(cfg *config) error {
+		return configureConsumerStall(&cfg.slowConsumer, duration, selected...)
+	}
+}
+
+// WithEgressStall is a concise alias for WithSlowConsumer.
+func WithEgressStall(duration time.Duration, frameNumbers ...int) Option {
+	return WithSlowConsumer(duration, frameNumbers...)
+}
+
+// WithSlowConsumerEgress is an explicit alias for WithSlowConsumer.
+func WithSlowConsumerEgress(duration time.Duration, frameNumbers ...int) Option {
+	return WithSlowConsumer(duration, frameNumbers...)
+}
+
 func resolveOptions(options []Option) (config, error) {
 	var cfg config
 	for _, option := range options {
@@ -247,6 +289,9 @@ func resolveOptions(options []Option) (config, error) {
 		if delay.enabled && cfg.clock == nil {
 			return config{}, fmt.Errorf("%w: frame delay requires a logical clock", ErrInvalidConfiguration)
 		}
+	}
+	if cfg.slowConsumer.enabled && cfg.clock == nil {
+		return config{}, fmt.Errorf("%w: slow consumer stall requires a logical clock", ErrInvalidConfiguration)
 	}
 	return cfg, nil
 }
@@ -310,6 +355,23 @@ func configureFrameDelay(cfg *config, direction FrameDirection, delay time.Durat
 	configured.duration = delay
 	mergeFrameSelector(&configured.frameSelector, selector)
 	cfg.delays[direction] = configured
+	return nil
+}
+
+func configureConsumerStall(stall *consumerStall, duration time.Duration, frameNumbers ...int) error {
+	if duration <= 0 {
+		return fmt.Errorf("%w: slow consumer stall %s is not positive", ErrInvalidConfiguration, duration)
+	}
+	selector, err := newFrameSelector(frameNumbers)
+	if err != nil {
+		return err
+	}
+	if stall.enabled && stall.duration != duration {
+		return fmt.Errorf("%w: slow consumer stall configured as %s and %s", ErrInvalidConfiguration, stall.duration, duration)
+	}
+	stall.enabled = true
+	stall.duration = duration
+	mergeFrameSelector(&stall.frameSelector, selector)
 	return nil
 }
 
@@ -401,6 +463,9 @@ func (c *Conn) ReadMessage() (messageType int, payload []byte, err error) {
 		if delay, ok := c.frameDelay(DirectionInbound, frame); ok {
 			c.applyDelay(DirectionInbound, frame, delay)
 		}
+		if duration, ok := c.egressStall(frame); ok {
+			c.applyStall(frame, duration)
+		}
 
 		c.mu.Lock()
 		c.stats.ReadFrames++
@@ -482,6 +547,7 @@ func (c *Conn) Stats() FaultStats {
 	snapshot := c.stats
 	snapshot.Drops = append([]FrameEvent(nil), c.stats.Drops...)
 	snapshot.Delays = append([]DelayEvent(nil), c.stats.Delays...)
+	snapshot.Stalls = append([]StallEvent(nil), c.stats.Stalls...)
 	return snapshot
 }
 
@@ -509,6 +575,15 @@ func (c *Conn) DelayedFrames(direction FrameDirection) int {
 		return stats.DelayedWriteFrames
 	}
 	return 0
+}
+
+// StalledFrames returns the number of bounded logical egress stalls in the
+// requested direction from the current snapshot.
+func (c *Conn) StalledFrames(direction FrameDirection) int {
+	if direction != DirectionInbound {
+		return 0
+	}
+	return c.Stats().StalledReadFrames
 }
 
 func (c *Conn) err() error {
@@ -565,6 +640,18 @@ func (c *Conn) frameDelay(direction FrameDirection, frame int) (time.Duration, b
 	return configured.duration, ok
 }
 
+func (c *Conn) egressStall(frame int) (time.Duration, bool) {
+	configured := c.cfg.slowConsumer
+	if !configured.enabled {
+		return 0, false
+	}
+	if configured.all {
+		return configured.duration, true
+	}
+	_, ok := configured.frames[frame]
+	return configured.duration, ok
+}
+
 func (c *Conn) recordDrop(direction FrameDirection, frame int) {
 	tick := uint64(0)
 	if c.cfg.clock != nil {
@@ -582,19 +669,7 @@ func (c *Conn) recordDrop(direction FrameDirection, frame int) {
 
 func (c *Conn) applyDelay(direction FrameDirection, frame int, duration time.Duration) {
 	clock := c.cfg.clock
-	before := clock.Tick()
-	target := clock.Now().Add(duration)
-	for clock.Now().Before(target) {
-		current := clock.Tick()
-		if current == ^uint64(0) {
-			break
-		}
-		next := clock.AdvanceTo(current + 1)
-		if next <= current {
-			break
-		}
-	}
-	after := clock.Tick()
+	before, after := advanceLogicalDuration(clock, duration)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -610,6 +685,37 @@ func (c *Conn) applyDelay(direction FrameDirection, frame int, duration time.Dur
 		BeforeTick: before,
 		AfterTick:  after,
 	})
+}
+
+func (c *Conn) applyStall(frame int, duration time.Duration) {
+	before, after := advanceLogicalDuration(c.cfg.clock, duration)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stats.StalledReadFrames++
+	c.stats.Stalls = append(c.stats.Stalls, StallEvent{
+		Direction:  DirectionInbound,
+		Frame:      frame,
+		Duration:   duration,
+		BeforeTick: before,
+		AfterTick:  after,
+	})
+}
+
+func advanceLogicalDuration(clock LogicalClock, duration time.Duration) (uint64, uint64) {
+	before := clock.Tick()
+	target := clock.Now().Add(duration)
+	for clock.Now().Before(target) {
+		current := clock.Tick()
+		if current == ^uint64(0) {
+			break
+		}
+		next := clock.AdvanceTo(current + 1)
+		if next <= current {
+			break
+		}
+	}
+	return before, clock.Tick()
 }
 
 func (c *Conn) closeInner() error {
@@ -696,6 +802,7 @@ func cloneConfig(src config) config {
 			dst.delays[direction] = delay
 		}
 	}
+	dst.slowConsumer.frameSelector = cloneFrameSelector(src.slowConsumer.frameSelector)
 	return dst
 }
 
