@@ -305,7 +305,9 @@ func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
 // completeTurn closes the current turn boundary and emits the per-turn record.
 func (o *sessionProgressObserver) completeTurn() {
 	o.turnsCompleted++
-	o.runtime.turnCompleted(o.turnsCompleted)
+	if o.runtime != nil {
+		o.runtime.turnCompleted(o.turnsCompleted)
+	}
 	if o.sink != nil {
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event: SessionDiagnosticEventTurn,
@@ -485,7 +487,9 @@ func (o *sessionProgressObserver) finish(err error) error {
 	}
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
-	o.runtime.terminal(o.turnsCompleted, err)
+	if o.runtime != nil {
+		o.runtime.terminal(o.turnsCompleted, err)
+	}
 	return err
 }
 
