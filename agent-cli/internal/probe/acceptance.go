@@ -601,7 +601,7 @@ func runLiveProcess(ctx context.Context, input loopprobe.AcceptanceInput) (RunRe
 	cmd.Dir = input.WorkingDirectory
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Env = withPWD(os.Environ(), input.WorkingDirectory)
+	cmd.Env = sanitizedEnvironment(input.WorkingDirectory)
 	err := cmd.Run()
 	result := RunResult{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}
 	if cmd.ProcessState != nil {
@@ -618,15 +618,14 @@ func runLiveProcess(ctx context.Context, input loopprobe.AcceptanceInput) (RunRe
 	return result, nil
 }
 
-func withPWD(environment []string, workingDirectory string) []string {
-	updated := make([]string, 0, len(environment)+1)
-	for _, entry := range environment {
-		if strings.HasPrefix(entry, "PWD=") {
-			continue
-		}
-		updated = append(updated, entry)
-	}
-	return append(updated, "PWD="+workingDirectory)
+// sanitizedEnvironment is the complete child-environment policy for a live
+// acceptance probe. The probe receives its only documented runtime context
+// through argv and cwd; PWD is retained solely as the conventional spelling
+// of that cwd for programs that inspect their process environment. In
+// particular, no parent environment or path-bearing checkout metadata is
+// forwarded to the blind process.
+func sanitizedEnvironment(workingDirectory string) []string {
+	return []string{"PWD=" + workingDirectory}
 }
 
 func parseAgentReport(data []byte) loopprobe.AcceptanceAgentReport {

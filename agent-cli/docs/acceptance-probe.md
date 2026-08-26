@@ -2,7 +2,8 @@
 
 `agent probe acceptance <binary> <goal>` runs one acceptance probe. The
 entrypoint creates a fresh empty working directory, starts the supplied
-executable with the goal as its only argument, captures stdout/stderr,
+executable with the goal as its only argument and a sanitized environment
+containing only `PWD` for that working directory, captures stdout/stderr,
 transcript, exit status, and files created in that directory, and prints one
 machine-readable verdict record.
 
