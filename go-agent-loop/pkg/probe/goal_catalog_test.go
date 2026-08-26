@@ -82,6 +82,47 @@ func TestLoadGoalCatalogIsDeterministicAcrossCalls(t *testing.T) {
 	}
 }
 
+func TestGoalCatalogRunInputsCoverValidatedGoalsExactlyOnceAndDeterministically(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+	if err := catalog.Validate(); err != nil {
+		t.Fatalf("shipped catalog failed validation: %v", err)
+	}
+
+	first := catalog.RunInputs()
+	second := probe.EnumerateGoalRunInputs(catalog)
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("run-input enumeration changed across calls:\n first %#v\nsecond %#v", first, second)
+	}
+	if len(first) != len(catalog) {
+		t.Fatalf("run-input count = %d, want one per goal (%d)", len(first), len(catalog))
+	}
+
+	seen := make(map[string]bool, len(first))
+	for index, input := range first {
+		goal := catalog[index]
+		if input.GoalID != goal.ID || input.GoalText != goal.Text {
+			t.Errorf("run input %d = %#v, want goal %q with exact text", index, input, goal.ID)
+		}
+		if seen[input.GoalID] {
+			t.Errorf("run input %d repeats goal ID %q", index, input.GoalID)
+		}
+		seen[input.GoalID] = true
+	}
+	for _, goal := range catalog {
+		if !seen[goal.ID] {
+			t.Errorf("goal %q is missing from run inputs", goal.ID)
+		}
+	}
+
+	inputType := reflect.TypeOf(probe.GoalRunInput{})
+	if inputType.NumField() != 2 {
+		t.Fatalf("GoalRunInput has %d fields, want exactly ID and text", inputType.NumField())
+	}
+}
+
 func TestGoalCatalogValidationRejectsDegradedCatalog(t *testing.T) {
 	catalog, err := probe.LoadGoalCatalog()
 	if err != nil {
