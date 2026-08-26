@@ -777,8 +777,18 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 	return runSessionDurationPlanWithAdmission(ctx, out, plan, maxDuration, durationClock, nil)
 }
 
-func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
+func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
 	artifacts := sessionDurationArtifactsFromContext(ctx)
+	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
+	if err != nil {
+		return errors.Join(err, finalizeSessionDurationArtifacts(artifacts))
+	}
+	if deviceBinding != nil {
+		defer func() {
+			runErr = errors.Join(runErr, deviceBinding.Close())
+		}()
+	}
+
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
 			return wrapSessionRuntimeError(plan, errors.Join(err, finalizeSessionDurationArtifacts(artifacts)))
@@ -790,7 +800,6 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		loopOut = plan.loopOut
 	}
 	plan.configureLoopObserver(&plan.loop)
-	var runErr error
 	if plan.inferencer != nil {
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
 	}

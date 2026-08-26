@@ -47,8 +47,14 @@ func TestSessionCommandHelpExposesAudioInput(t *testing.T) {
 	if !strings.Contains(audioInHelp, "--audio-in string") || !strings.Contains(audioInHelp, "raw PCM16 standard input") || !strings.Contains(audioInHelp, ".wav") {
 		t.Fatalf("session help does not describe --audio-in path and stdin behavior:\n%s", help)
 	}
+	if !strings.Contains(help, "--audio-in-device string") || !strings.Contains(help, "--audio-out-device string") {
+		t.Fatalf("session help does not expose RTC device selectors:\n%s", help)
+	}
 	if strings.Index(help, "--api-key") > strings.Index(help, "--audio-in") || strings.Index(help, "--audio-in") > strings.Index(help, "--base-url") {
 		t.Fatalf("--audio-in is not alphabetically positioned with neighboring flags:\n%s", help)
+	}
+	if strings.Index(help, "--audio-in") > strings.Index(help, "--audio-in-device") || strings.Index(help, "--audio-out") > strings.Index(help, "--audio-out-device") {
+		t.Fatalf("RTC device selectors are not alphabetically positioned with their file flags:\n%s", help)
 	}
 }
 
@@ -178,8 +184,7 @@ func TestSessionCommandAudioInputConflictUsesOwnerRegisteredDeviceFlag(t *testin
 	}
 	inferencer := &countingSessionInferencer{}
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
-	cmd.Flags().Bool("audio-in-device", false, "owner-registered device input")
-	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", validPath, "--audio-in-device"})
+	cmd.SetArgs([]string{"--replay", "synthetic.json", "--audio-in", validPath, "--audio-in-device", "virtual:input"})
 	err := cmd.ExecuteContext(context.Background())
 	if !errors.Is(err, services.ErrSessionAudioInputConflict) {
 		t.Fatalf("command error = %v, want audio input conflict", err)

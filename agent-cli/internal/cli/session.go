@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
@@ -26,6 +27,7 @@ type SessionCommand struct {
 	streamObserver            services.SessionStreamObserver
 	clockSource               platformclock.Source
 	runtimeObserver           services.SessionRuntimeObserver
+	deviceRegistry            audio.DeviceRegistry
 	imagePaths                []string
 }
 
@@ -34,7 +36,7 @@ type SessionCommand struct {
 // given to agent.NewExecutor); callers without one pass nil so session runs
 // keep their no-tools behavior.
 func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
-	return NewSessionCommandWithRuntime(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, nil, nil)
+	return NewSessionCommandWithRuntimeAndDeviceRegistry(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, nil, nil, newDefaultDeviceRegistry())
 }
 
 // NewSessionCommandWithRuntime constructs the session command with the
@@ -48,6 +50,28 @@ func NewSessionCommandWithRuntime(
 	clockSource platformclock.Source,
 	runtimeObserver services.SessionRuntimeObserver,
 ) *SessionCommand {
+	return NewSessionCommandWithRuntimeAndDeviceRegistry(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, clockSource, runtimeObserver, newDefaultDeviceRegistry())
+}
+
+// NewSessionCommandWithDeviceRegistry constructs the session command with the
+// application-owned registry used by RTC device preflight. The four-argument
+// constructor above remains the compatibility path for callers whose wire
+// graph does not yet expose a concrete registry.
+func NewSessionCommandWithDeviceRegistry(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer, deviceRegistry audio.DeviceRegistry) *SessionCommand {
+	return NewSessionCommandWithRuntimeAndDeviceRegistry(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, nil, nil, deviceRegistry)
+}
+
+// NewSessionCommandWithRuntimeAndDeviceRegistry composes the optional runtime
+// observation seams and the shared audio registry into one command graph.
+func NewSessionCommandWithRuntimeAndDeviceRegistry(
+	askFlags *flags.AskFlags,
+	globalFlags *flags.GlobalFlags,
+	toolExecutorOverride messages.ToolExecutor,
+	sessionInferencerOverride messages.SessionInferencer,
+	clockSource platformclock.Source,
+	runtimeObserver services.SessionRuntimeObserver,
+	deviceRegistry audio.DeviceRegistry,
+) *SessionCommand {
 	return &SessionCommand{
 		askFlags:                  askFlags,
 		globalFlags:               globalFlags,
@@ -55,6 +79,7 @@ func NewSessionCommandWithRuntime(
 		sessionInferencerOverride: sessionInferencerOverride,
 		clockSource:               clockSource,
 		runtimeObserver:           runtimeObserver,
+		deviceRegistry:            deviceRegistry,
 	}
 }
 
@@ -68,6 +93,13 @@ func (c *SessionCommand) SetSessionStreamObserver(observer services.SessionStrea
 	c.streamObserver = observer
 }
 
+// SetDeviceRegistry injects the registry used by session RTC device
+// preflight. It is primarily useful to the application wire graph and to
+// deterministic callers that provide a virtual registry.
+func (c *SessionCommand) SetDeviceRegistry(registry audio.DeviceRegistry) {
+	c.deviceRegistry = registry
+}
+
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
@@ -76,6 +108,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var maxDuration time.Duration
 	var audioIn string
 	var audioInTurns []string
+	var audioInDevice audio.DeviceID
+	var audioOutDevice audio.DeviceID
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
@@ -85,6 +119,14 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := services.ValidateSessionAudioDeviceConflicts(
+				cmd.Flags().Changed("audio-in"),
+				cmd.Flags().Changed("audio-out"),
+				cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
+				cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+			); err != nil {
+				return err
+			}
 			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
 				return err
 			}
@@ -120,6 +162,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				StreamObserver:    c.streamObserver,
 				Clock:             c.clockSource,
 				RuntimeObserver:   c.runtimeObserver,
+				RTCDeviceBinding: services.RTCDeviceBindingRequest{
+					Registry:      c.deviceRegistry,
+					InputDevice:   audioInDevice,
+					OutputDevice:  audioOutDevice,
+					InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
+					OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+				},
 			}
 			seed := services.SessionTextSeed{
 				Value:   prompt,
@@ -216,7 +265,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
 	cmd.Flags().StringArrayVar(&audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
+	cmd.Flags().StringVar(&audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
 	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
+	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
 	return cmd

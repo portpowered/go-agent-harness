@@ -40,6 +40,10 @@ type SessionRunOptions struct {
 	Prompt            string
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
+	// RTCDeviceBinding carries optional registry-backed local audio selectors.
+	// The runtime opens these devices only after planning succeeds and before
+	// provider/peer setup begins.
+	RTCDeviceBinding RTCDeviceBindingRequest
 
 	// ToolExecutor optionally injects the composed session tool executor.
 	// When nil, duplex loop construction stays byte-for-byte identical to the
