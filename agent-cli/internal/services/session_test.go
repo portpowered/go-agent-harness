@@ -256,6 +256,21 @@ func TestWriteSessionReplayMessage_PrintsSessionTerminalFields(t *testing.T) {
 	}
 }
 
+func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
+	var out bytes.Buffer
+
+	err := writeSessionReplayMessage(&out, messages.StreamMessage{
+		Type:  messages.StreamTypeTranscriptDelta,
+		Value: messages.NewTranscriptDeltaValue("spoken image description"),
+	})
+	if err != nil {
+		t.Fatalf("writeSessionReplayMessage: %v", err)
+	}
+	if got := out.String(); got != "spoken image description" {
+		t.Fatalf("transcript output = %q, want %q", got, "spoken image description")
+	}
+}
+
 func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.T) {
 	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
 		Type: messages.StreamTypeError,

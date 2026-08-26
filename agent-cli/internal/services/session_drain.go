@@ -17,6 +17,9 @@ func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error 
 	case *messages.TextDeltaValue:
 		_, err := fmt.Fprint(out, v.Content)
 		return err
+	case *messages.TranscriptDeltaValue:
+		_, err := fmt.Fprint(out, v.Text)
+		return err
 	case *messages.SessionCloseValue:
 		if v.Reason != "" {
 			if _, err := fmt.Fprintf(out, "\n[session closed: %s]\n", v.Reason); err != nil {

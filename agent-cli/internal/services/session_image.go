@@ -125,7 +125,9 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
-	plan.inferencer = &sessionImageInferencer{inner: plan.inferencer, parts: cloneSessionImageParts(parts)}
+	firstTurn := make(chan error, 1)
+	plan.inferencer = &sessionImageInferencer{inner: plan.inferencer, parts: cloneSessionImageParts(parts), firstTurn: firstTurn}
+	plan.loop.awaitFirstTurn = firstTurn
 	if seed.Present {
 		wirePrompt := nextSessionTextWirePrompt()
 		plan.loop.Prompt = wirePrompt
@@ -316,6 +318,11 @@ const sessionImageOnlyPrompt = "\x00agent-session-image-turn\x00"
 type sessionImageInferencer struct {
 	inner messages.SessionInferencer
 	parts []messages.ImagePart
+	// firstTurn reports the outcome of the one reusable image user turn:
+	// nil once its wire events reached the provider session's outbound
+	// queue, or the rejection error. Buffered so signaling never blocks the
+	// model runner goroutine; nil keeps direct construction sites unchanged.
+	firstTurn chan error
 }
 
 func (i *sessionImageInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -323,13 +330,16 @@ func (i *sessionImageInferencer) ConnectSession(ctx context.Context) (messages.S
 	if err != nil {
 		return nil, err
 	}
-	return &sessionImageSession{Session: session, parts: cloneSessionImageParts(i.parts)}, nil
+	return &sessionImageSession{Session: session, parts: cloneSessionImageParts(i.parts), firstTurn: i.firstTurn}, nil
 }
 
 type sessionImageSession struct {
 	messages.Session
 	parts []messages.ImagePart
 	mu    sync.Mutex
+	// firstTurn is the shared acceptance signal consumed by the session
+	// loop's awaitFirstTurn; see sessionImageInferencer.
+	firstTurn chan error
 }
 
 func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -348,9 +358,27 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 		if text == sessionImageOnlyPrompt {
 			text = ""
 		}
-		return sendSessionImageTurn(ctx, s.Session, text, parts)
+		sent := sendSessionImageTurn(ctx, s.Session, text, parts)
+		s.signalFirstTurn(sent)
+		return sent
 	}
+	s.signalFirstTurn(false)
 	return false
+}
+
+// signalFirstTurn reports the image-turn outcome to awaitSessionFirstTurn
+// exactly once. The buffered channel makes this non-blocking, and callers
+// without a waiter (plain RunSessionWithImages without streamed audio) only
+// leave the buffered result unconsumed.
+func (s *sessionImageSession) signalFirstTurn(sent bool) {
+	if s.firstTurn == nil {
+		return
+	}
+	if sent {
+		s.firstTurn <- nil
+		return
+	}
+	s.firstTurn <- fmt.Errorf("%w: provider session rejected image turn", ErrSessionImageSend)
 }
 
 // SendSessionImageTurn attaches validated parts to one reusable user turn.
