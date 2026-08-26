@@ -35,6 +35,25 @@ type SessionRuntimeObserver = services.SessionRuntimeObserver
 // SessionRuntimeObservation is the value delivered by SessionRuntimeObserver.
 type SessionRuntimeObservation = services.SessionRuntimeObservation
 
+const (
+	SessionRuntimeObservationAudioOutput   = services.SessionRuntimeObservationAudioOutput
+	SessionRuntimeObservationAudioInput    = services.SessionRuntimeObservationAudioInput
+	SessionRuntimeObservationTurnCompleted = services.SessionRuntimeObservationTurnCompleted
+	SessionRuntimeObservationTerminal      = services.SessionRuntimeObservationTerminal
+)
+
+// SessionFinalAccounting is the production-owned terminal token and metrics
+// value carried by SessionRuntimeObservation.FinalAccounting.
+type SessionFinalAccounting = services.SessionFinalAccounting
+
+// SessionTokenUsageSemantics describes how provider MESSAGE.END usage values
+// contribute to SessionFinalAccounting's session totals.
+type SessionTokenUsageSemantics = services.SessionTokenUsageSemantics
+
+// SessionTokenUsageIncremental is the supported session usage contract: each
+// MESSAGE.END usage value contributes once for its completed turn.
+const SessionTokenUsageIncremental = services.SessionTokenUsageIncremental
+
 type inertAudioSource struct{}
 
 func (inertAudioSource) ReadFrame(context.Context, []int16) error { return io.EOF }

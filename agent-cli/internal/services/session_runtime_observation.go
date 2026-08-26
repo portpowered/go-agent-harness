@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
@@ -24,10 +25,40 @@ const (
 	SessionRuntimeObservationTerminal      SessionRuntimeObservationKind = "terminal"
 )
 
+// SessionTokenUsageSemantics identifies how provider usage values are consumed
+// by the session accounting seam.
+type SessionTokenUsageSemantics string
+
+const (
+	// SessionTokenUsageIncremental means every non-negative MESSAGE.END usage
+	// value is the contribution for that completed turn and is added exactly
+	// once to the session total. Providers that expose cumulative readings must
+	// normalize them before they reach the session stream.
+	SessionTokenUsageIncremental SessionTokenUsageSemantics = "incremental"
+)
+
+// SessionFinalAccounting is the production-owned terminal accounting result
+// for one session. Token fields are session-cumulative totals, not the usage
+// from only the last turn. Metrics is a complete deep-copied snapshot with all
+// supported direction/modality series, including untouched zero series.
+type SessionFinalAccounting struct {
+	PromptTokens     uint64
+	CompletionTokens uint64
+	TotalTokens      uint64
+	ReasoningTokens  uint64
+	UsageSemantics   SessionTokenUsageSemantics
+	Metrics          metrics.Snapshot
+}
+
+// SessionRuntimeFinalAccounting is a descriptive alias for callers that want
+// the runtime boundary named explicitly.
+type SessionRuntimeFinalAccounting = SessionFinalAccounting
+
 // SessionRuntimeObservation is one clock-stamped observation from a session
 // command. Payload is present only for audio observations and is copied before
 // delivery so an observer owns its bytes. Terminal observations contain the
-// command's actual clean/error result and completed-turn count.
+// command's actual clean/error result, completed-turn count, and the
+// production-owned final accounting value.
 type SessionRuntimeObservation struct {
 	Kind           SessionRuntimeObservationKind
 	Tick           uint64
@@ -39,6 +70,9 @@ type SessionRuntimeObservation struct {
 	InputCommit int
 	Clean       bool
 	Error       string
+	// FinalAccounting is populated only on the terminal observation. It is
+	// copied before delivery and can be retained by the observer safely.
+	FinalAccounting *SessionFinalAccounting
 }
 
 // SessionRuntimeObserver receives runtime observations. It is optional and
@@ -77,19 +111,24 @@ func (r *sessionRuntimeObservationRecorder) observe(kind SessionRuntimeObservati
 }
 
 func (r *sessionRuntimeObservationRecorder) observeWithInputCommit(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error) {
+	r.observeFinal(kind, payload, turns, inputCommit, clean, runErr, nil)
+}
+
+func (r *sessionRuntimeObservationRecorder) observeFinal(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *SessionFinalAccounting) {
 	if r == nil || r.observer == nil {
 		return
 	}
 	tick, timestamp := r.snapshot()
 	r.observer.ObserveSessionRuntime(SessionRuntimeObservation{
-		Kind:           kind,
-		Tick:           tick,
-		Timestamp:      timestamp,
-		Payload:        append([]byte(nil), payload...),
-		TurnsCompleted: turns,
-		InputCommit:    inputCommit,
-		Clean:          clean,
-		Error:          sessionRuntimeObservationError(runErr),
+		Kind:            kind,
+		Tick:            tick,
+		Timestamp:       timestamp,
+		Payload:         append([]byte(nil), payload...),
+		TurnsCompleted:  turns,
+		InputCommit:     inputCommit,
+		Clean:           clean,
+		Error:           sessionRuntimeObservationError(runErr),
+		FinalAccounting: cloneSessionFinalAccounting(finalAccounting),
 	})
 }
 
@@ -128,12 +167,12 @@ func (r *sessionRuntimeObservationRecorder) turnCompleted(turns int) {
 	r.observe(SessionRuntimeObservationTurnCompleted, nil, turns, true, nil)
 }
 
-func (r *sessionRuntimeObservationRecorder) terminal(turns int, runErr error) {
+func (r *sessionRuntimeObservationRecorder) terminalWithAccounting(turns int, runErr error, finalAccounting *SessionFinalAccounting) {
 	if r == nil || r.observer == nil {
 		return
 	}
 	r.terminalOnce.Do(func() {
-		r.observe(SessionRuntimeObservationTerminal, nil, turns, runErr == nil, runErr)
+		r.observeFinal(SessionRuntimeObservationTerminal, nil, turns, 0, runErr == nil, runErr, finalAccounting)
 	})
 }
 
@@ -150,4 +189,19 @@ func sessionRuntimeObservationError(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func cloneSessionFinalAccounting(accounting *SessionFinalAccounting) *SessionFinalAccounting {
+	if accounting == nil {
+		return nil
+	}
+	clone := *accounting
+	clone.Metrics.HistogramBounds = append([]int64(nil), accounting.Metrics.HistogramBounds...)
+	clone.Metrics.Series = make([]metrics.SeriesSnapshot, len(accounting.Metrics.Series))
+	for index, series := range accounting.Metrics.Series {
+		clone.Metrics.Series[index] = series
+		clone.Metrics.Series[index].Histogram.Bounds = append([]int64(nil), series.Histogram.Bounds...)
+		clone.Metrics.Series[index].Histogram.BucketCounts = append([]uint64(nil), series.Histogram.BucketCounts...)
+	}
+	return &clone
 }

@@ -162,7 +162,9 @@ type SessionRunOptions struct {
 	// observers can correlate events across command instances.
 	Clock platformclock.Source
 	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
-	// from the session command. Nil keeps the runtime observationally silent.
+	// from the session command. The terminal event carries the production-owned
+	// session-cumulative token totals and complete metrics snapshot. Nil keeps
+	// the runtime observationally silent.
 	RuntimeObserver SessionRuntimeObserver
 
 	// Diagnostics optionally receives one canonical structured record per

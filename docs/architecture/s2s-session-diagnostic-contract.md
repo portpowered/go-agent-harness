@@ -5,7 +5,9 @@ speech-to-speech session run from **logs and metrics alone**, without reading
 code or re-running anything. It names, per closed-set failure mode, the first
 fields a responder looks at, in order; the full stable field reference; and the
 mapping between responder vocabulary ("the user's microphone audio") and the
-concrete metrics series names.
+concrete metrics series names. The runtime terminal observation contract below
+also defines the supported programmatic source for retaining the production
+accounting result without reconstructing it from observed stream deltas.
 
 Every field name and value shown below equals an observed value from the proof
 suite `agent-cli/internal/services/session_diagnostics_test.go`, which drives
@@ -36,6 +38,7 @@ With no sink injected, runtime behavior and output are byte-for-byte unchanged.
 | --- | --- | --- |
 | `SessionRunOptions.Diagnostics` | `services.SessionDiagnosticSink` | One canonical structured record per event (below). |
 | `SessionRunOptions.MetricsRecorder` | `go-agent-loop/pkg/metrics.Recorder` | Per-direction, per-modality byte observations. |
+| `SessionRunOptions.RuntimeObserver` | `services.SessionRuntimeObserver` | Clocked lifecycle observations; the terminal observation carries the production final accounting value. |
 | `SessionRunOptions.AudioInputs` | `[]services.SessionAudioInput` | User-audio injection through the loop's existing `AgentLoop.SendAudioInput` seam, attributed to a turn. |
 
 Canonical record events (`Event` field values):
@@ -50,6 +53,46 @@ Canonical record events (`Event` field values):
   delta it summarizes crosses, carrying the terminal per-direction and
   per-modality byte matrix plus provider-reported token usage when the
   provider delivered any on `MESSAGE.END`.
+
+## Final runtime accounting observation
+
+`SessionRuntimeObserver` is the supported programmatic composition seam for
+the production terminal result. `SessionRuntimeObservation.FinalAccounting` is
+nil on audio and turn-completed observations and is populated exactly once on
+the terminal observation, after the session consumer has processed all deltas
+that belong to the run. The terminal observation's `Clean` and `Error` fields
+retain the existing lifecycle result independently of the accounting payload.
+
+`SessionFinalAccounting` contains these session-cumulative token totals:
+
+| Field | Meaning |
+| --- | --- |
+| `PromptTokens` | Sum of every accepted non-negative provider prompt-token contribution. |
+| `CompletionTokens` | Sum of every accepted non-negative provider completion-token contribution. |
+| `TotalTokens` | Sum of every accepted non-negative provider total-token contribution. |
+| `ReasoningTokens` | Sum of every accepted non-negative provider reasoning-token contribution. |
+
+Each `MESSAGE.END` usage value is interpreted as an **incremental contribution
+for that completed turn** and is added once. The session accounting path does
+not add a cumulative provider reading repeatedly or attempt to infer/deduplicate
+one; a provider that exposes cumulative readings must normalize them before the
+value reaches the session stream. This makes the multi-turn total explicit and
+prevents accidental double counting.
+
+`SessionFinalAccounting.Metrics` is the deep-copied snapshot from the
+runtime-owned production metrics sink. It contains the deterministic
+input/output × audio/text/image/tool series (eight total), histogram bounds,
+non-cumulative bucket counts, overflow count, sample count, and byte sum. A
+series that received no observations is still present with explicit zero
+counters and zero histogram state. The snapshot is safe for an observer to
+retain or mutate after delivery; later runtime accounting cannot mutate the
+retained value.
+
+This terminal value is not built from `SessionStreamObserver`, a replay ledger,
+the duration transcript, or a command-side fold. Those are optional observation
+and artifact surfaces; the runtime accounting sink is advanced at the same
+production `sessionProgressObserver.account` seam that receives counted
+session events.
 
 ## Stable field reference
 
@@ -89,9 +132,10 @@ above (`input_audio_bytes`, `input_text_bytes`, `output_audio_bytes`,
 `output_text_bytes`, `output_tool_bytes`) plus `provider`, `model`, and
 `turns_completed`. When the provider reported nonzero token usage on any
 `MESSAGE.END`, the record also carries `provider_prompt_tokens`,
-`provider_completion_tokens`, and `provider_total_tokens`; zero-valued provider
-usage stays absent. Byte counts and token counts measure different units and
-are surfaced side by side, never assumed equal.
+`provider_completion_tokens`, `provider_total_tokens`, and
+`provider_reasoning_tokens`; zero-valued provider usage stays absent. Byte
+counts and token counts measure different units and are surfaced side by side,
+never assumed equal.
 
 ### `session_tool_call_unexecutable` fields
 
@@ -105,8 +149,10 @@ are surfaced side by side, never assumed equal.
 
 ## Metrics series semantics
 
-The recorder keeps five `(direction, modality)` series per direction; each
-observation adds one count and the payload's byte size:
+The diagnostic observer currently receives five observed `(direction, modality)`
+series; each observation adds one count and the payload's byte size. The final
+runtime `metrics.Snapshot` still preserves all eight supported series, including
+the explicit zero image and otherwise-unobserved series:
 
 | Responder vocabulary | Series key | Direction / Modality constants |
 | --- | --- | --- |
