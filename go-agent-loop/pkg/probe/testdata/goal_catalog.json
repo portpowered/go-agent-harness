@@ -28,11 +28,16 @@
   },
   {
     "id": "multimodal-describe-picture",
-    "text": "Give the assistant a picture of a red apple and ask it to describe what it sees.",
+    "text": "Describe the red apple in the image attached to this request.",
     "capability": "multimodal_input",
     "expectation": {
       "artifact_class": "described-image record",
       "description": "A recorded image interaction contains a description grounded in the supplied picture."
+    },
+    "input_source": {
+      "kind": "embedded_asset",
+      "asset_id": "red-apple-image",
+      "media_type": "image/png"
     }
   }
 ]

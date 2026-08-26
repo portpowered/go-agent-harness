@@ -57,11 +57,14 @@ type ArtifactExpectation struct {
 // Goal is one customer request that a blind acceptance probe can attempt.
 // Text is the exact plain-English input handed to the probe. Expectation
 // identifies the recorded artifact that can prove the goal was attained.
+// InputSource names a deterministic non-text attachment when the goal needs
+// one; fleet run inputs still contain only ID and Text.
 type Goal struct {
 	ID          string              `json:"id"`
 	Text        string              `json:"text"`
 	Capability  CapabilityArea      `json:"capability"`
 	Expectation ArtifactExpectation `json:"expectation"`
+	InputSource *GoalInputSource    `json:"input_source,omitempty"`
 }
 
 // GoalText returns the exact blind-probe text without adding any fleet hints.
@@ -264,6 +267,9 @@ func (c GoalCatalog) Validate() error {
 				Reason: "must describe objective recorded evidence",
 			}
 		}
+		if err := validateGoalInputSource(index, goal); err != nil {
+			return err
+		}
 	}
 
 	// Structural validation above protects each entry. This second pass protects
@@ -347,6 +353,14 @@ func LoadGoalCatalog() (GoalCatalog, error) {
 	}
 	if err := catalog.Validate(); err != nil {
 		return nil, fmt.Errorf("validate embedded goal catalog: %w", err)
+	}
+	for _, goal := range catalog {
+		if goal.InputSource == nil {
+			continue
+		}
+		if _, err := LoadGoalInputAsset(goal); err != nil {
+			return nil, fmt.Errorf("load embedded goal input for %q: %w", goal.ID, err)
+		}
 	}
 	return catalog, nil
 }

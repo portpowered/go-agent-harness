@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"image/png"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -177,6 +178,7 @@ func TestGoalCatalogValidationRejectsCapabilityDegradation(t *testing.T) {
 
 	candidate := append(probe.GoalCatalog(nil), catalog...)
 	candidate[len(candidate)-1].Capability = probe.CapabilityTextInteraction
+	candidate[len(candidate)-1].InputSource = nil
 	err = candidate.Validate()
 	if err == nil {
 		t.Fatal("capability-degraded catalog unexpectedly passed validation")
@@ -187,6 +189,131 @@ func TestGoalCatalogValidationRejectsCapabilityDegradation(t *testing.T) {
 	var validationErr *probe.GoalCatalogValidationError
 	if !errors.As(err, &validationErr) || validationErr.GoalID != catalog[len(catalog)-1].ID {
 		t.Fatalf("capability-degraded diagnostic: %#v (%v)", validationErr, err)
+	}
+}
+
+func TestMultimodalGoalRunInputResolvesEmbeddedAsset(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+
+	var multimodal probe.Goal
+	var runInput probe.GoalRunInput
+	for _, goal := range catalog {
+		if goal.ID != probe.GoalIDMultimodalDescribePicture {
+			continue
+		}
+		multimodal = goal
+		runInput = goalRunInputFor(t, catalog, goal.ID)
+		break
+	}
+	if multimodal.ID == "" {
+		t.Fatal("shipped catalog has no multimodal goal")
+	}
+	if multimodal.InputSource == nil {
+		t.Fatal("multimodal goal has no deterministic input source")
+	}
+	if multimodal.InputSource.Kind != probe.GoalInputSourceEmbeddedAsset {
+		t.Fatalf("multimodal input source kind = %q, want %q", multimodal.InputSource.Kind, probe.GoalInputSourceEmbeddedAsset)
+	}
+	if multimodal.InputSource.AssetID != probe.GoalInputAssetRedApple {
+		t.Fatalf("multimodal asset ID = %q, want %q", multimodal.InputSource.AssetID, probe.GoalInputAssetRedApple)
+	}
+
+	first, err := catalog.ResolveInputAsset(runInput)
+	if err != nil {
+		t.Fatalf("ResolveInputAsset: %v", err)
+	}
+	if first == nil {
+		t.Fatal("multimodal run input resolved without an asset")
+	}
+	if first.ID != multimodal.InputSource.AssetID || first.MediaType != "image/png" || len(first.Bytes) == 0 {
+		t.Fatalf("resolved asset metadata = %#v, want non-empty PNG asset", first)
+	}
+	decoded, err := png.Decode(bytes.NewReader(first.Bytes))
+	if err != nil {
+		t.Fatalf("decode resolved image: %v", err)
+	}
+	if bounds := decoded.Bounds(); bounds.Dx() < 2 || bounds.Dy() < 2 {
+		t.Fatalf("resolved image bounds = %v, want a visible image", bounds)
+	}
+	redPixels, greenPixels := 0, 0
+	for y := decoded.Bounds().Min.Y; y < decoded.Bounds().Max.Y; y++ {
+		for x := decoded.Bounds().Min.X; x < decoded.Bounds().Max.X; x++ {
+			r, g, b, _ := decoded.At(x, y).RGBA()
+			if r > 2*g && r > 2*b {
+				redPixels++
+			}
+			if g > 2*r && g > 2*b {
+				greenPixels++
+			}
+		}
+	}
+	if redPixels == 0 || greenPixels == 0 {
+		t.Fatalf("resolved image colors = red:%d green:%d, want red apple body and leaf", redPixels, greenPixels)
+	}
+
+	second, err := probe.ResolveGoalInputAsset(catalog, runInput)
+	if err != nil {
+		t.Fatalf("ResolveGoalInputAsset: %v", err)
+	}
+	if !bytes.Equal(first.Bytes, second.Bytes) {
+		t.Fatal("repeated asset resolution is not deterministic")
+	}
+	first.Bytes[0] ^= 0xff
+	third, err := catalog.ResolveInputAsset(runInput)
+	if err != nil {
+		t.Fatalf("ResolveInputAsset after caller mutation: %v", err)
+	}
+	if !bytes.Equal(second.Bytes, third.Bytes) {
+		t.Fatal("resolved asset bytes share mutable storage")
+	}
+}
+
+func TestGoalCatalogValidationRejectsUnwiredMultimodalInput(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+	index := len(catalog) - 1
+
+	for _, test := range []struct {
+		name     string
+		mutate   func(*probe.Goal)
+		wantKind error
+	}{
+		{
+			name:     "missing source",
+			mutate:   func(goal *probe.Goal) { goal.InputSource = nil },
+			wantKind: probe.ErrMissingGoalInputSource,
+		},
+		{
+			name: "unknown asset",
+			mutate: func(goal *probe.Goal) {
+				goal.InputSource.AssetID = "missing-image"
+			},
+			wantKind: probe.ErrInvalidGoalInputSource,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := append(probe.GoalCatalog(nil), catalog...)
+			source := *candidate[index].InputSource
+			candidate[index].InputSource = &source
+			test.mutate(&candidate[index])
+
+			err := candidate.Validate()
+			if err == nil {
+				t.Fatal("unwired multimodal source unexpectedly passed validation")
+			}
+			if !errors.Is(err, probe.ErrInvalidGoalCatalog) || !errors.Is(err, test.wantKind) {
+				t.Fatalf("error identity: %v", err)
+			}
+			var validationErr *probe.GoalCatalogValidationError
+			if !errors.As(err, &validationErr) || validationErr.GoalID != candidate[index].ID {
+				t.Fatalf("diagnostic: %#v (%v)", validationErr, err)
+			}
+		})
 	}
 }
 
@@ -346,4 +473,15 @@ func renderGoalList(catalog probe.GoalCatalog) string {
 		rendered.WriteByte('\n')
 	}
 	return rendered.String()
+}
+
+func goalRunInputFor(t *testing.T, catalog probe.GoalCatalog, goalID string) probe.GoalRunInput {
+	t.Helper()
+	for _, input := range catalog.RunInputs() {
+		if input.GoalID == goalID {
+			return input
+		}
+	}
+	t.Fatalf("no run input for goal %q", goalID)
+	return probe.GoalRunInput{}
 }
