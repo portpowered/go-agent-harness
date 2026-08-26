@@ -151,10 +151,35 @@ func renderFrictionReportSummary(report probe.FrictionReport) string {
 		}
 	}
 
+	summary.WriteString("Expectation misses:\n")
+	if len(report.ExpectationMisses) == 0 {
+		summary.WriteString("  (none)\n")
+	} else {
+		for _, miss := range report.ExpectationMisses {
+			fmt.Fprintf(&summary, "  %s: %d (scenarios: %s)\n", miss.Kind, miss.Count, reportScenarioNames(miss.Scenarios))
+		}
+	}
+
+	summary.WriteString("Top frictions:\n")
+	if len(report.TopFrictions) == 0 {
+		summary.WriteString("  (none)\n")
+	} else {
+		for _, friction := range report.TopFrictions {
+			fmt.Fprintf(&summary, "  %s/%s: %d (scenarios: %s)\n", friction.Category, friction.Key, friction.Count, reportScenarioNames(friction.Scenarios))
+		}
+	}
+
 	status := "pass"
 	if report.Failed > 0 {
 		status = "fail"
 	}
 	fmt.Fprintf(&summary, "Health: %s\n", status)
 	return summary.String()
+}
+
+func reportScenarioNames(names []string) string {
+	if len(names) == 0 {
+		return "(none)"
+	}
+	return strings.Join(names, ", ")
 }

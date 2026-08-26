@@ -41,13 +41,15 @@ type ReportArtifact = FrictionReportInput
 // their key before the report is returned, so json.Marshal produces stable
 // bytes for the same inputs.
 type FrictionReport struct {
-	Total           int                   `json:"total"`
-	Passed          int                   `json:"passed"`
-	Failed          int                   `json:"failed"`
-	Stuck           int                   `json:"stuck"`
-	Scenarios       []ScenarioRollup      `json:"scenarios"`
-	TerminalReasons []TerminalReasonCount `json:"terminal_reasons"`
-	ErrorClasses    []ErrorClassCount     `json:"error_classes"`
+	Total             int                    `json:"total"`
+	Passed            int                    `json:"passed"`
+	Failed            int                    `json:"failed"`
+	Stuck             int                    `json:"stuck"`
+	Scenarios         []ScenarioRollup       `json:"scenarios"`
+	TerminalReasons   []TerminalReasonCount  `json:"terminal_reasons"`
+	ErrorClasses      []ErrorClassCount      `json:"error_classes"`
+	ExpectationMisses []ExpectationMissCount `json:"expectation_misses"`
+	TopFrictions      []TopFriction          `json:"top_frictions"`
 }
 
 // ScenarioRollup contains the health totals for one scenario name across all
@@ -73,6 +75,36 @@ type ErrorClassCount struct {
 	Class string `json:"class"`
 	Count int    `json:"count"`
 }
+
+// ExpectationMissCount records failed expectation outcomes by kind. Scenarios
+// contains the sorted, distinct names that contributed to the count.
+type ExpectationMissCount struct {
+	Kind      ExpectationKind `json:"kind"`
+	Count     int             `json:"count"`
+	Scenarios []string        `json:"scenarios"`
+}
+
+// ExpectationKindCount is an expressive alias for callers that prefer the
+// same naming used by the underlying expectation vocabulary.
+type ExpectationKindCount = ExpectationMissCount
+
+// TopFriction is one ranked failure category. Key is the category-specific
+// value: an expectation kind, terminal reason, error class, or "stuck".
+// Scenarios contains sorted, distinct representative scenario names.
+type TopFriction struct {
+	Category  string   `json:"category"`
+	Key       string   `json:"key"`
+	Count     int      `json:"count"`
+	Scenarios []string `json:"scenarios"`
+}
+
+const (
+	FrictionCategoryErrorClass     = "error_class"
+	FrictionCategoryExpectation    = "expectation"
+	FrictionCategoryFailure        = "failure"
+	FrictionCategoryStuck          = "stuck"
+	FrictionCategoryTerminalReason = "terminal_reason"
+)
 
 // FrictionReportError identifies the source and 1-based line of malformed
 // JSONL input. Line is zero for an input-level reader error.
@@ -124,13 +156,33 @@ func AggregateScenarioResults(results []ScenarioResult) FrictionReport {
 	}
 
 	report := FrictionReport{
-		Scenarios:       make([]ScenarioRollup, 0),
-		TerminalReasons: make([]TerminalReasonCount, 0),
-		ErrorClasses:    make([]ErrorClassCount, 0),
+		Scenarios:         make([]ScenarioRollup, 0),
+		TerminalReasons:   make([]TerminalReasonCount, 0),
+		ErrorClasses:      make([]ErrorClassCount, 0),
+		ExpectationMisses: make([]ExpectationMissCount, 0),
+		TopFrictions:      make([]TopFriction, 0),
 	}
 	byScenario := make(map[string]*scenarioCounts)
 	terminalReasons := make(map[string]int)
 	errorClasses := make(map[string]int)
+	expectationMisses := make(map[ExpectationKind]*scenarioNames)
+	frictions := make(map[frictionIdentity]*frictionBucket)
+	addFriction := func(category, key, scenario string) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			key = "unknown"
+		}
+		identity := frictionIdentity{Category: category, Key: key}
+		bucket := frictions[identity]
+		if bucket == nil {
+			bucket = &frictionBucket{Scenarios: make(map[string]struct{})}
+			frictions[identity] = bucket
+		}
+		bucket.Count++
+		if scenario != "" {
+			bucket.Scenarios[scenario] = struct{}{}
+		}
+	}
 
 	for _, result := range results {
 		report.Total++
@@ -159,6 +211,45 @@ func AggregateScenarioResults(results []ScenarioResult) FrictionReport {
 		}
 		if class := resultErrorClass(result); class != "" {
 			errorClasses[class]++
+		}
+
+		for _, outcome := range result.ScenarioExpectationOutcomes {
+			if outcome.Passed {
+				continue
+			}
+			kind := outcome.Kind
+			if strings.TrimSpace(string(kind)) == "" {
+				kind = ExpectationKind("unknown")
+			}
+			misses := expectationMisses[kind]
+			if misses == nil {
+				misses = &scenarioNames{Values: make(map[string]struct{})}
+				expectationMisses[kind] = misses
+			}
+			misses.Count++
+			if result.Name != "" {
+				misses.Values[result.Name] = struct{}{}
+			}
+			addFriction(FrictionCategoryExpectation, string(kind), result.Name)
+		}
+
+		failure := !result.Pass || stuck
+		if !failure {
+			continue
+		}
+		if stuck {
+			addFriction(FrictionCategoryStuck, StuckTerminalReason, result.Name)
+		}
+		reason := strings.TrimSpace(result.TerminalReason)
+		if reason != "" && reason != StuckTerminalReason {
+			addFriction(FrictionCategoryTerminalReason, reason, result.Name)
+		}
+		class := resultErrorClass(result)
+		if class != "" {
+			addFriction(FrictionCategoryErrorClass, class, result.Name)
+		}
+		if !stuck && reason == "" && class == "" && len(result.ScenarioExpectationOutcomes) == 0 {
+			addFriction(FrictionCategoryFailure, "unknown", result.Name)
 		}
 	}
 
@@ -190,6 +281,17 @@ func AggregateScenarioResults(results []ScenarioResult) FrictionReport {
 			Count: errorClasses[class],
 		})
 	}
+
+	for _, kind := range sortedExpectationKinds(expectationMisses) {
+		misses := expectationMisses[kind]
+		report.ExpectationMisses = append(report.ExpectationMisses, ExpectationMissCount{
+			Kind:      kind,
+			Count:     misses.Count,
+			Scenarios: sortedScenarioNames(misses.Values),
+		})
+	}
+
+	report.TopFrictions = sortedTopFrictions(frictions)
 	return report
 }
 
@@ -292,6 +394,68 @@ func sortedCountKeys(counts map[string]int) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func sortedExpectationKinds(counts map[ExpectationKind]*scenarioNames) []ExpectationKind {
+	keys := make([]ExpectationKind, 0, len(counts))
+	for kind := range counts {
+		keys = append(keys, kind)
+	}
+	sort.Slice(keys, func(i, j int) bool { return string(keys[i]) < string(keys[j]) })
+	return keys
+}
+
+func sortedScenarioNames(names map[string]struct{}) []string {
+	values := make([]string, 0, len(names))
+	for name := range names {
+		values = append(values, name)
+	}
+	sort.Strings(values)
+	return values
+}
+
+func sortedTopFrictions(frictions map[frictionIdentity]*frictionBucket) []TopFriction {
+	identities := make([]frictionIdentity, 0, len(frictions))
+	for identity := range frictions {
+		identities = append(identities, identity)
+	}
+	sort.Slice(identities, func(i, j int) bool {
+		left, right := frictions[identities[i]], frictions[identities[j]]
+		if left.Count != right.Count {
+			return left.Count > right.Count
+		}
+		if identities[i].Category != identities[j].Category {
+			return identities[i].Category < identities[j].Category
+		}
+		return identities[i].Key < identities[j].Key
+	})
+
+	result := make([]TopFriction, 0, len(identities))
+	for _, identity := range identities {
+		bucket := frictions[identity]
+		result = append(result, TopFriction{
+			Category:  identity.Category,
+			Key:       identity.Key,
+			Count:     bucket.Count,
+			Scenarios: sortedScenarioNames(bucket.Scenarios),
+		})
+	}
+	return result
+}
+
+type scenarioNames struct {
+	Count  int
+	Values map[string]struct{}
+}
+
+type frictionIdentity struct {
+	Category string
+	Key      string
+}
+
+type frictionBucket struct {
+	Count     int
+	Scenarios map[string]struct{}
 }
 
 func resultErrorClass(result ScenarioResult) string {

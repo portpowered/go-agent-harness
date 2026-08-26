@@ -13,11 +13,16 @@ func reportInput(name string, lines ...string) FrictionReportInput {
 }
 
 func reportResult(name string, pass bool, terminalReason, message string) string {
+	return reportResultWithExpectations(name, pass, terminalReason, message)
+}
+
+func reportResultWithExpectations(name string, pass bool, terminalReason, message string, outcomes ...ScenarioExpectationOutcome) string {
 	result := ScenarioResult{
-		Name:           name,
-		Pass:           pass,
-		TerminalReason: terminalReason,
-		Error:          message,
+		Name:                        name,
+		Pass:                        pass,
+		ScenarioExpectationOutcomes: outcomes,
+		TerminalReason:              terminalReason,
+		Error:                       message,
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
@@ -86,6 +91,49 @@ func TestAggregateFrictionReportStuckIsASeparateFailureBucket(t *testing.T) {
 	}
 }
 
+func TestAggregateFrictionReportIncludesExpectationMissesAndTopFrictions(t *testing.T) {
+	report, err := AggregateFrictionReport(reportInput("mixed.jsonl",
+		reportResultWithExpectations("healthy", true, "disconnect", "", ScenarioExpectationOutcome{
+			Kind:   ExpectFrameCount,
+			Passed: true,
+		}),
+		reportResultWithExpectations("transcript-miss", false, "error:transport", "connection reset",
+			ScenarioExpectationOutcome{Kind: ExpectTranscriptContains, Passed: false, Expected: "ready", Actual: ""},
+			ScenarioExpectationOutcome{Kind: ExpectFrameCount, Passed: false, Expected: "2", Actual: "0"},
+		),
+		reportResultWithExpectations("transcript-miss", false, "disconnect", "",
+			ScenarioExpectationOutcome{Kind: ExpectTranscriptContains, Passed: false, Expected: "ready", Actual: "busy"},
+		),
+		reportResult("stuck-session", true, StuckTerminalReason, ""),
+	))
+	if err != nil {
+		t.Fatalf("AggregateFrictionReport failed: %v", err)
+	}
+
+	wantMisses := []ExpectationMissCount{
+		{Kind: ExpectFrameCount, Count: 1, Scenarios: []string{"transcript-miss"}},
+		{Kind: ExpectTranscriptContains, Count: 2, Scenarios: []string{"transcript-miss"}},
+	}
+	if !reflect.DeepEqual(report.ExpectationMisses, wantMisses) {
+		t.Fatalf("expectation misses = %#v, want %#v", report.ExpectationMisses, wantMisses)
+	}
+
+	if len(report.TopFrictions) != 6 {
+		t.Fatalf("top frictions = %#v, want six categories", report.TopFrictions)
+	}
+	wantTop := []TopFriction{
+		{Category: FrictionCategoryExpectation, Key: string(ExpectTranscriptContains), Count: 2, Scenarios: []string{"transcript-miss"}},
+		{Category: FrictionCategoryErrorClass, Key: "transport", Count: 1, Scenarios: []string{"transcript-miss"}},
+		{Category: FrictionCategoryExpectation, Key: string(ExpectFrameCount), Count: 1, Scenarios: []string{"transcript-miss"}},
+		{Category: FrictionCategoryStuck, Key: StuckTerminalReason, Count: 1, Scenarios: []string{"stuck-session"}},
+		{Category: FrictionCategoryTerminalReason, Key: "disconnect", Count: 1, Scenarios: []string{"transcript-miss"}},
+		{Category: FrictionCategoryTerminalReason, Key: "error:transport", Count: 1, Scenarios: []string{"transcript-miss"}},
+	}
+	if !reflect.DeepEqual(report.TopFrictions, wantTop) {
+		t.Fatalf("top frictions = %#v, want %#v", report.TopFrictions, wantTop)
+	}
+}
+
 func TestAggregateFrictionReportUsesLexicographicTieBreaks(t *testing.T) {
 	buildInputs := func() []FrictionReportInput {
 		return []FrictionReportInput{
@@ -138,7 +186,8 @@ func TestAggregateFrictionReportEmptyInputIsValid(t *testing.T) {
 		if report.Total != 0 || report.Passed != 0 || report.Failed != 0 || report.Stuck != 0 {
 			t.Fatalf("empty totals = %+v", report)
 		}
-		if report.Scenarios == nil || report.TerminalReasons == nil || report.ErrorClasses == nil {
+		if report.Scenarios == nil || report.TerminalReasons == nil || report.ErrorClasses == nil ||
+			report.ExpectationMisses == nil || report.TopFrictions == nil {
 			t.Fatalf("empty report contains nil collections: %+v", report)
 		}
 	}

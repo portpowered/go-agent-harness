@@ -326,6 +326,78 @@ func TestProbeReportNoFailAndStdinUseDefaultStreams(t *testing.T) {
 	}
 }
 
+func TestProbeReportMixedCorpusIncludesExpectationAndTopFrictionRollups(t *testing.T) {
+	dir := t.TempDir()
+	jsonPath := filepath.Join(dir, "friction.json")
+	summaryPath := filepath.Join(dir, "friction.txt")
+
+	run := executeCLI(
+		"probe", "report",
+		"--out", filepath.Join(probeReportFixtureDir, "mixed.jsonl"),
+		"--json", jsonPath,
+		"--summary", summaryPath,
+	)
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1 for mixed failures; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+
+	jsonBytes, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("read JSON report: %v", err)
+	}
+	var report probe.FrictionReport
+	if err := json.Unmarshal(jsonBytes, &report); err != nil {
+		t.Fatalf("decode JSON report %q: %v", jsonBytes, err)
+	}
+	if report.Total != 4 || report.Passed != 1 || report.Failed != 3 || report.Stuck != 1 {
+		t.Fatalf("report totals = %+v, want total=4 passed=1 failed=3 stuck=1", report)
+	}
+	wantMisses := []probe.ExpectationMissCount{
+		{Kind: probe.ExpectFrameCount, Count: 1, Scenarios: []string{"transcript-miss"}},
+		{Kind: probe.ExpectTranscriptContains, Count: 2, Scenarios: []string{"transcript-miss"}},
+	}
+	if !reflect.DeepEqual(report.ExpectationMisses, wantMisses) {
+		t.Fatalf("expectation misses = %#v, want %#v", report.ExpectationMisses, wantMisses)
+	}
+	if len(report.TopFrictions) == 0 || report.TopFrictions[0].Category != probe.FrictionCategoryExpectation ||
+		report.TopFrictions[0].Key != string(probe.ExpectTranscriptContains) || report.TopFrictions[0].Count != 2 {
+		t.Fatalf("top friction = %#v, want transcript-contains expectation count 2", report.TopFrictions)
+	}
+	var sawStuck, sawError, sawTerminal bool
+	for _, friction := range report.TopFrictions {
+		switch {
+		case friction.Category == probe.FrictionCategoryStuck && friction.Key == probe.StuckTerminalReason:
+			sawStuck = friction.Count == 1 && reflect.DeepEqual(friction.Scenarios, []string{"stuck-session"})
+		case friction.Category == probe.FrictionCategoryErrorClass && friction.Key == "transport":
+			sawError = friction.Count == 1 && reflect.DeepEqual(friction.Scenarios, []string{"transcript-miss"})
+		case friction.Category == probe.FrictionCategoryTerminalReason && friction.Key == "error:transport":
+			sawTerminal = friction.Count == 1 && reflect.DeepEqual(friction.Scenarios, []string{"transcript-miss"})
+		}
+	}
+	if !sawStuck || !sawError || !sawTerminal {
+		t.Fatalf("top friction categories missing stuck/error/terminal representatives: %#v", report.TopFrictions)
+	}
+
+	summaryBytes, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatalf("read summary: %v", err)
+	}
+	summary := string(summaryBytes)
+	for _, want := range []string{
+		"Expectation misses:",
+		"transcript-contains: 2 (scenarios: transcript-miss)",
+		"Top frictions:",
+		"expectation/transcript-contains: 2 (scenarios: transcript-miss)",
+		"stuck/stuck: 1 (scenarios: stuck-session)",
+		"error_class/transport: 1 (scenarios: transcript-miss)",
+		"terminal_reason/error:transport: 1 (scenarios: transcript-miss)",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("summary %q does not contain %q", summary, want)
+		}
+	}
+}
+
 func TestProbeReportMalformedAndMissingInputsAreTyped(t *testing.T) {
 	dir := t.TempDir()
 	malformed := filepath.Join(dir, "malformed.jsonl")
