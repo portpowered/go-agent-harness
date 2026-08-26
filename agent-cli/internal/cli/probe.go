@@ -669,17 +669,9 @@ func validateInjectedReplayAudio(capture gatewaytesting.SessionCapture, frames [
 	return nil
 }
 
-// replayTranscript extracts the server-to-client transcript text from a
-// recorded session fixture so transcript expectations can be evaluated
+// replayTranscriptFromCapture extracts the server-to-client transcript text
+// from a loaded session capture so transcript expectations can be evaluated
 // offline.
-func replayTranscript(fixture string) (string, error) {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return "", fmt.Errorf("load replay fixture %q: %w", fixture, err)
-	}
-	return replayTranscriptFromCapture(capture), nil
-}
-
 func replayTranscriptFromCapture(capture gatewaytesting.SessionCapture) string {
 	var builder strings.Builder
 	for _, record := range capture.Records {
@@ -776,20 +768,12 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 	}
 }
 
-// deriveResponseCancelObservation scans the recorded fixture for
-// RESPONSE.CANCEL frames on the outbound client-to-provider path and fills the
-// observation's barge-in cancel fields. A frame's logical tick is its 1-based
-// ordinal among all client-to-server frames, matching the replay probe's
-// outbound tick counting. The first observed cancel wins; later duplicates do
-// not move the recorded tick.
-func deriveResponseCancelObservation(fixture string, observation *probe.ObservationSnapshot) error {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
-	}
-	return deriveResponseCancelObservationFromCapture(capture, observation)
-}
-
+// deriveResponseCancelObservationFromCapture scans the capture for
+// RESPONSE.CANCEL frames on the outbound client-to-provider path and fills
+// the observation's barge-in cancel fields. A frame's logical tick is its
+// 1-based ordinal among all client-to-server frames, matching the replay
+// probe's outbound tick counting. The first observed cancel wins; later
+// duplicates do not move the recorded tick.
 func deriveResponseCancelObservationFromCapture(capture gatewaytesting.SessionCapture, observation *probe.ObservationSnapshot) error {
 	tick := probe.LogicalTime(0)
 	for _, record := range capture.Records {
@@ -826,19 +810,11 @@ func isResponseCancelEventType(eventType string) bool {
 	}
 }
 
-// replayBufferDisposition inspects a recorded session fixture for an
+// replayBufferDispositionFromCapture inspects a session capture for an
 // observable disposition of the buffered input audio: an acknowledged commit
-// or an explicit discard. The empty string means the fixture ends with the
+// or an explicit discard. The empty string means the capture ends with the
 // buffer uncommitted, which buffer-disposition expectations treat as a
 // failure.
-func replayBufferDisposition(fixture string) string {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return ""
-	}
-	return replayBufferDispositionFromCapture(capture)
-}
-
 func replayBufferDispositionFromCapture(capture gatewaytesting.SessionCapture) string {
 	for _, record := range capture.Records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
@@ -854,19 +830,11 @@ func replayBufferDispositionFromCapture(capture gatewaytesting.SessionCapture) s
 	return ""
 }
 
-// deriveToolResultObservation scans the recorded fixture for tool-call
+// deriveToolResultObservationFromCapture scans the capture for tool-call
 // lifecycle events and fills the observation's barge-in/tool-result fields:
 // issued calls (server function_call_arguments.done), delivered results
 // (client conversation.item.create carrying a function_call_output), and
 // explicitly discarded results (client tool.result.discarded events).
-func deriveToolResultObservation(fixture string, observation *probe.ObservationSnapshot) error {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
-	}
-	return deriveToolResultObservationFromCapture(capture, observation)
-}
-
 func deriveToolResultObservationFromCapture(capture gatewaytesting.SessionCapture, observation *probe.ObservationSnapshot) error {
 	for _, record := range capture.Records {
 		var payload struct {
@@ -893,22 +861,14 @@ func deriveToolResultObservationFromCapture(capture gatewaytesting.SessionCaptur
 	return nil
 }
 
-// deriveBargeInObservation scans the recorded fixture for the repeated-barge-in
-// lifecycle (s2s v3c) and fills the observation's reconciliation evidence:
-// committed user turns (client input_audio_buffer.commit or a client
-// conversation.item.create carrying a message item), created responses,
-// delivered assistant turns (response.done on an uninterrupted response),
-// cancellation events (client response.cancel), deltas leaking after their
-// response was cancelled or outside any live response, and any response still
-// streaming when the fixture ends.
-func deriveBargeInObservation(fixture string, observation *probe.ObservationSnapshot) error {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return fmt.Errorf("load replay session fixture %q: %w", fixture, err)
-	}
-	return deriveBargeInObservationFromCapture(capture, observation)
-}
-
+// deriveBargeInObservationFromCapture scans the capture for the
+// repeated-barge-in lifecycle (s2s v3c) and fills the observation's
+// reconciliation evidence: committed user turns (client
+// input_audio_buffer.commit or a client conversation.item.create carrying a
+// message item), created responses, delivered assistant turns (response.done
+// on an uninterrupted response), cancellation events (client response.cancel),
+// deltas leaking after their response was cancelled or outside any live
+// response, and any response still streaming when the capture ends.
 func deriveBargeInObservationFromCapture(capture gatewaytesting.SessionCapture, observation *probe.ObservationSnapshot) error {
 	inFlight, cancelled := false, false
 	for _, record := range capture.Records {
@@ -968,23 +928,15 @@ func isTranscriptDeltaEventType(eventType string) bool {
 	}
 }
 
-// replayErrorClassification classifies the first server-to-client failure
-// record in the fixture through the established provider error taxonomy. A
+// replayErrorClassificationFromCapture classifies the first server-to-client
+// failure record through the established provider error taxonomy. A
 // server-to-client frame whose type carries the "malformed." prefix encodes an
 // unparseable provider response and classifies as invalid_request — the same
 // taxonomy class the gateway assigns when a live session parser rejects a
 // provider event. Well-formed "error" records classify via their wire error
-// type/code. It returns the empty string when the fixture records no provider
+// type/code. It returns the empty string when the capture records no provider
 // error or malformed frame, so healthy sessions keep their
 // disconnect/provenance terminal reason.
-func replayErrorClassification(fixture string) string {
-	capture, err := gatewaytesting.LoadSessionCapture(fixture)
-	if err != nil {
-		return ""
-	}
-	return replayErrorClassificationFromCapture(capture)
-}
-
 func replayErrorClassificationFromCapture(capture gatewaytesting.SessionCapture) string {
 	for _, record := range capture.Records {
 		if record.Direction != gatewaytesting.DirectionServerToClient {
