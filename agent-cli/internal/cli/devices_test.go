@@ -219,8 +219,14 @@ func (r *devicesTestRegistry) Open(audio.DeviceID) (audio.OpenedDevice, error) {
 }
 
 func TestDevicesListRegisteredInProductionRoot(t *testing.T) {
-	if _, err := newDefaultDeviceRegistry().List(); err != nil {
+	registry := newDefaultDeviceRegistry()
+	if _, err := registry.List(); err != nil {
 		t.Skipf("platform audio registry unavailable: %v", err)
+	}
+	for _, direction := range []audio.Direction{audio.DirectionInput, audio.DirectionOutput} {
+		if _, err := registry.Default(direction); err != nil {
+			t.Skipf("platform audio %s default unavailable: %v", direction, err)
+		}
 	}
 	table := executeCLI("devices", "list")
 	if table.exitCode != 0 || table.stderr != "" {

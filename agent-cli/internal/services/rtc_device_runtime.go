@@ -132,7 +132,8 @@ func (i *rtcDeviceBindingInferencer) report(err error) {
 
 func rtcDevicePumpStopped(err error) bool {
 	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, ErrRTCDeviceSourceClosed) || errors.Is(err, ErrRTCDeviceSinkClosed) || errors.Is(err, audio.ErrClosed)
+		errors.Is(err, ErrRTCDeviceSourceClosed) || errors.Is(err, ErrRTCDeviceSinkClosed) || errors.Is(err, audio.ErrClosed) ||
+		errors.Is(err, rtc.ErrSessionMediaClosed)
 }
 
 // rtcDeviceBoundSession keeps the session owner and local device binding in
