@@ -79,6 +79,56 @@ microphones, WebRTC, and the entire probe/acceptance layer are all unreachable.
   `session_audio_in.go`, `session_image.go`, or `session_tools.go`. Those files
   exist **only inside the 15 open PRs**.
 
+### 1.1 v10 WebRTC external source — bounded evidence (verified 2026-08-26)
+
+The v10 vertical is proven through the shipped root CLI after the media/look
+surface landed on `origin/main`. No credentialed or live-camera claim is made.
+
+- Reachable command surfaces (actual argv through the real root router):
+  `agent media probe go2rtc://<loopback>/api/ws?src=v10-tuya-main`,
+  `agent media look go2rtc://<loopback>/api/ws?src=v10-tuya-main`, and
+  `agent session --replay <synthetic capture> --audio-in - --audio-out <wav>`.
+- Concrete tests under `agent-cli/test/integration/`:
+  `TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI`,
+  `TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy`, and
+  `TestWebrtcDeadSourceFailsPositiveDeliveryAssertions`. The camera and
+  audio-only tests execute both public media commands and the real root
+  session command; the loopback fixture independently records negotiation and
+  per-track packet activity.
+- Provider replay fixture: a synthetic `.session.json` assembled from the
+  shared smoke handshake (`openai_realtime_smoke.session.json`) whose
+  `input_audio_buffer.append` records carry the exact bridged source frames;
+  the replay transport diverges on any dropped or distorted frame, so a
+  session that did not consume the source audio byte-exactly cannot pass.
+- go2rtc/WebRTC source shapes: loopback go2rtc-compatible signaling
+  (`/api/ws` with `webrtc/offer|answer`). Camera = PCMU/8000/mono audio track
+  plus an H.264 video track; audio-only = the PCMU track with the video
+  m-line stripped from the answer. Source audio is μ-law encoded from the
+  loudest window of committed `go-agent-loop/testdata/audio/utt_short_16k.wav`
+  (no new binary fixture).
+- Fixture-observed track facts: the camera offer and answer each contain one
+  audio section (`PCMU`, 8000 Hz, mono) and one video section, with at least
+  three independently observed video packets. The audio-only answer contains
+  exactly one audio section and no video section (the client offer's video
+  recvonly request is rejected), with zero video packets. The public camera
+  report says `Video presence: true` and `look` returns non-empty `video/H264`;
+  the public audio-only report says `Video presence: false` and returns the
+  successful unavailable result `Reason: no_video_track` with no image bytes.
+- Negative controls: applying the camera assertion to the parsed public
+  audio-only reports fails for absent video and unavailable `look()`, while a
+  negotiated frame-less source cannot satisfy the positive audio-delivery
+  assertion.
+- Non-silent audio and terminal signals: bridged source RMS energy > 500, a
+  recorded reply WAV that is non-silent within bounded duration,
+  `[session closed: fixture_complete]` plus exit status 0 inside a hard 45 s
+  parent deadline. The dead-source control negotiates but sends no media and
+  cannot satisfy the positive audio-delivery assertion.
+
+Scope: T1 only — a loopback go2rtc-compatible source over the replayed
+provider transport. This evidence does not duplicate v1 text-in/audio-out,
+v2a basic audio-in, v6a auth failure, or v9 physical-device roundtrip
+coverage, and does not claim a credentialed or live-camera run.
+
 ---
 
 ## 2. Inventory
