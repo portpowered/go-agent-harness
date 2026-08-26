@@ -20,9 +20,9 @@ import (
 // agent-cli processes. The fixtures are replay-only: no provider credentials
 // or network connection is needed by any command under test.
 const (
-	unknownToolFixture     = "s2s-v4e-tool-unknown.session.json"
+	unknownToolFixture     = "s2s-v4e-tool-unknown.capture.json"
 	unknownToolScenario    = "s2s-v4e/s2s-v4e-tool-unknown.scenario.json"
-	registeredToolFixture  = "s2s-v4e-tool-registered.session.json"
+	registeredToolFixture  = "s2s-v4e-tool-registered.capture.json"
 	registeredToolScenario = "s2s-v4e/s2s-v4e-tool-registered.scenario.json"
 	unknownToolName        = "s2s_v4e_unregistered_tool"
 	registeredToolName     = "read_file"

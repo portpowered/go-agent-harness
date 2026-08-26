@@ -9,7 +9,7 @@ lane with no network and no credentials.
 (`agent-cli/test/integration/tool_unknown_test.go`) launches real `agent-cli`
 processes as child processes with their production argv over the committed,
 replay-only capture
-`agent-cli/test/integration/testdata/s2s-v4e-tool-unknown.session.json`. No
+`agent-cli/test/integration/testdata/s2s-v4e-tool-unknown.capture.json`. No
 Cobra constructor, session service, probe executor, or tool-routing function
 runs in-process. The proof has three observations:
 
@@ -62,7 +62,7 @@ stays distinct from the execution-error verticals:
 assertion discriminates instead of labeling every tool call as unknown:
 
 - The committed control pair
-  (`s2s-v4e-tool-registered.session.json` /
+  (`s2s-v4e-tool-registered.capture.json` /
   `s2s-v4e/s2s-v4e-tool-registered.scenario.json`) preserves the positive interaction
   shape but requests `read_file`, a name present in the active registry.
 - Both scenario documents declare identical expectation blocks, and the test
@@ -97,7 +97,7 @@ read_file             # active registry contains read_file ...
 write_file            # ... and never s2s_v4e_unregistered_tool
 
 $ /tmp/agent --config-dir /tmp/agent-cfg session --replay \
-    test/integration/testdata/s2s-v4e-tool-unknown.session.json
+    test/integration/testdata/s2s-v4e-tool-unknown.capture.json
 {"type":"refusal","classification":"unknown_tool","tool_name":"s2s_v4e_unregistered_tool"}
 [session closed: fixture_complete]
 [session terminal: ...]
@@ -105,12 +105,12 @@ $ /tmp/agent --config-dir /tmp/agent-cfg session --replay \
 
 $ /tmp/agent probe run \
     test/integration/testdata/s2s-v4e/s2s-v4e-tool-unknown.scenario.json \
-    --replay test/integration/testdata/s2s-v4e-tool-unknown.session.json --json
+    --replay test/integration/testdata/s2s-v4e-tool-unknown.capture.json --json
 # exit 0; result line "pass":true then summary "status":"pass"
 
 $ /tmp/agent probe run \
     test/integration/testdata/s2s-v4e/s2s-v4e-tool-registered.scenario.json \
-    --replay test/integration/testdata/s2s-v4e-tool-registered.session.json --json
+    --replay test/integration/testdata/s2s-v4e-tool-registered.capture.json --json
 # exit 1; result line "pass":false with transcript_contains
 # expected-vs-actual, summary "status":"fail"
 ```
