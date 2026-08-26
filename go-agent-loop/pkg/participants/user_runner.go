@@ -41,7 +41,11 @@ func (r *UserRunner) Run(ctx context.Context) error {
 			return ctx.Err()
 		}
 		if r.outChannel != nil {
-			r.outChannel <- req
+			select {
+			case r.outChannel <- req:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 }
