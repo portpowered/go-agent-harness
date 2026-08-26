@@ -26,9 +26,9 @@ const (
 	ScenarioIDS2SV6CErrorRateLimitThrottled = ScenarioIDS2SV6CErrorRateLimit + "-throttled"
 )
 
-func init() {
+func s2sv6CErrorRateLimitScenario() Scenario {
 	expectation := ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "error:rate_limited"}
-	scenario := Scenario{
+	return Scenario{
 		ID:          ScenarioIDS2SV6CErrorRateLimitThrottled,
 		Name:        ScenarioIDS2SV6CErrorRateLimitThrottled,
 		Description: "Session receiving a provider rate-limit error must terminate with the typed rate_limited classification",
@@ -40,7 +40,14 @@ func init() {
 		Expected:         []ExpectedBehavior{expectation},
 		ExpectedBehavior: []ExpectedBehavior{expectation},
 	}
-	if err := RegisterScenario(scenario); err != nil {
+}
+
+func registerS2SV6CErrorRateLimitScenario(register func(Scenario, ...DeadSessionControl) error) {
+	if err := register(s2sv6CErrorRateLimitScenario()); err != nil {
 		panic(err)
 	}
+}
+
+func init() {
+	registerS2SV6CErrorRateLimitScenario(RegisterScenario)
 }
