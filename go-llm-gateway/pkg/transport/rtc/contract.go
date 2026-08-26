@@ -91,11 +91,11 @@ const (
 // storage after the operation returns. MediaType is the negotiated video MIME
 // type, for example video/H264.
 type VisualObservation struct {
-	Source    string                   `json:"source,omitempty"`
-	Status    VisualObservationStatus  `json:"status"`
-	Reason    VisualObservationReason  `json:"reason,omitempty"`
-	MediaType string                   `json:"media_type,omitempty"`
-	Bytes     []byte                   `json:"bytes,omitempty"`
+	Source    string                  `json:"source,omitempty"`
+	Status    VisualObservationStatus `json:"status"`
+	Reason    VisualObservationReason `json:"reason,omitempty"`
+	MediaType string                  `json:"media_type,omitempty"`
+	Bytes     []byte                  `json:"bytes,omitempty"`
 }
 
 // VisualObservationResult and LookResult are descriptive aliases for callers
