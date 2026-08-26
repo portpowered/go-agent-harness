@@ -177,7 +177,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 // the hermetic replay transport with --audio-in and returns stdout.
 func runSessionAudioIn(t *testing.T, wavPath, wirePath, audioOutPath string) (string, error) {
 	t.Helper()
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	stdout := &testStdoutBuffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(io.Discard)
