@@ -45,7 +45,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-e2e-multiturn-conversation` — a 3-7 turn audio conversation that holds together _(history: #158:MERGED)_
 - `s2s-e2e-tool-call-conversation` — customer asks by voice, agent calls a specific CLI tool, response reflects the real result _(history: NEVER SUBMITTED)_
 - `s2s-e2e-vision-describe` — customer asks by voice about a committed image, agent describes it from actual image content _(history: NEVER SUBMITTED)_
-- `s2s-e2e-conversation-observability` — logs and recordings alone (not test instrumentation) prove the conversation happened _(history: NEVER SUBMITTED)_
+- `s2s-e2e-conversation-observability` — logs and recordings alone (not test instrumentation) prove the conversation happened _(history: #191:OPEN)_
 
 ## Acceptance gate (7)
 
@@ -85,7 +85,6 @@ UPDATE 2026-08-26: every lane below except `s2s-v2b-audio-in-long` (OPEN PR #185
 - `s2s-v10-webrtc-external-source`
 - `s2s-e2e-tool-call-conversation`
 - `s2s-e2e-vision-describe`
-- `s2s-e2e-conversation-observability`
 - `s2s-e2e-customer-acceptance-probe`
 - `s2s-acc-probe-goal-catalog`
 - `s2s-acc-probe-stuck-detection`
