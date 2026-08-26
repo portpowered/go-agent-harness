@@ -4,17 +4,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"math"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -52,6 +61,18 @@ type mediaProbeReport struct {
 	sampleRate    int
 	channels      int
 	videoPresence bool
+}
+
+type rootCLIResult struct {
+	argv       []string
+	stdout     string
+	stderr     string
+	err        error
+	exitStatus int
+}
+
+func (r rootCLIResult) diagnostics() string {
+	return fmt.Sprintf("argv: %q\nstdout:\n%s\nstderr:\n%s\nexit_status: %d\nexit_error: %v", r.argv, r.stdout, r.stderr, r.exitStatus, r.err)
 }
 
 // bridgeExternalSourceAudio opens the go2rtc source through the production
@@ -202,8 +223,9 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 }
 
 // runRootCLIProbe executes actual argv against the real root router and
-// returns captured stdout. It is used for the media observation leg.
-func runRootCLIProbe(t *testing.T, ctx context.Context, cfgDir string, argv []string) (string, error) {
+// returns both output streams and the process-like exit result. It is used for
+// the media observation leg and keeps stderr available in failure diagnostics.
+func runRootCLIProbe(t *testing.T, ctx context.Context, cfgDir string, argv []string) rootCLIResult {
 	t.Helper()
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
@@ -211,18 +233,24 @@ func runRootCLIProbe(t *testing.T, ctx context.Context, cfgDir string, argv []st
 	}
 	rootCmd := agentCLI.Generate()
 	stdout := &syncBuffer{}
+	stderr := &syncBuffer{}
 	rootCmd.SetOut(stdout)
-	rootCmd.SetErr(io.Discard)
+	rootCmd.SetErr(stderr)
 	rootCmd.SetArgs(argv)
 	err = rootCmd.ExecuteContext(ctx)
-	return stdout.String(), err
+	result := rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: err}
+	if err != nil {
+		result.exitStatus = 1
+	}
+	return result
 }
 
 // runRootCLISession drives `agent session --replay <fixture> --audio-in -
 // --audio-out <wav>` through the real root router with the bridged source
 // audio on stdin, waiting for the explicit terminal close marker so
-// asynchronous terminal formatting is always observed.
-func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath string, stdinPCM []byte, outWavPath string) (string, error) {
+// asynchronous terminal formatting is always observed. Both output streams
+// are retained because Cobra may put usage and errors on stderr.
+func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath string, stdinPCM []byte, outWavPath string) rootCLIResult {
 	t.Helper()
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
@@ -230,30 +258,48 @@ func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath st
 	}
 	rootCmd := agentCLI.Generate()
 	stdout := &syncBuffer{}
+	stderr := &syncBuffer{}
 	rootCmd.SetOut(stdout)
-	rootCmd.SetErr(io.Discard)
+	rootCmd.SetErr(stderr)
 	rootCmd.SetIn(bytes.NewReader(stdinPCM))
-	rootCmd.SetArgs([]string{
+	argv := []string{
 		"--config-dir", cfgDir,
 		"session",
 		"--replay", fixturePath,
 		"--audio-in", "-",
 		"--audio-out", outWavPath,
-	})
+	}
+	rootCmd.SetArgs(argv)
 	runErr := rootCmd.ExecuteContext(ctx)
-	deadline := time.Now().Add(20 * time.Second)
-	for !strings.Contains(stdout.String(), "[session closed:") && time.Now().Before(deadline) {
+	wait := time.NewTimer(20 * time.Second)
+	defer wait.Stop()
+	for !strings.Contains(stdout.String(), "[session closed:") {
+		select {
+		case <-ctx.Done():
+			return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
+		case <-wait.C:
+			return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
+		default:
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return stdout.String(), runErr
+	return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
+}
+
+func boolExitStatus(err error) int {
+	if err != nil {
+		return 1
+	}
+	return 0
 }
 
 // parseMediaProbeReport requires the shipped report to identify exactly one
-// negotiated audio track and at most one video track. Our offer carries a
-// single recvonly transceiver per direction-kind, so the single codec block
-// is exactly-once track evidence; any extra or missing line breaks the count.
-func parseMediaProbeReport(t *testing.T, stdout string) mediaProbeReport {
+// negotiated audio track and at most one video track. The fixture observation
+// is checked separately because the compact CLI report intentionally exposes
+// video as a capability boolean rather than a track inventory.
+func parseMediaProbeReport(t *testing.T, result rootCLIResult) mediaProbeReport {
 	t.Helper()
+	stdout := result.stdout
 	report := mediaProbeReport{}
 	counts := map[string]int{}
 	lines := 0
@@ -280,26 +326,33 @@ func parseMediaProbeReport(t *testing.T, stdout string) mediaProbeReport {
 			counts["video"]++
 			report.videoPresence = strings.TrimPrefix(line, "Video presence: ") == "true"
 		default:
-			t.Fatalf("unexpected media probe output line %q in:\n%s", line, stdout)
+			t.Fatalf("unexpected media probe output line %q\n%s", line, result.diagnostics())
 		}
 	}
 	for field, want := range map[string]int{"source": 1, "codec": 1, "rate": 1, "channels": 1, "video": 1} {
 		if counts[field] != want {
-			t.Fatalf("media observation field %q appeared %d times, want exactly %d; output:\n%s", field, counts[field], want, stdout)
+			t.Fatalf("media observation field %q appeared %d times, want exactly %d\n%s", field, counts[field], want, result.diagnostics())
 		}
 	}
 	if lines != 5 {
-		t.Fatalf("media probe emitted %d output lines, want exactly 5:\n%s", lines, stdout)
+		t.Fatalf("media probe emitted %d output lines, want exactly 5\n%s", lines, result.diagnostics())
 	}
 	return report
 }
 
+func sourceObservationDiagnostics(observed webrtcSourceObservationSnapshot) string {
+	return fmt.Sprintf("fixture: path=%q source=%q offer_tracks={audio:%d video:%d} answer_tracks={audio:%d video:%d} sent_frames={audio:%d video:%d}",
+		observed.path, observed.source, observed.offerAudioTracks, observed.offerVideoTracks,
+		observed.answerAudioTracks, observed.answerVideoTracks, observed.frameCount, observed.videoFrameCount)
+}
+
 // assertCameraMediaEvidence is the shared camera-case assertion: exactly one
-// PCMU/8000/mono audio track, one video track, and look() available. It is
-// applied positively to the camera observation and, as the executable
-// negative control, to the audio-only observation where it must fail naming
-// absent video and unavailable look().
-func assertCameraMediaEvidence(report mediaProbeReport) error {
+// PCMU/8000/mono audio track, one independently observed negotiated video
+// track, and actual video packet activity. It is applied positively to the
+// camera observation and, as the executable negative control, to the
+// audio-only observation where it must fail naming absent video and
+// unavailable look().
+func assertCameraMediaEvidence(report mediaProbeReport, observed webrtcSourceObservationSnapshot) error {
 	var violations []string
 	if report.codec != "PCMU" {
 		violations = append(violations, fmt.Sprintf("audio codec %q, want PCMU", report.codec))
@@ -309,6 +362,18 @@ func assertCameraMediaEvidence(report mediaProbeReport) error {
 	}
 	if report.channels != 1 {
 		violations = append(violations, fmt.Sprintf("channels %d, want 1", report.channels))
+	}
+	if observed.offerAudioTracks != 1 || observed.answerAudioTracks != 1 {
+		violations = append(violations, fmt.Sprintf("negotiated audio tracks offer=%d answer=%d, want exactly one in each", observed.offerAudioTracks, observed.answerAudioTracks))
+	}
+	if observed.offerVideoTracks != 1 || observed.answerVideoTracks != 1 {
+		violations = append(violations, fmt.Sprintf("negotiated video tracks offer=%d answer=%d, want exactly one in each", observed.offerVideoTracks, observed.answerVideoTracks))
+	}
+	if observed.frameCount == 0 {
+		violations = append(violations, "no audio packet activity was observed")
+	}
+	if observed.videoFrameCount < externalSourceVideoPackets {
+		violations = append(violations, fmt.Sprintf("video packet activity %d, want at least %d", observed.videoFrameCount, externalSourceVideoPackets))
 	}
 	if !report.videoPresence {
 		violations = append(violations, "no video track was negotiated")
@@ -366,22 +431,22 @@ func sqrtOf(value float64) float64 {
 // successful exit, the deterministic replayed transcript, an explicit
 // terminal outcome inside the hard parent deadline, and a non-silent
 // recorded reply. diagnostics carries the failure-reporting fields required
-// by the vertical (argv shape, stdout, exit state, deadline state).
-func assertExternalSourceSessionOutcome(t *testing.T, output string, runErr error, elapsed time.Duration, wantTranscript string, outWavPath string, diagnostics string) {
+// by the vertical (argv shape, stdout, stderr, exit state, deadline state).
+func assertExternalSourceSessionOutcome(t *testing.T, result rootCLIResult, elapsed time.Duration, wantTranscript string, outWavPath string, diagnostics string) {
 	t.Helper()
-	if runErr != nil {
-		t.Fatalf("session command failed: %v\n%s", runErr, diagnostics)
+	if result.err != nil {
+		t.Fatalf("session command failed\n%s\n%s", result.diagnostics(), diagnostics)
 	}
-	if !strings.Contains(output, wantTranscript) {
-		t.Fatalf("session output missing deterministic replayed transcript %q:\n%s\n%s", wantTranscript, output, diagnostics)
+	if !strings.Contains(result.stdout, wantTranscript) {
+		t.Fatalf("session output missing deterministic replayed transcript %q\n%s\n%s", wantTranscript, result.diagnostics(), diagnostics)
 	}
-	if !strings.Contains(output, "[session closed:") {
-		t.Fatalf("session output missing explicit terminal outcome:\n%s\n%s", output, diagnostics)
+	if !strings.Contains(result.stdout, "[session closed:") {
+		t.Fatalf("session output missing explicit terminal outcome\n%s\n%s", result.diagnostics(), diagnostics)
 	}
 	if elapsed >= externalSourceHardDeadline {
 		t.Fatalf("session exceeded hard parent deadline: %s >= %s\n%s", elapsed, externalSourceHardDeadline, diagnostics)
 	}
-	assertNonSilentWAVResponse(t, outWavPath, diagnostics+"\noutput:\n"+output)
+	assertNonSilentWAVResponse(t, outWavPath, diagnostics+"\n"+result.diagnostics())
 }
 
 // TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI is the v10 positive
@@ -400,28 +465,36 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets})
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "camera offer/answer completion")
+	waitForExternalSourceEvent(t, bridgeObserved.videoFrameDelivered, "camera video frame delivery")
+	bridgeSnapshot := bridgeObserved.snapshot()
 	bridgeCleanup()
-	if got := bridgeObserved.frameCount; got != len(packets) {
-		t.Fatalf("fixture delivered %d audio frames, want %d", got, len(packets))
+	if bridgeSnapshot.offerAudioTracks != 1 || bridgeSnapshot.answerAudioTracks != 1 || bridgeSnapshot.offerVideoTracks != 1 || bridgeSnapshot.answerVideoTracks != 1 {
+		t.Fatalf("camera fixture negotiated tracks = offer audio/video %d/%d, answer audio/video %d/%d; want 1/1 in both", bridgeSnapshot.offerAudioTracks, bridgeSnapshot.offerVideoTracks, bridgeSnapshot.answerAudioTracks, bridgeSnapshot.answerVideoTracks)
+	}
+	if bridgeSnapshot.frameCount != len(packets) || bridgeSnapshot.videoFrameCount < externalSourceVideoPackets {
+		t.Fatalf("camera fixture sent frames = audio:%d video:%d, want audio:%d and video at least:%d", bridgeSnapshot.frameCount, bridgeSnapshot.videoFrameCount, len(packets), externalSourceVideoPackets)
 	}
 	if energy := pcmRMSEnergy(sourcePCM); energy <= externalSourceRMSThreshold {
-		t.Fatalf("bridged source audio RMS energy = %.1f, want > %.1f", energy, externalSourceRMSThreshold)
+		t.Fatalf("bridged source audio RMS energy = %.1f, want > %.1f\n%s", energy, externalSourceRMSThreshold, sourceObservationDiagnostics(bridgeSnapshot))
 	}
 
 	// Leg 2 — the CLI media observation reports the negotiated tracks.
 	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets})
-	stdout, err := runRootCLIProbe(t, parentCtx, cfgDir, []string{"--config-dir", cfgDir, "media", "probe", probeURL})
-	if err != nil {
-		t.Fatalf("media probe through real root CLI failed: %v\nstdout:\n%s", err, stdout)
+	probeResult := runRootCLIProbe(t, parentCtx, cfgDir, []string{"--config-dir", cfgDir, "media", "probe", probeURL})
+	if probeResult.err != nil {
+		t.Fatalf("media probe through real root CLI failed\n%s\n%s", probeResult.diagnostics(), sourceObservationDiagnostics(probeObserved.snapshot()))
 	}
-	report := parseMediaProbeReport(t, stdout)
+	waitForExternalSourceEvent(t, probeObserved.negotiated, "camera probe offer/answer completion")
+	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "camera probe audio frame delivery")
+	waitForExternalSourceEvent(t, probeObserved.videoFrameDelivered, "camera probe video frame delivery")
+	probeSnapshot := probeObserved.snapshot()
+	report := parseMediaProbeReport(t, probeResult)
 	if report.source != probeURL {
-		t.Fatalf("probe reported source %q, want %q (credentials-free identity)", report.source, probeURL)
+		t.Fatalf("probe reported source %q, want %q (credentials-free identity)\n%s\n%s", report.source, probeURL, probeResult.diagnostics(), sourceObservationDiagnostics(probeSnapshot))
 	}
-	if err := assertCameraMediaEvidence(report); err != nil {
-		t.Fatalf("camera media observation rejected: %v\nstdout:\n%s", err, stdout)
+	if err := assertCameraMediaEvidence(report, probeSnapshot); err != nil {
+		t.Fatalf("camera media observation rejected: %v\n%s\n%s", err, probeResult.diagnostics(), sourceObservationDiagnostics(probeSnapshot))
 	}
-	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "independent fixture frame delivery")
 	probeCleanup()
 
 	// Leg 3 — the same source audio drives the replay-backed session.
@@ -429,11 +502,11 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	fixture := buildExternalSourceReplayFixture(t, appendFrames, []string{cameraReplyTranscript, cameraTranscriptTail}, loudestUtteranceWindow(t, externalSourceReplyWindow))
 	outWav := filepath.Join(t.TempDir(), "camera-response.wav")
 	started := time.Now()
-	output, err := runRootCLISession(t, parentCtx, cfgDir, fixture, sourcePCM, outWav)
+	sessionResult := runRootCLISession(t, parentCtx, cfgDir, fixture, sourcePCM, outWav)
 	elapsed := time.Since(started)
-	diagnostics := fmt.Sprintf("argv: agent --config-dir %q session --replay %q --audio-in - --audio-out %q; frames=%d; pcm_bytes=%d; exit_state=%v; deadline_in=%t",
-		cfgDir, fixture, outWav, len(appendFrames), len(sourcePCM), err, elapsed < externalSourceHardDeadline)
-	assertExternalSourceSessionOutcome(t, output, err, elapsed, cameraReplyTranscript, outWav, diagnostics)
+	diagnostics := fmt.Sprintf("replay_fixture: %q; expected_append_frames=%d; pcm_bytes=%d; source_rms=%.1f; terminal_seen=%t; deadline_state=%t",
+		fixture, len(appendFrames), len(sourcePCM), pcmRMSEnergy(sourcePCM), strings.Contains(sessionResult.stdout, "[session closed:"), elapsed < externalSourceHardDeadline)
+	assertExternalSourceSessionOutcome(t, sessionResult, elapsed, cameraReplyTranscript, outWav, diagnostics)
 }
 
 // TestWebrtcAudioOnlySourceReportsLookUnavailableThroughRealCLI proves that
@@ -449,33 +522,40 @@ func TestWebrtcAudioOnlySourceReportsLookUnavailableThroughRealCLI(t *testing.T)
 	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: false, sendFrames: true, packets: packets})
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "audio-only offer/answer completion")
+	waitForExternalSourceEvent(t, bridgeObserved.frameDelivered, "audio-only audio frame delivery")
+	bridgeSnapshot := bridgeObserved.snapshot()
 	bridgeCleanup()
-	if got := bridgeObserved.frameCount; got != len(packets) {
-		t.Fatalf("audio-only fixture delivered %d audio frames, want %d", got, len(packets))
+	if bridgeSnapshot.answerAudioTracks != 1 || bridgeSnapshot.answerVideoTracks != 0 || bridgeSnapshot.videoFrameCount != 0 {
+		t.Fatalf("audio-only fixture negotiated/sent tracks = answer audio/video %d/%d, video frames %d; want 1/0 and 0 video frames", bridgeSnapshot.answerAudioTracks, bridgeSnapshot.answerVideoTracks, bridgeSnapshot.videoFrameCount)
+	}
+	if bridgeSnapshot.frameCount != len(packets) {
+		t.Fatalf("audio-only fixture delivered %d audio frames, want %d\n%s", bridgeSnapshot.frameCount, len(packets), sourceObservationDiagnostics(bridgeSnapshot))
 	}
 	if energy := pcmRMSEnergy(sourcePCM); energy <= externalSourceRMSThreshold {
-		t.Fatalf("audio-only bridged audio RMS energy = %.1f, want > %.1f", energy, externalSourceRMSThreshold)
+		t.Fatalf("audio-only bridged audio RMS energy = %.1f, want > %.1f\n%s", energy, externalSourceRMSThreshold, sourceObservationDiagnostics(bridgeSnapshot))
 	}
 
 	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: false, sendFrames: true, packets: packets})
-	stdout, err := runRootCLIProbe(t, parentCtx, cfgDir, []string{"--config-dir", cfgDir, "media", "probe", probeURL})
-	if err != nil {
-		t.Fatalf("audio-only media probe must be a stable non-fatal outcome, got error: %v\nstdout:\n%s", err, stdout)
+	probeResult := runRootCLIProbe(t, parentCtx, cfgDir, []string{"--config-dir", cfgDir, "media", "probe", probeURL})
+	if probeResult.err != nil {
+		t.Fatalf("audio-only media probe must be a stable non-fatal outcome\n%s\n%s", probeResult.diagnostics(), sourceObservationDiagnostics(probeObserved.snapshot()))
 	}
-	report := parseMediaProbeReport(t, stdout)
+	waitForExternalSourceEvent(t, probeObserved.negotiated, "audio-only probe offer/answer completion")
+	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "audio-only probe frame delivery")
+	probeSnapshot := probeObserved.snapshot()
+	report := parseMediaProbeReport(t, probeResult)
 	if report.codec != "PCMU" || report.sampleRate != 8000 || report.channels != 1 {
-		t.Fatalf("audio-only track facts = %s/%d/%d, want PCMU/8000/1\nstdout:\n%s", report.codec, report.sampleRate, report.channels, stdout)
+		t.Fatalf("audio-only track facts = %s/%d/%d, want PCMU/8000/1\n%s\n%s", report.codec, report.sampleRate, report.channels, probeResult.diagnostics(), sourceObservationDiagnostics(probeSnapshot))
 	}
 	if report.videoPresence {
-		t.Fatalf("audio-only source falsely claims video presence:\n%s", stdout)
+		t.Fatalf("audio-only source falsely claims video presence\n%s\n%s", probeResult.diagnostics(), sourceObservationDiagnostics(probeSnapshot))
 	}
-	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "audio-only fixture frame delivery")
 	probeCleanup()
 
 	// Executable negative control: the camera assertion must reject this
 	// observation specifically because video is absent and look() is
 	// unavailable.
-	cameraViolation := assertCameraMediaEvidence(report)
+	cameraViolation := assertCameraMediaEvidence(report, probeSnapshot)
 	if cameraViolation == nil {
 		t.Fatal("camera assertion passed on the audio-only observation; the negative control is vacuous")
 	}
@@ -487,11 +567,11 @@ func TestWebrtcAudioOnlySourceReportsLookUnavailableThroughRealCLI(t *testing.T)
 	fixture := buildExternalSourceReplayFixture(t, appendFrames, []string{audioOnlyReplyTranscript, audioOnlyTranscriptTail}, loudestUtteranceWindow(t, externalSourceReplyWindow))
 	outWav := filepath.Join(t.TempDir(), "audio-only-response.wav")
 	started := time.Now()
-	output, err := runRootCLISession(t, parentCtx, cfgDir, fixture, sourcePCM, outWav)
+	sessionResult := runRootCLISession(t, parentCtx, cfgDir, fixture, sourcePCM, outWav)
 	elapsed := time.Since(started)
-	diagnostics := fmt.Sprintf("argv: agent --config-dir %q session --replay %q --audio-in - --audio-out %q; frames=%d; exit_state=%v; deadline_in=%t",
-		cfgDir, fixture, outWav, len(appendFrames), err, elapsed < externalSourceHardDeadline)
-	assertExternalSourceSessionOutcome(t, output, err, elapsed, audioOnlyReplyTranscript, outWav, diagnostics)
+	diagnostics := fmt.Sprintf("replay_fixture: %q; expected_append_frames=%d; pcm_bytes=%d; source_rms=%.1f; terminal_seen=%t; deadline_state=%t",
+		fixture, len(appendFrames), len(sourcePCM), pcmRMSEnergy(sourcePCM), strings.Contains(sessionResult.stdout, "[session closed:"), elapsed < externalSourceHardDeadline)
+	assertExternalSourceSessionOutcome(t, sessionResult, elapsed, audioOnlyReplyTranscript, outWav, diagnostics)
 }
 
 // TestWebrtcDeadSourceFailsPositiveDeliveryAssertions is the dead-source
@@ -518,15 +598,15 @@ func TestWebrtcDeadSourceFailsPositiveDeliveryAssertions(t *testing.T) {
 
 	// Through the CLI, the same dead source yields the typed unreachable
 	// outcome and no successful capability report.
-	stdout, err := runRootCLIProbe(t, parentCtx, cfgDir, []string{"--config-dir", cfgDir, "media", "probe", deadURL})
-	if err == nil {
-		t.Fatalf("dead-source probe unexpectedly succeeded:\n%s", stdout)
+	probeResult := runRootCLIProbe(t, parentCtx, cfgDir, []string{"--config-dir", cfgDir, "media", "probe", deadURL})
+	if probeResult.err == nil {
+		t.Fatalf("dead-source probe unexpectedly succeeded\n%s", probeResult.diagnostics())
 	}
-	if !errors.Is(err, rtc.ErrSourceUnreachable) {
-		t.Fatalf("dead-source probe error = %v, want typed ErrSourceUnreachable identity", err)
+	if !errors.Is(probeResult.err, rtc.ErrSourceUnreachable) {
+		t.Fatalf("dead-source probe error = %v, want typed ErrSourceUnreachable identity\n%s\n%s", probeResult.err, probeResult.diagnostics(), sourceObservationDiagnostics(deadObserved.snapshot()))
 	}
-	if strings.Contains(stdout, "Video presence:") || strings.Contains(stdout, "Audio codec:") {
-		t.Fatalf("dead-source probe printed a capability report despite failure:\n%s", stdout)
+	if strings.Contains(probeResult.stdout, "Video presence:") || strings.Contains(probeResult.stdout, "Audio codec:") {
+		t.Fatalf("dead-source probe printed a capability report despite failure\n%s", probeResult.diagnostics())
 	}
 
 	// And even if empty bytes were somehow carried, the energy gate rejects
@@ -534,4 +614,586 @@ func TestWebrtcDeadSourceFailsPositiveDeliveryAssertions(t *testing.T) {
 	if energy := pcmRMSEnergy(nil); energy > externalSourceRMSThreshold {
 		t.Fatalf("empty source audio RMS = %.1f, want <= %.1f", energy, externalSourceRMSThreshold)
 	}
+}
+
+// The v10 WebRTC external-source vertical speaks the go2rtc signaling dialect
+// (`GET /api/ws?src=<name>`, JSON {"type":"webrtc/offer"} / "webrtc/answer")
+// and presents deterministic G.711 μ-law audio plus, for the camera shape, an
+// H.264 video track. Source audio is derived from the committed corpus
+// utterance utt_short_16k.wav so both the media-observation leg and the
+// session leg consume the same voiced content.
+const (
+	// externalSourceHardDeadline bounds every v10 leg: negotiation, media
+	// observation, and the replay-backed session run must all finish inside
+	// this parent deadline or the test fails on the deadline condition.
+	externalSourceHardDeadline = 45 * time.Second
+
+	// externalSourceRMSThreshold is the minimum PCM16 RMS energy for audio to
+	// count as non-silent; digital silence measures 0 and voiced corpus
+	// windows measure well above it (the committed utterance averages ~809).
+	externalSourceRMSThreshold = 500.0
+
+	// externalSourcePacketSamples is one 20 ms PCMU packet at 8 kHz.
+	externalSourcePacketSamples = 160
+
+	// externalSourcePrefixSamples is the length of the committed 16 kHz
+	// utterance window that feeds the source stream (~1.6 s), keeping the
+	// paced session leg fast enough for the PR-tier budget. The window is
+	// the loudest one in the file so the source carries genuinely voiced
+	// content rather than the leading silence padding.
+	externalSourcePrefixSamples = 25600
+
+	// externalSourceDecimation reduces the 16 kHz corpus to the source's
+	// 8 kHz PCMU rate by taking every fourth sample.
+	externalSourceDecimation = 4
+
+	externalSourceSessionID    = "sess_v10_webrtc_external_source"
+	externalSourceVideoPackets = 3
+
+	cameraReplyTranscript     = "The camera feed looks clear today."
+	audioOnlyReplyTranscript  = "I heard you, but there is no camera to inspect."
+	cameraTranscriptTail      = " Clear."
+	audioOnlyTranscriptTail   = " No video."
+	externalSourceReplyWindow = 9600
+)
+
+// webrtcSourceOptions shapes one loopback go2rtc-compatible fixture instance.
+type webrtcSourceOptions struct {
+	// withVideo negotiates an H.264 video m-line and track alongside the
+	// audio track (the camera shape). When false the answer carries no video
+	// m-line at all, so a negotiated-but-frame-less video declaration cannot
+	// be confused with genuine absence.
+	withVideo bool
+
+	// sendFrames streams the deterministic PCMU packets after ICE connects.
+	// A false value models a dead source whose negotiation succeeds without
+	// any media activity.
+	sendFrames bool
+
+	// packets are the precomputed PCMU payloads streamed when sendFrames is
+	// set. They are returned unchanged by cameraSourceRTPPackets so the test
+	// can derive the exact decoded PCM stream independently.
+	packets [][]byte
+}
+
+// webrtcSourceObservation independently records what the fixture saw:
+// signaling path and requested source name, answer completion, and per-track
+// media activity. This is the declared-but-unused guard: the CLI report alone
+// cannot pass without the fixture having actually delivered frames.
+type webrtcSourceObservation struct {
+	sync.Mutex
+	path, source string
+
+	offerAudioTracks, offerVideoTracks   int
+	answerAudioTracks, answerVideoTracks int
+	frameCount, videoFrameCount          int
+
+	negotiated          chan struct{}
+	frameDelivered      chan struct{}
+	videoFrameDelivered chan struct{}
+
+	negotiatedOnce, frameOnce, videoFrameOnce sync.Once
+}
+
+type webrtcSourceObservationSnapshot struct {
+	path, source                         string
+	offerAudioTracks, offerVideoTracks   int
+	answerAudioTracks, answerVideoTracks int
+	frameCount, videoFrameCount          int
+}
+
+func (o *webrtcSourceObservation) snapshot() webrtcSourceObservationSnapshot {
+	o.Lock()
+	defer o.Unlock()
+	return webrtcSourceObservationSnapshot{
+		path: o.path, source: o.source,
+		offerAudioTracks: o.offerAudioTracks, offerVideoTracks: o.offerVideoTracks,
+		answerAudioTracks: o.answerAudioTracks, answerVideoTracks: o.answerVideoTracks,
+		frameCount: o.frameCount, videoFrameCount: o.videoFrameCount,
+	}
+}
+
+func (o *webrtcSourceObservation) recordNegotiation(offerSDP, answerSDP string) {
+	o.Lock()
+	o.offerAudioTracks = countSDPMediaSections(offerSDP, "audio")
+	o.offerVideoTracks = countSDPMediaSections(offerSDP, "video")
+	o.answerAudioTracks = countSDPMediaSections(answerSDP, "audio")
+	o.answerVideoTracks = countSDPMediaSections(answerSDP, "video")
+	o.Unlock()
+}
+
+func (o *webrtcSourceObservation) recordAudioFrame() {
+	o.Lock()
+	o.frameCount++
+	o.Unlock()
+	o.frameOnce.Do(func() { close(o.frameDelivered) })
+}
+
+func (o *webrtcSourceObservation) recordVideoFrame() {
+	o.Lock()
+	o.videoFrameCount++
+	o.Unlock()
+	o.videoFrameOnce.Do(func() { close(o.videoFrameDelivered) })
+}
+
+func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *webrtcSourceObservation, func()) {
+	t.Helper()
+	observed := &webrtcSourceObservation{
+		negotiated:          make(chan struct{}),
+		frameDelivered:      make(chan struct{}),
+		videoFrameDelivered: make(chan struct{}),
+	}
+	var handlers sync.WaitGroup
+	fixtureContext, cancelFixture := context.WithCancel(context.Background())
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlers.Add(1)
+		defer handlers.Done()
+		handlerContext, cancelHandler := context.WithCancel(r.Context())
+		defer cancelHandler()
+		go func() {
+			select {
+			case <-fixtureContext.Done():
+				cancelHandler()
+			case <-handlerContext.Done():
+			}
+		}()
+		observed.Lock()
+		observed.path = r.URL.Path
+		observed.source = r.URL.Query().Get("src")
+		observed.Unlock()
+		if r.URL.Path != "/api/ws" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var offer struct {
+			Type  string `json:"type"`
+			Value string `json:"value"`
+		}
+		if err := json.Unmarshal(data, &offer); err != nil || offer.Type != "webrtc/offer" {
+			return
+		}
+
+		mediaEngine := &webrtc.MediaEngine{}
+		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1},
+			PayloadType:        0,
+		}, webrtc.RTPCodecTypeAudio); err != nil {
+			return
+		}
+		if opts.withVideo {
+			if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000},
+				PayloadType:        96,
+			}, webrtc.RTPCodecTypeVideo); err != nil {
+				return
+			}
+		}
+		pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine)).NewPeerConnection(webrtc.Configuration{})
+		if err != nil {
+			return
+		}
+		defer pc.Close()
+		connected := make(chan struct{})
+		var connectedOnce sync.Once
+		pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+			if state == webrtc.PeerConnectionStateConnected {
+				connectedOnce.Do(func() { close(connected) })
+			}
+		})
+
+		audio, err := webrtc.NewTrackLocalStaticRTP(
+			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1},
+			"audio", "v10-camera-fixture")
+		if err != nil {
+			return
+		}
+		if _, err = pc.AddTrack(audio); err != nil {
+			return
+		}
+		var video *webrtc.TrackLocalStaticRTP
+		if opts.withVideo {
+			video, err = webrtc.NewTrackLocalStaticRTP(
+				webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000},
+				"video", "v10-camera-fixture")
+			if err != nil {
+				return
+			}
+			if _, err = pc.AddTrack(video); err != nil {
+				return
+			}
+		}
+
+		if err = pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer.Value}); err != nil {
+			return
+		}
+		answer, err := pc.CreateAnswer(nil)
+		if err != nil {
+			return
+		}
+		if err = pc.SetLocalDescription(answer); err != nil {
+			return
+		}
+		select {
+		case <-webrtc.GatheringCompletePromise(pc):
+		case <-handlerContext.Done():
+			return
+		}
+		answerSDP := pc.LocalDescription().SDP
+		if !opts.withVideo {
+			// An audio-only source answers without any video m-line, exactly
+			// as go2rtc fronts a camera that exposes no video stream. pion
+			// always echoes rejected m-lines into JSEP answers, so the video
+			// section is removed before the answer reaches the wire; the
+			// production client accepts the reduced answer (verified against
+			// pion v4.2.18) and parseSDP reports no negotiated video track.
+			answerSDP = stripSDPMediaSection(answerSDP, "video")
+		}
+		observed.recordNegotiation(offer.Value, answerSDP)
+		if err = conn.WriteJSON(struct {
+			Type  string `json:"type"`
+			Value string `json:"value"`
+		}{Type: "webrtc/answer", Value: answerSDP}); err != nil {
+			return
+		}
+		observed.negotiatedOnce.Do(func() { close(observed.negotiated) })
+		select {
+		case <-connected:
+		case <-handlerContext.Done():
+			return
+		}
+		if opts.sendFrames {
+			streamFixtureAudio(t, audio, video, opts.packets, observed)
+		}
+		<-handlerContext.Done()
+	}))
+	u, _ := url.Parse(server.URL)
+	rawURL := "go2rtc://" + u.Host + "/api/ws?src=v10-tuya-main"
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			cancelFixture()
+			server.CloseClientConnections()
+			handlersDone := make(chan struct{})
+			go func() {
+				handlers.Wait()
+				close(handlersDone)
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			select {
+			case <-handlersDone:
+			case <-ctx.Done():
+				t.Errorf("go2rtc fixture handlers did not close: %v", ctx.Err())
+			}
+			serverClosed := make(chan struct{})
+			go func() {
+				server.Close()
+				close(serverClosed)
+			}()
+			select {
+			case <-serverClosed:
+			case <-ctx.Done():
+				t.Errorf("go2rtc fixture server did not close: %v", ctx.Err())
+			}
+		})
+	}
+	t.Cleanup(cleanup)
+	return rawURL, observed, cleanup
+}
+
+// streamFixtureAssets writes every precomputed audio packet once, then a small
+// burst of H.264 packets on the video track when one is negotiated. Delivery
+// is recorded per track so the tests can prove real media activity rather
+// than a declared-but-unused capability.
+func streamFixtureAudio(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, packets [][]byte, observed *webrtcSourceObservation) {
+	t.Helper()
+	for i, payload := range packets {
+		packet := &rtp.Packet{Header: rtp.Header{
+			Version:        2,
+			PayloadType:    0,
+			SequenceNumber: uint16(i + 1),
+			Timestamp:      uint32(i * externalSourcePacketSamples),
+		}, Payload: payload}
+		data, err := packet.Marshal()
+		if err != nil {
+			t.Errorf("marshal fixture RTP: %v", err)
+			return
+		}
+		if _, err := audio.Write(data); err != nil {
+			t.Errorf("write fixture audio packet: %v", err)
+			return
+		}
+		observed.recordAudioFrame()
+	}
+	for i := 0; i < externalSourceVideoPackets && video != nil; i++ {
+		packet := &rtp.Packet{Header: rtp.Header{
+			Version:        2,
+			PayloadType:    96,
+			SequenceNumber: uint16(i + 1),
+			Timestamp:      uint32(i * 3000),
+			Marker:         i == 2,
+		}, Payload: []byte{0x67, 0x42, 0xc0, 0x1f}} // H.264 SPS-shaped bytes
+		data, err := packet.Marshal()
+		if err != nil {
+			return
+		}
+		if _, err := video.Write(data); err != nil {
+			return
+		}
+		observed.recordVideoFrame()
+	}
+}
+
+// stripSDPMediaSection removes one media section (its m-line and every
+// following attribute line) from an SDP body while keeping the trailing CRLF
+// the SDP parser requires.
+func stripSDPMediaSection(sdp, media string) string {
+	lines := splitSDPLines(sdp)
+	out := make([]string, 0, len(lines))
+	inTarget := false
+	for _, line := range lines {
+		if len(line) >= 2 && line[:2] == "m=" {
+			fields := fieldsOf(line[2:])
+			inTarget = len(fields) > 0 && fields[0] == media
+		}
+		if !inTarget {
+			out = append(out, line)
+		}
+	}
+	return joinSDPLines(out)
+}
+
+func splitSDPLines(sdp string) []string {
+	lines := []string{}
+	start := 0
+	for i := 0; i < len(sdp); i++ {
+		if sdp[i] == '\n' {
+			end := i
+			if end > start && sdp[end-1] == '\r' {
+				end--
+			}
+			lines = append(lines, sdp[start:end])
+			start = i + 1
+		}
+	}
+	if start < len(sdp) {
+		lines = append(lines, sdp[start:])
+	}
+	return lines
+}
+
+func joinSDPLines(lines []string) string {
+	joined := ""
+	for _, line := range lines {
+		joined += line + "\r\n"
+	}
+	return joined
+}
+
+func fieldsOf(value string) []string {
+	fields := []string{}
+	current := ""
+	for i := 0; i <= len(value); i++ {
+		if i == len(value) || value[i] == ' ' || value[i] == '\t' {
+			if current != "" {
+				fields = append(fields, current)
+				current = ""
+			}
+			continue
+		}
+		current += string(value[i])
+	}
+	return fields
+}
+
+func countSDPMediaSections(sdp, media string) int {
+	want := "m=" + media
+	count := 0
+	for _, line := range splitSDPLines(sdp) {
+		fields := fieldsOf(line)
+		if len(fields) > 0 && fields[0] == want {
+			count++
+		}
+	}
+	return count
+}
+
+// committedCorpusWAVPath locates a committed corpus WAV under
+// go-agent-loop/testdata/audio so the source stream reuses the existing
+// fixture instead of adding new binary assets.
+func committedCorpusWAVPath(t *testing.T, name string) string {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve corpus fixture path: runtime.Caller failed")
+	}
+	path := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "go-agent-loop", "testdata", "audio", name)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("committed corpus WAV %s not found: %v", name, err)
+	}
+	return path
+}
+
+// ulawEncodeByte compresses one linear PCM16 sample to G.711 μ-law exactly as
+// a camera encoder would; the production decoder under test expands it back.
+func ulawEncodeByte(sample int16) byte {
+	const bias = 0x84
+	const clip = 32635
+	sign := byte(0x00)
+	value := int(sample)
+	if value < 0 {
+		sign = 0x80
+		value = -value
+	}
+	if value > clip {
+		value = clip
+	}
+	value += bias
+	exponent := 7
+	for mask := 0x4000; exponent > 0 && value&mask == 0; mask >>= 1 {
+		exponent--
+	}
+	mantissa := byte((value >> uint(exponent+3)) & 0x0f)
+	return ^(sign | byte(exponent)<<4 | mantissa)
+}
+
+// loudestSampleWindow returns the highest-energy contiguous sample window of
+// the given length (scanned at a fixed stride), so fixture streams derived
+// from the committed corpus carry voiced content deterministically.
+func loudestSampleWindow(samples []int16, window int) []int16 {
+	if window >= len(samples) {
+		return samples
+	}
+	bestStart, bestEnergy := 0, -1.0
+	for start := 0; start+window <= len(samples); start += 800 {
+		var energy float64
+		for _, sample := range samples[start : start+window] {
+			energy += float64(sample) * float64(sample)
+		}
+		if energy > bestEnergy {
+			bestEnergy = energy
+			bestStart = start
+		}
+	}
+	out := make([]int16, window)
+	copy(out, samples[bestStart:bestStart+window])
+	return out
+}
+
+// cameraSourceRTPPackets derives the deterministic PCMU packet stream from
+// the committed utt_short_16k.wav corpus utterance: its loudest fixed 1.6 s
+// window is decimated to the source's 8 kHz rate and μ-law encoded into
+// 20 ms packets.
+func cameraSourceRTPPackets(t *testing.T) [][]byte {
+	t.Helper()
+	wavBytes, err := os.ReadFile(committedCorpusWAVPath(t, "utt_short_16k.wav"))
+	if err != nil {
+		t.Fatalf("read committed corpus WAV: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse committed corpus WAV: %v", err)
+	}
+	if rate != 16000 {
+		t.Fatalf("committed corpus WAV rate = %d, want 16000", rate)
+	}
+	window := loudestSampleWindow(samples, externalSourcePrefixSamples)
+	downsampled := make([]int16, 0, len(window)/externalSourceDecimation+1)
+	for i := 0; i < len(window); i += externalSourceDecimation {
+		downsampled = append(downsampled, window[i])
+	}
+	packets := make([][]byte, 0, (len(downsampled)+externalSourcePacketSamples-1)/externalSourcePacketSamples)
+	payload := make([]byte, 0, len(downsampled))
+	for _, sample := range downsampled {
+		payload = append(payload, ulawEncodeByte(sample))
+	}
+	for start := 0; start < len(payload); start += externalSourcePacketSamples {
+		end := start + externalSourcePacketSamples
+		if end > len(payload) {
+			end = len(payload)
+		}
+		chunk := make([]byte, end-start)
+		copy(chunk, payload[start:end])
+		packets = append(packets, chunk)
+	}
+	return packets
+}
+
+// rawPCMAppendFrames chunks a raw PCM16 byte stream into the FrameSize-sample
+// frames the session audio source emits over the wire, zero-padding the final
+// short frame exactly as documented for raw stdin input.
+func rawPCMAppendFrames(pcm []byte, frameBytes int) [][]byte {
+	frames := make([][]byte, 0, (len(pcm)+frameBytes-1)/frameBytes)
+	for start := 0; start < len(pcm); start += frameBytes {
+		frame := make([]byte, frameBytes)
+		copy(frame, pcm[start:])
+		frames = append(frames, frame)
+	}
+	return frames
+}
+
+// pcmRMSEnergy computes the linear RMS energy of a PCM16 little-endian stream.
+func pcmRMSEnergy(pcm []byte) float64 {
+	count := len(pcm) / 2
+	if count == 0 {
+		return 0
+	}
+	var sum float64
+	for i := 0; i+1 < len(pcm); i += 2 {
+		sample := int16(uint16(pcm[i]) | uint16(pcm[i+1])<<8)
+		sum += float64(sample) * float64(sample)
+	}
+	return math.Sqrt(sum / float64(count))
+}
+
+// loudestUtteranceWindow returns the highest-energy contiguous window of
+// the committed utterance so the scripted reply mirrors genuinely voiced content.
+func loudestUtteranceWindow(t *testing.T, window int) []int16 {
+	t.Helper()
+	wavBytes, err := os.ReadFile(committedCorpusWAVPath(t, "utt_short_16k.wav"))
+	if err != nil {
+		t.Fatalf("read committed corpus WAV: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse committed corpus WAV: %v", err)
+	}
+	if rate != 16000 {
+		t.Fatalf("committed corpus WAV rate = %d, want 16000", rate)
+	}
+	if window <= 0 || window > len(samples) {
+		t.Fatalf("reply window %d out of range for %d samples", window, len(samples))
+	}
+	bestStart, bestEnergy := 0, -1.0
+	for start := 0; start+window <= len(samples); start += 800 {
+		var energy float64
+		for _, sample := range samples[start : start+window] {
+			energy += float64(sample) * float64(sample)
+		}
+		if energy > bestEnergy {
+			bestEnergy = energy
+			bestStart = start
+		}
+	}
+	reply := make([]int16, window)
+	copy(reply, samples[bestStart:bestStart+window])
+	return reply
+}
+
+func pcm16LEBytesOf(samples []int16) []byte {
+	data := make([]byte, len(samples)*2)
+	for i, sample := range samples {
+		binary.LittleEndian.PutUint16(data[i*2:], uint16(sample))
+	}
+	return data
 }
