@@ -1,0 +1,14 @@
+{
+  "id": "s2s-v4e-tool-unknown",
+  "name": "s2s-v4e-tool-unknown",
+  "description": "A replayed request for an unregistered tool yields a typed refusal carrying that name and reaches the recorded close boundary.",
+  "steps": [
+    {"type": "send_text", "text": "Invoke s2s_v4e_unregistered_tool."},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "transcript_contains", "text": "{\"type\":\"refusal\",\"classification\":\"unknown_tool\",\"tool_name\":\"s2s_v4e_unregistered_tool\"}"},
+    {"type": "frame_count", "count": 7},
+    {"type": "terminal_reason", "value": "synthetic"}
+  ]
+}

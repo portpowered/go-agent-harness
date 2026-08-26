@@ -1,0 +1,14 @@
+{
+  "id": "s2s-v4e-tool-registered",
+  "name": "s2s-v4e-tool-registered",
+  "description": "Negative control: an otherwise-identical replay whose requested name is a registered tool must fail the same unknown-tool refusal expectation.",
+  "steps": [
+    {"type": "send_text", "text": "Invoke read_file."},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "transcript_contains", "text": "{\"type\":\"refusal\",\"classification\":\"unknown_tool\",\"tool_name\":\"s2s_v4e_unregistered_tool\"}"},
+    {"type": "frame_count", "count": 7},
+    {"type": "terminal_reason", "value": "synthetic"}
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-s2s-v4e-tool-registered"
+  },
+  "session": {
+    "id": "sess_s2s_v4e_tool_registered",
+    "started_at_utc": "2026-08-25T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-s2s-v4e-tool-registered"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_s2s_v4e_tool_registered",
+        "model": "grok-s2s-v4e-tool-registered"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "resp_s2s_v4e_tool_registered"
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.text.delta",
+        "delta": "Calling the registered tool read_file on notes.txt."
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.text.done",
+        "text": "Calling the registered tool read_file on notes.txt."
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "resp_s2s_v4e_tool_registered",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "session_id": "sess_s2s_v4e_tool_registered",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}
