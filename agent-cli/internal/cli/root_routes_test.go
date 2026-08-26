@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,11 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  -v, --verbose count       Enable verbose output (use -v for info, -vv for debug)\n\n" +
 	"Use \"agent [command] --help\" for more information about a command.\n"
 
-func newTestRootCommand() *cobra.Command {
+func newTestRootCommand(fleetExecutor ...fleet.EntryExecutor) *cobra.Command {
+	return newTestRootCommandWithProbeFleetCommand(NewProbeFleetCommand(fleetExecutor...))
+}
+
+func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetCommand) *cobra.Command {
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
@@ -72,6 +77,7 @@ func newTestRootCommand() *cobra.Command {
 		NewProbeRunCommand(),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
+		probeFleetCommand,
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),
@@ -154,6 +160,7 @@ func TestRouteHelpExecutionContracts(t *testing.T) {
 		{name: "tool", args: []string{"tool", "--help"}, usage: "agent tool <tool-id> [key=value...]", description: "Invoke a tool directly."},
 		{name: "interaction", args: []string{"interaction", "--help"}, usage: "agent interaction", description: "Inspect provider-neutral gateway interactions."},
 		{name: "interaction replay", args: []string{"interaction", "replay", "--help"}, usage: "agent interaction replay <fixture-path>", description: "Load a normalized PNIG interaction fixture"},
+		{name: "probe fleet", args: []string{"probe", "fleet", "--help"}, usage: "agent probe fleet --manifest <file>", description: "Execute every entry in a fleet manifest"},
 		{name: "probe report", args: []string{"probe", "report", "--help"}, usage: "agent probe report --out <result.jsonl>...", description: "Aggregate probe result artifacts into a friction report"},
 		{name: "session", args: []string{"session", "--help"}, usage: "agent session", description: "Run a bidirectional session inference capture"},
 		{name: "session show", args: []string{"session", "show", "--help"}, usage: "agent session show <session-id>", description: "Load and print the conversation history"},

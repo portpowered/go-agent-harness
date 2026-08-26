@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -51,6 +52,15 @@ var FlagsSet = wire.NewSet(
 	flags.NewLoopFlags,
 )
 
+// provideFleetEntryExecutors keeps the production fleet command on its
+// default transport dispatcher while leaving the executor injectable for
+// hermetic command tests.
+func provideFleetEntryExecutors() []fleet.EntryExecutor { return nil }
+
+// provideAcceptanceCommands keeps the production router on its default
+// acceptance runner while leaving the command injectable for route tests.
+func provideAcceptanceCommands() []*cli.ProbeAcceptanceCommand { return nil }
+
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
 	FlagsSet,
@@ -64,6 +74,9 @@ var CliSet = wire.NewSet(
 	cli.NewProbeRunCommand,
 	cli.NewProbeGateCommand,
 	cli.NewProbeReportCommand,
+	cli.NewProbeFleetCommand,
+	provideFleetEntryExecutors,
+	provideAcceptanceCommands,
 	cli.NewSessionCommandWithRuntime,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,

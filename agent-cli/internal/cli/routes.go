@@ -24,6 +24,7 @@ type Router struct {
 	ProbeGateCommand       *ProbeGateCommand
 	ProbeReportCommand     *ProbeReportCommand
 	ProbeAcceptanceCommand *ProbeAcceptanceCommand
+	ProbeFleetCommand      *ProbeFleetCommand
 
 	SessionCommand       *SessionCommand
 	SessionShowCommand   *SessionShowCommand
@@ -47,6 +48,7 @@ func NewRouter(
 	probeRunCommand *ProbeRunCommand,
 	probeGateCommand *ProbeGateCommand,
 	probeReportCommand *ProbeReportCommand,
+	probeFleetCommand *ProbeFleetCommand,
 	sessionCommand *SessionCommand,
 	sessionShowCommand *SessionShowCommand,
 	sessionListCommand *SessionListCommand,
@@ -72,6 +74,7 @@ func NewRouter(
 		ProbeGateCommand:         probeGateCommand,
 		ProbeReportCommand:       probeReportCommand,
 		ProbeAcceptanceCommand:   acceptanceCommand,
+		ProbeFleetCommand:        probeFleetCommand,
 		SessionCommand:           sessionCommand,
 		SessionShowCommand:       sessionShowCommand,
 		SessionListCommand:       sessionListCommand,
@@ -98,6 +101,7 @@ func (r *Router) BuildRoot() *cobra.Command {
 	probeGroup.AddCommand(NewPath("gate --out <result.jsonl>...", r.ProbeGateCommand.Generate()))
 	probeGroup.AddCommand(NewPath("report --out <result.jsonl>...", r.ProbeReportCommand.Generate()))
 	probeGroup.AddCommand(NewPath("acceptance <binary> <goal>", r.ProbeAcceptanceCommand.Generate()))
+	probeGroup.AddCommand(NewPath("fleet --manifest <file>", r.ProbeFleetCommand.Generate()))
 	root.AddCommand(probeGroup)
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())
