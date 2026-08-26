@@ -45,6 +45,7 @@ func newGeneratedCLIRoot(configDir string) *cobra.Command {
 		NewProbeRunCommand(),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
+		NewProbeFleetCommand(),
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),

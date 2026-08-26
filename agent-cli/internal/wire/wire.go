@@ -64,6 +64,7 @@ var CliSet = wire.NewSet(
 	cli.NewProbeRunCommand,
 	cli.NewProbeGateCommand,
 	cli.NewProbeReportCommand,
+	cli.NewProbeFleetCommand,
 	cli.NewSessionCommandWithRuntime,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,

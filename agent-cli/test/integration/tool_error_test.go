@@ -218,6 +218,7 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 		cli.NewProbeRunCommand(),
 		cli.NewProbeGateCommand(),
 		cli.NewProbeReportCommand(),
+		cli.NewProbeFleetCommand(),
 		cli.NewSessionCommand(askFlags, globalFlags, nil, nil),
 		cli.NewSessionShowCommand(globalFlags),
 		cli.NewSessionListCommand(globalFlags),
