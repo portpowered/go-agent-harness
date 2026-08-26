@@ -42,7 +42,7 @@ member so no two failure families collapse into one observable verdict.
 | auth negative control | `go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6c-error-rate-limit-negative-auth.session.json` |
 | invalid-request negative control | `go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6c-error-rate-limit-negative-invalid-request.session.json` |
 | integration proof | `agent-cli/test/integration/s2s_v6c_error_rate_limit_test.go` |
-| fixture corpus gate | `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go` (exact count recomputed to 30 on this head) |
+| fixture corpus gate | `go-llm-gateway/internal/sessionfixturevalidator/committed_fixtures_test.go` (exact count recomputed to 35 on this head) |
 
 ## Reproduction
 
