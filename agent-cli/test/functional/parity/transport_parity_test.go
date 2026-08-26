@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,9 +84,7 @@ func TestCommittedScenarioHasWSRTCProjectionParity(t *testing.T) {
 	ws := runParityScenario(t, scenario, capture, transportWebSocket)
 	rtcRun := runParityScenario(t, scenario, capture, transportRTC)
 
-	if differences := parity.Compare(ws.Projection, rtcRun.Projection); len(differences) != 0 {
-		t.Fatalf("scenario %q WebSocket and WebRTC projections diverged:\n%s", scenarioName(scenario), parity.FormatReport(differences))
-	}
+	assertTransportProjectionParity(t, scenarioName(scenario), "WebSocket", "WebRTC", ws.Projection, rtcRun.Projection)
 	if !reflect.DeepEqual(ws.Client, ws.Agent) {
 		t.Fatalf("scenario %q WebSocket client/agent projections diverged:\n%s", scenarioName(scenario), parity.FormatReport(parity.Compare(ws.Client, ws.Agent)))
 	}
@@ -110,6 +109,65 @@ func TestCommittedScenarioHasWSRTCProjectionParity(t *testing.T) {
 
 	if len(ws.Projection.Audio.Frames) == 0 || len(ws.Projection.Transcripts) == 0 || ws.Projection.Terminal == nil {
 		t.Fatalf("scenario projection lacks retained speech evidence: %+v", ws.Projection)
+	}
+}
+
+func assertTransportProjectionParity(t *testing.T, scenario, leftTransport, rightTransport string, left, right parity.Projection) {
+	t.Helper()
+	if failure := transportProjectionFailure(scenario, leftTransport, rightTransport, left, right); failure != "" {
+		t.Fatal(failure)
+	}
+	t.Logf("scenario %q: %s and %s projections agree", scenario, leftTransport, rightTransport)
+}
+
+func transportProjectionFailure(scenario, leftTransport, rightTransport string, left, right parity.Projection) string {
+	differences := parity.Compare(left, right)
+	if len(differences) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("scenario %q %s and %s projections diverged:\n%s", scenario, leftTransport, rightTransport, parity.FormatReport(differences))
+}
+
+func TestTransportProjectionDivergenceNamesEveryFactCategory(t *testing.T) {
+	expected := parity.Projection{
+		Turns: []parity.TurnBoundary{{Order: 1, Tick: 1, Kind: "turn.start", Boundary: "start", ID: "turn-1", Role: "user", Payload: []byte("turn")}},
+		Audio: parity.AudioSummary{
+			FrameCount: 1,
+			TotalBytes: 2,
+			Frames:     []parity.AudioFrame{{Tick: 2, Bytes: []byte{1, 2}, Payload: []byte("audio")}},
+		},
+		Transcripts:   []parity.TranscriptFact{{Order: 1, Tick: 3, Text: "hello", Payload: []byte("hello")}},
+		ToolCalls:     []parity.ToolCallFact{{Order: 1, ID: "tool-1", Name: "lookup", Arguments: []byte(`{"q":"x"}`), Result: []byte(`{"ok":true}`), CallTick: 4, ResultTick: 5, CallPayload: []byte("call"), ResultPayload: []byte("result")}},
+		Interruptions: []parity.InterruptionFact{{Order: 1, Tick: 6, Reason: "barge-in", Provenance: "client", Payload: []byte("interrupt")}},
+		Terminal:      &parity.TerminalOutcome{Tick: 7, Reason: "provider_close", Provenance: "provider", Payload: []byte("terminal")},
+	}
+	actual := parity.Projection{
+		Turns: []parity.TurnBoundary{{Order: 1, Tick: 1, Kind: "turn.end", Boundary: "start", ID: "turn-1", Role: "user", Payload: []byte("turn")}},
+		Audio: parity.AudioSummary{
+			FrameCount: 2,
+			TotalBytes: 2,
+			Frames:     []parity.AudioFrame{{Tick: 2, Bytes: []byte{1, 2}, Payload: []byte("audio")}},
+		},
+		Transcripts:   []parity.TranscriptFact{{Order: 1, Tick: 3, Text: "goodbye", Payload: []byte("hello")}},
+		ToolCalls:     []parity.ToolCallFact{{Order: 1, ID: "tool-1", Name: "search", Arguments: []byte(`{"q":"x"}`), Result: []byte(`{"ok":true}`), CallTick: 4, ResultTick: 5, CallPayload: []byte("call"), ResultPayload: []byte("result")}},
+		Interruptions: []parity.InterruptionFact{{Order: 1, Tick: 6, Reason: "user_cancel", Provenance: "client", Payload: []byte("interrupt")}},
+		Terminal:      &parity.TerminalOutcome{Tick: 7, Reason: "client_close", Provenance: "provider", Payload: []byte("terminal")},
+	}
+
+	failure := transportProjectionFailure("negative-path", "WebSocket", "WebRTC", expected, actual)
+	if failure == "" {
+		t.Fatal("diverging projections unexpectedly produced no failure")
+	}
+	if !strings.Contains(failure, `scenario "negative-path" WebSocket and WebRTC projections diverged:`) {
+		t.Fatalf("failure omitted scenario and transport names: %s", failure)
+	}
+	if !strings.Contains(failure, "Parity comparison: 6 differences") {
+		t.Fatalf("failure did not retain one difference per fact category: %s", failure)
+	}
+	for _, category := range []string{"turns", "audio", "transcripts", "toolCalls", "interruptions", "terminal"} {
+		if !strings.Contains(failure, category) {
+			t.Errorf("failure omitted %s fact category: %s", category, failure)
+		}
 	}
 }
 
