@@ -80,6 +80,82 @@ model:
 	}
 }
 
+func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		provider  string
+		model     string
+		apiKey    string
+		plan      func(SessionRunOptions, sessionRuntimeFactory) (sessionRuntimePlan, error)
+		configure func(*sessionRuntimeFactory)
+	}{
+		{
+			name:     "openai",
+			provider: config.ProviderOpenAI,
+			model:    "gpt-realtime",
+			apiKey:   "sk-scheduled-test-key",
+			plan:     planOpenAIRecordRuntime,
+			configure: func(factory *sessionRuntimeFactory) {
+				factory.newOpenAISessionInf = func(config.OpenAIConfig, transport.Dialer) (messages.SessionInferencer, error) {
+					return &scriptedSessionInferencer{}, nil
+				}
+			},
+		},
+		{
+			name:     "grok",
+			provider: config.ProviderGrok,
+			model:    "grok-realtime",
+			apiKey:   "xai-scheduled-test-key",
+			plan:     planGrokRecordRuntime,
+			configure: func(factory *sessionRuntimeFactory) {
+				factory.newGrokSessionInferencer = func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error) {
+					return &scriptedSessionInferencer{}, nil
+				}
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recordPath := filepath.Join(t.TempDir(), "capture.json")
+			factory := sessionRuntimeFactory{
+				newDefaultLiveDialer: func() transport.Dialer {
+					return &stubRuntimeDialer{id: "scheduled-live"}
+				},
+				newRecordingDialer: func(transport.Dialer, string, string) sessionRecordingDialer {
+					return &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "scheduled-recording"}}
+				},
+			}
+			testCase.configure(&factory)
+
+			plan, err := testCase.plan(SessionRunOptions{
+				RecordPath: recordPath,
+				Provider:   testCase.provider,
+				Model:      testCase.model,
+				APIKey:     testCase.apiKey,
+				ConfigDir:  t.TempDir(),
+				AudioInputs: []ScheduledAudioInput{
+					{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true},
+					{AfterCompletedTurns: 1, PCM: []byte{3, 4}, EndOfTurn: true},
+				},
+			}, factory)
+			if err != nil {
+				t.Fatalf("plan scheduled %s runtime: %v", testCase.provider, err)
+			}
+			if plan.loop.CloseAfterOpen {
+				t.Fatal("scheduled live session still closes immediately after SESSION.OPEN")
+			}
+			if !plan.loop.WaitForClose {
+				t.Fatal("scheduled live session must wait for its explicit terminal close")
+			}
+			if !plan.loop.CloseAfterScheduledAudio {
+				t.Fatal("scheduled live session must close only after the scheduled responses")
+			}
+			if plan.capturePath != recordPath {
+				t.Fatalf("capture path = %q, want %q", plan.capturePath, recordPath)
+			}
+		})
+	}
+}
+
 func TestPlanSessionRuntime_GrokRecordPreservesCallerOwnedDialer(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, `

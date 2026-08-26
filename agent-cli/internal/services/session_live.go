@@ -16,6 +16,10 @@ import (
 
 const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 
+// ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run
+// that ended before every queued input received an assistant response.
+var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
+
 // sessionFirstTurnAckTimeout bounds how long the SESSION.OPEN handler waits
 // for the first user turn acceptance before failing the run instead of
 // streaming user audio over an unacknowledged turn.
@@ -89,6 +93,12 @@ type sessionLoopOptions struct {
 	// rtcDeviceBinding is opened by the enclosing runtime plan and is started
 	// against the real session-owned media endpoints after ConnectSession.
 	rtcDeviceBinding *RTCDeviceBinding
+
+	// CloseAfterScheduledAudio requests a live scheduled-audio session close
+	// only after every queued input has produced a terminal assistant turn.
+	// Replay plans leave this false so capture-derived close behavior remains
+	// authoritative.
+	CloseAfterScheduledAudio bool
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
@@ -119,8 +129,16 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
+	err = scheduledAudioCompletionError(err, opts)
 	opts.observer.finish(err)
 	return err
+}
+
+func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
+	if err != nil || !opts.CloseAfterScheduledAudio || opts.observer == nil || opts.observer.scheduledAudioComplete() {
+		return err
+	}
+	return fmt.Errorf("%w: completed %d of %d", ErrSessionScheduledAudioIncomplete, opts.observer.turnsCompleted, opts.observer.scheduledInputs)
 }
 
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
@@ -271,7 +289,6 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
 			opts.observer.observe(msg)
-			opts.observer.dispatchScheduledInputs(runCtx, loop)
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return errors.Join(err, stop())
 			}
@@ -297,7 +314,18 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				}
 				startAudio()
 			}
+			if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
+				if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
+					return errors.Join(err, stopAndDrain())
+				}
+			}
 			if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
+				closeSent = true
+				if err := sendSessionClose(runCtx, loop); err != nil {
+					return errors.Join(err, stop())
+				}
+			}
+			if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !closeSent {
 				closeSent = true
 				if err := sendSessionClose(runCtx, loop); err != nil {
 					return errors.Join(err, stop())

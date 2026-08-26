@@ -2,8 +2,10 @@ package services_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,6 +123,103 @@ func (c *audioInLifecycleConn) Close() error {
 	return nil
 }
 
+// scheduledAudioLifecycleServer is a live-shaped OpenAI transport that emits
+// one response for each response.create and deliberately never sends a
+// captured session.closed event. The session runner must close locally only
+// after the final scheduled response.
+type scheduledAudioLifecycleServer struct {
+	mu        sync.Mutex
+	writes    []string
+	responses chan int
+	events    chan string
+	closed    chan struct{}
+	closeOnce sync.Once
+	nextTurn  int
+}
+
+func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
+	return &scheduledAudioLifecycleServer{
+		responses: make(chan int, 8),
+		events:    make(chan string, 32),
+		closed:    make(chan struct{}),
+	}
+}
+
+func (s *scheduledAudioLifecycleServer) writesSnapshot() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.writes...)
+}
+
+func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
+	go func() {
+		s.events <- `{"type":"session.created","session":{"id":"sess_scheduled","model":"gpt-realtime"}}`
+		for {
+			select {
+			case turn := <-s.responses:
+				audio := base64AudioForTurn(turn)
+				s.events <- `{"type":"response.created","response":{"id":"resp_` + string(rune('0'+turn)) + `"}}`
+				s.events <- `{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`
+				s.events <- `{"type":"response.output_audio.done"}`
+				s.events <- `{"type":"response.done","response":{"status":"completed"}}`
+			case <-s.closed:
+				return
+			}
+		}
+	}()
+	return &scheduledAudioLifecycleConn{server: s}, nil
+}
+
+func base64AudioForTurn(turn int) string {
+	return base64.StdEncoding.EncodeToString([]byte{byte(turn), 0, byte(turn + 10), 0})
+}
+
+type scheduledAudioLifecycleConn struct {
+	server *scheduledAudioLifecycleServer
+}
+
+func (c *scheduledAudioLifecycleConn) ReadMessage() (int, []byte, error) {
+	select {
+	case event := <-c.server.events:
+		var envelope struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal([]byte(event), &envelope); err == nil {
+			c.server.mu.Lock()
+			c.server.writes = append(c.server.writes, "IN:"+envelope.Type)
+			c.server.mu.Unlock()
+		}
+		return 1, []byte(event), nil
+	case <-c.server.closed:
+		return 0, nil, errors.New("connection closed")
+	}
+}
+
+func (c *scheduledAudioLifecycleConn) WriteMessage(_ int, payload []byte) error {
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return err
+	}
+	c.server.mu.Lock()
+	c.server.writes = append(c.server.writes, envelope.Type)
+	if envelope.Type == "response.create" {
+		c.server.nextTurn++
+		turn := c.server.nextTurn
+		c.server.mu.Unlock()
+		c.server.responses <- turn
+		return nil
+	}
+	c.server.mu.Unlock()
+	return nil
+}
+
+func (c *scheduledAudioLifecycleConn) Close() error {
+	c.server.closeOnce.Do(func() { close(c.server.closed) })
+	return nil
+}
+
 func liveAudioInRunOptions(t *testing.T, dialer *audioInLifecycleServer, recordPath string) services.SessionRunOptions {
 	t.Helper()
 	return services.SessionRunOptions{
@@ -200,6 +299,97 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 	}
 	if info.Size() <= 44 {
 		t.Fatalf("recorded response audio = %d bytes; want non-empty assistant audio", info.Size())
+	}
+}
+
+func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *testing.T) {
+	server := newScheduledAudioLifecycleServer()
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			context.Background(),
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:      recordPath,
+				Provider:        "openai",
+				Model:           "gpt-realtime",
+				APIKey:          "test-key",
+				ConfigDir:       t.TempDir(),
+				WebSocketDialer: server,
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath, audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("scheduled live-mode session error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("scheduled live-mode session did not close after its final response")
+	}
+
+	writes := server.writesSnapshot()
+	commitCount, responseCount, appendCount := 0, 0, 0
+	firstResponseDone := -1
+	secondAppend := -1
+	for index, writeType := range writes {
+		switch writeType {
+		case "input_audio_buffer.append":
+			appendCount++
+			if responseCount == 1 && secondAppend < 0 {
+				secondAppend = index
+			}
+		case "input_audio_buffer.commit":
+			commitCount++
+		case "response.create":
+			responseCount++
+		case "IN:response.done":
+			if responseCount == 1 {
+				firstResponseDone = index
+			}
+		}
+	}
+	if appendCount < 2 || commitCount != 2 || responseCount != 2 {
+		t.Fatalf("scheduled live wire events = %v, want two appended turns, commits, and responses", writes)
+	}
+	if secondAppend < 0 || firstResponseDone < 0 || secondAppend <= firstResponseDone {
+		t.Fatalf("second input was not dispatched after first response completion: %v", writes)
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read finalized recording manifest: %v", err)
+	}
+	var manifest struct {
+		Artifacts []struct {
+			Path string `json:"path"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode finalized recording manifest: %v", err)
+	}
+	inputArtifacts, outputArtifacts := 0, 0
+	for _, artifact := range manifest.Artifacts {
+		switch {
+		case strings.HasPrefix(artifact.Path, "audio/in-"):
+			inputArtifacts++
+		case strings.HasPrefix(artifact.Path, "audio/out-"):
+			outputArtifacts++
+		}
+	}
+	if inputArtifacts != 2 || outputArtifacts != 2 {
+		t.Fatalf("finalized audio artifacts = input:%d output:%d, want 2 each", inputArtifacts, outputArtifacts)
 	}
 }
 

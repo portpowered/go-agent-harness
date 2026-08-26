@@ -199,7 +199,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		}
 	}
 	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
-	return errors.Join(runErr, recording.Finalize())
+	return finalizeSessionDirectoryRecording(runErr, recording)
 }
 
 func runSessionWithRecordingDirectory(
@@ -316,7 +316,7 @@ func runSessionWithRecordingDirectory(
 					runErr = errors.Join(runErr, closeErr)
 				}
 			}
-			return errors.Join(runErr, recording.Finalize())
+			return finalizeSessionDirectoryRecording(runErr, recording)
 		}
 		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 	}
@@ -332,7 +332,19 @@ func runSessionWithRecordingDirectory(
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
 		}
 	}
-	return errors.Join(runErr, recording.Finalize())
+	return finalizeSessionDirectoryRecording(runErr, recording)
+}
+
+// finalizeSessionDirectoryRecording preserves a provider, cancellation, or
+// runtime failure when the failed run has no audio to satisfy the recording
+// bundle's success-only non-empty-segment invariant. A clean run still returns
+// the validation error, so an incomplete recording can never look successful.
+func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
+	recordingErr := recording.Finalize()
+	if runErr != nil && errors.Is(recordingErr, transcript.ErrInvalidRecording) {
+		return runErr
+	}
+	return errors.Join(runErr, recordingErr)
 }
 
 func validateSessionRecordingOptions(opts SessionRunOptions) error {

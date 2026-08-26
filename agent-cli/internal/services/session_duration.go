@@ -866,6 +866,7 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 
 func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
 	err := runAgentLoopSessionWithDurationAdmissionClockStream(ctx, out, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
+	err = scheduledAudioCompletionError(err, opts)
 	opts.observer.finish(err)
 	return err
 }
@@ -1030,7 +1031,6 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 				msg, durationTerminalWritten = maxDurationTerminalMessage(msg)
 			}
 			opts.observer.observe(msg)
-			opts.observer.dispatchScheduledInputs(runCtx, loop)
 			if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 				return finish(false, err)
 			}
@@ -1048,6 +1048,17 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 					if err := sendSessionClose(runCtx, loop); err != nil {
 						return finish(false, err)
 					}
+				}
+			}
+			if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
+				if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
+					return finish(false, err)
+				}
+			}
+			if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !closeSent {
+				closeSent = true
+				if err := sendSessionClose(runCtx, loop); err != nil {
+					return finish(false, err)
 				}
 			}
 			if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
