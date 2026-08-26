@@ -777,8 +777,22 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 	return runSessionDurationPlanWithAdmission(ctx, out, plan, maxDuration, durationClock, nil)
 }
 
-func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
+func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
 	artifacts := sessionDurationArtifactsFromContext(ctx)
+	if plan.rtcRuntime != nil {
+		defer func() {
+			if err := plan.rtcRuntime.Close(); err != nil {
+				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC runtime", err))
+			}
+		}()
+	}
+	if plan.closeSession != nil {
+		defer func() {
+			if err := plan.closeSession(); err != nil {
+				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
+			}
+		}()
+	}
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
 			return wrapSessionRuntimeError(plan, errors.Join(err, finalizeSessionDurationArtifacts(artifacts)))
@@ -790,7 +804,6 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		loopOut = plan.loopOut
 	}
 	plan.configureLoopObserver(&plan.loop)
-	var runErr error
 	if plan.inferencer != nil {
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
 	}

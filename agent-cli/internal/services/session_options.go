@@ -2,6 +2,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -25,7 +26,74 @@ const (
 	sessionProviderOpenAI = config.ProviderOpenAI
 	openAIRealtimeModel   = openAIRealtimeDefaultModel
 	openAIRealtimeBaseURL = "wss://api.openai.com/v1/realtime"
+
+	// SessionTransportWebSocket is the unchanged session transport default.
+	SessionTransportWebSocket = "ws"
+	// SessionTransportWebRTC selects the service-owned WebRTC runtime.
+	SessionTransportWebRTC = "webrtc"
 )
+
+var (
+	// ErrInvalidSessionRuntimeSelection identifies a malformed or incompatible
+	// transport/signaling/media selection at the service boundary.
+	ErrInvalidSessionRuntimeSelection = errors.New("invalid session runtime selection")
+	// ErrInvalidSessionTransport identifies a transport value the service does
+	// not know how to dispatch.
+	ErrInvalidSessionTransport = errors.New("invalid session transport")
+	// ErrSessionSignalingRequiresWebRTC identifies signaling supplied for the
+	// unchanged WebSocket runtime.
+	ErrSessionSignalingRequiresWebRTC = errors.New("session signaling requires WebRTC transport")
+	// ErrSessionMediaSourceRequiresWebRTC identifies a media source supplied for
+	// the unchanged WebSocket runtime.
+	ErrSessionMediaSourceRequiresWebRTC = errors.New("session media source requires WebRTC transport")
+	// ErrSessionWebRTCRequiresSignaling identifies a WebRTC request without an
+	// endpoint for the signaling exchange.
+	ErrSessionWebRTCRequiresSignaling = errors.New("WebRTC session transport requires signaling")
+	// ErrSessionWebRTCRequiresMediaSource identifies a WebRTC request without a
+	// selected external media source.
+	ErrSessionWebRTCRequiresMediaSource = errors.New("WebRTC session transport requires media source")
+	// ErrSessionRuntimeSelectionConflict identifies two aliases carrying
+	// different signaling endpoint values.
+	ErrSessionRuntimeSelectionConflict = errors.New("conflicting session signaling endpoints")
+)
+
+// SessionRuntimeSelection is the opaque, service-owned transport selection
+// retained by a runtime plan. Endpoint and source values are intentionally
+// strings: concrete signaling, peer, and media implementations stay behind
+// the runtime factory and no protocol-specific type crosses the service API.
+type SessionRuntimeSelection struct {
+	Transport         string
+	SignalingEndpoint string
+	MediaSource       string
+}
+
+// SessionRuntimeSelectionError reports all fields that made a selection
+// invalid while preserving a stable sentinel and the more specific cause.
+// Fields contain service option names without the leading command-line dashes.
+type SessionRuntimeSelectionError struct {
+	Fields []string
+	Err    error
+}
+
+func (e *SessionRuntimeSelectionError) Error() string {
+	if e == nil {
+		return ErrInvalidSessionRuntimeSelection.Error()
+	}
+	if len(e.Fields) == 0 {
+		return fmt.Sprintf("%s: %v", ErrInvalidSessionRuntimeSelection, e.Err)
+	}
+	if e.Err == nil {
+		return fmt.Sprintf("%s (%s)", ErrInvalidSessionRuntimeSelection, strings.Join(e.Fields, ", "))
+	}
+	return fmt.Sprintf("%s (%s): %v", ErrInvalidSessionRuntimeSelection, strings.Join(e.Fields, ", "), e.Err)
+}
+
+func (e *SessionRuntimeSelectionError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return errors.Join(ErrInvalidSessionRuntimeSelection, e.Err)
+}
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
@@ -40,6 +108,26 @@ type SessionRunOptions struct {
 	Prompt            string
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
+	// RTCRuntimeFactory optionally supplies the service-owned WebRTC runtime
+	// constructor. A nil value keeps the WebSocket path unchanged; selecting
+	// WebRTC without a factory returns an explicit setup error rather than
+	// silently falling back to WebSocket.
+	RTCRuntimeFactory SessionRTCRuntimeFactory
+
+	// Transport selects the live session runtime. Empty preserves the existing
+	// WebSocket default. The value is retained as supplied in the option
+	// contract only long enough for case/space-insensitive validation; plans
+	// store the canonical ws or webrtc value.
+	Transport string
+	// Signaling is the selected opaque signaling endpoint. It is consumed by
+	// the WebRTC runtime only; it must remain empty for the WebSocket runtime.
+	Signaling string
+	// SignalingEndpoint is the descriptive alias used by non-CLI callers. When
+	// both signaling fields are supplied they must carry the same value.
+	SignalingEndpoint string
+	// MediaSource is the selected opaque external media-source identity. It is
+	// consumed by the WebRTC runtime only; it must remain empty for WebSocket.
+	MediaSource string
 
 	// ToolExecutor optionally injects the composed session tool executor.
 	// When nil, duplex loop construction stays byte-for-byte identical to the
@@ -88,6 +176,9 @@ type SessionRunOptions struct {
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {
+	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
+		return err
+	}
 	if opts.RecordPath == "" && opts.ReplayPath == "" {
 		return fmt.Errorf("agent session requires --record <file>.json or --replay <file>.json")
 	}
@@ -101,6 +192,78 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 		return fmt.Errorf("--replay path %q must end with .json", opts.ReplayPath)
 	}
 	return nil
+}
+
+func resolveSessionRuntimeSelection(opts SessionRunOptions) (SessionRuntimeSelection, error) {
+	transportValue := strings.ToLower(strings.TrimSpace(opts.Transport))
+	if transportValue == "" {
+		transportValue = SessionTransportWebSocket
+	}
+	if transportValue != SessionTransportWebSocket && transportValue != SessionTransportWebRTC {
+		return SessionRuntimeSelection{}, sessionRuntimeSelectionError(
+			[]string{"transport"},
+			fmt.Errorf("%w: %q (want %q or %q)", ErrInvalidSessionTransport, opts.Transport, SessionTransportWebSocket, SessionTransportWebRTC),
+		)
+	}
+
+	signaling := opts.Signaling
+	if opts.SignalingEndpoint != "" {
+		if signaling != "" && signaling != opts.SignalingEndpoint {
+			return SessionRuntimeSelection{}, sessionRuntimeSelectionError(
+				[]string{"signaling", "signaling-endpoint"},
+				ErrSessionRuntimeSelectionConflict,
+			)
+		}
+		signaling = opts.SignalingEndpoint
+	}
+	selection := SessionRuntimeSelection{
+		Transport:         transportValue,
+		SignalingEndpoint: signaling,
+		MediaSource:       opts.MediaSource,
+	}
+
+	var fields []string
+	var causes []error
+	if transportValue == SessionTransportWebSocket {
+		if strings.TrimSpace(signaling) != "" {
+			fields = append(fields, "transport", "signaling")
+			causes = append(causes, ErrSessionSignalingRequiresWebRTC)
+		}
+		if strings.TrimSpace(opts.MediaSource) != "" {
+			fields = append(fields, "transport", "media-source")
+			causes = append(causes, ErrSessionMediaSourceRequiresWebRTC)
+		}
+	} else {
+		if strings.TrimSpace(signaling) == "" {
+			fields = append(fields, "transport", "signaling")
+			causes = append(causes, ErrSessionWebRTCRequiresSignaling)
+		}
+		if strings.TrimSpace(opts.MediaSource) == "" {
+			fields = append(fields, "transport", "media-source")
+			causes = append(causes, ErrSessionWebRTCRequiresMediaSource)
+		}
+	}
+	if len(causes) != 0 {
+		return SessionRuntimeSelection{}, sessionRuntimeSelectionError(uniqueSessionSelectionFields(fields), errors.Join(causes...))
+	}
+	return selection, nil
+}
+
+func sessionRuntimeSelectionError(fields []string, err error) error {
+	return &SessionRuntimeSelectionError{Fields: append([]string(nil), fields...), Err: err}
+}
+
+func uniqueSessionSelectionFields(fields []string) []string {
+	seen := make(map[string]struct{}, len(fields))
+	unique := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if _, ok := seen[field]; ok {
+			continue
+		}
+		seen[field] = struct{}{}
+		unique = append(unique, field)
+	}
+	return unique
 }
 
 func isJSONCapturePath(path string) bool {
