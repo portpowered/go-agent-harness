@@ -259,17 +259,12 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 	return wirePath
 }
 
-func strconvQuote(s string) string {
-	data, _ := json.Marshal(s)
-	return string(data)
-}
-
 // runToolDuringAudio drives the real 'agent session' command surface over the
 // hermetic record/replay transport with file-backed audio-in and audio-out.
 func runToolDuringAudio(t *testing.T, wavPath, wirePath string) (string, string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
+	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(io.Discard)
