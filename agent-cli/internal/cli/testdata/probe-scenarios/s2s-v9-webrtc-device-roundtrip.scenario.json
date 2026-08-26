@@ -1,0 +1,13 @@
+{
+  "id": "s2s-v9-webrtc-device-roundtrip",
+  "name": "s2s-v9-webrtc-device-roundtrip",
+  "description": "T2 device-tier proof: capture a scripted utterance from the selected microphone, carry it through the WebRTC session, and play a recognized response through the selected speaker.",
+  "steps": [
+    {"type": "send_audio", "corpus_id": "utterance-hello-there", "text": "The timer is ready for the next step."},
+    {"type": "close"}
+  ],
+  "expectations": [
+    {"type": "audio_energy"},
+    {"type": "transcript_contains", "text": "device round trip"}
+  ]
+}

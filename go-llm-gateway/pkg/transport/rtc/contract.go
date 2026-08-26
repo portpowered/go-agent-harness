@@ -55,6 +55,61 @@ type PCMFrame struct {
 	Samples []int16
 }
 
+// VisualObservationStatus is the stable outcome of a visual look operation.
+// An unavailable observation is a successful source observation: it means
+// the source is usable, but no video track is available for visual data.
+type VisualObservationStatus string
+
+const (
+	VisualObservationAvailable   VisualObservationStatus = "available"
+	VisualObservationUnavailable VisualObservationStatus = "unavailable"
+
+	// The longer names make the status constants discoverable without relying
+	// on the type name at the call site.
+	VisualObservationStatusAvailable   = VisualObservationAvailable
+	VisualObservationStatusUnavailable = VisualObservationUnavailable
+	LookAvailable                      = VisualObservationAvailable
+	LookUnavailable                    = VisualObservationUnavailable
+	LookStatusAvailable                = VisualObservationAvailable
+	LookStatusUnavailable              = VisualObservationUnavailable
+)
+
+// VisualObservationReason is populated when a visual observation is not
+// available. Reasons are intentionally small and stable so callers can branch
+// on them without parsing human-readable error text.
+type VisualObservationReason string
+
+const (
+	VisualObservationReasonNoVideoTrack VisualObservationReason = "no_video_track"
+	NoVideoTrack                                                = VisualObservationReasonNoVideoTrack
+	LookReasonNoVideoTrack                                      = VisualObservationReasonNoVideoTrack
+)
+
+// VisualObservation is the caller-owned result of a visual look operation.
+// Bytes contains one encoded video RTP payload copied from source activity;
+// it is non-empty only for an available result and the caller owns that byte
+// storage after the operation returns. MediaType is the negotiated video MIME
+// type, for example video/H264.
+type VisualObservation struct {
+	Source    string                  `json:"source,omitempty"`
+	Status    VisualObservationStatus `json:"status"`
+	Reason    VisualObservationReason `json:"reason,omitempty"`
+	MediaType string                  `json:"media_type,omitempty"`
+	Bytes     []byte                  `json:"bytes,omitempty"`
+}
+
+// VisualObservationResult and LookResult are descriptive aliases for callers
+// that use result-oriented naming. They intentionally share one contract.
+type VisualObservationResult = VisualObservation
+type LookResult = VisualObservation
+type LookStatus = VisualObservationStatus
+type LookReason = VisualObservationReason
+
+// Available reports whether the observation contains visual data.
+func (o VisualObservation) Available() bool {
+	return o.Status == VisualObservationAvailable && len(o.Bytes) > 0
+}
+
 // MediaEndpoint is the lifecycle seam shared by inbound and outbound media.
 //
 // Each endpoint returned with a nil error is caller-owned. The caller closes

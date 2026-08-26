@@ -74,6 +74,17 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 	if !ok {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
+	events := []models.SessionEvent{event}
+	if msg.Type == messages.StreamTypeMessageEnd {
+		// Finite client-side audio turns need an explicit response request after
+		// committing their input buffer. This mirrors the OpenAI realtime
+		// adapter and keeps Grok device probes from waiting for server-side VAD.
+		events = append(events, models.NewResponseCreateEvent())
+	}
+	return s.sendEvents(ctx, events)
+}
+
+func (s *grokSession) sendEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
 	select {
 	case <-ctx.Done():
 		return sessionSendContextOutcome(ctx)
@@ -93,15 +104,24 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	default:
 	}
-	outcome := s.sendQueue.WriteContext(ctx, event)
-	switch outcome.Status {
-	case messages.BufferWriteSucceeded:
-		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-	case messages.BufferWriteBufferFull:
-		return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
-	default:
-		return sessionSendContextOutcome(ctx)
+	for _, event := range events {
+		// A terminated session reports closed regardless of remaining outbound
+		// buffer capacity.
+		select {
+		case <-s.done:
+			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+		default:
+		}
+		outcome := s.sendQueue.WriteContext(ctx, event)
+		switch outcome.Status {
+		case messages.BufferWriteSucceeded:
+		case messages.BufferWriteBufferFull:
+			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
+		default:
+			return sessionSendContextOutcome(ctx)
+		}
 	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
 
 func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome {
