@@ -1,5 +1,7 @@
 package transport
 
+import "errors"
+
 // Dialer establishes a message connection to endpoint using headers.
 //
 // On success, Dial returns a non-nil Conn and nil error. On failure, it
@@ -20,4 +22,20 @@ type Conn interface {
 	ReadMessage() (messageType int, payload []byte, err error)
 	WriteMessage(messageType int, payload []byte) error
 	Close() error
+}
+
+// InjectedFault identifies a deterministic fault deliberately introduced by a
+// probe or test transport decorator. Providers can preserve the normal raw
+// EOF/disconnect compatibility path while surfacing marked probe faults as
+// typed stream errors.
+type InjectedFault interface {
+	error
+	TransportFault()
+}
+
+// IsInjectedFault reports whether err or one of its wrapped causes is a
+// deterministic transport fault.
+func IsInjectedFault(err error) bool {
+	var fault InjectedFault
+	return errors.As(err, &fault)
 }
