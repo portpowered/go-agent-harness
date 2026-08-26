@@ -3,6 +3,7 @@ package wire
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -16,7 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -39,6 +42,19 @@ type recordingDeviceRegistry struct {
 func (r *recordingDeviceRegistry) ListDevices() []string {
 	r.lookups++
 	return []string{"recording-device"}
+}
+
+func (r *recordingDeviceRegistry) List() ([]audio.Device, error) {
+	r.lookups++
+	return nil, nil
+}
+
+func (r *recordingDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
+	return audio.Device{}, audio.NewNoDefaultDeviceError(direction)
+}
+
+func (r *recordingDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
+	return nil, audio.NewDeviceNotFoundError(id)
 }
 
 type recordingAudioSource struct {
@@ -206,6 +222,115 @@ func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
 		t.Fatal("ComposeAgentCLI generated a nil cobra root")
 	}
 }
+
+func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
+	inner, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual registry: %v", err)
+	}
+	registry := &trackingDeviceRegistry{inner: inner}
+
+	app, err := ComposeAgentCLI(
+		&recordingToolExecutor{},
+		&recordingDialer{},
+		registry,
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		&recordingClock{now: time.Unix(123, 0)},
+	)
+	if err != nil {
+		t.Fatalf("ComposeAgentCLI: %v", err)
+	}
+	root := app.Generate()
+	var listOut, listErr bytes.Buffer
+	root.SetOut(&listOut)
+	root.SetErr(&listErr)
+	root.SetArgs([]string{"devices", "list", "--json"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("composed devices list: %v", err)
+	}
+	if listErr.Len() != 0 {
+		t.Fatalf("composed devices list stderr = %q", listErr.String())
+	}
+	var response struct {
+		Devices []struct {
+			ID        audio.DeviceID  `json:"id"`
+			Direction audio.Direction `json:"direction"`
+			Default   bool            `json:"default"`
+		} `json:"devices"`
+	}
+	if err := json.Unmarshal(listOut.Bytes(), &response); err != nil {
+		t.Fatalf("decode composed devices list: %v", err)
+	}
+	wantDevices := map[audio.DeviceID]struct {
+		direction audio.Direction
+		defaulted bool
+	}{
+		"virtual:input":     {direction: audio.DirectionInput, defaulted: true},
+		"virtual:output":    {direction: audio.DirectionOutput, defaulted: true},
+		"virtual:exclusive": {direction: audio.DirectionOutput},
+	}
+	if len(response.Devices) != len(wantDevices) {
+		t.Fatalf("composed device list = %#v, want exact shared-registry snapshot", response.Devices)
+	}
+	for _, device := range response.Devices {
+		want, ok := wantDevices[device.ID]
+		if !ok || device.Direction != want.direction || device.Default != want.defaulted {
+			t.Fatalf("composed device entry = %#v, want shared-registry entry", device)
+		}
+		delete(wantDevices, device.ID)
+	}
+	if len(wantDevices) != 0 {
+		t.Fatalf("composed device list omitted IDs: %#v", wantDevices)
+	}
+
+	sessionApp, err := ComposeAgentCLI(
+		&recordingToolExecutor{},
+		&recordingDialer{},
+		registry,
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		&recordingClock{now: time.Unix(123, 0)},
+		WithSessionInferencer(&recordingSessionInferencer{}),
+	)
+	if err != nil {
+		t.Fatalf("ComposeAgentCLI with session inferencer: %v", err)
+	}
+	sessionRoot := sessionApp.Generate()
+	sessionRoot.SetOut(io.Discard)
+	sessionRoot.SetArgs([]string{
+		"session", "--replay", "synthetic.json",
+		"--audio-in-device", "virtual:input",
+		"--audio-out-device", "default",
+	})
+	if err := sessionRoot.Execute(); err == nil || !errors.Is(err, services.ErrRTCSessionMediaUnavailable) {
+		t.Fatalf("composed session error = %v, want RTC media capability error after preflight", err)
+	}
+	if len(registry.opened) != 2 || registry.opened[0] != "virtual:input" || registry.opened[1] != "virtual:output" {
+		t.Fatalf("composed session opened IDs = %v, want exact input and output default", registry.opened)
+	}
+	if got := inner.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("composed session registry observations = %+v, want two opens and releases", got)
+	}
+}
+
+type trackingDeviceRegistry struct {
+	inner  *audio.VirtualRegistry
+	opened []audio.DeviceID
+}
+
+func (r *trackingDeviceRegistry) List() ([]audio.Device, error) { return r.inner.List() }
+
+func (r *trackingDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
+	return r.inner.Default(direction)
+}
+
+func (r *trackingDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
+	r.opened = append(r.opened, id)
+	return r.inner.Open(id)
+}
+
+var _ DeviceRegistry = (*trackingDeviceRegistry)(nil)
 
 func TestCompositionClock_DefaultsThroughEnsureAndPreservesSuppliedIdentity(t *testing.T) {
 	values := validCompositionValues()

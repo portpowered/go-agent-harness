@@ -37,6 +37,8 @@ type Router struct {
 
 	ConfigCommand         *ConfigCommand
 	ConfigAddLocalCommand *ConfigAddLocalCommand
+
+	deviceRegistry audio.DeviceRegistry
 }
 
 // NewRouter constructs a Router with the given dependencies.
@@ -69,6 +71,9 @@ func NewRouter(
 	if probeRunCommand != nil && probeRunCommand.deviceRegistry != nil {
 		deviceRegistry = probeRunCommand.deviceRegistry
 	}
+	if sessionCommand != nil && sessionCommand.deviceRegistry != nil {
+		deviceRegistry = sessionCommand.deviceRegistry
+	}
 	return &Router{
 		Flags:                    flags,
 		deviceRegistry:           deviceRegistry,
@@ -91,6 +96,7 @@ func NewRouter(
 		SessionDeleteCommand:     sessionDeleteCommand,
 		ConfigCommand:            configCommand,
 		ConfigAddLocalCommand:    configAddLocalCommand,
+		deviceRegistry:           deviceRegistry,
 	}
 }
 

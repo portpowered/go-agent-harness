@@ -9,12 +9,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
-// DeviceRegistry is the minimal consumer-side device discovery contract. The
-// audio device lane owns the concrete registry and may add richer operations
-// without changing the wire boundary.
-type DeviceRegistry interface {
-	ListDevices() []string
-}
+// DeviceRegistry is the shared registry boundary used by both device listing
+// and session RTC device bindings. Keeping the alias here prevents the wire
+// graph from inventing a second, discovery-only device contract.
+type DeviceRegistry = audio.DeviceRegistry
 
 // AudioSource is the shared PCM input contract used by the audio package.
 type AudioSource = audio.AudioSource
@@ -37,14 +35,6 @@ type SessionRuntimeObserver = services.SessionRuntimeObserver
 // SessionRuntimeObservation is the value delivered by SessionRuntimeObserver.
 type SessionRuntimeObservation = services.SessionRuntimeObservation
 
-// The legacy CLI initializers do not yet own audio devices. These inert values
-// keep those compatibility entry points constructible without opening a
-// device, consuming audio, or adding a second composition path. Callers that
-// own the edges replace them through the named port API.
-type inertDeviceRegistry struct{}
-
-func (inertDeviceRegistry) ListDevices() []string { return nil }
-
 type inertAudioSource struct{}
 
 func (inertAudioSource) ReadFrame(context.Context, []int16) error { return io.EOF }
@@ -55,13 +45,12 @@ type inertAudioSink struct{}
 func (inertAudioSink) WriteFrame(context.Context, []int16) error { return nil }
 func (inertAudioSink) Close() error                              { return nil }
 
-func defaultDeviceRegistry() DeviceRegistry { return inertDeviceRegistry{} }
+func defaultDeviceRegistry() DeviceRegistry { return audio.NewPlatformDeviceRegistry() }
 func defaultAudioSource() AudioSource       { return inertAudioSource{} }
 func defaultAudioSink() AudioSink           { return inertAudioSink{} }
 
 var (
-	_ DeviceRegistry = inertDeviceRegistry{}
-	_ AudioSource    = inertAudioSource{}
-	_ AudioSink      = inertAudioSink{}
-	_ Clock          = clock.Real{}
+	_ AudioSource = inertAudioSource{}
+	_ AudioSink   = inertAudioSink{}
+	_ Clock       = clock.Real{}
 )
