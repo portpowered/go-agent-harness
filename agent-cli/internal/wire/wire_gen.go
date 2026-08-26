@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -37,14 +38,16 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	probeRunCommand := cli.NewProbeRunCommand()
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
-	probeFleetCommand := cli.NewProbeFleetCommand()
+	v2 := provideFleetEntryExecutors()
+	probeFleetCommand := cli.NewProbeFleetCommand(v2...)
 	sessionCommand := cli.NewSessionCommandWithRuntime(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand)
+	v3 := provideAcceptanceCommands()
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand, v3...)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -83,7 +86,17 @@ func provideModelValidation(
 // FlagsSet provides global and command-specific CLI flags.
 var FlagsSet = wire.NewSet(flags.NewGlobalFlags, flags.NewAskFlags, flags.NewChatFlags, flags.NewLoopFlags)
 
+// provideFleetEntryExecutors keeps the production fleet command on its
+// default transport dispatcher while leaving the executor injectable for
+// hermetic command tests.
+func provideFleetEntryExecutors() []fleet.EntryExecutor { return nil }
+
+// provideAcceptanceCommands keeps the production router on its default
+// acceptance runner while leaving the command injectable for route tests.
+func provideAcceptanceCommands() []*cli.ProbeAcceptanceCommand { return nil }
+
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, cli.NewSessionCommandWithRuntime, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
+	provideAcceptanceCommands, cli.NewSessionCommandWithRuntime, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

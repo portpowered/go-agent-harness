@@ -240,3 +240,55 @@ func TestProbeFleetJSONReconcilesEveryManifestEntry(t *testing.T) {
 		t.Fatalf("unique result IDs = %d, want %d", len(seen), manifest.EntryCount())
 	}
 }
+
+func TestProbeFleetRunsCommittedS2SScenariosThroughRealArgv(t *testing.T) {
+	manifest, err := fleet.Compose(fleet.ComposeInput{
+		ScenarioFiles: []string{v2aNoRespScenario, v2aHappyScenario},
+		Transports:    []fleet.Transport{fleet.TransportReplay},
+		RepeatCount:   2,
+		Concurrency:   2,
+	})
+	if err != nil {
+		t.Fatalf("compose committed s2s fleet: %v", err)
+	}
+	manifestPath := filepath.Join(t.TempDir(), "fleet.json")
+	writeFleetManifest(t, manifestPath, manifest)
+
+	run := executeCLI(
+		"probe", "fleet", "--manifest", manifestPath,
+		"--replay", "testdata/probe-fixtures", "--json",
+	)
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1 for committed negative control; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+
+	var result fleet.Result
+	if err := json.Unmarshal([]byte(run.stdout), &result); err != nil {
+		t.Fatalf("decode committed fleet result %q: %v", run.stdout, err)
+	}
+	if result.Total != manifest.EntryCount() || result.Passed != 2 || result.Failed != 2 || result.Passed+result.Failed != result.Total {
+		t.Fatalf("committed fleet counts = passed %d failed %d total %d, want 2/2/%d", result.Passed, result.Failed, result.Total, manifest.EntryCount())
+	}
+	if len(result.Entries) != manifest.EntryCount() {
+		t.Fatalf("committed fleet result entries = %d, want %d", len(result.Entries), manifest.EntryCount())
+	}
+
+	seen := make(map[string]struct{}, len(result.Entries))
+	for index, got := range result.Entries {
+		want := manifest.Entries[index]
+		if _, exists := seen[got.ID]; exists {
+			t.Fatalf("duplicate committed fleet result ID %q", got.ID)
+		}
+		seen[got.ID] = struct{}{}
+		if got.ID != want.ID || got.ScenarioID != want.ScenarioID || got.Transport != want.Transport || got.RepeatIndex != want.RepeatIndex {
+			t.Fatalf("committed fleet result[%d] = %+v, want coordinates %+v", index, got, want)
+		}
+		wantPass := got.ScenarioID == "s2s-v2a-audio-in-basic"
+		if got.Pass != wantPass {
+			t.Fatalf("committed fleet result[%d] pass = %t for %s, want %t", index, got.Pass, got.ScenarioID, wantPass)
+		}
+	}
+	if len(seen) != manifest.EntryCount() {
+		t.Fatalf("unique committed fleet result IDs = %d, want %d", len(seen), manifest.EntryCount())
+	}
+}

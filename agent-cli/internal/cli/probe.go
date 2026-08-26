@@ -704,17 +704,9 @@ func replayTranscriptFromCapture(capture gatewaytesting.SessionCapture) string {
 // session fixture matching the scenario name or ID.
 func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 	return func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-		fixture, ok := fixtures[scenario.Name]
-		if !ok {
-			fixture, ok = fixtures[scenario.ID]
-		}
-		if !ok && len(fixtures) == 1 {
-			for _, only := range fixtures {
-				fixture, ok = only, true
-			}
-		}
-		if !ok {
-			return probe.ObservationSnapshot{}, fmt.Errorf("no recorded fixture matches scenario %q", scenarioName(scenario))
+		fixture, err := replayFixtureForScenario(fixtures, scenario)
+		if err != nil {
+			return probe.ObservationSnapshot{}, err
 		}
 		capture, err := gatewaytesting.LoadSessionCapture(fixture)
 		if err != nil {
@@ -730,6 +722,44 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		}
 		return observationFromSessionCapture(ctx, scenario, replayCapture, fixture, !injected)
 	}
+}
+
+// replayFixtureForScenario resolves both the exact authored name and the
+// filename spelling used by committed s2s fixtures. Those fixtures predate
+// the probe scenario IDs and use underscores where the scenario documents use
+// hyphens, so a directory replay must normalize the two representations before
+// declaring a scenario unmatched.
+func replayFixtureForScenario(fixtures map[string]string, scenario probe.Scenario) (string, error) {
+	for _, candidate := range []string{scenario.Name, scenario.ID, scenarioName(scenario)} {
+		if fixture, ok := fixtures[candidate]; ok {
+			return fixture, nil
+		}
+	}
+
+	want := normalizeReplayFixtureName(scenarioName(scenario))
+	var matched string
+	for key, fixture := range fixtures {
+		if normalizeReplayFixtureName(key) != want {
+			continue
+		}
+		if matched != "" && matched != fixture {
+			return "", fmt.Errorf("multiple recorded fixtures match scenario %q", scenarioName(scenario))
+		}
+		matched = fixture
+	}
+	if matched != "" {
+		return matched, nil
+	}
+	if len(fixtures) == 1 {
+		for _, only := range fixtures {
+			return only, nil
+		}
+	}
+	return "", fmt.Errorf("no recorded fixture matches scenario %q", scenarioName(scenario))
+}
+
+func normalizeReplayFixtureName(value string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), "_", "-")
 }
 
 // observationFromSessionCapture validates and derives the probe evidence from
