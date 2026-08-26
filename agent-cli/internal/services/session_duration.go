@@ -612,6 +612,10 @@ func (s *sessionDurationAdmissionSession) Done() <-chan struct{} {
 	return s.done
 }
 
+func (s *sessionDurationAdmissionSession) rtcMedia() (RTCMediaEndpoints, bool) {
+	return rtcMediaFromSession(s.inner)
+}
+
 func (s *sessionDurationAdmissionSession) Close() error {
 	s.closeOnce.Do(func() {
 		s.closeAdmission()
@@ -784,6 +788,7 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		return errors.Join(err, finalizeSessionDurationArtifacts(artifacts))
 	}
 	if deviceBinding != nil {
+		plan.loop.rtcDeviceBinding = deviceBinding
 		defer func() {
 			runErr = errors.Join(runErr, deviceBinding.Close())
 		}()
@@ -865,7 +870,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			closeDone: make(chan struct{}),
 		}
 	}
-	observedInferencer := newObservedSessionInferencer(admittedInferencer)
+	var rtcPumpErrors <-chan error
+	boundInferencer, rtcErrors := bindRTCDeviceSessionInferencer(admittedInferencer, opts.rtcDeviceBinding)
+	rtcPumpErrors = rtcErrors
+	observedInferencer := newObservedSessionInferencer(boundInferencer)
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -901,6 +909,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer)
 		}
 		cancel()
+		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
 		runErr := <-runErrCh
 		admittedInferencer.waitForClose()
 		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer); drainErr != nil {
@@ -909,19 +918,16 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		runtimeErr := admittedInferencer.runtimeError()
 		closeErr := admittedInferencer.closeError()
 		if preferredErr != nil {
-			if runtimeErr != nil || closeErr != nil {
-				return errors.Join(preferredErr, sessionDurationLifecycleError(runtimeErr, closeErr))
+			if lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr); lifecycleErr != nil {
+				return errors.Join(preferredErr, lifecycleErr)
 			}
 			return preferredErr
 		}
 		if preCancelDrainErr != nil {
 			return preCancelDrainErr
 		}
-		if runtimeErr != nil {
-			return wrapSessionPhaseError("session runtime", runtimeErr)
-		}
-		if closeErr != nil {
-			return wrapSessionPhaseError("close session", closeErr)
+		if lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr); lifecycleErr != nil {
+			return lifecycleErr
 		}
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {
 			return fmt.Errorf("session error: %w", runErr)
@@ -981,6 +987,8 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 				doneErr = opts.DoneErr()
 			}
 			return finish(durationExpired && doneErr == nil, doneErr)
+		case pumpErr := <-rtcPumpErrors:
+			return finish(false, pumpErr)
 		case err := <-runErrCh:
 			admittedInferencer.waitForClose()
 			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten, artifacts, opts.observer); drainErr != nil {
@@ -1137,13 +1145,16 @@ func writeMaxDurationTerminal(out io.Writer, artifacts SessionDurationArtifactLi
 	}, artifacts)
 }
 
-func sessionDurationLifecycleError(runtimeErr, closeErr error) error {
+func sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr error) error {
 	var lifecycleErrs []error
 	if runtimeErr != nil {
 		lifecycleErrs = append(lifecycleErrs, wrapSessionPhaseError("session runtime", runtimeErr))
 	}
 	if closeErr != nil {
 		lifecycleErrs = append(lifecycleErrs, wrapSessionPhaseError("close session", closeErr))
+	}
+	if bindingErr != nil {
+		lifecycleErrs = append(lifecycleErrs, wrapSessionPhaseError("close RTC device binding", bindingErr))
 	}
 	return errors.Join(lifecycleErrs...)
 }

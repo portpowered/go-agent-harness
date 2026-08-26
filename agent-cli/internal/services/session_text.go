@@ -115,6 +115,10 @@ func (s *sessionTextSeedSession) Done() <-chan struct{} {
 	return s.inner.Done()
 }
 
+func (s *sessionTextSeedSession) rtcMedia() (RTCMediaEndpoints, bool) {
+	return rtcMediaFromSession(s.inner)
+}
+
 func (s *sessionTextSeedSession) Close() error {
 	return s.inner.Close()
 }

@@ -75,6 +75,10 @@ type sessionLoopOptions struct {
 	// runtime stamps audio input and lifecycle observations from inside the
 	// session command. Nil keeps the existing runtime path unchanged.
 	runtime *sessionRuntimeObservationRecorder
+
+	// rtcDeviceBinding is opened by the enclosing runtime plan and is started
+	// against the real session-owned media endpoints after ConnectSession.
+	rtcDeviceBinding *RTCDeviceBinding
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
@@ -98,6 +102,8 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 }
 
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
+	var rtcPumpErrors <-chan error
+	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
 	observedInferencer := newObservedSessionInferencer(sessionInferencer)
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
@@ -151,7 +157,11 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	}
 	stop := func() error {
 		cancel()
-		return joinSessionTerminationErrors(waitRun(), waitAudio())
+		var bindingErr error
+		if opts.rtcDeviceBinding != nil {
+			bindingErr = opts.rtcDeviceBinding.Close()
+		}
+		return errors.Join(joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
 	}
 	stopAndDrain := func() error {
 		stopErr := stop()
@@ -184,6 +194,13 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				return stopErr
 			}
 			awaitingResponse = audioErr == nil
+		case pumpErr := <-rtcPumpErrors:
+			cancel()
+			stopErr := errors.Join(pumpErr, opts.rtcDeviceBinding.Close(), joinSessionTerminationErrors(waitRun(), waitAudio()))
+			if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
+				stopErr = errors.Join(stopErr, drainErr)
+			}
+			return stopErr
 		case <-done:
 			doneErr := error(nil)
 			if opts.DoneErr != nil {

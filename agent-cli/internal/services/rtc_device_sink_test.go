@@ -340,10 +340,8 @@ func (m *blockingRTCInboundMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, 
 		return frame, nil
 	}
 	m.mu.Unlock()
-	select {
-	case <-ctx.Done():
-		return rtc.PCMFrame{}, ctx.Err()
-	}
+	<-ctx.Done()
+	return rtc.PCMFrame{}, ctx.Err()
 }
 
 func (m *blockingRTCInboundMedia) Close() error { return nil }

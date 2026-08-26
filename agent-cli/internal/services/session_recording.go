@@ -584,6 +584,10 @@ func (s *sessionDirectoryRecordingSession) Done() <-chan struct{} {
 	return s.inner.Done()
 }
 
+func (s *sessionDirectoryRecordingSession) rtcMedia() (RTCMediaEndpoints, bool) {
+	return rtcMediaFromSession(s.inner)
+}
+
 func (s *sessionDirectoryRecordingSession) Close() error {
 	err := s.inner.Close()
 	select {
