@@ -12,9 +12,11 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/parity"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -36,7 +38,6 @@ const (
 var (
 	_ transport.Dialer = (*rtcReplayDialer)(nil)
 	_ rtc.Dialer       = (*rtcReplayDialer)(nil)
-	_ transport.Conn   = (*fixtureConn)(nil)
 )
 
 type parityTransport string
@@ -236,6 +237,7 @@ func runParityScenario(t *testing.T, scenario committedScenario, capture gateway
 	if err != nil {
 		t.Fatalf("dial %s transport: %v", kind, err)
 	}
+	t.Cleanup(func() { _ = conn.Close() })
 
 	logicalClock := clock.NewDeterministic(time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), parityClockTick)
 	observed := driveScenario(ctx, t, scenario, capture, conn, logicalClock)
@@ -251,6 +253,11 @@ func runParityScenario(t *testing.T, scenario committedScenario, capture gateway
 		case <-replayDialer.Done():
 		default:
 			t.Fatalf("%s replay did not reach the end of the fixture", kind)
+		}
+	}
+	if replayDialer, ok := dialer.(*rtcReplayDialer); ok {
+		if replayErr := replayDialer.Err(); replayErr != nil {
+			t.Fatalf("%s replay diverged: %v", kind, replayErr)
 		}
 	}
 
@@ -467,122 +474,429 @@ func jsonEqual(left, right []byte) bool {
 
 type rtcReplayDialer struct {
 	capture gatewaytesting.SessionCapture
+	mu      sync.Mutex
+	conn    *rtcDataConn
 }
 
 func (d *rtcReplayDialer) Dial(endpoint string, _ map[string]string) (transport.Conn, error) {
 	if endpoint != parityEndpoint {
 		return nil, fmt.Errorf("unexpected RTC endpoint %q", endpoint)
 	}
-	if err := completeLoopbackSignaling(); err != nil {
+	conn, err := newRTCDataConn(cloneCapturedEvents(d.capture.Records))
+	if err != nil {
 		return nil, err
 	}
-	events := append([]gatewaytesting.CapturedSessionEvent(nil), d.capture.Records...)
-	return &fixtureConn{events: events}, nil
+	d.mu.Lock()
+	d.conn = conn
+	d.mu.Unlock()
+	return conn, nil
 }
 
-func completeLoopbackSignaling() error {
+func (d *rtcReplayDialer) Err() error {
+	d.mu.Lock()
+	conn := d.conn
+	d.mu.Unlock()
+	if conn == nil {
+		return nil
+	}
+	return conn.Err()
+}
+
+func cloneCapturedEvents(events []gatewaytesting.CapturedSessionEvent) []gatewaytesting.CapturedSessionEvent {
+	cloned := make([]gatewaytesting.CapturedSessionEvent, len(events))
+	for i, event := range events {
+		cloned[i] = event
+		cloned[i].Payload = append([]byte(nil), event.Payload...)
+		cloned[i].Data = append([]byte(nil), event.Data...)
+	}
+	return cloned
+}
+
+const parityDataChannelLabel = "s2s-parity"
+
+type rtcReplayState struct {
+	mu     sync.Mutex
+	events []gatewaytesting.CapturedSessionEvent
+	index  int
+	err    error
+	failed chan struct{}
+	closed chan struct{}
+
+	failOnce  sync.Once
+	closeOnce sync.Once
+}
+
+func newRTCReplayState(events []gatewaytesting.CapturedSessionEvent) *rtcReplayState {
+	return &rtcReplayState{
+		events: events,
+		failed: make(chan struct{}),
+		closed: make(chan struct{}),
+	}
+}
+
+func (s *rtcReplayState) fail(err error) {
+	if err == nil {
+		return
+	}
+	s.failOnce.Do(func() {
+		s.mu.Lock()
+		s.err = err
+		s.mu.Unlock()
+		close(s.failed)
+	})
+}
+
+func (s *rtcReplayState) failIfOpen(err error) {
+	if !s.isClosed() {
+		s.fail(err)
+	}
+}
+
+func (s *rtcReplayState) markClosed() {
+	s.closeOnce.Do(func() { close(s.closed) })
+}
+
+func (s *rtcReplayState) isClosed() bool {
+	select {
+	case <-s.closed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *rtcReplayState) failure() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err
+}
+
+func (s *rtcReplayState) closeError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return s.err
+	}
+	if s.index != len(s.events) {
+		return fmt.Errorf("RTC replay incomplete at record %d of %d", s.index, len(s.events))
+	}
+	return nil
+}
+
+func (s *rtcReplayState) receive(dc *webrtc.DataChannel, message webrtc.DataChannelMessage) {
+	if !message.IsString {
+		s.failIfOpen(errors.New("RTC replay received a binary message; want a text message"))
+		return
+	}
+
+	s.mu.Lock()
+	if s.err != nil || s.isClosed() {
+		s.mu.Unlock()
+		return
+	}
+	if s.index >= len(s.events) {
+		s.mu.Unlock()
+		s.fail(errors.New("RTC replay received an unexpected outbound event after the fixture completed"))
+		return
+	}
+	expected := s.events[s.index]
+	if expected.Direction != gatewaytesting.DirectionClientToServer {
+		s.mu.Unlock()
+		s.fail(fmt.Errorf("RTC replay expected %s event %s at sequence %d before outbound traffic", expected.Direction, expected.Type, expected.Sequence))
+		return
+	}
+	if !jsonEqual(eventPayload(expected), message.Data) {
+		s.mu.Unlock()
+		s.fail(fmt.Errorf("RTC replay outbound payload for %s at sequence %d did not match the fixture", expected.Type, expected.Sequence))
+		return
+	}
+	s.index++
+	responses := make([][]byte, 0)
+	for s.index < len(s.events) && s.events[s.index].Direction == gatewaytesting.DirectionServerToClient {
+		responses = append(responses, append([]byte(nil), eventPayload(s.events[s.index])...))
+		s.index++
+	}
+	s.mu.Unlock()
+
+	for _, payload := range responses {
+		if err := dc.SendText(string(payload)); err != nil {
+			s.failIfOpen(fmt.Errorf("RTC replay send server event: %w", err))
+			return
+		}
+	}
+}
+
+type rtcDataMessage struct {
+	messageType int
+	payload     []byte
+}
+
+type rtcDataConn struct {
+	clientDataChannel *webrtc.DataChannel
+	clientPeer        *webrtc.PeerConnection
+	serverPeer        *webrtc.PeerConnection
+	state             *rtcReplayState
+	inbound           chan rtcDataMessage
+
+	mu        sync.Mutex
+	closed    bool
+	closeErr  error
+	closeOnce sync.Once
+}
+
+func newRTCDataConn(events []gatewaytesting.CapturedSessionEvent) (_ *rtcDataConn, err error) {
+	if len(events) == 0 {
+		return nil, errors.New("RTC replay fixture has no records")
+	}
+	state := newRTCReplayState(events)
 	offerer, answerer, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: paritySignalingWait})
 	if err != nil {
-		return fmt.Errorf("create RTC loopback signaling pair: %w", err)
+		return nil, fmt.Errorf("create RTC loopback signaling pair: %w", err)
 	}
 	defer offerer.Close()
 	defer answerer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), paritySignalingWait)
+	api := parityRTCAPI()
+	clientPeer, err := api.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		return nil, fmt.Errorf("create RTC client peer: %w", err)
+	}
+	serverPeer, err := api.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		_ = clientPeer.Close()
+		return nil, fmt.Errorf("create RTC server peer: %w", err)
+	}
+	setupComplete := false
+	defer func() {
+		if !setupComplete {
+			state.markClosed()
+			_ = clientPeer.Close()
+			_ = serverPeer.Close()
+		}
+	}()
+
+	inbound := make(chan rtcDataMessage, len(events))
+	clientOpen := make(chan struct{})
+	serverSeen := make(chan struct{})
+	serverOpen := make(chan struct{})
+	var clientOpenOnce, serverSeenOnce, serverOpenOnce sync.Once
+
+	clientPeer.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
+		if connectionState == webrtc.PeerConnectionStateFailed || connectionState == webrtc.PeerConnectionStateClosed {
+			if !state.isClosed() {
+				state.fail(fmt.Errorf("RTC client peer reached %s", connectionState))
+			}
+		}
+	})
+	serverPeer.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
+		if connectionState == webrtc.PeerConnectionStateFailed || connectionState == webrtc.PeerConnectionStateClosed {
+			if !state.isClosed() {
+				state.fail(fmt.Errorf("RTC server peer reached %s", connectionState))
+			}
+		}
+	})
+	serverPeer.OnDataChannel(func(dataChannel *webrtc.DataChannel) {
+		if dataChannel.Label() != parityDataChannelLabel {
+			state.fail(fmt.Errorf("RTC server received unexpected data channel %q", dataChannel.Label()))
+			return
+		}
+		serverSeenOnce.Do(func() { close(serverSeen) })
+		dataChannel.OnOpen(func() { serverOpenOnce.Do(func() { close(serverOpen) }) })
+		dataChannel.OnMessage(func(message webrtc.DataChannelMessage) { state.receive(dataChannel, message) })
+		dataChannel.OnError(func(dataChannelErr error) {
+			state.failIfOpen(fmt.Errorf("RTC server data channel: %w", dataChannelErr))
+		})
+		dataChannel.OnClose(func() {
+			if !state.isClosed() {
+				state.fail(errors.New("RTC server data channel closed before replay completed"))
+			}
+		})
+	})
+
+	clientDataChannel, err := clientPeer.CreateDataChannel(parityDataChannelLabel, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create RTC data channel: %w", err)
+	}
+	clientDataChannel.OnOpen(func() { clientOpenOnce.Do(func() { close(clientOpen) }) })
+	clientDataChannel.OnMessage(func(message webrtc.DataChannelMessage) {
+		messageType := 2
+		if message.IsString {
+			messageType = 1
+		}
+		select {
+		case inbound <- rtcDataMessage{messageType: messageType, payload: append([]byte(nil), message.Data...)}:
+		case <-state.failed:
+		case <-state.closed:
+		}
+	})
+	clientDataChannel.OnError(func(dataChannelErr error) {
+		state.failIfOpen(fmt.Errorf("RTC client data channel: %w", dataChannelErr))
+	})
+	clientDataChannel.OnClose(func() {
+		if !state.isClosed() {
+			state.fail(errors.New("RTC client data channel closed before replay completed"))
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), parityRTCConnectWait)
 	defer cancel()
-	offer := rtc.SessionDescription{Type: "offer", SDP: "v=0\r\no=- parity-offer 1 IN IP4 127.0.0.1\r\ns=parity\r\nt=0 0"}
-	answer := rtc.SessionDescription{Type: "answer", SDP: "v=0\r\no=- parity-answer 1 IN IP4 127.0.0.1\r\ns=parity\r\nt=0 0"}
-	if err := offerer.SendOffer(ctx, offer); err != nil {
+	if err := negotiateRTCDataChannel(ctx, offerer, answerer, clientPeer, serverPeer); err != nil {
+		return nil, err
+	}
+	for _, ready := range []struct {
+		name string
+		ch   <-chan struct{}
+	}{{"server data channel", serverSeen}, {"server data channel open", serverOpen}, {"client data channel open", clientOpen}} {
+		if err := waitRTCReady(ctx, state, ready.ch, ready.name); err != nil {
+			return nil, err
+		}
+	}
+
+	setupComplete = true
+	return &rtcDataConn{
+		clientDataChannel: clientDataChannel,
+		clientPeer:        clientPeer,
+		serverPeer:        serverPeer,
+		state:             state,
+		inbound:           inbound,
+	}, nil
+}
+
+const parityRTCConnectWait = 2 * time.Second
+
+func parityRTCAPI() *webrtc.API {
+	settings := webrtc.SettingEngine{}
+	settings.SetIncludeLoopbackCandidate(true)
+	settings.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4})
+	return webrtc.NewAPI(webrtc.WithSettingEngine(settings))
+}
+
+func negotiateRTCDataChannel(ctx context.Context, offerer, answerer *rtc.LoopbackEndpoint, clientPeer, serverPeer *webrtc.PeerConnection) error {
+	offer, err := clientPeer.CreateOffer(nil)
+	if err != nil {
+		return fmt.Errorf("create RTC offer: %w", err)
+	}
+	offer, err = setLocalAndGather(ctx, clientPeer, offer)
+	if err != nil {
+		return fmt.Errorf("gather RTC offer: %w", err)
+	}
+	if err := offerer.SendOffer(ctx, rtc.SessionDescription{Type: offer.Type.String(), SDP: offer.SDP}); err != nil {
 		return fmt.Errorf("send RTC offer: %w", err)
 	}
-	if got, err := answerer.ReceiveOffer(ctx); err != nil || got != offer {
-		return fmt.Errorf("receive RTC offer: got %#v, err %v", got, err)
+	receivedOffer, err := answerer.ReceiveOffer(ctx)
+	if err != nil {
+		return fmt.Errorf("receive RTC offer: %w", err)
 	}
-	if err := offerer.SendCandidate(ctx, rtc.ICECandidate{Candidate: "offer-candidate"}); err != nil {
-		return fmt.Errorf("send RTC offer candidate: %w", err)
+	if err := serverPeer.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: receivedOffer.SDP}); err != nil {
+		return fmt.Errorf("set RTC server remote offer: %w", err)
 	}
-	if err := offerer.CompleteCandidateGathering(ctx); err != nil {
-		return fmt.Errorf("complete RTC offer gathering: %w", err)
+
+	answer, err := serverPeer.CreateAnswer(nil)
+	if err != nil {
+		return fmt.Errorf("create RTC answer: %w", err)
 	}
-	if candidate, err := answerer.ReceiveCandidate(ctx); err != nil || candidate.Candidate != "offer-candidate" {
-		return fmt.Errorf("receive RTC offer candidate: got %#v, err %v", candidate, err)
+	answer, err = setLocalAndGather(ctx, serverPeer, answer)
+	if err != nil {
+		return fmt.Errorf("gather RTC answer: %w", err)
 	}
-	if _, err := answerer.ReceiveCandidate(ctx); !errors.Is(err, rtc.ErrGatheringComplete) {
-		return fmt.Errorf("finish RTC offer candidate receive: %w", err)
-	}
-	if err := answerer.SendAnswer(ctx, answer); err != nil {
+	if err := answerer.SendAnswer(ctx, rtc.SessionDescription{Type: answer.Type.String(), SDP: answer.SDP}); err != nil {
 		return fmt.Errorf("send RTC answer: %w", err)
 	}
-	if got, err := offerer.ReceiveAnswer(ctx); err != nil || got != answer {
-		return fmt.Errorf("receive RTC answer: got %#v, err %v", got, err)
+	receivedAnswer, err := offerer.ReceiveAnswer(ctx)
+	if err != nil {
+		return fmt.Errorf("receive RTC answer: %w", err)
 	}
-	if err := answerer.SendCandidate(ctx, rtc.ICECandidate{Candidate: "answer-candidate"}); err != nil {
-		return fmt.Errorf("send RTC answer candidate: %w", err)
-	}
-	if err := answerer.CompleteCandidateGathering(ctx); err != nil {
-		return fmt.Errorf("complete RTC answer gathering: %w", err)
-	}
-	if candidate, err := offerer.ReceiveCandidate(ctx); err != nil || candidate.Candidate != "answer-candidate" {
-		return fmt.Errorf("receive RTC answer candidate: got %#v, err %v", candidate, err)
-	}
-	if _, err := offerer.ReceiveCandidate(ctx); !errors.Is(err, rtc.ErrGatheringComplete) {
-		return fmt.Errorf("finish RTC answer candidate receive: %w", err)
-	}
-	if err := offerer.WaitCandidateGathering(ctx); err != nil {
-		return fmt.Errorf("wait for RTC offer gathering: %w", err)
-	}
-	if err := answerer.WaitCandidateGathering(ctx); err != nil {
-		return fmt.Errorf("wait for RTC answer gathering: %w", err)
+	if err := clientPeer.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: receivedAnswer.SDP}); err != nil {
+		return fmt.Errorf("set RTC client remote answer: %w", err)
 	}
 	return nil
 }
 
-type fixtureConn struct {
-	events []gatewaytesting.CapturedSessionEvent
-	index  int
-	closed bool
+func setLocalAndGather(ctx context.Context, peer *webrtc.PeerConnection, description webrtc.SessionDescription) (webrtc.SessionDescription, error) {
+	if err := peer.SetLocalDescription(description); err != nil {
+		return webrtc.SessionDescription{}, err
+	}
+	select {
+	case <-webrtc.GatheringCompletePromise(peer):
+	case <-ctx.Done():
+		return webrtc.SessionDescription{}, ctx.Err()
+	}
+	local := peer.LocalDescription()
+	if local == nil {
+		return webrtc.SessionDescription{}, errors.New("RTC peer has no local description after gathering")
+	}
+	return *local, nil
 }
 
-func (c *fixtureConn) ReadMessage() (int, []byte, error) {
-	if c.closed {
-		return 0, nil, io.EOF
+func waitRTCReady(ctx context.Context, state *rtcReplayState, ready <-chan struct{}, name string) error {
+	select {
+	case <-ready:
+		return nil
+	case <-state.failed:
+		return fmt.Errorf("wait for %s: %w", name, state.failure())
+	case <-ctx.Done():
+		return fmt.Errorf("wait for %s: %w", name, ctx.Err())
 	}
-	if c.index >= len(c.events) {
-		return 0, nil, io.EOF
-	}
-	event := c.events[c.index]
-	if event.Direction != gatewaytesting.DirectionServerToClient {
-		return 0, nil, fmt.Errorf("fixture expects outbound event %s at sequence %d", event.Type, event.Sequence)
-	}
-	c.index++
-	return 1, append([]byte(nil), eventPayload(event)...), nil
 }
 
-func (c *fixtureConn) WriteMessage(_ int, payload []byte) error {
+func (c *rtcDataConn) Err() error {
+	return c.state.failure()
+}
+
+func (c *rtcDataConn) ReadMessage() (int, []byte, error) {
+	select {
+	case message := <-c.inbound:
+		return message.messageType, message.payload, nil
+	case <-c.state.failed:
+		return 0, nil, fmt.Errorf("RTC data channel replay: %w", c.state.failure())
+	case <-c.state.closed:
+		return 0, nil, io.EOF
+	}
+}
+
+func (c *rtcDataConn) WriteMessage(messageType int, payload []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.closed {
 		return io.ErrClosedPipe
 	}
-	if c.index >= len(c.events) {
-		return fmt.Errorf("unexpected outbound event after fixture completed")
+	if messageType != 1 && messageType != 2 {
+		return fmt.Errorf("RTC data channel does not support message type %d", messageType)
 	}
-	event := c.events[c.index]
-	if event.Direction != gatewaytesting.DirectionClientToServer {
-		return fmt.Errorf("fixture expects inbound event %s at sequence %d", event.Type, event.Sequence)
+	var err error
+	if messageType == 1 {
+		err = c.clientDataChannel.SendText(string(payload))
+	} else {
+		err = c.clientDataChannel.Send(payload)
 	}
-	if !jsonEqual(eventPayload(event), payload) {
-		return fmt.Errorf("outbound event %s at sequence %d does not match fixture", event.Type, event.Sequence)
+	if err != nil {
+		wrapped := fmt.Errorf("RTC data channel write: %w", err)
+		c.state.fail(wrapped)
+		return wrapped
 	}
-	c.index++
 	return nil
 }
 
-func (c *fixtureConn) Close() error {
-	if c.closed {
-		return nil
-	}
-	c.closed = true
-	if c.index != len(c.events) {
-		return fmt.Errorf("fixture connection closed at record %d of %d", c.index, len(c.events))
-	}
-	return nil
+func (c *rtcDataConn) Close() error {
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		c.closed = true
+		c.mu.Unlock()
+		c.state.markClosed()
+
+		errs := []error{c.state.closeError()}
+		if err := c.clientDataChannel.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close RTC data channel: %w", err))
+		}
+		if err := c.clientPeer.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close RTC client peer: %w", err))
+		}
+		if err := c.serverPeer.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close RTC server peer: %w", err))
+		}
+		c.closeErr = errors.Join(errs...)
+	})
+	return c.closeErr
 }
+
+var _ transport.Conn = (*rtcDataConn)(nil)
