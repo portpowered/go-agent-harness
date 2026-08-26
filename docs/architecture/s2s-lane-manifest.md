@@ -22,7 +22,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-v4a-tool-single-call` — call -> executor -> result reaches the provider -> speech resumes _(history: #163:MERGED)_
 - `s2s-v4b-tool-parallel-calls` — concurrent tool calls all succeed, results correctly paired back to their calls _(history: NEVER SUBMITTED)_
 - `s2s-v4c-tool-error` — a tool call failure surfaces as a typed, observable error _(history: #162:MERGED)_
-- `s2s-v4d-tool-timeout` — a tool call that never returns is bounded by an explicit timeout; session degrades gracefully _(history: NEVER SUBMITTED)_
+- `s2s-v4d-tool-timeout` — a tool call that never returns is bounded by an explicit timeout; session degrades gracefully _(history: #197:OPEN)_
 - `s2s-v4e-tool-unknown` — a request for an unrecognized tool name yields a typed refusal, not a panic or hang _(history: NEVER SUBMITTED)_
 - `s2s-v4f-tool-during-audio` — a tool call issued while audio is still streaming in does not corrupt or drop the in-flight audio turn _(history: NEVER SUBMITTED)_
 - `s2s-v5a-default-toolset-active` — the default toolset is available and callable without extra configuration _(history: NEVER SUBMITTED)_
