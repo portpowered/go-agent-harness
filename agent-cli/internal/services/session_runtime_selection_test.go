@@ -140,7 +140,7 @@ func TestPlanSessionRuntime_InvalidSelectionFailsBeforeFactorySideEffects(t *tes
 
 func TestRunSession_InvalidRTCSelectionDoesNotMutateCapturePath(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "rejected.session.json")
-	err := RunSession(nil, os.Stdout, SessionRunOptions{
+	err := RunSession(context.Background(), os.Stdout, SessionRunOptions{
 		RecordPath: recordPath,
 		Transport:  SessionTransportWebRTC,
 		Signaling:  "loopback",
