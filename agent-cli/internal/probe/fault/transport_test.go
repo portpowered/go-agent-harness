@@ -349,10 +349,20 @@ func TestDelayedFrameChangesGrokLogicalTimelineAndReportsDelay(t *testing.T) {
 	}
 }
 
-func TestSlowConsumerChangesGrokAudioSessionTimelineAndCompletesCleanly(t *testing.T) {
-	clean := runFaultScenarioFrames(t, audioFaultScenarioFrames())
-	logicalClock := platformclock.NewDeterministic(time.Time{}, time.Millisecond)
-	faulted := runFaultScenarioFrames(t, audioFaultScenarioFrames(), WithClock(logicalClock), WithSlowConsumer(3*time.Millisecond, 3))
+func TestSlowConsumerChangesGrokAudioStreamThroughTransportBackpressure(t *testing.T) {
+	cleanClock := platformclock.NewDeterministic(time.Time{}, time.Millisecond)
+	cleanConn := newScheduledFaultTestConn(audioBurstScenarioFrames(), cleanClock)
+	clean := runFaultScenarioWithConn(t, cleanConn)
+	clean.sourceDrops = cleanConn.SourceDrops()
+	faultClock := platformclock.NewDeterministic(time.Time{}, time.Millisecond)
+	faultConn := newScheduledFaultTestConn(audioBurstScenarioFrames(), faultClock)
+	faulted := runFaultScenarioWithConn(
+		t,
+		faultConn,
+		WithClock(faultClock),
+		WithSlowConsumer(3*time.Millisecond, 3),
+	)
+	faulted.sourceDrops = faultConn.SourceDrops()
 
 	if clean.err != nil || faulted.err != nil {
 		t.Fatalf("clean/faulted scenario errors = %v/%v", clean.err, faulted.err)
@@ -366,11 +376,11 @@ func TestSlowConsumerChangesGrokAudioSessionTimelineAndCompletesCleanly(t *testi
 	if !clean.sawAudioDelta || !faulted.sawAudioDelta {
 		t.Fatalf("clean/faulted scenarios did not deliver audio: %#v/%#v", clean.messages, faulted.messages)
 	}
-	if len(clean.messages) != len(faulted.messages) {
-		t.Fatalf("slow consumer changed message count: clean=%d faulted=%d", len(clean.messages), len(faulted.messages))
+	if faulted.audioDeltaCount >= clean.audioDeltaCount {
+		t.Fatalf("slow consumer did not degrade emitted audio: clean=%d faulted=%d; messages=%#v/%#v", clean.audioDeltaCount, faulted.audioDeltaCount, clean.messages, faulted.messages)
 	}
-	if got := logicalClock.Tick(); got != 3 {
-		t.Fatalf("faulted logical clock = %d, want 3; clean run has no stall timeline", got)
+	if faulted.sourceDrops == 0 {
+		t.Fatalf("slow consumer changed no scheduled egress frames: clean=%#v faulted=%#v", clean.messages, faulted.messages)
 	}
 
 	stats := faulted.faultConn.Stats()
@@ -379,20 +389,80 @@ func TestSlowConsumerChangesGrokAudioSessionTimelineAndCompletesCleanly(t *testi
 	}
 	stall := stats.Stalls[0]
 	if stall.Direction != DirectionInbound || stall.Frame != 3 || stall.Duration != 3*time.Millisecond ||
-		stall.BeforeTick != 0 || stall.AfterTick != 3 {
-		t.Fatalf("faulted stall evidence = %#v, want inbound frame 3 from tick 0 to 3", stall)
+		stall.BeforeTick != 2 || stall.AfterTick != 5 {
+		t.Fatalf("faulted stall evidence = %#v, want inbound frame 3 from tick 2 to 5", stall)
+	}
+}
+
+func TestGrokTransportFaultRemainsObservableWithFullReceiveBuffer(t *testing.T) {
+	frames := fullReceiveBufferFaultFrames()
+	rawConn := newFaultTestConn(frames)
+	wrapped, err := WrapConn(rawConn, WithMidStreamCloseAfter(len(frames)))
+	if err != nil {
+		t.Fatalf("WrapConn: %v", err)
+	}
+	provider := grok.New(
+		grok.WithAPIKey("fault-test-key"),
+		grok.WithBaseURL("wss://fault.test/v1/realtime"),
+		grok.WithWebSocketDialer(&staticFaultDialer{conn: wrapped}),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, structSessionConfig())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	select {
+	case <-session.Done():
+	case <-ctx.Done():
+		t.Fatalf("faulted session did not terminate: %v", ctx.Err())
+	}
+
+	var terminal *messages.ErrorValue
+	for {
+		msg, ok := session.Receive().Read()
+		if !ok {
+			break
+		}
+		if msg.Type != messages.StreamTypeError {
+			continue
+		}
+		value, ok := msg.Value.(*messages.ErrorValue)
+		if !ok || value == nil {
+			t.Fatalf("terminal ERROR value = %T, want *messages.ErrorValue", msg.Value)
+		}
+		terminal = value
+	}
+	if terminal == nil {
+		t.Fatal("full receive buffer swallowed the injected terminal ERROR")
+	}
+	if !errors.Is(terminal.Err, ErrMidStreamClose) {
+		t.Fatalf("terminal error = %v, want injected mid-stream close", terminal.Err)
+	}
+	var closeErr *MidStreamCloseError
+	if !errors.As(terminal.Err, &closeErr) {
+		t.Fatalf("terminal error = %v, want typed MidStreamCloseError", terminal.Err)
+	}
+	if terminal.Classification != "transport" ||
+		terminal.TerminalReason != messages.TerminalReasonTerminalFailure ||
+		terminal.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal value = %#v, want typed transport terminal failure", terminal)
 	}
 }
 
 type faultScenarioResult struct {
-	messages      []messages.StreamMessage
-	sawMessageEnd bool
-	sawError      bool
-	sawTextDelta  bool
-	sawAudioDelta bool
-	errorValue    *messages.ErrorValue
-	faultConn     *Conn
-	err           error
+	messages        []messages.StreamMessage
+	sawMessageEnd   bool
+	sawError        bool
+	sawTextDelta    bool
+	sawAudioDelta   bool
+	audioDeltaCount int
+	sourceDrops     int
+	errorValue      *messages.ErrorValue
+	faultConn       *Conn
+	err             error
 }
 
 func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
@@ -401,7 +471,11 @@ func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
 
 func runFaultScenarioFrames(t *testing.T, frames []faultTestFrame, options ...Option) faultScenarioResult {
 	t.Helper()
-	rawConn := newFaultTestConn(frames)
+	return runFaultScenarioWithConn(t, newFaultTestConn(frames), options...)
+}
+
+func runFaultScenarioWithConn(t *testing.T, rawConn transport.Conn, options ...Option) faultScenarioResult {
+	t.Helper()
 	var dialer transport.Dialer = &staticFaultDialer{conn: rawConn}
 	var faultConn *Conn
 	if len(options) > 0 {
@@ -438,6 +512,7 @@ func runFaultScenarioFrames(t *testing.T, frames []faultTestFrame, options ...Op
 			result.sawTextDelta = true
 		case messages.StreamTypeAudioDelta:
 			result.sawAudioDelta = true
+			result.audioDeltaCount++
 		case messages.StreamTypeMessageEnd:
 			result.sawMessageEnd = true
 			return result
@@ -477,6 +552,31 @@ func audioFaultScenarioFrames() []faultTestFrame {
 	}
 }
 
+func audioBurstScenarioFrames() []faultTestFrame {
+	frames := []faultTestFrame{
+		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-audio-burst","model":"grok-fault-injection"}`)},
+		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
+	}
+	for i := 0; i < 6; i++ {
+		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
+	}
+	return append(frames,
+		faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.done"}`)},
+		faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.done"}`)},
+	)
+}
+
+func fullReceiveBufferFaultFrames() []faultTestFrame {
+	frames := []faultTestFrame{
+		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-full-buffer","model":"grok-fault-injection"}`)},
+		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
+	}
+	for i := 0; i < 70; i++ {
+		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
+	}
+	return frames
+}
+
 type faultTestFrame struct {
 	Type    int
 	Payload []byte
@@ -491,6 +591,56 @@ type faultTestConn struct {
 	closeCh   chan struct{}
 	closeOnce sync.Once
 	closeN    int
+}
+
+// scheduledFaultTestConn models an upstream egress producer that schedules one
+// frame per logical tick. If the transport consumer is stalled, frames whose
+// delivery ticks have passed are discarded before the next read. This keeps
+// the slow-consumer proof deterministic while exercising a changed session
+// output stream instead of asserting only decorator-local stall statistics.
+type scheduledFaultTestConn struct {
+	*faultTestConn
+	clock       *platformclock.Deterministic
+	nextTick    uint64
+	sourceDrops int
+}
+
+func newScheduledFaultTestConn(frames []faultTestFrame, clock *platformclock.Deterministic) *scheduledFaultTestConn {
+	return &scheduledFaultTestConn{
+		faultTestConn: newFaultTestConn(frames),
+		clock:         clock,
+	}
+}
+
+func (c *scheduledFaultTestConn) ReadMessage() (int, []byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return 0, nil, io.EOF
+	}
+
+	currentTick := c.clock.Tick()
+	for c.readIdx < len(c.frames) && c.nextTick < currentTick {
+		c.readIdx++
+		c.nextTick++
+		c.sourceDrops++
+	}
+	if c.readIdx >= len(c.frames) {
+		return 0, nil, io.EOF
+	}
+	if currentTick < c.nextTick {
+		c.clock.AdvanceTo(c.nextTick)
+	}
+	frame := c.frames[c.readIdx]
+	c.readIdx++
+	c.nextTick++
+	return frame.Type, append([]byte(nil), frame.Payload...), nil
+}
+
+func (c *scheduledFaultTestConn) SourceDrops() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sourceDrops
 }
 
 func newFaultTestConn(frames []faultTestFrame) *faultTestConn {

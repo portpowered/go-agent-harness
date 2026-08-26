@@ -54,6 +54,29 @@ func TestTypedBuffer_WriteFull(t *testing.T) {
 	}
 }
 
+func TestTypedBuffer_WriteTerminalEvictsWhenFull(t *testing.T) {
+	buf := NewTypedBuffer[string](1)
+	var drops int
+	buf.SetOnDrop(func() { drops++ })
+	if !buf.Write(context.Background(), "ordinary") {
+		t.Fatal("ordinary write should succeed")
+	}
+
+	if !buf.WriteTerminal("terminal") {
+		t.Fatal("terminal write should succeed when buffer is full")
+	}
+	if drops != 1 {
+		t.Fatalf("drop callback count = %d, want 1 evicted ordinary record", drops)
+	}
+	if got := buf.Len(); got != 1 {
+		t.Fatalf("buffer length = %d, want 1", got)
+	}
+	got, ok := buf.Read()
+	if !ok || got != "terminal" {
+		t.Fatalf("Read = (%q, %t), want terminal record", got, ok)
+	}
+}
+
 func TestTypedBuffer_WriteContextOutcomes(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		buf := NewTypedBuffer[string](1)
