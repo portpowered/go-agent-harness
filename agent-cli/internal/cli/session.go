@@ -52,7 +52,7 @@ type SessionCommand struct {
 // given to agent.NewExecutor); callers without one pass nil so session runs
 // keep their no-tools behavior.
 func NewSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, toolExecutorOverride messages.ToolExecutor, sessionInferencerOverride messages.SessionInferencer) *SessionCommand {
-	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, nil, nil, nil, newDefaultDeviceRegistry())
+	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, nil, nil, nil, nil)
 }
 
 // NewSessionCommandWithRuntime constructs the session command with the
@@ -66,7 +66,7 @@ func NewSessionCommandWithRuntime(
 	clockSource platformclock.Source,
 	runtimeObserver services.SessionRuntimeObserver,
 ) *SessionCommand {
-	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, clockSource, runtimeObserver, nil, newDefaultDeviceRegistry())
+	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, clockSource, runtimeObserver, nil, nil)
 }
 
 // NewSessionCommandWithRuntimeAndToolCapabilities constructs the session
@@ -81,7 +81,7 @@ func NewSessionCommandWithRuntimeAndToolCapabilities(
 	runtimeObserver services.SessionRuntimeObserver,
 	sessionToolCapabilities SessionToolCapabilitiesFactory,
 ) *SessionCommand {
-	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, clockSource, runtimeObserver, sessionToolCapabilities, newDefaultDeviceRegistry())
+	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutorOverride, sessionInferencerOverride, clockSource, runtimeObserver, sessionToolCapabilities, nil)
 }
 
 // NewSessionCommandWithDeviceRegistry constructs the session command with the
