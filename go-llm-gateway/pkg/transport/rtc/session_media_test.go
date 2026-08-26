@@ -180,6 +180,13 @@ func TestSessionMediaInboundFailuresAndEndpointLifecycle(t *testing.T) {
 	if err := endpoints.Inbound.Close(); err != nil {
 		t.Fatalf("repeated inbound endpoint Close = %v", err)
 	}
+	if err := media.PushInbound([]int16{1}); !errors.Is(err, rtc.ErrSessionMediaClosed) {
+		t.Fatalf("push after inbound endpoint close = %v, want ErrSessionMediaClosed", err)
+	}
+	if err := media.FlushInbound(); !errors.Is(err, rtc.ErrSessionMediaClosed) {
+		t.Fatalf("flush after inbound endpoint close = %v, want ErrSessionMediaClosed", err)
+	}
+	media.FailInbound(errors.New("late inbound failure"))
 	if _, err := endpoints.Inbound.ReadFrame(context.Background()); !errors.Is(err, wantErr) {
 		t.Fatalf("inbound read after terminal close = %v, want terminal error %v", err, wantErr)
 	}
