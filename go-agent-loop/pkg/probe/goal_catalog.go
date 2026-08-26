@@ -22,6 +22,28 @@ const (
 	CapabilityMultimodalInput  CapabilityArea = "multimodal_input"
 )
 
+// Stable IDs are part of the acceptance fleet's aggregation contract. Keep
+// the required set in code as well as in the embedded data so deleting a goal
+// from the data cannot silently reduce fleet coverage.
+const (
+	GoalIDTextHelpfulAnswer         = "text-helpful-answer"
+	GoalIDAudioSpokenAnswer         = "audio-spoken-answer"
+	GoalIDToolListCurrentFolder     = "tool-list-current-folder"
+	GoalIDMultimodalDescribePicture = "multimodal-describe-picture"
+)
+
+type requiredGoalDefinition struct {
+	id         string
+	capability CapabilityArea
+}
+
+var requiredGoalDefinitions = [...]requiredGoalDefinition{
+	{id: GoalIDTextHelpfulAnswer, capability: CapabilityTextInteraction},
+	{id: GoalIDAudioSpokenAnswer, capability: CapabilityAudioInteraction},
+	{id: GoalIDToolListCurrentFolder, capability: CapabilityToolUse},
+	{id: GoalIDMultimodalDescribePicture, capability: CapabilityMultimodalInput},
+}
+
 // Capability is a compatibility alias for callers that use the shorter name.
 type Capability = CapabilityArea
 
@@ -62,10 +84,18 @@ var (
 	ErrEmptyGoalCatalog = errors.New("probe: empty goal catalog")
 	// ErrBlankGoalID identifies a goal without a stable ID.
 	ErrBlankGoalID = errors.New("probe: blank goal ID")
+	// ErrMissingGoalID identifies a required shipped goal that was removed.
+	ErrMissingGoalID = errors.New("probe: missing required goal ID")
 	// ErrDuplicateGoalID identifies an ID that occurs more than once.
 	ErrDuplicateGoalID = errors.New("probe: duplicate goal ID")
 	// ErrBlankGoalText identifies a goal without usable plain-English text.
 	ErrBlankGoalText = errors.New("probe: blank goal text")
+	// ErrBlankGoalCapability identifies a goal without a capability area.
+	ErrBlankGoalCapability = errors.New("probe: blank goal capability")
+	// ErrUnknownGoalCapability identifies a capability outside the supported set.
+	ErrUnknownGoalCapability = errors.New("probe: unknown goal capability")
+	// ErrGoalCapabilityMismatch identifies a required goal assigned to another area.
+	ErrGoalCapabilityMismatch = errors.New("probe: goal capability mismatch")
 	// ErrMissingGoalExpectation identifies a goal without objective artifact evidence.
 	ErrMissingGoalExpectation = errors.New("probe: missing goal expectation")
 	// ErrGoalTextNotBlindProbeReady identifies goal text that gives a probe
@@ -114,9 +144,9 @@ func (e *GoalCatalogValidationError) Error() string {
 	location := "catalog"
 	if e.Index >= 0 {
 		location = fmt.Sprintf("goals[%d]", e.Index)
-		if e.GoalID != "" {
-			location += fmt.Sprintf(" (goal %q)", e.GoalID)
-		}
+	}
+	if e.GoalID != "" {
+		location += fmt.Sprintf(" (goal %q)", e.GoalID)
 	}
 	if e.Field != "" {
 		location += "." + e.Field
@@ -189,6 +219,24 @@ func (c GoalCatalog) Validate() error {
 				Reason: "must be non-empty plain English",
 			}
 		}
+		if strings.TrimSpace(string(goal.Capability)) == "" {
+			return &GoalCatalogValidationError{
+				Index:  index,
+				GoalID: goal.ID,
+				Field:  "capability",
+				Kind:   ErrBlankGoalCapability,
+				Reason: "must name a supported capability area",
+			}
+		}
+		if !isSupportedCapability(goal.Capability) {
+			return &GoalCatalogValidationError{
+				Index:  index,
+				GoalID: goal.ID,
+				Field:  "capability",
+				Kind:   ErrUnknownGoalCapability,
+				Reason: fmt.Sprintf("%q is not supported", goal.Capability),
+			}
+		}
 		if reason := blindProbeGoalTextViolation(goal.Text); reason != "" {
 			return &GoalCatalogValidationError{
 				Index:  index,
@@ -217,7 +265,41 @@ func (c GoalCatalog) Validate() error {
 			}
 		}
 	}
+
+	// Structural validation above protects each entry. This second pass protects
+	// the fleet contract itself: every canonical goal must still be present and
+	// must remain assigned to its declared capability area.
+	for _, required := range requiredGoalDefinitions {
+		index, ok := seen[required.id]
+		if !ok {
+			return &GoalCatalogValidationError{
+				Index:  -1,
+				GoalID: required.id,
+				Field:  "id",
+				Kind:   ErrMissingGoalID,
+				Reason: "required by the shipped acceptance catalog",
+			}
+		}
+		if c[index].Capability != required.capability {
+			return &GoalCatalogValidationError{
+				Index:  index,
+				GoalID: required.id,
+				Field:  "capability",
+				Kind:   ErrGoalCapabilityMismatch,
+				Reason: fmt.Sprintf("must be %q", required.capability),
+			}
+		}
+	}
 	return nil
+}
+
+func isSupportedCapability(capability CapabilityArea) bool {
+	switch capability {
+	case CapabilityTextInteraction, CapabilityAudioInteraction, CapabilityToolUse, CapabilityMultimodalInput:
+		return true
+	default:
+		return false
+	}
 }
 
 func blindProbeGoalTextViolation(text string) string {

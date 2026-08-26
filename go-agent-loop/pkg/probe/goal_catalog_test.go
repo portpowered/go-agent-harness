@@ -132,7 +132,7 @@ func TestGoalCatalogValidationRejectsDegradedCatalog(t *testing.T) {
 		t.Fatalf("shipped catalog failed validation: %v", err)
 	}
 
-	// Deliberately drop the final shipped goal and duplicate the first one.
+	// A duplicate remains invalid even when the fixture also has a dropped goal.
 	degraded := append(probe.GoalCatalog(nil), catalog[:len(catalog)-1]...)
 	degraded = append(degraded, catalog[0])
 	err = probe.ValidateGoalCatalog(degraded)
@@ -148,6 +148,45 @@ func TestGoalCatalogValidationRejectsDegradedCatalog(t *testing.T) {
 	}
 	if validationErr.GoalID != catalog[0].ID || !strings.Contains(err.Error(), catalog[0].ID) {
 		t.Fatalf("duplicate diagnostic does not name goal %q: %#v", catalog[0].ID, validationErr)
+	}
+
+	// The deletion-only control must fail for the missing canonical ID rather
+	// than passing merely because all remaining entries are internally valid.
+	dropOnly := append(probe.GoalCatalog(nil), catalog[:len(catalog)-1]...)
+	err = probe.ValidateGoalCatalog(dropOnly)
+	if err == nil {
+		t.Fatal("drop-only catalog unexpectedly passed validation")
+	}
+	if !errors.Is(err, probe.ErrInvalidGoalCatalog) || !errors.Is(err, probe.ErrMissingGoalID) {
+		t.Fatalf("drop-only catalog error identity: %v", err)
+	}
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("drop-only catalog error type: %T", err)
+	}
+	wantMissingID := catalog[len(catalog)-1].ID
+	if validationErr.GoalID != wantMissingID || !strings.Contains(err.Error(), wantMissingID) {
+		t.Fatalf("missing diagnostic does not name goal %q: %#v (%v)", wantMissingID, validationErr, err)
+	}
+}
+
+func TestGoalCatalogValidationRejectsCapabilityDegradation(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+
+	candidate := append(probe.GoalCatalog(nil), catalog...)
+	candidate[len(candidate)-1].Capability = probe.CapabilityTextInteraction
+	err = candidate.Validate()
+	if err == nil {
+		t.Fatal("capability-degraded catalog unexpectedly passed validation")
+	}
+	if !errors.Is(err, probe.ErrInvalidGoalCatalog) || !errors.Is(err, probe.ErrGoalCapabilityMismatch) {
+		t.Fatalf("capability-degraded catalog error identity: %v", err)
+	}
+	var validationErr *probe.GoalCatalogValidationError
+	if !errors.As(err, &validationErr) || validationErr.GoalID != catalog[len(catalog)-1].ID {
+		t.Fatalf("capability-degraded diagnostic: %#v (%v)", validationErr, err)
 	}
 }
 
