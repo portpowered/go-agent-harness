@@ -345,13 +345,13 @@ func filepathV4DScratch(t *testing.T) string {
 // runV4DSession drives services.RunSession — the real production session
 // runtime — with an injected tool executor, an explicit adapter deadline
 // override, and the scripted session inferencer.
-func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout time.Duration) (*v4DObservableWriter, error, []messages.ToolCall, *v4DDiagnosticSink) {
+func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout, runBound time.Duration) (*v4DObservableWriter, []messages.ToolCall, *v4DDiagnosticSink, error) {
 	t.Helper()
 
 	out := newV4DObservableWriter()
 	sink := &v4DDiagnosticSink{}
 	inferencer := newV4DScriptedInferencer(out)
-	ctx, cancel := context.WithTimeout(context.Background(), v4dControlContextBound)
+	ctx, cancel := context.WithTimeout(context.Background(), runBound)
 	defer cancel()
 	err := services.RunSession(ctx, out, services.SessionRunOptions{
 		ReplayPath:           filepathV4DScratch(t),
@@ -367,7 +367,7 @@ func runV4DSession(t *testing.T, executor messages.ToolExecutor, timeout time.Du
 	if recorder, ok := executor.(v4DCallRecorder); ok {
 		calls = recorder.recordedCalls()
 	}
-	return out, err, calls, sink
+	return out, calls, sink, err
 }
 
 // v4DObservation carries everything the shared vertical validator judges.
@@ -454,7 +454,7 @@ func validateV4DBoundedTimeoutOutcome(obs v4DObservation) error {
 // the session degrades gracefully into later turns and a succeeding call.
 func TestS2SV4DNeverReturningToolCallBoundedByExplicitTimeout(t *testing.T) {
 	executor := newV4DHangingExecutor()
-	out, runErr, calls, sink := runV4DSession(t, executor, v4dToolExecutionTimeout)
+	out, calls, sink, runErr := runV4DSession(t, executor, v4dToolExecutionTimeout, v4dRunDeadguard)
 	if runErr != nil {
 		t.Fatalf("bounded session run must terminate cleanly: %v\noutput:\n%s", runErr, out.String())
 	}
@@ -478,7 +478,7 @@ func TestS2SV4DNeverReturningToolCallBoundedByExplicitTimeout(t *testing.T) {
 // the outcome ever appears here, the positive proof above is vacuous.
 func TestS2SV4DBoundedOutcomeRequiresExplicitOverride(t *testing.T) {
 	executor := newV4DHangingExecutor()
-	out, _, calls, _ := runV4DSession(t, executor, 0)
+	out, calls, _, _ := runV4DSession(t, executor, 0, v4dControlContextBound)
 	if !hasV4DCall(calls, v4dTimeoutToolCallID, v4dTimeoutToolName) {
 		t.Fatalf("missing expected executor invocation under the default bound: control never exercised the hanging call\noutput:\n%s", out.String())
 	}
@@ -491,7 +491,7 @@ func TestS2SV4DBoundedOutcomeRequiresExplicitOverride(t *testing.T) {
 // outcome with a fast executor and requires the shared vertical validator to
 // reject the resulting transcript with an explicit "missing expected" message.
 func TestS2SV4DSuppressedTimeoutOutcomeFailsNonVacuously(t *testing.T) {
-	out, runErr, calls, sink := runV4DSession(t, v4DFastExecutor{}, v4dToolExecutionTimeout)
+	out, calls, sink, runErr := runV4DSession(t, v4DFastExecutor{}, v4dToolExecutionTimeout, v4dControlContextBound)
 	if runErr != nil {
 		t.Fatalf("suppressed-outcome control run must stay hermetic-clean: %v\noutput:\n%s", runErr, out.String())
 	}
