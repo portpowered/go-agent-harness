@@ -47,6 +47,7 @@ func newTestRootCommandWithAcceptance(runner AcceptanceProbeRunner, timeouts ...
 		NewProbeCommand(),
 		NewProbeRunCommand(),
 		NewProbeGateCommand(),
+		NewProbeReportCommand(),
 		NewSessionCommand(askFlags, globalFlags, nil, nil),
 		NewSessionShowCommand(globalFlags),
 		NewSessionListCommand(globalFlags),
