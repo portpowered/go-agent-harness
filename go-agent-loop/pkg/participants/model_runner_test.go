@@ -685,11 +685,90 @@ func TestSessionModelRunner_SessionDoneEmitsSessionClose(t *testing.T) {
 	if value.Classification != "transport" {
 		t.Fatalf("classification = %q, want %q", value.Classification, "transport")
 	}
-	if value.TerminalProvenance != messages.TerminalProvenanceSession {
-		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceSession)
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
 	}
-	if value.OutputState != messages.TerminalOutputNotApplicable {
-		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNotApplicable)
+	if value.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputNone)
+	}
+}
+
+func TestSessionModelRunner_ProviderDisconnectAfterPartialOutputCarriesPartialTerminalState(t *testing.T) {
+	session := newCompletedSession()
+	session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("partial response"),
+	})
+	close(session.done)
+
+	runner := NewSessionModelRunner(&completedSessionInferencer{session: session}, 16, nil)
+	if err := runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if delta, ok := runner.DeltaOutbox.Read(); !ok || delta.Type != messages.StreamTypeTextDelta {
+		t.Fatalf("first delta = %#v, ok=%v; want text delta", delta, ok)
+	}
+	delta, ok := runner.DeltaOutbox.Read()
+	if !ok || delta.Type != messages.StreamTypeSessionClose {
+		t.Fatalf("terminal delta = %#v, ok=%v; want session close", delta, ok)
+	}
+	value, ok := delta.Value.(*messages.SessionCloseValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.SessionCloseValue", delta.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonProviderClose {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonProviderClose)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
+	}
+}
+
+func TestSessionModelRunner_ResetsTerminalStateForResponseAfterCompletedTurn(t *testing.T) {
+	session := newCompletedSession()
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("complete response")},
+		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("partial response")},
+	} {
+		session.recv.Write(context.Background(), msg)
+	}
+	close(session.done)
+
+	runner := NewSessionModelRunner(&completedSessionInferencer{session: session}, 16, nil)
+	if err := runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	var terminal messages.StreamMessage
+	for {
+		delta, ok := runner.DeltaOutbox.Read()
+		if !ok {
+			t.Fatal("session output closed before terminal delta")
+		}
+		if delta.Type == messages.StreamTypeSessionClose {
+			terminal = delta
+			break
+		}
+	}
+	value, ok := terminal.Value.(*messages.SessionCloseValue)
+	if !ok {
+		t.Fatalf("terminal value = %T, want *messages.SessionCloseValue", terminal.Value)
+	}
+	if value.TerminalReason != messages.TerminalReasonProviderClose {
+		t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonProviderClose)
+	}
+	if value.TerminalProvenance != messages.TerminalProvenanceProvider {
+		t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceProvider)
+	}
+	if value.OutputState != messages.TerminalOutputPartial {
+		t.Fatalf("output state = %q, want %q", value.OutputState, messages.TerminalOutputPartial)
 	}
 }
 

@@ -14,7 +14,12 @@ const (
 	ExpectToolCalled         ExpectationKind = "tool-called"
 	ExpectLatencyWithinTicks ExpectationKind = "latency-within-ticks"
 	ExpectTerminalReason     ExpectationKind = "terminal-reason"
-	ExpectFrameCount         ExpectationKind = "frame-count"
+	ExpectTerminalProvenance ExpectationKind = "terminal-provenance"
+	ExpectOutputState        ExpectationKind = "output-state"
+	// ExpectTerminalOutputState is a compatibility alias for callers that use
+	// the longer terminal-field name in their scenario builders.
+	ExpectTerminalOutputState ExpectationKind = ExpectOutputState
+	ExpectFrameCount          ExpectationKind = "frame-count"
 	// ExpectMetricsReconcile requires the emitted per-direction/per-modality
 	// metric matrix to equal the summed observed delta stream exactly.
 	ExpectMetricsReconcile ExpectationKind = "metrics-reconcile"
@@ -92,7 +97,13 @@ type ObservationSnapshot struct {
 	ObservedTick    LogicalTime
 	HasObservedTick bool
 	TerminalReason  string
-	FrameCount      int
+	// TerminalProvenance identifies the layer that authored the terminal
+	// outcome, for example provider or loop.
+	TerminalProvenance string
+	// OutputState identifies whether terminal output was complete, partial, or
+	// absent.
+	OutputState string
+	FrameCount  int
 	// InterruptTick is the logical tick at which the first interrupting
 	// input_audio_buffer.append crossed the outbound client-to-provider path.
 	// It is used as the implicit start of a latency-within-ticks expectation
@@ -276,6 +287,22 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		if observation.TerminalReason != want {
 			return mismatch(expectation, kind, want, observation.TerminalReason)
 		}
+	case ExpectTerminalProvenance:
+		want, err := aliasString(expectation, kind, "provenance", expectation.Value, expectation.Text)
+		if err != nil {
+			return err
+		}
+		if observation.TerminalProvenance != want {
+			return mismatch(expectation, kind, want, observation.TerminalProvenance)
+		}
+	case ExpectOutputState:
+		want, err := aliasString(expectation, kind, "output state", expectation.Value, expectation.Text)
+		if err != nil {
+			return err
+		}
+		if observation.OutputState != want {
+			return mismatch(expectation, kind, want, observation.OutputState)
+		}
 	case ExpectFrameCount:
 		if expectation.Count < 0 {
 			return invalid(expectation, kind, "count", "expected frame count must not be negative")
@@ -367,7 +394,8 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 	}
 	switch kind {
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
-		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectFrameCount,
+		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance,
+		ExpectOutputState, ExpectFrameCount,
 		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
 		ExpectBufferDisposition, ExpectMetricsReconcile,
 		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel:

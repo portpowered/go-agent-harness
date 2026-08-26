@@ -34,6 +34,8 @@ type ScenarioResult struct {
 	Ticks                       LogicalTime                  `json:"ticks"`
 	Frames                      int                          `json:"frames"`
 	TerminalReason              string                       `json:"terminal_reason,omitempty"`
+	TerminalProvenance          string                       `json:"terminal_provenance,omitempty"`
+	OutputState                 string                       `json:"output_state,omitempty"`
 	Error                       string                       `json:"error,omitempty"`
 	// InputDropCount and OutputDropCount report the cumulative buffer-full
 	// drops observed on the client-to-provider and provider-to-client paths,
@@ -167,6 +169,8 @@ func (r *Runner) runOne(ctx context.Context, scenario Scenario) ScenarioResult {
 	result.Ticks = observation.ObservedTick
 	result.Frames = observation.FrameCount
 	result.TerminalReason = observation.TerminalReason
+	result.TerminalProvenance = observation.TerminalProvenance
+	result.OutputState = observation.OutputState
 	result.InputDropCount = observation.InputDrops
 	result.OutputDropCount = observation.OutputDrops
 	result.Pass = pass

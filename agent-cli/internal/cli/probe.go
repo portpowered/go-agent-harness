@@ -313,6 +313,12 @@ var expectationKindAliases = map[string]probe.ExpectationKind{
 	"tool-called":              probe.ExpectToolCalled,
 	"terminal_reason":          probe.ExpectTerminalReason,
 	"terminal-reason":          probe.ExpectTerminalReason,
+	"terminal_provenance":      probe.ExpectTerminalProvenance,
+	"terminal-provenance":      probe.ExpectTerminalProvenance,
+	"output_state":             probe.ExpectOutputState,
+	"output-state":             probe.ExpectOutputState,
+	"terminal_output_state":    probe.ExpectOutputState,
+	"terminal-output-state":    probe.ExpectOutputState,
 	"latency_within_ticks":     probe.ExpectLatencyWithinTicks,
 	"latency-within-ticks":     probe.ExpectLatencyWithinTicks,
 	"audio_energy":             probe.ExpectAudioEnergy,
@@ -679,7 +685,7 @@ func replayTranscriptFromCapture(capture gatewaytesting.SessionCapture) string {
 			continue
 		}
 		switch record.Type {
-		case "response.text.delta", "response.audio_transcript.delta":
+		case "response.text.delta", "response.output_text.delta", "response.audio_transcript.delta":
 		default:
 			continue
 		}
@@ -742,6 +748,12 @@ func replayExecFunc(fixtures map[string]string) probe.ExecFunc {
 		}
 		if classification := replayErrorClassificationFromCapture(replayCapture); classification != "" {
 			observation.TerminalReason = "error:" + classification
+		}
+		if scenarioDeclaresTerminalMetadata(scenario) {
+			terminalReason, terminalProvenance, outputState := replayTerminalTriple(replayCapture)
+			observation.TerminalReason = terminalReason
+			observation.TerminalProvenance = terminalProvenance
+			observation.OutputState = outputState
 		}
 		observation.Transcript = replayTranscriptFromCapture(replayCapture)
 		if deriveErr := deriveToolResultObservationFromCapture(replayCapture, &observation); deriveErr != nil {
@@ -810,7 +822,71 @@ func isResponseCancelEventType(eventType string) bool {
 	}
 }
 
-// replayBufferDispositionFromCapture inspects a session capture for an
+// scenarioDeclaresTerminalMetadata reports whether the scenario asks for the
+// provider-authored terminal triple. Keeping this opt-in preserves the
+// established terminal-reason vocabulary for older probe scenarios whose
+// fixture provenance is their intentional fallback observation.
+func scenarioDeclaresTerminalMetadata(scenario probe.Scenario) bool {
+	expectationSets := [][]probe.ExpectedBehavior{scenario.Expectations, scenario.ExpectedBehavior, scenario.Expected}
+	for _, expectations := range expectationSets {
+		for _, expectation := range expectations {
+			kind := expectation.Type
+			if kind == "" {
+				kind = expectation.Kind
+			}
+			switch kind {
+			case probe.ExpectTerminalProvenance, probe.ExpectOutputState:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// replayTerminalTriple derives the stable probe-surface terminal vocabulary
+// from a sanitized provider-wire fixture. The provider-close transport seam
+// is exposed as "disconnect" at the probe layer; explicit response.done is
+// exposed as "complete". Output state is based on whether a non-empty output
+// delta was observed before the terminal boundary.
+func replayTerminalTriple(capture gatewaytesting.SessionCapture) (reason, provenance, outputState string) {
+	hasOutput, hasCompletion := false, false
+	for _, record := range capture.Records {
+		if record.Direction != gatewaytesting.DirectionServerToClient {
+			continue
+		}
+		switch record.Type {
+		case "response.text.delta", "response.output_text.delta", "response.audio_transcript.delta", "response.audio.delta",
+			"response.output_audio.delta":
+			var payload struct {
+				Delta string `json:"delta"`
+			}
+			if json.Unmarshal(replayRecordPayload(record), &payload) == nil && payload.Delta != "" {
+				hasOutput = true
+			}
+		case "response.done":
+			hasCompletion = true
+		}
+	}
+
+	if classification := replayErrorClassificationFromCapture(capture); classification != "" {
+		return "error:" + classification, "provider", replayOutputState(hasOutput)
+	}
+	if capture.EndsWithDisconnect {
+		return "disconnect", "provider", replayOutputState(hasOutput)
+	}
+	if hasCompletion {
+		return "complete", "provider", "complete"
+	}
+	return "", "", ""
+}
+
+func replayOutputState(hasOutput bool) string {
+	if hasOutput {
+		return "partial"
+	}
+	return "none"
+}
+
 // observable disposition of the buffered input audio: an acknowledged commit
 // or an explicit discard. The empty string means the capture ends with the
 // buffer uncommitted, which buffer-disposition expectations treat as a

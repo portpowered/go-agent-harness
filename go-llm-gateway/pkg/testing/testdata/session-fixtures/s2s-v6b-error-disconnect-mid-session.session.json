@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "grok",
+    "model": "grok-4-v6b-midstream-disconnect"
+  },
+  "session": {
+    "id": "sess_v6b_disconnect_midstream",
+    "started_at_utc": "2026-08-25T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "model": "grok-4-v6b-midstream-disconnect"
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session_id": "sess_v6b_disconnect_midstream",
+        "model": "grok-4-v6b-midstream-disconnect"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 2,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "tell me about transport failures"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.text.delta",
+        "delta": "v6b midstream answer cut off when the transport dropped"
+      }
+    }
+  ],
+  "ends_with_disconnect": true
+}

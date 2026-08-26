@@ -608,29 +608,6 @@ var expectationFields = map[string]bool{"type": true, "kind": true, "payload": t
 
 var expectationModifiers = map[string]bool{"count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
 
-func expectationAllowed(fields ...string) map[string]bool {
-	allowed := make(map[string]bool, len(fields)+len(expectationModifiers))
-	for key := range expectationModifiers {
-		allowed[key] = true
-	}
-	for _, key := range fields {
-		allowed[key] = true
-	}
-	return allowed
-}
-
-var expectationFieldsByKind = map[ExpectationKind]map[string]bool{
-	ExpectText:       expectationAllowed("text", "value", "message"),
-	ExpectTranscript: expectationAllowed("text", "value", "message"),
-	ExpectContains:   expectationAllowed("text", "value", "message"),
-	ExpectAudio:      expectationAllowed("corpus_id", "corpusID"),
-	ExpectToolCall:   expectationAllowed("tool_call_id", "toolCallID", "tool_name", "toolName", "name"),
-	ExpectToolResult: expectationAllowed("tool_call_id", "toolCallID", "result"),
-	ExpectClose:      expectationAllowed(),
-	ExpectTime:       expectationAllowed("at", "time", "logical_time", "logicalTime"),
-	ExpectEvent:      expectationAllowed("event", "value", "message"),
-}
-
 func expectationKind(value string) (ExpectationKind, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "text", "text_output", "assistant_text":
@@ -651,6 +628,12 @@ func expectationKind(value string) (ExpectationKind, bool) {
 		return ExpectEvent, true
 	case "contains":
 		return ExpectContains, true
+	case "terminal_reason", "terminal-reason":
+		return ExpectTerminalReason, true
+	case "terminal_provenance", "terminal-provenance":
+		return ExpectTerminalProvenance, true
+	case "output_state", "output-state", "terminal_output_state", "terminal-output-state":
+		return ExpectOutputState, true
 	default:
 		return "", false
 	}
