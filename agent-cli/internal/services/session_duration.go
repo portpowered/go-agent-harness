@@ -793,6 +793,15 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 			}
 		}()
 	}
+	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
+	if err != nil {
+		return errors.Join(err, finalizeSessionDurationArtifacts(artifacts))
+	}
+	if deviceBinding != nil {
+		defer func() {
+			runErr = errors.Join(runErr, deviceBinding.Close())
+		}()
+	}
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
 			return wrapSessionRuntimeError(plan, errors.Join(err, finalizeSessionDurationArtifacts(artifacts)))
