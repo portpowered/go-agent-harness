@@ -53,24 +53,62 @@ type ProbeRunCommand struct {
 	Scenarios   []string
 	Record      string
 	Replay      string
+	Devices     string
+	Provider    string
+	Model       string
+	APIKey      string
+	BaseURL     string
+	CaptureTime time.Duration
+	ConfigDir   string
 	OutPath     string
 	SummaryPath string
 	JSONOut     bool
+
+	deviceRegistry      audio.DeviceRegistry
+	deviceProbeExec     DeviceProbeExecFunc
+	deviceProbeDeadline time.Duration
 }
 
+// DeviceProbeExecFunc runs one validated scenario against the selected device
+// snapshot. It is the narrow command seam used by hermetic command tests; the
+// production constructor installs the live registry/WebRTC/session executor.
+type DeviceProbeExecFunc func(context.Context, probe.Scenario, audio.DeviceProbeAvailability) (probe.ObservationSnapshot, error)
+
 // NewProbeRunCommand returns the probe run command constructor.
-func NewProbeRunCommand() *ProbeRunCommand {
-	return &ProbeRunCommand{}
+func NewProbeRunCommand(registries ...audio.DeviceRegistry) *ProbeRunCommand {
+	registry := newDefaultDeviceRegistry()
+	if len(registries) > 0 && registries[0] != nil {
+		registry = registries[0]
+	}
+	command := &ProbeRunCommand{
+		deviceRegistry:      registry,
+		Provider:            "openai",
+		CaptureTime:         deviceProbeDefaultCaptureDuration,
+		deviceProbeDeadline: probeScenarioDeadline,
+	}
+	command.deviceProbeExec = func(ctx context.Context, scenario probe.Scenario, availability audio.DeviceProbeAvailability) (probe.ObservationSnapshot, error) {
+		return runDeviceProbeScenario(ctx, scenario, availability, command.deviceRegistry, deviceProbeRuntimeOptions{
+			Provider:    command.Provider,
+			Model:       command.Model,
+			APIKey:      command.APIKey,
+			BaseURL:     command.BaseURL,
+			CaptureTime: command.CaptureTime,
+			ConfigDir:   command.ConfigDir,
+		})
+	}
+	return command
 }
 
 // Generate returns the cobra command for probe run.
 func (c *ProbeRunCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [scenario-path...]",
-		Short: "Run probe scenarios against recorded fixtures",
+		Short: "Run probe scenarios against recorded fixtures or device hardware",
 		Long: "Load probe scenarios and execute them through the JSONL probe runner over recorded\n" +
 			"session fixtures. Execution never dials the network. One JSON result line per scenario\n" +
 			"is written to --out (default stdout) followed by one summary line to --summary (default stderr).\n\n" +
+			"For the T2 device tier, pass --devices real to enumerate the shared audio device registry\n" +
+			"before execution; hosts without both directions receive a machine-readable SKIP result.\n\n" +
 			"The command exits non-zero when any scenario fails.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -80,6 +118,12 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 	cmd.Flags().StringArrayVar(&c.Scenarios, "scenario", nil, "Scenario file path (repeatable)")
 	cmd.Flags().StringVar(&c.Record, "record", "", "Record fixtures to path (recording is unsupported for offline probe runs)")
 	cmd.Flags().StringVar(&c.Replay, "replay", "", "Replay fixture path or directory of recorded session fixtures")
+	cmd.Flags().StringVar(&c.Devices, "devices", "", "Run the device-tier probe against real audio devices")
+	cmd.Flags().StringVar(&c.Provider, "provider", c.Provider, "Realtime session provider for --devices real (openai or grok)")
+	cmd.Flags().StringVar(&c.Model, "model", c.Model, "Realtime session model for --devices real")
+	cmd.Flags().StringVar(&c.APIKey, "api-key", c.APIKey, "Realtime session API key for --devices real")
+	cmd.Flags().StringVar(&c.BaseURL, "base-url", c.BaseURL, "Realtime session WebSocket base URL for --devices real")
+	cmd.Flags().DurationVar(&c.CaptureTime, "capture-duration", c.CaptureTime, "Microphone capture duration for --devices real")
 	cmd.Flags().StringVar(&c.OutPath, "out", "", "Path for per-scenario JSONL result lines (default stdout)")
 	cmd.Flags().StringVar(&c.SummaryPath, "summary", "", "Path for the summary artifact (default stderr)")
 	cmd.Flags().BoolVar(&c.JSONOut, "json", false, "Emit pure machine-readable output without human-readable decoration")
@@ -89,6 +133,31 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	if c.Record != "" {
 		return fmt.Errorf("--record is not supported for offline probe runs; use --replay with recorded fixtures")
+	}
+	if c.Devices != "" {
+		if c.Devices != "real" {
+			return fmt.Errorf("unsupported --devices value %q; want real", c.Devices)
+		}
+		if len(probeSelections(positional, c.Scenarios)) == 0 {
+			return fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
+		}
+		availability, err := audio.ProbeDeviceAvailability(c.deviceRegistry)
+		if err != nil {
+			return fmt.Errorf("device probe availability: %w", err)
+		}
+		if availability.Status == audio.DeviceProbeStatusSkip {
+			return c.writeDeviceProbeSkip(cmd, positional, availability)
+		}
+		if configDir, getErr := cmd.Flags().GetString("config-dir"); getErr == nil {
+			c.ConfigDir = configDir
+		}
+		scenarios, err := buildDeviceProbePlan(positional, c.Scenarios)
+		if err != nil {
+			return err
+		}
+		return c.runScenarios(cmd, scenarios, deadguardExec(func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
+			return c.deviceProbeExec(ctx, scenario, availability)
+		}, c.deviceProbeDeadline))
 	}
 	if strings.TrimSpace(c.Replay) == "" {
 		return fmt.Errorf("--replay <fixture-path-or-dir> is required to select recorded fixtures")
@@ -104,6 +173,10 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		return err
 	}
 
+	return c.runScenarios(cmd, scenarios, deadguardExec(exec, probeScenarioDeadline))
+}
+
+func (c *ProbeRunCommand) runScenarios(cmd *cobra.Command, scenarios []probe.Scenario, exec probe.ExecFunc) error {
 	resultsOut := cmd.OutOrStdout()
 	if c.OutPath != "" {
 		file, openErr := os.Create(c.OutPath)
@@ -124,7 +197,7 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	}
 
 	runner := &probe.Runner{
-		Exec:          deadguardExec(exec, probeScenarioDeadline),
+		Exec:          exec,
 		Out:           &resultRouter{results: resultsOut, summary: summaryOut},
 		CorpusLookups: []probe.CorpusLookup{replayCorpusLookup{}},
 	}
@@ -139,6 +212,44 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		return fmt.Errorf("%d of %d probe scenarios failed", summary.Failed, summary.Total)
 	}
 	return nil
+}
+
+func buildDeviceProbePlan(positional []string, flags []string) ([]probe.Scenario, error) {
+	selections := probeSelections(positional, flags)
+	if len(selections) == 0 {
+		return nil, fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
+	}
+	seen := make(map[string]struct{}, len(selections))
+	scenarios := make([]probe.Scenario, 0, len(selections))
+	for _, selection := range selections {
+		resolved, err := resolveProbeSelection(selection)
+		if err != nil {
+			return nil, err
+		}
+		for _, scenario := range resolved {
+			key := scenario.ID + "\x00" + scenario.Name
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			scenarios = append(scenarios, scenario)
+		}
+	}
+	return scenarios, nil
+}
+
+func probeSelections(positional, flags []string) []string {
+	raw := append(append([]string{}, positional...), flags...)
+	selections := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, selection := range raw {
+		if _, exists := seen[selection]; exists {
+			continue
+		}
+		seen[selection] = struct{}{}
+		selections = append(selections, selection)
+	}
+	return selections
 }
 
 // resultRouter routes each verbatim runner line either to the results

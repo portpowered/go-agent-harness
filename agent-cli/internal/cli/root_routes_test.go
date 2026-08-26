@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	"github.com/spf13/cobra"
@@ -64,6 +65,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	chatFlags := flags.NewChatFlags()
+	testDeviceRegistry := defaultTestDeviceRegistry{}
 
 	router := NewRouter(
 		globalFlags,
@@ -74,7 +76,7 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewInteractionCommand(),
 		NewInteractionReplayCommand(),
 		NewProbeCommand(),
-		NewProbeRunCommand(),
+		NewProbeRunCommand(testDeviceRegistry),
 		NewProbeGateCommand(),
 		NewProbeReportCommand(),
 		probeFleetCommand,
@@ -85,7 +87,22 @@ func newTestRootCommandWithProbeFleetCommand(probeFleetCommand *ProbeFleetComman
 		NewConfigCommand(),
 		NewConfigAddLocalCommand(globalFlags),
 	)
+	// Root command tests must not depend on the workstation's physical audio
+	// endpoints. NewRouter carries the fixture registry from ProbeRunCommand
+	// into the devices route; production composition uses the host registry.
 	return NewAgentCLI(router).Generate()
+}
+
+type defaultTestDeviceRegistry struct{}
+
+func (defaultTestDeviceRegistry) List() ([]audio.Device, error) { return nil, nil }
+
+func (defaultTestDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
+	return audio.Device{}, audio.NewNoDefaultDeviceError(direction)
+}
+
+func (defaultTestDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
+	return nil, audio.NewDeviceNotFoundError(id)
 }
 
 func executeCLI(args ...string) cliExecution {

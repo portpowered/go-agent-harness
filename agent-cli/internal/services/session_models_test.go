@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -122,6 +124,53 @@ func TestNewOpenAIRealtimeSessionInferencer_SupportedModelsReachDialer(t *testin
 			}
 			if !strings.Contains(dialer.url, "model="+model) {
 				t.Fatalf("dial URL = %q, want selected model %q", dialer.url, model)
+			}
+		})
+	}
+}
+
+func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		model    string
+		apiKey   string
+		baseURL  string
+	}{
+		{name: "openai", provider: config.ProviderOpenAI, model: openAIRealtimeDefaultModel, apiKey: "sk-live-test", baseURL: "ws://openai.test/realtime"},
+		{name: "grok", provider: config.ProviderGrok, model: "grok-session-model", apiKey: "xai-live-test", baseURL: "ws://grok.test/realtime"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
+				Provider:  tt.provider,
+				Model:     tt.model,
+				APIKey:    tt.apiKey,
+				BaseURL:   tt.baseURL,
+				ConfigDir: t.TempDir(),
+			}, "respond with the device probe phrase")
+			if err != nil {
+				t.Fatalf("NewLiveSessionInferencer: %v", err)
+			}
+			if inferencer == nil || model != tt.model {
+				t.Fatalf("inferencer/model = (%T, %q), want non-nil inferencer and %q", inferencer, model, tt.model)
+			}
+			requested, ok := inferencer.(interface {
+				Request() inference.SessionRequest
+			})
+			if !ok {
+				t.Fatalf("inferencer type %T does not expose its session request", inferencer)
+			}
+			config := requested.Request().Config
+			if config.Model != tt.model || config.Instructions != "respond with the device probe phrase" {
+				t.Fatalf("session request identity = (%q, %q), want model/instructions", config.Model, config.Instructions)
+			}
+			if len(config.Modalities) != 2 || config.Modalities[0] != models.SessionModalityText || config.Modalities[1] != models.SessionModalityAudio {
+				t.Fatalf("session modalities = %#v, want text+audio", config.Modalities)
+			}
+			if config.InputAudioFormat != models.AudioFormatPCM16 || config.OutputAudioFormat != models.AudioFormatPCM16 ||
+				config.InputAudioSampleRate != models.SampleRate24000 || config.OutputAudioSampleRate != models.SampleRate24000 {
+				t.Fatalf("session audio contract = %#v, want PCM16 at 24 kHz in both directions", config)
 			}
 		})
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -73,6 +74,105 @@ func TestSession_SendAudioBufferAppend(t *testing.T) {
 	expected := base64.StdEncoding.EncodeToString(audioData)
 	if audio != expected {
 		t.Errorf("audio: got %q, want %q", audio, expected)
+	}
+}
+
+func TestSession_SendMessageEndCommitsAndRequestsResponse(t *testing.T) {
+	conn := newMockConn()
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}) {
+		t.Fatal("Send returned false for MESSAGE.END")
+	}
+
+	var clientMessages [][]byte
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		clientMessages = conn.getClientMessages()
+		if len(clientMessages) == 2 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(clientMessages) != 2 {
+		t.Fatalf("wire events = %d, want input_audio_buffer.commit followed by response.create", len(clientMessages))
+	}
+	var commit, response struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(clientMessages[0], &commit); err != nil {
+		t.Fatalf("unmarshal commit event: %v", err)
+	}
+	if err := json.Unmarshal(clientMessages[1], &response); err != nil {
+		t.Fatalf("unmarshal response event: %v", err)
+	}
+	if commit.Type != "input_audio_buffer.commit" || response.Type != "response.create" {
+		t.Fatalf("wire event order = %q, %q; want commit then response.create", commit.Type, response.Type)
+	}
+}
+
+func TestSession_SendMessageEndRequestsResponseAndCompletesTurn(t *testing.T) {
+	conn := newMockConn()
+	conn.addServerEvent("session.created", map[string]any{"session_id": "grok-session", "model": "grok-device-test"})
+	conn.addServerEvent("response.created", nil)
+	conn.addServerEvent("response.audio.delta", map[string]any{
+		"delta": base64.StdEncoding.EncodeToString([]byte{0x01, 0x02}),
+	})
+	conn.addServerEvent("response.audio.done", nil)
+	conn.addServerEvent("response.audio_transcript.done", map[string]any{"transcript": "device round trip"})
+	conn.addServerEvent("response.done", nil)
+
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if !session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue([]byte{0x11, 0x12}),
+	}) {
+		t.Fatal("Send returned false for audio delta")
+	}
+	if !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}) {
+		t.Fatal("Send returned false for MESSAGE.END")
+	}
+
+	for {
+		if message := readFromSession(t, ctx, session); message.Type == messages.StreamTypeMessageEnd {
+			break
+		}
+	}
+
+	var clientMessages [][]byte
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		clientMessages = conn.getClientMessages()
+		if len(clientMessages) == 3 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(clientMessages) != 3 {
+		t.Fatalf("wire events = %d, want audio append, commit, and response.create", len(clientMessages))
+	}
+	var types []string
+	for _, raw := range clientMessages {
+		var event struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(raw, &event); err != nil {
+			t.Fatalf("unmarshal client event: %v", err)
+		}
+		types = append(types, event.Type)
+	}
+	want := []string{"input_audio_buffer.append", "input_audio_buffer.commit", "response.create"}
+	if !reflect.DeepEqual(types, want) {
+		t.Fatalf("wire event types = %#v, want %#v", types, want)
 	}
 }
 

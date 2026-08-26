@@ -36,7 +36,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 - `s2s-v7b-buffer-logs` — input and output buffer overflow/drop events are counted and observably logged, never silent _(history: NEVER SUBMITTED)_
 - `s2s-v7c-metrics-reconcile` — the token counter and per-modality metrics reconcile EXACTLY with the observed delta stream _(history: NEVER SUBMITTED)_
 - `s2s-v8-duplex-overlap` — two harnesses, different instructions, each side's PCM output driving the other's PCM input, one shared Deterministic clock, both sides recorded, parity-compared, clean leak-free termination _(history: NEVER SUBMITTED)_
-- `s2s-v9-webrtc-device-roundtrip` — real microphone -> session -> real speaker on a host with audio devices; asserts emitted energy and a recognized transcript; SKIP with a recorded reason if no device exists _(history: NEVER SUBMITTED)_
+- `s2s-v9-webrtc-device-roundtrip` — real microphone -> session -> real speaker on a host with audio devices; asserts emitted energy and a recognized transcript; SKIP with a recorded reason if no device exists _(history: IMPLEMENTED 2026-08-26 on branch `s2s-v9-webrtc-device-roundtrip`)_
 - `s2s-v10-webrtc-external-source` — a go2rtc-fronted camera source drives a live session end to end; agent media probe reports its tracks; audio-only sources correctly report look() unavailable _(history: NEVER SUBMITTED)_
 
 ## Depth-5+ program milestones (5)
@@ -81,7 +81,6 @@ UPDATE 2026-08-26: every lane below except `s2s-v2b-audio-in-long` (OPEN PR #185
 - `s2s-v7b-buffer-logs`
 - `s2s-v7c-metrics-reconcile`
 - `s2s-v8-duplex-overlap`
-- `s2s-v9-webrtc-device-roundtrip`
 - `s2s-v10-webrtc-external-source`
 - `s2s-e2e-tool-call-conversation`
 - `s2s-e2e-vision-describe`

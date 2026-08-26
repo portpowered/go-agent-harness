@@ -180,21 +180,7 @@ func writeDeviceListJSON(out io.Writer, entries []deviceListEntry) error {
 	return nil
 }
 
-// defaultDeviceRegistry is the always-compilable fallback registry that
-// BuildRoot uses for agent devices list: enumeration is empty and every
-// directional default lookup fails with the typed no-default error.
-// Platform registries arrive via a future wire-injection lane.
-type defaultDeviceRegistry struct{}
-
-// newDefaultDeviceRegistry constructs the fallback registry.
-func newDefaultDeviceRegistry() audio.DeviceRegistry { return defaultDeviceRegistry{} }
-
-func (defaultDeviceRegistry) List() ([]audio.Device, error) { return nil, nil }
-
-func (defaultDeviceRegistry) Default(direction audio.Direction) (audio.Device, error) {
-	return audio.Device{}, audio.NewNoDefaultDeviceError(direction)
-}
-
-func (defaultDeviceRegistry) Open(id audio.DeviceID) (audio.OpenedDevice, error) {
-	return nil, audio.NewDeviceNotFoundError(id)
-}
+// newDefaultDeviceRegistry constructs the host registry used by production
+// device discovery and device-tier probes. The audio package supplies an
+// empty no-CGO/platform fallback that preserves structured SKIP semantics.
+func newDefaultDeviceRegistry() audio.DeviceRegistry { return audio.NewHostDeviceRegistry() }
