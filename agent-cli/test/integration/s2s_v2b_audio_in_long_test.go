@@ -23,37 +23,10 @@ import (
 // gets its exact append payloads from the committed long corpus WAV, so the
 // replay transport compares every client-to-server byte emitted by the real
 // command surface.
-var s2sV2BAgentBinary string
-
-func TestMain(m *testing.M) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		fmt.Fprintln(os.Stderr, "resolve v2b integration test path: runtime.Caller failed")
-		os.Exit(1)
-	}
-
-	buildDir, err := os.MkdirTemp("", "s2s-v2b-agent-")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "create v2b integration build directory: %v\n", err)
-		os.Exit(1)
-	}
-	binaryPath := filepath.Join(buildDir, "agent")
-	build := exec.Command("go", "build", "-o", binaryPath, "./cmd/agent")
-	build.Dir = filepath.Join(filepath.Dir(currentFile), "..", "..")
-	build.Env = append(os.Environ(), "CGO_ENABLED=0")
-	build.Stdout = os.Stdout
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		_ = os.RemoveAll(buildDir)
-		fmt.Fprintf(os.Stderr, "build agent binary for v2b integration test: %v\n", err)
-		os.Exit(1)
-	}
-	s2sV2BAgentBinary = binaryPath
-
-	status := m.Run()
-	_ = os.RemoveAll(buildDir)
-	os.Exit(status)
-}
+//
+// The executable itself is built once for the whole integration package by
+// the package-level TestMain in s2s_v2d_multi_utterance_test.go and exposed
+// as agentBinaryPath; this file only drives it as a subprocess.
 
 type s2sV2BCLIResult struct {
 	exitCode int
@@ -64,7 +37,7 @@ type s2sV2BCLIResult struct {
 func runS2SV2BAgent(t *testing.T, args ...string) s2sV2BCLIResult {
 	t.Helper()
 
-	command := exec.CommandContext(t.Context(), s2sV2BAgentBinary, args...)
+	command := exec.CommandContext(t.Context(), agentBinaryPath, args...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
@@ -210,6 +183,95 @@ func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.Sessio
 	return capture, len(frames)
 }
 
+// buildS2SV2BPerChunkCommitCapture derives the negative-control capture from
+// the positive one: identical records in identical order except that an
+// input_audio_buffer.commit is inserted immediately after every
+// input_audio_buffer.append, encoding the per-chunk-commit regression this
+// lane exists to reject.
+func buildS2SV2BPerChunkCommitCapture(t *testing.T, positive gatewaytesting.SessionCapture) gatewaytesting.SessionCapture {
+	t.Helper()
+
+	negative := positive
+	appends := 0
+	records := make([]gatewaytesting.CapturedSessionEvent, 0, len(positive.Records)*2)
+	for _, record := range positive.Records {
+		clone := record
+		clone.Sequence = len(records) + 1
+		clone.TimestampMs = int64(len(records))
+		records = append(records, clone)
+		if record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "input_audio_buffer.append" {
+			appends++
+			records = append(records, gatewaytesting.CapturedSessionEvent{
+				Direction:   gatewaytesting.DirectionClientToServer,
+				Type:        "input_audio_buffer.commit",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
+				Sequence:    len(records) + 1,
+				TimestampMs: int64(len(records)),
+			})
+		}
+	}
+	if appends <= 1 {
+		t.Fatalf("positive capture carries %d appends, want more than one before deriving the negative control", appends)
+	}
+	negative.Records = records
+	return negative
+}
+
+// assertS2SV2BDifferOnlyByInsertedCommits pins the negative-control contract:
+// the negative capture is exactly the positive trace with one
+// client-to-server input_audio_buffer.commit inserted directly after every
+// append. The expected layout (source index or inserted) is derived from the
+// positive capture itself, so adjacent identical commit records cannot be
+// mis-aligned: every mapped record must equal its positive source, and every
+// unmapped slot must be a bare commit following an append.
+func assertS2SV2BDifferOnlyByInsertedCommits(t *testing.T, positive, negative gatewaytesting.SessionCapture) {
+	t.Helper()
+
+	sameRecord := func(a, b gatewaytesting.CapturedSessionEvent) bool {
+		return a.Direction == b.Direction && a.Type == b.Type && a.PayloadType == b.PayloadType && bytes.Equal(a.Payload, b.Payload)
+	}
+	isCommit := func(r gatewaytesting.CapturedSessionEvent) bool {
+		return r.Direction == gatewaytesting.DirectionClientToServer && r.Type == "input_audio_buffer.commit" && string(r.Payload) == `{"type":"input_audio_buffer.commit"}`
+	}
+	isAppend := func(r gatewaytesting.CapturedSessionEvent) bool {
+		return r.Direction == gatewaytesting.DirectionClientToServer && r.Type == "input_audio_buffer.append"
+	}
+
+	layout := make([]int, 0, len(positive.Records)*2)
+	for i, record := range positive.Records {
+		layout = append(layout, i)
+		if isAppend(record) {
+			layout = append(layout, -1)
+		}
+	}
+	if len(layout) != len(negative.Records) {
+		t.Fatalf("negative control has %d records, want %d (%d positive records plus one inserted commit per append)", len(negative.Records), len(layout), len(positive.Records))
+	}
+
+	insertedCommits := 0
+	for neg, source := range layout {
+		if source >= 0 {
+			if !sameRecord(positive.Records[source], negative.Records[neg]) {
+				t.Fatalf("negative control altered positive record %d (%s) at position %d", positive.Records[source].Sequence, positive.Records[source].Type, neg+1)
+			}
+			continue
+		}
+		followsAppend := neg > 0 && isAppend(negative.Records[neg-1])
+		switch {
+		case !isCommit(negative.Records[neg]):
+			t.Fatalf("expected an inserted input_audio_buffer.commit at position %d, got %s/%s", neg+1, negative.Records[neg].Direction, negative.Records[neg].Type)
+		case !followsAppend:
+			t.Fatalf("inserted commit at negative sequence %d does not follow an append", negative.Records[neg].Sequence)
+		default:
+			insertedCommits++
+		}
+	}
+	if expected := countS2SV2BEvents(positive).Appends; insertedCommits != expected {
+		t.Fatalf("negative control inserted %d commits, want exactly one per append (%d)", insertedCommits, expected)
+	}
+}
+
 func writeS2SV2BCapture(t *testing.T, capture gatewaytesting.SessionCapture) string {
 	t.Helper()
 
@@ -248,8 +310,9 @@ func countS2SV2BEvents(capture gatewaytesting.SessionCapture) s2sV2BEventCounts 
 	return counts
 }
 
-// assertS2SV2BOneTurn is the load-bearing invariant shared by the positive
-// proof and the next-iteration per-chunk negative control.
+// assertS2SV2BOneTurn is the load-bearing invariant of the v2b vertical: a
+// long utterance streams many appends but ends the turn with exactly one
+// commit, one response.create, and one completed response.
 func assertS2SV2BOneTurn(capture gatewaytesting.SessionCapture) error {
 	counts := countS2SV2BEvents(capture)
 	if counts.Appends <= 1 || counts.Commits != 1 || counts.ResponseCreate != 1 || counts.ResponseDone != 1 {
@@ -288,4 +351,47 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 	if err := assertS2SV2BOneTurn(observed); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation is the
+// non-vacuousness proof: the negative control differs from the positive
+// capture only by an input_audio_buffer.commit inserted after every append,
+// and the identical CLI invocation must fail with diagnostics naming the
+// commit-versus-append divergence. The suite passes only by asserting that
+// rejection; substituting this fixture into the positive case would fail its
+// assertions.
+func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
+	wavPath := locateS2SV2BLongWAV(t)
+	positive, _ := buildS2SV2BLongCapture(t, wavPath)
+	negative := buildS2SV2BPerChunkCommitCapture(t, positive)
+	assertS2SV2BDifferOnlyByInsertedCommits(t, positive, negative)
+	negativeCounts := countS2SV2BEvents(negative)
+	if negativeCounts.Commits != negativeCounts.Appends+1 {
+		t.Fatalf("negative control carries %d commits for %d appends, want appends+1 (per-chunk commits plus the final turn commit)", negativeCounts.Commits, negativeCounts.Appends)
+	}
+
+	capturePath := writeS2SV2BCapture(t, negative)
+	run := runS2SV2BAgent(t,
+		"--config-dir", t.TempDir(),
+		"session",
+		"--max-duration", "30s",
+		"--replay", capturePath,
+		"--audio-in", wavPath,
+	)
+	diagnostics := run.stdout + "\n" + run.stderr
+	if run.exitCode == 0 && strings.Contains(run.stdout, "[session closed: fixture_complete]") {
+		t.Fatalf("per-chunk-commit fixture completed cleanly; the exactly-once proof is vacuous: stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+
+	divergence := ""
+	for _, line := range strings.Split(diagnostics, "\n") {
+		if strings.Contains(line, "input_audio_buffer.commit") && strings.Contains(line, "input_audio_buffer.append") {
+			divergence = line
+			break
+		}
+	}
+	if divergence == "" {
+		t.Fatalf("failure diagnostics do not name the divergent input_audio_buffer.commit versus input_audio_buffer.append sequence: exit=%d stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	t.Logf("per-chunk-commit negative control rejected as expected: %s", strings.TrimSpace(divergence))
 }
