@@ -70,6 +70,18 @@ func WithSessionInstructions(instructions string) SessionOption {
 	}
 }
 
+// WithSessionTools sets the tool definitions advertised by every session
+// connection. The definitions are copied so callers can safely reuse or
+// mutate their input after configuring the inferencer.
+func WithSessionTools(tools []models.ToolDefinition) SessionOption {
+	return func(si *SessionGatewayInferencer) {
+		si.request.Config.Tools = append([]models.ToolDefinition(nil), tools...)
+		for i := range si.request.Config.Tools {
+			si.request.Config.Tools[i].Parameters = append([]models.ToolParameter(nil), tools[i].Parameters...)
+		}
+	}
+}
+
 // NewSessionGatewayInferencer creates a bridge that delegates session
 // establishment to a gateway-owned session adapter while preserving
 // messages.SessionInferencer as the consumer-facing contract.

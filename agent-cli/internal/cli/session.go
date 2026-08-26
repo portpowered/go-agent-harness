@@ -17,12 +17,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// SessionToolCapabilities is the config-scoped tool surface used by a
+// composed session command. Executor and Definitions are derived from the
+// same loaded config snapshot so the session cannot advertise a tool that its
+// executor does not expose.
+type SessionToolCapabilities struct {
+	Executor    messages.ToolExecutor
+	Definitions []messages.ToolDefinition
+}
+
+// SessionToolCapabilitiesFactory builds the session tool surface from the
+// config selected by --config-dir. It is optional so direct command
+// constructors and callers that intentionally inject a no-tools session keep
+// their existing behavior.
+type SessionToolCapabilitiesFactory func(*config.Config) (SessionToolCapabilities, error)
+
 // SessionCommand is the session group (parent command); subcommands are wired in routes.go.
 type SessionCommand struct {
 	askFlags                  *flags.AskFlags
 	globalFlags               *flags.GlobalFlags
 	toolExecutorOverride      messages.ToolExecutor
 	sessionInferencerOverride messages.SessionInferencer
+	sessionToolCapabilities   SessionToolCapabilitiesFactory
 	streamObserver            services.SessionStreamObserver
 	clockSource               platformclock.Source
 	runtimeObserver           services.SessionRuntimeObserver
@@ -48,11 +64,35 @@ func NewSessionCommandWithRuntime(
 	clockSource platformclock.Source,
 	runtimeObserver services.SessionRuntimeObserver,
 ) *SessionCommand {
+	return NewSessionCommandWithRuntimeAndToolCapabilities(
+		askFlags,
+		globalFlags,
+		toolExecutorOverride,
+		sessionInferencerOverride,
+		clockSource,
+		runtimeObserver,
+		nil,
+	)
+}
+
+// NewSessionCommandWithRuntimeAndToolCapabilities constructs the session
+// command with the composed clock, runtime observer, and optional config-aware
+// session tool capability factory.
+func NewSessionCommandWithRuntimeAndToolCapabilities(
+	askFlags *flags.AskFlags,
+	globalFlags *flags.GlobalFlags,
+	toolExecutorOverride messages.ToolExecutor,
+	sessionInferencerOverride messages.SessionInferencer,
+	clockSource platformclock.Source,
+	runtimeObserver services.SessionRuntimeObserver,
+	sessionToolCapabilities SessionToolCapabilitiesFactory,
+) *SessionCommand {
 	return &SessionCommand{
 		askFlags:                  askFlags,
 		globalFlags:               globalFlags,
 		toolExecutorOverride:      toolExecutorOverride,
 		sessionInferencerOverride: sessionInferencerOverride,
+		sessionToolCapabilities:   sessionToolCapabilities,
 		clockSource:               clockSource,
 		runtimeObserver:           runtimeObserver,
 	}
@@ -74,6 +114,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	recordDirPath := ""
 	audioOutPath := ""
 	var maxDuration time.Duration
+	var waitForClose bool
 	var audioIn string
 	var audioInTurns []string
 	cmd := &cobra.Command{
@@ -105,6 +146,25 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					})
 				}
 			}
+			toolExecutor := c.toolExecutorOverride
+			var toolDefinitions []messages.ToolDefinition
+			var loadedConfig *config.Config
+			if c.sessionToolCapabilities != nil {
+				storage, err := config.NewDefaultConfigStorage(c.globalFlags.ConfigDir())
+				if err != nil {
+					return fmt.Errorf("load session config: %w", err)
+				}
+				loadedConfig, err = storage.Load()
+				if err != nil {
+					return fmt.Errorf("load session config: %w", err)
+				}
+				capabilities, err := c.sessionToolCapabilities(loadedConfig)
+				if err != nil {
+					return fmt.Errorf("configure session tools: %w", err)
+				}
+				toolExecutor = capabilities.Executor
+				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+			}
 			sessionOptions := services.SessionRunOptions{
 				RecordPath:        c.askFlags.RecordCapturePath,
 				ReplayPath:        c.askFlags.ReplayCapturePath,
@@ -116,7 +176,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
 				SessionInferencer: c.sessionInferencerOverride,
-				ToolExecutor:      c.toolExecutorOverride,
+				ToolExecutor:      toolExecutor,
+				ToolDefinitions:   toolDefinitions,
+				LoadedConfig:      loadedConfig,
+				WaitForClose:      waitForClose,
 				StreamObserver:    c.streamObserver,
 				Clock:             c.clockSource,
 				RuntimeObserver:   c.runtimeObserver,
@@ -212,6 +275,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
 	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")
 	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
+	cmd.Flags().BoolVar(&waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")

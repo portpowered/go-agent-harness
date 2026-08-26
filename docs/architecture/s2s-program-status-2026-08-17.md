@@ -555,3 +555,22 @@ live-provider, network, or retry/backoff claim. Tests:
 `go-agent-loop/pkg/probe/scenario_error_rate_limit.go` plus three captures in
 `go-llm-gateway/pkg/testing/testdata/session-fixtures/`. Details:
 `docs/architecture/s2s-v6c-error-rate-limit.md`.
+
+## 12. Production session config-aware tool filtering prerequisite — 2026-08-26
+
+Append-only status recorded by the `s2s-prereq-session-config-tool-filter` lane.
+The wire-composed `agent session` path now loads the selected `--config-dir` at
+invocation time, derives a filtered registry-backed executor and advertised
+definitions from that one config snapshot, and carries the aligned capability
+pair through injected-live, record, and replay plans. Empty `tools.list` keeps
+all tools enabled, including `sleep`; `{id: sleep, enabled: false}` removes
+only `sleep` while omitted tools such as `read_file` remain enabled. The
+focused hermetic proof is
+[`s2s-prereq-session-config-tool-filter.md`](s2s-prereq-session-config-tool-filter.md)
+and its real-router matrix at
+`agent-cli/test/integration/s2s_prereq_session_config_tool_filter_test.go`.
+
+Provider `function_call_output` translation, serialization, and result
+forwarding remain owned by PR #181. This entry records a prerequisite only;
+v5a is not complete and must be rerun after this filter and PR #181 are both
+available.

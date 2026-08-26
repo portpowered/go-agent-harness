@@ -212,10 +212,20 @@ func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFa
 	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}
+	factory.newGrokSessionWithTools = func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
+	}
+	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
+	}
 	return factory
 }
 
 func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
+	return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, nil)
+}
+
+func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokConfig, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
@@ -227,14 +237,21 @@ func buildGrokSessionInferencerWithInstructions(sessionCfg config.GrokConfig, di
 	if err != nil {
 		return nil, fmt.Errorf("create Grok session gateway: %w", err)
 	}
-	return inference.NewSessionGatewayInferencer(
-		sessionGateway,
+	inferenceOpts := []inference.SessionOption{
 		inference.WithSessionModel(sessionCfg.Model),
 		inference.WithSessionInstructions(instructions),
-	), nil
+	}
+	if len(toolDefinitions) > 0 {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
+	}
+	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
 func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, nil)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
@@ -251,11 +268,14 @@ func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.Open
 	if err != nil {
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 	}
-	return inference.NewSessionGatewayInferencer(
-		sessionGateway,
+	inferenceOpts := []inference.SessionOption{
 		inference.WithSessionModel(sessionCfg.Model),
 		inference.WithSessionInstructions(instructions),
-	), nil
+	}
+	if len(toolDefinitions) > 0 {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
+	}
+	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
 // resolveSessionInstructions delegates prompt selection, AGENTS.md creation,

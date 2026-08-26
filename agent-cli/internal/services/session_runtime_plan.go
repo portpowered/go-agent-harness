@@ -43,12 +43,14 @@ type sessionReplayDialer interface {
 }
 
 type sessionRuntimeFactory struct {
-	newDefaultLiveDialer     func() transport.Dialer
-	newRecordingDialer       func(transport.Dialer, string, string) sessionRecordingDialer
-	newReplayDialer          func(string) (sessionReplayDialer, error)
-	newReplayInferencer      func(string) messages.SessionInferencer
-	newGrokSessionInferencer func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
-	newOpenAISessionInf      func(config.OpenAIConfig, transport.Dialer) (messages.SessionInferencer, error)
+	newDefaultLiveDialer      func() transport.Dialer
+	newRecordingDialer        func(transport.Dialer, string, string) sessionRecordingDialer
+	newReplayDialer           func(string) (sessionReplayDialer, error)
+	newReplayInferencer       func(string) messages.SessionInferencer
+	newGrokSessionInferencer  func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
+	newOpenAISessionInf       func(config.OpenAIConfig, transport.Dialer) (messages.SessionInferencer, error)
+	newGrokSessionWithTools   func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newOpenAISessionWithTools func(config.OpenAIConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
 }
 
 var defaultSessionRuntimeFactory = sessionRuntimeFactory{
@@ -70,6 +72,26 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	newOpenAISessionInf: func(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencer(sessionCfg, dialer)
 	},
+	newGrokSessionWithTools: func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildGrokSessionInferencerWithTools(sessionCfg, dialer, toolDefinitions)
+	},
+	newOpenAISessionWithTools: func(sessionCfg config.OpenAIConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg, dialer, toolDefinitions)
+	},
+}
+
+func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	if f.newGrokSessionWithTools != nil {
+		return f.newGrokSessionWithTools(sessionCfg, dialer, toolDefinitions)
+	}
+	return f.newGrokSessionInferencer(sessionCfg, dialer)
+}
+
+func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg config.OpenAIConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	if f.newOpenAISessionWithTools != nil {
+		return f.newOpenAISessionWithTools(sessionCfg, dialer, toolDefinitions)
+	}
+	return f.newOpenAISessionInf(sessionCfg, dialer)
 }
 
 type sessionRuntimePlan struct {
@@ -164,6 +186,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// replay, record) here; the duplex loop construction seam decides whether
 	// tool execution is enabled. Nil keeps every plan unchanged.
 	plan.loop.ToolExecutor = opts.ToolExecutor
+	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 	// The per-invocation adapter deadline override crosses with the executor;
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
@@ -184,10 +207,11 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 			model:      opts.Model,
 			inferencer: opts.SessionInferencer,
 			loop: sessionLoopOptions{
-				Prompt:         opts.Prompt,
-				CloseAfterOpen: !opts.WaitForClose,
-				WaitForClose:   opts.WaitForClose,
-				MaxDuration:    3 * time.Second,
+				Prompt:                   opts.Prompt,
+				CloseAfterOpen:           !opts.WaitForClose,
+				WaitForClose:             opts.WaitForClose,
+				MaxDuration:              3 * time.Second,
+				AdvertiseToolDefinitions: true,
 			},
 		}, nil
 	}
@@ -204,9 +228,10 @@ func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFact
 			model:       opts.Model,
 			inferencer:  sessionInferencer,
 			loop: sessionLoopOptions{
-				Prompt:       opts.Prompt,
-				WaitForClose: opts.WaitForClose,
-				MaxDuration:  3 * time.Second,
+				Prompt:                   opts.Prompt,
+				WaitForClose:             opts.WaitForClose,
+				MaxDuration:              3 * time.Second,
+				AdvertiseToolDefinitions: true,
 			},
 		}, nil
 	}

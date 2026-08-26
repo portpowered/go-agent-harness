@@ -67,6 +67,16 @@ type sessionLoopOptions struct {
 	// Nil keeps loop construction byte-for-byte identical to today.
 	ToolExecutor messages.ToolExecutor
 
+	// ToolDefinitions is the config-filtered tool surface advertised to the
+	// session loop. It is paired with ToolExecutor by the runtime planner.
+	ToolDefinitions []messages.ToolDefinition
+
+	// AdvertiseToolDefinitions sends the definitions through the generic
+	// SESSION.UPDATE seam used by injected sessions. Live provider-backed
+	// sessions receive definitions in their initial provider-specific config;
+	// strict websocket replays preserve their captured outbound sequence.
+	AdvertiseToolDefinitions bool
+
 	// ToolExecutionTimeout overrides the per-invocation adapter deadline in
 	// tests. Zero selects defaultSessionToolExecutionTimeout; production plans
 	// never set it.
@@ -86,7 +96,19 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 		agentloop.WithSessionInferencer(observedInferencer),
 	}
 	if opts.ToolExecutor != nil {
+		if len(opts.ToolDefinitions) > 0 {
+			loopOpts = append(loopOpts,
+				agentloop.WithTools(opts.ToolDefinitions),
+			)
+			if opts.AdvertiseToolDefinitions {
+				loopOpts = append(loopOpts, agentloop.WithSessionConfig(messages.SessionUpdateConfig{
+					Tools: append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
+				}))
+			}
+		}
 		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeout(opts.ToolExecutor, opts.ToolExecutionTimeout)))
+	} else {
+		loopOpts = append(loopOpts, agentloop.WithToolExecutionDisabled())
 	}
 	return loopOpts
 }

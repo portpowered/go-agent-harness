@@ -28,7 +28,7 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderGrok, sessionCfg.Model)
-	sessionInferencer, err := factory.newGrokSessionInferencer(sessionCfg, recordingDialer)
+	sessionInferencer, err := factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -62,10 +62,13 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if strings.TrimSpace(model) == "" {
 		model = "grok-replay"
 	}
-	sessionInferencer, err := factory.newGrokSessionInferencer(config.GrokConfig{
+	// A websocket replay owns its historical initial session.update payload.
+	// The selected definitions still reach the replay loop through plan.loop,
+	// but must not add a new outbound payload that would invalidate the capture.
+	sessionInferencer, err := factory.newGrokSessionInferencerForTools(config.GrokConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, replayDialer)
+	}, replayDialer, nil)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -91,10 +94,14 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 }
 
 func buildGrokSessionInferencer(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
+	return buildGrokSessionInferencerWithTools(sessionCfg, dialer, nil)
+}
+
+func buildGrokSessionInferencerWithTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderGrok)
 	}
 	opts := make([]grok.Option, 0, 1)
 	opts = append(opts, grok.WithWebSocketDialer(dialer))
-	return NewGrokSessionInferencerWithOptions(sessionCfg, opts...)
+	return NewGrokSessionInferencerWithToolsAndOptions(sessionCfg, toolDefinitions, opts...)
 }
