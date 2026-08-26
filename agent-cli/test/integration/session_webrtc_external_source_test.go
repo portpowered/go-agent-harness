@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -30,21 +31,21 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
-// The v10 vertical records the in-lease evidence needed for a go2rtc-fronted
+// The v10 vertical records the evidence needed for a go2rtc-fronted
 // camera-style source and a hermetic replay-backed live session over WebRTC.
-// The public root registration for `agent media probe` and the `look()`
-// operation are upstream CLI/media contracts, absent on origin/main and
-// intentionally not recreated in this vertical:
+// Every observation and session leg enters through the generated root CLI with
+// actual argv; the loopback fixture independently records the negotiated
+// sections and packet activity that make the CLI output non-vacuous:
 //
 //  1. Source bridge: the loopback go2rtc-compatible fixture negotiates with
 //     the production WebRTC client (rtc.OpenMediaSource is used purely as the
 //     receive pipe into the session's public `--audio-in -` stdin seam, never
 //     as a substitute for a CLI assertion), and its deterministic PCMU audio
 //     arrives decoded and non-silent.
-//  2. Media observation: the fixture independently records exact offer/answer
-//     track sections and per-track packet activity for the camera and
-//     audio-only shapes. The owning media CLI lane must expose those facts
-//     through the shipped root command.
+//  2. Media observation: `agent media probe` and `agent media look` report the
+//     camera and audio-only facts through the shipped root command. The
+//     fixture independently records exact offer/answer track sections and
+//     per-track packet activity so a declared-but-unused track cannot pass.
 //  3. Session: real argv (`agent session --replay ... --audio-in - --audio-out ...`)
 //     consumes the bridged source audio byte-exactly over the record/replay
 //     transport (any dropped or distorted WebRTC frame diverges the replay),
@@ -52,15 +53,20 @@ import (
 //     terminal outcome, and exits successfully inside the hard deadline.
 const externalSourceFrameBytes = 2 * audio.FrameSize
 
-// mediaObservation carries the negotiated audio facts and video capability
-// used by the in-lease camera negative control. The owning media CLI lane is
-// responsible for rendering these facts on the shipped root command.
+// mediaObservation is parsed from the public media command reports and feeds
+// the camera assertion used by the audio-only negative control. Keeping this
+// derived from CLI output prevents a hard-coded local report from standing in
+// for the shipped media/look behavior.
 type mediaObservation struct {
-	source        string
-	codec         string
-	sampleRate    int
-	channels      int
-	videoPresence bool
+	source           string
+	codec            string
+	sampleRate       int
+	channels         int
+	videoPresence    bool
+	lookStatus       string
+	lookReason       string
+	mediaType        string
+	observationBytes int
 }
 
 type rootCLIResult struct {
@@ -263,6 +269,105 @@ func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath st
 	return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
 }
 
+// runRootCLIMediaCommand drives `agent media probe|look <source>` through the
+// same generated root router used by the shipped binary. It retains both
+// output streams and a process-like exit status so a failed public command has
+// useful diagnostics without exposing source credentials.
+func runRootCLIMediaCommand(t *testing.T, ctx context.Context, cfgDir, operation, rawURL string) rootCLIResult {
+	t.Helper()
+	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	if err != nil {
+		t.Fatalf("initialize CLI composition: %v", err)
+	}
+	rootCmd := agentCLI.Generate()
+	stdout := &syncBuffer{}
+	stderr := &syncBuffer{}
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+	argv := []string{"--config-dir", cfgDir, "media", operation, rawURL}
+	rootCmd.SetArgs(argv)
+	runErr := rootCmd.ExecuteContext(ctx)
+	return rootCLIResult{argv: append([]string(nil), argv...), stdout: stdout.String(), stderr: stderr.String(), err: runErr, exitStatus: boolExitStatus(runErr)}
+}
+
+func assertRootCLIMediaSuccess(t *testing.T, result rootCLIResult, cfgDir, wantOperation, wantURL string) {
+	t.Helper()
+	wantArgv := []string{"--config-dir", cfgDir, "media", wantOperation, wantURL}
+	if len(result.argv) != len(wantArgv) || strings.Join(result.argv, "\x00") != strings.Join(wantArgv, "\x00") {
+		t.Fatalf("media command argv = %q, want %q", result.argv, wantArgv)
+	}
+	if result.err != nil || result.exitStatus != 0 || result.stderr != "" {
+		t.Fatalf("media command failed\n%s", result.diagnostics())
+	}
+}
+
+// parseMediaCLIObservation converts the two human-readable reports emitted by
+// the public media commands into the values used by the shared camera
+// predicate. Every field is derived from command output, including the
+// audio-only unavailable look result.
+func parseMediaCLIObservation(probeOutput, lookOutput string) (mediaObservation, error) {
+	var observation mediaObservation
+	var sourceSet, codecSet, rateSet, channelsSet, videoSet, lookSet bool
+	parse := func(output string) error {
+		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+			key, value, ok := strings.Cut(line, ": ")
+			if !ok {
+				continue
+			}
+			switch key {
+			case "Source":
+				if !sourceSet {
+					observation.source = value
+				}
+				sourceSet = true
+			case "Audio codec":
+				observation.codec, codecSet = value, true
+			case "Sample rate":
+				rate, err := strconv.Atoi(value)
+				if err != nil {
+					return fmt.Errorf("parse sample rate %q: %w", value, err)
+				}
+				observation.sampleRate, rateSet = rate, true
+			case "Channels":
+				channels, err := strconv.Atoi(value)
+				if err != nil {
+					return fmt.Errorf("parse channels %q: %w", value, err)
+				}
+				observation.channels, channelsSet = channels, true
+			case "Video presence":
+				video, err := strconv.ParseBool(value)
+				if err != nil {
+					return fmt.Errorf("parse video presence %q: %w", value, err)
+				}
+				observation.videoPresence, videoSet = video, true
+			case "Look status":
+				observation.lookStatus, lookSet = value, true
+			case "Reason":
+				observation.lookReason = value
+			case "Media type":
+				observation.mediaType = value
+			case "Observation bytes":
+				count, err := strconv.Atoi(value)
+				if err != nil {
+					return fmt.Errorf("parse observation bytes %q: %w", value, err)
+				}
+				observation.observationBytes = count
+			}
+		}
+		return nil
+	}
+	if err := parse(probeOutput); err != nil {
+		return mediaObservation{}, err
+	}
+	if err := parse(lookOutput); err != nil {
+		return mediaObservation{}, err
+	}
+	if !sourceSet || !codecSet || !rateSet || !channelsSet || !videoSet || !lookSet {
+		return mediaObservation{}, fmt.Errorf("incomplete public media observation: source=%t codec=%t rate=%t channels=%t video=%t look=%t", sourceSet, codecSet, rateSet, channelsSet, videoSet, lookSet)
+	}
+	return observation, nil
+}
+
 func boolExitStatus(err error) int {
 	if err != nil {
 		return 1
@@ -276,11 +381,11 @@ func sourceObservationDiagnostics(observed webrtcSourceObservationSnapshot) stri
 		observed.answerAudioTracks, observed.answerVideoTracks, observed.frameCount, observed.videoFrameCount)
 }
 
-// assertCameraMediaEvidence is the shared camera-shape assertion: exactly one
-// PCMU/8000/mono audio track, one independently observed negotiated video
-// track, and actual video packet activity. As an executable fixture-level
-// negative control, it rejects the audio-only observation naming absent video
-// and unavailable look(); the public look operation remains an owner-lane gap.
+// assertCameraMediaEvidence is the shared camera-shape assertion: the public
+// CLI report must identify PCMU/8000/mono audio and available visual data, while
+// the independently observed fixture must show exactly one negotiated audio
+// and video track plus actual packet activity. Applying it to the parsed
+// audio-only CLI report is the executable negative control.
 func assertCameraMediaEvidence(report mediaObservation, observed webrtcSourceObservationSnapshot) error {
 	var violations []string
 	if report.codec != "PCMU" {
@@ -306,7 +411,13 @@ func assertCameraMediaEvidence(report mediaObservation, observed webrtcSourceObs
 	}
 	if !report.videoPresence {
 		violations = append(violations, "no video track was negotiated")
-		violations = append(violations, "look() unavailable: visual inspection cannot be served by an audio-only source")
+	}
+	if report.lookStatus != string(rtc.VisualObservationAvailable) {
+		detail := fmt.Sprintf("status %q", report.lookStatus)
+		if report.lookReason != "" {
+			detail += fmt.Sprintf(" reason %q", report.lookReason)
+		}
+		violations = append(violations, "look() unavailable: public report has "+detail)
 	}
 	if len(violations) > 0 {
 		return fmt.Errorf("camera media evidence rejected: %s", strings.Join(violations, "; "))
@@ -388,6 +499,60 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	cfgDir := t.TempDir()
 	packets := cameraSourceRTPPackets(t)
 
+	// Public media leg 1 — the real root `agent media probe` command reports
+	// the negotiated camera tracks. One audio packet is enough for probe to
+	// return while leaving the fixture free to deliver all three video packets
+	// for the independent activity assertion.
+	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1]})
+	probeResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "probe", probeURL)
+	waitForExternalSourceEvent(t, probeObserved.negotiated, "camera media probe offer/answer completion")
+	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "camera media probe audio frame delivery")
+	waitForExternalSourceEvent(t, probeObserved.videoFrameDelivered, "camera media probe video frame delivery")
+	probeSnapshot := probeObserved.snapshot()
+	probeCleanup()
+	assertRootCLIMediaSuccess(t, probeResult, cfgDir, "probe", probeURL)
+	probeSource, err := rtc.ParseMediaSource(probeURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantProbe := fmt.Sprintf("Source: %s\nAudio codec: PCMU\nSample rate: 8000\nChannels: 1\nVideo presence: true\n", probeSource.Identity())
+	if probeResult.stdout != wantProbe {
+		t.Fatalf("camera media probe output = %q, want %q\n%s", probeResult.stdout, wantProbe, probeResult.diagnostics())
+	}
+	if probeSnapshot.offerAudioTracks != 1 || probeSnapshot.answerAudioTracks != 1 || probeSnapshot.offerVideoTracks != 1 || probeSnapshot.answerVideoTracks != 1 || probeSnapshot.frameCount == 0 || probeSnapshot.videoFrameCount < externalSourceVideoPackets {
+		t.Fatalf("camera media probe fixture evidence = %s", sourceObservationDiagnostics(probeSnapshot))
+	}
+
+	// Public media leg 2 — `agent media look` must return an actual visual
+	// observation from a camera-shaped source, not merely trust the probe's
+	// video-presence flag.
+	lookURL, lookObserved, lookCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1]})
+	lookResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "look", lookURL)
+	waitForExternalSourceEvent(t, lookObserved.negotiated, "camera media look offer/answer completion")
+	waitForExternalSourceEvent(t, lookObserved.videoFrameDelivered, "camera media look video frame delivery")
+	lookSnapshot := lookObserved.snapshot()
+	lookCleanup()
+	assertRootCLIMediaSuccess(t, lookResult, cfgDir, "look", lookURL)
+	lookSource, err := rtc.ParseMediaSource(lookURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLookPrefix := fmt.Sprintf("Source: %s\nLook status: available\nMedia type: video/H264\nObservation bytes: ", lookSource.Identity())
+	if !strings.HasPrefix(lookResult.stdout, wantLookPrefix) || !strings.HasSuffix(lookResult.stdout, "\n") {
+		t.Fatalf("camera media look output = %q, want available H264 observation\n%s", lookResult.stdout, lookResult.diagnostics())
+	}
+	if lookSnapshot.offerAudioTracks != 1 || lookSnapshot.answerAudioTracks != 1 || lookSnapshot.offerVideoTracks != 1 || lookSnapshot.answerVideoTracks != 1 || lookSnapshot.videoFrameCount < externalSourceVideoPackets {
+		t.Fatalf("camera media look fixture evidence = %s", sourceObservationDiagnostics(lookSnapshot))
+	}
+
+	cameraReport, err := parseMediaCLIObservation(probeResult.stdout, lookResult.stdout)
+	if err != nil {
+		t.Fatalf("parse camera media CLI observation: %v", err)
+	}
+	if cameraReport.lookStatus != string(rtc.VisualObservationAvailable) || cameraReport.mediaType != "video/H264" || cameraReport.observationBytes == 0 {
+		t.Fatalf("camera public media observation = %+v, want available non-empty H264 look", cameraReport)
+	}
+
 	// Leg 1 — the camera's audio reaches us over WebRTC through the
 	// production inbound path, non-silent and complete.
 	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets})
@@ -405,10 +570,9 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	if energy := pcmRMSEnergy(sourcePCM); energy <= externalSourceRMSThreshold {
 		t.Fatalf("bridged source audio RMS energy = %.1f, want > %.1f\n%s", energy, externalSourceRMSThreshold, sourceObservationDiagnostics(bridgeSnapshot))
 	}
-
-	// The owning media CLI lane must expose the fixture's track facts through
-	// `agent media probe`; this vertical deliberately does not register that
-	// root route itself.
+	if err := assertCameraMediaEvidence(cameraReport, bridgeSnapshot); err != nil {
+		t.Fatalf("camera public media observation rejected: %v\n%s", err, sourceObservationDiagnostics(bridgeSnapshot))
+	}
 
 	// The same source audio drives the replay-backed session.
 	appendFrames := rawPCMAppendFrames(sourcePCM, externalSourceFrameBytes)
@@ -422,15 +586,64 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	assertExternalSourceSessionOutcome(t, sessionResult, elapsed, cameraReplyTranscript, outWav, diagnostics)
 }
 
-// TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy proves the in-lease
-// audio-only source shape and healthy replay session. The public look()
-// invocation is an upstream media/CLI contract and is not simulated by this
-// test.
+// TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy proves the audio-only
+// source shape and healthy replay session through the public media and session
+// CLI commands. Its parsed media report is also fed to the camera assertion as
+// an executable negative control.
 func TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy(t *testing.T) {
 	parentCtx, cancelParent := context.WithTimeout(context.Background(), externalSourceHardDeadline)
 	defer cancelParent()
 	cfgDir := t.TempDir()
 	packets := cameraSourceRTPPackets(t)
+
+	// Public media leg 1 — the audio-only source still reports its negotiated
+	// audio track through the actual root command, with no video presence.
+	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: false, sendFrames: true, packets: packets[:1]})
+	probeResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "probe", probeURL)
+	waitForExternalSourceEvent(t, probeObserved.negotiated, "audio-only media probe offer/answer completion")
+	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "audio-only media probe audio frame delivery")
+	probeSnapshot := probeObserved.snapshot()
+	probeCleanup()
+	assertRootCLIMediaSuccess(t, probeResult, cfgDir, "probe", probeURL)
+	probeSource, err := rtc.ParseMediaSource(probeURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantProbe := fmt.Sprintf("Source: %s\nAudio codec: PCMU\nSample rate: 8000\nChannels: 1\nVideo presence: false\n", probeSource.Identity())
+	if probeResult.stdout != wantProbe {
+		t.Fatalf("audio-only media probe output = %q, want %q\n%s", probeResult.stdout, wantProbe, probeResult.diagnostics())
+	}
+	if probeSnapshot.offerAudioTracks != 1 || probeSnapshot.answerAudioTracks != 1 || probeSnapshot.answerVideoTracks != 0 || probeSnapshot.frameCount == 0 || probeSnapshot.videoFrameCount != 0 {
+		t.Fatalf("audio-only media probe fixture evidence = %s", sourceObservationDiagnostics(probeSnapshot))
+	}
+
+	// Public media leg 2 — a real root `look` invocation must be a successful,
+	// structured unavailable result, not a panic or a source failure.
+	lookURL, lookObserved, lookCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: false, sendFrames: true, packets: packets[:1]})
+	lookResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "look", lookURL)
+	waitForExternalSourceEvent(t, lookObserved.negotiated, "audio-only media look offer/answer completion")
+	lookSnapshot := lookObserved.snapshot()
+	lookCleanup()
+	assertRootCLIMediaSuccess(t, lookResult, cfgDir, "look", lookURL)
+	lookSource, err := rtc.ParseMediaSource(lookURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLook := fmt.Sprintf("Source: %s\nLook status: unavailable\nReason: no_video_track\n", lookSource.Identity())
+	if lookResult.stdout != wantLook {
+		t.Fatalf("audio-only media look output = %q, want %q\n%s", lookResult.stdout, wantLook, lookResult.diagnostics())
+	}
+	if lookSnapshot.offerAudioTracks != 1 || lookSnapshot.answerAudioTracks != 1 || lookSnapshot.answerVideoTracks != 0 || lookSnapshot.videoFrameCount != 0 {
+		t.Fatalf("audio-only media look fixture evidence = %s", sourceObservationDiagnostics(lookSnapshot))
+	}
+
+	audioOnlyReport, err := parseMediaCLIObservation(probeResult.stdout, lookResult.stdout)
+	if err != nil {
+		t.Fatalf("parse audio-only media CLI observation: %v", err)
+	}
+	if audioOnlyReport.videoPresence || audioOnlyReport.lookStatus != string(rtc.VisualObservationUnavailable) || audioOnlyReport.lookReason != string(rtc.VisualObservationReasonNoVideoTrack) {
+		t.Fatalf("audio-only public media observation = %+v, want no video and unavailable look", audioOnlyReport)
+	}
 
 	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: false, sendFrames: true, packets: packets})
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
@@ -448,11 +661,10 @@ func TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy(t *testing.T) {
 		t.Fatalf("audio-only bridged audio RMS energy = %.1f, want > %.1f\n%s", energy, externalSourceRMSThreshold, sourceObservationDiagnostics(bridgeSnapshot))
 	}
 
-	// Executable negative control: the camera assertion must reject this
-	// fixture observation specifically because video is absent and look() is
-	// unavailable. The public look operation remains an owner-lane gap.
-	report := mediaObservation{source: bridgeURL, codec: "PCMU", sampleRate: 8000, channels: 1}
-	cameraViolation := assertCameraMediaEvidence(report, bridgeSnapshot)
+	// Executable negative control: applying the camera assertion to the actual
+	// audio-only CLI report must fail specifically because video is absent and
+	// public look() is unavailable.
+	cameraViolation := assertCameraMediaEvidence(audioOnlyReport, bridgeSnapshot)
 	if cameraViolation == nil {
 		t.Fatal("camera assertion passed on the audio-only observation; the negative control is vacuous")
 	}
