@@ -1,14 +1,27 @@
 package probe_test
 
 import (
+	"bytes"
+	"embed"
 	"encoding/json"
 	"errors"
+	"flag"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 )
+
+var updateGoalCatalogGolden = flag.Bool("update-goal-catalog-golden", false, "update the blind-probe goal catalog golden")
+
+// Ordinary test runs compare against committed output. The explicit update
+// flag is the only path that rewrites the golden fixture.
+//
+//go:embed testdata/goal_catalog.golden
+var goalCatalogFixtures embed.FS
 
 func TestLoadGoalCatalogIsTypedCompleteAndJSONRoundTrips(t *testing.T) {
 	catalog, err := probe.LoadGoalCatalog()
@@ -172,4 +185,85 @@ func TestGoalCatalogValidationRejectsEmptyCatalog(t *testing.T) {
 	if validationErr.Index != -1 || !strings.Contains(err.Error(), "goals") {
 		t.Fatalf("empty catalog diagnostic: %#v (%v)", validationErr, err)
 	}
+}
+
+func TestGoalCatalogGoalTextIsBlindProbeReadyAndMatchesGolden(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+
+	for _, goal := range catalog {
+		if !strings.Contains(strings.ToLower(goal.Expectation.ArtifactClass), "record") {
+			t.Errorf("goal %q expectation class %q does not name a recorded artifact", goal.ID, goal.Expectation.ArtifactClass)
+		}
+		if !strings.Contains(strings.ToLower(goal.Expectation.Description), "record") {
+			t.Errorf("goal %q expectation description %q does not identify recorded evidence", goal.ID, goal.Expectation.Description)
+		}
+	}
+
+	got := []byte(renderGoalList(catalog))
+	path := filepath.FromSlash("testdata/goal_catalog.golden")
+	if *updateGoalCatalogGolden {
+		if err := os.WriteFile(path, got, 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+		return
+	}
+	want, err := goalCatalogFixtures.ReadFile(filepath.ToSlash(path))
+	if err != nil {
+		t.Fatalf("read golden %s: %v", path, err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("goal catalog golden differs; run with -update-goal-catalog-golden only after reviewing the behavior change\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestGoalCatalogValidationRejectsBlindProbeHints(t *testing.T) {
+	catalog, err := probe.LoadGoalCatalog()
+	if err != nil {
+		t.Fatalf("LoadGoalCatalog: %v", err)
+	}
+
+	for _, test := range []struct {
+		name string
+		text string
+	}{
+		{name: "internal package vocabulary", text: "Ask the assistant to use go-agent-loop for the answer."},
+		{name: "flag spelling", text: "Ask the assistant to run --help and explain the result."},
+		{name: "repository file path", text: "Ask the assistant to read README.md from the current folder."},
+		{name: "program documentation", text: "Ask the assistant to follow the program documentation."},
+		{name: "multiline hint", text: "Ask the assistant to answer this request.\nThen use the result."},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := append(probe.GoalCatalog(nil), catalog...)
+			candidate[0].Text = test.text
+
+			err := candidate.Validate()
+			if err == nil {
+				t.Fatal("hint-bearing goal unexpectedly passed validation")
+			}
+			if !errors.Is(err, probe.ErrInvalidGoalCatalog) || !errors.Is(err, probe.ErrGoalTextNotBlindProbeReady) {
+				t.Fatalf("error identity: %v", err)
+			}
+			var validationErr *probe.GoalCatalogValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error type: %T", err)
+			}
+			if validationErr.GoalID != candidate[0].ID || validationErr.Field != "text" || !strings.Contains(err.Error(), candidate[0].ID) {
+				t.Fatalf("diagnostic: %#v (%v)", validationErr, err)
+			}
+		})
+	}
+}
+
+func renderGoalList(catalog probe.GoalCatalog) string {
+	var rendered strings.Builder
+	for _, goal := range catalog {
+		rendered.WriteString(goal.ID)
+		rendered.WriteString(": ")
+		rendered.WriteString(goal.Text)
+		rendered.WriteByte('\n')
+	}
+	return rendered.String()
 }

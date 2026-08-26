@@ -1,0 +1,4 @@
+text-helpful-answer: Ask the assistant to explain how to make a cup of tea in three short steps.
+audio-spoken-answer: Ask the assistant a short question and listen to its spoken answer.
+tool-list-current-folder: Ask the assistant to tell you which files are in the current folder.
+multimodal-describe-picture: Give the assistant a picture of a red apple and ask it to describe what it sees.
