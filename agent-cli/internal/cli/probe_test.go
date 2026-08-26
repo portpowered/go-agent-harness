@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -227,6 +230,140 @@ func TestProbeRunBadOutputParentDirectoryErrors(t *testing.T) {
 }
 
 const probeFixtureDir = "../../../go-llm-gateway/pkg/testing/testdata/session-fixtures"
+
+const probeReportFixtureDir = "testdata/probe-reports"
+
+func executeCLIWithInput(input string, args ...string) cliExecution {
+	root := newTestRootCommand()
+	var stdout, stderr bytes.Buffer
+	root.SetIn(strings.NewReader(input))
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(args)
+
+	exitCode := 0
+	if root.Execute() != nil {
+		exitCode = 1
+	}
+	return cliExecution{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
+}
+
+func TestProbeReportAggregatesFixtureArtifactsAndWritesBothOutputs(t *testing.T) {
+	dir := t.TempDir()
+	jsonPath := filepath.Join(dir, "friction.json")
+	summaryPath := filepath.Join(dir, "friction.txt")
+
+	run := executeCLI(
+		"probe", "report",
+		"--out", filepath.Join(probeReportFixtureDir, "run-a.jsonl"),
+		"--out", filepath.Join(probeReportFixtureDir, "run-b.jsonl"),
+		"--json", jsonPath,
+		"--summary", summaryPath,
+	)
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1 for fixture failures; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	if run.stdout != "" || run.stderr != "" {
+		t.Fatalf("file outputs leaked to process streams: stdout=%q stderr=%q", run.stdout, run.stderr)
+	}
+
+	jsonBytes, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("read JSON report: %v", err)
+	}
+	var report probe.FrictionReport
+	if err := json.Unmarshal(jsonBytes, &report); err != nil {
+		t.Fatalf("decode JSON report %q: %v", jsonBytes, err)
+	}
+	if report.Total != 4 || report.Passed != 2 || report.Failed != 2 || report.Stuck != 0 {
+		t.Fatalf("report totals = %+v, want total=4 passed=2 failed=2 stuck=0", report)
+	}
+	wantScenarios := []probe.ScenarioRollup{
+		{Name: "checkout", Total: 2, Passed: 1, Failed: 1},
+		{Name: "profile", Total: 1, Passed: 1},
+		{Name: "search", Total: 1, Failed: 1},
+	}
+	if !reflect.DeepEqual(report.Scenarios, wantScenarios) {
+		t.Fatalf("scenario rollups = %#v, want %#v", report.Scenarios, wantScenarios)
+	}
+
+	summaryBytes, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatalf("read summary: %v", err)
+	}
+	summary := string(summaryBytes)
+	for _, want := range []string{
+		"Probe friction report",
+		"Scenarios: 4 total, 2 passed, 2 failed, 0 stuck",
+		"checkout: total=2 passed=1 failed=1 stuck=0",
+		"authentication: 1",
+		"rate_limited: 1",
+		"Health: fail",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("summary %q does not contain %q", summary, want)
+		}
+	}
+}
+
+func TestProbeReportNoFailAndStdinUseDefaultStreams(t *testing.T) {
+	input := `{"name":"stdin-case","pass":false,"expectations":[],"terminal_reason":"error:transport","error":"connection reset"}
+{"total":1,"passed":0,"failed":1,"status":"fail"}
+`
+	run := executeCLIWithInput(input, "probe", "report", "--out", "-", "--no-fail")
+	if run.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0 with --no-fail; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	var report probe.FrictionReport
+	if err := json.Unmarshal([]byte(run.stdout), &report); err != nil {
+		t.Fatalf("decode stdout report %q: %v", run.stdout, err)
+	}
+	if report.Total != 1 || report.Failed != 1 || report.Scenarios[0].Name != "stdin-case" {
+		t.Fatalf("stdin report = %+v", report)
+	}
+	if !strings.Contains(run.stderr, "Health: fail") {
+		t.Fatalf("default summary stderr = %q", run.stderr)
+	}
+}
+
+func TestProbeReportMalformedAndMissingInputsAreTyped(t *testing.T) {
+	dir := t.TempDir()
+	malformed := filepath.Join(dir, "malformed.jsonl")
+	if err := os.WriteFile(malformed, []byte("{\"name\":\"ok\",\"pass\":true}\nnot-json\n"), 0o644); err != nil {
+		t.Fatalf("write malformed fixture: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		path       string
+		wantLine   int
+		wantErr    error
+		wantSource string
+	}{
+		{name: "malformed line", path: malformed, wantLine: 2, wantErr: probe.ErrMalformedReport, wantSource: malformed},
+		{name: "missing file", path: filepath.Join(dir, "missing.jsonl"), wantLine: 0, wantErr: os.ErrNotExist, wantSource: filepath.Join(dir, "missing.jsonl")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := newTestRootCommand()
+			root.SetArgs([]string{"probe", "report", "--out", tt.path})
+			err := root.Execute()
+			if err == nil {
+				t.Fatal("expected report command error")
+			}
+			var reportErr *probe.FrictionReportError
+			if !errors.As(err, &reportErr) {
+				t.Fatalf("error = %v, want *probe.FrictionReportError", err)
+			}
+			if reportErr.Source != tt.wantSource || reportErr.Line != tt.wantLine {
+				t.Fatalf("error context = %+v, want source=%q line=%d", reportErr, tt.wantSource, tt.wantLine)
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, want errors.Is(..., %v)", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func TestProbeRunErrorAuthSuiteOfflineExitZero(t *testing.T) {
 	run := executeCLI("probe", "run", "--replay", probeFixtureDir, "--json",

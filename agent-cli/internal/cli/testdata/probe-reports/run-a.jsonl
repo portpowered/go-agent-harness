@@ -1,0 +1,3 @@
+{"name":"checkout","pass":true,"expectations":[],"ticks":4,"frames":2,"terminal_reason":"disconnect"}
+{"name":"search","pass":false,"expectations":[],"ticks":3,"frames":1,"terminal_reason":"error:rate_limited","error":"provider rate limit"}
+{"total":2,"passed":1,"failed":1,"status":"fail"}
