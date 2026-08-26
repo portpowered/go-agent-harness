@@ -37,7 +37,8 @@
     "input_source": {
       "kind": "embedded_asset",
       "asset_id": "red-apple-image",
-      "media_type": "image/png"
+      "media_type": "image/png",
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAABLElEQVR4nOyaP9IBQRDFv0/tEQRKJFIkYokqqYO4gAsoJ3EEoVSVG0gokVDkCiugNsD29vbM7NuZer+EYP6837RZwXaW5/lfzHTQAVyhABoKoKGAA6PN3H2R/4b/B4TQl/XBsGCjFZCP3FaQsBVYTvvF9+NiqJlStw68xDqUx28g0ww6DybG5Xvvz9n+qnT42Gt8O8njKwTs0T3xCiBoSD8hv+l324d5jJCkVCDE2csOGsNvVHfAI7aUAnyMoqEAmrCXeHXvBl0/hQpQAA0F0FAADQXQUAANBdBQAA0F0FAADQXQUAANBdBQAA0F0KQrUPmCtiVIFWiPg5BE1ewBfN1deYg1ulUMGsX2LnNlarfbKKP83N5lbhlNd2x5J93HaCxQAE30As8AAAD//0/WUFnpgb3iAAAAAElFTkSuQmCC"
     }
   }
 ]

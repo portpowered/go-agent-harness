@@ -44,8 +44,23 @@ var requiredGoalDefinitions = [...]requiredGoalDefinition{
 	{id: GoalIDMultimodalDescribePicture, capability: CapabilityMultimodalInput},
 }
 
-// Capability is a compatibility alias for callers that use the shorter name.
-type Capability = CapabilityArea
+// GoalInputSourceKind identifies how a non-text input is supplied to a goal.
+type GoalInputSourceKind string
+
+const (
+	GoalInputSourceEmbeddedAsset GoalInputSourceKind = "embedded_asset"
+	GoalInputAssetRedApple                           = "red-apple-image"
+)
+
+// GoalInputSource is catalog-owned non-text input. Data is decoded from the
+// JSON asset as bytes, so a fleet adapter can attach it without a path, network
+// lookup, or extra field on GoalRunInput.
+type GoalInputSource struct {
+	Kind      GoalInputSourceKind `json:"kind"`
+	AssetID   string              `json:"asset_id"`
+	MediaType string              `json:"media_type"`
+	Data      []byte              `json:"data"`
+}
 
 // ArtifactExpectation describes objective evidence in a recorded probe
 // artifact. It deliberately does not contain a subjective probe verdict.
@@ -77,9 +92,6 @@ func (g Goal) CapabilityArea() CapabilityArea { return g.Capability }
 // Ordering is part of the catalog contract and is stable across loads.
 type GoalCatalog []Goal
 
-// Catalog is a shorter compatibility name for GoalCatalog.
-type Catalog = GoalCatalog
-
 var (
 	// ErrInvalidGoalCatalog is the broad class for rejected goal catalogs.
 	ErrInvalidGoalCatalog = errors.New("probe: invalid goal catalog")
@@ -99,6 +111,10 @@ var (
 	ErrUnknownGoalCapability = errors.New("probe: unknown goal capability")
 	// ErrGoalCapabilityMismatch identifies a required goal assigned to another area.
 	ErrGoalCapabilityMismatch = errors.New("probe: goal capability mismatch")
+	// ErrMissingGoalInputSource identifies a multimodal goal without an input.
+	ErrMissingGoalInputSource = errors.New("probe: missing goal input source")
+	// ErrInvalidGoalInputSource identifies an unknown or incomplete input.
+	ErrInvalidGoalInputSource = errors.New("probe: invalid goal input source")
 	// ErrMissingGoalExpectation identifies a goal without objective artifact evidence.
 	ErrMissingGoalExpectation = errors.New("probe: missing goal expectation")
 	// ErrGoalTextNotBlindProbeReady identifies goal text that gives a probe
@@ -267,8 +283,15 @@ func (c GoalCatalog) Validate() error {
 				Reason: "must describe objective recorded evidence",
 			}
 		}
-		if err := validateGoalInputSource(index, goal); err != nil {
-			return err
+		if goal.Capability == CapabilityMultimodalInput {
+			if goal.InputSource == nil {
+				return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrMissingGoalInputSource, Reason: "multimodal goals require a deterministic image"}
+			}
+			if goal.InputSource.Kind != GoalInputSourceEmbeddedAsset || goal.InputSource.AssetID != GoalInputAssetRedApple || goal.InputSource.MediaType != "image/png" || len(goal.InputSource.Data) == 0 {
+				return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrInvalidGoalInputSource, Reason: "must contain the shipped red apple PNG asset"}
+			}
+		} else if goal.InputSource != nil {
+			return &GoalCatalogValidationError{Index: index, GoalID: goal.ID, Field: "input_source", Kind: ErrInvalidGoalInputSource, Reason: "only multimodal goals may declare an input source"}
 		}
 	}
 
@@ -354,16 +377,5 @@ func LoadGoalCatalog() (GoalCatalog, error) {
 	if err := catalog.Validate(); err != nil {
 		return nil, fmt.Errorf("validate embedded goal catalog: %w", err)
 	}
-	for _, goal := range catalog {
-		if goal.InputSource == nil {
-			continue
-		}
-		if _, err := LoadGoalInputAsset(goal); err != nil {
-			return nil, fmt.Errorf("load embedded goal input for %q: %w", goal.ID, err)
-		}
-	}
 	return catalog, nil
 }
-
-// LoadCatalog is the concise spelling of LoadGoalCatalog for fleet consumers.
-func LoadCatalog() (GoalCatalog, error) { return LoadGoalCatalog() }

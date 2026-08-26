@@ -74,9 +74,9 @@ func TestLoadGoalCatalogIsDeterministicAcrossCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first LoadGoalCatalog: %v", err)
 	}
-	second, err := probe.LoadCatalog()
+	second, err := probe.LoadGoalCatalog()
 	if err != nil {
-		t.Fatalf("second LoadCatalog: %v", err)
+		t.Fatalf("second LoadGoalCatalog: %v", err)
 	}
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("catalog order/content changed across loads:\n first %#v\nsecond %#v", first, second)
@@ -192,7 +192,7 @@ func TestGoalCatalogValidationRejectsCapabilityDegradation(t *testing.T) {
 	}
 }
 
-func TestMultimodalGoalRunInputResolvesEmbeddedAsset(t *testing.T) {
+func TestMultimodalGoalRunInputCarriesCatalogDeclaredAsset(t *testing.T) {
 	catalog, err := probe.LoadGoalCatalog()
 	if err != nil {
 		t.Fatalf("LoadGoalCatalog: %v", err)
@@ -221,17 +221,13 @@ func TestMultimodalGoalRunInputResolvesEmbeddedAsset(t *testing.T) {
 		t.Fatalf("multimodal asset ID = %q, want %q", multimodal.InputSource.AssetID, probe.GoalInputAssetRedApple)
 	}
 
-	first, err := catalog.ResolveInputAsset(runInput)
-	if err != nil {
-		t.Fatalf("ResolveInputAsset: %v", err)
+	if runInput.GoalID != multimodal.ID || runInput.GoalText != multimodal.Text {
+		t.Fatalf("multimodal run input = %#v, want exact catalog identity/text", runInput)
 	}
-	if first == nil {
-		t.Fatal("multimodal run input resolved without an asset")
+	if multimodal.InputSource.MediaType != "image/png" || len(multimodal.InputSource.Data) == 0 {
+		t.Fatalf("catalog asset metadata = %#v, want non-empty PNG asset", multimodal.InputSource)
 	}
-	if first.ID != multimodal.InputSource.AssetID || first.MediaType != "image/png" || len(first.Bytes) == 0 {
-		t.Fatalf("resolved asset metadata = %#v, want non-empty PNG asset", first)
-	}
-	decoded, err := png.Decode(bytes.NewReader(first.Bytes))
+	decoded, err := png.Decode(bytes.NewReader(multimodal.InputSource.Data))
 	if err != nil {
 		t.Fatalf("decode resolved image: %v", err)
 	}
@@ -254,20 +250,12 @@ func TestMultimodalGoalRunInputResolvesEmbeddedAsset(t *testing.T) {
 		t.Fatalf("resolved image colors = red:%d green:%d, want red apple body and leaf", redPixels, greenPixels)
 	}
 
-	second, err := probe.ResolveGoalInputAsset(catalog, runInput)
+	second, err := probe.LoadGoalCatalog()
 	if err != nil {
-		t.Fatalf("ResolveGoalInputAsset: %v", err)
+		t.Fatalf("second LoadGoalCatalog: %v", err)
 	}
-	if !bytes.Equal(first.Bytes, second.Bytes) {
-		t.Fatal("repeated asset resolution is not deterministic")
-	}
-	first.Bytes[0] ^= 0xff
-	third, err := catalog.ResolveInputAsset(runInput)
-	if err != nil {
-		t.Fatalf("ResolveInputAsset after caller mutation: %v", err)
-	}
-	if !bytes.Equal(second.Bytes, third.Bytes) {
-		t.Fatal("resolved asset bytes share mutable storage")
+	if !bytes.Equal(second[len(second)-1].InputSource.Data, multimodal.InputSource.Data) {
+		t.Fatal("repeated catalog loading is not deterministic")
 	}
 }
 
