@@ -214,6 +214,70 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 	}
 }
 
+func TestPlanSessionRuntime_OpenAIReplayUsesToolDefinitionsOnlyWhenCaptureAdvertisesTools(t *testing.T) {
+	definition := messages.ToolDefinition{
+		Name:        "exec",
+		Description: "execute a command",
+		Parameters: []messages.ToolParameter{{
+			Name:     "command",
+			Type:     "string",
+			Required: true,
+		}},
+	}
+
+	cases := []struct {
+		name          string
+		sessionUpdate string
+		wantProvider  int
+	}{
+		{
+			name:          "historical capture without tools",
+			sessionUpdate: `{"type":"session.update","session":{"model":"gpt-realtime"}}`,
+			wantProvider:  0,
+		},
+		{
+			name:          "strict capture with tools",
+			sessionUpdate: `{"type":"session.update","session":{"model":"gpt-realtime","tools":[]}}`,
+			wantProvider:  1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "openai-replay.session.json")
+			writeOpenAIReplayCapture(t, path, tc.sessionUpdate)
+
+			replayDialer := &stubReplayDialer{
+				stubRuntimeDialer: stubRuntimeDialer{id: "openai-replay"},
+				model:             "gpt-realtime",
+				done:              make(chan struct{}),
+			}
+			var gotProviderDefinitions []messages.ToolDefinition
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
+				ReplayPath:      path,
+				ToolDefinitions: []messages.ToolDefinition{definition},
+			}, sessionRuntimeFactory{
+				newReplayDialer: func(string) (sessionReplayDialer, error) {
+					return replayDialer, nil
+				},
+				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ transport.Dialer, definitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+					gotProviderDefinitions = definitions
+					return &scriptedSessionInferencer{}, nil
+				},
+			})
+			if err != nil {
+				t.Fatalf("planSessionRuntimeWithFactory: %v", err)
+			}
+			if len(gotProviderDefinitions) != tc.wantProvider {
+				t.Fatalf("provider tool definitions = %#v, want %d definitions", gotProviderDefinitions, tc.wantProvider)
+			}
+			if len(plan.loop.ToolDefinitions) != 1 {
+				t.Fatalf("replay loop tool definitions = %#v, want selected definition retained for loop execution", plan.loop.ToolDefinitions)
+			}
+		})
+	}
+}
+
 type failingWriter struct {
 	err error
 }
@@ -676,6 +740,47 @@ func writeGenericSessionCapture(t *testing.T, path string, records []gwtesting.C
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("write replay capture: %v", err)
+	}
+}
+
+func writeOpenAIReplayCapture(t *testing.T, path, sessionUpdate string) {
+	t.Helper()
+	writeSessionCapture(t, path, gwtesting.SessionCapture{
+		Version: gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{
+			Name:  sessionProviderOpenAI,
+			Model: "gpt-realtime",
+		},
+		Session: gwtesting.SessionMetadata{ID: "sess-openai-replay-test"},
+		Records: []gwtesting.CapturedSessionEvent{
+			{
+				Sequence:    1,
+				Direction:   gwtesting.DirectionClientToServer,
+				TimestampMs: 0,
+				Type:        "session.update",
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(sessionUpdate),
+			},
+			{
+				Sequence:    2,
+				Direction:   gwtesting.DirectionServerToClient,
+				TimestampMs: 1,
+				Type:        "session.created",
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.created","session":{"id":"sess-openai-replay-test","model":"gpt-realtime"}}`),
+			},
+		},
+	})
+}
+
+func writeSessionCapture(t *testing.T, path string, capture gwtesting.SessionCapture) {
+	t.Helper()
+	data, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal session capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write session capture: %v", err)
 	}
 }
 
