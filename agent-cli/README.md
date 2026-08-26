@@ -54,6 +54,7 @@ These are the supported consumer-facing command groups:
 | `agent ask [prompt] [files...]` | One-shot prompts, optional file inputs, stdin piping, JSON output, and iterative `--loop` runs. |
 | `agent chat` | Interactive multi-turn chat, with optional audio input and iterative loop mode. |
 | `agent tool <tool-id> key=value...` | Direct tool invocation for debugging tool behavior outside a full model run. |
+| `agent probe acceptance <binary> <goal>` | Run one blind, artifact-backed acceptance probe in a fresh empty directory. |
 | `agent session ...` | Live session capture, offline replay, and stored session inspection via `show`, `list`, and `delete`. |
 | `agent config add-local ...` | Write a local provider entry into the CLI config for OpenAI-compatible local inference servers. |
 
@@ -74,6 +75,9 @@ agent chat
 
 # Tool debugging
 agent tool read_file path=./README.md
+
+# Blind acceptance probe (the probe receives only the binary, goal, and empty cwd)
+agent probe acceptance ./probe-agent "Create the requested result"
 
 # Provider-neutral interaction fixture replay
 agent interaction replay fixtures/demo.interaction.json
