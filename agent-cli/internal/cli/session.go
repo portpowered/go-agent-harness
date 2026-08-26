@@ -85,6 +85,38 @@ func (e *SessionSignalingError) Unwrap() error {
 	return ErrSessionSignalingRequiresWebRTC
 }
 
+// SessionMediaSourceError describes an invalid relationship between the
+// --media-source, --audio-in, and --transport flags before session setup.
+type SessionMediaSourceError struct {
+	Transport string
+	Source    string
+	AudioIn   bool
+	Empty     bool
+}
+
+func (e *SessionMediaSourceError) Error() string {
+	if e == nil {
+		return ErrSessionMediaSourceRequiresWebRTC.Error()
+	}
+	if e.AudioIn {
+		return "--media-source cannot be combined with --audio-in; provide only one audio input (the --media-source and --audio-in flags are incompatible)"
+	}
+	if e.Empty {
+		return "--media-source requires a non-empty URL; provide --media-source <url>"
+	}
+	return fmt.Sprintf("--media-source requires --transport %q; got --transport %q (the --media-source and --transport flags are incompatible)", SessionTransportWebRTC, e.Transport)
+}
+
+func (e *SessionMediaSourceError) Unwrap() error {
+	if e != nil && e.AudioIn {
+		return ErrSessionMediaSourceConflictsWithAudioIn
+	}
+	if e != nil && e.Empty {
+		return ErrSessionMediaSourceEmpty
+	}
+	return ErrSessionMediaSourceRequiresWebRTC
+}
+
 // ErrSessionSignalingRequiresWebRTC identifies --signaling used without the
 // WebRTC transport.
 var ErrSessionSignalingRequiresWebRTC = errors.New("session signaling requires WebRTC transport")
@@ -92,6 +124,18 @@ var ErrSessionSignalingRequiresWebRTC = errors.New("session signaling requires W
 // ErrSessionWebRTCRequiresSignaling identifies WebRTC selected without an
 // endpoint for its signaling exchange.
 var ErrSessionWebRTCRequiresSignaling = errors.New("WebRTC session transport requires signaling")
+
+// ErrSessionMediaSourceRequiresWebRTC identifies --media-source used without
+// the WebRTC transport.
+var ErrSessionMediaSourceRequiresWebRTC = errors.New("session media source requires WebRTC transport")
+
+// ErrSessionMediaSourceConflictsWithAudioIn identifies --media-source used
+// together with --audio-in.
+var ErrSessionMediaSourceConflictsWithAudioIn = errors.New("session media source conflicts with audio input")
+
+// ErrSessionMediaSourceEmpty identifies an explicitly provided empty
+// --media-source value.
+var ErrSessionMediaSourceEmpty = errors.New("session media source is empty")
 
 func validateSessionTransport(raw string) (string, error) {
 	transport := strings.ToLower(strings.TrimSpace(raw))
@@ -253,6 +297,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	audioOutPath := ""
 	transport := SessionTransportWebSocket
 	signaling := ""
+	mediaSource := ""
 	var maxDuration time.Duration
 	var waitForClose bool
 	var audioIn string
@@ -277,6 +322,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return err
 			}
 			if err := validateSessionSignaling(selectedTransport, signaling, cmd.Flags().Changed("signaling")); err != nil {
+				return err
+			}
+			if err := validateSessionMediaSource(selectedTransport, mediaSource, cmd.Flags().Changed("media-source"), cmd.Flags().Changed("audio-in")); err != nil {
 				return err
 			}
 			if err := services.ValidateSessionAudioDeviceConflicts(
@@ -462,6 +510,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
+	cmd.Flags().StringVar(&mediaSource, "media-source", "", "External media source URL; requires --transport webrtc and cannot be combined with --audio-in")
 	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default) or webrtc")
 	cmd.Flags().StringVar(&signaling, "signaling", "", "WebRTC signaling endpoint; requires --transport webrtc, and --transport webrtc requires this flag")
 	return cmd
@@ -473,6 +522,22 @@ func validateSessionSignaling(transport, signaling string, provided bool) error 
 	}
 	if transport == SessionTransportWebRTC && strings.TrimSpace(signaling) == "" {
 		return &SessionSignalingError{Transport: transport, Missing: true}
+	}
+	return nil
+}
+
+func validateSessionMediaSource(transport, source string, provided, audioInProvided bool) error {
+	if !provided {
+		return nil
+	}
+	if audioInProvided {
+		return &SessionMediaSourceError{Transport: transport, Source: source, AudioIn: true}
+	}
+	if transport != SessionTransportWebRTC {
+		return &SessionMediaSourceError{Transport: transport, Source: source}
+	}
+	if strings.TrimSpace(source) == "" {
+		return &SessionMediaSourceError{Transport: transport, Source: source, Empty: true}
 	}
 	return nil
 }

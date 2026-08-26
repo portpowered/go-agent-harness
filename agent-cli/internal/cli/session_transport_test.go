@@ -27,6 +27,8 @@ func TestSessionCommandTransportHelpDocumentsSupportedValues(t *testing.T) {
 		"--signaling string",
 		"requires --transport webrtc",
 		"--transport webrtc requires this flag",
+		"--media-source string",
+		"cannot be combined with --audio-in",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("session help does not document %q:\n%s", want, help)
@@ -125,12 +127,78 @@ func TestSessionCommandAcceptsWebRTCWithSignaling(t *testing.T) {
 	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	var out bytes.Buffer
 	command.SetOut(&out)
-	command.SetArgs([]string{"--transport", "webrtc", "--signaling", " loopback "})
+	command.SetArgs([]string{"--transport", "webrtc", "--signaling", " loopback ", "--media-source", "rtsp://fixture/camera"})
 
 	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("--transport webrtc --signaling loopback: %v", err)
+		t.Fatalf("--transport webrtc --signaling loopback --media-source: %v", err)
 	}
 	if !strings.Contains(out.String(), "Usage:") {
 		t.Fatalf("accepted transport selection did not reach the normal session help path: %q", out.String())
+	}
+}
+
+func TestSessionCommandMediaSourceWithoutWebRTCIsRejectedBeforeSessionSetup(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	command.SetArgs([]string{"--media-source", "rtsp://fixture/camera"})
+
+	err := command.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("--media-source without --transport webrtc returned nil")
+	}
+	var mediaErr *SessionMediaSourceError
+	if !errors.As(err, &mediaErr) {
+		t.Fatalf("error type = %T, want *SessionMediaSourceError: %v", err, err)
+	}
+	if !errors.Is(err, ErrSessionMediaSourceRequiresWebRTC) {
+		t.Fatalf("error does not preserve media-source classification: %v", err)
+	}
+	for _, want := range []string{"--media-source", "--transport", "webrtc", "ws"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+}
+
+func TestSessionCommandMediaSourceWithAudioInIsRejectedBeforeSessionSetup(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	command.SetArgs([]string{
+		"--transport", "webrtc",
+		"--signaling", "loopback",
+		"--media-source", "rtsp://fixture/camera",
+		"--audio-in", "fixture.wav",
+	})
+
+	err := command.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("--media-source with --audio-in returned nil")
+	}
+	var mediaErr *SessionMediaSourceError
+	if !errors.As(err, &mediaErr) {
+		t.Fatalf("error type = %T, want *SessionMediaSourceError: %v", err, err)
+	}
+	if !errors.Is(err, ErrSessionMediaSourceConflictsWithAudioIn) {
+		t.Fatalf("error does not preserve media/audio conflict classification: %v", err)
+	}
+	for _, want := range []string{"--media-source", "--audio-in", "incompatible"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+}
+
+func TestValidateSessionMediaSourceRejectsEmptyExplicitValue(t *testing.T) {
+	err := validateSessionMediaSource(SessionTransportWebRTC, " ", true, false)
+	if err == nil {
+		t.Fatal("empty --media-source value returned nil")
+	}
+	var mediaErr *SessionMediaSourceError
+	if !errors.As(err, &mediaErr) {
+		t.Fatalf("error type = %T, want *SessionMediaSourceError: %v", err, err)
+	}
+	if !errors.Is(err, ErrSessionMediaSourceEmpty) {
+		t.Fatalf("error does not preserve empty media-source classification: %v", err)
+	}
+	if !strings.Contains(err.Error(), "--media-source") {
+		t.Fatalf("error %q does not name --media-source", err)
 	}
 }
