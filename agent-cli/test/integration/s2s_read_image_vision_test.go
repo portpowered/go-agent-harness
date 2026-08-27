@@ -3,7 +3,9 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image/color"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -28,6 +31,7 @@ const (
 	readImageNegativeFixtureName = "read_image_negative.session.json"
 	readImagePathPlaceholder     = "__READ_IMAGE_PATH__"
 	readImageDataPlaceholder     = "__READ_IMAGE_DATA_URL__"
+	readImageResultPlaceholder   = "__READ_IMAGE_RESULT__"
 	readImageCallID              = "call_read_image_1"
 )
 
@@ -120,13 +124,25 @@ func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath st
 	t.Helper()
 	capture := captureCopy(t, committedPath)
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	digest := sha256.Sum256(imageBytes)
+	result, err := json.Marshal(tools.ReadImageResult{
+		Version:    tools.ReadImageResultVersion,
+		Status:     tools.ReadImageResultStatusSuccess,
+		MIMEType:   "image/png",
+		ByteLength: len(imageBytes),
+		SHA256:     hex.EncodeToString(digest[:]),
+		DataURL:    dataURL,
+	})
+	if err != nil {
+		t.Fatalf("marshal read_image result envelope: %v", err)
+	}
 	for index := range capture.Records {
 		record := &capture.Records[index]
 		payload := record.Payload
 		if len(payload) == 0 {
 			payload = record.Data
 		}
-		record.Payload = rewriteReadImagePayload(t, payload, imagePath, dataURL)
+		record.Payload = rewriteReadImagePayload(t, payload, imagePath, dataURL, string(result))
 		record.Data = nil
 	}
 	path := filepath.Join(t.TempDir(), filepath.Base(committedPath))
@@ -143,7 +159,7 @@ func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath st
 	return path
 }
 
-func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataURL string) json.RawMessage {
+func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataURL, result string) json.RawMessage {
 	t.Helper()
 	var value any
 	if err := json.Unmarshal(raw, &value); err != nil {
@@ -153,6 +169,9 @@ func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataU
 	rewrite = func(current any) any {
 		switch typed := current.(type) {
 		case string:
+			if typed == readImageResultPlaceholder {
+				return result
+			}
 			return strings.ReplaceAll(strings.ReplaceAll(typed, readImagePathPlaceholder, imagePath), readImageDataPlaceholder, dataURL)
 		case []any:
 			for index := range typed {

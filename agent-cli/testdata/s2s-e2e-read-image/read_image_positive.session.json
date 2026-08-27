@@ -147,7 +147,7 @@
         "item": {
           "type": "function_call_output",
           "call_id": "call_read_image_1",
-          "output": ""
+          "output": "__READ_IMAGE_RESULT__"
         }
       }
     },
@@ -162,6 +162,9 @@
         "item": {
           "type": "message",
           "role": "user",
+          "metadata": {
+            "tool_call_id": "call_read_image_1"
+          },
           "content": [
             {
               "type": "input_image",
