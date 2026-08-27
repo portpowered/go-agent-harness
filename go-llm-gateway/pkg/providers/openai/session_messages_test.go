@@ -198,10 +198,10 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	var imageItem struct {
 		Type string `json:"type"`
 		Item struct {
-			Type     string            `json:"type"`
-			Role     string            `json:"role"`
-			Metadata map[string]string `json:"metadata"`
-			Content  []struct {
+			Type    string `json:"type"`
+			Role    string `json:"role"`
+			ID      string `json:"id"`
+			Content []struct {
 				Type     string `json:"type"`
 				ImageURL string `json:"image_url"`
 			} `json:"content"`
@@ -213,8 +213,8 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if imageItem.Type != "conversation.item.create" || imageItem.Item.Type != "message" || imageItem.Item.Role != string(messages.RoleUser) || len(imageItem.Item.Content) != 1 {
 		t.Fatalf("tool image event = %#v, want one user image message", imageItem)
 	}
-	if imageItem.Item.Metadata["tool_call_id"] != msg.ToolCallID {
-		t.Fatalf("tool image metadata = %#v, want correlation to %q", imageItem.Item.Metadata, msg.ToolCallID)
+	if imageItem.Item.ID != realtimeToolImageItemID(msg.ToolCallID) {
+		t.Fatalf("tool image item ID = %q, want correlation ID %q", imageItem.Item.ID, realtimeToolImageItemID(msg.ToolCallID))
 	}
 	if imageItem.Item.Content[0].Type != "input_image" || imageItem.Item.Content[0].ImageURL != wantURL {
 		t.Fatalf("tool image content = %#v, want exact PNG data URL", imageItem.Item.Content[0])

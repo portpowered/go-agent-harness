@@ -138,11 +138,9 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 	if len(imageParts) > 0 {
 		imageData, err := json.Marshal(map[string]any{
 			"item": map[string]any{
-				"type": "message",
-				"role": string(messages.RoleUser),
-				"metadata": map[string]string{
-					"tool_call_id": msg.ToolCallID,
-				},
+				"type":    "message",
+				"role":    string(messages.RoleUser),
+				"id":      realtimeToolImageItemID(msg.ToolCallID),
 				"content": imageContent,
 			},
 		})
@@ -158,6 +156,14 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 		events = append(events, models.NewResponseCreateEvent())
 	}
 	return events, true
+}
+
+// realtimeToolImageItemID uses the documented client-supplied ID on a
+// Realtime user message to correlate a typed image projection with the
+// function_call_output that carries the same tool result. The provider's user
+// message schema does not define an extensible metadata field.
+func realtimeToolImageItemID(toolCallID string) string {
+	return "item_tool_result_" + toolCallID
 }
 
 // fallbackRealtimeImageResult keeps the provider boundary lossless for older

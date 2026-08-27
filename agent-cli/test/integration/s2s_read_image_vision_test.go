@@ -390,12 +390,12 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 		case "conversation.item.create":
 			var event struct {
 				Item struct {
-					Type     string            `json:"type"`
-					CallID   string            `json:"call_id"`
-					Output   string            `json:"output"`
-					Role     string            `json:"role"`
-					Metadata map[string]string `json:"metadata"`
-					Content  []struct {
+					Type    string `json:"type"`
+					CallID  string `json:"call_id"`
+					Output  string `json:"output"`
+					Role    string `json:"role"`
+					ID      string `json:"id"`
+					Content []struct {
 						Type     string `json:"type"`
 						ImageURL string `json:"image_url"`
 					} `json:"content"`
@@ -431,7 +431,7 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 					t.Fatalf("function_call_output data URL does not decode to fixture bytes: decode error=%v, bytes=%d want=%d", err, len(decoded), len(expectedBytes))
 				}
 			case "message":
-				if event.Item.Metadata["tool_call_id"] != readImageCallID {
+				if event.Item.ID != "item_tool_result_"+readImageCallID {
 					continue
 				}
 				imageItemCount++
