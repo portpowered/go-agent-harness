@@ -113,6 +113,10 @@ type RoomObserver func(RoomResult)
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
 	Manifest room.Manifest
+	// OutputDir enables the durable room evidence bundle. An empty value keeps
+	// the service's observational-only mode for callers that do not need
+	// artifacts; the room CLI supplies a concrete, empty directory.
+	OutputDir string
 
 	SessionFactory     RoomSessionInferencerFactory
 	SessionInferencers map[string]messages.SessionInferencer
@@ -635,6 +639,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	if out == nil {
 		out = io.Discard
 	}
+	var err error
 
 	validation := opts.Validation
 	if opts.CredentialLookup != nil {
@@ -644,9 +649,39 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		return roomFailureResult(err, nil), err
 	}
 
+	var evidence *roomEvidence
+	var evidenceSecrets []string
+	startedAt := time.Now().UTC()
+	if strings.TrimSpace(opts.OutputDir) != "" {
+		outputDir, outputErr := prepareRoomEvidenceOutput(opts.OutputDir)
+		if outputErr != nil {
+			return roomFailureResult(outputErr, nil), outputErr
+		}
+		opts.OutputDir = outputDir
+		evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
+		evidence, err = newRoomEvidence(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt)
+		if err != nil {
+			return roomFailureResult(err, evidenceSecrets), err
+		}
+	}
+	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
+		if evidence == nil {
+			return result, runErr
+		}
+		finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
+		if finalizeErr != nil {
+			runErr = errors.Join(runErr, finalizeErr)
+			if result.Error == "" {
+				result.Error = sanitizeRoomError(finalizeErr, evidenceSecrets)
+			}
+		}
+		return result, runErr
+	}
+
 	plans, secrets, err := buildRoomParticipantPlans(opts, validation)
 	if err != nil {
-		return roomFailureResult(err, secrets), err
+		result := roomFailureResult(err, secrets)
+		return finalizeEvidence(result, err)
 	}
 
 	roomCtx, roomCancel := context.WithCancel(ctx)
@@ -656,27 +691,27 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	for _, plan := range plans {
 		if err := mesh.Join(roomCtx, plan.manifest.ID); err != nil {
 			safeErr := roomParticipantFailure(plan.manifest.ID, err, secrets)
-			return roomFailureResult(safeErr, secrets), safeErr
+			result := roomFailureResult(safeErr, secrets)
+			return finalizeEvidence(result, safeErr)
 		}
 	}
 
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.OnParticipantTerminated)
+	if evidence != nil {
+		evidence.setErrorHandler(func(participantID string, evidenceErr error) {
+			coordinator.fail(roomParticipantFailure(participantID, fmt.Errorf("record room evidence: %w", evidenceErr), secrets))
+		})
+	}
 	for _, plan := range plans {
 		participantCtx, participantCancel := context.WithCancel(roomCtx)
-		mixerConfig := opts.MixerConfig
-		if opts.PCMFormat != (room.PCM16Format{}) {
-			mixerConfig.Format = opts.PCMFormat
-		} else if opts.FrameSamples > 0 {
-			format := room.DefaultPCM16Format()
-			format.FrameDuration = time.Duration(opts.FrameSamples) * time.Second / time.Duration(format.SampleRate)
-			mixerConfig.Format = format
-		}
+		mixerConfig := roomMixerConfigForOptions(opts)
 		mixer, mixerErr := room.NewPCM16MixerWithConfig(participantCtx, mixerConfig)
 		if mixerErr != nil {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, mixerErr, secrets))
 			participantCancel()
 			roomErr := coordinator.roomError()
-			return roomFailureResult(roomErr, secrets), roomErr
+			result := roomFailureResult(roomErr, secrets)
+			return finalizeEvidence(result, roomErr)
 		}
 		runtime := &roomParticipantRuntime{
 			plan:      plan,
@@ -697,7 +732,8 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 				_ = mixer.Close()
 				participantCancel()
 				roomErr := coordinator.roomError()
-				return roomFailureResult(roomErr, secrets), roomErr
+				result := roomFailureResult(roomErr, secrets)
+				return finalizeEvidence(result, roomErr)
 			}
 		}
 		coordinator.addParticipant(runtime)
@@ -723,8 +759,17 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		go func(plan *roomParticipantPlan, runtime *roomParticipantRuntime) {
 			defer runWG.Done()
 			go pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, secrets)
-			observer := newSessionProgressObserver(nil, nil, plan.manifest.Provider, plan.manifest.Model)
+			participantEvidence := (*roomParticipantEvidence)(nil)
+			if evidence != nil {
+				participantEvidence = evidence.participant(plan.manifest.ID)
+			}
+			observer := newSessionProgressObserver(participantEvidence, nil, plan.manifest.Provider, plan.manifest.Model)
 			observer.streamObserver = func(msg messages.StreamMessage) {
+				if participantEvidence != nil {
+					if evidenceErr := participantEvidence.observeDelta(msg); evidenceErr != nil {
+						evidence.recordError(plan.manifest.ID, fmt.Errorf("write stream delta: %w", evidenceErr))
+					}
+				}
 				turns := runtime.lifecycle.observe(msg)
 				if msg.Type == messages.StreamTypeMessageEnd {
 					coordinator.noteTurn(plan.manifest.ID, turns)
@@ -738,6 +783,11 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 					return
 				}
 				pcm := append([]byte(nil), value.Content...)
+				if participantEvidence != nil {
+					if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
+						evidence.recordError(plan.manifest.ID, fmt.Errorf("write WAV audio: %w", evidenceErr))
+					}
+				}
 				if opts.OnAudioOutput != nil {
 					if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
 						coordinator.fail(roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
@@ -803,6 +853,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		coordinator.fail(errors.New("room ended without a terminal reason"))
 		reason, roomErr, participantResults, active = coordinator.snapshot()
 	}
+	if meshErr := mesh.Close(); meshErr != nil {
+		roomErr = errors.Join(roomErr, meshErr)
+	}
 	for _, plan := range plans {
 		if _, ok := participantResults[plan.manifest.ID]; ok {
 			continue
@@ -823,6 +876,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result.Error = sanitizeRoomError(roomErr, secrets)
 	}
 	result.ActiveParticipants = sortedRoomIDs(result.ActiveParticipants)
+	result, roomErr = finalizeEvidence(result, roomErr)
 	if opts.OnRoomTerminated != nil {
 		opts.OnRoomTerminated(result)
 	}
