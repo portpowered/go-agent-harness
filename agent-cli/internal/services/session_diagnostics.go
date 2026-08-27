@@ -407,10 +407,6 @@ func (o *sessionProgressObserver) noteToolResultRejected(callID string, outcome 
 	}
 }
 
-func (o *sessionProgressObserver) toolResultAcceptedEvents() <-chan struct{} {
-	return o.toolLifecycleEvents()
-}
-
 func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {
 	if o == nil {
 		return false
