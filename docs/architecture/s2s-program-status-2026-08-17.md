@@ -624,3 +624,13 @@ Provider `function_call_output` translation, serialization, and result
 forwarding remain owned by PR #181. This entry records a prerequisite only;
 v5a is not complete and must be rerun after this filter and PR #181 are both
 available.
+
+## 13. Vertical delivery: `s2s-v2b-audio-in-long` — 2026-08-25
+
+Append-only section, recorded by the `s2s-v2b-audio-in-long` lane.
+
+**Proven verticals (CLI-verified over the hermetic replay transport):**
+
+| vertical | evidence |
+|---|---|
+| `v2b-audio-in-long` | Proven on branch `s2s-v2b-audio-in-long` 2026-08-25 — `utt_long_16k.wav` (14.3 s, 228750 samples) streams `ceil(samples/480)` = 477 byte-exact `input_audio_buffer.append` events through the shipped `agent session --replay --audio-in` command and ends the turn with exactly one commit, one `response.create`, one completed response, and non-silent recorded output audio; a per-chunk-commit negative capture (differing only by an inserted commit after every append) fails the identical invocation with `expected outbound payload for input_audio_buffer.commit at sequence 4, actual input_audio_buffer.append`. Tests: `TestS2SV2BAudioInLongCLIStaysOneTurn`, `TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation` (`agent-cli/test/integration/s2s_v2b_audio_in_long_test.go`). Reuses committed corpus audio; replay fixtures are runtime-generated, no new audio blobs committed. Details: `docs/architecture/s2s-v2b-audio-in-long-proof.md`. |
