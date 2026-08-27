@@ -102,7 +102,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			apiKey:   "sk-scheduled-test-key",
 			plan:     planOpenAIRecordRuntime,
 			configure: func(factory *sessionRuntimeFactory) {
-				factory.newOpenAISessionInf = func(config.OpenAIConfig, transport.Dialer) (messages.SessionInferencer, error) {
+				factory.newOpenAISessionInf = func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error) {
 					return &scriptedSessionInferencer{}, nil
 				}
 			},

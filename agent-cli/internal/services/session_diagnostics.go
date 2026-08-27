@@ -60,6 +60,7 @@ const (
 	fieldProviderPromptTokens     = "provider_prompt_tokens"
 	fieldProviderCompletionTokens = "provider_completion_tokens"
 	fieldProviderTotalTokens      = "provider_total_tokens"
+	fieldProviderReasoningTokens  = "provider_reasoning_tokens"
 
 	fieldToolName              = "tool_name"
 	fieldToolCallID            = "tool_call_id"
@@ -160,6 +161,7 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 type sessionProgressObserver struct {
 	sink            SessionDiagnosticSink
 	recorder        metrics.Recorder
+	productionSink  *metrics.InMemorySink
 	streamObserver  SessionStreamObserver
 	runtime         *sessionRuntimeObservationRecorder
 	provider        string
@@ -179,6 +181,7 @@ type sessionProgressObserver struct {
 	usagePrompt     uint64
 	usageCompletion uint64
 	usageTotal      uint64
+	usageReasoning  uint64
 	usageSeen       bool
 
 	failure *failureFacts
@@ -188,21 +191,34 @@ type sessionProgressObserver struct {
 }
 
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {
+	productionSink, err := metrics.NewInMemorySink()
+	if err != nil {
+		// The default histogram configuration is package-owned and validated by
+		// NewInMemorySink. Reaching this branch means the production accounting
+		// invariant cannot be constructed, so fail immediately rather than
+		// publishing a partial terminal snapshot.
+		panic(err)
+	}
 	return &sessionProgressObserver{
-		sink:     sink,
-		recorder: recorder,
-		provider: provider,
-		model:    model,
+		sink:           sink,
+		recorder:       recorder,
+		productionSink: productionSink,
+		provider:       provider,
+		model:          model,
 	}
 }
 
-// account is the single observation seam: every counted byte crosses here
-// exactly once, forwarding to the metrics recorder and advancing both the
-// per-turn counters and the lifetime totals in one step. Recording failures
-// are diagnostics-only and never alter session behavior.
+// account is the single production accounting seam: every counted byte
+// crosses here exactly once, advancing the runtime-owned metrics sink, the
+// optional recorder, and both the per-turn counters and lifetime totals in one
+// step. Recording failures are diagnostics-only and never alter session
+// behavior.
 func (o *sessionProgressObserver) account(direction metrics.Direction, modality metrics.Modality, n int) {
 	if o == nil || n <= 0 {
 		return
+	}
+	if o.productionSink != nil {
+		_ = o.productionSink.Record(direction, modality, int64(n))
 	}
 	if o.recorder != nil {
 		_ = o.recorder.Record(direction, modality, int64(n))
@@ -301,19 +317,21 @@ func (o *sessionProgressObserver) scheduledAudioComplete() bool {
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on
-// MESSAGE.END so the terminal metrics matrix can surface both accounting
-// sources side by side.
+// MESSAGE.END. Each value is an incremental contribution for the completed
+// turn; the terminal runtime observation publishes the resulting
+// session-cumulative totals.
 func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
 	if o == nil {
 		return
 	}
-	if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens < 0 {
+	if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens < 0 || usage.ReasoningTokens < 0 {
 		return
 	}
 	o.usagePrompt += uint64(usage.PromptTokens)
 	o.usageCompletion += uint64(usage.CompletionTokens)
 	o.usageTotal += uint64(usage.TotalTokens)
-	if usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 {
+	o.usageReasoning += uint64(usage.ReasoningTokens)
+	if usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 || usage.ReasoningTokens != 0 {
 		o.usageSeen = true
 	}
 }
@@ -504,9 +522,29 @@ func (o *sessionProgressObserver) finish(err error) error {
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
 	if o.runtime != nil {
-		o.runtime.terminal(o.turnsCompleted, err)
+		o.runtime.terminalWithAccounting(o.turnsCompleted, err, o.finalAccounting())
 	}
 	return err
+}
+
+// finalAccounting captures the runtime-owned production counters only after
+// the session consumer has drained every accounted delta. The optional
+// MetricsRecorder and SessionStreamObserver are deliberately not consulted.
+func (o *sessionProgressObserver) finalAccounting() *SessionFinalAccounting {
+	if o == nil {
+		return nil
+	}
+	accounting := &SessionFinalAccounting{
+		PromptTokens:     o.usagePrompt,
+		CompletionTokens: o.usageCompletion,
+		TotalTokens:      o.usageTotal,
+		ReasoningTokens:  o.usageReasoning,
+		UsageSemantics:   SessionTokenUsageIncremental,
+	}
+	if o.productionSink != nil {
+		accounting.Metrics = o.productionSink.Snapshot()
+	}
+	return accounting
 }
 
 // emitMetricsMatrix emits the terminal per-direction/per-modality byte matrix
@@ -533,6 +571,7 @@ func (o *sessionProgressObserver) emitMetricsMatrix() {
 			fields[fieldProviderPromptTokens] = strconv.FormatUint(o.usagePrompt, 10)
 			fields[fieldProviderCompletionTokens] = strconv.FormatUint(o.usageCompletion, 10)
 			fields[fieldProviderTotalTokens] = strconv.FormatUint(o.usageTotal, 10)
+			fields[fieldProviderReasoningTokens] = strconv.FormatUint(o.usageReasoning, 10)
 		}
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event:  SessionDiagnosticEventMetrics,
