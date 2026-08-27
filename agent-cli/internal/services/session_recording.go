@@ -587,6 +587,16 @@ func (s *sessionDirectoryRecordingSession) SendMessageWithoutResponse(ctx contex
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *sessionDirectoryRecordingSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionDirectoryRecordingSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionDirectoryRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	payload, err := gwtesting.MarshalStreamMessage(msg)
 	audio := sessionRecordingAudio(msg)

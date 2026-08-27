@@ -117,6 +117,16 @@ func (s *sessionTextSeedSession) SendMessageWithoutResponse(ctx context.Context,
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *sessionTextSeedSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionTextSeedSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionTextSeedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }

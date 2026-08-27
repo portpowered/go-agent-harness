@@ -86,6 +86,23 @@ type SessionImageMessageSenderWithoutResponse interface {
 	SendMessageWithoutResponse(context.Context, messages.Message) bool
 }
 
+// sessionCompleteMessageCapabilities is implemented by provider sessions and
+// forwarded by session wrappers so the agent loop can distinguish an optional
+// capability from a wrapper method that merely returns false when unsupported.
+type sessionCompleteMessageCapabilities interface {
+	SupportsCompleteMessages() bool
+	SupportsCompleteMessagesWithoutResponse() bool
+}
+
+func completeMessageCapabilities(session messages.Session) (complete, withoutResponse bool) {
+	if capabilities, ok := session.(sessionCompleteMessageCapabilities); ok {
+		return capabilities.SupportsCompleteMessages(), capabilities.SupportsCompleteMessagesWithoutResponse()
+	}
+	_, complete = session.(SessionImageMessageSender)
+	_, withoutResponse = session.(SessionImageMessageSenderWithoutResponse)
+	return complete, withoutResponse
+}
+
 func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) (runErr error) {
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
@@ -466,6 +483,16 @@ func (s *sessionImageSession) SendMessage(ctx context.Context, msg messages.Mess
 func (s *sessionImageSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionImageSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *sessionImageSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
 }
 
 // signalFirstTurn reports the image-turn outcome to awaitSessionFirstTurn

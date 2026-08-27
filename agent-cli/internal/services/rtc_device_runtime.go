@@ -154,6 +154,16 @@ func (s *rtcDeviceBoundSession) SendMessageWithoutResponse(ctx context.Context, 
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *rtcDeviceBoundSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *rtcDeviceBoundSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 func (s *rtcDeviceBoundSession) Close() error {
 	if s == nil {
 		return nil

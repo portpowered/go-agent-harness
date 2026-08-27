@@ -495,6 +495,16 @@ func (s *sessionRTCRuntimeSession) SendMessageWithoutResponse(ctx context.Contex
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *sessionRTCRuntimeSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *sessionRTCRuntimeSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 func (s *sessionRTCRuntimeSession) Close() error {
 	if s == nil {
 		return nil

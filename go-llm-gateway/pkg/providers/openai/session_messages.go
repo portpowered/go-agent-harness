@@ -11,6 +11,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+// The OpenAI Realtime session supports both complete-message delivery modes,
+// allowing a mixed tool-result batch to request exactly one response.
+func (*realtimeSession) SupportsCompleteMessages() bool { return true }
+
+func (*realtimeSession) SupportsCompleteMessagesWithoutResponse() bool { return true }
+
 // SendMessage delivers a complete user message (text plus ordered image parts)
 // as exactly one conversation.item.create event followed by one response.create.
 func (s *realtimeSession) SendMessage(ctx context.Context, msg messages.Message) bool {

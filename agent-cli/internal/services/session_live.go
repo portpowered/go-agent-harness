@@ -494,6 +494,16 @@ func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg me
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *observedSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 func (s *observedSession) Close() error {
 	err := s.Session.Close()
 	s.markDone()

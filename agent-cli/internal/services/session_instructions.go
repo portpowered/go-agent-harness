@@ -421,6 +421,16 @@ func (s *sessionInstructionsSession) SendMessageWithoutResponse(ctx context.Cont
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *sessionInstructionsSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionInstructionsSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionInstructionsSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	return messages.SendSessionWithOutcome(ctx, s.inner, msg)
 }

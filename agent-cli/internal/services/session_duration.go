@@ -614,6 +614,16 @@ func (s *sessionDurationAdmissionSession) SendMessageWithoutResponse(ctx context
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
 
+func (s *sessionDurationAdmissionSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionDurationAdmissionSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionDurationAdmissionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }

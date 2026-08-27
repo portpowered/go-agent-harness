@@ -89,6 +89,48 @@ func (s *recordingSession) Close() error {
 	return nil
 }
 
+// streamOnlyRecordingSession intentionally exposes only the stream Session
+// contract. It verifies the model runner's compatibility fallback without
+// accidentally advertising complete-message support through a method set.
+type streamOnlyRecordingSession struct {
+	mu   sync.Mutex
+	sent []messages.StreamMessage
+	recv *messages.TypedBuffer[messages.StreamMessage]
+	done chan struct{}
+	once sync.Once
+}
+
+func newStreamOnlyRecordingSession() *streamOnlyRecordingSession {
+	return &streamOnlyRecordingSession{
+		recv: messages.NewTypedBuffer[messages.StreamMessage](8),
+		done: make(chan struct{}),
+	}
+}
+
+func (s *streamOnlyRecordingSession) Send(_ context.Context, msg messages.StreamMessage) bool {
+	s.mu.Lock()
+	s.sent = append(s.sent, msg)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *streamOnlyRecordingSession) sentMessages() []messages.StreamMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]messages.StreamMessage(nil), s.sent...)
+}
+
+func (s *streamOnlyRecordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.recv
+}
+
+func (s *streamOnlyRecordingSession) Done() <-chan struct{} { return s.done }
+
+func (s *streamOnlyRecordingSession) Close() error {
+	s.once.Do(func() { close(s.done) })
+	return nil
+}
+
 type failingConnectInferencer struct{ err error }
 
 func (f *failingConnectInferencer) ConnectSession(context.Context) (messages.Session, error) {
@@ -403,6 +445,124 @@ func TestModelRunner_SendLatestSessionToolResultsPreservesBatchOrder(t *testing.
 	sent := session.completeMessages()
 	if len(sent) != 1 || sent[0].ToolCallID != "call-2" {
 		t.Fatalf("final tool results = %#v, want call-2", sent)
+	}
+}
+
+func TestModelRunner_SendLatestSessionToolResultsMixedBatchUsesOneCompleteResponse(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+	imageBytes := []byte("image bytes")
+	history := []messages.Message{
+		messages.NewTextMessage(messages.RoleUser, "inspect both results"),
+		{
+			Role: messages.RoleAssistant,
+			ToolCalls: []messages.ToolCall{
+				{ID: "call-text", Name: "text_tool"},
+				{ID: "call-image", Name: "read_image"},
+			},
+		},
+		{
+			Role:         messages.RoleTool,
+			ToolCallID:   "call-text",
+			ContentParts: []messages.ContentPart{messages.TextPart{Text: "text result"}},
+		},
+		{
+			Role:       messages.RoleTool,
+			ToolCallID: "call-image",
+			ContentParts: []messages.ContentPart{
+				messages.TextPart{Text: "image result"},
+				messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
+			},
+		},
+	}
+
+	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{Messages: history})
+
+	if sent := session.sentMessages(); len(sent) != 0 {
+		t.Fatalf("mixed rich batch sent %d flat messages, want complete-message path only", len(sent))
+	}
+	deferred := session.completeMessagesWithoutResponse()
+	if len(deferred) != 1 || deferred[0].ToolCallID != "call-text" {
+		t.Fatalf("deferred tool results = %#v, want one call-text result", deferred)
+	}
+	complete := session.completeMessages()
+	if len(complete) != 1 || complete[0].ToolCallID != "call-image" {
+		t.Fatalf("response-requesting tool results = %#v, want one call-image result", complete)
+	}
+	imageParts := 0
+	for _, part := range complete[0].ContentParts {
+		if image, ok := part.(messages.ImagePart); ok {
+			imageParts++
+			if image.MediaType != "image/png" || string(image.Bytes) != string(imageBytes) {
+				t.Fatalf("image part = %#v, want original PNG content", image)
+			}
+		}
+	}
+	if imageParts != 1 {
+		t.Fatalf("image parts in final result = %d, want 1", imageParts)
+	}
+}
+
+func TestModelRunner_SendLatestSessionToolResultsFallsBackForStreamOnlySession(t *testing.T) {
+	session := newStreamOnlyRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+	history := []messages.Message{
+		messages.NewTextMessage(messages.RoleUser, "inspect both results"),
+		{
+			Role: messages.RoleAssistant,
+			ToolCalls: []messages.ToolCall{
+				{ID: "call-text", Name: "text_tool"},
+				{ID: "call-image", Name: "read_image"},
+			},
+		},
+		{
+			Role:         messages.RoleTool,
+			ToolCallID:   "call-text",
+			ContentParts: []messages.ContentPart{messages.TextPart{Text: "text result"}},
+		},
+		{
+			Role:       messages.RoleTool,
+			ToolCallID: "call-image",
+			ContentParts: []messages.ContentPart{
+				messages.ImagePart{Bytes: []byte("image bytes"), MediaType: "image/png"},
+			},
+		},
+	}
+
+	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{Messages: history})
+
+	sent := session.sentMessages()
+	if len(sent) != 3 {
+		t.Fatalf("stream-only sends = %d, want two tool results and one response trigger", len(sent))
+	}
+	for index, wantID := range []string{"call-text", "call-image"} {
+		if sent[index].Type != messages.StreamTypeToolCallEnd {
+			t.Fatalf("sent[%d] type = %s, want TOOLCALL.END", index, sent[index].Type)
+		}
+		value, ok := sent[index].Value.(*messages.ToolCallEndValue)
+		if !ok {
+			t.Fatalf("sent[%d] value = %T, want *ToolCallEndValue", index, sent[index].Value)
+		}
+		if value.ToolCallID != wantID {
+			t.Fatalf("sent[%d] call ID = %q, want %q", index, value.ToolCallID, wantID)
+		}
+	}
+	first, _ := sent[0].Value.(*messages.ToolCallEndValue)
+	if first.Arguments != "text result" || first.Name != "text_tool" {
+		t.Fatalf("text fallback = %#v, want correlated text result", first)
+	}
+	second, _ := sent[1].Value.(*messages.ToolCallEndValue)
+	if second.Arguments != "" || second.Name != "read_image" {
+		t.Fatalf("image fallback = %#v, want correlated empty flat output", second)
+	}
+	if sent[2].Type != messages.StreamTypeTextDelta {
+		t.Fatalf("response trigger type = %s, want TEXT.DELTA", sent[2].Type)
+	}
+	trigger, ok := sent[2].Value.(*messages.TextDeltaValue)
+	if !ok || trigger.Content != "inspect both results" {
+		t.Fatalf("response trigger = %#v, want original user prompt", sent[2].Value)
 	}
 }
 

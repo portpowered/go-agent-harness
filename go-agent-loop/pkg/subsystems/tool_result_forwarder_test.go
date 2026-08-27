@@ -141,6 +141,25 @@ func TestToolResultForwarder_DefersImageResultsToCompleteMessagePath(t *testing.
 	}
 }
 
+func TestToolResultForwarder_DefersEntireBatchWhenAnyResultIsRich(t *testing.T) {
+	ch := make(chan messages.StreamMessage, 8)
+	f := NewToolResultForwarder(ch, nil)
+
+	text := textResult("tc-text", "text sibling")
+	image := textResult("tc-image", "image result")
+	image.ContentParts = append(image.ContentParts, messages.ImagePart{
+		Bytes:     []byte{0x89, 'P', 'N', 'G'},
+		MediaType: "image/png",
+	})
+
+	if err := f.Execute(context.Background(), forwarderState(state.DuplexSession, text, image)); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !assertNoSessionSend(ch) {
+		t.Fatal("a text sibling in a rich batch was forwarded through the flat path")
+	}
+}
+
 func TestToolResultForwarder_ZeroResultsDeliversNothing(t *testing.T) {
 	ch := make(chan messages.StreamMessage, 8)
 	f := NewToolResultForwarder(ch, nil)

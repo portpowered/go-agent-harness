@@ -68,17 +68,22 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 	if len(curr.Inputs.ToolOutputMessage) == 0 {
 		return nil
 	}
+	// The coordinator dispatches the current tool outputs as one inference
+	// request. If any member is rich, the model runner must own the complete
+	// batch so text-only siblings cannot be sent here and then sent again via
+	// the complete-message path.
+	richBatch := toolResultsContainImage(curr.Inputs.ToolOutputMessage)
 	for _, msg := range curr.Inputs.ToolOutputMessage {
 		callID := msg.ToolCallID
 		if callID == "" {
 			f.logInfo("tool result forwarder: skipping result without ToolCallID")
 			continue
 		}
-		if toolResultContainsImage(msg) {
-			// Rich results are delivered by the session model runner's
-			// complete-message path. Sending a flat TOOLCALL.END here as well
-			// would duplicate the function-call output before the image-bearing
-			// message and can cause providers to request the next response twice.
+		if richBatch {
+			// Rich results, including text-only siblings in this batch, are
+			// delivered by the session model runner's complete-message path.
+			// Sending only the text sibling through TOOLCALL.END would duplicate
+			// it when the runner sends the complete batch.
 			f.logInfo("tool result forwarder: deferring rich result to complete-message path",
 				logging.Field{Key: "tool_call_id", Value: callID})
 			continue
@@ -101,10 +106,12 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 	return nil
 }
 
-func toolResultContainsImage(msg messages.Message) bool {
-	for _, part := range msg.ContentParts {
-		if _, ok := part.(messages.ImagePart); ok {
-			return true
+func toolResultsContainImage(results []messages.Message) bool {
+	for _, result := range results {
+		for _, part := range result.ContentParts {
+			if _, ok := part.(messages.ImagePart); ok {
+				return true
+			}
 		}
 	}
 	return false
