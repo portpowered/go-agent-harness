@@ -1,9 +1,9 @@
 # S2S live tool-result close safety
 
 This document defines the lifecycle contract for provider-requested tool
-results in a live session. It covers the session runner's ordinary live path;
-the duration controller has a separate admission/teardown owner and remains a
-separate lease boundary.
+results in a live session. The ordinary runner and the duration-admission
+controller have separate loop/admission owners, but both use the same
+observer-backed outstanding-call and close-gating contract.
 
 ## Outstanding state
 
@@ -18,9 +18,12 @@ there is no result-producing executor.
    admitted because it cannot be correlated.
 2. Tool execution completion, local result assembly, and enqueueing into the
    loop's user-event inbox do not resolve the obligation.
-3. The obligation resolves only after the correlated `TOOLCALL.END` result
-   crosses `messages.SendSessionWithOutcome` and returns
-   `SessionSendSucceeded`. This is the provider-facing acceptance boundary.
+3. The obligation resolves only after the correlated result crosses the
+   provider-facing send boundary and is accepted. Flat results use
+   `messages.SendSessionWithOutcome` and `TOOLCALL.END`; rich complete-message
+   results use `SendMessage` or `SendMessageWithoutResponse`, with the same
+   success/rejection observation. Execution completion, local result assembly,
+   and enqueueing are not acceptance evidence.
 4. Cancelled, timed-out, closed, buffer-full, and terminal-failure sends leave
    the ID outstanding. When exposed, the first non-success send status is
    retained for the terminal error. An acceptance or rejection observation may
@@ -35,10 +38,11 @@ deduplicated and sorted with Go lexical ordering.
 
 For scheduled live input, automatic `SESSION.CLOSE` requires both existing
 completion conditions — every scheduled input was accepted and its assistant
-turn crossed `MESSAGE.END` — and an empty outstanding set. A result accepted
-after the final `response.done` wakes the session runner and re-evaluates this
-predicate, so no additional provider response is needed. Exactly one close is
-sent after the predicate becomes true.
+turn crossed `MESSAGE.END` — and an empty outstanding set. `CloseAfterOpen`
+uses the same empty-set gate after its prompt or open boundary. A result
+accepted after the final `response.done` wakes either session controller and
+re-evaluates this predicate, so no additional provider response is needed.
+Exactly one close is sent after the predicate becomes true.
 
 Each invocation still uses the existing per-call `ToolExecutionTimeout`. A
 successful, failed, or timed-out executor result follows the same provider
@@ -79,6 +83,11 @@ boundary.
 `agent-cli/test/integration/session_tool_result_failure_test.go` drives the
 exported `services.RunSession` composition seam with a credential-free session
 double. It proves both a terminal provider close while an executor is blocked
-and a rejected `buffer_full` result send. The assertions use typed errors,
-provider send outcomes, human CLI-facing error text, and the stable diagnostic
-fields rather than source inspection.
+and a rejected `buffer_full` result send. The
+`session_tool_result_close_after_open_test.go` replay proves a blocked rich
+complete-message result cannot be closed over by `CloseAfterOpen`. The
+duration-admission tests exercise the same gate through the bounded controller,
+and `session_tool_lifecycle_test.go` pins the rejection-before-observation
+ordering. Assertions use typed errors, provider send outcomes, human
+CLI-facing error text, and stable diagnostic fields rather than source
+inspection.

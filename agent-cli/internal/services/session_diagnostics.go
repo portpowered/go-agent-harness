@@ -294,9 +294,7 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	if _, outstanding := o.unresolvedToolCalls[callID]; outstanding {
-		delete(o.unresolvedToolCalls, callID)
-	}
+	delete(o.unresolvedToolCalls, callID)
 	o.acceptedToolCalls[callID] = struct{}{}
 	delete(o.toolResultRejections, callID)
 	acceptedCh := o.toolResultAcceptedCh
@@ -312,9 +310,11 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 }
 
 // noteToolResultRejected remembers a failed provider-facing result send
-// without resolving its outstanding call ID. It is intentionally idempotent;
-// only the first rejection is retained so repeated attempts cannot rewrite
-// the terminal status for a call.
+// without resolving its outstanding call ID. A result can be rejected before
+// the outer session consumer observes the provider's completed call delta, so
+// rejection also registers the call as unresolved. It is intentionally
+// idempotent; only the first rejection is retained so repeated attempts cannot
+// rewrite the terminal status for a call.
 func (o *sessionProgressObserver) noteToolResultRejected(callID string, outcome messages.SessionSendOutcome) {
 	if o == nil || strings.TrimSpace(callID) == "" || outcome.OK() {
 		return
@@ -325,6 +325,7 @@ func (o *sessionProgressObserver) noteToolResultRejected(callID string, outcome 
 	if _, accepted := o.acceptedToolCalls[callID]; accepted {
 		return
 	}
+	o.unresolvedToolCalls[callID] = struct{}{}
 	if _, recorded := o.toolResultRejections[callID]; !recorded {
 		o.toolResultRejections[callID] = outcome.Status
 	}

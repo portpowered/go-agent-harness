@@ -194,9 +194,11 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 			}
 		}
 		if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !state.closeSent {
-			state.closeSent = true
-			if err := sendSessionClose(ctx, loop); err != nil {
-				return state, false, errors.Join(err, stop())
+			state.closeAfterOpenPending = true
+			var closeErr error
+			state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
+			if closeErr != nil {
+				return state, false, errors.Join(closeErr, stop())
 			}
 		}
 		startAudio()
@@ -445,6 +447,9 @@ func closePendingSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, 
 	if state.closeSent {
 		return state, nil
 	}
+	if opts.observer != nil && opts.observer.hasUnresolvedToolCalls() {
+		return state, nil
+	}
 	closeAfterOpen := opts.CloseAfterOpen && state.closeAfterOpenPending
 	closeAfterScheduled := opts.CloseAfterScheduledAudio && opts.observer != nil && opts.observer.scheduledAudioComplete()
 	if !closeAfterOpen && !closeAfterScheduled {
@@ -600,14 +605,50 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 // must preserve the rich tool-result path used by multimodal sessions.
 func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSender)
-	return ok && sender.SendMessage(ctx, msg)
+	if !ok {
+		return false
+	}
+	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessage(ctx, msg))
+	s.observeCompleteMessageToolResult(msg, outcome)
+	return outcome.OK()
 }
 
 // SendMessageWithoutResponse preserves deferred rich-message delivery for
 // callers that batch tool results before requesting one provider response.
 func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
-	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+	if !ok {
+		return false
+	}
+	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessageWithoutResponse(ctx, msg))
+	s.observeCompleteMessageToolResult(msg, outcome)
+	return outcome.OK()
+}
+
+func sessionCompleteMessageSendOutcome(ctx context.Context, sent bool) messages.SessionSendOutcome {
+	if sent {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	}
+	if ctx != nil {
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
+			return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: ctx.Err()}
+		case context.Canceled:
+			return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: ctx.Err()}
+		}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+}
+
+func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message, outcome messages.SessionSendOutcome) {
+	if s == nil || s.progress == nil || msg.ToolCallID == "" {
+		return
+	}
+	if outcome.OK() {
+		s.progress.noteToolResultAccepted(msg.ToolCallID)
+		return
+	}
+	s.progress.noteToolResultRejected(msg.ToolCallID, outcome)
 }
 
 func (s *observedSession) SupportsCompleteMessages() bool {
