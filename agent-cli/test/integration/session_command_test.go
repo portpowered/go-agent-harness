@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -274,7 +275,7 @@ func TestSessionCommand_ReplayGrokWebSocketCaptureDoesNotCallLiveDialer(t *testi
 	}
 }
 
-func TestSessionCommand_OpenAIRealtimeReplayUsesFixtureWithoutLiveNetwork(t *testing.T) {
+func TestSessionCommand_OpenAIRealtimeReplayWithoutVoicePreservesProviderDefault(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
@@ -301,6 +302,75 @@ func TestSessionCommand_OpenAIRealtimeReplayUsesFixtureWithoutLiveNetwork(t *tes
 
 	if got := testWriter.StdoutString(); !strings.Contains(got, "OpenAI replay response") {
 		t.Fatalf("OpenAI replay output missing fixture transcript, got:\n%s", got)
+	}
+}
+
+func TestSessionCommand_OpenAIRealtimeReplayVoiceMatchesCurrentWire(t *testing.T) {
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--replay", locateCLIFixture(t, "openai_realtime_text_marin.session.json"),
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--voice", "marin",
+		"hello", "realtime",
+	})
+
+	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute OpenAI realtime replay with marin voice: %v", err)
+	}
+	if got := testWriter.StdoutString(); !strings.Contains(got, "OpenAI replay response") {
+		t.Fatalf("OpenAI marin replay output missing fixture transcript, got:\n%s", got)
+	}
+}
+
+func TestSessionCommand_OpenAIRealtimeReplayInvalidVoiceFailsBeforeFixtureLoad(t *testing.T) {
+	const rejected = "not-a-voice"
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	missingCapture := filepath.Join(t.TempDir(), "not-consumed.session.json")
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetArgs([]string{
+		"session",
+		"--voice", rejected,
+		"--replay", missingCapture,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+	})
+
+	err = rootCmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("expected invalid OpenAI realtime voice error")
+	}
+	if !errors.Is(err, services.ErrInvalidOpenAIRealtimeVoice) {
+		t.Fatalf("error = %v, want ErrInvalidOpenAIRealtimeVoice", err)
+	}
+	var typed *services.InvalidOpenAIRealtimeVoiceError
+	if !errors.As(err, &typed) {
+		t.Fatalf("error = %v, want InvalidOpenAIRealtimeVoiceError", err)
+	}
+	if typed.Voice != rejected {
+		t.Fatalf("rejected voice = %q, want %q", typed.Voice, rejected)
+	}
+	if strings.Contains(err.Error(), missingCapture) {
+		t.Fatalf("invalid voice validation loaded the replay capture: %v", err)
 	}
 }
 
