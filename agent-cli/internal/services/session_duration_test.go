@@ -248,6 +248,62 @@ func TestRunSessionWithMaxDuration_NaturalCompletionKeepsNaturalReason(t *testin
 	}
 }
 
+func TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown(t *testing.T) {
+	clock := &durationTestClock{}
+	writer := newDurationTestWriter()
+	providerTerminal := messages.StreamMessage{
+		Type: messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValueWithTerminal(
+			"duration-session",
+			"provider_shutdown",
+			"transport",
+			messages.TerminalReasonProviderClose,
+			messages.TerminalProvenanceProvider,
+			messages.TerminalOutputPartial,
+		),
+	}
+	inferencer := &durationTestInferencer{
+		events:               durationOutputEvents(),
+		providerCloseOnClose: &providerTerminal,
+	}
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- runAgentLoopSessionWithDurationClock(
+			context.Background(),
+			writer,
+			inferencer,
+			sessionLoopOptions{},
+			time.Minute,
+			clock,
+		)
+	}()
+
+	writer.waitFor(t, "accepted output")
+	clock.fire()
+	select {
+	case err := <-runErrCh:
+		if err != nil {
+			t.Fatalf("duration cutoff returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("duration cutoff did not finish")
+	}
+
+	got := writer.String()
+	if !strings.Contains(got, "provider_shutdown") {
+		t.Fatalf("duration output lost provider terminal: %q", got)
+	}
+	if !strings.Contains(got, "terminal_provenance=provider") {
+		t.Fatalf("duration output lost provider provenance: %q", got)
+	}
+	if !strings.Contains(got, "output_state=partial") {
+		t.Fatalf("duration output lost partial output state: %q", got)
+	}
+	if strings.Contains(got, "terminal_reason=max_duration") {
+		t.Fatalf("duration output rewrote provider terminal as max duration: %q", got)
+	}
+}
+
 func durationOutputEvents() []messages.StreamMessage {
 	return []messages.StreamMessage{
 		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("duration-session", "test")},
@@ -331,13 +387,14 @@ func (t *durationTestTimer) Stop() bool {
 }
 
 type durationTestInferencer struct {
-	events           []messages.StreamMessage
-	connected        bool
-	connectedCh      chan struct{}
-	closeAfterEvents bool
-	session          *durationTestSession
-	connectErr       error
-	sessionCloseErr  error
+	events               []messages.StreamMessage
+	connected            bool
+	connectedCh          chan struct{}
+	closeAfterEvents     bool
+	providerCloseOnClose *messages.StreamMessage
+	session              *durationTestSession
+	connectErr           error
+	sessionCloseErr      error
 }
 
 func (i *durationTestInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -347,6 +404,7 @@ func (i *durationTestInferencer) ConnectSession(ctx context.Context) (messages.S
 	i.connected = true
 	session := newDurationTestSession()
 	session.closeErr = i.sessionCloseErr
+	session.providerCloseOnClose = i.providerCloseOnClose
 	i.session = session
 	if i.connectedCh != nil {
 		close(i.connectedCh)
@@ -363,13 +421,14 @@ func (i *durationTestInferencer) ConnectSession(ctx context.Context) (messages.S
 }
 
 type durationTestSession struct {
-	receive       *messages.TypedBuffer[messages.StreamMessage]
-	done          chan struct{}
-	closeCh       chan struct{}
-	once          sync.Once
-	closeCallOnce sync.Once
-	closeErr      error
-	closeCount    int
+	receive              *messages.TypedBuffer[messages.StreamMessage]
+	done                 chan struct{}
+	closeCh              chan struct{}
+	once                 sync.Once
+	closeCallOnce        sync.Once
+	closeErr             error
+	closeCount           int
+	providerCloseOnClose *messages.StreamMessage
 }
 
 func newDurationTestSession() *durationTestSession {
@@ -391,6 +450,9 @@ func (s *durationTestSession) Done() <-chan struct{} { return s.done }
 func (s *durationTestSession) Close() error {
 	s.closeCount++
 	s.closeCallOnce.Do(func() { close(s.closeCh) })
+	if s.providerCloseOnClose != nil {
+		s.receive.Write(context.Background(), *s.providerCloseOnClose)
+	}
 	s.end()
 	return s.closeErr
 }
@@ -581,6 +643,11 @@ func TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame(t *
 	}
 	if !bytes.Contains(terminalPayload, []byte("max_duration")) {
 		t.Fatalf("transcript terminal record = %s, want max_duration", terminalPayload)
+	}
+	for _, want := range []string{"\"terminal_provenance\":\"loop\"", "\"output_state\":\"partial\""} {
+		if !bytes.Contains(terminalPayload, []byte(want)) {
+			t.Fatalf("transcript terminal record = %s, want %s", terminalPayload, want)
+		}
 	}
 }
 
