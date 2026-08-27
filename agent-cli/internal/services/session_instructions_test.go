@@ -261,6 +261,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 		APIKey:          "test-api-key",
 		ConfigDir:       workspaceDir,
 		Prompt:          userTurnMarker,
+		Voice:           "marin",
 		WebSocketDialer: realtimeDialer,
 	}, "")
 	if err != nil {
@@ -276,6 +277,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	configCount := 0
 	userCount := 0
 	gotInstructions := ""
+	gotVoice := ""
 	gotUserText := ""
 	for index, event := range capture.Records {
 		if event.Direction != gwtesting.DirectionClientToServer {
@@ -289,6 +291,11 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 			Type    string `json:"type"`
 			Session struct {
 				Instructions string `json:"instructions"`
+				Audio        struct {
+					Output struct {
+						Voice string `json:"voice"`
+					} `json:"output"`
+				} `json:"audio"`
 			} `json:"session"`
 			Item struct {
 				Content []struct {
@@ -304,6 +311,7 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 			configCount++
 			configIndex = index
 			gotInstructions = envelope.Session.Instructions
+			gotVoice = envelope.Session.Audio.Output.Voice
 		case "conversation.item.create":
 			userCount++
 			userIndex = index
@@ -317,6 +325,9 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigPrecedesUserTurn(t *testi
 	}
 	if gotInstructions != agentsInstructionsMarker {
 		t.Fatalf("OpenAI initial session instructions = %q, want %q", gotInstructions, agentsInstructionsMarker)
+	}
+	if gotVoice != "marin" {
+		t.Fatalf("OpenAI initial session voice = %q, want marin", gotVoice)
 	}
 	if userCount != 1 || gotUserText != userTurnMarker {
 		t.Fatalf("OpenAI first user event = count %d text %q, want count 1 text %q", userCount, gotUserText, userTurnMarker)

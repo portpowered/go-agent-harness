@@ -151,7 +151,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inner, err = factory.newOpenAISessionInf(sessionCfg, recordingDialer)
+		inner, err = factory.newOpenAISessionInf(sessionCfg, opts.Voice, recordingDialer)
 		if err != nil {
 			return closeOnPlanError(err)
 		}

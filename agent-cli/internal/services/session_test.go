@@ -36,6 +36,7 @@ model:
 	var gotInner transport.Dialer
 	var gotProvider string
 	var gotModel string
+	var gotVoice string
 	var gotCfg config.OpenAIConfig
 	var gotDialer transport.Dialer
 
@@ -45,6 +46,7 @@ model:
 		Model:      "gpt-realtime",
 		APIKey:     "sk-override-key",
 		ConfigDir:  configDir,
+		Voice:      "marin",
 	}, sessionRuntimeFactory{
 		newDefaultLiveDialer: func() transport.Dialer { return defaultDialer },
 		newRecordingDialer: func(inner transport.Dialer, providerName string, model string) sessionRecordingDialer {
@@ -53,8 +55,9 @@ model:
 			gotModel = model
 			return recordingDialer
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			gotCfg = cfg
+			gotVoice = voice
 			gotDialer = dialer
 			return &scriptedSessionInferencer{}, nil
 		},
@@ -77,6 +80,9 @@ model:
 	}
 	if gotCfg.APIKey != "sk-override-key" || gotCfg.Model != "gpt-realtime" {
 		t.Fatalf("OpenAI config overrides were not resolved before runtime planning: %#v", gotCfg)
+	}
+	if gotVoice != "marin" {
+		t.Fatalf("OpenAI runtime voice = %q, want marin", gotVoice)
 	}
 }
 
@@ -168,6 +174,7 @@ model:
 func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testing.T) {
 	var openAICalled bool
 	var grokCalled bool
+	var gotVoice string
 	replayDialer := &stubReplayDialer{
 		stubRuntimeDialer: stubRuntimeDialer{id: "openai-replay"},
 		model:             "gpt-realtime",
@@ -177,6 +184,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{
 		ReplayPath: filepath.Join("..", "..", "test", "integration", "testdata", "openai_realtime_text.session.json"),
 		Prompt:     "hello realtime",
+		Voice:      "cedar",
 	}, sessionRuntimeFactory{
 		newReplayDialer: func(path string) (sessionReplayDialer, error) {
 			if !strings.Contains(path, "openai_realtime_text.session.json") {
@@ -184,8 +192,9 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 			}
 			return replayDialer, nil
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
 			openAICalled = true
+			gotVoice = voice
 			if cfg.Model != "gpt-realtime" {
 				t.Fatalf("OpenAI replay model = %q, want gpt-realtime", cfg.Model)
 			}
@@ -211,6 +220,9 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 	}
 	if grokCalled {
 		t.Fatal("OpenAI websocket replay capture should not use the Grok runtime seam")
+	}
+	if gotVoice != "cedar" {
+		t.Fatalf("OpenAI replay voice = %q, want cedar", gotVoice)
 	}
 }
 

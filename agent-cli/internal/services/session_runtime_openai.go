@@ -30,7 +30,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
+	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -75,7 +75,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, replayDialer, replayToolDefinitions)
+	}, opts.Voice, replayDialer, replayToolDefinitions)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -139,15 +139,15 @@ func openAIReplayToolDefinitions(path string, definitions []messages.ToolDefinit
 	return nil, nil
 }
 
-func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg, dialer, nil)
+func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg, voice, dialer, nil)
 }
 
-func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	opts := make([]oaiprovider.Option, 0, 1)
 	opts = append(opts, oaiprovider.WithWebSocketDialer(dialer))
-	return NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg, toolDefinitions, opts...)
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
 }

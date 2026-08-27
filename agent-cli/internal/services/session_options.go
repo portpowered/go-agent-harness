@@ -97,15 +97,20 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
-	RecordPath        string
-	ReplayPath        string
-	Provider          string
-	Model             string
-	ModelProvided     bool
-	APIKey            string
-	BaseURL           string
-	ConfigDir         string
-	Prompt            string
+	RecordPath    string
+	ReplayPath    string
+	Provider      string
+	Model         string
+	ModelProvided bool
+	APIKey        string
+	BaseURL       string
+	ConfigDir     string
+	Prompt        string
+	// Voice selects the optional OpenAI Realtime audio output voice for this
+	// invocation. The empty value preserves the provider default. It is kept
+	// on the session options rather than package state so concurrent sessions
+	// retain independent configuration.
+	Voice             string
 	SessionInferencer messages.SessionInferencer
 	WebSocketDialer   transport.Dialer
 	// RTCRuntimeFactory optionally supplies the service-owned WebRTC runtime
@@ -437,6 +442,10 @@ func NewOpenAIRealtimeSessionInferencerWithOptions(sessionCfg config.OpenAIConfi
 // realtime inferencer with the selected tool definitions in its initial
 // session configuration.
 func NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg config.OpenAIConfig, toolDefinitions []messages.ToolDefinition, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, "", toolDefinitions, opts...)
+}
+
+func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg config.OpenAIConfig, voice string, toolDefinitions []messages.ToolDefinition, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
 	if !isOpenAIRealtimeModel(sessionCfg.Model) {
 		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
 	}
@@ -451,6 +460,9 @@ func NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg config.Ope
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 	}
 	inferenceOpts := []inference.SessionOption{inference.WithSessionModel(sessionCfg.Model)}
+	if voice != "" {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
+	}
 	if len(toolDefinitions) > 0 {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))
 	}
@@ -481,6 +493,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		config.Voice = opts.Voice
 		providerOpts := []oaiprovider.Option{
 			oaiprovider.WithAPIKey(sessionCfg.APIKey),
 			oaiprovider.WithModel(sessionCfg.Model),
