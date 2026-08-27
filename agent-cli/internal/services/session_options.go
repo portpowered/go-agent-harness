@@ -184,6 +184,12 @@ type SessionRunOptions struct {
 	// stopping at the first completed turn. Defaults to false, which preserves
 	// the existing single-turn stop behavior byte-for-byte.
 	WaitForClose bool
+
+	// sessionImageCapabilities is resolved once by the entry point that owns
+	// an initial --image turn and reused when the read_image tool is bound.
+	// Keeping it private prevents callers from bypassing the capability
+	// resolver while allowing all session wrappers to share one snapshot.
+	sessionImageCapabilities *SessionImageCapabilities
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {

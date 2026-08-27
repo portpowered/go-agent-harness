@@ -164,6 +164,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	if err != nil {
 		return err
 	}
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
 	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err
@@ -583,6 +584,26 @@ func newSessionDirectoryRecordingSession(ctx context.Context, inner messages.Ses
 
 func (s *sessionDirectoryRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+func (s *sessionDirectoryRecordingSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *sessionDirectoryRecordingSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionDirectoryRecordingSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionDirectoryRecordingSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
 }
 
 func (s *sessionDirectoryRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {

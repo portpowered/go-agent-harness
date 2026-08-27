@@ -107,6 +107,26 @@ func (s *sessionTextSeedSession) Send(ctx context.Context, msg messages.StreamMe
 	return s.inner.Send(ctx, msg)
 }
 
+func (s *sessionTextSeedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *sessionTextSeedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionTextSeedSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionTextSeedSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionTextSeedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }

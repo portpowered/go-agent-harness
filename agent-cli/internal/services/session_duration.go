@@ -604,6 +604,26 @@ func (s *sessionDurationAdmissionSession) Send(ctx context.Context, msg messages
 	return s.inner.Send(ctx, msg)
 }
 
+func (s *sessionDurationAdmissionSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *sessionDurationAdmissionSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionDurationAdmissionSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionDurationAdmissionSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionDurationAdmissionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }

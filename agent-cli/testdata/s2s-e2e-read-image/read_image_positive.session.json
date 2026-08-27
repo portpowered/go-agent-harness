@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime"
+  },
+  "session": {
+    "id": "sess_read_image_positive",
+    "started_at_utc": "2026-08-26T00:00:00Z",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 0,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.update",
+        "session": {
+          "type": "realtime",
+          "model": "gpt-realtime",
+          "tools": [
+            {
+              "type": "function",
+              "name": "read_image",
+              "description": "Read and attach a validated local image so the model can inspect its pixels",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Path to the local image to attach"
+                  }
+                },
+                "required": ["path"]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 1,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session": {
+          "id": "sess_read_image_positive",
+          "model": "gpt-realtime"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 2,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "Please inspect the image at __READ_IMAGE_PATH__ without relying on its filename."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 3,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 4,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "response.output_item.added",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_item.added",
+        "item": {
+          "type": "function_call",
+          "call_id": "call_read_image_1",
+          "name": "read_image"
+        }
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 6,
+      "type": "response.function_call_arguments.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.function_call_arguments.done",
+        "call_id": "call_read_image_1",
+        "name": "read_image",
+        "arguments": "{\"path\":\"__READ_IMAGE_PATH__\"}"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 7,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "client_to_server",
+      "timestamp_ms": 8,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "function_call_output",
+          "call_id": "call_read_image_1",
+          "output": ""
+        }
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "client_to_server",
+      "timestamp_ms": 9,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.create",
+        "item": {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_image",
+              "image_url": "__READ_IMAGE_DATA_URL__"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 11,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 12,
+      "type": "response.output_text.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.delta",
+        "delta": "The image is a one-by-one image with a single indigo pixel."
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "server_to_client",
+      "timestamp_ms": 13,
+      "type": "response.output_text.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_text.done"
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "server_to_client",
+      "timestamp_ms": 14,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "server_to_client",
+      "timestamp_ms": 15,
+      "type": "session.closed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.closed",
+        "session_id": "sess_read_image_positive",
+        "reason": "fixture_complete"
+      }
+    }
+  ]
+}

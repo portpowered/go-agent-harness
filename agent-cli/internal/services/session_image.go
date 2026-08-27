@@ -17,6 +17,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -85,6 +86,23 @@ type SessionImageMessageSenderWithoutResponse interface {
 	SendMessageWithoutResponse(context.Context, messages.Message) bool
 }
 
+// sessionCompleteMessageCapabilities is implemented by provider sessions and
+// forwarded by session wrappers so the agent loop can distinguish an optional
+// capability from a wrapper method that merely returns false when unsupported.
+type sessionCompleteMessageCapabilities interface {
+	SupportsCompleteMessages() bool
+	SupportsCompleteMessagesWithoutResponse() bool
+}
+
+func completeMessageCapabilities(session messages.Session) (complete, withoutResponse bool) {
+	if capabilities, ok := session.(sessionCompleteMessageCapabilities); ok {
+		return capabilities.SupportsCompleteMessages(), capabilities.SupportsCompleteMessagesWithoutResponse()
+	}
+	_, complete = session.(SessionImageMessageSender)
+	_, withoutResponse = session.(SessionImageMessageSenderWithoutResponse)
+	return complete, withoutResponse
+}
+
 func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) (runErr error) {
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
@@ -100,6 +118,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err != nil {
 		return err
 	}
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
 	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err
@@ -139,6 +158,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return err
 	}
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
 	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err
@@ -449,6 +469,32 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 	return false
 }
 
+// SendMessage forwards the optional complete-message capability of the
+// provider session. The image-turn wrapper embeds only the stream Session
+// interface, so optional multimodal delivery must be forwarded explicitly for
+// a later read_image tool result to reach the same provider connection.
+func (s *sessionImageSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+// SendMessageWithoutResponse forwards the deferred complete-message path used
+// when a tool batch contains more than one rich result.
+func (s *sessionImageSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionImageSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *sessionImageSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 // signalFirstTurn reports the image-turn outcome to awaitSessionFirstTurn
 // exactly once. The buffered channel makes this non-blocking, and callers
 // without a waiter (plain RunSessionWithImages without streamed audio) only
@@ -497,4 +543,65 @@ func cloneSessionImageParts(parts []messages.ImagePart) []messages.ImagePart {
 		cloned[i].Bytes = append([]byte(nil), cloned[i].Bytes...)
 	}
 	return cloned
+}
+
+func cloneSessionImageCapabilities(capabilities *SessionImageCapabilities) *SessionImageCapabilities {
+	if capabilities == nil {
+		return nil
+	}
+	clone := *capabilities
+	clone.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
+	return &clone
+}
+
+func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// bindSessionImageToolExecutor resolves image capability metadata once for a
+// session and binds a private preparer to the registry executor. Capability
+// failures are captured by the preparer so a provider that cannot inspect
+// images can still continue the session and receive a correlated tool failure.
+func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePlan) messages.ToolExecutor {
+	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, tools.ReadImageToolID) {
+		return opts.ToolExecutor
+	}
+	binder, ok := opts.ToolExecutor.(tools.SessionImagePreparerBinder)
+	if !ok {
+		return opts.ToolExecutor
+	}
+
+	capabilities := cloneSessionImageCapabilities(opts.sessionImageCapabilities)
+	var resolveErr error
+	if capabilities == nil {
+		capabilityOpts := opts
+		if plan.provider != "" {
+			capabilityOpts.Provider = plan.provider
+		}
+		if plan.model != "" {
+			capabilityOpts.Model = plan.model
+			capabilityOpts.ModelProvided = true
+		}
+		var resolved SessionImageCapabilities
+		resolved, resolveErr = resolveSessionImageCapabilities(capabilityOpts)
+		capabilities = cloneSessionImageCapabilities(&resolved)
+	}
+
+	metadata := SessionImageCapabilities{}
+	if capabilities != nil {
+		metadata = *capabilities
+		metadata.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
+	}
+	preparer := tools.ImagePartPreparer(func(paths []string) ([]messages.ImagePart, error) {
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		return PrepareSessionImageParts(paths, metadata)
+	})
+	return binder.WithSessionImagePreparer(preparer)
 }

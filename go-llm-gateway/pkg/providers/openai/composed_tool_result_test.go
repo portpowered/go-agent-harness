@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 	"time"
@@ -231,5 +232,146 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	}
 	if responseCreates != 1 {
 		t.Fatalf("response.create count = %d, want exactly 1 (plain-text turn only)", responseCreates)
+	}
+}
+
+func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *testing.T) {
+	const (
+		textCallID  = "call_composed_text"
+		imageCallID = "call_composed_image"
+		textTool    = "lookup_weather"
+		imageTool   = "read_image"
+		textOutput  = "text sibling result"
+	)
+	imageBytes := []byte("committed image bytes")
+
+	conn := newMockWebSocketConn()
+	dialer := &mockWebSocketDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	al, err := agentloop.New(
+		agentloop.WithMode(engine.DuplexSession),
+		agentloop.WithSessionInferencer(composedSessionInferencer{session: session.(*realtimeSession)}),
+		agentloop.WithToolExecutor(composedToolExecutor{responses: map[string]messages.ToolCallResponse{
+			textCallID:  {ToolCallID: textCallID, Content: textOutput},
+			imageCallID: {ToolCallID: imageCallID, ContentParts: []messages.ContentPart{messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"}}},
+		}}),
+		agentloop.WithTools([]messages.ToolDefinition{
+			{Name: textTool, Description: "text lookup"},
+			{Name: imageTool, Description: "image lookup"},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("agentloop.New: %v", err)
+	}
+
+	go func() { _ = al.Run(ctx) }()
+	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
+		t.Fatalf("SendAudioInput: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	waitForFrameCount(t, conn, 2, deadline) // session.update + input_audio_buffer.append
+
+	// One provider response requests two tools in a single batch: the first
+	// result is text-only and the second carries the image content.
+	addServerEvent(conn, "response.created", nil)
+	addServerEvent(conn, "response.output_item.added", map[string]any{
+		"item": map[string]any{"type": "function_call", "id": "item_text", "call_id": textCallID, "name": textTool, "arguments": ""},
+	})
+	addServerEvent(conn, "response.function_call_arguments.done", map[string]any{
+		"call_id": textCallID, "name": textTool, "arguments": `{"city":"Seattle"}`,
+	})
+	addServerEvent(conn, "response.output_item.added", map[string]any{
+		"item": map[string]any{"type": "function_call", "id": "item_image", "call_id": imageCallID, "name": imageTool, "arguments": ""},
+	})
+	addServerEvent(conn, "response.function_call_arguments.done", map[string]any{
+		"call_id": imageCallID, "name": imageTool, "arguments": `{"path":"fixture.png"}`,
+	})
+	addServerEvent(conn, "response.done", nil)
+
+	frames := waitForFrameCount(t, conn, 6, deadline)
+	wantTypes := []string{
+		"session.update",
+		"input_audio_buffer.append",
+		"conversation.item.create", // text function_call_output
+		"conversation.item.create", // image function_call_output
+		"conversation.item.create", // image input message
+		"response.create",
+	}
+	gotTypes := make([]string, 0, len(frames))
+	for _, frame := range frames {
+		gotTypes = append(gotTypes, frame.Type)
+	}
+	if len(gotTypes) != len(wantTypes) {
+		t.Fatalf("client event sequence = %v, want %v", gotTypes, wantTypes)
+	}
+	for i := range wantTypes {
+		if gotTypes[i] != wantTypes[i] {
+			t.Fatalf("client event sequence = %v, want %v (mismatch at %d)", gotTypes, wantTypes, i)
+		}
+	}
+
+	outputs := map[string]string{}
+	imageItems := 0
+	for _, frame := range frames {
+		if frame.Type != "conversation.item.create" {
+			continue
+		}
+		switch frame.Item["type"] {
+		case "function_call_output":
+			callID, _ := frame.Item["call_id"].(string)
+			output, _ := frame.Item["output"].(string)
+			outputs[callID] = output
+		case "message":
+			content, ok := frame.Item["content"].([]any)
+			if !ok {
+				continue
+			}
+			for _, rawPart := range content {
+				part, _ := rawPart.(map[string]any)
+				if part["type"] != "input_image" {
+					continue
+				}
+				imageItems++
+				wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+				if got, _ := part["image_url"].(string); got != wantURL {
+					t.Fatalf("image URL = %q, want original image bytes", got)
+				}
+			}
+		}
+	}
+	if len(outputs) != 2 {
+		t.Fatalf("function_call_output call IDs = %#v, want one result for each call", outputs)
+	}
+	if outputs[textCallID] != textOutput {
+		t.Fatalf("text result = %q, want %q", outputs[textCallID], textOutput)
+	}
+	if _, ok := outputs[imageCallID]; !ok {
+		t.Fatalf("image result missing from function_call_output map: %#v", outputs)
+	}
+	if imageItems != 1 {
+		t.Fatalf("image input items = %d, want exactly 1", imageItems)
+	}
+	responseCreates := 0
+	for _, frame := range frames {
+		if frame.Type == "response.create" {
+			responseCreates++
+		}
+	}
+	if responseCreates != 1 {
+		t.Fatalf("response.create count = %d, want exactly 1 for the mixed batch", responseCreates)
 	}
 }

@@ -406,6 +406,31 @@ func (s *sessionInstructionsSession) Send(ctx context.Context, msg messages.Stre
 	return s.inner.Send(ctx, msg)
 }
 
+// SendMessage forwards the optional complete-message capability of the
+// wrapped provider session. Instruction decoration must not hide the rich
+// message path used to deliver a tool result on the next model turn.
+func (s *sessionInstructionsSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+// SendMessageWithoutResponse forwards deferred complete messages for callers
+// that batch more than one tool result before requesting the next response.
+func (s *sessionInstructionsSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionInstructionsSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.inner)
+	return complete
+}
+
+func (s *sessionInstructionsSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.inner)
+	return withoutResponse
+}
+
 func (s *sessionInstructionsSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	return messages.SendSessionWithOutcome(ctx, s.inner, msg)
 }

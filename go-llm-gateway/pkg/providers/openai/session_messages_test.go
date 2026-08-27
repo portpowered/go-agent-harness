@@ -143,6 +143,85 @@ func TestRealtimeSessionSendMessageWithoutResponse_QueuesOnlyMessageItem(t *test
 	}
 }
 
+func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testing.T) {
+	session, conn := newWireSeamSession(t)
+	imageBytes := []byte{0x89, 'P', 'N', 'G'}
+	msg := messages.Message{
+		Role:       messages.RoleTool,
+		ToolCallID: "call-read-image",
+		ContentParts: []messages.ContentPart{
+			messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
+		},
+	}
+
+	if !session.SendMessage(context.Background(), msg) {
+		t.Fatal("SendMessage returned false for a rich tool result")
+	}
+
+	written := waitForWireMessages(t, conn, 3)
+	var functionOutput struct {
+		Type string `json:"type"`
+		Item struct {
+			Type   string `json:"type"`
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[0], &functionOutput); err != nil {
+		t.Fatalf("unmarshal function_call_output: %v", err)
+	}
+	if functionOutput.Type != "conversation.item.create" || functionOutput.Item.Type != "function_call_output" || functionOutput.Item.CallID != msg.ToolCallID {
+		t.Fatalf("function output event = %#v, want correlated function_call_output", functionOutput)
+	}
+
+	var imageItem struct {
+		Type string `json:"type"`
+		Item struct {
+			Type    string `json:"type"`
+			Role    string `json:"role"`
+			Content []struct {
+				Type     string `json:"type"`
+				ImageURL string `json:"image_url"`
+			} `json:"content"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[1], &imageItem); err != nil {
+		t.Fatalf("unmarshal tool image item: %v", err)
+	}
+	if imageItem.Type != "conversation.item.create" || imageItem.Item.Type != "message" || imageItem.Item.Role != string(messages.RoleUser) || len(imageItem.Item.Content) != 1 {
+		t.Fatalf("tool image event = %#v, want one user image message", imageItem)
+	}
+	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	if imageItem.Item.Content[0].Type != "input_image" || imageItem.Item.Content[0].ImageURL != wantURL {
+		t.Fatalf("tool image content = %#v, want exact PNG data URL", imageItem.Item.Content[0])
+	}
+
+	var response struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(written[2], &response); err != nil {
+		t.Fatalf("unmarshal response.create: %v", err)
+	}
+	if response.Type != "response.create" {
+		t.Fatalf("third event type = %q, want response.create", response.Type)
+	}
+}
+
+func waitForWireMessages(t *testing.T, conn *mockWebSocketConn, want int) [][]byte {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		written := conn.getClientMessages()
+		if len(written) == want || time.Now().After(deadline) {
+			if len(written) != want {
+				t.Fatalf("wire events = %d, want %d", len(written), want)
+			}
+			return written
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestRealtimeSessionSendMessage_RejectsIncompleteMessages(t *testing.T) {
 	session, conn := newWireSeamSession(t)
 	cases := map[string]messages.Message{

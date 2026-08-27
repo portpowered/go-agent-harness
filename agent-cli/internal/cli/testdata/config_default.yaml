@@ -34,6 +34,8 @@ tools:
           enabled: true
         - id: read_file
           enabled: true
+        - id: read_image
+          enabled: true
         - id: write_file
           enabled: true
         - id: edit_file

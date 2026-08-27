@@ -558,6 +558,26 @@ func (s *sessionAudioOutputSession) Send(ctx context.Context, msg messages.Strea
 	return s.Session.Send(ctx, msg)
 }
 
+func (s *sessionAudioOutputSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *sessionAudioOutputSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionAudioOutputSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *sessionAudioOutputSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 func (s *sessionAudioOutputSession) replaceSeed(msg messages.StreamMessage) bool {
 	if s.wirePrompt == "" || msg.Type != messages.StreamTypeTextDelta {
 		return false

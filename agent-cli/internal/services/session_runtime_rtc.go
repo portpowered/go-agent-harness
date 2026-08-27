@@ -485,6 +485,26 @@ func (s *sessionRTCRuntimeSession) TerminalError() error {
 	return terminalSessionError(s.Session)
 }
 
+func (s *sessionRTCRuntimeSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *sessionRTCRuntimeSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *sessionRTCRuntimeSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *sessionRTCRuntimeSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 func (s *sessionRTCRuntimeSession) Close() error {
 	if s == nil {
 		return nil

@@ -111,7 +111,7 @@ type ExecConfig struct {
 
 // DefaultToolIDs is the ordered list of all tool IDs. Used to build the default tools list.
 var DefaultToolIDs = []string{
-	"exec", "read_file", "write_file", "edit_file", "append_file", "list_dir",
+	"exec", "read_file", "read_image", "write_file", "edit_file", "append_file", "list_dir",
 	"web_fetch", "web_search", "show", "mouse", "load_skill", "sleep",
 }
 

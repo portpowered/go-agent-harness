@@ -60,8 +60,16 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
 		curr.History.CurrentModelDeltaCount = 0
 		curr.History.CurrentPassID++
+		// The kernel records full messages asynchronously through the shared
+		// delta inbox. Include this completed tool batch in the request snapshot
+		// as well, so a session model runner can deliver rich results to the
+		// provider before the kernel's history tick catches up.
+		conversation := append([]messages.Message(nil), curr.History.ConversationBuffer...)
+		if !toolResultsAtHistoryTail(conversation, curr.Inputs.ToolOutputMessage) {
+			conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
+		}
 		curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-			curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
+			conversation, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
 		))
 		return nil
 	}
@@ -151,6 +159,23 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		))
 	}
 	return nil
+}
+
+// toolResultsAtHistoryTail handles the race between the coordinator's
+// inference-request tick and the kernel tick that records SYSTEM.FULL_MESSAGE.
+// A request must contain the current tool batch exactly once whether the
+// kernel has already appended it or not.
+func toolResultsAtHistoryTail(history, results []messages.Message) bool {
+	if len(results) == 0 || len(history) < len(results) {
+		return false
+	}
+	tail := history[len(history)-len(results):]
+	for index := range results {
+		if tail[index].Role != results[index].Role || tail[index].ToolCallID != results[index].ToolCallID {
+			return false
+		}
+	}
+	return true
 }
 
 // TickGroup implements [Subsystem].

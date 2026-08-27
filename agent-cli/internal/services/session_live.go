@@ -479,6 +479,31 @@ func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) 
 	return ok
 }
 
+// SendMessage forwards the optional complete-message provider capability. The
+// observation wrapper embeds the stream-only public Session interface, so it
+// must preserve the rich tool-result path used by multimodal sessions.
+func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+// SendMessageWithoutResponse preserves deferred rich-message delivery for
+// callers that batch tool results before requesting one provider response.
+func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *observedSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
 func (s *observedSession) Close() error {
 	err := s.Session.Close()
 	s.markDone()

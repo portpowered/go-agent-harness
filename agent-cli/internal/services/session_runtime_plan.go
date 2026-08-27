@@ -230,8 +230,9 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether
-	// tool execution is enabled. Nil keeps every plan unchanged.
-	plan.loop.ToolExecutor = opts.ToolExecutor
+	// tool execution is enabled. The read_image binding is cloned per session
+	// so its capability snapshot cannot leak across concurrent sessions.
+	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 	// The per-invocation adapter deadline override crosses with the executor;
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.

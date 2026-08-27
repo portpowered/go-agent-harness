@@ -110,6 +110,9 @@ func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
 	if enabled("read_file") {
 		_ = registry.Register(NewReadFileTool("", false))
 	}
+	if enabled(ReadImageToolID) {
+		_ = registry.Register(NewReadImageTool(nil))
+	}
 	if enabled("write_file") {
 		_ = registry.Register(NewWriteFileTool("", false))
 	}
@@ -143,6 +146,29 @@ func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {
 		_ = registry.Register(NewSleepTool())
 	}
 	return registry
+}
+
+// cloneWithSessionImagePreparer returns a registry snapshot whose read_image
+// tool is bound to one session. Tool instances for every other name are
+// shared read-only values; the registry map itself is always copied so a
+// session cannot overwrite another session's image preparer.
+func (r *ToolRegistry) cloneWithSessionImagePreparer(preparer ImagePartPreparer) *ToolRegistry {
+	clone := &ToolRegistry{tools: make(map[string]Tool)}
+	if r == nil {
+		return clone
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for name, tool := range r.tools {
+		if name == ReadImageToolID {
+			if readImage, ok := tool.(*ReadImageTool); ok {
+				tool = readImage.withSessionImagePreparer(preparer)
+			}
+		}
+		clone.tools[name] = tool
+	}
+	return clone
 }
 
 func (r *ToolRegistry) Register(tool Tool) error {
