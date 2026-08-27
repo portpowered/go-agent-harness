@@ -79,6 +79,9 @@ func TestRoomEventBroker_ServesContractAndFiltersAudio(t *testing.T) {
 	if got := response.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
 		t.Fatalf("content type = %q, want text/event-stream", got)
 	}
+	if got := response.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("access-control-allow-origin = %q, want wildcard for local visualizer", got)
+	}
 	reader := newRoomSSEReader(response.Body)
 
 	broker.RecordDiagnostic(participant, SessionDiagnosticRecord{

@@ -126,13 +126,14 @@ func (r Room) MarshalYAML() (any, error) {
 // Participant is one independently configured room member. APIKeyEnv is only
 // an environment variable name, never the resolved credential value.
 type Participant struct {
-	ID           string   `json:"id" yaml:"id"`
-	SystemPrompt string   `json:"system_prompt" yaml:"system_prompt"`
-	Provider     string   `json:"provider" yaml:"provider"`
-	Model        string   `json:"model" yaml:"model"`
-	APIKeyEnv    string   `json:"api_key_env" yaml:"api_key_env"`
-	Voice        string   `json:"voice,omitempty" yaml:"voice,omitempty"`
-	Tools        []string `json:"tools" yaml:"tools"`
+	ID            string   `json:"id" yaml:"id"`
+	SystemPrompt  string   `json:"system_prompt" yaml:"system_prompt"`
+	OpeningPrompt string   `json:"opening_prompt,omitempty" yaml:"opening_prompt,omitempty"`
+	Provider      string   `json:"provider" yaml:"provider"`
+	Model         string   `json:"model" yaml:"model"`
+	APIKeyEnv     string   `json:"api_key_env" yaml:"api_key_env"`
+	Voice         string   `json:"voice,omitempty" yaml:"voice,omitempty"`
+	Tools         []string `json:"tools" yaml:"tools"`
 }
 
 // ValidationOptions supplies the registries that are available in the
@@ -358,13 +359,14 @@ type manifestRoomDocument struct {
 }
 
 type manifestParticipant struct {
-	ID           *string   `json:"id" yaml:"id"`
-	SystemPrompt *string   `json:"system_prompt" yaml:"system_prompt"`
-	Provider     *string   `json:"provider" yaml:"provider"`
-	Model        *string   `json:"model" yaml:"model"`
-	APIKeyEnv    *string   `json:"api_key_env" yaml:"api_key_env"`
-	Voice        *string   `json:"voice" yaml:"voice"`
-	Tools        *[]string `json:"tools" yaml:"tools"`
+	ID            *string   `json:"id" yaml:"id"`
+	SystemPrompt  *string   `json:"system_prompt" yaml:"system_prompt"`
+	OpeningPrompt *string   `json:"opening_prompt" yaml:"opening_prompt"`
+	Provider      *string   `json:"provider" yaml:"provider"`
+	Model         *string   `json:"model" yaml:"model"`
+	APIKeyEnv     *string   `json:"api_key_env" yaml:"api_key_env"`
+	Voice         *string   `json:"voice" yaml:"voice"`
+	Tools         *[]string `json:"tools" yaml:"tools"`
 }
 
 func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifest, error) {
@@ -403,12 +405,13 @@ func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifes
 	participants := make([]Participant, len(raw.Participants))
 	for index, rawParticipant := range raw.Participants {
 		participant := Participant{
-			ID:           normalizeString(rawParticipant.ID),
-			SystemPrompt: normalizeString(rawParticipant.SystemPrompt),
-			Provider:     strings.ToLower(normalizeString(rawParticipant.Provider)),
-			Model:        normalizeString(rawParticipant.Model),
-			APIKeyEnv:    normalizeString(rawParticipant.APIKeyEnv),
-			Voice:        normalizeString(rawParticipant.Voice),
+			ID:            normalizeString(rawParticipant.ID),
+			SystemPrompt:  normalizeString(rawParticipant.SystemPrompt),
+			OpeningPrompt: normalizeString(rawParticipant.OpeningPrompt),
+			Provider:      strings.ToLower(normalizeString(rawParticipant.Provider)),
+			Model:         normalizeString(rawParticipant.Model),
+			APIKeyEnv:     normalizeString(rawParticipant.APIKeyEnv),
+			Voice:         normalizeString(rawParticipant.Voice),
 		}
 		if rawParticipant.Tools != nil {
 			participant.Tools = make([]string, len(*rawParticipant.Tools))

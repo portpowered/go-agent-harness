@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "room": {
+    "max_turns": 3,
+    "max_duration": "90s"
+  },
+  "participants": [
+    {
+      "id": "alpha",
+      "system_prompt": "You are Alpha in a three-person conversation. Speak briefly, address Beta and Gamma by name, and complete at least three turns.",
+      "opening_prompt": "Greet Beta and Gamma, then ask which short agenda item to discuss.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "cedar",
+      "tools": []
+    },
+    {
+      "id": "beta",
+      "system_prompt": "You are Beta in a three-person conversation. Speak briefly, respond to Alpha or Gamma, and complete at least three turns. Do not use tools.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "marin",
+      "tools": []
+    },
+    {
+      "id": "gamma",
+      "system_prompt": "You are Gamma in a three-person conversation. Speak briefly, respond to the other participants, and complete at least three turns. Do not use tools.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "ash",
+      "tools": []
+    }
+  ]
+}

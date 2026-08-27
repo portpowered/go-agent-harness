@@ -19,6 +19,7 @@ func TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials(t *testing.T
 	jsonData := validManifestData(t, func(document map[string]any) {
 		document["participants"].([]any)[0].(map[string]any)["provider"] = " OPENAI "
 		document["participants"].([]any)[0].(map[string]any)["voice"] = nil
+		document["participants"].([]any)[0].(map[string]any)["opening_prompt"] = "  Start the room  "
 	})
 	manifest, err := ParseManifest(jsonData)
 	if err != nil {
@@ -28,6 +29,9 @@ func TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials(t *testing.T
 		t.Fatalf("JSON bounds = %+v", manifest.Room)
 	}
 	assertNormalizedParticipants(t, manifest)
+	if manifest.Participants[0].OpeningPrompt != "Start the room" {
+		t.Fatalf("opening prompt = %q, want normalized prompt", manifest.Participants[0].OpeningPrompt)
+	}
 
 	yamlData := []byte(`schema_version: 1
 room:
@@ -62,6 +66,9 @@ participants:
 	}
 	if !strings.Contains(string(encoded), `"max_duration":"2m0s"`) {
 		t.Fatalf("normalized manifest does not preserve duration: %s", encoded)
+	}
+	if strings.Contains(string(encoded), "opening_prompt") {
+		t.Fatalf("YAML fixture unexpectedly gained an opening prompt: %s", encoded)
 	}
 	yamlEncoded, err := yamlv3.Marshal(manifest)
 	if err != nil {

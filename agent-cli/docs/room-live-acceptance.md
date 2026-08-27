@@ -43,41 +43,7 @@ RUN_ROOT="$(mktemp -d)"
 RUN_OUT="$RUN_ROOT/evidence"
 mkdir "$RUN_OUT"
 
-cat > "$RUN_ROOT/room.json" <<'JSON'
-{
-  "schema_version": 1,
-  "room": {
-    "max_turns": 3,
-    "max_duration": "90s"
-  },
-  "participants": [
-    {
-      "id": "alpha",
-      "system_prompt": "You are Alpha in a three-person conversation. Speak briefly, address the other participants by name, and complete at least three turns. Begin by greeting them when the room starts.",
-      "provider": "openai",
-      "model": "gpt-realtime-2.1-mini",
-      "api_key_env": "OPENAI_API_KEY",
-      "tools": []
-    },
-    {
-      "id": "beta",
-      "system_prompt": "You are Beta in a three-person conversation. Speak briefly, respond to Alpha or Gamma, and complete at least three turns. Do not use tools.",
-      "provider": "openai",
-      "model": "gpt-realtime-2.1-mini",
-      "api_key_env": "OPENAI_API_KEY",
-      "tools": []
-    },
-    {
-      "id": "gamma",
-      "system_prompt": "You are Gamma in a three-person conversation. Speak briefly, respond to the other participants, and complete at least three turns. Do not use tools.",
-      "provider": "openai",
-      "model": "gpt-realtime-2.1-mini",
-      "api_key_env": "OPENAI_API_KEY",
-      "tools": []
-    }
-  ]
-}
-JSON
+cp agent-cli/docs/room-three-participant.json "$RUN_ROOT/room.json"
 
 # Enter the key without putting its value in shell history or output.
 read -r -s OPENAI_API_KEY
@@ -95,7 +61,10 @@ participant-scoped progress and final room summary can be recorded:
   --stream 127.0.0.1:8422
 ```
 
-The command validates the complete manifest and empty output directory before
+The committed fixture includes one `opening_prompt` for Alpha. The room
+reuses the existing text-seed seam to start the conversation; Beta and Gamma
+remain input-driven by the mixed audio they receive. The command validates the
+complete manifest and empty output directory before
 opening the provider sessions. It prints the stream URL and only bounded
 participant progress. A normal bounded run ends with
 `reason=max_turns_reached`; `max_duration_reached` is the safety fallback.

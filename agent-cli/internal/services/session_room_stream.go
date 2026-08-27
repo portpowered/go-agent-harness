@@ -396,6 +396,10 @@ func (b *RoomEventBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	// The CLI documents serving the static visualizer from a second loopback
+	// port. Room streams are local metadata endpoints, so allow that browser
+	// EventSource connection without requiring a proxy or disabling security.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	client := &roomEventClient{
 		participant: participantID,
