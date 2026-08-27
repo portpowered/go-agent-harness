@@ -155,6 +155,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	if err != nil {
 		return err
 	}
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
 	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err

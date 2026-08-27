@@ -17,6 +17,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/input"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -100,6 +101,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	if err != nil {
 		return err
 	}
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
 	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err
@@ -139,6 +141,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	if err != nil {
 		return err
 	}
+	opts.SessionRunOptions.sessionImageCapabilities = cloneSessionImageCapabilities(&metadata)
 	parts, err := PrepareSessionImageParts(paths, metadata)
 	if err != nil {
 		return err
@@ -497,4 +500,65 @@ func cloneSessionImageParts(parts []messages.ImagePart) []messages.ImagePart {
 		cloned[i].Bytes = append([]byte(nil), cloned[i].Bytes...)
 	}
 	return cloned
+}
+
+func cloneSessionImageCapabilities(capabilities *SessionImageCapabilities) *SessionImageCapabilities {
+	if capabilities == nil {
+		return nil
+	}
+	clone := *capabilities
+	clone.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
+	return &clone
+}
+
+func sessionHasTool(definitions []messages.ToolDefinition, name string) bool {
+	for _, definition := range definitions {
+		if definition.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// bindSessionImageToolExecutor resolves image capability metadata once for a
+// session and binds a private preparer to the registry executor. Capability
+// failures are captured by the preparer so a provider that cannot inspect
+// images can still continue the session and receive a correlated tool failure.
+func bindSessionImageToolExecutor(opts SessionRunOptions, plan sessionRuntimePlan) messages.ToolExecutor {
+	if opts.ToolExecutor == nil || !sessionHasTool(opts.ToolDefinitions, tools.ReadImageToolID) {
+		return opts.ToolExecutor
+	}
+	binder, ok := opts.ToolExecutor.(tools.SessionImagePreparerBinder)
+	if !ok {
+		return opts.ToolExecutor
+	}
+
+	capabilities := cloneSessionImageCapabilities(opts.sessionImageCapabilities)
+	var resolveErr error
+	if capabilities == nil {
+		capabilityOpts := opts
+		if plan.provider != "" {
+			capabilityOpts.Provider = plan.provider
+		}
+		if plan.model != "" {
+			capabilityOpts.Model = plan.model
+			capabilityOpts.ModelProvided = true
+		}
+		var resolved SessionImageCapabilities
+		resolved, resolveErr = resolveSessionImageCapabilities(capabilityOpts)
+		capabilities = cloneSessionImageCapabilities(&resolved)
+	}
+
+	metadata := SessionImageCapabilities{}
+	if capabilities != nil {
+		metadata = *capabilities
+		metadata.SupportedInputMIMETypes = append([]string(nil), capabilities.SupportedInputMIMETypes...)
+	}
+	preparer := tools.ImagePartPreparer(func(paths []string) ([]messages.ImagePart, error) {
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		return PrepareSessionImageParts(paths, metadata)
+	})
+	return binder.WithSessionImagePreparer(preparer)
 }

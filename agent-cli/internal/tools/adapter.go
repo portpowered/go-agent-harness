@@ -15,6 +15,8 @@ type RegistryExecutor struct {
 	registry *ToolRegistry
 }
 
+var _ SessionImagePreparerBinder = (*RegistryExecutor)(nil)
+
 type ToolArgumentError struct {
 	Err error
 }
@@ -28,6 +30,16 @@ func (e *ToolArgumentError) Unwrap() error { return e.Err }
 // NewRegistryExecutor creates a ToolExecutor backed by the given ToolRegistry.
 func NewRegistryExecutor(registry *ToolRegistry) *RegistryExecutor {
 	return &RegistryExecutor{registry: registry}
+}
+
+// WithSessionImagePreparer returns a registry executor isolated to one
+// session's provider-aware image preparation callback. The original executor
+// remains safe for other sessions and one-shot calls.
+func (re *RegistryExecutor) WithSessionImagePreparer(preparer ImagePartPreparer) messages.ToolExecutor {
+	if re == nil {
+		return nil
+	}
+	return &RegistryExecutor{registry: re.registry.cloneWithSessionImagePreparer(preparer)}
 }
 
 // Execute implements subsystems.ToolExecutor.

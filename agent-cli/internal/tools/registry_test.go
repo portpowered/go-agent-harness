@@ -16,6 +16,9 @@ func TestNewToolRegistryFromConfig_NilConfigAllEnabled(t *testing.T) {
 	if !ok {
 		t.Error("exec should be present when config is nil")
 	}
+	if _, ok := r.Get(ReadImageToolID); !ok {
+		t.Errorf("%s should be present when config is nil", ReadImageToolID)
+	}
 }
 
 func TestNewToolRegistryFromConfig_DisabledToolExcluded(t *testing.T) {
@@ -34,5 +37,20 @@ func TestNewToolRegistryFromConfig_DisabledToolExcluded(t *testing.T) {
 	_, ok = r.Get("read_file")
 	if !ok {
 		t.Error("read_file should be present when not in list (default enabled)")
+	}
+}
+
+func TestNewToolRegistryFromConfig_DisabledReadImageExcluded(t *testing.T) {
+	cfg := &config.Config{
+		Tools: config.ToolsConfig{
+			List: []config.ToolEntry{{ID: ReadImageToolID, Enabled: false}},
+		},
+	}
+	r := NewToolRegistryFromConfig(cfg)
+	if _, ok := r.Get(ReadImageToolID); ok {
+		t.Fatalf("%s should be excluded when disabled in config", ReadImageToolID)
+	}
+	if _, ok := r.Get("read_file"); !ok {
+		t.Fatal("read_file should remain enabled when read_image is disabled")
 	}
 }
