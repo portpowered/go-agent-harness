@@ -129,7 +129,10 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 		// deterministic transport turn before accepting the next inbound
 		// provider event, so a scheduled audio turn cannot be interleaved
 		// ahead of its own commit/response.create boundary.
-		handled, closed := r.forwardPendingSessionInputs(ctx, session, &responseInFlight, &responseCancelSent)
+		handled, closed, inputErr := r.forwardPendingSessionInputs(ctx, session, &responseInFlight, &responseCancelSent)
+		if inputErr != nil {
+			return inputErr
+		}
 		if closed {
 			return nil
 		}
@@ -174,12 +177,16 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			r.forwardSessionAudio(ctx, session, pcm, &responseInFlight, &responseCancelSent)
+			if err := r.forwardSessionAudio(ctx, session, pcm, &responseInFlight, &responseCancelSent); err != nil {
+				return err
+			}
 		case evt, ok := <-r.UserEventInbox:
 			if !ok {
 				return nil
 			}
-			r.drainSessionAudio(ctx, session, &responseInFlight, &responseCancelSent)
+			if err := r.drainSessionAudio(ctx, session, &responseInFlight, &responseCancelSent); err != nil {
+				return err
+			}
 			r.forwardSessionEvent(ctx, session, evt)
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
@@ -198,63 +205,103 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 // forwardPendingSessionInputs gives queued user audio/control messages
 // priority over the provider receive path. It returns whether it forwarded
 // anything and whether either user inbox was closed.
-func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) (handled, closed bool) {
+func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) (handled, closed bool, err error) {
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
-				return true, true
+				return true, true, nil
 			}
-			r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent)
+			if err := r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent); err != nil {
+				return true, false, err
+			}
 			handled = true
 		case evt, ok := <-r.UserEventInbox:
 			if !ok {
-				return true, true
+				return true, true, nil
 			}
-			r.drainSessionAudio(ctx, session, responseInFlight, responseCancelSent)
+			if err := r.drainSessionAudio(ctx, session, responseInFlight, responseCancelSent); err != nil {
+				return true, false, err
+			}
 			r.forwardSessionEvent(ctx, session, evt)
 			handled = true
 		default:
-			return handled, false
+			return handled, false, nil
 		}
 	}
 }
 
-func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) {
+func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) error {
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
-				return
+				return nil
 			}
-			r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent)
+			if err := r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent); err != nil {
+				return err
+			}
 		default:
-			return
+			return nil
 		}
 	}
 }
 
-func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) {
+func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) error {
 	// Barge-in: new user audio while the current model response is still
 	// non-terminal. The response-created-before-first-audio state is
 	// intentionally included: provider response creation and its first output
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
 	if *responseInFlight && !*responseCancelSent {
-		session.Send(ctx, messages.StreamMessage{
+		outcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
 		})
+		if !outcome.OK() {
+			return r.emitSessionSendFailure(ctx, "response.cancel", outcome)
+		}
 		// Keep the response in flight until its terminal MESSAGE.END arrives,
 		// but never send a second cancel for more audio belonging to the same
-		// response.
+		// response. This state is changed only after the provider-facing send
+		// accepted the cancellation.
 		*responseCancelSent = true
 	}
 	// Forward the user audio to the inference provider.
-	session.Send(ctx, messages.StreamMessage{
+	outcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 		Type:  messages.StreamTypeAudioDelta,
 		Value: messages.NewAudioDeltaValue(pcm),
 	})
+	if !outcome.OK() {
+		return r.emitSessionSendFailure(ctx, "input_audio_buffer.append", outcome)
+	}
+	return nil
+}
+
+// emitSessionSendFailure makes an outbound rejection visible on the loop's
+// terminal stream before the session runner returns. A bool-only Send result
+// cannot distinguish a full queue, closed session, cancellation, or provider
+// failure, so the typed outcome is retained in both the error value and the
+// returned runner error rather than allowing a false clean continuation.
+func (r *ModelRunner) emitSessionSendFailure(ctx context.Context, operation string, outcome messages.SessionSendOutcome) error {
+	err := fmt.Errorf("session %s was not delivered: send status %q", operation, outcome.Status)
+	if outcome.Err != nil {
+		err = errors.Join(err, outcome.Err)
+	}
+	value := messages.NewErrorValueWithTerminal(
+		err.Error(),
+		"session_send_failed",
+		messages.TerminalReasonTerminalFailure,
+		messages.TerminalProvenanceLoop,
+		messages.TerminalOutputNone,
+	)
+	value.Err = err
+	r.DeltaOutbox.WriteTerminal(messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Role:  messages.RoleAssistant,
+		Value: value,
+	})
+	return err
 }
 
 // forwardSessionEvent preserves the legacy best-effort behavior for ordinary

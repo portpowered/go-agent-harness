@@ -410,6 +410,7 @@ type liveS2SBargeInTurn struct {
 	Commit         int
 	ResponseCreate int
 	UserItem       int
+	UserItemID     string
 }
 
 type liveS2SBargeInResponse struct {
@@ -467,13 +468,14 @@ func (l *liveS2SBargeInLedger) evidence() string {
 	}
 	turns := make([]string, 0, len(l.Turns))
 	for _, turn := range l.Turns {
-		turns = append(turns, fmt.Sprintf("T%d{append=%d/%d,bytes=%d,commit=%d,create=%d,user=%d}",
+		turns = append(turns, fmt.Sprintf("T%d{append=%d/%d,bytes=%d,commit=%d,create=%d,user=%s@%d}",
 			turn.Ordinal,
 			turn.AppendCount,
 			turn.LastAppend-turn.FirstAppend+1,
 			turn.AudioBytes,
 			turn.Commit,
 			turn.ResponseCreate,
+			turn.UserItemID,
 			turn.UserItem,
 		))
 	}
@@ -526,7 +528,7 @@ func validateLiveS2SBargeInCapture(capture gwtesting.SessionCapture, trace *live
 	if ledger.SessionCreated != 1 {
 		ledger.Violations = append(ledger.Violations, "session was not reused for all collisions")
 	}
-	if ledger.UserItems != 0 && ledger.UserItems != liveS2SBargeInTurns {
+	if ledger.UserItems != liveS2SBargeInTurns {
 		ledger.Violations = append(ledger.Violations, "user item identity count did not reconcile with input turns")
 	}
 
@@ -537,6 +539,9 @@ func validateLiveS2SBargeInCapture(capture gwtesting.SessionCapture, trace *live
 		}
 		if turn.Commit == 0 || turn.ResponseCreate == 0 {
 			continue
+		}
+		if turn.UserItem == 0 || turn.UserItemID == "" {
+			ledger.Violations = append(ledger.Violations, fmt.Sprintf("T%d has no attributable redacted user item identity", want))
 		}
 		if turn.Commit >= turn.ResponseCreate {
 			ledger.Violations = append(ledger.Violations, fmt.Sprintf("T%d commit/response request order is invalid", want))
@@ -672,7 +677,7 @@ func liveS2SValidateRecord(ledger *liveS2SBargeInLedger, record gwtesting.Captur
 			return
 		}
 		ledger.UserItems++
-		liveS2SAssignUserItem(ledger, sequence)
+		liveS2SAssignUserItem(ledger, sequence, fmt.Sprintf("I%d", ledger.UserItems))
 	case "response.created":
 		if !server {
 			ledger.Violations = append(ledger.Violations, "response creation had the wrong direction")
@@ -790,10 +795,11 @@ func liveS2SValidateRecord(ledger *liveS2SBargeInLedger, record gwtesting.Captur
 	}
 }
 
-func liveS2SAssignUserItem(ledger *liveS2SBargeInLedger, sequence int) {
+func liveS2SAssignUserItem(ledger *liveS2SBargeInLedger, sequence int, redactedID string) {
 	for _, turn := range ledger.Turns {
 		if turn.UserItem == 0 {
 			turn.UserItem = sequence
+			turn.UserItemID = redactedID
 			return
 		}
 	}
@@ -980,6 +986,50 @@ func validateLiveS2SBargeInRecordDir(path string) error {
 		return fmt.Errorf("session diagnostic log entries=%d, want %d", entries, liveS2SBargeInTurns)
 	}
 	return nil
+}
+
+func newLiveS2SBargeInValidatorTrace() *liveS2SBargeInTrace {
+	trace := newLiveS2SBargeInTrace()
+	trace.markInputStart(1)
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1, 2})})
+	trace.markInputStart(2)
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	trace.markInputStart(3)
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{3, 4})})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	trace.markInputStart(4)
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{5, 6})})
+	trace.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	return trace
+}
+
+func TestLiveSessionS2SLiveShapedBargeInV2ValidatorRejectsMissingUserItem(t *testing.T) {
+	capture, _ := loadS2SLiveShapedBargeInV2ReplayCapture(t)
+	trace := newLiveS2SBargeInValidatorTrace()
+
+	removed := false
+	filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
+	for _, record := range capture.Records {
+		if !removed && record.Type == "conversation.item.created" && liveS2SJSONField(liveS2SPayload(record), "item.role") == "user" {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+	if !removed {
+		t.Fatal("missing-user-item negative control did not find a user conversation item")
+	}
+	capture.Records = filtered
+
+	ledger, validationErr := validateLiveS2SBargeInCapture(capture, trace)
+	if validationErr == nil || !strings.Contains(validationErr.Error(), "user item") {
+		t.Fatalf("missing-user-item validation = %v, want a user-item contract failure; evidence=%s", validationErr, ledger.evidence())
+	}
 }
 
 func TestLiveSessionS2SLiveShapedBargeInV2(t *testing.T) {

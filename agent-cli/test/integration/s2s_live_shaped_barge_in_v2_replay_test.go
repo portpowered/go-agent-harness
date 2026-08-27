@@ -14,6 +14,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -228,12 +229,16 @@ func TestSessionCommandS2SLiveShapedBargeInV2ReplaysSanitizedLiveCapture(t *test
 func TestSessionCommandS2SLiveShapedBargeInV2ReplayNegativeControls(t *testing.T) {
 	base, _ := loadS2SLiveShapedBargeInV2ReplayCapture(t)
 	cases := []struct {
-		name   string
-		mutate func(*gwtesting.SessionCapture) bool
-		want   string
+		name       string
+		mutate     func(*gwtesting.SessionCapture) bool
+		want       string
+		wantStarts int
+		wantEnds   int
 	}{
 		{
-			name: "dropped replacement",
+			name:       "dropped replacement",
+			wantStarts: deterministicBargeInTurns - 1,
+			wantEnds:   deterministicBargeInTurns - 1,
 			mutate: func(capture *gwtesting.SessionCapture) bool {
 				filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
 				removed := false
@@ -267,7 +272,9 @@ func TestSessionCommandS2SLiveShapedBargeInV2ReplayNegativeControls(t *testing.T
 			want: "duplicate response.cancel",
 		},
 		{
-			name: "clean unresolved outcome",
+			name:       "clean unresolved outcome",
+			wantStarts: deterministicBargeInTurns,
+			wantEnds:   deterministicBargeInTurns - 1,
 			mutate: func(capture *gwtesting.SessionCapture) bool {
 				for index := len(capture.Records) - 1; index >= 0; index-- {
 					if capture.Records[index].Type != "response.done" {
@@ -294,9 +301,32 @@ func TestSessionCommandS2SLiveShapedBargeInV2ReplayNegativeControls(t *testing.T
 			}
 
 			_, replayPath := writeS2SLiveShapedBargeInV2ReplayCapture(t, capture)
-			trace, _, _, runErr := runS2SLiveShapedBargeInV2Replay(t, replayPath)
-			if runErr == nil {
-				t.Fatalf("negative control replay unexpectedly completed cleanly; evidence=%s; stream=%v", ledger.evidence(), trace.streamSnapshot())
+			trace, runtimeObserver, _, runErr := runS2SLiveShapedBargeInV2Replay(t, replayPath)
+			if runErr != nil {
+				t.Logf("shipped CLI surfaced a transport-level negative-control error: %v", runErr)
+			}
+			if testCase.wantStarts != 0 || testCase.wantEnds != 0 {
+				starts, ends := 0, 0
+				for _, event := range trace.streamSnapshot() {
+					switch event.Type {
+					case messages.StreamTypeMessageStart:
+						starts++
+					case messages.StreamTypeMessageEnd:
+						ends++
+					}
+				}
+				if starts != testCase.wantStarts || ends != testCase.wantEnds {
+					t.Fatalf("shipped CLI negative-control stream did not preserve the violated boundary: starts=%d ends=%d, want %d/%d; evidence=%s; stream=%v", starts, ends, testCase.wantStarts, testCase.wantEnds, ledger.evidence(), trace.streamSnapshot())
+				}
+			}
+			facts := runtimeObserver.snapshot()
+			if len(facts) == 0 {
+				t.Fatalf("shipped CLI negative-control produced no runtime evidence; ledger=%s", ledger.evidence())
+			}
+			for _, fact := range facts {
+				if fact.Kind == services.SessionRuntimeObservationTerminal && fact.Clean && !fact.HasError && fact.Accounted && fact.Turns >= deterministicBargeInTurns {
+					t.Fatalf("negative control reported clean accounted success for unresolved work: fact=%#v; ledger=%s; stream=%v", fact, ledger.evidence(), trace.streamSnapshot())
+				}
 			}
 		})
 	}

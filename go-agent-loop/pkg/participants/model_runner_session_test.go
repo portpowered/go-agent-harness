@@ -100,6 +100,27 @@ type streamOnlyRecordingSession struct {
 	once sync.Once
 }
 
+// sessionSendFailureSession exercises the typed session-send contract used by
+// the barge-in path. It records successful messages like recordingSession but
+// returns a chosen lifecycle failure for one message type without pretending
+// that the message was accepted.
+type sessionSendFailureSession struct {
+	*recordingSession
+	failType messages.StreamMessageType
+	outcome  messages.SessionSendOutcome
+}
+
+func (s *sessionSendFailureSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+func (s *sessionSendFailureSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if msg.Type == s.failType {
+		return s.outcome
+	}
+	return messages.SendSessionWithOutcome(ctx, s.recordingSession, msg)
+}
+
 func newStreamOnlyRecordingSession() *streamOnlyRecordingSession {
 	return &streamOnlyRecordingSession{
 		recv: messages.NewTypedBuffer[messages.StreamMessage](8),
@@ -289,6 +310,96 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	}
 	if second.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
+	}
+}
+
+func TestSessionModelRunner_BargeInSendFailuresAreTerminal(t *testing.T) {
+	tests := []struct {
+		name     string
+		failType messages.StreamMessageType
+		wantText string
+	}{
+		{
+			name:     "cancel rejected",
+			failType: messages.StreamTypeResponseCancel,
+			wantText: "response.cancel",
+		},
+		{
+			name:     "interrupting audio rejected",
+			failType: messages.StreamTypeAudioDelta,
+			wantText: "input_audio_buffer.append",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			base := newRecordingSession()
+			session := &sessionSendFailureSession{
+				recordingSession: base,
+				failType:         test.failType,
+				outcome: messages.SessionSendOutcome{
+					Status: messages.SessionSendBufferFull,
+					Err:    errors.New("outbound session queue is full"),
+				},
+			}
+			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			runErr := make(chan error, 1)
+			go func() { runErr <- runner.Run(ctx) }()
+
+			base.recv.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeMessageStart,
+				Value: messages.NewMessageStartValue(),
+			})
+			waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+			runner.UserAudioInbox <- []byte{1, 2, 3}
+
+			errorDelta := waitForDelta(t, ctx, runner, messages.StreamTypeError)
+			value, ok := errorDelta.Value.(*messages.ErrorValue)
+			if !ok {
+				t.Fatalf("error value = %T, want *messages.ErrorValue", errorDelta.Value)
+			}
+			if !contains(value.Message, test.wantText) {
+				t.Fatalf("error message = %q, want %q", value.Message, test.wantText)
+			}
+			if value.TerminalReason != messages.TerminalReasonTerminalFailure {
+				t.Fatalf("terminal reason = %q, want %q", value.TerminalReason, messages.TerminalReasonTerminalFailure)
+			}
+			if value.TerminalProvenance != messages.TerminalProvenanceLoop {
+				t.Fatalf("terminal provenance = %q, want %q", value.TerminalProvenance, messages.TerminalProvenanceLoop)
+			}
+			if !errors.Is(value.Err, session.outcome.Err) {
+				t.Fatalf("error value did not preserve send failure: %v", value.Err)
+			}
+
+			select {
+			case err := <-runErr:
+				if err == nil || !contains(err.Error(), test.wantText) {
+					t.Fatalf("runner error = %v, want terminal %q failure", err, test.wantText)
+				}
+			case <-ctx.Done():
+				t.Fatal("runner did not terminate after rejected session send")
+			}
+
+			sent := base.sentMessages()
+			for _, msg := range sent {
+				if msg.Type == test.failType {
+					t.Fatalf("rejected %s was recorded as accepted", test.failType)
+				}
+			}
+			if test.failType == messages.StreamTypeResponseCancel && len(sent) != 0 {
+				t.Fatalf("cancel rejection forwarded %d messages, want none", len(sent))
+			}
+			if test.failType == messages.StreamTypeAudioDelta {
+				if len(sent) != 1 || sent[0].Type != messages.StreamTypeResponseCancel {
+					t.Fatalf("audio rejection sends = %#v, want one accepted response cancel", sent)
+				}
+			}
+			if err := session.Close(); err != nil {
+				t.Fatalf("close failure session: %v", err)
+			}
+		})
 	}
 }
 
