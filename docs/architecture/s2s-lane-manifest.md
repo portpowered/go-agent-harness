@@ -82,7 +82,7 @@ UPDATE 2026-08-26: every lane below except `s2s-v2b-audio-in-long` (OPEN PR #185
 - `s2s-v7c-metrics-reconcile`
 - `s2s-v8-duplex-overlap`
 - `s2s-v10-webrtc-external-source`
-- `s2s-e2e-tool-call-conversation`
+- `s2s-e2e-conversation-observability`
 - `s2s-e2e-vision-describe`
 - `s2s-e2e-customer-acceptance-probe`
 - `s2s-acc-probe-goal-catalog`

@@ -43,3 +43,33 @@ func TestSessionProgressObserver_RejectedResultRegistersBeforeCallObservation(t 
 		t.Fatalf("accepted call retained rejection status %q", statuses[callID])
 	}
 }
+
+func TestSessionProgressObserver_IncompleteResponsePreservesAcceptedResultID(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-incomplete-response"
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "get_weather", `{"city":"Lisbon"}`),
+	})
+	observer.noteToolResultAccepted(callID)
+
+	err := audioResponseCompletionError(nil, sessionLoopOptions{
+		RequireAssistantResponse: true,
+		observer:                 observer,
+	})
+	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
+		t.Fatalf("incomplete response error = %v, want ErrSessionAudioResponseIncomplete", err)
+	}
+	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("unresolved IDs after incomplete response = %v, want [%s]", got, callID)
+	}
+
+	// A provider writer can report queue acceptance after the terminal path has
+	// started. That late callback must not clear the preserved obligation.
+	observer.noteToolResultAccepted(callID)
+	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("late acceptance cleared unresolved ID = %v, want [%s]", got, callID)
+	}
+}

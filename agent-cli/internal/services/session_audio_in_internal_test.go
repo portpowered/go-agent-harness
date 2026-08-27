@@ -305,6 +305,56 @@ func TestShouldStopAudioInputAwaitingResponseSemantics(t *testing.T) {
 	}
 }
 
+func TestShouldStopAudioInputSessionLoopWaitsForFinalAssistantResponse(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue("call-1", "lookup", `{}`),
+	})
+
+	intermediateProviderEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(intermediateProviderEnd)
+	if shouldStopAudioInputSessionLoop(intermediateProviderEnd, sessionLoopOptions{
+		RequireAssistantResponse: true,
+		observer:                 observer,
+	}, false, true) {
+		t.Fatal("provider tool-call MESSAGE.END stopped before the tool result and follow-up response")
+	}
+
+	toolRunnerEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleTool,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(toolRunnerEnd)
+	if shouldStopAudioInputSessionLoop(toolRunnerEnd, sessionLoopOptions{
+		RequireAssistantResponse: true,
+		observer:                 observer,
+	}, false, true) {
+		t.Fatal("ToolRunner RoleTool MESSAGE.END stopped before the follow-up response")
+	}
+
+	observer.noteToolResultAccepted("call-1")
+	finalAssistantEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(finalAssistantEnd)
+	if !shouldStopAudioInputSessionLoop(finalAssistantEnd, sessionLoopOptions{
+		RequireAssistantResponse: true,
+		observer:                 observer,
+	}, false, true) {
+		t.Fatal("completed non-tool assistant MESSAGE.END did not stop the awaiting audio session")
+	}
+}
+
 // TestNewSessionWAVSourceResamples24kHz proves the 24 kHz corpus path: the
 // source decodes the payload once, resamples it to the harness rate, and
 // serves harness-rate frames with the established zero-pad/EOF semantics.

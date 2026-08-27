@@ -144,6 +144,26 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 			`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"call_weather_1","name":"`+toolCallScenarioName+`"}}`)
 		serverEvent("response.function_call_arguments.done",
 			`{"type":"response.function_call_arguments.done","call_id":"call_weather_1","name":"`+toolCallScenarioName+`","arguments":`+strconvQuote(toolCallScenarioArguments)+`}`)
+		// The tool-call response terminates with the call pending; the
+		// spoken follow-up response exists only after the executed result is
+		// delivered back to the provider.
+		serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_single_call","status":"completed"}}`)
+		// Tool results are delivered on the provider wire: replay validation
+		// gates the post-tool speech behind this exact function_call_output
+		// frame from the live session.
+		outputPayload, outputMarshalErr := json.Marshal(map[string]any{
+			"type": "conversation.item.create",
+			"item": map[string]string{
+				"type":    "function_call_output",
+				"call_id": "call_weather_1",
+				"output":  toolSingleCallResultContent,
+			},
+		})
+		if outputMarshalErr != nil {
+			t.Fatalf("marshal function_call_output event: %v", outputMarshalErr)
+		}
+		clientEvent("conversation.item.create", outputPayload)
+		serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_single_call_reply"}}`)
 	}
 	transcriptDelta, marshalErr := json.Marshal(map[string]string{
 		"type":  "response.output_audio_transcript.delta",
@@ -165,20 +185,6 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 	serverEvent("response.output_audio.delta", string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_single_call","status":"completed"}}`)
-	if includeToolCall {
-		resultPayload, marshalErr := json.Marshal(map[string]any{
-			"type": "conversation.item.create",
-			"item": map[string]any{
-				"type":    "function_call_output",
-				"call_id": "call_weather_1",
-				"output":  toolCallScenarioOutput,
-			},
-		})
-		if marshalErr != nil {
-			t.Fatalf("marshal tool result event: %v", marshalErr)
-		}
-		clientEvent("conversation.item.create", resultPayload)
-	}
 
 	baseCapture.Session.ID = "sess_tool_single_call"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -209,6 +215,11 @@ func strconvQuote(s string) string {
 	return string(data)
 }
 
+// toolSingleCallResultContent is the canned weather report the recording
+// executor returns; the fixture's expected function_call_output frame carries
+// it verbatim now that tool results are delivered on the provider wire.
+const toolSingleCallResultContent = `{"temperature_c":24,"condition":"clear"}`
+
 // toolCallRecordingExecutor is a messages.ToolExecutor that records every
 // invocation (name + arguments) so the test can assert exactly-one named-tool
 // execution on the executor reached through the real CLI wiring.
@@ -218,7 +229,7 @@ type toolCallRecordingExecutor struct {
 
 func (e *toolCallRecordingExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	e.calls = append(e.calls, call)
-	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: `{"temperature_c":24,"condition":"clear"}`}, nil
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: toolSingleCallResultContent}, nil
 }
 
 // runToolSingleCall drives the real 'agent session' command surface — wired
@@ -353,11 +364,29 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 		return fmt.Errorf("missing named invocation %q: recorded %d calls, want exactly one", toolCallScenarioName, len(calls))
 	}
 	call := calls[0]
+	if call.ID != toolConversationCallID {
+		return fmt.Errorf("executor invocation has call ID %q, want non-empty originating ID %q", call.ID, toolConversationCallID)
+	}
 	if call.Name != toolCallScenarioName {
 		return fmt.Errorf("executor invoked tool %q, want %q", call.Name, toolCallScenarioName)
 	}
-	if !json.Valid([]byte(call.Arguments)) || !strings.Contains(call.Arguments, "Lisbon") {
-		return fmt.Errorf("executor invoked %q with arguments %q, want valid arguments mentioning Lisbon", call.Name, call.Arguments)
+	var args struct {
+		City string `json:"city"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(call.Arguments))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil {
+		return fmt.Errorf("executor invoked %q with invalid arguments %q: %w", call.Name, call.Arguments, err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("executor invoked %q with multiple argument values %q", call.Name, call.Arguments)
+		}
+		return fmt.Errorf("executor invoked %q with trailing invalid arguments %q: %w", call.Name, call.Arguments, err)
+	}
+	if args.City != "Lisbon" {
+		return fmt.Errorf("executor invoked %q with decoded city %q, want %q", call.Name, args.City, "Lisbon")
 	}
 	return nil
 }
