@@ -232,23 +232,35 @@ func (i *promptOnlyRecordingSessionInferencer) ConnectSession(ctx context.Contex
 	}) {
 		return nil, ctx.Err()
 	}
-	for _, event := range session.events {
-		if !session.receive.Write(ctx, event) {
-			return nil, ctx.Err()
-		}
-	}
 	return session, nil
 }
 
 type promptOnlyRecordingSession struct {
-	events  []messages.StreamMessage
-	receive *messages.TypedBuffer[messages.StreamMessage]
-	done    chan struct{}
-	once    sync.Once
+	events       []messages.StreamMessage
+	receive      *messages.TypedBuffer[messages.StreamMessage]
+	done         chan struct{}
+	once         sync.Once
+	responseOnce sync.Once
 }
 
 func (s *promptOnlyRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return true
+	if msg.Type != messages.StreamTypeTextDelta {
+		return true
+	}
+	value, ok := msg.Value.(*messages.TextDeltaValue)
+	if !ok || value == nil || value.Content == "" {
+		return true
+	}
+	writeOK := true
+	s.responseOnce.Do(func() {
+		for _, event := range s.events {
+			if !s.receive.Write(ctx, event) {
+				writeOK = false
+				return
+			}
+		}
+	})
+	return writeOK
 }
 
 func (s *promptOnlyRecordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {

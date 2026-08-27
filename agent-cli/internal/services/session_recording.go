@@ -278,6 +278,7 @@ func runSessionWithRecordingDirectory(
 
 	var audioOutput *sessionAudioOutput
 	var audioWrapper *sessionAudioOutputInferencer
+	var textOutput *sessionTextOutput
 	if audioOutPath != "" {
 		sink, sinkErr := newSessionAudioSink(audioOutPath, out)
 		if sinkErr != nil {
@@ -297,16 +298,20 @@ func runSessionWithRecordingDirectory(
 		wirePrompt := nextSessionTextWirePrompt()
 		plan.loop.Prompt = wirePrompt
 		if plan.inferencer != nil {
+			textOutput = &sessionTextOutput{writer: out}
 			plan.inferencer = &sessionTextSeedInferencer{
 				inner:      plan.inferencer,
 				wirePrompt: wirePrompt,
 				value:      seed.Value,
-				audioOut:   &sessionTextOutput{writer: out},
+				audioOut:   textOutput,
 			}
 		}
 	}
 
 	sessionOut := out
+	if textOutput != nil {
+		sessionOut = textOutput
+	}
 	if audioOutPath == "-" {
 		sessionOut = io.Discard
 	}
