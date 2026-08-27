@@ -278,6 +278,7 @@ func runSessionWithRecordingDirectory(
 
 	var audioOutput *sessionAudioOutput
 	var audioWrapper *sessionAudioOutputInferencer
+	var textOutput *sessionTextOutput
 	if audioOutPath != "" {
 		sink, sinkErr := newSessionAudioSink(audioOutPath, out)
 		if sinkErr != nil {
@@ -297,16 +298,20 @@ func runSessionWithRecordingDirectory(
 		wirePrompt := nextSessionTextWirePrompt()
 		plan.loop.Prompt = wirePrompt
 		if plan.inferencer != nil {
+			textOutput = &sessionTextOutput{writer: out}
 			plan.inferencer = &sessionTextSeedInferencer{
 				inner:      plan.inferencer,
 				wirePrompt: wirePrompt,
 				value:      seed.Value,
-				audioOut:   &sessionTextOutput{writer: out},
+				audioOut:   textOutput,
 			}
 		}
 	}
 
 	sessionOut := out
+	if textOutput != nil {
+		sessionOut = textOutput
+	}
 	if audioOutPath == "-" {
 		sessionOut = io.Discard
 	}
@@ -346,9 +351,9 @@ func runSessionWithRecordingDirectory(
 }
 
 // finalizeSessionDirectoryRecording preserves a provider, cancellation, or
-// runtime failure when the failed run has no audio to satisfy the recording
-// bundle's success-only non-empty-segment invariant. A clean run still returns
-// the validation error, so an incomplete recording can never look successful.
+// runtime failure when finalization cannot validate the captured recording. A
+// clean run still returns any recording validation error, so an incomplete
+// recording can never look successful.
 func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
 	recordingErr := recording.Finalize()
 	if runErr != nil && errors.Is(recordingErr, transcript.ErrInvalidRecording) {

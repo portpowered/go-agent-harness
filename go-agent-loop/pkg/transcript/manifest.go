@@ -163,7 +163,11 @@ type RecordingConfig struct {
 	ClientTranscriptPath string
 	AgentTranscriptPath  string
 
-	InputSegments  [][]byte
+	// InputSegments is optional for prompt-only sessions. When present, every
+	// segment must contain bytes and is emitted as audio/in-NNN.pcm.
+	InputSegments [][]byte
+	// OutputSegments contains only observed assistant audio. When present,
+	// every segment must contain bytes and is emitted as audio/out-NNN.pcm.
 	OutputSegments [][]byte
 
 	// SessionLog is an optional machine-readable conversation log (JSONL).
@@ -422,7 +426,7 @@ func readTranscriptInput(data []byte, path, side, destination string, redactor c
 
 func validateSegments(segments [][]byte, name, destination string, redactor credentialRedactor) error {
 	if len(segments) == 0 {
-		return recordingError(ErrInvalidRecording, "validate "+name+" audio", destination, errors.New("at least one segment is required"), redactor)
+		return nil
 	}
 	for index, segment := range segments {
 		if len(segment) == 0 {
