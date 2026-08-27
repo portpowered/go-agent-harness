@@ -162,9 +162,7 @@
         "item": {
           "type": "message",
           "role": "user",
-          "metadata": {
-            "tool_call_id": "call_read_image_1"
-          },
+          "id": "item_tool_result_call_read_image_1",
           "content": [
             {
               "type": "input_image",

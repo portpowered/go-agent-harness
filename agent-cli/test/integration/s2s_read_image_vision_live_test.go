@@ -293,12 +293,12 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		}
 		var event struct {
 			Item struct {
-				Type     string            `json:"type"`
-				CallID   string            `json:"call_id"`
-				Output   string            `json:"output"`
-				Role     string            `json:"role"`
-				Metadata map[string]string `json:"metadata"`
-				Content  []struct {
+				Type    string `json:"type"`
+				CallID  string `json:"call_id"`
+				Output  string `json:"output"`
+				Role    string `json:"role"`
+				ID      string `json:"id"`
+				Content []struct {
 					Type     string `json:"type"`
 					ImageURL string `json:"image_url"`
 				} `json:"content"`
@@ -324,7 +324,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 					continue
 				}
 				observation.inputImageCount++
-				if event.Item.Metadata["tool_call_id"] == observation.readImageCallID {
+				if event.Item.ID == "item_tool_result_"+observation.readImageCallID {
 					observation.correlatedImageCount++
 					observation.correlatedImageIndex = index
 					observation.correlatedImageURL = part.ImageURL
