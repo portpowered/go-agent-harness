@@ -30,6 +30,7 @@ import (
 
 const (
 	readImagePositiveFixtureName = "read_image_positive.session.json"
+	readImageMissingFixtureName  = "read_image_missing.session.json"
 	readImageNegativeFixtureName = "read_image_negative.session.json"
 	readImagePathPlaceholder     = "__READ_IMAGE_PATH__"
 	readImageDataPlaceholder     = "__READ_IMAGE_DATA_URL__"
@@ -133,7 +134,6 @@ func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath st
 // shortcut.
 func materializeReadImageReplayFixtureMode(t *testing.T, committedPath, imagePath string, imageBytes []byte, includeSessionClose bool) string {
 	t.Helper()
-	capture := captureCopy(t, committedPath)
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
 	digest := sha256.Sum256(imageBytes)
 	result, err := json.Marshal(tools.ReadImageResult{
@@ -147,6 +147,25 @@ func materializeReadImageReplayFixtureMode(t *testing.T, committedPath, imagePat
 	if err != nil {
 		t.Fatalf("marshal read_image result envelope: %v", err)
 	}
+	return materializeReadImageReplayResultFixture(t, committedPath, imagePath, dataURL, string(result), includeSessionClose)
+}
+
+func materializeReadImageMissingReplayFixtureMode(t *testing.T, committedPath, imagePath string, includeSessionClose bool) string {
+	t.Helper()
+	result, err := json.Marshal(tools.ReadImageResult{
+		Version: tools.ReadImageResultVersion,
+		Status:  tools.ReadImageResultStatusError,
+		Error:   expectedReadImageMissingError(t, imagePath),
+	})
+	if err != nil {
+		t.Fatalf("marshal missing read_image result envelope: %v", err)
+	}
+	return materializeReadImageReplayResultFixture(t, committedPath, imagePath, "", string(result), includeSessionClose)
+}
+
+func materializeReadImageReplayResultFixture(t *testing.T, committedPath, imagePath, dataURL, result string, includeSessionClose bool) string {
+	t.Helper()
+	capture := captureCopy(t, committedPath)
 	for index := range capture.Records {
 		record := &capture.Records[index]
 		payload := record.Payload
@@ -178,6 +197,18 @@ func materializeReadImageReplayFixtureMode(t *testing.T, committedPath, imagePat
 		t.Fatalf("materialized read_image replay fixture rejected: %v", err)
 	}
 	return path
+}
+
+func expectedReadImageMissingError(t *testing.T, imagePath string) string {
+	t.Helper()
+	_, err := os.ReadFile(imagePath)
+	if err == nil {
+		t.Fatalf("missing read_image path unexpectedly exists: %s", imagePath)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing read_image path returned unexpected error: %v", err)
+	}
+	return fmt.Sprintf("session image %q is missing: %v", imagePath, err)
 }
 
 func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataURL, result string) json.RawMessage {
@@ -434,6 +465,132 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 	}
 }
 
+func assertReadImageMissingWireContract(t *testing.T, fixturePath, imagePath string) {
+	t.Helper()
+	capture := captureCopy(t, fixturePath)
+	wantError := expectedReadImageMissingError(t, imagePath)
+
+	callCount := 0
+	callID := ""
+	toolArgumentCount := 0
+	functionOutputCount := 0
+	functionOutputIndex := -1
+	imageItemCount := 0
+	continuationResponseCreates := make([]int, 0, 2)
+	for index, record := range capture.Records {
+		payload := record.Payload
+		if len(payload) == 0 {
+			payload = record.Data
+		}
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_item.added" {
+			var event struct {
+				Item struct {
+					Type   string `json:"type"`
+					CallID string `json:"call_id"`
+					Name   string `json:"name"`
+				} `json:"item"`
+			}
+			if err := json.Unmarshal(payload, &event); err != nil {
+				t.Fatalf("decode missing read_image tool call: %v", err)
+			}
+			if event.Item.Type == "function_call" && event.Item.Name == tools.ReadImageToolID {
+				callCount++
+				callID = event.Item.CallID
+			}
+		}
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" {
+			var event struct {
+				CallID    string `json:"call_id"`
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			}
+			if err := json.Unmarshal(payload, &event); err != nil {
+				t.Fatalf("decode missing read_image arguments: %v", err)
+			}
+			if event.CallID != readImageCallID || event.Name != tools.ReadImageToolID {
+				t.Fatalf("missing read_image arguments correlation = (%q, %q), want (%q, %q)", event.CallID, event.Name, readImageCallID, tools.ReadImageToolID)
+			}
+			var arguments struct {
+				Path string `json:"path"`
+			}
+			if err := json.Unmarshal([]byte(event.Arguments), &arguments); err != nil {
+				t.Fatalf("decode missing read_image arguments JSON: %v", err)
+			}
+			if arguments.Path != imagePath {
+				t.Fatalf("missing read_image path = %q, want %q", arguments.Path, imagePath)
+			}
+			toolArgumentCount++
+		}
+		if record.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		switch record.Type {
+		case "conversation.item.create":
+			var event struct {
+				Item struct {
+					Type    string `json:"type"`
+					CallID  string `json:"call_id"`
+					Output  string `json:"output"`
+					Content []struct {
+						Type string `json:"type"`
+					} `json:"content"`
+				} `json:"item"`
+			}
+			if err := json.Unmarshal(payload, &event); err != nil {
+				t.Fatalf("decode missing read_image conversation item: %v", err)
+			}
+			switch event.Item.Type {
+			case "function_call_output":
+				functionOutputCount++
+				functionOutputIndex = index
+				if event.Item.CallID != readImageCallID {
+					t.Fatalf("missing function_call_output call_id = %q, want %q", event.Item.CallID, readImageCallID)
+				}
+				if strings.TrimSpace(event.Item.Output) == "" {
+					t.Fatal("missing read_image function_call_output is empty")
+				}
+				var result tools.ReadImageResult
+				if err := json.Unmarshal([]byte(event.Item.Output), &result); err != nil {
+					t.Fatalf("decode missing read_image error envelope: %v", err)
+				}
+				if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error != wantError {
+					t.Fatalf("missing read_image result = %#v, want version %d error %q", result, tools.ReadImageResultVersion, wantError)
+				}
+				if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.DataURL != "" {
+					t.Fatalf("missing read_image result unexpectedly carried image metadata: %#v", result)
+				}
+			case "message":
+				for _, part := range event.Item.Content {
+					if part.Type == "input_image" {
+						imageItemCount++
+					}
+				}
+			}
+		case "response.create":
+			continuationResponseCreates = append(continuationResponseCreates, index)
+		}
+	}
+
+	if callCount != 1 || callID != readImageCallID {
+		t.Fatalf("missing read_image calls = %d with call ID %q, want one call ID %q", callCount, callID, readImageCallID)
+	}
+	if toolArgumentCount != 1 {
+		t.Fatalf("missing read_image argument event count = %d, want exactly one", toolArgumentCount)
+	}
+	if functionOutputCount != 1 {
+		t.Fatalf("missing function_call_output count = %d, want exactly one", functionOutputCount)
+	}
+	if imageItemCount != 0 {
+		t.Fatalf("missing read_image emitted %d input_image item(s), want none", imageItemCount)
+	}
+	if len(continuationResponseCreates) != 2 {
+		t.Fatalf("missing read_image response.create count = %d, want initial request plus exactly one continuation", len(continuationResponseCreates))
+	}
+	if functionOutputIndex >= continuationResponseCreates[1] {
+		t.Fatalf("missing read_image transaction order = function output %d, continuation %d; want output before continuation", functionOutputIndex, continuationResponseCreates[1])
+	}
+}
+
 // rewriteReadImageCapture copies a materialized capture and applies a wire
 // mutation. It is used only for negative controls that must fail at the
 // provider boundary, before scripted grounded prose can be delivered.
@@ -644,6 +801,70 @@ func TestReadImageCLI_DefaultLifecycleRejectsEmptyFunctionOutput(t *testing.T) {
 		if strings.Contains(output, marker) {
 			t.Fatalf("empty function_call_output released fabricated grounded reply %q: %s", marker, output)
 		}
+	}
+}
+
+// TestReadImageCLI_DefaultLifecycleMissingFileContinues proves the failed
+// read_image transaction through the shipped CLI composition. The capture has
+// no provider-close record, so the default lifecycle must consume the one
+// continuation after the non-empty error result before returning.
+func TestReadImageCLI_DefaultLifecycleMissingFileContinues(t *testing.T) {
+	missingPath := filepath.Join(t.TempDir(), "guaranteed-missing-read-image.png")
+	configDir := writeReadImageConfig(t, true)
+	committedFixture := readImageReplayFixturePath(t, readImageMissingFixtureName)
+	if violations := gwtesting.ValidateSessionCaptureFile(committedFixture); len(violations) != 0 {
+		t.Fatalf("committed missing read_image fixture failed validation: %v", violations)
+	}
+	fixture := materializeReadImageMissingReplayFixtureMode(t, committedFixture, missingPath, false)
+	assertReadImageToolAdvertisement(t, fixture, true)
+	assertReadImageMissingWireContract(t, fixture, missingPath)
+
+	observer := &readImageSessionObserver{}
+	output, runErr := runReadImageSession(t, fixture, configDir, missingPath, observer)
+	if runErr != nil {
+		t.Fatalf("default missing read_image CLI replay failed: %v\noutput: %s", runErr, output)
+	}
+	if strings.Contains(output, "use of closed network connection") {
+		t.Fatalf("missing read_image session reported a closed network error: %s", output)
+	}
+	if !strings.Contains(strings.ToLower(output), "could not read the image") || !strings.Contains(strings.ToLower(output), "missing") {
+		t.Fatalf("missing read_image response did not explain the missing file: %s", output)
+	}
+	for _, marker := range readImageGroundedMarkers {
+		if strings.Contains(output, marker) {
+			t.Fatalf("missing read_image response fabricated grounded marker %q: %s", marker, output)
+		}
+	}
+
+	events := observer.snapshot()
+	toolCallIndex := -1
+	assistantMessageStarts := 0
+	continuationMessageStart := -1
+	finalAssistantEnd := -1
+	for index, event := range events {
+		if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == tools.ReadImageToolID {
+			if toolCallIndex >= 0 {
+				t.Fatalf("missing read_image observed duplicate tool call: %#v", events)
+			}
+			toolCallIndex = index
+		}
+		if event.Type == messages.StreamTypeImageStart || event.Type == messages.StreamTypeImageDelta || event.Type == messages.StreamTypeImageEnd {
+			if event.Role == messages.RoleTool || event.ToolCallId == readImageCallID {
+				t.Fatalf("missing read_image emitted image result event: %#v", event)
+			}
+		}
+		if event.Type == messages.StreamTypeMessageStart && event.Role != messages.RoleTool {
+			assistantMessageStarts++
+			if assistantMessageStarts == 2 {
+				continuationMessageStart = index
+			}
+		}
+		if event.Type == messages.StreamTypeMessageEnd && event.Role != messages.RoleTool && continuationMessageStart >= 0 {
+			finalAssistantEnd = index
+		}
+	}
+	if toolCallIndex < 0 || continuationMessageStart <= toolCallIndex || finalAssistantEnd <= continuationMessageStart {
+		t.Fatalf("missing read_image session did not reach a terminal assistant continuation: tool_call=%d continuation_start=%d assistant_starts=%d assistant_end=%d events=%#v", toolCallIndex, continuationMessageStart, assistantMessageStarts, finalAssistantEnd, events)
 	}
 }
 
