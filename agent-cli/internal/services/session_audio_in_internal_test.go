@@ -279,23 +279,25 @@ func TestSessionWAVSourceCloseIsOnceAndGuardsReads(t *testing.T) {
 // provider errors, or SESSION.CLOSE end an awaiting session.
 func TestShouldStopAudioInputAwaitingResponseSemantics(t *testing.T) {
 	cases := []struct {
-		name     string
-		msg      messages.StreamMessageType
-		awaiting bool
-		wantStop bool
+		name         string
+		msg          messages.StreamMessageType
+		awaiting     bool
+		waitForClose bool
+		wantStop     bool
 	}{
-		{"mid-response text end does not stop", messages.StreamTypeTextEnd, true, false},
-		{"audio delta does not stop", messages.StreamTypeAudioDelta, true, false},
-		{"transcript delta does not stop", messages.StreamTypeTranscriptDelta, true, false},
-		{"message end from response.done stops", messages.StreamTypeMessageEnd, true, true},
-		{"provider error stops", messages.StreamTypeError, true, true},
-		{"session close stops", messages.StreamTypeSessionClose, true, true},
-		{"before end-of-turn message end does not stop", messages.StreamTypeMessageEnd, false, false},
-		{"before end-of-turn session close stops", messages.StreamTypeSessionClose, false, true},
+		{"mid-response text end does not stop", messages.StreamTypeTextEnd, true, false, false},
+		{"audio delta does not stop", messages.StreamTypeAudioDelta, true, false, false},
+		{"transcript delta does not stop", messages.StreamTypeTranscriptDelta, true, false, false},
+		{"message end from response.done stops", messages.StreamTypeMessageEnd, true, false, true},
+		{"wait for close keeps response.done open", messages.StreamTypeMessageEnd, true, true, false},
+		{"provider error stops", messages.StreamTypeError, true, false, true},
+		{"session close stops", messages.StreamTypeSessionClose, true, false, true},
+		{"before end-of-turn message end does not stop", messages.StreamTypeMessageEnd, false, false, false},
+		{"before end-of-turn session close stops", messages.StreamTypeSessionClose, false, false, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := shouldStopAudioInputSessionLoop(messages.StreamMessage{Type: tc.msg}, sessionLoopOptions{}, false, tc.awaiting)
+			got := shouldStopAudioInputSessionLoop(messages.StreamMessage{Type: tc.msg}, sessionLoopOptions{WaitForClose: tc.waitForClose}, false, tc.awaiting)
 			if got != tc.wantStop {
 				t.Fatalf("stop = %v; want %v", got, tc.wantStop)
 			}

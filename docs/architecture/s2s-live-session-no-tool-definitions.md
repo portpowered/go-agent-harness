@@ -36,13 +36,14 @@ go test ./test/integration -run 'TestSessionCommand_(DefaultRegistryExecRoundTri
 It runs `wire.InitializeAgentCLI`, supplies only a temporary config and a
 strict OpenAI websocket capture, and requires the first outbound update to
 contain the non-empty `exec` schema. The positive replay then emits exactly
-one provider `function_call` with the stable call ID `call_exec_probe_1` and
-the arguments `{"command":"echo PROBE_TOOL_MARKER_9182"}`. The real default
-registry executor runs that harmless command; the replay requires one exact
+one provider `function_call` with the stable call ID `call_exec_probe_1`. Its
+arguments ask the real default registry executor to append the marker to a
+temporary invocation log and echo it. The replay requires one exact
 `conversation.item.create` / `function_call_output` carrying the same call ID
 and `PROBE_TOOL_MARKER_9182\n`, followed by a second response and
-`session.closed`. A second function result, a different call ID, or different
-output diverges before the continuation can complete. Historical OpenAI
+`session.closed`; the temporary log independently proves exactly one real
+execution. A second function result, a different call ID, or different output
+diverges before the continuation can complete. Historical OpenAI
 captures without a `tools` field remain replayable; a capture that includes
 `tools` opts into the selected definitions and fails on omission, null, or
 schema divergence.

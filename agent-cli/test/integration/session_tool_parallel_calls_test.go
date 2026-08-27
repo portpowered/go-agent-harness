@@ -39,18 +39,11 @@ package integration
 // strict outbound byte matching, bounded duration, recorded-speech assertion —
 // follows the established lane conventions.
 //
-// Outbound delivery gap (documented, not silently weakened): on current main
-// the OpenAI Realtime outbound translation maps only AUDIO.DELTA, MESSAGE.END,
-// and TEXT.DELTA (see go-llm-gateway/pkg/providers/openai/session_events.go),
-// and the duplex ModelRunner forwards only the latest user text to the
-// session, so reconstructed tool-result messages trigger the follow-up model
-// pass but are never serialized into the provider exchange as
-// conversation.item.create function_call_output items. The exchange verifier
-// below therefore asserts that ANY function_call_output events present in the
-// replayed outbound exchange pair 1:1 with executed call IDs and their result
-// contents (zero today), so the moment outbound translation lands this lane
-// extends to full exchange-level pairing instead of silently ignoring it. The
-// gap is reported in the PR description per the lane contract.
+// Provider-wire result delivery is part of this vertical: the session-only
+// agent-loop forwarder sends each assembled result once, and the OpenAI
+// adapter serializes it as a conversation.item.create function_call_output.
+// The strict replay below requires both results before the second provider
+// response can start.
 
 import (
 	"bytes"
@@ -124,6 +117,19 @@ func parallelUserItemCreatePayload(text string) json.RawMessage {
 	return data
 }
 
+func parallelToolResultPayload(callID, output string) json.RawMessage {
+	payload := map[string]any{
+		"type": "conversation.item.create",
+		"item": map[string]any{
+			"type":    "function_call_output",
+			"call_id": callID,
+			"output":  output,
+		},
+	}
+	data, _ := json.Marshal(payload)
+	return data
+}
+
 // buildParallelToolCallsFixture writes a synthetic record/replay capture in
 // two provider turns. Turn one issues the two named function tool calls and
 // terminates; turn two can only be reached after the client emits the
@@ -179,10 +185,13 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 		`{"type":"response.function_call_arguments.done","call_id":"`+parallelCallBravoID+`","name":"`+parallelCallBravoName+`","arguments":`+strconvQuote(parallelCallBravoArgs)+`}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_parallel_1","status":"completed"}}`)
 
-	// Post-tool follow-up turn: reachable only after the executed results were
-	// reconstructed and dispatched the next inference pass.
+	// The session loop schedules the next prompt turn after the tool batch and
+	// forwards both completed results. The strict replay keeps the provider's
+	// continuation behind those exact correlated function_call_output frames.
 	clientEvent("conversation.item.create", parallelUserItemCreatePayload(parallelPrompt))
 	clientEventRaw("response.create", `{"type":"response.create"}`)
+	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallAlphaID, parallelResultContent[parallelCallAlphaID]))
+	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallBravoID, parallelResultContent[parallelCallBravoID]))
 
 	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_parallel_2"}}`)
 	transcriptDelta, marshalErr := json.Marshal(map[string]string{
@@ -741,15 +750,14 @@ func TestSessionParallelToolCallsRoundTripThroughCLI(t *testing.T) {
 	// batch, proving the reconstructed results drove the next inference pass.
 	verifyFollowUpUserTurn(t, wirePath)
 
-	// Outbound exchange pairing: any function_call_output delivered to the
-	// provider must pair 1:1 with an executed call and its own content (zero
-	// on current main — outbound translation gap documented in the header).
+	// Outbound exchange pairing: each function_call_output delivered to the
+	// provider must pair 1:1 with an executed call and its own content.
 	executedContents := map[string]string{}
 	for _, id := range parallelRequestOrder {
 		executedContents[id] = parallelResultContent[id]
 	}
-	if delivered := countOutboundFunctionCallOutputs(t, wirePath, executedContents); delivered == 0 {
-		t.Logf("outbound tool-result delivery: 0 function_call_output events in the exchange (documented realtime outbound translation gap on main)")
+	if delivered := countOutboundFunctionCallOutputs(t, wirePath, executedContents); delivered != len(parallelRequestOrder) {
+		t.Fatalf("outbound exchange delivered %d function_call_output events, want %d", delivered, len(parallelRequestOrder))
 	}
 }
 
@@ -775,10 +783,13 @@ func TestSessionParallelToolCallsSwappedPairingFailsDeterministically(t *testing
 	streamObserver := &parallelStreamObserver{}
 	wirePath := buildParallelToolCallsFixture(t, reply)
 	outputPath, runErr := runParallelToolCalls(t, wirePath, executor, streamObserver)
-	if runErr != nil {
-		t.Fatalf("swapped-pairing control should complete the session deterministically, got run error: %v", runErr)
+	if runErr == nil {
+		t.Fatal("swapped-pairing control unexpectedly completed with a mismatched provider result")
 	}
-	assertRecordedSpeech(t, outputPath, len(reply))
+	if !strings.Contains(runErr.Error(), "replay mismatch") {
+		t.Fatalf("swapped-pairing control failed for an unexpected reason: %v", runErr)
+	}
+	_ = outputPath
 
 	exchangeCalls, _ := inspectParallelExchange(t, wirePath)
 	if len(exchangeCalls) != 2 {
