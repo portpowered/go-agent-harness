@@ -48,6 +48,11 @@ func conversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
 func buildConversationControlFixture(t *testing.T, mutate func(*gwtesting.SessionCapture)) (wavPath, wirePath string) {
 	t.Helper()
 	wavPath, reply := conversationFixtureInputs(t)
+	return buildConversationControlFixtureFromInputs(t, wavPath, reply, mutate)
+}
+
+func buildConversationControlFixtureFromInputs(t *testing.T, wavPath string, reply []int16, mutate func(*gwtesting.SessionCapture)) (string, string) {
+	t.Helper()
 	basePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
 	capture, err := gwtesting.LoadSessionCapture(basePath)
 	if err != nil {
@@ -57,7 +62,7 @@ func buildConversationControlFixture(t *testing.T, mutate func(*gwtesting.Sessio
 	for index := range capture.Records {
 		capture.Records[index].Sequence = index + 1
 	}
-	wirePath = t.TempDir() + "/tool-result-conversation-control.session.json"
+	wirePath := t.TempDir() + "/tool-result-conversation-control.session.json"
 	data, err := json.MarshalIndent(capture, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal conversation control fixture: %v", err)

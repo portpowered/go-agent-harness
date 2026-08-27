@@ -279,6 +279,18 @@ func runToolResultConversation(t *testing.T, wavPath, wirePath string, executor 
 // impossible second result must have a short, explicit liveness bound rather
 // than inheriting the positive path's larger audio-session allowance.
 func runToolResultConversationWithBounds(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor, maxDuration, contextTimeout time.Duration) (stdout string, outputPath string, runErr error) {
+	return runToolResultConversationWithOptions(t, wavPath, wirePath, executor, maxDuration, contextTimeout, false)
+}
+
+// runToolResultConversationWithWaitForCloseAndBounds keeps the real CLI in
+// its explicit terminal-close mode. It is used by the missing-continuation
+// control so the first tool-call MESSAGE.END cannot be mistaken for the final
+// assistant response while the replay waits at its bounded terminal edge.
+func runToolResultConversationWithWaitForCloseAndBounds(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor, maxDuration, contextTimeout time.Duration) (stdout string, outputPath string, runErr error) {
+	return runToolResultConversationWithOptions(t, wavPath, wirePath, executor, maxDuration, contextTimeout, true)
+}
+
+func runToolResultConversationWithOptions(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor, maxDuration, contextTimeout time.Duration, waitForClose bool) (stdout string, outputPath string, runErr error) {
 	t.Helper()
 	outputPath = filepath.Join(t.TempDir(), "response.wav")
 	stdoutBuffer := &testStdoutBuffer{}
@@ -289,14 +301,18 @@ func runToolResultConversationWithBounds(t *testing.T, wavPath, wirePath string,
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(stdoutBuffer)
 	rootCmd.SetErr(io.Discard)
-	rootCmd.SetArgs([]string{
+	args := []string{
 		"--config-dir", t.TempDir(),
 		"session",
 		"--replay", wirePath,
 		"--audio-in", wavPath,
 		"--audio-out", outputPath,
 		"--max-duration", maxDuration.String(),
-	})
+	}
+	if waitForClose {
+		args = append(args, "--wait-for-close")
+	}
+	rootCmd.SetArgs(args)
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 	runErr = rootCmd.ExecuteContext(ctx)

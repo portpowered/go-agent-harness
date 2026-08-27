@@ -20,6 +20,12 @@ const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 // that ended before every queued input received an assistant response.
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 
+// ErrSessionAudioResponseIncomplete identifies an audio-input run that ended
+// after a provider tool-call turn but before a final assistant response. A
+// provider close or a duration cutoff is not a successful conversation when
+// the tool round trip has no continuation.
+var ErrSessionAudioResponseIncomplete = errors.New("audio session ended before the final assistant response")
+
 // ErrSessionScheduledAudioConfigTimeout identifies a live scheduled-audio run
 // whose current session never acknowledged its initial configuration.
 var ErrSessionScheduledAudioConfigTimeout = errors.New("scheduled audio session timed out awaiting session.updated")
@@ -54,8 +60,12 @@ type sessionLoopOptions struct {
 	CloseAfterOpen bool
 	WaitForClose   bool
 	MaxDuration    time.Duration
-	Done           <-chan struct{}
-	DoneErr        func() error
+	// RequireAssistantResponse is enabled for finite audio-input sessions.
+	// A tool-call MESSAGE.END is an intermediate provider turn; the session
+	// must observe a later non-tool assistant MESSAGE.END before clean success.
+	RequireAssistantResponse bool
+	Done                     <-chan struct{}
+	DoneErr                  func() error
 	// AudioIn optionally streams a bounded file or stdin audio source into
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
@@ -147,9 +157,24 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
+	err = audioResponseCompletionError(err, opts)
 	err = scheduledAudioCompletionError(err, opts)
 	err = opts.observer.finish(err)
 	return err
+}
+
+// audioResponseCompletionError prevents an audio session from reporting clean
+// success when it observed a tool-call response but never observed the final
+// assistant response that should follow accepted tool-result delivery.
+func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
+	if !opts.RequireAssistantResponse || opts.observer == nil || !opts.observer.providerToolCallObserved() || opts.observer.assistantResponseCompleted() {
+		return err
+	}
+	incomplete := ErrSessionAudioResponseIncomplete
+	if err == nil {
+		return incomplete
+	}
+	return errors.Join(err, incomplete)
 }
 
 func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {

@@ -238,6 +238,7 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	// A finite audio source is the input lifetime. Do not close immediately on
 	// SESSION.OPEN; allow every source frame to reach the loop first.
 	plan.loop.CloseAfterOpen = false
+	plan.loop.RequireAssistantResponse = true
 	plan.loop.AudioIn = source
 	runErr = plan.run(ctx, sessionOut)
 	if audioWrapped != nil {
