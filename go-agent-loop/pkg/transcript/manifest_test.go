@@ -174,6 +174,80 @@ func TestRecordingBundleNumbersAudioDirectionsIndependently(t *testing.T) {
 	}
 }
 
+func TestRecordingBundleAllowsZeroInputAudioSegments(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "prompt-only")
+	sessionLog := []byte(`{"turn_index":1,"input":{"text":"hello","audio_bytes":0,"committed":true},"response":{"text":"hi","complete":true,"audio_bytes":2}}` + "\n")
+	if err := WriteRecordingBundle(RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client transcript\n"),
+		AgentTranscript:  []byte("agent transcript\n"),
+		OutputSegments:   [][]byte{{0x10, 0x00}},
+		SessionLog:       sessionLog,
+	}); err != nil {
+		t.Fatalf("WriteRecordingBundle: %v", err)
+	}
+
+	wantEntries := []string{
+		"agent.transcript.jsonl", "audio", "audio/out-000.pcm", "client.transcript.jsonl", "manifest.json", "session-log.jsonl",
+	}
+	if got := recordingEntries(t, destination); !equalStrings(got, wantEntries) {
+		t.Fatalf("bundle entries = %v, want %v", got, wantEntries)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "audio", "in-000.pcm")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("prompt-only input audio stat error = %v, want absent", err)
+	}
+
+	var manifest RecordingManifest
+	if err := json.Unmarshal(readBundleFile(t, destination, "manifest.json"), &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	wantArtifacts := []string{
+		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/out-000.pcm",
+	}
+	gotArtifacts := make([]string, 0, len(manifest.Artifacts))
+	for _, artifact := range manifest.Artifacts {
+		gotArtifacts = append(gotArtifacts, artifact.Path)
+		data, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(artifact.Path)))
+		if err != nil {
+			t.Fatalf("read manifest artifact %q: %v", artifact.Path, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("manifest artifact %q is empty", artifact.Path)
+		}
+	}
+	if !equalStrings(gotArtifacts, wantArtifacts) {
+		t.Fatalf("manifest artifacts = %v, want %v", gotArtifacts, wantArtifacts)
+	}
+}
+
+func TestRecordingBundleRejectsPresentEmptyAudioSegments(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		input  [][]byte
+		output [][]byte
+	}{
+		{name: "input", input: [][]byte{nil}, output: [][]byte{{1}}},
+		{name: "output", input: nil, output: [][]byte{nil}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "recording")
+			err := WriteRecordingBundle(RecordingConfig{
+				Destination:      destination,
+				ClientTranscript: []byte("client\n"),
+				AgentTranscript:  []byte("agent\n"),
+				InputSegments:    testCase.input,
+				OutputSegments:   testCase.output,
+			})
+			if !errors.Is(err, ErrInvalidRecording) {
+				t.Fatalf("error = %v, want ErrInvalidRecording", err)
+			}
+			if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("failed destination stat error = %v, want absent", statErr)
+			}
+		})
+	}
+}
+
 func TestRecordingBundleEmitsOptionalSessionLog(t *testing.T) {
 	t.Run("present", func(t *testing.T) {
 		destination := filepath.Join(t.TempDir(), "recording")

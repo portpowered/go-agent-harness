@@ -3,7 +3,10 @@ package integration
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +18,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -95,6 +99,167 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 			t.Fatalf("duration sidecar %s = %q, want %q", field, got, want)
 		}
 	}
+}
+
+func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T) {
+	const responseText = "prompt-only response"
+	sessionInferencer := &promptOnlyRecordingSessionInferencer{
+		events: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(responseText)},
+			{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
+			{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x10, 0x00})},
+			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("prompt-only-session", "complete")},
+		},
+	}
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		&mockToolExecutor{},
+		&mockInferencerError{err: os.ErrNotExist},
+		sessionInferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	recordDir := filepath.Join(t.TempDir(), "prompt-only-recording")
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--record-dir", recordDir,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--prompt", "prompt-only request",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("prompt-only record-dir CLI returned an error: %v; stdout=%q stderr=%q", err, testWriter.StdoutString(), testWriter.StderrString())
+	}
+	if !strings.Contains(testWriter.StdoutString(), responseText) {
+		t.Fatalf("CLI output = %q, want %q", testWriter.StdoutString(), responseText)
+	}
+
+	wantFiles := []string{
+		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "manifest.json", "audio/out-000.pcm",
+	}
+	for _, relative := range wantFiles {
+		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatalf("read prompt-only artifact %q: %v", relative, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("prompt-only artifact %q is empty", relative)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(recordDir, "audio", "in-000.pcm")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("prompt-only input audio stat error = %v, want absent", err)
+	}
+
+	var manifest transcript.RecordingManifest
+	manifestBytes, err := os.ReadFile(filepath.Join(recordDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read prompt-only manifest: %v", err)
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode prompt-only manifest: %v", err)
+	}
+	wantArtifacts := []string{
+		"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/out-000.pcm",
+	}
+	if len(manifest.Artifacts) != len(wantArtifacts) {
+		t.Fatalf("prompt-only manifest artifact count = %d, want %d", len(manifest.Artifacts), len(wantArtifacts))
+	}
+	wantArtifactSet := make(map[string]struct{}, len(wantArtifacts))
+	for _, path := range wantArtifacts {
+		wantArtifactSet[path] = struct{}{}
+	}
+	seenArtifacts := make(map[string]struct{}, len(manifest.Artifacts))
+	for _, artifact := range manifest.Artifacts {
+		if _, duplicate := seenArtifacts[artifact.Path]; duplicate {
+			t.Fatalf("prompt-only manifest repeats artifact %q", artifact.Path)
+		}
+		seenArtifacts[artifact.Path] = struct{}{}
+		if _, expected := wantArtifactSet[artifact.Path]; !expected {
+			t.Fatalf("prompt-only manifest contains unexpected artifact %q", artifact.Path)
+		}
+		if strings.HasPrefix(artifact.Path, "audio/in-") {
+			t.Fatalf("prompt-only manifest contains fabricated input audio %q", artifact.Path)
+		}
+		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(artifact.Path)))
+		if err != nil {
+			t.Fatalf("read prompt-only manifest artifact %q: %v", artifact.Path, err)
+		}
+		digest := sha256.Sum256(data)
+		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
+			t.Fatalf("prompt-only manifest hash for %q = %s, want %s", artifact.Path, artifact.SHA256, got)
+		}
+	}
+	for path := range wantArtifactSet {
+		if _, found := seenArtifacts[path]; !found {
+			t.Fatalf("prompt-only manifest omits artifact %q", path)
+		}
+	}
+
+	logBytes, err := os.ReadFile(filepath.Join(recordDir, "session-log.jsonl"))
+	if err != nil {
+		t.Fatalf("read prompt-only session log: %v", err)
+	}
+	if !strings.Contains(string(logBytes), responseText) || !strings.Contains(string(logBytes), "prompt-only request") {
+		t.Fatalf("prompt-only session log = %q, want input and response text", logBytes)
+	}
+}
+
+type promptOnlyRecordingSessionInferencer struct {
+	events []messages.StreamMessage
+}
+
+func (i *promptOnlyRecordingSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session := &promptOnlyRecordingSession{
+		events:  append([]messages.StreamMessage(nil), i.events...),
+		receive: messages.NewTypedBuffer[messages.StreamMessage](32),
+		done:    make(chan struct{}),
+	}
+	if !session.receive.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("prompt-only-session", "openai"),
+	}) {
+		return nil, ctx.Err()
+	}
+	for _, event := range session.events {
+		if !session.receive.Write(ctx, event) {
+			return nil, ctx.Err()
+		}
+	}
+	return session, nil
+}
+
+type promptOnlyRecordingSession struct {
+	events  []messages.StreamMessage
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	once    sync.Once
+}
+
+func (s *promptOnlyRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return true
+}
+
+func (s *promptOnlyRecordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *promptOnlyRecordingSession) Done() <-chan struct{} { return s.done }
+
+func (s *promptOnlyRecordingSession) Close() error {
+	s.once.Do(func() { close(s.done) })
+	return nil
 }
 
 type maxDurationWebSocketFixture struct {

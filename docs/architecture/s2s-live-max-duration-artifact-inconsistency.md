@@ -43,6 +43,18 @@ retained instead of being rewritten as `max_duration`.
 response without its message-end boundary. A bound reached before any output
 uses `none`; a response that already ended uses `complete`.
 
+## Prompt-only recording bundles
+
+`--record-dir` also supports a text-only user turn. Input audio is optional:
+the finalizer accepts zero input segments, keeps the required client and agent
+transcripts plus any observed `session-log.jsonl`, and emits only the output
+audio segments that were actually observed. The `audio/` directory remains in
+the bundle as the stable container, but no `audio/in-NNN.pcm` file or manifest
+hash is fabricated for a prompt-only session. Any segment supplied by a caller
+is still required to be non-empty, so an empty element remains a recording
+validation failure. The staged directory is verified against this conditional
+artifact set and renamed into place atomically.
+
 ## Shutdown and errors
 
 At expiry, the duration admission boundary stops ordinary late provider

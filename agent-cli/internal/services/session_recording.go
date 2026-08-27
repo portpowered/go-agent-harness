@@ -346,9 +346,9 @@ func runSessionWithRecordingDirectory(
 }
 
 // finalizeSessionDirectoryRecording preserves a provider, cancellation, or
-// runtime failure when the failed run has no audio to satisfy the recording
-// bundle's success-only non-empty-segment invariant. A clean run still returns
-// the validation error, so an incomplete recording can never look successful.
+// runtime failure when finalization cannot validate the captured recording. A
+// clean run still returns any recording validation error, so an incomplete
+// recording can never look successful.
 func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
 	recordingErr := recording.Finalize()
 	if runErr != nil && errors.Is(recordingErr, transcript.ErrInvalidRecording) {
