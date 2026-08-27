@@ -369,6 +369,28 @@ loopback fired. It only adds a second, exhaustive discovery source so no whole
 category of intended work can silently sit unaddressed for hours because it
 was never written into `checklist.md` in the first place.
 
+## Writing validation/hardening instructions — do not let a passing test formalize an unverified bug
+
+Measured 2026-08-27: `s2s-validate-async-tool-result-interrupts-speech`
+merged with a genuinely correct, well-verified replay proof — and a live
+adversarial probe the same day found the actual defect it was meant to catch
+(a silently orphaned tool call on premature session close) was still present.
+The instruction told the worker to derive "correct" from the runtime's actual
+current behavior; the worker did exactly that, and proved a real but
+narrower disposition than the one that was actually broken. Full root cause,
+rationale, and target shape: `docs/architecture/s2s-validation-instruction-standard.md`.
+
+Whenever you author an `idea` whose purpose is to find or rule out a bug
+(not to document already-trusted behavior), read that document first and
+apply its checklist before submitting. In short: state the correctness
+contract yourself rather than pointing the worker at the code under test;
+enumerate failure shapes exhaustively, including "succeeds for the wrong
+reason," not just crash/hang/corrupt; name every distinct collision an area
+could plausibly admit rather than letting one stand in for the whole area;
+and treat a hermetic/replay proof as necessary-but-not-sufficient for
+anything timing/concurrency-shaped — say so explicitly in the ticket rather
+than letting a green replay test alone stand in for "this is fixed."
+
 ## Ending your response
 
 End your response with exactly `<COMPLETE>` on its own line once this planning
