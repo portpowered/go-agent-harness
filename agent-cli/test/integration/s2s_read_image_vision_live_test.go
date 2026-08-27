@@ -354,8 +354,8 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 	if len(observation.responseCreateIndices) != 2 {
 		t.Fatalf("live response.create count = %d, want initial request plus exactly one continuation", len(observation.responseCreateIndices))
 	}
-	if observation.readImageCallIndex >= observation.responseCreateIndices[0] {
-		t.Fatalf("live read_image call index = %d, initial response.create index = %d; call must belong to the initial response", observation.readImageCallIndex, observation.responseCreateIndices[0])
+	if observation.readImageCallIndex <= observation.responseCreateIndices[0] {
+		t.Fatalf("live read_image call index = %d, initial response.create index = %d; call must follow the initial response request", observation.readImageCallIndex, observation.responseCreateIndices[0])
 	}
 	observation.continuationIndex = observation.responseCreateIndices[1]
 	if functionOutput.index >= observation.continuationIndex {
