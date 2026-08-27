@@ -22,6 +22,11 @@ import (
 type RoomTerminationReason string
 
 const (
+	// DefaultRoomOutputDir is the deterministic evidence directory used by the
+	// room CLI when --out is omitted. It is resolved relative to the process's
+	// working directory and must still satisfy the empty-directory safety check.
+	DefaultRoomOutputDir = "room-run"
+
 	RoomTerminationStopped            RoomTerminationReason = "stopped"
 	RoomTerminationMaxTurnsReached    RoomTerminationReason = "max_turns_reached"
 	RoomTerminationMaxDurationReached RoomTerminationReason = "max_duration_reached"
@@ -100,6 +105,11 @@ type RoomSessionFactory = RoomSessionInferencerFactory
 // may be used by the evidence writer in a later composition layer.
 type RoomParticipantAudioObserver func(participantID string, pcm []byte) error
 
+// RoomParticipantDiagnosticObserver receives the credential-free diagnostic
+// projection for one participant. It is intended for bounded terminal
+// progress; raw stream deltas and audio remain unavailable through this seam.
+type RoomParticipantDiagnosticObserver func(participantID string, record SessionDiagnosticRecord)
+
 // RoomParticipantObserver receives one event after a participant leaves the
 // room. It is called only after that participant's own mixer has been stopped.
 type RoomParticipantObserver func(RoomParticipantResult)
@@ -144,6 +154,7 @@ type RoomRunOptions struct {
 
 	OnAudioOutput           RoomParticipantAudioObserver
 	OnAudioInput            RoomParticipantAudioObserver
+	OnDiagnostic            RoomParticipantDiagnosticObserver
 	OnParticipantTerminated RoomParticipantObserver
 	OnRoomTerminated        RoomObserver
 	// Stream optionally receives the room's diagnostic, transcript, and
@@ -626,6 +637,18 @@ func defaultRoomSessionFactory(participant room.Participant, options SessionRunO
 	return inferencer, err
 }
 
+type roomParticipantDiagnosticSink struct {
+	participantID string
+	observer      RoomParticipantDiagnosticObserver
+}
+
+func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	if s.observer == nil {
+		return
+	}
+	s.observer(s.participantID, record)
+}
+
 // RunRoom runs a manifest-defined room and discards the structured result.
 func RunRoom(ctx context.Context, out io.Writer, opts RoomRunOptions) error {
 	_, err := RunRoomWithResult(ctx, out, opts)
@@ -818,6 +841,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			}
 			if opts.Stream != nil {
 				diagnosticSinks = append(diagnosticSinks, participantStream)
+			}
+			if opts.OnDiagnostic != nil {
+				diagnosticSinks = append(diagnosticSinks, roomParticipantDiagnosticSink{
+					participantID: plan.manifest.ID,
+					observer:      opts.OnDiagnostic,
+				})
 			}
 			observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, plan.manifest.Provider, plan.manifest.Model)
 			observer.streamObserver = func(msg messages.StreamMessage) {

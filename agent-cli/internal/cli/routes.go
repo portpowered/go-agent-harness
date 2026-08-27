@@ -34,6 +34,7 @@ type Router struct {
 	SessionShowCommand   *SessionShowCommand
 	SessionListCommand   *SessionListCommand
 	SessionDeleteCommand *SessionDeleteCommand
+	RoomRunCommand       *RoomRunCommand
 
 	ConfigCommand         *ConfigCommand
 	ConfigAddLocalCommand *ConfigAddLocalCommand
@@ -92,6 +93,7 @@ func NewRouter(
 		SessionShowCommand:       sessionShowCommand,
 		SessionListCommand:       sessionListCommand,
 		SessionDeleteCommand:     sessionDeleteCommand,
+		RoomRunCommand:           NewRoomRunCommand(flags),
 		ConfigCommand:            configCommand,
 		ConfigAddLocalCommand:    configAddLocalCommand,
 	}
@@ -122,6 +124,14 @@ func (r *Router) BuildRoot() *cobra.Command {
 		mediaCommand = NewMediaCommand()
 	}
 	root.AddCommand(NewPath("media", mediaCommand.Generate()))
+
+	roomGroup := NewPath("room", NewRoomCommand().Generate())
+	roomRunCommand := r.RoomRunCommand
+	if roomRunCommand == nil {
+		roomRunCommand = NewRoomRunCommand(r.Flags)
+	}
+	roomGroup.AddCommand(NewPath("run --manifest <file> [--out <dir>] [--stream <addr>]", roomRunCommand.Generate()))
+	root.AddCommand(roomGroup)
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())
 	sessionGroup.AddCommand(NewPath("show <session-id>", r.SessionShowCommand.Generate()))
