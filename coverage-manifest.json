@@ -14,6 +14,7 @@
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe", "minimum": 73.90},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault", "minimum": 71.60},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet", "minimum": 73.20},
+    {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/room", "minimum": 70.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services", "minimum": 27.60},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/session", "minimum": 31.60},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/skills", "minimum": 69.60},
