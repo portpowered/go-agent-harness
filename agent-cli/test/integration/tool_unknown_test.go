@@ -59,22 +59,10 @@ func agentCLIRoot(t *testing.T) string {
 
 func buildAgentBinary(t *testing.T) string {
 	t.Helper()
-	binaryPath := filepath.Join(t.TempDir(), "agent")
-	ctx, cancel := context.WithTimeout(context.Background(), toolUnknownProcessDeadline)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, "./cmd/agent")
-	cmd.Dir = agentCLIRoot(t)
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("build agent CLI: %v\n%s", err, output.String())
+	if agentBinaryPath == "" {
+		t.Fatal("package TestMain did not build the agent CLI")
 	}
-	if ctx.Err() != nil {
-		t.Fatalf("build agent CLI exceeded %s: %v", toolUnknownProcessDeadline, ctx.Err())
-	}
-	return binaryPath
+	return agentBinaryPath
 }
 
 func runAgentCLIBinary(t *testing.T, binaryPath string, args ...string) agentProcessResult {
