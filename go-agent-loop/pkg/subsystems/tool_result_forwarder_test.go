@@ -123,6 +123,24 @@ func TestToolResultForwarder_EmptyContentStillForwardedOnce(t *testing.T) {
 	}
 }
 
+func TestToolResultForwarder_DefersImageResultsToCompleteMessagePath(t *testing.T) {
+	ch := make(chan messages.StreamMessage, 8)
+	f := NewToolResultForwarder(ch, nil)
+
+	result := textResult("tc-image", "image attached")
+	result.ContentParts = append(result.ContentParts, messages.ImagePart{
+		Bytes:     []byte{0x89, 'P', 'N', 'G'},
+		MediaType: "image/png",
+	})
+
+	if err := f.Execute(context.Background(), forwarderState(state.DuplexSession, result)); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !assertNoSessionSend(ch) {
+		t.Fatal("rich image result was forwarded through the flat TOOLCALL.END path")
+	}
+}
+
 func TestToolResultForwarder_ZeroResultsDeliversNothing(t *testing.T) {
 	ch := make(chan messages.StreamMessage, 8)
 	f := NewToolResultForwarder(ch, nil)

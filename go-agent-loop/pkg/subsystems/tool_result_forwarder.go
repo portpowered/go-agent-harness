@@ -74,6 +74,15 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 			f.logInfo("tool result forwarder: skipping result without ToolCallID")
 			continue
 		}
+		if toolResultContainsImage(msg) {
+			// Rich results are delivered by the session model runner's
+			// complete-message path. Sending a flat TOOLCALL.END here as well
+			// would duplicate the function-call output before the image-bearing
+			// message and can cause providers to request the next response twice.
+			f.logInfo("tool result forwarder: deferring rich result to complete-message path",
+				logging.Field{Key: "tool_call_id", Value: callID})
+			continue
+		}
 		if _, done := f.forwarded[callID]; done {
 			continue
 		}
@@ -90,6 +99,15 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 		f.logInfo("tool result forwarder: delivered tool result", logging.Field{Key: "tool_call_id", Value: callID})
 	}
 	return nil
+}
+
+func toolResultContainsImage(msg messages.Message) bool {
+	for _, part := range msg.ContentParts {
+		if _, ok := part.(messages.ImagePart); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // serializedToolOutput projects a tool result message onto the flat string
