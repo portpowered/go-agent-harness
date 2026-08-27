@@ -90,17 +90,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	if terminal.count != 1 {
 		t.Fatalf("duration sidecar terminal count = %d, want exactly one", terminal.count)
 	}
-	for field, want := range map[string]string{
-		"reason":              "max_duration",
-		"classification":      "max_duration",
-		"terminal_reason":     "max_duration",
-		"terminal_provenance": "loop",
-		"output_state":        "partial",
-	} {
-		if got := terminal.fields[field]; got != want {
-			t.Fatalf("duration sidecar %s = %q, want %q", field, got, want)
-		}
-	}
+	assertMaxDurationTerminalFields(t, "duration sidecar", terminal.fields)
 
 	manifestBytes, err := os.ReadFile(filepath.Join(recordDir, "manifest.json"))
 	if err != nil {
@@ -134,7 +124,8 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	if len(terminalFields) != 5 {
 		t.Fatalf("record-dir terminal field count = %d, want exactly 5", len(terminalFields))
 	}
-	assertMaxDurationTerminalJSONFields(t, "record-dir manifest", terminalFields)
+	manifestTerminal := assertMaxDurationTerminalJSONFields(t, "record-dir manifest", terminalFields)
+	assertTerminalFieldAgreement(t, "duration sidecar vs record-dir manifest", terminal.fields, manifestTerminal)
 
 	if len(manifest.Artifacts) == 0 {
 		t.Fatal("record-dir manifest has no artifacts")
@@ -407,7 +398,7 @@ type durationSidecarTerminal struct {
 	fields map[string]string
 }
 
-func assertMaxDurationTerminalJSONFields(t *testing.T, label string, fields map[string]json.RawMessage) {
+func assertMaxDurationTerminalFields(t *testing.T, label string, fields map[string]string) {
 	t.Helper()
 	want := map[string]string{
 		"reason":              "max_duration",
@@ -416,17 +407,46 @@ func assertMaxDurationTerminalJSONFields(t *testing.T, label string, fields map[
 		"terminal_provenance": "loop",
 		"output_state":        "partial",
 	}
+	if len(fields) != len(want) {
+		t.Fatalf("%s field count = %d, want exactly %d", label, len(fields), len(want))
+	}
 	for field, wantValue := range want {
-		value, ok := fields[field]
+		got, ok := fields[field]
 		if !ok {
 			t.Fatalf("%s omitted terminal field %q", label, field)
 		}
+		if got != wantValue {
+			t.Fatalf("%s terminal field %q = %q, want %q", label, field, got, wantValue)
+		}
+	}
+}
+
+func assertMaxDurationTerminalJSONFields(t *testing.T, label string, fields map[string]json.RawMessage) map[string]string {
+	t.Helper()
+	decoded := make(map[string]string, len(fields))
+	for field, value := range fields {
 		var got string
 		if err := json.Unmarshal(value, &got); err != nil {
 			t.Fatalf("%s terminal field %q is not a string: %v", label, field, err)
 		}
-		if got != wantValue {
-			t.Fatalf("%s terminal field %q = %q, want %q", label, field, got, wantValue)
+		decoded[field] = got
+	}
+	assertMaxDurationTerminalFields(t, label, decoded)
+	return decoded
+}
+
+func assertTerminalFieldAgreement(t *testing.T, label string, sidecar, manifest map[string]string) {
+	t.Helper()
+	if len(sidecar) != len(manifest) {
+		t.Fatalf("%s field counts = %d/%d, want equal", label, len(sidecar), len(manifest))
+	}
+	for field, want := range sidecar {
+		got, ok := manifest[field]
+		if !ok {
+			t.Fatalf("%s manifest omitted sidecar field %q", label, field)
+		}
+		if got != want {
+			t.Fatalf("%s field %q = %q, want %q", label, field, got, want)
 		}
 	}
 }
@@ -458,8 +478,17 @@ func readSessionDurationSidecarTerminal(t *testing.T, path string) durationSidec
 		}
 		terminal.count++
 		for key, value := range event.Value {
-			if text, ok := value.(string); ok {
-				terminal.fields[key] = text
+			switch key {
+			case "type", "session_id":
+				// These are structural SESSION.CLOSE fields, not terminal
+				// metadata. The assertion below covers exactly the five fields
+				// that describe the terminal outcome.
+			case "reason", "classification", "terminal_reason", "terminal_provenance", "output_state":
+				if text, ok := value.(string); ok {
+					terminal.fields[key] = text
+				}
+			default:
+				t.Fatalf("duration sidecar terminal contains unexpected field %q", key)
 			}
 		}
 	}

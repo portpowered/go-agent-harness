@@ -84,17 +84,7 @@ func TestLiveSession_MaxDurationRecordDirTerminalAgreement(t *testing.T) {
 	if sidecar.count != 1 {
 		t.Fatalf("live sidecar terminal count = %d, want exactly one", sidecar.count)
 	}
-	for field, want := range map[string]string{
-		"reason":              "max_duration",
-		"classification":      "max_duration",
-		"terminal_reason":     "max_duration",
-		"terminal_provenance": "loop",
-		"output_state":        "partial",
-	} {
-		if got := sidecar.fields[field]; got != want {
-			t.Fatalf("live sidecar %s = %q, want %q", field, got, want)
-		}
-	}
+	assertMaxDurationTerminalFields(t, "live sidecar", sidecar.fields)
 
 	manifestBytes, err := os.ReadFile(filepath.Join(recordDir, "manifest.json"))
 	if err != nil {
@@ -125,7 +115,8 @@ func TestLiveSession_MaxDurationRecordDirTerminalAgreement(t *testing.T) {
 	if len(terminalFields) != 5 {
 		t.Fatalf("live manifest terminal field count = %d, want exactly 5", len(terminalFields))
 	}
-	assertMaxDurationTerminalJSONFields(t, "live record-dir manifest", terminalFields)
+	manifestTerminal := assertMaxDurationTerminalJSONFields(t, "live record-dir manifest", terminalFields)
+	assertTerminalFieldAgreement(t, "live sidecar vs record-dir manifest", sidecar.fields, manifestTerminal)
 
 	if len(manifest.Artifacts) == 0 {
 		t.Fatal("live record-dir manifest has no artifacts")
