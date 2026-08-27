@@ -158,6 +158,10 @@ func (i *sessionToolBargeInInferencer) ConnectSession(context.Context) (messages
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("session-tool-barge-in", "test"),
 	})
+	session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionUpdated,
+		Value: messages.NewSessionUpdatedValue("session-tool-barge-in"),
+	})
 	i.mu.Lock()
 	i.session = session
 	i.mu.Unlock()

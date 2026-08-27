@@ -239,6 +239,10 @@ func (i *parallelLifecycleInferencer) ConnectSession(context.Context) (messages.
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("parallel-tool-lifecycle", "test"),
 	})
+	i.session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionUpdated,
+		Value: messages.NewSessionUpdatedValue("parallel-tool-lifecycle"),
+	})
 	i.mu.Lock()
 	session := i.session
 	i.mu.Unlock()

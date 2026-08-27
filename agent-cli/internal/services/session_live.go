@@ -333,8 +333,6 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	}
 	defer stopSessionUpdatedTimer()
 
-	promptSent := false
-	closeSent := false
 	state := sessionLoopMessageState{}
 	// awaitingResponse is the explicit end-of-turn state: it turns on only
 	// after the finite audio source reached EOF AND its end-of-turn signal
