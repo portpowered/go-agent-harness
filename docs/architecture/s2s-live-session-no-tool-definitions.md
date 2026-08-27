@@ -1,4 +1,4 @@
-# Live session tool advertisement
+# Live session tool advertisement and round trip
 
 The live probe failure was a provider-discoverability failure: the session
 runtime had an executor, but its initial OpenAI Realtime `session.update` did
@@ -30,23 +30,32 @@ shape:
 The focused credential-free production-root proof is:
 
 ```text
-go test ./test/integration -run '^TestSessionCommand_DefaultRegistryAdvertisesExecInStrictOpenAIReplay$' -count=1 -v
+go test ./test/integration -run 'TestSessionCommand_(DefaultRegistryExecRoundTripInStrictOpenAIReplay|StrictOpenAIReplayRejectsMissingExecAdvertisement)' -count=1 -v
 ```
 
 It runs `wire.InitializeAgentCLI`, supplies only a temporary config and a
 strict OpenAI websocket capture, and requires the first outbound update to
-contain the non-empty `exec` schema. Historical OpenAI captures without a
-`tools` field remain replayable; a capture that includes `tools` opts into the
-selected definitions and fails on omission, null, or schema divergence.
+contain the non-empty `exec` schema. The positive replay then emits exactly
+one provider `function_call` with the stable call ID `call_exec_probe_1` and
+the arguments `{"command":"echo PROBE_TOOL_MARKER_9182"}`. The real default
+registry executor runs that harmless command; the replay requires one exact
+`conversation.item.create` / `function_call_output` carrying the same call ID
+and `PROBE_TOOL_MARKER_9182\n`, followed by a second response and
+`session.closed`. A second function result, a different call ID, or different
+output diverges before the continuation can complete. Historical OpenAI
+captures without a `tools` field remain replayable; a capture that includes
+`tools` opts into the selected definitions and fails on omission, null, or
+schema divergence.
 
-The intended end-to-end follow-up uses one stable call ID and the harmless
-command `echo PROBE_TOOL_MARKER_9182`, then requires the exact marker result in
-the correlated OpenAI `function_call_output` before accepting the terminal
-response. That result-forwarding contract is outside this lane's lease: the
-agent-loop result forwarder and OpenAI Realtime `function_call_output`
-translation are owned by PR #181. This change deliberately records the
-advertisement evidence without adding a knowingly red canary for that
-out-of-lease boundary.
+The provider-wire result path is session-only: the agent-loop
+`ToolResultForwarder` delivers each assembled result once to the session
+runner, and the OpenAI adapter serializes it as
+`conversation.item.create` / `function_call_output` without changing the
+plain-text input event shape. The strict prompt-seeded replay includes the
+production loop's follow-up user-text/response request before the queued tool
+result; the provider continuation is still gated behind the exact correlated
+result. The shared result-forwarding and OpenAI translation changes from PR
+#181 are reconciled here narrowly to complete this proof.
 
 This session-only path does not alter the stateless agent ask/chat routes.
 Config exclusions continue to remove a tool from both the advertised

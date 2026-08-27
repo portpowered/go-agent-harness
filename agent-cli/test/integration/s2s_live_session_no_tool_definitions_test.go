@@ -15,18 +15,31 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-const strictOpenAIExecAdvertisementMarker = "PROBE_TOOL_MARKER_9182"
+const (
+	strictOpenAIExecAdvertisementMarker = "PROBE_TOOL_MARKER_9182"
+	strictOpenAIExecCallID              = "call_exec_probe_1"
+	strictOpenAIExecOutput              = strictOpenAIExecAdvertisementMarker + "\n"
+	strictOpenAIExecContinuation        = "strict replay continuation"
+)
 
-// TestSessionCommand_DefaultRegistryAdvertisesExecInStrictOpenAIReplay proves
-// the shipped CLI's provider-facing advertisement path. The production
-// composition root owns the registry and executor; the replay is only the
-// deterministic external transport boundary. Its first outbound event is a
-// strict assertion of the registry-derived OpenAI exec schema.
-func TestSessionCommand_DefaultRegistryAdvertisesExecInStrictOpenAIReplay(t *testing.T) {
+// TestSessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay proves
+// the shipped CLI's provider-facing advertisement and tool round trip. The
+// production composition root owns the registry and executor; the replay is
+// only the deterministic external transport boundary. It strictly checks the
+// initial registry-derived schema, accepts one provider function call, and
+// requires the exact correlated result before the continuation can complete.
+func TestSessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionToolConfig(t, configDir, true)
-	capturePath := filepath.Join(t.TempDir(), "openai-exec-advertisement.session.json")
-	writeStrictOpenAIExecAdvertisementCapture(t, capturePath)
+	invocationLogPath := filepath.Join(configDir, "exec-invocations.log")
+	execCommand := fmt.Sprintf(
+		"echo %s >> %s; echo %s",
+		strictOpenAIExecAdvertisementMarker,
+		strictOpenAIShellQuote(invocationLogPath),
+		strictOpenAIExecAdvertisementMarker,
+	)
+	capturePath := filepath.Join(t.TempDir(), "openai-exec-round-trip.session.json")
+	writeStrictOpenAIExecRoundTripCapture(t, capturePath, execCommand)
 
 	agentCLI, err := wire.InitializeAgentCLI()
 	if err != nil {
@@ -46,18 +59,27 @@ func TestSessionCommand_DefaultRegistryAdvertisesExecInStrictOpenAIReplay(t *tes
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := root.ExecuteContext(ctx); err != nil {
-		t.Fatalf("production session replay rejected registry-derived exec advertisement: %v\nstderr=%s", err, writer.StderrString())
+		t.Fatalf("production session replay rejected registry-derived exec round trip: %v\nstderr=%s", err, writer.StderrString())
 	}
-	if !strings.Contains(writer.StdoutString(), "strict replay response") {
-		t.Fatalf("strict replay completed without its terminal response: %q", writer.StdoutString())
+	stdout := writer.StdoutString()
+	if !strings.Contains(stdout, strictOpenAIExecContinuation) {
+		t.Fatalf("strict replay completed without post-result continuation %q: %q", strictOpenAIExecContinuation, stdout)
+	}
+	invocations, err := os.ReadFile(invocationLogPath)
+	if err != nil {
+		t.Fatalf("read default exec invocation log: %v", err)
+	}
+	if got := string(invocations); got != strictOpenAIExecOutput {
+		t.Fatalf("default exec invocation log = %q, want exactly one marker line %q", got, strictOpenAIExecOutput)
 	}
 }
 
 func TestSessionCommand_StrictOpenAIReplayRejectsMissingExecAdvertisement(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionToolConfig(t, configDir, false)
-	capturePath := filepath.Join(t.TempDir(), "openai-exec-advertisement.session.json")
-	writeStrictOpenAIExecAdvertisementCapture(t, capturePath)
+	execCommand := fmt.Sprintf("echo %s", strictOpenAIExecAdvertisementMarker)
+	capturePath := filepath.Join(t.TempDir(), "openai-exec-round-trip.session.json")
+	writeStrictOpenAIExecRoundTripCapture(t, capturePath, execCommand)
 
 	agentCLI, err := wire.InitializeAgentCLI()
 	if err != nil {
@@ -96,7 +118,7 @@ func writeSessionToolConfig(t *testing.T, configDir string, execEnabled bool) {
 	}
 }
 
-func writeStrictOpenAIExecAdvertisementCapture(t *testing.T, path string) {
+func writeStrictOpenAIExecRoundTripCapture(t *testing.T, path, execCommand string) {
 	t.Helper()
 	data, err := json.MarshalIndent(gwtesting.SessionCapture{
 		Version: gwtesting.SessionCaptureVersion,
@@ -105,27 +127,43 @@ func writeStrictOpenAIExecAdvertisementCapture(t *testing.T, path string) {
 			Model: "gpt-realtime",
 		},
 		Session: gwtesting.SessionMetadata{
-			ID:                "sess-strict-exec-advertisement",
+			ID:                "sess-strict-exec-round-trip",
 			FixtureProvenance: gwtesting.SessionFixtureProvenanceSynthetic,
 		},
 		Records: []gwtesting.CapturedSessionEvent{
 			strictOpenAIWebSocketRecord(1, gwtesting.DirectionClientToServer, "session.update", `{"type":"session.update","session":{"type":"realtime","model":"gpt-realtime","tools":[{"type":"function","name":"exec","description":"Execute a shell command and return its output. Use with caution.","parameters":{"type":"object","properties":{"command":{"type":"string","description":"The shell command to execute"},"working_dir":{"type":"string","description":"Optional working directory for the command"}},"required":["command"]}}]}}`),
-			strictOpenAIWebSocketRecord(2, gwtesting.DirectionServerToClient, "session.created", `{"type":"session.created","session":{"id":"sess-strict-exec-advertisement","model":"gpt-realtime"}}`),
+			strictOpenAIWebSocketRecord(2, gwtesting.DirectionServerToClient, "session.created", `{"type":"session.created","session":{"id":"sess-strict-exec-round-trip","model":"gpt-realtime"}}`),
 			strictOpenAIWebSocketRecord(3, gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"probe PROBE_TOOL_MARKER_9182"}]}}`),
 			strictOpenAIWebSocketRecord(4, gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`),
-			strictOpenAIWebSocketRecord(5, gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created"}`),
-			strictOpenAIWebSocketRecord(6, gwtesting.DirectionServerToClient, "response.output_text.delta", `{"type":"response.output_text.delta","delta":"strict replay response"}`),
-			strictOpenAIWebSocketRecord(7, gwtesting.DirectionServerToClient, "response.output_text.done", `{"type":"response.output_text.done"}`),
-			strictOpenAIWebSocketRecord(8, gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done"}`),
-			strictOpenAIWebSocketRecord(9, gwtesting.DirectionServerToClient, "session.closed", `{"type":"session.closed","session_id":"sess-strict-exec-advertisement","reason":"fixture_complete"}`),
+			strictOpenAIWebSocketRecord(5, gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp-strict-exec-call"}}`),
+			strictOpenAIWebSocketRecord(6, gwtesting.DirectionServerToClient, "response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","id":"item-strict-exec-1","call_id":"`+strictOpenAIExecCallID+`","name":"exec"}}`),
+			strictOpenAIWebSocketRecord(7, gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+strictOpenAIExecCallID+`","name":"exec","arguments":`+strictOpenAIJSONQuote(fmt.Sprintf(`{"command":%s}`, strictOpenAIJSONQuote(execCommand)))+`}`),
+			strictOpenAIWebSocketRecord(8, gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp-strict-exec-call","status":"completed"}}`),
+			strictOpenAIWebSocketRecord(9, gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"probe PROBE_TOOL_MARKER_9182"}]}}`),
+			strictOpenAIWebSocketRecord(10, gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`),
+			strictOpenAIWebSocketRecord(11, gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"`+strictOpenAIExecCallID+`","output":`+strictOpenAIJSONQuote(strictOpenAIExecOutput)+`}}`),
+			strictOpenAIWebSocketRecord(12, gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp-strict-exec-continuation"}}`),
+			strictOpenAIWebSocketRecord(13, gwtesting.DirectionServerToClient, "response.output_text.delta", `{"type":"response.output_text.delta","delta":"`+strictOpenAIExecContinuation+`"}`),
+			strictOpenAIWebSocketRecord(14, gwtesting.DirectionServerToClient, "response.output_text.done", `{"type":"response.output_text.done"}`),
+			strictOpenAIWebSocketRecord(15, gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp-strict-exec-continuation","status":"completed"}}`),
+			strictOpenAIWebSocketRecord(16, gwtesting.DirectionServerToClient, "session.closed", `{"type":"session.closed","session_id":"sess-strict-exec-round-trip","reason":"fixture_complete"}`),
 		},
 	}, "", "  ")
 	if err != nil {
-		t.Fatalf("marshal strict OpenAI advertisement capture: %v", err)
+		t.Fatalf("marshal strict OpenAI exec round-trip capture: %v", err)
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write strict OpenAI advertisement capture: %v", err)
+		t.Fatalf("write strict OpenAI exec round-trip capture: %v", err)
 	}
+}
+
+func strictOpenAIJSONQuote(value string) string {
+	data, _ := json.Marshal(value)
+	return string(data)
+}
+
+func strictOpenAIShellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func strictOpenAIWebSocketRecord(sequence int, direction gwtesting.SessionEventDirection, eventType, payload string) gwtesting.CapturedSessionEvent {
