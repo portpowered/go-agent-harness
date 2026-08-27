@@ -13,10 +13,9 @@ package integration
 //   - a negative control proves the exactly-one assertion fails
 //     deterministically when the tool call is suppressed.
 //
-// The session runtime on main has no tool executor wiring (every provider tool
-// call is recorded as an unexecutable-call diagnostic), so executor-side
-// invocation recording is out of scope for this test-only lane; see the PR
-// description.
+// The session runtime composes the supplied executor and forwards completed
+// tool results to the provider wire. This fixture keeps the existing injected
+// executor seam while proving the resulting call/result exchange.
 
 import (
 	"bytes"
@@ -47,6 +46,10 @@ const toolCallScenarioName = "get_weather"
 // toolCallScenarioArguments is the exact argument payload the replayed
 // provider exchange carries for the single tool call.
 const toolCallScenarioArguments = `{"city":"Lisbon"}`
+
+// toolCallScenarioOutput is the exact result returned by the recording
+// executor and required on the provider-facing function_call_output item.
+const toolCallScenarioOutput = `{"temperature_c":24,"condition":"clear"}`
 
 // toolSingleCallInputWAV is the existing committed corpus fixture expressing
 // the spoken single-tool request. Reused from go-agent-loop/testdata/audio;
@@ -162,6 +165,20 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 	serverEvent("response.output_audio.delta", string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_single_call","status":"completed"}}`)
+	if includeToolCall {
+		resultPayload, marshalErr := json.Marshal(map[string]any{
+			"type": "conversation.item.create",
+			"item": map[string]any{
+				"type":    "function_call_output",
+				"call_id": "call_weather_1",
+				"output":  toolCallScenarioOutput,
+			},
+		})
+		if marshalErr != nil {
+			t.Fatalf("marshal tool result event: %v", marshalErr)
+		}
+		clientEvent("conversation.item.create", resultPayload)
+	}
 
 	baseCapture.Session.ID = "sess_tool_single_call"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -224,6 +241,7 @@ func runToolSingleCall(t *testing.T, wavPath, wirePath string, executor *toolCal
 		"--replay", wirePath,
 		"--audio-in", wavPath,
 		"--audio-out", outputPath,
+		"--wait-for-close",
 		"--max-duration", "3s",
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -269,6 +287,34 @@ func countToolCallsInExchange(t *testing.T, wirePath string) (count int, argumen
 		}
 	}
 	return count, argumentsMatched, lastAudioIndex > lastToolCallIndex
+}
+
+func countMatchingToolResultsInExchange(t *testing.T, wirePath string) (count, matching int) {
+	t.Helper()
+	capture, err := gwtesting.LoadSessionCapture(wirePath)
+	if err != nil {
+		t.Fatalf("load replayed provider exchange: %v", err)
+	}
+	for _, record := range capture.Records {
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+			continue
+		}
+		var payload struct {
+			Item struct {
+				Type   string `json:"type"`
+				CallID string `json:"call_id"`
+				Output string `json:"output"`
+			} `json:"item"`
+		}
+		if json.Unmarshal(record.Payload, &payload) != nil || payload.Item.Type != "function_call_output" {
+			continue
+		}
+		count++
+		if payload.Item.CallID == "call_weather_1" && payload.Item.Output == toolCallScenarioOutput {
+			matching++
+		}
+	}
+	return count, matching
 }
 
 // assertRecordedSpeech is the local speech assertion for the recorded
@@ -321,13 +367,6 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 // exactly one invocation of the named tool with the expected arguments, the
 // replayed provider exchange contains the tool call followed by output speech,
 // and resumed speech is recorded.
-//
-// Until the session loop wires the composed tool executor into
-// agentloop.New (services/session_live.go still constructs its loop without
-// WithToolExecutor, so every call hits messages.DefaultToolExecutor) and the
-// realtime outbound translation forwards tool results to the provider, this
-// proof cannot complete and is skipped with that exact reason instead of
-// failing: the moment the wiring lands the test turns green on its own.
 func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
 	wavPath := toolSingleCallWAVPath(t)
 	wavBytes, err := os.ReadFile(wavPath)
@@ -344,9 +383,6 @@ func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
 	wirePath := buildToolSingleCallFixture(t, wavPath, reply, true)
 	outputPath, runErr := runToolSingleCall(t, wavPath, wirePath, executor)
 	if runErr != nil {
-		if strings.Contains(runErr.Error(), "default tool executor is not implemented") {
-			t.Skipf("s2s v4a round trip blocked by out-of-lease production wiring: session loop builds agentloop without WithToolExecutor so the composed executor never executes the named tool (%v)", runErr)
-		}
 		t.Fatalf("agent session --audio-in/--audio-out over replay failed: %v", runErr)
 	}
 	assertRecordedSpeech(t, outputPath, len(reply))
@@ -362,8 +398,9 @@ func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
 		t.Fatal("no output speech produced after the named tool call in the replayed provider exchange")
 	}
 
-	if len(executor.calls) == 0 {
-		t.Skipf("s2s v4a executor-invocation proof blocked by out-of-lease production wiring: the session loop is constructed without agentloop.WithToolExecutor, so the composed recording executor never receives the named tool call; transport-level speech resumption after the named tool call did succeed")
+	resultCount, matchingResults := countMatchingToolResultsInExchange(t, wirePath)
+	if resultCount != 1 || matchingResults != 1 {
+		t.Fatalf("replayed provider exchange contains %d tool results (%d matching), want exactly one correlated result with output %s", resultCount, matchingResults, toolCallScenarioOutput)
 	}
 	if err := validateExactlyOneToolCall(executor.calls); err != nil {
 		t.Fatal(err)

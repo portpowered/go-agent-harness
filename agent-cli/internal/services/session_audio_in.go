@@ -607,6 +607,9 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 	if !awaitingResponse {
 		return msg.Type == messages.StreamTypeSessionClose
 	}
+	if opts.WaitForClose {
+		return msg.Type == messages.StreamTypeError || msg.Type == messages.StreamTypeSessionClose
+	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd, messages.StreamTypeError, messages.StreamTypeSessionClose:
 		return true
