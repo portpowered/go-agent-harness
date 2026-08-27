@@ -1,0 +1,366 @@
+package integration
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+)
+
+const sessionToolBargeInCallID = "call_barge_in_slow"
+
+// sessionToolBargeInSession is a provider-shaped session double used through
+// the shipped session command. The first completed response requests one
+// tool, and the second completed response is emitted only after the next
+// scheduled audio turn arrives. The executor barrier keeps the first result
+// outstanding while that follow-on response completes.
+type sessionToolBargeInSession struct {
+	recv *messages.TypedBuffer[messages.StreamMessage]
+	done chan struct{}
+
+	closeOnce          sync.Once
+	resultAcceptedOnce sync.Once
+
+	mu             sync.Mutex
+	responseCount  int
+	sent           []messages.StreamMessage
+	lifecycle      []string
+	resultAccepted chan struct{}
+}
+
+func newSessionToolBargeInSession() *sessionToolBargeInSession {
+	return &sessionToolBargeInSession{
+		recv:           messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:           make(chan struct{}),
+		resultAccepted: make(chan struct{}),
+	}
+}
+
+func (s *sessionToolBargeInSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if err := ctx.Err(); err != nil {
+		return sessionToolBargeInContextOutcome(err)
+	}
+
+	s.mu.Lock()
+	s.sent = append(s.sent, msg)
+	s.mu.Unlock()
+
+	switch msg.Type {
+	case messages.StreamTypeMessageEnd:
+		s.mu.Lock()
+		s.responseCount++
+		response := s.responseCount
+		s.mu.Unlock()
+		switch response {
+		case 1:
+			s.emitFirstResponse()
+		case 2:
+			s.emitSecondResponse()
+		}
+	case messages.StreamTypeToolCallEnd:
+		value, ok := msg.Value.(*messages.ToolCallEndValue)
+		if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
+			s.resultAcceptedOnce.Do(func() {
+				s.recordLifecycle("result_accepted")
+				close(s.resultAccepted)
+			})
+		}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+func sessionToolBargeInContextOutcome(err error) messages.SessionSendOutcome {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+}
+
+func (s *sessionToolBargeInSession) emitFirstResponse() {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0})},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(sessionToolBargeInCallID, "slow_tool")},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(sessionToolBargeInCallID, "slow_tool", `{"value":"wait"}`)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(context.Background(), msg)
+	}
+}
+
+func (s *sessionToolBargeInSession) emitSecondResponse() {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("follow-on response")},
+		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{3, 0, 4, 0})},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(context.Background(), msg)
+	}
+}
+
+func (s *sessionToolBargeInSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.recv
+}
+
+func (s *sessionToolBargeInSession) Done() <-chan struct{} { return s.done }
+
+func (s *sessionToolBargeInSession) Close() error {
+	s.closeOnce.Do(func() { close(s.done) })
+	return nil
+}
+
+func (s *sessionToolBargeInSession) sentSnapshot() []messages.StreamMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]messages.StreamMessage(nil), s.sent...)
+}
+
+func (s *sessionToolBargeInSession) recordLifecycle(event string) {
+	s.mu.Lock()
+	s.lifecycle = append(s.lifecycle, event)
+	s.mu.Unlock()
+}
+
+func (s *sessionToolBargeInSession) lifecycleSnapshot() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.lifecycle...)
+}
+
+type sessionToolBargeInInferencer struct {
+	ready   chan struct{}
+	mu      sync.Mutex
+	session *sessionToolBargeInSession
+}
+
+func newSessionToolBargeInInferencer() *sessionToolBargeInInferencer {
+	return &sessionToolBargeInInferencer{ready: make(chan struct{})}
+}
+
+func (i *sessionToolBargeInInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	session := newSessionToolBargeInSession()
+	session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("session-tool-barge-in", "test"),
+	})
+	session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionUpdated,
+		Value: messages.NewSessionUpdatedValue("session-tool-barge-in"),
+	})
+	i.mu.Lock()
+	i.session = session
+	i.mu.Unlock()
+	close(i.ready)
+	return session, nil
+}
+
+func (i *sessionToolBargeInInferencer) connectedSession() *sessionToolBargeInSession {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.session
+}
+
+type sessionToolBargeInExecutor struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+
+	mu    sync.Mutex
+	calls []messages.ToolCall
+}
+
+func newSessionToolBargeInExecutor() *sessionToolBargeInExecutor {
+	return &sessionToolBargeInExecutor{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (e *sessionToolBargeInExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	e.mu.Lock()
+	e.calls = append(e.calls, call)
+	e.mu.Unlock()
+	e.once.Do(func() { close(e.started) })
+	select {
+	case <-e.release:
+		return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "slow-result"}, nil
+	case <-ctx.Done():
+		return messages.ToolCallResponse{}, ctx.Err()
+	}
+}
+
+func (e *sessionToolBargeInExecutor) callsSnapshot() []messages.ToolCall {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]messages.ToolCall(nil), e.calls...)
+}
+
+func waitSessionToolBargeInSignal(t *testing.T, signal <-chan struct{}, name string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for %s", name)
+	}
+}
+
+// TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose drives
+// the real agent session command with two scheduled audio turns. The first
+// provider response requests a deliberately blocked tool; the second turn is
+// dispatched and completed before that tool is released. A stream-observer
+// barrier makes the later response.done boundary explicit, while the command
+// must keep the provider session open until the correlated result is accepted.
+func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testing.T) {
+	inferencer := newSessionToolBargeInInferencer()
+	executor := newSessionToolBargeInExecutor()
+
+	secondAssistantResponseObserved := make(chan struct{})
+	releaseSecondAssistantObserver := make(chan struct{})
+	localSessionCloseObserved := make(chan struct{})
+	var localSessionCloseOnce sync.Once
+	var releaseObserverOnce sync.Once
+	var observerOnce sync.Once
+	var assistantResponseCount int
+	var localSessionCloseCount int
+	var observerMu sync.Mutex
+
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		executor,
+		&mockInferencer{response: "stateless inferencer should not be called"},
+		inferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+	defer releaseObserverOnce.Do(func() { close(releaseSecondAssistantObserver) })
+	var session *sessionToolBargeInSession
+	agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
+		if msg.Type == messages.StreamTypeSessionClose {
+			if session != nil {
+				session.recordLifecycle("client_close")
+			}
+			observerMu.Lock()
+			localSessionCloseCount++
+			observerMu.Unlock()
+			localSessionCloseOnce.Do(func() { close(localSessionCloseObserved) })
+			return
+		}
+		if msg.Type != messages.StreamTypeMessageEnd || msg.Role != messages.RoleAssistant {
+			return
+		}
+		observerMu.Lock()
+		assistantResponseCount++
+		response := assistantResponseCount
+		observerMu.Unlock()
+		if response == 2 {
+			observerOnce.Do(func() { close(secondAssistantResponseObserved) })
+			<-releaseSecondAssistantObserver
+		}
+	})
+
+	writer := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(writer.Stdout())
+	rootCmd.SetErr(writer.Stderr())
+	rootCmd.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record-dir", t.TempDir(),
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--system-prompt", "none",
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() { runErr <- rootCmd.ExecuteContext(ctx) }()
+
+	waitSessionToolBargeInSignal(t, inferencer.ready, "session connection")
+	session = inferencer.connectedSession()
+	if session == nil {
+		t.Fatal("connected session was not retained")
+	}
+	waitSessionToolBargeInSignal(t, executor.started, "slow tool executor to start")
+	waitSessionToolBargeInSignal(t, secondAssistantResponseObserved, "second assistant response.done")
+
+	if got := len(executor.callsSnapshot()); got != 1 {
+		t.Fatalf("slow tool executor received %d calls, want exactly one", got)
+	}
+	if call := executor.callsSnapshot()[0]; call.ID != sessionToolBargeInCallID || call.Name != "slow_tool" {
+		t.Fatalf("slow tool call = %#v, want ID %q and name slow_tool", call, sessionToolBargeInCallID)
+	}
+	select {
+	case <-localSessionCloseObserved:
+		t.Fatal("client close was sent while the follow-on response observer was still held")
+	default:
+	}
+
+	// Let the session runner finish observing response.done while the executor
+	// remains blocked. A bounded absence check is only a deadlock guard; all
+	// lifecycle ordering is controlled by the observer and executor barriers.
+	releaseObserverOnce.Do(func() { close(releaseSecondAssistantObserver) })
+	select {
+	case <-localSessionCloseObserved:
+		t.Fatal("client close preceded the accepted correlated tool result")
+	case <-time.After(250 * time.Millisecond):
+	}
+
+	close(executor.release)
+	waitSessionToolBargeInSignal(t, session.resultAccepted, "correlated tool result acceptance")
+	waitSessionToolBargeInSignal(t, localSessionCloseObserved, "client close after accepted tool result")
+
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("session command returned an error: %v\nstdout=%s\nstderr=%s", err, writer.StdoutString(), writer.StderrString())
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("session command did not finish after client close")
+	}
+
+	var resultCount int
+	for _, msg := range session.sentSnapshot() {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			value, ok := msg.Value.(*messages.ToolCallEndValue)
+			if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
+				resultCount++
+			}
+		}
+	}
+	if resultCount != 1 {
+		t.Fatalf("provider received %d correlated tool results, want exactly one", resultCount)
+	}
+	observerMu.Lock()
+	closeCount := localSessionCloseCount
+	observerMu.Unlock()
+	if closeCount != 1 {
+		t.Fatalf("stream observer saw %d client closes, want exactly one", closeCount)
+	}
+	gotLifecycle := session.lifecycleSnapshot()
+	if len(gotLifecycle) != 2 || gotLifecycle[0] != "result_accepted" || gotLifecycle[1] != "client_close" {
+		t.Fatalf("session lifecycle order = %v, want [result_accepted client_close]", gotLifecycle)
+	}
+}
+
+var _ messages.SessionInferencer = (*sessionToolBargeInInferencer)(nil)
+var _ messages.ToolExecutor = (*sessionToolBargeInExecutor)(nil)

@@ -10,7 +10,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -66,6 +68,16 @@ const (
 	fieldToolCallID            = "tool_call_id"
 	fieldFailureClassification = "failure_classification"
 	fieldFailureReason         = "failure_reason"
+
+	// These fields extend the canonical session_failure record when a terminal
+	// path leaves provider-requested tool results unresolved.
+	SessionDiagnosticFieldUnresolvedToolResultCount = "unresolved_tool_result_count"
+	SessionDiagnosticFieldUnresolvedToolCallIDs     = "unresolved_tool_call_ids"
+)
+
+const (
+	fieldUnresolvedToolResultCount = SessionDiagnosticFieldUnresolvedToolResultCount
+	fieldUnresolvedToolCallIDs     = SessionDiagnosticFieldUnresolvedToolCallIDs
 )
 
 // Failing-event identities used when no stream event authored the failure.
@@ -85,8 +97,8 @@ type SessionDiagnosticRecord struct {
 // SessionDiagnosticSink receives structured session diagnostic records. Sinks
 // are optional injection seams following the established
 // SessionInferencer/WebSocketDialer precedent on SessionRunOptions; with no
-// sink injected no diagnostic records are produced and runtime behavior is
-// unchanged.
+// sink injected no diagnostic records are produced. Executable session tools
+// still retain the lifecycle safety contract even when no sink is attached.
 type SessionDiagnosticSink interface {
 	RecordSessionDiagnostic(SessionDiagnosticRecord)
 }
@@ -155,9 +167,10 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 }
 
 // sessionProgressObserver derives metrics observations and diagnostic records
-// from the delta stream consumed by the session runner. It is owned by the
-// runner's single consumer goroutine; no internal locking is required except
-// for the exactly-once terminal emission guard.
+// from the delta stream consumed by the session runner. Most state is owned by
+// the runner's single consumer goroutine. Outstanding tool state is also
+// touched by the provider-send wrapper, so that small state machine has its
+// own synchronization boundary.
 type sessionProgressObserver struct {
 	sink           SessionDiagnosticSink
 	recorder       metrics.Recorder
@@ -178,6 +191,16 @@ type sessionProgressObserver struct {
 	counters              audioTurnCounters
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
+
+	toolStateMu          sync.Mutex
+	unresolvedToolCalls  map[string]struct{}
+	acceptedToolCalls    map[string]struct{}
+	toolResultRejections map[string]messages.SessionSendStatus
+	toolResultAcceptedCh chan struct{}
+	// toolResultsEnabled is false for explicit no-tools session plans, where a
+	// provider tool event is reported as unexecutable rather than creating an
+	// obligation that no executor can satisfy.
+	toolResultsEnabled bool
 
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
@@ -206,19 +229,163 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
-		sink:           sink,
-		recorder:       recorder,
-		productionSink: productionSink,
-		provider:       provider,
-		model:          model,
+		sink:                 sink,
+		recorder:             recorder,
+		productionSink:       productionSink,
+		provider:             provider,
+		model:                model,
+		unresolvedToolCalls:  make(map[string]struct{}),
+		acceptedToolCalls:    make(map[string]struct{}),
+		toolResultRejections: make(map[string]messages.SessionSendStatus),
+		toolResultAcceptedCh: make(chan struct{}, 1),
 	}
 }
 
-// account is the single production accounting seam: every counted byte
-// crosses here exactly once, advancing the runtime-owned metrics sink, the
-// optional recorder, and both the per-turn counters and lifetime totals in one
-// step. Recording failures are diagnostics-only and never alter session
-// behavior.
+func (o *sessionProgressObserver) setToolResultsEnabled(enabled bool) {
+	if o == nil {
+		return
+	}
+	o.toolStateMu.Lock()
+	o.toolResultsEnabled = enabled
+	o.toolStateMu.Unlock()
+}
+
+func (o *sessionProgressObserver) ensureToolStateLocked() {
+	if o.unresolvedToolCalls == nil {
+		o.unresolvedToolCalls = make(map[string]struct{})
+	}
+	if o.acceptedToolCalls == nil {
+		o.acceptedToolCalls = make(map[string]struct{})
+	}
+	if o.toolResultRejections == nil {
+		o.toolResultRejections = make(map[string]messages.SessionSendStatus)
+	}
+	if o.toolResultAcceptedCh == nil {
+		o.toolResultAcceptedCh = make(chan struct{}, 1)
+	}
+}
+
+// observeProviderToolCall records the creation of a provider tool obligation.
+// The completed call event is the first point at which the full provider call
+// identity is known. Empty IDs are deliberately ignored because they cannot be
+// correlated with a later result.
+func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEndValue) {
+	if o == nil || v == nil || strings.TrimSpace(v.ToolCallID) == "" {
+		return
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	o.ensureToolStateLocked()
+	if !o.toolResultsEnabled {
+		return
+	}
+	if _, accepted := o.acceptedToolCalls[v.ToolCallID]; accepted {
+		return
+	}
+	o.unresolvedToolCalls[v.ToolCallID] = struct{}{}
+}
+
+// noteToolResultAccepted resolves exactly one provider call after the
+// provider-facing session send boundary reports success. Execution completion,
+// queueing, and rejected sends do not reach this method.
+func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
+		return
+	}
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	delete(o.unresolvedToolCalls, callID)
+	o.acceptedToolCalls[callID] = struct{}{}
+	delete(o.toolResultRejections, callID)
+	acceptedCh := o.toolResultAcceptedCh
+	o.toolStateMu.Unlock()
+
+	// One wake-up is enough even when several results are accepted before the
+	// session loop selects this branch: the close predicate observes the whole
+	// current set, not a count of wake-ups.
+	select {
+	case acceptedCh <- struct{}{}:
+	default:
+	}
+}
+
+// noteToolResultRejected remembers a failed provider-facing result send
+// without resolving its outstanding call ID. A result can be rejected before
+// the outer session consumer observes the provider's completed call delta, so
+// rejection also registers the call as unresolved. It is intentionally
+// idempotent; only the first rejection is retained so repeated attempts cannot
+// rewrite the terminal status for a call.
+func (o *sessionProgressObserver) noteToolResultRejected(callID string, outcome messages.SessionSendOutcome) {
+	if o == nil || strings.TrimSpace(callID) == "" || outcome.OK() {
+		return
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	o.ensureToolStateLocked()
+	if _, accepted := o.acceptedToolCalls[callID]; accepted {
+		return
+	}
+	o.unresolvedToolCalls[callID] = struct{}{}
+	if _, recorded := o.toolResultRejections[callID]; !recorded {
+		o.toolResultRejections[callID] = outcome.Status
+	}
+}
+
+func (o *sessionProgressObserver) toolResultAcceptedEvents() <-chan struct{} {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	ch := o.toolResultAcceptedCh
+	o.toolStateMu.Unlock()
+	return ch
+}
+
+func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	return len(o.unresolvedToolCalls) > 0
+}
+
+// unresolvedToolCallIDs returns a deterministic snapshot for lifecycle
+// consumers and future terminal diagnostics.
+func (o *sessionProgressObserver) unresolvedToolCallIDs() []string {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.unresolvedToolCalls))
+	for id := range o.unresolvedToolCalls {
+		ids = append(ids, id)
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids
+}
+
+func (o *sessionProgressObserver) unresolvedToolResultSendStatuses() map[string]messages.SessionSendStatus {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	statuses := make(map[string]messages.SessionSendStatus, len(o.toolResultRejections))
+	for id, status := range o.toolResultRejections {
+		if _, outstanding := o.unresolvedToolCalls[id]; outstanding {
+			statuses[id] = status
+		}
+	}
+	return statuses
+}
+
+// account is the single observation seam: every counted byte crosses here
+// exactly once, forwarding to the metrics recorder and advancing both the
+// per-turn counters and the lifetime totals in one step. Recording failures
+// are diagnostics-only and never alter session behavior.
 func (o *sessionProgressObserver) account(direction metrics.Direction, modality metrics.Modality, n int) {
 	if o == nil || n <= 0 {
 		return
@@ -290,6 +457,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
 		o.toolDeltaSeen = true
 	case *messages.ToolCallEndValue:
+		o.observeProviderToolCall(v)
 		o.emitToolCallRecord(v)
 		if !o.toolDeltaSeen {
 			o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.Arguments))
@@ -357,7 +525,7 @@ func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
 // owns the decision to close after the schedule, while replay follows its
 // captured lifecycle.
 func (o *sessionProgressObserver) scheduledAudioComplete() bool {
-	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs
+	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs && !o.hasUnresolvedToolCalls()
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on
@@ -477,6 +645,16 @@ func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionClo
 	o.failure = f
 }
 
+func (o *sessionProgressObserver) unresolvedToolResultFailureFacts(failingEvent string) *failureFacts {
+	return &failureFacts{
+		classification: SessionUnresolvedToolResultClassification,
+		terminalReason: string(messages.TerminalReasonTerminalFailure),
+		provenance:     string(messages.TerminalProvenanceSession),
+		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
+		failingEvent:   failingEvent,
+	}
+}
+
 // emitToolCallRecord reports a provider tool-call event that cannot be
 // executed. The session runtime has no tool execution path, so every provider
 // tool call is unexecutable by construction and must not pass silently.
@@ -504,11 +682,17 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		return
 	}
 	o.emitOnce.Do(func() {
+		unresolvedIDs := o.unresolvedToolCallIDs()
 		f := o.failure
-		if f == nil {
+		if f == nil && len(unresolvedIDs) == 0 {
 			if runErr == nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 				return
 			}
+		}
+		if f == nil && len(unresolvedIDs) > 0 && errors.Is(runErr, ErrSessionUnresolvedToolResults) {
+			f = o.unresolvedToolResultFailureFacts(failingEventRun)
+		}
+		if f == nil && runErr != nil {
 			var deltaErr *engine.StreamDeltaError
 			if errors.As(runErr, &deltaErr) && deltaErr.Value != nil {
 				// The engine terminates the hot loop on ERROR deltas and the
@@ -518,20 +702,24 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 			}
 		}
 		if f == nil {
-			classification := providers.ErrorClassification(runErr)
-			if classification == "" {
-				classification = providers.ErrorClassUnknown
-			}
-			failingEvent := failingEventRun
-			if !o.sawSessionOpen {
-				failingEvent = failingEventConnect
-			}
-			f = &failureFacts{
-				classification: classification,
-				terminalReason: string(messages.TerminalReasonTerminalFailure),
-				provenance:     string(messages.TerminalProvenanceCLI),
-				outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-				failingEvent:   failingEvent,
+			if len(unresolvedIDs) > 0 {
+				f = o.unresolvedToolResultFailureFacts(failingEventRun)
+			} else {
+				classification := providers.ErrorClassification(runErr)
+				if classification == "" {
+					classification = providers.ErrorClassUnknown
+				}
+				failingEvent := failingEventRun
+				if !o.sawSessionOpen {
+					failingEvent = failingEventConnect
+				}
+				f = &failureFacts{
+					classification: classification,
+					terminalReason: string(messages.TerminalReasonTerminalFailure),
+					provenance:     string(messages.TerminalProvenanceCLI),
+					outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
+					failingEvent:   failingEvent,
+				}
 			}
 		}
 		fields := map[string]string{
@@ -550,6 +738,10 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		if f.code != "" {
 			fields[fieldProviderErrorCode] = f.code
 		}
+		if len(unresolvedIDs) > 0 {
+			fields[fieldUnresolvedToolResultCount] = strconv.Itoa(len(unresolvedIDs))
+			fields[fieldUnresolvedToolCallIDs] = strings.Join(unresolvedIDs, ", ")
+		}
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event:  SessionDiagnosticEventFailure,
 			Fields: fields,
@@ -557,12 +749,14 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 	})
 }
 
-// finish emits the terminal diagnostic record and returns err unchanged so
-// termination paths read as plain returns.
+// finish enriches err with any unresolved lifecycle failure, emits terminal
+// records, and returns the enriched error so termination paths read as plain
+// returns.
 func (o *sessionProgressObserver) finish(err error) error {
 	if o == nil {
 		return err
 	}
+	err = withUnresolvedToolResults(err, o)
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
 	if o.runtime != nil {

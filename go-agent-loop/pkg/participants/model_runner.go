@@ -178,7 +178,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				return nil
 			}
 			r.drainSessionAudio(ctx, session, &audioStreaming)
-			session.Send(ctx, evt)
+			r.forwardSessionEvent(ctx, session, evt)
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
 				return nil
@@ -210,7 +210,7 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 				return true, true
 			}
 			r.drainSessionAudio(ctx, session, audioStreaming)
-			session.Send(ctx, evt)
+			r.forwardSessionEvent(ctx, session, evt)
 			handled = true
 		default:
 			return handled, false
@@ -245,6 +245,34 @@ func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.
 	session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeAudioDelta,
 		Value: messages.NewAudioDeltaValue(pcm),
+	})
+}
+
+// forwardSessionEvent preserves the legacy best-effort behavior for ordinary
+// user events, but turns a rejected tool-result send into an observable stream
+// error. The session lifecycle can then report the still-unresolved call ID
+// instead of allowing a false clean close.
+func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.Session, msg messages.StreamMessage) {
+	outcome := messages.SendSessionWithOutcome(ctx, session, msg)
+	if outcome.OK() || msg.Type != messages.StreamTypeToolCallEnd {
+		return
+	}
+	callID := ""
+	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+		callID = value.ToolCallID
+	}
+	message := fmt.Sprintf("tool result %q was not delivered: session send status %q", callID, outcome.Status)
+	value := messages.NewErrorValueWithTerminal(
+		message,
+		"unresolved_tool_result",
+		messages.TerminalReasonTerminalFailure,
+		messages.TerminalProvenanceLoop,
+		messages.TerminalOutputNone,
+	)
+	value.Err = outcome.Err
+	r.DeltaOutbox.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: value,
 	})
 }
 

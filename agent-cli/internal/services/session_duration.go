@@ -639,7 +639,7 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
 	err := runAgentLoopSessionWithDurationAdmissionClockStream(ctx, out, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
 	err = scheduledAudioCompletionError(err, opts)
-	opts.observer.finish(err)
+	err = opts.observer.finish(err)
 	return err
 }
 
@@ -660,6 +660,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	boundInferencer, rtcErrors := bindRTCDeviceSessionInferencer(admittedInferencer, opts.rtcDeviceBinding)
 	rtcPumpErrors = rtcErrors
 	observedInferencer := newObservedSessionInferencer(boundInferencer)
+	observedInferencer.progress = opts.observer
+	if opts.observer != nil {
+		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -708,10 +712,12 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 	promptSent := false
 	closeSent := false
+	closeAfterOpenPending := false
 	durationExpired := false
 	durationTerminalWritten := false
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	terminalState := newSessionDurationTerminalState(admittedInferencer)
+	toolResultAccepted := opts.observer.toolResultAcceptedEvents()
 
 	finish := func(planned bool, preferredErr error) error {
 		var preCancelDrainErr error
@@ -789,6 +795,15 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 
 		select {
+		case <-toolResultAccepted:
+			state, closeErr := closePendingSessionIfReady(runCtx, loop, opts, sessionLoopMessageState{
+				closeSent:             closeSent,
+				closeAfterOpenPending: closeAfterOpenPending,
+			})
+			if closeErr != nil {
+				return finish(false, closeErr)
+			}
+			closeSent = state.closeSent
 		case <-timerCh:
 			if err := expire(); err != nil {
 				return finish(false, err)
@@ -847,9 +862,10 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if !ok {
 				return finish(durationExpired, nil)
 			}
-			result, msgErr := processDurationLoopMessage(runCtx, loop, out, msg, opts, durationExpired, promptSent, closeSent, durationTerminalWritten, artifacts, terminalState)
+			result, msgErr := processDurationLoopMessage(runCtx, loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten, artifacts, terminalState)
 			promptSent = result.promptSent
 			closeSent = result.closeSent
+			closeAfterOpenPending = result.closeAfterOpenPending
 			durationTerminalWritten = result.durationTerminalWritten
 			if msgErr != nil {
 				return finish(false, msgErr)
@@ -877,6 +893,7 @@ func sessionTransportError(err error) error {
 type sessionDurationMessageResult struct {
 	promptSent              bool
 	closeSent               bool
+	closeAfterOpenPending   bool
 	durationTerminalWritten bool
 	stop                    bool
 	planned                 bool
@@ -966,10 +983,11 @@ func (s *sessionDurationTerminalState) writeObservedProviderTerminal(out io.Writ
 	return nil
 }
 
-func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState) (sessionDurationMessageResult, error) {
+func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState) (sessionDurationMessageResult, error) {
 	result := sessionDurationMessageResult{
 		promptSent:              promptSent,
 		closeSent:               closeSent,
+		closeAfterOpenPending:   closeAfterOpenPending,
 		durationTerminalWritten: durationTerminalWritten,
 	}
 	if terminalState != nil {
@@ -998,10 +1016,7 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 			opts.observer.noteUserTextInput(opts.Prompt)
 		}
 		if opts.CloseAfterOpen && opts.Prompt == "" && !result.closeSent {
-			result.closeSent = true
-			if err := sendSessionClose(ctx, loop); err != nil {
-				return result, err
-			}
+			result.closeAfterOpenPending = true
 		}
 	}
 	var err error
@@ -1010,11 +1025,16 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 		return result, err
 	}
 	if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent {
-		result.closeSent = true
-		if err := sendSessionClose(ctx, loop); err != nil {
-			return result, err
-		}
+		result.closeAfterOpenPending = true
 	}
+	state, err := closePendingSessionIfReady(ctx, loop, opts, sessionLoopMessageState{
+		closeSent:             result.closeSent,
+		closeAfterOpenPending: result.closeAfterOpenPending,
+	})
+	if err != nil {
+		return result, err
+	}
+	result.closeSent = state.closeSent
 	result.stop = shouldStopSessionLoop(msg, opts, result.closeSent) && (!durationExpired || msg.Type == messages.StreamTypeSessionClose)
 	result.planned = durationExpired
 	return result, nil
@@ -1027,13 +1047,7 @@ func processDurationScheduledMessage(ctx context.Context, loop *agentloop.AgentL
 	if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
 		return closeSent, err
 	}
-	if !opts.CloseAfterScheduledAudio || msg.Type != messages.StreamTypeMessageEnd || !opts.observer.scheduledAudioComplete() || closeSent {
-		return closeSent, nil
-	}
-	if err := sendSessionClose(ctx, loop); err != nil {
-		return closeSent, err
-	}
-	return true, nil
+	return closeSent, nil
 }
 
 func sessionDurationTimerReady(timerCh <-chan time.Time) bool {
