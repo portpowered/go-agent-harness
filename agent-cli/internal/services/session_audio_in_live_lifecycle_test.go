@@ -407,29 +407,20 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	if secondAppend < 0 || firstResponseDone < 0 || secondAppend <= firstResponseDone {
 		t.Fatalf("second input was not dispatched after first response completion: %v", writes)
 	}
-	var sessionUpdate struct {
-		Audio struct {
-			Input struct {
-				TurnDetection *struct {
-					Type           string `json:"type"`
-					CreateResponse *bool  `json:"create_response"`
-				} `json:"turn_detection"`
-			} `json:"input"`
-		} `json:"audio"`
-		TurnDetection *struct {
-			Type           string `json:"type"`
-			CreateResponse *bool  `json:"create_response"`
-		} `json:"turn_detection"`
-	}
+	var sessionUpdate map[string]json.RawMessage
 	if err := json.Unmarshal(server.sessionUpdateSnapshot(), &sessionUpdate); err != nil {
 		t.Fatalf("decode scheduled session.update: %v", err)
 	}
-	detection := sessionUpdate.Audio.Input.TurnDetection
-	if detection == nil {
-		detection = sessionUpdate.TurnDetection
+	var audio map[string]json.RawMessage
+	if err := json.Unmarshal(sessionUpdate["audio"], &audio); err != nil {
+		t.Fatalf("decode scheduled audio config: %v", err)
 	}
-	if detection == nil || detection.Type != "server_vad" || detection.CreateResponse == nil || *detection.CreateResponse {
-		t.Fatalf("scheduled session.update turn detection = %+v, want server_vad with create_response=false", detection)
+	var input map[string]json.RawMessage
+	if err := json.Unmarshal(audio["input"], &input); err != nil {
+		t.Fatalf("decode scheduled audio input config: %v", err)
+	}
+	if detection := input["turn_detection"]; string(detection) != "null" {
+		t.Fatalf("scheduled session.update turn detection = %s, want explicit null", detection)
 	}
 	if countWireEvent(writes, "IN:input_audio_buffer.speech_started") != 2 || countWireEvent(writes, "IN:input_audio_buffer.speech_stopped") != 2 {
 		t.Fatalf("scheduled VAD observations = %v, want two speech-start and speech-stop events", writes)

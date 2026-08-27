@@ -338,7 +338,7 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	}
 }
 
-func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableServerVADResponseCreation(t *testing.T) {
+func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableTurnDetection(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
 		name := "ga"
 		if legacy {
@@ -358,7 +358,14 @@ func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableServerVADResponseCr
 			}
 			provider := New(options...)
 
-			session, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "gpt-realtime"})
+			createResponse := true
+			session, err := provider.ConnectSession(context.Background(), models.SessionConfig{
+				Model: "gpt-realtime",
+				TurnDetection: &models.TurnDetectionConfig{
+					Type:           "server_vad",
+					CreateResponse: &createResponse,
+				},
+			})
 			if err != nil {
 				t.Fatalf("ConnectSession: %v", err)
 			}
@@ -372,35 +379,33 @@ func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableServerVADResponseCr
 			if err := json.Unmarshal(clientMessages[0], &envelope); err != nil {
 				t.Fatalf("unmarshal session.update: %v", err)
 			}
-			var sessionPayload map[string]any
+			var sessionPayload map[string]json.RawMessage
 			if err := json.Unmarshal(envelope["session"], &sessionPayload); err != nil {
 				t.Fatalf("unmarshal session payload: %v", err)
 			}
 
-			var turnDetection map[string]any
+			var turnDetection json.RawMessage
 			if legacy {
-				var ok bool
-				turnDetection, ok = sessionPayload["turn_detection"].(map[string]any)
-				if !ok {
-					t.Fatalf("legacy turn_detection: got %T", sessionPayload["turn_detection"])
+				turnDetection = sessionPayload["turn_detection"]
+				if len(turnDetection) == 0 {
+					t.Fatal("legacy turn_detection field is missing")
 				}
 			} else {
-				audio, ok := sessionPayload["audio"].(map[string]any)
-				if !ok {
-					t.Fatalf("audio config: got %T", sessionPayload["audio"])
+				var audio map[string]json.RawMessage
+				if err := json.Unmarshal(sessionPayload["audio"], &audio); err != nil {
+					t.Fatalf("decode audio config: %v", err)
 				}
-				input, ok := audio["input"].(map[string]any)
-				if !ok {
-					t.Fatalf("audio.input config: got %T", audio["input"])
+				var input map[string]json.RawMessage
+				if err := json.Unmarshal(audio["input"], &input); err != nil {
+					t.Fatalf("decode audio.input config: %v", err)
 				}
-				turnDetection, ok = input["turn_detection"].(map[string]any)
-				if !ok {
-					t.Fatalf("audio.input.turn_detection: got %T", input["turn_detection"])
+				turnDetection = input["turn_detection"]
+				if len(turnDetection) == 0 {
+					t.Fatal("audio.input.turn_detection field is missing")
 				}
 			}
-			assertStringField(t, turnDetection, "type", "server_vad")
-			if got, ok := turnDetection["create_response"].(bool); !ok || got {
-				t.Fatalf("create_response = %#v, want explicit false", turnDetection["create_response"])
+			if strings.TrimSpace(string(turnDetection)) != "null" {
+				t.Fatalf("turn_detection = %s, want explicit null", turnDetection)
 			}
 		})
 	}
