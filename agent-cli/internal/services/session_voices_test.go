@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"io"
 	"path/filepath"
@@ -54,7 +55,7 @@ func TestValidateOpenAIRealtimeVoiceReturnsStableTypedError(t *testing.T) {
 }
 
 func TestRunSession_InvalidVoiceFailsBeforeReplayConsumption(t *testing.T) {
-	err := RunSession(nil, io.Discard, SessionRunOptions{
+	err := RunSession(context.Background(), io.Discard, SessionRunOptions{
 		ReplayPath: filepath.Join(t.TempDir(), "missing.session.json"),
 		Voice:      "not-a-voice",
 	})
