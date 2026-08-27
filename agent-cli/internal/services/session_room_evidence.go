@@ -325,6 +325,7 @@ type roomEvidenceBounds struct {
 type roomEvidenceParticipantManifest struct {
 	ID                string                       `json:"id"`
 	SystemPrompt      string                       `json:"system_prompt"`
+	OpeningPrompt     string                       `json:"opening_prompt,omitempty"`
 	Provider          string                       `json:"provider"`
 	Model             string                       `json:"model"`
 	APIKeyEnv         string                       `json:"api_key_env"`
@@ -391,6 +392,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		manifest.Participants[participant.ID] = roomEvidenceParticipantManifest{
 			ID:                participant.ID,
 			SystemPrompt:      e.redactText(participant.SystemPrompt),
+			OpeningPrompt:     e.redactText(participant.OpeningPrompt),
 			Provider:          e.redactText(participant.Provider),
 			Model:             e.redactText(participant.Model),
 			APIKeyEnv:         e.redactText(participant.APIKeyEnv),

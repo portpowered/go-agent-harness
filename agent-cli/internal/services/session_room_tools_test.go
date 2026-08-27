@@ -207,6 +207,28 @@ func TestBuildRoomParticipantPlans_RejectsVoiceBeforeSessionConstructionWhenUpst
 	}
 }
 
+func TestBuildRoomParticipantPlans_PropagatesOpeningPromptToSession(t *testing.T) {
+	opts, factoryCalls := newRoomTestRunOptions([]string{"alpha", "beta"}, map[string]*roomTestInferencer{
+		"alpha": {},
+		"beta":  {},
+	})
+	opts.Manifest.Participants[0].OpeningPrompt = "Start the bounded room conversation."
+
+	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
+	if err != nil {
+		t.Fatalf("buildRoomParticipantPlans: %v", err)
+	}
+	if got := factoryCalls["alpha"].Prompt; got != "Start the bounded room conversation." {
+		t.Fatalf("alpha session prompt = %q, want opening prompt", got)
+	}
+	if got := factoryCalls["beta"].Prompt; got != "" {
+		t.Fatalf("beta session prompt = %q, want no implicit prompt", got)
+	}
+	if plans[0].options.Prompt != factoryCalls["alpha"].Prompt || plans[1].options.Prompt != factoryCalls["beta"].Prompt {
+		t.Fatalf("plan prompt values diverged from factory options: plans=%q/%q factory=%q/%q", plans[0].options.Prompt, plans[1].options.Prompt, factoryCalls["alpha"].Prompt, factoryCalls["beta"].Prompt)
+	}
+}
+
 func TestNewLiveSessionInferencerCarriesToolDefinitionsToProviderRequest(t *testing.T) {
 	definition := messages.ToolDefinition{
 		Name:        "participant_tool",

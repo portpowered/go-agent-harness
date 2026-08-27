@@ -896,6 +896,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 				}
 			}
 			runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, sessionLoopOptions{
+				Prompt:          plan.options.Prompt,
 				WaitForClose:    true,
 				Done:            coordinator.done,
 				DoneErr:         coordinator.roomError,
@@ -1041,6 +1042,8 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 			APIKey:          value,
 			BaseURL:         opts.BaseURL,
 			ConfigDir:       opts.ConfigDir,
+			Prompt:          participant.OpeningPrompt,
+			Voice:           participant.Voice,
 			WebSocketDialer: opts.WebSocketDialer,
 			WaitForClose:    true,
 		}
