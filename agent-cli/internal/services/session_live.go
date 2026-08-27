@@ -148,11 +148,12 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
 	err = scheduledAudioCompletionError(err, opts)
-	opts.observer.finish(err)
+	err = opts.observer.finish(err)
 	return err
 }
 
 func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
+	err = withUnresolvedToolResults(err, opts.observer)
 	if err != nil || !opts.CloseAfterScheduledAudio || opts.observer == nil || opts.observer.scheduledAudioComplete() {
 		return err
 	}
@@ -168,8 +169,9 @@ func sessionScheduledAudioConfigTimeoutError(opts sessionLoopOptions) error {
 }
 
 type sessionLoopMessageState struct {
-	promptSent bool
-	closeSent  bool
+	promptSent            bool
+	closeSent             bool
+	closeAfterOpenPending bool
 }
 
 func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stop func() error, stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
@@ -205,14 +207,16 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 		}
 	}
 	if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent {
-		state.closeSent = true
-		if err := sendSessionClose(ctx, loop); err != nil {
-			return state, false, errors.Join(err, stop())
+		state.closeAfterOpenPending = true
+		var closeErr error
+		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
+		if closeErr != nil {
+			return state, false, errors.Join(closeErr, stop())
 		}
 	}
 	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd {
 		var closeErr error
-		state.closeSent, closeErr = closeScheduledAudioSessionIfReady(ctx, loop, opts, state.closeSent)
+		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
 		if closeErr != nil {
 			return state, false, errors.Join(closeErr, stop())
 		}
@@ -232,6 +236,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
 	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
 	observedInferencer.progress = opts.observer
+	if opts.observer != nil {
+		opts.observer.setToolResultsEnabled(opts.ToolExecutor != nil)
+	}
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -326,6 +333,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 
 	promptSent := false
 	closeSent := false
+	state := sessionLoopMessageState{}
 	// awaitingResponse is the explicit end-of-turn state: it turns on only
 	// after the finite audio source reached EOF AND its end-of-turn signal
 	// (MESSAGE.END -> input_audio_buffer.commit + response.create) was
@@ -339,7 +347,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		select {
 		case <-toolResultAccepted:
 			var closeErr error
-			closeSent, closeErr = closeScheduledAudioSessionIfReady(runCtx, loop, opts, closeSent)
+			state, closeErr = closePendingSessionIfReady(runCtx, loop, opts, state)
 			if closeErr != nil {
 				return errors.Join(closeErr, stop())
 			}
@@ -411,9 +419,8 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			cancel()
 			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
-			state, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, sessionLoopMessageState{promptSent: promptSent, closeSent: closeSent}, awaitingResponse, startAudio, stop, stopAndDrain)
-			promptSent = state.promptSent
-			closeSent = state.closeSent
+			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, state, awaitingResponse, startAudio, stop, stopAndDrain)
+			state = nextState
 			if msgErr != nil {
 				return msgErr
 			}
@@ -430,17 +437,24 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	}
 }
 
-// closeScheduledAudioSessionIfReady is shared by provider response handling
-// and the asynchronous tool-result acceptance wake-up. The latter is needed
-// because the final accepted result can arrive after the final response.done.
-func closeScheduledAudioSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, closeSent bool) (bool, error) {
-	if closeSent || !opts.CloseAfterScheduledAudio || opts.observer == nil || !opts.observer.scheduledAudioComplete() {
-		return closeSent, nil
+// closePendingSessionIfReady is shared by response handling and the
+// asynchronous tool-result acceptance wake-up. A final accepted result may
+// arrive after the final response.done, so closure must be re-evaluated from
+// both paths.
+func closePendingSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, state sessionLoopMessageState) (sessionLoopMessageState, error) {
+	if state.closeSent {
+		return state, nil
+	}
+	closeAfterOpen := opts.CloseAfterOpen && state.closeAfterOpenPending
+	closeAfterScheduled := opts.CloseAfterScheduledAudio && opts.observer != nil && opts.observer.scheduledAudioComplete()
+	if !closeAfterOpen && !closeAfterScheduled {
+		return state, nil
 	}
 	if err := sendSessionClose(ctx, loop); err != nil {
-		return closeSent, err
+		return state, err
 	}
-	return true, nil
+	state.closeSent = true
+	return state, nil
 }
 
 type observedSessionInferencer struct {
@@ -563,6 +577,11 @@ func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) 
 func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
+		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
+			if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+				s.progress.noteToolResultRejected(value.ToolCallID, outcome)
+			}
+		}
 		return outcome
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {

@@ -199,7 +199,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 // runner mode, including the duration-bounded path which executes plan.loop
 // directly instead of calling plan.run.
 func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
-	if loop == nil || (p.diagnostics == nil && p.metricsRecorder == nil && p.streamObserver == nil && p.runtime == nil && len(p.audioInputs) == 0) {
+	if loop == nil {
 		return
 	}
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
