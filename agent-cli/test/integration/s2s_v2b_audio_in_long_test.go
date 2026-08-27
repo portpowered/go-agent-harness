@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,10 +105,31 @@ func s2sV2BAudioFrames(t *testing.T, wavPath string) [][]byte {
 	return frames
 }
 
+// s2sV2BResponsePCM16LE is a small deterministic spoken-audio stand-in for
+// the replayed provider response. It is generated in memory rather than
+// committed as a binary fixture, and its alternating samples make a silent
+// response impossible to mistake for successful audio delivery.
+func s2sV2BResponsePCM16LE() []byte {
+	const sampleCount = 960
+	const amplitude int16 = 1600
+
+	pcm := make([]byte, sampleCount*2)
+	for i := range sampleCount {
+		sample := amplitude
+		if i%2 != 0 {
+			sample = -amplitude
+		}
+		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
+	}
+	return pcm
+}
+
 // buildS2SV2BLongCapture turns the existing OpenAI smoke capture into the
 // exact one-turn wire trace expected from --audio-in. The client text input
 // records are replaced by the WAV's append sequence; the server response and
-// session-close records remain the committed smoke behavior.
+// session-close records remain the committed smoke behavior, with a
+// deterministic non-silent output-audio delta added for the --audio-out
+// assertion.
 func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.SessionCapture, int) {
 	t.Helper()
 
@@ -177,6 +199,28 @@ func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.Sessio
 	})
 	for _, record := range response {
 		appendRecord(record)
+		if record.Type == "response.output_text.done" {
+			audioDelta, marshalErr := json.Marshal(map[string]string{
+				"type":   "response.output_audio.delta",
+				"delta":  base64.StdEncoding.EncodeToString(s2sV2BResponsePCM16LE()),
+				"format": "pcm16",
+			})
+			if marshalErr != nil {
+				t.Fatalf("marshal response audio delta: %v", marshalErr)
+			}
+			appendRecord(gatewaytesting.CapturedSessionEvent{
+				Direction:   gatewaytesting.DirectionServerToClient,
+				Type:        "response.output_audio.delta",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     audioDelta,
+			})
+			appendRecord(gatewaytesting.CapturedSessionEvent{
+				Direction:   gatewaytesting.DirectionServerToClient,
+				Type:        "response.output_audio.done",
+				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"response.output_audio.done"}`),
+			})
+		}
 	}
 	appendRecord(*closeEvent)
 	capture.Records = records
@@ -325,6 +369,7 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 	wavPath := locateS2SV2BLongWAV(t)
 	capture, frameCount := buildS2SV2BLongCapture(t, wavPath)
 	capturePath := writeS2SV2BCapture(t, capture)
+	audioOutPath := filepath.Join(t.TempDir(), "response.wav")
 
 	run := runS2SV2BAgent(t,
 		"--config-dir", t.TempDir(),
@@ -332,11 +377,12 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 		"--max-duration", "30s",
 		"--replay", capturePath,
 		"--audio-in", wavPath,
+		"--audio-out", audioOutPath,
 	)
 	if run.exitCode != 0 {
 		t.Fatalf("agent session exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
 	}
-	if !strings.Contains(run.stdout, "OpenAI E2E replay complete.") || !strings.Contains(run.stdout, "[session closed: fixture_complete]") {
+	if strings.Count(run.stdout, "OpenAI E2E replay complete.") != 1 || strings.Count(run.stdout, "[session closed: fixture_complete]") != 1 {
 		t.Fatalf("agent session did not expose the replayed terminal response: stdout=%q stderr=%q", run.stdout, run.stderr)
 	}
 
@@ -350,6 +396,29 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 	}
 	if err := assertS2SV2BOneTurn(observed); err != nil {
 		t.Fatal(err)
+	}
+
+	audioBytes, err := os.ReadFile(audioOutPath)
+	if err != nil {
+		t.Fatalf("read recorded response WAV: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(audioBytes))
+	if err != nil {
+		t.Fatalf("parse recorded response WAV: %v", err)
+	}
+	if rate != audio.SampleRate {
+		t.Fatalf("recorded response WAV rate = %d, want %d", rate, audio.SampleRate)
+	}
+	if len(samples) == 0 {
+		t.Fatal("recorded response WAV contains no emitted audio samples")
+	}
+	var energy float64
+	for _, sample := range samples {
+		energy += float64(sample) * float64(sample)
+	}
+	rms := math.Sqrt(energy / float64(len(samples)))
+	if rms < 500 {
+		t.Fatalf("recorded response RMS = %.1f, want > 500 for non-silent emitted audio", rms)
 	}
 }
 
@@ -371,12 +440,14 @@ func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 	}
 
 	capturePath := writeS2SV2BCapture(t, negative)
+	audioOutPath := filepath.Join(t.TempDir(), "response.wav")
 	run := runS2SV2BAgent(t,
 		"--config-dir", t.TempDir(),
 		"session",
 		"--max-duration", "30s",
 		"--replay", capturePath,
 		"--audio-in", wavPath,
+		"--audio-out", audioOutPath,
 	)
 	diagnostics := run.stdout + "\n" + run.stderr
 	if run.exitCode == 0 && strings.Contains(run.stdout, "[session closed: fixture_complete]") {

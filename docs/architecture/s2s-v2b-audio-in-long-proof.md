@@ -35,10 +35,10 @@ The proof enters only through the real shipped CLI executed as a subprocess
 ```bash
 agent session \
   --config-dir <tempdir> \
-  session \
   --max-duration 30s \
   --replay <runtime-generated .session.json fixture> \
-  --audio-in go-agent-loop/testdata/audio/utt_long_16k.wav
+  --audio-in go-agent-loop/testdata/audio/utt_long_16k.wav \
+  --audio-out <tempdir>/response.wav
 ```
 
 No internal agent-loop or session-service function call establishes the proof.
@@ -79,10 +79,11 @@ client-to-server event **byte-for-byte and in strict order** against the
 capture (`go-llm-gateway/pkg/testing` replay WebSocket dialer). Any extra
 event, missing event, truncation, or payload divergence terminates replay
 with a typed mismatch that names the expected and actual events. Therefore a
-clean run — exit 0, the scripted reply transcript printed exactly once, and
-the `[session closed: fixture_complete]` terminal marker on stdout — proves
-the exact wire shape including the N-appends : 1-commit : 1-response.create :
-1-turn invariant. Nothing else could pass the ordered validation.
+clean run — exit 0, the scripted reply transcript printed exactly once, the
+`[session closed: fixture_complete]` terminal marker on stdout, and a
+non-silent recorded response WAV — proves the exact wire shape including the
+N-appends : 1-commit : 1-response.create : 1-turn invariant and emitted audio
+delivery. Nothing else could pass the ordered validation.
 
 ## Negative control proves non-vacuous coverage
 
