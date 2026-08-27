@@ -119,6 +119,10 @@ func cloneSessionConfig(config models.SessionConfig) models.SessionConfig {
 	}
 	if config.TurnDetection != nil {
 		turnDetection := *config.TurnDetection
+		if turnDetection.CreateResponse != nil {
+			createResponse := *turnDetection.CreateResponse
+			turnDetection.CreateResponse = &createResponse
+		}
 		config.TurnDetection = &turnDetection
 	}
 	config.Config = append([]byte(nil), config.Config...)

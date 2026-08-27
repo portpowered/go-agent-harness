@@ -30,14 +30,15 @@ const (
 // such as OpenRouter that extend the OpenAI schema (e.g. images in tool messages,
 // video content parts, etc.).
 type OpenAIProvider struct {
-	httpClient                  *http.Client
-	model                       string
-	baseURL                     string
-	realtimeBaseURL             string
-	logger                      logging.Logger
-	apiKey                      string
-	realtimeDialer              transport.Dialer
-	realtimeLegacySessionUpdate bool
+	httpClient                    *http.Client
+	model                         string
+	baseURL                       string
+	realtimeBaseURL               string
+	logger                        logging.Logger
+	apiKey                        string
+	realtimeDialer                transport.Dialer
+	realtimeLegacySessionUpdate   bool
+	clientOwnsAudioTurnBoundaries bool
 }
 
 var _ providers.Provider = (*OpenAIProvider)(nil)

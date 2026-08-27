@@ -159,19 +159,25 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 // runner's single consumer goroutine; no internal locking is required except
 // for the exactly-once terminal emission guard.
 type sessionProgressObserver struct {
-	sink            SessionDiagnosticSink
-	recorder        metrics.Recorder
-	productionSink  *metrics.InMemorySink
-	streamObserver  SessionStreamObserver
-	runtime         *sessionRuntimeObservationRecorder
-	provider        string
-	model           string
-	sawSessionOpen  bool
-	turnsCompleted  int
-	scheduledInputs int
-	counters        audioTurnCounters
-	totals          audioTurnCounters
-	pendingInputs   []ScheduledAudioInput
+	sink           SessionDiagnosticSink
+	recorder       metrics.Recorder
+	productionSink *metrics.InMemorySink
+	streamObserver SessionStreamObserver
+	runtime        *sessionRuntimeObservationRecorder
+	provider       string
+	model          string
+	sawSessionOpen bool
+	sessionID      string
+	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
+	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
+	// connection cannot release a new connection's scheduled input.
+	sessionUpdated        bool
+	requireSessionUpdated bool
+	turnsCompleted        int
+	scheduledInputs       int
+	counters              audioTurnCounters
+	totals                audioTurnCounters
+	pendingInputs         []ScheduledAudioInput
 
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
@@ -245,6 +251,30 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
+	switch msg.Type {
+	case messages.StreamTypeSessionOpen:
+		o.sawSessionOpen = true
+		o.sessionID = ""
+		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
+			o.sessionID = v.SessionID
+		}
+		o.sessionUpdated = false
+	case messages.StreamTypeSessionUpdated:
+		if !o.sawSessionOpen {
+			break
+		}
+		updatedID := ""
+		if v, ok := msg.Value.(*messages.SessionUpdatedValue); ok && v != nil {
+			updatedID = v.SessionID
+		}
+		// Some compatible transports omit the session ID. When both sides
+		// provide one, require an exact match to the current connection.
+		if o.sessionID != "" && updatedID != "" && o.sessionID != updatedID {
+			break
+		}
+		o.sessionUpdated = true
+	}
+
 	switch v := msg.Value.(type) {
 	case *messages.SessionOpenValue:
 		o.sawSessionOpen = true
@@ -290,6 +320,9 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 	if o == nil || loop == nil {
 		return nil
 	}
+	if !o.scheduledAudioReady() {
+		return nil
+	}
 	for len(o.pendingInputs) > 0 && o.pendingInputs[0].AfterCompletedTurns <= o.turnsCompleted {
 		input := o.pendingInputs[0]
 		inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
@@ -305,6 +338,17 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	}
 	return nil
+}
+
+// scheduledAudioReady reports whether the scheduler may release its next
+// input. The acknowledgement requirement is opt-in so replay and existing
+// non-OpenAI session paths preserve their previous behavior.
+func (o *sessionProgressObserver) scheduledAudioReady() bool {
+	return o == nil || !o.requireSessionUpdated || (o.sawSessionOpen && o.sessionUpdated)
+}
+
+func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
+	return o != nil && o.requireSessionUpdated && len(o.pendingInputs) > 0 && !o.scheduledAudioReady()
 }
 
 // scheduledAudioComplete reports whether every scheduled input has been

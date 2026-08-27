@@ -155,6 +155,9 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			if !plan.loop.CloseAfterScheduledAudio {
 				t.Fatal("scheduled live session must close only after the scheduled responses")
 			}
+			if want := testCase.name == "openai"; plan.loop.RequireSessionUpdated != want {
+				t.Fatalf("scheduled %s configuration-ack requirement = %t, want %t", testCase.provider, plan.loop.RequireSessionUpdated, want)
+			}
 			if plan.capturePath != recordPath {
 				t.Fatalf("capture path = %q, want %q", plan.capturePath, recordPath)
 			}

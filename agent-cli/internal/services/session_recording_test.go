@@ -1126,6 +1126,12 @@ func (i *persistentSessionRecordingInferencer) ConnectSession(ctx context.Contex
 	}) {
 		return nil, ctx.Err()
 	}
+	if !session.receive.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionUpdated,
+		Value: messages.NewSessionUpdatedValue("persistent-session"),
+	}) {
+		return nil, ctx.Err()
+	}
 	return session, nil
 }
 

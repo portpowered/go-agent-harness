@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -15,12 +16,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 // cliLiveRecordDirServer is a provider-shaped transport used at the shipped
@@ -77,6 +80,7 @@ func (s *cliLiveRecordDirServer) serve() {
 		s.sendEvent(`{"type":"error","error":{"type":"authentication_error","code":"invalid_api_key","message":"invalid API key"}}`)
 		return
 	}
+	s.sendEvent(`{"type":"session.updated","session":{"id":"sess_cli_live","model":"gpt-realtime"}}`)
 
 	for {
 		select {
@@ -179,6 +183,493 @@ func (c *cliLiveRecordDirConn) WriteMessage(_ int, payload []byte) error {
 func (c *cliLiveRecordDirConn) Close() error {
 	c.server.closeOnce.Do(func() { close(c.server.closed) })
 	return nil
+}
+
+// cliLiveScheduledBoundaryServer is a live-shaped OpenAI transport for the
+// production CLI scheduled-audio path. It can withhold the initial
+// session.updated acknowledgement, emits VAD observations for speech, and
+// models the provider-side collision that occurs when server VAD owns a
+// response while the client sends its explicit boundary.
+type cliLiveScheduledBoundaryServer struct {
+	mu sync.Mutex
+
+	timeline       []string
+	outbound       []cliLiveOutbound
+	providerErrors []string
+	responses      chan int
+	events         chan []byte
+	closed         chan struct{}
+	closeOnce      sync.Once
+	dialOnce       sync.Once
+	dialCount      int
+	nextTurn       int
+
+	sessionCreated        chan struct{}
+	sessionUpdatedRelease chan struct{}
+	sessionCreatedOnce    sync.Once
+	releaseOnce           sync.Once
+
+	serverVADCreatesResponse bool
+	turnObserved             bool
+	turnHasSpeech            bool
+}
+
+func newCLILiveScheduledBoundaryServer(delaySessionUpdated bool) *cliLiveScheduledBoundaryServer {
+	server := &cliLiveScheduledBoundaryServer{
+		responses:                make(chan int, 8),
+		events:                   make(chan []byte, 64),
+		closed:                   make(chan struct{}),
+		sessionCreated:           make(chan struct{}),
+		serverVADCreatesResponse: true,
+	}
+	if delaySessionUpdated {
+		server.sessionUpdatedRelease = make(chan struct{})
+	}
+	return server
+}
+
+func (s *cliLiveScheduledBoundaryServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
+	s.mu.Lock()
+	s.dialCount++
+	s.mu.Unlock()
+	s.dialOnce.Do(func() { go s.serve() })
+	return &cliLiveScheduledBoundaryConn{server: s}, nil
+}
+
+func (s *cliLiveScheduledBoundaryServer) serve() {
+	s.sendEvent(`{"type":"session.created","session":{"id":"sess_cli_boundary","model":"gpt-realtime"}}`)
+	closeChannelOnce(s.sessionCreated, &s.sessionCreatedOnce)
+	if s.sessionUpdatedRelease != nil {
+		select {
+		case <-s.sessionUpdatedRelease:
+		case <-s.closed:
+			return
+		}
+	}
+	s.sendEvent(`{"type":"session.updated","session":{"id":"sess_cli_boundary","model":"gpt-realtime"}}`)
+
+	for {
+		select {
+		case turn := <-s.responses:
+			responseID := "resp_boundary_" + strconv.Itoa(turn)
+			transcriptText := "response turn " + strconv.Itoa(turn)
+			audio := base64.StdEncoding.EncodeToString([]byte{byte(turn), 0, byte(turn + 20), 0})
+			s.sendEvent(`{"type":"response.created","response":{"id":"` + responseID + `"}}`)
+			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
+			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
+			s.sendEvent(`{"type":"response.output_audio.done"}`)
+			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+		case <-s.closed:
+			return
+		}
+	}
+}
+
+func (s *cliLiveScheduledBoundaryServer) sendEvent(payload string) {
+	select {
+	case s.events <- []byte(payload):
+	case <-s.closed:
+	}
+}
+
+func (s *cliLiveScheduledBoundaryServer) shutdown() {
+	s.closeOnce.Do(func() { close(s.closed) })
+}
+
+func (s *cliLiveScheduledBoundaryServer) releaseSessionUpdated() {
+	if s == nil || s.sessionUpdatedRelease == nil {
+		return
+	}
+	s.releaseOnce.Do(func() { close(s.sessionUpdatedRelease) })
+}
+
+func (s *cliLiveScheduledBoundaryServer) snapshots() ([]string, []cliLiveOutbound, []string, int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	timeline := append([]string(nil), s.timeline...)
+	outbound := make([]cliLiveOutbound, len(s.outbound))
+	for index, event := range s.outbound {
+		outbound[index] = cliLiveOutbound{typeName: event.typeName, audio: append([]byte(nil), event.audio...)}
+	}
+	return timeline, outbound, append([]string(nil), s.providerErrors...), s.dialCount, s.serverVADCreatesResponse
+}
+
+type cliLiveScheduledBoundaryConn struct {
+	server *cliLiveScheduledBoundaryServer
+}
+
+func (c *cliLiveScheduledBoundaryConn) ReadMessage() (int, []byte, error) {
+	select {
+	case payload := <-c.server.events:
+		var envelope struct {
+			Type  string `json:"type"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err == nil {
+			c.server.mu.Lock()
+			c.server.timeline = append(c.server.timeline, "in:"+envelope.Type)
+			if envelope.Type == "error" && envelope.Error.Code != "" {
+				c.server.providerErrors = append(c.server.providerErrors, envelope.Error.Code)
+			}
+			c.server.mu.Unlock()
+		}
+		return 1, payload, nil
+	case <-c.server.closed:
+		return 0, nil, errors.New("hermetic scheduled-boundary connection closed")
+	}
+}
+
+func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error {
+	var envelope struct {
+		Type    string          `json:"type"`
+		Audio   string          `json:"audio"`
+		Session json.RawMessage `json:"session"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return err
+	}
+
+	var audio []byte
+	if envelope.Audio != "" {
+		var err error
+		audio, err = base64.StdEncoding.DecodeString(envelope.Audio)
+		if err != nil {
+			return err
+		}
+	}
+
+	var observations []string
+	var responseTurn int
+	var collision bool
+	c.server.mu.Lock()
+	c.server.timeline = append(c.server.timeline, "out:"+envelope.Type)
+	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio})
+	switch envelope.Type {
+	case "session.update":
+		c.server.serverVADCreatesResponse = scheduledServerVADCreatesResponse(envelope.Session)
+	case "input_audio_buffer.append":
+		if !c.server.turnObserved {
+			c.server.turnObserved = true
+			if hasNonZeroPCM(audio) {
+				c.server.turnHasSpeech = true
+				observations = append(observations, `{"type":"input_audio_buffer.speech_started"}`)
+			}
+		} else if hasNonZeroPCM(audio) {
+			c.server.turnHasSpeech = true
+		}
+	case "input_audio_buffer.commit":
+		if c.server.turnHasSpeech {
+			observations = append(observations, `{"type":"input_audio_buffer.speech_stopped"}`)
+		}
+	case "response.create":
+		c.server.nextTurn++
+		responseTurn = c.server.nextTurn
+		collision = c.server.serverVADCreatesResponse && c.server.turnHasSpeech
+		c.server.turnObserved = false
+		c.server.turnHasSpeech = false
+	}
+	c.server.mu.Unlock()
+
+	for _, observation := range observations {
+		c.server.sendEvent(observation)
+	}
+	if collision {
+		c.server.sendEvent(`{"type":"error","error":{"type":"invalid_request_error","code":"conversation_already_has_active_response","message":"server VAD already owns the response"}}`)
+		return nil
+	}
+	if responseTurn > 0 {
+		select {
+		case c.server.responses <- responseTurn:
+		case <-c.server.closed:
+		}
+	}
+	return nil
+}
+
+func (c *cliLiveScheduledBoundaryConn) Close() error {
+	c.server.shutdown()
+	return nil
+}
+
+func closeChannelOnce(channel chan struct{}, once *sync.Once) {
+	if channel == nil || once == nil {
+		return
+	}
+	once.Do(func() { close(channel) })
+}
+
+func scheduledServerVADCreatesResponse(session json.RawMessage) bool {
+	var update struct {
+		Audio struct {
+			Input struct {
+				TurnDetection *struct {
+					CreateResponse *bool `json:"create_response"`
+				} `json:"turn_detection"`
+			} `json:"input"`
+		} `json:"audio"`
+		TurnDetection *struct {
+			CreateResponse *bool `json:"create_response"`
+		} `json:"turn_detection"`
+	}
+	if err := json.Unmarshal(session, &update); err != nil {
+		return true
+	}
+	detection := update.Audio.Input.TurnDetection
+	if detection == nil {
+		detection = update.TurnDetection
+	}
+	if detection == nil || detection.CreateResponse == nil {
+		return true
+	}
+	return *detection.CreateResponse
+}
+
+func hasNonZeroPCM(audio []byte) bool {
+	for _, sample := range audio {
+		if sample != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
+	t.Helper()
+	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
+		oaiprovider.WithWebSocketDialer(server),
+		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
+	)
+	if err != nil {
+		t.Fatalf("create hermetic OpenAI scheduled session inferencer: %v", err)
+	}
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+		sessionInferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+	return agentCLI
+}
+
+func scheduledBoundaryArgs(configDir, recordDir string, audioPaths ...string) []string {
+	args := []string{
+		"--config-dir", configDir,
+		"session",
+		"--record-dir", recordDir,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--system-prompt", "none",
+		"--max-duration", "10s",
+	}
+	for _, path := range audioPaths {
+		args = append(args, "--audio-in-turn", path)
+	}
+	return args
+}
+
+func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) {
+	t.Helper()
+	for turn := 0; turn < turns; turn++ {
+		appendIndex := indexOfTimeline(timeline, "out:input_audio_buffer.append", turn)
+		commitIndex := indexOfTimeline(timeline, "out:input_audio_buffer.commit", turn)
+		responseIndex := indexOfTimeline(timeline, "out:response.create", turn)
+		if appendIndex < 0 || commitIndex < 0 || responseIndex < 0 {
+			t.Fatalf("scheduled turn %d is missing its boundary from %v", turn+1, timeline)
+		}
+		if !(appendIndex < commitIndex && commitIndex < responseIndex) {
+			t.Fatalf("scheduled turn %d wire order = %v, want append < commit < response.create", turn+1, timeline)
+		}
+	}
+}
+
+func equalDuration24kSilenceFixture(t *testing.T, speechPath string) string {
+	t.Helper()
+	wavBytes, err := os.ReadFile(speechPath)
+	if err != nil {
+		t.Fatalf("read 24 kHz speech fixture: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("decode 24 kHz speech fixture: %v", err)
+	}
+	if rate != wavio.Rate24kHz || len(samples) == 0 {
+		t.Fatalf("speech fixture format = rate %d, samples %d; want non-empty 24 kHz PCM16 mono", rate, len(samples))
+	}
+	for index := range samples {
+		samples[index] = 0
+	}
+
+	var silence bytes.Buffer
+	if err := wavio.Write(&silence, wavio.Rate24kHz, samples); err != nil {
+		t.Fatalf("encode equal-duration 24 kHz silence fixture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "exact-silence-24k.wav")
+	if err := os.WriteFile(path, silence.Bytes(), 0o600); err != nil {
+		t.Fatalf("write equal-duration 24 kHz silence fixture: %v", err)
+	}
+	return path
+}
+
+// TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated
+// drives the shipped command surface against a transport that withholds the
+// initial configuration acknowledgement. The provider boundary must remain
+// free of scheduled input until the observable session.updated event arrives.
+func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *testing.T) {
+	server := newCLILiveScheduledBoundaryServer(true)
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIScheduledBoundaryAgent(t, server)
+	recordDir := filepath.Join(t.TempDir(), "delayed-ack-recording")
+	stdout := &syncBuffer{}
+	stderr := &syncBuffer{}
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+	rootCmd.SetArgs(scheduledBoundaryArgs(
+		t.TempDir(),
+		recordDir,
+		locateCLIFixture(t, "multiturn_turn1.wav"),
+	))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- rootCmd.ExecuteContext(ctx) }()
+
+	select {
+	case <-server.sessionCreated:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the live SESSION.OPEN fixture")
+	}
+	timeline, _, _, _, _ := server.snapshots()
+	for _, event := range []string{"out:input_audio_buffer.append", "out:input_audio_buffer.commit", "out:response.create"} {
+		if containsTimeline(timeline, event) {
+			t.Fatalf("scheduled boundary crossed provider before session.updated: %v", timeline)
+		}
+	}
+
+	server.releaseSessionUpdated()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("delayed-ack production CLI session error: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("delayed-ack production CLI session did not complete")
+	}
+
+	timeline, outbound, providerErrors, dialCount, serverVADCreatesResponse := server.snapshots()
+	if dialCount != 1 {
+		t.Fatalf("delayed-ack provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
+	}
+	if serverVADCreatesResponse {
+		t.Fatalf("scheduled session update left server VAD response ownership enabled: %v", timeline)
+	}
+	if len(providerErrors) != 0 {
+		t.Fatalf("delayed-ack provider errors = %v; timeline=%v", providerErrors, timeline)
+	}
+	updatedIndex := indexOfTimeline(timeline, "in:session.updated", 0)
+	appendIndex := indexOfTimeline(timeline, "out:input_audio_buffer.append", 0)
+	if updatedIndex < 0 || appendIndex < 0 || updatedIndex >= appendIndex {
+		t.Fatalf("delayed-ack session.updated did not precede the first append: %v", timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 1 || countTimeline(timeline, "out:input_audio_buffer.commit") != 1 || countTimeline(timeline, "out:response.create") != 1 {
+		t.Fatalf("delayed-ack scheduled boundary duplicated or missing: %v", timeline)
+	}
+	assertScheduledBoundaryOrder(t, timeline, 1)
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	if len(appendAudio) != 1 || len(appendAudio[0]) == 0 || !hasNonZeroPCM(appendAudio[0]) {
+		t.Fatalf("delayed-ack first scheduled append = %v; want one non-empty PCM payload", audioLengths(appendAudio))
+	}
+	for _, output := range []string{stdout.String(), stderr.String()} {
+		if strings.Contains(output, "input_audio_buffer_commit_empty") || strings.Contains(output, "conversation_already_has_active_response") {
+			t.Fatalf("delayed-ack CLI output contains a provider collision: %q", output)
+		}
+	}
+	assertCLILiveRecordingBundle(t, recordDir, 1)
+}
+
+// TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence keeps a real
+// 24 kHz speech fixture and an equal-duration all-zero 24 kHz fixture in one
+// persistent production-CLI session. The transport emits a live-shaped VAD
+// observation for speech and fails the old server-VAD/client-boundary dual
+// ownership configuration with the provider collision code.
+func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
+	speechPath := locateCorpusWAV(t, "truncated_24k")
+	silencePath := equalDuration24kSilenceFixture(t, speechPath)
+	server := newCLILiveScheduledBoundaryServer(false)
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIScheduledBoundaryAgent(t, server)
+	recordDir := filepath.Join(t.TempDir(), "speech-silence-recording")
+	stdout := &syncBuffer{}
+	stderr := &syncBuffer{}
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+	rootCmd.SetArgs(scheduledBoundaryArgs(t.TempDir(), recordDir, speechPath, silencePath))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	err := rootCmd.ExecuteContext(ctx)
+	if err != nil {
+		timeline, outbound, providerErrors, _, _ := server.snapshots()
+		t.Fatalf("speech-then-silence production CLI session error: %v\nprovider errors=%v\ntimeline=%v\nappend lengths=%v\nstdout:\n%s\nstderr:\n%s", err, providerErrors, timeline, audioLengthsFromOutbound(outbound), stdout.String(), stderr.String())
+	}
+
+	timeline, outbound, providerErrors, dialCount, serverVADCreatesResponse := server.snapshots()
+	if dialCount != 1 {
+		t.Fatalf("speech-then-silence provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
+	}
+	if serverVADCreatesResponse {
+		t.Fatalf("scheduled session update left server VAD response ownership enabled: %v", timeline)
+	}
+	if len(providerErrors) != 0 {
+		t.Fatalf("speech-then-silence provider errors = %v; timeline=%v", providerErrors, timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 || countTimeline(timeline, "out:input_audio_buffer.commit") != 2 || countTimeline(timeline, "out:response.create") != 2 || countTimeline(timeline, "in:response.done") != 2 {
+		t.Fatalf("speech-then-silence scheduled lifecycle = %v, want two complete client-owned turns", timeline)
+	}
+	assertScheduledBoundaryOrder(t, timeline, 2)
+	firstResponseDone := indexOfTimeline(timeline, "in:response.done", 0)
+	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
+	if firstResponseDone < 0 || secondAppend <= firstResponseDone {
+		t.Fatalf("silence turn crossed the active first response: %v", timeline)
+	}
+	if countTimeline(timeline, "in:input_audio_buffer.speech_started") != 1 || countTimeline(timeline, "in:input_audio_buffer.speech_stopped") != 1 {
+		t.Fatalf("live-shaped VAD observations = %v, want one speech start/stop for the real speech turn", timeline)
+	}
+
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	if len(appendAudio) != 2 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 {
+		t.Fatalf("speech-then-silence append payloads = %v, want two non-empty scheduled payloads", audioLengths(appendAudio))
+	}
+	if len(appendAudio[0]) != len(appendAudio[1]) {
+		t.Fatalf("speech and exact-silence payload lengths = %v, want equal duration after normalization", audioLengths(appendAudio))
+	}
+	if !hasNonZeroPCM(appendAudio[0]) || hasNonZeroPCM(appendAudio[1]) {
+		t.Fatalf("scheduled payloads do not preserve speech then exact silence: non-zero=%t,%t", hasNonZeroPCM(appendAudio[0]), hasNonZeroPCM(appendAudio[1]))
+	}
+	for _, output := range []string{strings.Join(timeline, "\n"), strings.Join(providerErrors, "\n"), stdout.String(), stderr.String()} {
+		if strings.Contains(output, "input_audio_buffer_commit_empty") || strings.Contains(output, "conversation_already_has_active_response") {
+			t.Fatalf("speech-then-silence run contains a provider collision: %q", output)
+		}
+	}
+	assertCLILiveRecordingBundle(t, recordDir, 2)
+}
+
+func audioPayloadsFromOutbound(outbound []cliLiveOutbound) [][]byte {
+	audio := make([][]byte, 0, len(outbound))
+	for _, event := range outbound {
+		if event.typeName == "input_audio_buffer.append" {
+			audio = append(audio, append([]byte(nil), event.audio...))
+		}
+	}
+	return audio
 }
 
 type cliLiveRecordingEntry struct {

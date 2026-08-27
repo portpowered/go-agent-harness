@@ -9,6 +9,9 @@ import (
 )
 
 func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
+	if p.clientOwnsAudioTurnBoundaries {
+		config.TurnDetection = clientOwnedAudioTurnDetection(config.TurnDetection)
+	}
 	if p.realtimeLegacySessionUpdate {
 		return buildLegacyRealtimeSessionUpdate(config, model)
 	}
@@ -36,6 +39,19 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 		return models.SessionEvent{}, fmt.Errorf("marshal session update: %w", err)
 	}
 	return models.NewSessionUpdateEvent(data), nil
+}
+
+func clientOwnedAudioTurnDetection(existing *models.TurnDetectionConfig) *models.TurnDetectionConfig {
+	detection := models.TurnDetectionConfig{Type: "server_vad"}
+	if existing != nil {
+		detection = *existing
+		if detection.Type == "" {
+			detection.Type = "server_vad"
+		}
+	}
+	createResponse := false
+	detection.CreateResponse = &createResponse
+	return &detection
 }
 
 func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
