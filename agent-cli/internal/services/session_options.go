@@ -185,6 +185,9 @@ type SessionRunOptions struct {
 }
 
 func validateSessionRunOptions(opts SessionRunOptions) error {
+	if err := ValidateOpenAIRealtimeVoice(opts.Voice); err != nil {
+		return err
+	}
 	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
 		return err
 	}
