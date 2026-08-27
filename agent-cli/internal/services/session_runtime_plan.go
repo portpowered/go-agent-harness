@@ -43,15 +43,16 @@ type sessionReplayDialer interface {
 }
 
 type sessionRuntimeFactory struct {
-	newDefaultLiveDialer      func() transport.Dialer
-	newRecordingDialer        func(transport.Dialer, string, string) sessionRecordingDialer
-	newReplayDialer           func(string) (sessionReplayDialer, error)
-	newReplayInferencer       func(string) messages.SessionInferencer
-	newGrokSessionInferencer  func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
-	newOpenAISessionInf       func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error)
-	newGrokSessionWithTools   func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
-	newOpenAISessionWithTools func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
-	newRTCRuntime             SessionRTCRuntimeFactory
+	newDefaultLiveDialer               func() transport.Dialer
+	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
+	newReplayDialer                    func(string) (sessionReplayDialer, error)
+	newReplayInferencer                func(string) messages.SessionInferencer
+	newGrokSessionInferencer           func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
+	newOpenAISessionInf                func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error)
+	newGrokSessionWithTools            func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newOpenAISessionWithTools          func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newOpenAIScheduledSessionWithTools func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newRTCRuntime                      SessionRTCRuntimeFactory
 }
 
 var defaultSessionRuntimeFactory = sessionRuntimeFactory{
@@ -79,6 +80,9 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	newOpenAISessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg, voice, dialer, toolDefinitions)
 	},
+	newOpenAIScheduledSessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithScheduledAudio(sessionCfg, voice, dialer, toolDefinitions)
+	},
 }
 
 func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
@@ -88,7 +92,10 @@ func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg confi
 	return f.newGrokSessionInferencer(sessionCfg, dialer)
 }
 
-func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, scheduledAudio bool) (messages.SessionInferencer, error) {
+	if scheduledAudio && f.newOpenAIScheduledSessionWithTools != nil {
+		return f.newOpenAIScheduledSessionWithTools(sessionCfg, voice, dialer, toolDefinitions)
+	}
 	if f.newOpenAISessionWithTools != nil {
 		return f.newOpenAISessionWithTools(sessionCfg, voice, dialer, toolDefinitions)
 	}

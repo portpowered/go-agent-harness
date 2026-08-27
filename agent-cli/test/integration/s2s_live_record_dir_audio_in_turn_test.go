@@ -77,6 +77,7 @@ func (s *cliLiveRecordDirServer) serve() {
 		s.sendEvent(`{"type":"error","error":{"type":"authentication_error","code":"invalid_api_key","message":"invalid API key"}}`)
 		return
 	}
+	s.sendEvent(`{"type":"session.updated","session":{"id":"sess_cli_live","model":"gpt-realtime"}}`)
 
 	for {
 		select {

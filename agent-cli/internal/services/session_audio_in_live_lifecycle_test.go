@@ -130,6 +130,7 @@ func (c *audioInLifecycleConn) Close() error {
 type scheduledAudioLifecycleServer struct {
 	mu                    sync.Mutex
 	writes                []string
+	sessionUpdates        []json.RawMessage
 	responses             chan int
 	events                chan string
 	closed                chan struct{}
@@ -160,6 +161,15 @@ func (s *scheduledAudioLifecycleServer) writesSnapshot() []string {
 	return append([]string(nil), s.writes...)
 }
 
+func (s *scheduledAudioLifecycleServer) sessionUpdateSnapshot() json.RawMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sessionUpdates) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), s.sessionUpdates[0]...)
+}
+
 func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	go func() {
 		s.events <- `{"type":"session.created","session":{"id":"sess_scheduled","model":"gpt-realtime"}}`
@@ -176,6 +186,8 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 			select {
 			case turn := <-s.responses:
 				audio := base64AudioForTurn(turn)
+				s.events <- `{"type":"input_audio_buffer.speech_started"}`
+				s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
 				s.events <- `{"type":"response.created","response":{"id":"resp_` + string(rune('0'+turn)) + `"}}`
 				s.events <- `{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`
 				s.events <- `{"type":"response.output_audio.done"}`
@@ -222,13 +234,17 @@ func (c *scheduledAudioLifecycleConn) ReadMessage() (int, []byte, error) {
 
 func (c *scheduledAudioLifecycleConn) WriteMessage(_ int, payload []byte) error {
 	var envelope struct {
-		Type string `json:"type"`
+		Type    string          `json:"type"`
+		Session json.RawMessage `json:"session"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
 		return err
 	}
 	c.server.mu.Lock()
 	c.server.writes = append(c.server.writes, envelope.Type)
+	if envelope.Type == "session.update" && len(envelope.Session) > 0 {
+		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
+	}
 	if envelope.Type == "response.create" {
 		c.server.nextTurn++
 		turn := c.server.nextTurn
@@ -390,6 +406,33 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	}
 	if secondAppend < 0 || firstResponseDone < 0 || secondAppend <= firstResponseDone {
 		t.Fatalf("second input was not dispatched after first response completion: %v", writes)
+	}
+	var sessionUpdate struct {
+		Audio struct {
+			Input struct {
+				TurnDetection *struct {
+					Type           string `json:"type"`
+					CreateResponse *bool  `json:"create_response"`
+				} `json:"turn_detection"`
+			} `json:"input"`
+		} `json:"audio"`
+		TurnDetection *struct {
+			Type           string `json:"type"`
+			CreateResponse *bool  `json:"create_response"`
+		} `json:"turn_detection"`
+	}
+	if err := json.Unmarshal(server.sessionUpdateSnapshot(), &sessionUpdate); err != nil {
+		t.Fatalf("decode scheduled session.update: %v", err)
+	}
+	detection := sessionUpdate.Audio.Input.TurnDetection
+	if detection == nil {
+		detection = sessionUpdate.TurnDetection
+	}
+	if detection == nil || detection.Type != "server_vad" || detection.CreateResponse == nil || *detection.CreateResponse {
+		t.Fatalf("scheduled session.update turn detection = %+v, want server_vad with create_response=false", detection)
+	}
+	if countWireEvent(writes, "IN:input_audio_buffer.speech_started") != 2 || countWireEvent(writes, "IN:input_audio_buffer.speech_stopped") != 2 {
+		t.Fatalf("scheduled VAD observations = %v, want two speech-start and speech-stop events", writes)
 	}
 
 	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))

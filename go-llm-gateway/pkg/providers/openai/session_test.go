@@ -303,6 +303,9 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 		t.Fatalf("audio.input.turn_detection missing or wrong type: %T", input["turn_detection"])
 	}
 	assertStringField(t, turnDetection, "type", "server_vad")
+	if _, ok := turnDetection["create_response"]; ok {
+		t.Fatal("server-owned OpenAI realtime VAD should leave create_response unspecified")
+	}
 
 	output, ok := audio["output"].(map[string]any)
 	if !ok {
@@ -332,6 +335,74 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	required, ok := parameters["required"].([]any)
 	if !ok || len(required) != 1 || required[0] != "city" {
 		t.Fatalf("tool required parameters: got %#v, want [city]", parameters["required"])
+	}
+}
+
+func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableServerVADResponseCreation(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		name := "ga"
+		if legacy {
+			name = "legacy"
+		}
+		t.Run(name, func(t *testing.T) {
+			conn := newMockWebSocketConn()
+			dialer := &mockWebSocketDialer{conn: conn}
+			options := []Option{
+				WithAPIKey("test-key"),
+				WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+				WithWebSocketDialer(dialer),
+				WithClientOwnedAudioTurnBoundaries(),
+			}
+			if legacy {
+				options = append(options, WithLegacyRealtimeSessionUpdate())
+			}
+			provider := New(options...)
+
+			session, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "gpt-realtime"})
+			if err != nil {
+				t.Fatalf("ConnectSession: %v", err)
+			}
+			defer func() { _ = session.Close() }()
+
+			clientMessages := conn.getClientMessages()
+			if len(clientMessages) != 1 {
+				t.Fatalf("client messages: got %d, want initial session.update only", len(clientMessages))
+			}
+			var envelope map[string]json.RawMessage
+			if err := json.Unmarshal(clientMessages[0], &envelope); err != nil {
+				t.Fatalf("unmarshal session.update: %v", err)
+			}
+			var sessionPayload map[string]any
+			if err := json.Unmarshal(envelope["session"], &sessionPayload); err != nil {
+				t.Fatalf("unmarshal session payload: %v", err)
+			}
+
+			var turnDetection map[string]any
+			if legacy {
+				var ok bool
+				turnDetection, ok = sessionPayload["turn_detection"].(map[string]any)
+				if !ok {
+					t.Fatalf("legacy turn_detection: got %T", sessionPayload["turn_detection"])
+				}
+			} else {
+				audio, ok := sessionPayload["audio"].(map[string]any)
+				if !ok {
+					t.Fatalf("audio config: got %T", sessionPayload["audio"])
+				}
+				input, ok := audio["input"].(map[string]any)
+				if !ok {
+					t.Fatalf("audio.input config: got %T", audio["input"])
+				}
+				turnDetection, ok = input["turn_detection"].(map[string]any)
+				if !ok {
+					t.Fatalf("audio.input.turn_detection: got %T", input["turn_detection"])
+				}
+			}
+			assertStringField(t, turnDetection, "type", "server_vad")
+			if got, ok := turnDetection["create_response"].(bool); !ok || got {
+				t.Fatalf("create_response = %#v, want explicit false", turnDetection["create_response"])
+			}
+		})
 	}
 }
 
@@ -469,6 +540,67 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 	wantTypes := []string{
 		string(models.SessionEventSessionUpdate),
 		"conversation.item.create",
+		string(models.SessionEventResponseCreate),
+	}
+	if strings.Join(gotTypes, ",") != strings.Join(wantTypes, ",") {
+		t.Fatalf("client event sequence: got %v, want %v", gotTypes, wantTypes)
+	}
+}
+
+func TestConnectSession_VADObservationsDoNotCreateAnOutboundTurnBoundary(t *testing.T) {
+	conn := newMockWebSocketConn()
+	conn.addServerEvent("input_audio_buffer.speech_started", nil)
+	conn.addServerEvent("input_audio_buffer.speech_stopped", nil)
+	dialer := &mockWebSocketDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	for i, want := range []messages.StreamMessageType{messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped} {
+		got, ok := session.Receive().ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatalf("timed out waiting for VAD observation %d", i)
+		}
+		if got.Type != want {
+			t.Fatalf("VAD observation %d: got %q, want %q", i, got.Type, want)
+		}
+	}
+
+	if !session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue([]byte{0, 0, 0, 0}),
+	}) {
+		t.Fatal("Send audio returned false")
+	}
+	if !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}) {
+		t.Fatal("Send message end returned false")
+	}
+
+	clientMessages := waitForClientMessages(t, conn, 4)
+	gotTypes := make([]string, 0, len(clientMessages))
+	for _, payload := range clientMessages {
+		var event struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(payload, &event); err != nil {
+			t.Fatalf("unmarshal client event: %v", err)
+		}
+		gotTypes = append(gotTypes, event.Type)
+	}
+	wantTypes := []string{
+		string(models.SessionEventSessionUpdate),
+		string(models.SessionEventInputAudioBufferAppend),
+		string(models.SessionEventInputAudioBufferCommit),
 		string(models.SessionEventResponseCreate),
 	}
 	if strings.Join(gotTypes, ",") != strings.Join(wantTypes, ",") {

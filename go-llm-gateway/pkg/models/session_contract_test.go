@@ -82,11 +82,13 @@ func compareModelJSONRepresentation(t *testing.T, want, got any) {
 }
 
 func populatedTurnDetectionConfig() TurnDetectionConfig {
+	createResponse := true
 	return TurnDetectionConfig{
 		Type:              "server_vad",
 		Threshold:         0.72,
 		PrefixPaddingMs:   240,
 		SilenceDurationMs: 680,
+		CreateResponse:    &createResponse,
 	}
 }
 

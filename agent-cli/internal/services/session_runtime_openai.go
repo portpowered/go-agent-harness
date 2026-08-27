@@ -30,7 +30,8 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions)
+	scheduledAudio := len(opts.AudioInputs) > 0
+	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, scheduledAudio)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -79,7 +80,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, opts.Voice, replayDialer, replayToolDefinitions)
+	}, opts.Voice, replayDialer, replayToolDefinitions, false)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -153,5 +154,16 @@ func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfi
 	}
 	opts := make([]oaiprovider.Option, 0, 1)
 	opts = append(opts, oaiprovider.WithWebSocketDialer(dialer))
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithScheduledAudio(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
+	}
+	opts := []oaiprovider.Option{
+		oaiprovider.WithWebSocketDialer(dialer),
+		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
+	}
 	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
 }

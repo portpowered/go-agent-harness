@@ -38,6 +38,10 @@ type TurnDetectionConfig struct {
 	PrefixPaddingMs int `json:"prefix_padding_ms,omitempty"`
 	// SilenceDurationMs is milliseconds of silence before speech is considered ended.
 	SilenceDurationMs int `json:"silence_duration_ms,omitempty"`
+	// CreateResponse controls whether server-side VAD owns response creation.
+	// A pointer preserves the provider default when the field is unspecified and
+	// allows callers to explicitly send false for client-owned turn boundaries.
+	CreateResponse *bool `json:"create_response,omitempty"`
 }
 
 // SessionConfig is a gateway-owned configuration surface for establishing a

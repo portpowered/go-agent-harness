@@ -41,6 +41,10 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		return []messages.StreamMessage{
 			{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue(sessionID)},
 		}
+	case models.SessionEventInputAudioBufferSpeechStarted:
+		return []messages.StreamMessage{{Type: messages.StreamTypeVADSpeechStarted, Value: messages.NewVADSpeechStartedValue()}}
+	case models.SessionEventInputAudioBufferSpeechStopped:
+		return []messages.StreamMessage{{Type: messages.StreamTypeVADSpeechStopped, Value: messages.NewVADSpeechStoppedValue()}}
 	case models.SessionEventSessionClosed:
 		sessionID := firstStringField(event.Data, "session_id", "session.id", "id")
 		reason := firstStringField(event.Data, "reason", "session.reason")

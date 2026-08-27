@@ -218,6 +218,9 @@ func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFa
 	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, voice, dialer, instructions, toolDefinitions)
 	}
+	factory.newOpenAIScheduledSessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudio(sessionCfg, voice, dialer, instructions, toolDefinitions)
+	}
 	return factory
 }
 
@@ -252,6 +255,14 @@ func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.Open
 }
 
 func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudio(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, oaiprovider.WithClientOwnedAudioTurnBoundaries())
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, extra ...oaiprovider.Option) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
@@ -264,6 +275,7 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg con
 		oaiprovider.WithRealtimeBaseURL(openAIRealtimeURL(sessionCfg)),
 		oaiprovider.WithWebSocketDialer(dialer),
 	}
+	providerOpts = append(providerOpts, extra...)
 	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(oaiprovider.New(providerOpts...)))
 	if err != nil {
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)

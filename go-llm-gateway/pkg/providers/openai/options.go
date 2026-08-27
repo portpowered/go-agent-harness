@@ -73,3 +73,13 @@ func WithLegacyRealtimeSessionUpdate() Option {
 		p.realtimeLegacySessionUpdate = true
 	}
 }
+
+// WithClientOwnedAudioTurnBoundaries configures a realtime session for finite
+// client-scheduled audio turns. Server VAD remains enabled for observations,
+// but it cannot independently create a response; the caller owns the single
+// commit and response.create pair for each turn.
+func WithClientOwnedAudioTurnBoundaries() Option {
+	return func(p *OpenAIProvider) {
+		p.clientOwnsAudioTurnBoundaries = true
+	}
+}
