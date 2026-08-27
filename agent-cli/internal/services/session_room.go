@@ -146,6 +146,10 @@ type RoomRunOptions struct {
 	OnAudioInput            RoomParticipantAudioObserver
 	OnParticipantTerminated RoomParticipantObserver
 	OnRoomTerminated        RoomObserver
+	// Stream optionally receives the room's diagnostic, transcript, and
+	// lifecycle projections. The broker is observational and never carries raw
+	// audio. Callers that expose it over HTTP own the listener lifecycle.
+	Stream *RoomEventBroker
 }
 
 // RoomOptions is a concise alias for RoomRunOptions.
@@ -640,13 +644,36 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		out = io.Discard
 	}
 	var err error
+	var streamTerminalOnce sync.Once
+	publishStreamTermination := func(result RoomResult) {
+		if opts.Stream == nil {
+			return
+		}
+		streamTerminalOnce.Do(func() {
+			opts.Stream.PublishRoomEvent(RoomStreamEventRunTerminated, RoomStreamRoomParticipantID, string(result.TerminationReason))
+			_ = opts.Stream.Close()
+		})
+	}
 
 	validation := opts.Validation
 	if opts.CredentialLookup != nil {
 		validation.LookupCredential = opts.CredentialLookup
 	}
 	if err := opts.Manifest.Validate(validation); err != nil {
-		return roomFailureResult(err, nil), err
+		result := roomFailureResult(err, nil)
+		publishStreamTermination(result)
+		return result, err
+	}
+	if opts.Stream != nil {
+		participantIDs := make([]string, 0, len(opts.Manifest.Participants))
+		for _, participant := range opts.Manifest.Participants {
+			participantIDs = append(participantIDs, participant.ID)
+		}
+		if err := opts.Stream.ValidateParticipants(participantIDs); err != nil {
+			result := roomFailureResult(err, nil)
+			publishStreamTermination(result)
+			return result, err
+		}
 	}
 
 	var evidence *roomEvidence
@@ -655,26 +682,30 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	if strings.TrimSpace(opts.OutputDir) != "" {
 		outputDir, outputErr := prepareRoomEvidenceOutput(opts.OutputDir)
 		if outputErr != nil {
-			return roomFailureResult(outputErr, nil), outputErr
+			result := roomFailureResult(outputErr, nil)
+			publishStreamTermination(result)
+			return result, outputErr
 		}
 		opts.OutputDir = outputDir
 		evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
 		evidence, err = newRoomEvidence(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt)
 		if err != nil {
-			return roomFailureResult(err, evidenceSecrets), err
+			result := roomFailureResult(err, evidenceSecrets)
+			publishStreamTermination(result)
+			return result, err
 		}
 	}
 	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
-		if evidence == nil {
-			return result, runErr
-		}
-		finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
-		if finalizeErr != nil {
-			runErr = errors.Join(runErr, finalizeErr)
-			if result.Error == "" {
-				result.Error = sanitizeRoomError(finalizeErr, evidenceSecrets)
+		if evidence != nil {
+			finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
+			if finalizeErr != nil {
+				runErr = errors.Join(runErr, finalizeErr)
+				if result.Error == "" {
+					result.Error = sanitizeRoomError(finalizeErr, evidenceSecrets)
+				}
 			}
 		}
+		publishStreamTermination(result)
 		return result, runErr
 	}
 
@@ -694,9 +725,23 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			result := roomFailureResult(safeErr, secrets)
 			return finalizeEvidence(result, safeErr)
 		}
+		if opts.Stream != nil {
+			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantJoined, plan.manifest.ID)
+		}
 	}
 
-	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, opts.OnParticipantTerminated)
+	onParticipantTerminated := opts.OnParticipantTerminated
+	if opts.Stream != nil || onParticipantTerminated != nil {
+		onParticipantTerminated = func(result RoomParticipantResult) {
+			if opts.Stream != nil {
+				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantTerminated, result.ParticipantID, string(result.TerminationReason))
+			}
+			if opts.OnParticipantTerminated != nil {
+				opts.OnParticipantTerminated(result)
+			}
+		}
+	}
+	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
 	if evidence != nil {
 		evidence.setErrorHandler(func(participantID string, evidenceErr error) {
 			coordinator.fail(roomParticipantFailure(participantID, fmt.Errorf("record room evidence: %w", evidenceErr), secrets))
@@ -763,8 +808,22 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			if evidence != nil {
 				participantEvidence = evidence.participant(plan.manifest.ID)
 			}
-			observer := newSessionProgressObserver(participantEvidence, nil, plan.manifest.Provider, plan.manifest.Model)
+			participantStream := RoomParticipantEventSink{}
+			if opts.Stream != nil {
+				participantStream = opts.Stream.ParticipantSink(plan.manifest.ID)
+			}
+			diagnosticSinks := make([]SessionDiagnosticSink, 0, 2)
+			if participantEvidence != nil {
+				diagnosticSinks = append(diagnosticSinks, participantEvidence)
+			}
+			if opts.Stream != nil {
+				diagnosticSinks = append(diagnosticSinks, participantStream)
+			}
+			observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, plan.manifest.Provider, plan.manifest.Model)
 			observer.streamObserver = func(msg messages.StreamMessage) {
+				if opts.Stream != nil {
+					participantStream.ObserveStream(msg)
+				}
 				if participantEvidence != nil {
 					if evidenceErr := participantEvidence.observeDelta(msg); evidenceErr != nil {
 						evidence.recordError(plan.manifest.ID, fmt.Errorf("write stream delta: %w", evidenceErr))
