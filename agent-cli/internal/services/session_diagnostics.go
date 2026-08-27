@@ -192,14 +192,15 @@ type sessionProgressObserver struct {
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
 
-	toolStateMu           sync.Mutex
-	unresolvedToolCalls   map[string]struct{}
-	acceptedToolCalls     map[string]struct{}
-	toolResultRejections  map[string]messages.SessionSendStatus
-	toolResultAcceptedCh  chan struct{}
-	toolCallInTurn        bool
-	providerToolCallSeen  bool
-	assistantResponseDone bool
+	toolStateMu            sync.Mutex
+	unresolvedToolCalls    map[string]struct{}
+	acceptedToolCalls      map[string]struct{}
+	toolResultRejections   map[string]messages.SessionSendStatus
+	toolResultAcceptedCh   chan struct{}
+	toolResultsInvalidated bool
+	toolCallInTurn         bool
+	providerToolCallSeen   bool
+	assistantResponseDone  bool
 	// toolResultsEnabled is false for explicit no-tools session plans, where a
 	// provider tool event is reported as unexecutable rather than creating an
 	// obligation that no executor can satisfy.
@@ -297,7 +298,9 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	delete(o.unresolvedToolCalls, callID)
+	if !o.toolResultsInvalidated {
+		delete(o.unresolvedToolCalls, callID)
+	}
 	o.acceptedToolCalls[callID] = struct{}{}
 	delete(o.toolResultRejections, callID)
 	acceptedCh := o.toolResultAcceptedCh
@@ -309,6 +312,26 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	select {
 	case acceptedCh <- struct{}{}:
 	default:
+	}
+}
+
+// invalidateAcceptedToolResults records that queued result sends are no longer
+// sufficient evidence of delivery when a tool-call turn terminated without its
+// required final assistant response. The provider-facing send API acknowledges
+// queue acceptance before its asynchronous writer reaches the transport, so a
+// terminal close can otherwise erase the only copy of the originating call ID.
+// Keep the invalidation latched: a late writer callback must not turn a
+// terminated, incomplete conversation back into clean success.
+func (o *sessionProgressObserver) invalidateAcceptedToolResults() {
+	if o == nil {
+		return
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	o.ensureToolStateLocked()
+	o.toolResultsInvalidated = true
+	for callID := range o.acceptedToolCalls {
+		o.unresolvedToolCalls[callID] = struct{}{}
 	}
 }
 

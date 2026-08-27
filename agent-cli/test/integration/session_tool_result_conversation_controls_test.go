@@ -334,9 +334,12 @@ func assertConversationMissingResultFailure(t *testing.T, runErr error, elapsed 
 		t.Fatalf("missing-result control took %s; unresolved-result close handling must remain within the explicit 4s bound: %v", elapsed, runErr)
 	}
 	errText := runErr.Error()
-	if !strings.Contains(errText, "tool results were not delivered") &&
-		(!strings.Contains(errText, "replay mismatch") || !strings.Contains(errText, "conversation.item.create")) {
-		t.Fatalf("missing-result control failed with %q, want an unresolved-result diagnostic or strict result-gate mismatch for %q", errText, toolConversationCallID)
+	if strings.Contains(errText, "tool results were not delivered") {
+		if !strings.Contains(errText, toolConversationCallID) {
+			t.Fatalf("missing-result control failed with an unresolved-result diagnostic that lost call ID %q: %q", toolConversationCallID, errText)
+		}
+	} else if !strings.Contains(errText, "replay mismatch") || !strings.Contains(errText, "conversation.item.create") {
+		t.Fatalf("missing-result control failed with %q, want an unresolved-result diagnostic naming %q or strict result-gate mismatch", errText, toolConversationCallID)
 	}
 	if strings.Contains(errText, "context deadline exceeded") && !strings.Contains(errText, "replay mismatch") {
 		t.Fatalf("missing-result control reached a deadline instead of reporting the unresolved call: %q", errText)

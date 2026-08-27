@@ -230,6 +230,10 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOutput, "", seed.Value)
 		plan.inferencer = wrapped
 		audioWrapped = wrapped
+		plan.loop.AudioOutputError = func() error {
+			audioWrapped.wait()
+			return audioWrapped.err()
+		}
 		if audioOutPath == "-" {
 			sessionOut = io.Discard
 		}

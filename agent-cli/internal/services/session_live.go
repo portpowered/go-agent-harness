@@ -109,6 +109,12 @@ type sessionLoopOptions struct {
 	// session command. Nil keeps the existing runtime path unchanged.
 	runtime *sessionRuntimeObservationRecorder
 
+	// AudioOutputError lets the audio-output wrapper report a concrete artifact
+	// failure before the incomplete-response guard classifies a tool round trip.
+	// Without this seam, malformed output can stop the wrapper before the final
+	// assistant boundary and be misreported as an unresolved tool result.
+	AudioOutputError func() error
+
 	// rtcDeviceBinding is opened by the enclosing runtime plan and is started
 	// against the real session-owned media endpoints after ConnectSession.
 	rtcDeviceBinding *RTCDeviceBinding
@@ -167,9 +173,15 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 // success when it observed a tool-call response but never observed the final
 // assistant response that should follow accepted tool-result delivery.
 func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
+	if opts.AudioOutputError != nil {
+		if outputErr := opts.AudioOutputError(); outputErr != nil {
+			return err
+		}
+	}
 	if !opts.RequireAssistantResponse || opts.observer == nil || !opts.observer.providerToolCallObserved() || opts.observer.assistantResponseCompleted() {
 		return err
 	}
+	opts.observer.invalidateAcceptedToolResults()
 	incomplete := ErrSessionAudioResponseIncomplete
 	if err == nil {
 		return incomplete
