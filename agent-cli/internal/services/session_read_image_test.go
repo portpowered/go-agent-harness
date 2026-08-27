@@ -112,6 +112,149 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 	}
 }
 
+func TestReadImageSession_InvalidInputsReturnCorrelatedTextOnlyFailures(t *testing.T) {
+	dir := t.TempDir()
+	registry := tools.NewToolRegistryFromConfig(nil)
+	sharedExecutor := tools.NewRegistryExecutor(registry)
+	definitions := registry.ToAgentLoopDefs()
+
+	valid := writeSessionReadImagePNG(t, dir, "valid.png", color.RGBA{R: 255, A: 255})
+	missing := filepath.Join(dir, "missing.png")
+	unreadable := filepath.Join(dir, "unreadable.png")
+	if err := os.Mkdir(unreadable, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	textFile := writeReadImageTestFile(t, dir, "notes.txt", []byte("plain text"))
+	audioFile := writeReadImageTestFile(t, dir, "sound.wav", []byte("audio payload"))
+	videoFile := writeReadImageTestFile(t, dir, "movie.mp4", []byte("video payload"))
+	empty := writeReadImageTestFile(t, dir, "empty.png", nil)
+	corrupt := writeReadImageTestFile(t, dir, "corrupt.png", []byte("not an image"))
+	unsupported := writeReadImageTestFile(t, dir, "unsupported.gif", []byte("GIF89a"))
+
+	capabilityConfigDir := filepath.Join(dir, "text-only-config")
+	if err := os.MkdirAll(capabilityConfigDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(capabilityConfigDir, "models.yaml"), []byte(`
+models:
+  - name: gpt-realtime
+    providers: [openai]
+    input_modalities: [text]
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name      string
+		args      map[string]any
+		configDir string
+		wantText  string
+	}{
+		{name: "missing path argument", args: nil, configDir: filepath.Join(dir, "missing-argument-config"), wantText: "path is required"},
+		{name: "empty path", args: map[string]any{"path": "  "}, configDir: filepath.Join(dir, "empty-path-config"), wantText: "path must not be empty"},
+		{name: "missing file", args: map[string]any{"path": missing}, configDir: filepath.Join(dir, "missing-file-config"), wantText: "is missing"},
+		{name: "unreadable file", args: map[string]any{"path": unreadable}, configDir: filepath.Join(dir, "unreadable-config"), wantText: "cannot be read"},
+		{name: "text file", args: map[string]any{"path": textFile}, configDir: filepath.Join(dir, "text-config"), wantText: "unsupported MIME type"},
+		{name: "audio file", args: map[string]any{"path": audioFile}, configDir: filepath.Join(dir, "audio-config"), wantText: "unsupported MIME type"},
+		{name: "video file", args: map[string]any{"path": videoFile}, configDir: filepath.Join(dir, "video-config"), wantText: "unsupported MIME type"},
+		{name: "empty file", args: map[string]any{"path": empty}, configDir: filepath.Join(dir, "empty-file-config"), wantText: "is empty"},
+		{name: "corrupt image", args: map[string]any{"path": corrupt}, configDir: filepath.Join(dir, "corrupt-config"), wantText: "not valid image/png"},
+		{name: "unsupported image MIME", args: map[string]any{"path": unsupported}, configDir: filepath.Join(dir, "unsupported-config"), wantText: "unsupported MIME type"},
+		{name: "image-incapable model", args: map[string]any{"path": valid}, configDir: capabilityConfigDir, wantText: "does not support image input"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := planReadImageTestSession(t, tc.configDir, sharedExecutor, definitions)
+			response := executeReadImageFailure(t, plan.loop.ToolExecutor, tc.args, "invalid-"+strings.ReplaceAll(tc.name, " ", "-"))
+			assertReadImageFailure(t, response, "invalid-"+strings.ReplaceAll(tc.name, " ", "-"), tc.wantText)
+		})
+	}
+}
+
+func TestRunAgentLoopSession_ReadImageFailureKeepsSessionAlive(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.png")
+	registry := tools.NewToolRegistryFromConfig(nil)
+	sharedExecutor := tools.NewRegistryExecutor(registry)
+	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), sharedExecutor, registry.ToAgentLoopDefs())
+	arguments, err := json.Marshal(map[string]string{"path": missing})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const callID = "invalid-image-call"
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(
+		out,
+		"session continued after invalid image",
+		"is missing",
+		scriptedTurn{events: toolCallEvents(callID, tools.ReadImageToolID, string(arguments))},
+	)
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	var observed []messages.StreamMessage
+	var observedMu sync.Mutex
+	observer.streamObserver = func(event messages.StreamMessage) {
+		observedMu.Lock()
+		observed = append(observed, event)
+		observedMu.Unlock()
+	}
+
+	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:          2 * time.Second,
+		WaitForClose:         true,
+		ToolExecutor:         plan.loop.ToolExecutor,
+		ToolDefinitions:      plan.loop.ToolDefinitions,
+		ToolExecutionTimeout: 2 * time.Second,
+		observer:             observer,
+	})
+	if err != nil {
+		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "is missing") {
+		t.Fatalf("missing-image failure did not reach the provider-visible result:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "session continued after invalid image") {
+		t.Fatalf("session did not continue after invalid image:\n%s", out.String())
+	}
+
+	observedMu.Lock()
+	defer observedMu.Unlock()
+	for _, event := range observed {
+		if event.ToolCallId != callID {
+			continue
+		}
+		switch event.Type {
+		case messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd:
+			t.Fatalf("invalid image call emitted image event: %#v", event)
+		}
+	}
+}
+
+func executeReadImageFailure(t *testing.T, executor messages.ToolExecutor, args map[string]any, callID string) messages.ToolCallResponse {
+	t.Helper()
+	arguments, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mustExecuteSessionTool(t, executor, messages.ToolCall{ID: callID, Name: tools.ReadImageToolID, Arguments: string(arguments)})
+}
+
+func assertReadImageFailure(t *testing.T, response messages.ToolCallResponse, callID, wantText string) {
+	t.Helper()
+	if response.ToolCallID != callID || response.Name != tools.ReadImageToolID {
+		t.Fatalf("failure response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, tools.ReadImageToolID)
+	}
+	if !strings.Contains(response.Content, wantText) {
+		t.Fatalf("failure response = %q, want substring %q", response.Content, wantText)
+	}
+	for _, part := range response.ContentParts {
+		if _, ok := part.(messages.ImagePart); ok {
+			t.Fatalf("failure response unexpectedly contained an image part: %#v", response.ContentParts)
+		}
+	}
+}
+
 type readImageResultGatedInferencer struct {
 	ready     <-chan struct{}
 	callID    string
@@ -238,4 +381,13 @@ func mustReadSessionReadImage(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func writeReadImageTestFile(t *testing.T, dir, name string, data []byte) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
