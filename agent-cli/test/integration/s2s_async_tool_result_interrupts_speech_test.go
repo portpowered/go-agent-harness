@@ -284,6 +284,9 @@ type asyncCollisionReplayControl struct {
 	expectedInputAudio        []byte
 	trace                     *asyncCollisionTrace
 	dropProviderResult        bool
+	duplicateProviderResult   bool
+	orphanProviderResult      bool
+	prematureClose            bool
 	withholdTerminal          bool
 }
 
@@ -291,9 +294,13 @@ type asyncCollisionReplayControl struct {
 // healthy replay. The command, fixture shape, causal gates, and verifiers stay
 // shared by every control.
 type asyncCollisionRunOptions struct {
-	maxDuration        time.Duration
-	dropProviderResult bool
-	withholdTerminal   bool
+	maxDuration             time.Duration
+	dropProviderResult      bool
+	duplicateProviderResult bool
+	orphanProviderResult    bool
+	wrongProviderResult     bool
+	prematureClose          bool
+	withholdTerminal        bool
 }
 
 func (o asyncCollisionRunOptions) normalized() asyncCollisionRunOptions {
@@ -462,11 +469,18 @@ func (c *asyncCollisionReplayConn) ReadMessage() (int, []byte, error) {
 			waitFor = c.control.signals.laterResponseReady
 			phase = c.groups.collisionHead
 		case 3:
-			// The executor's return is the result-availability boundary. The
-			// local RoleTool delta is observed independently by the shared
-			// verifier and must not be needed to release the response tail.
-			waitFor = c.control.toolResultReady
-			phase = c.groups.collisionTail
+			if c.control.prematureClose {
+				// This control intentionally closes while the named tool is still
+				// blocked. A clean provider close must not erase the unresolved
+				// call or turn the run into a false success.
+				phase = c.groups.terminal
+			} else {
+				// The executor's return is the result-availability boundary. The
+				// local RoleTool delta is observed independently by the shared
+				// verifier and must not be needed to release the response tail.
+				waitFor = c.control.toolResultReady
+				phase = c.groups.collisionTail
+			}
 		case 4:
 			waitFor = c.control.signals.continuationReady
 			phase = c.groups.continuation
@@ -523,7 +537,7 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 			// crossed its final audio boundary, so a result cannot race ahead
 			// of the response it is queued behind.
 			if err := c.waitForPhase(c.control.collisionResponseComplete); err != nil {
-				return fmt.Errorf("async collision replay could not reach the queue/sequence result boundary: %w", err)
+				return fmt.Errorf("async collision replay could not reach the queue/sequence result boundary for outstanding call %q: %w", asyncCollisionCallID, err)
 			}
 			// The loss control acts at the provider-facing transport boundary. It
 			// accepts the write but removes only the correlated result from the
@@ -565,7 +579,31 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 		Type:    envelope.Type,
 		Payload: append([]byte(nil), payload...),
 	})
+	if envelope.Type == "conversation.item.create" && isAsyncCollisionFunctionCallOutput(payload) {
+		switch {
+		case c.control.duplicateProviderResult:
+			c.outbound = append(c.outbound, asyncCollisionOutbound{
+				Type:    envelope.Type,
+				Payload: append([]byte(nil), payload...),
+			})
+		case c.control.orphanProviderResult:
+			c.outbound = append(c.outbound, asyncCollisionOutbound{
+				Type:    envelope.Type,
+				Payload: []byte(asyncCollisionOrphanFunctionCallOutputPayload()),
+			})
+		}
+	}
 	c.mu.Unlock()
+	if envelope.Type == "conversation.item.create" && isAsyncCollisionFunctionCallOutput(payload) {
+		switch {
+		case c.control.duplicateProviderResult:
+			c.control.trace.record("provider_result_duplicate")
+			return fmt.Errorf("duplicate provider-facing function_call_output for outstanding call %q", asyncCollisionCallID)
+		case c.control.orphanProviderResult:
+			c.control.trace.record("provider_result_orphaned")
+			return fmt.Errorf("orphaned provider-facing function_call_output for outstanding call %q", asyncCollisionCallID)
+		}
+	}
 
 	switch envelope.Type {
 	case "session.update":
@@ -686,8 +724,9 @@ func (c *asyncCollisionReplayConn) Close() error {
 // only needs to observe the later command-layer configuration without turning
 // that unsupported outbound stream value into a test failure.
 type asyncCollisionSessionInferencer struct {
-	inner messages.SessionInferencer
-	trace *asyncCollisionTrace
+	inner               messages.SessionInferencer
+	trace               *asyncCollisionTrace
+	wrongProviderResult bool
 }
 
 func (i *asyncCollisionSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -695,18 +734,32 @@ func (i *asyncCollisionSessionInferencer) ConnectSession(ctx context.Context) (m
 	if err != nil {
 		return nil, err
 	}
-	return &asyncCollisionSession{inner: session, trace: i.trace}, nil
+	return &asyncCollisionSession{
+		inner:               session,
+		trace:               i.trace,
+		wrongProviderResult: i.wrongProviderResult,
+	}, nil
 }
 
 type asyncCollisionSession struct {
-	inner messages.Session
-	trace *asyncCollisionTrace
+	inner               messages.Session
+	trace               *asyncCollisionTrace
+	wrongProviderResult bool
 }
 
 func (s *asyncCollisionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeSessionUpdate {
 		s.trace.record("generic_session_update_suppressed")
 		return true
+	}
+	if s.wrongProviderResult && msg.Type == messages.StreamTypeToolCallEnd {
+		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+			// The provider-facing validator must see a wrong identity even though
+			// the local executor returned the original call ID. This models a
+			// transport/adaptor corruption at the public session boundary.
+			msg.Value = messages.NewToolCallEndValue("call_async_wrong_identity", value.Name, value.Arguments)
+			s.trace.record("provider_result_wrong_identity")
+		}
 	}
 	s.trace.record("session_send_" + string(msg.Type))
 	ok := s.inner.Send(ctx, msg)
@@ -721,6 +774,17 @@ func (s *asyncCollisionSession) Receive() *messages.TypedBuffer[messages.StreamM
 }
 
 func (s *asyncCollisionSession) Done() <-chan struct{} { return s.inner.Done() }
+
+// TerminalError preserves provider-side write failures through this test-only
+// decorator. Without forwarding the optional diagnostic interface, a replay
+// transport rejection could look like a clean session close to the CLI.
+func (s *asyncCollisionSession) TerminalError() error {
+	source, ok := s.inner.(interface{ TerminalError() error })
+	if !ok {
+		return nil
+	}
+	return source.TerminalError()
+}
 
 func (s *asyncCollisionSession) Close() error { return s.inner.Close() }
 
@@ -865,6 +929,18 @@ func functionCallOutputPayload() string {
 	return string(payload)
 }
 
+func asyncCollisionOrphanFunctionCallOutputPayload() string {
+	payload, _ := json.Marshal(map[string]any{
+		"type": "conversation.item.create",
+		"item": map[string]string{
+			"type":    "function_call_output",
+			"call_id": "call_async_orphaned",
+			"output":  asyncCollisionResult,
+		},
+	})
+	return string(payload)
+}
+
 func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16, inputAudio []byte) (string, gwtesting.SessionCapture) {
 	t.Helper()
 	base, err := gwtesting.LoadSessionCapture(filepath.Join("testdata", "openai_realtime_smoke.session.json"))
@@ -990,6 +1066,9 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 	)
 	control.trace = executor.trace
 	control.dropProviderResult = options.dropProviderResult
+	control.duplicateProviderResult = options.duplicateProviderResult
+	control.orphanProviderResult = options.orphanProviderResult
+	control.prematureClose = options.prematureClose
 	control.withholdTerminal = options.withholdTerminal
 	replayDialer, err := newAsyncCollisionReplayDialer(capture, control)
 	if err != nil {
@@ -1002,7 +1081,11 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 	if err != nil {
 		t.Fatalf("build OpenAI realtime session inferencer: %v", err)
 	}
-	sessionInferencer = &asyncCollisionSessionInferencer{inner: sessionInferencer, trace: executor.trace}
+	sessionInferencer = &asyncCollisionSessionInferencer{
+		inner:               sessionInferencer,
+		trace:               executor.trace,
+		wrongProviderResult: options.wrongProviderResult,
+	}
 	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
 		executor,
 		&mockInferencer{response: "unused"},
@@ -1204,6 +1287,15 @@ func validateAsyncCollisionProviderResult(outbound []asyncCollisionOutbound) err
 	return nil
 }
 
+func validateAsyncCollisionCancelRule(outbound []asyncCollisionOutbound) error {
+	for _, event := range outbound {
+		if event.Type == "response.cancel" {
+			return fmt.Errorf("completed first response was cancelled after the later speech turn began")
+		}
+	}
+	return nil
+}
+
 func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCollisionOutbound, expectProviderResult bool) error {
 	count, err := countAsyncProviderResults(outbound)
 	if err != nil {
@@ -1346,6 +1438,9 @@ func validateAsyncCollisionRun(run asyncCollisionRunResult, collision, continuat
 	if err := validateAsyncCollisionToolDeltas(run.observer.snapshot()); err != nil {
 		return err
 	}
+	if err := validateAsyncCollisionCancelRule(run.outbound); err != nil {
+		return err
+	}
 	if err := validateAsyncCollisionTrace(run.trace.snapshot()); err != nil {
 		return err
 	}
@@ -1460,5 +1555,67 @@ func TestSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 	}
 	if !strings.Contains(assertionErr.Error(), "required terminal event") && !strings.Contains(assertionErr.Error(), "bounded CLI run") {
 		t.Fatalf("missing-terminal diagnostic %q does not identify terminal/timeout failure", assertionErr)
+	}
+}
+
+// TestSessionAsyncToolResultLifecycleNegativeControlsFailThroughCLI exercises
+// the remaining tool-disposition boundaries through the same public command
+// used by the positive proof. Each control changes one provider-facing fact:
+// duplicate and orphaned results fail at the transport boundary, wrong call
+// identity fails before it can be accepted, and a clean provider close while
+// the executor is blocked must retain the unresolved call ID.
+func TestSessionAsyncToolResultLifecycleNegativeControlsFailThroughCLI(t *testing.T) {
+	cases := []struct {
+		name    string
+		options asyncCollisionRunOptions
+		want    string
+	}{
+		{
+			name:    "duplicated result",
+			options: asyncCollisionRunOptions{duplicateProviderResult: true},
+			want:    "duplicate provider-facing function_call_output",
+		},
+		{
+			name:    "orphaned result",
+			options: asyncCollisionRunOptions{orphanProviderResult: true},
+			want:    "orphaned provider-facing function_call_output",
+		},
+		{
+			name:    "wrong call identity",
+			options: asyncCollisionRunOptions{wrongProviderResult: true},
+			want:    "call_async_wrong_identity",
+		},
+		{
+			name:    "premature clean close",
+			options: asyncCollisionRunOptions{prematureClose: true},
+			want:    asyncCollisionCallID,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			collision, continuation := asyncCollisionAudio(t)
+			run := runAsyncCollisionScenario(t, collision, collision, continuation, testCase.options)
+			assertionErr := run.runErr
+			if assertionErr == nil && testCase.options.prematureClose {
+				providerResultCount, countErr := countAsyncProviderResults(run.outbound)
+				if countErr != nil {
+					assertionErr = countErr
+				} else {
+					// The runtime can consume a premature terminal frame before the
+					// blocked result writer observes the closed transport. Treat that
+					// clean exit as the failure under test when the provider-facing
+					// disposition is still absent; otherwise the control would only
+					// catch a scheduling-dependent transport error.
+					assertionErr = fmt.Errorf("premature clean close while outstanding call %q had no provider-facing result disposition (observed %d results; trace=%v)", asyncCollisionCallID, providerResultCount, run.trace.snapshot())
+				}
+			}
+			if assertionErr == nil {
+				t.Fatalf("negative control unexpectedly returned clean success: trace=%v outbound=%v", run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
+			}
+			if !strings.Contains(assertionErr.Error(), testCase.want) {
+				t.Fatalf("negative-control error = %v, want diagnostic containing %q; trace=%v outbound=%v", assertionErr, testCase.want, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
+			}
+		})
 	}
 }
