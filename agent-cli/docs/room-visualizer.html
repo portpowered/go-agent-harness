@@ -813,10 +813,11 @@
 
           row.append(header, turns);
           transcripts.append(row);
-          transcriptRows.set(key, { row, state, turns, current: null });
+          const participantRow = { row, state, turns, current: null };
+          transcriptRows.set(key, participantRow);
           setEmptyState(transcriptEmpty, false);
           updateCounts();
-          return { row, state, turns, current: null };
+          return participantRow;
         }
 
         function transcriptTurn(row) {
