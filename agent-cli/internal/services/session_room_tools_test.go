@@ -121,6 +121,31 @@ func TestBuildRoomParticipantPlans_RejectsCapabilityMismatchBeforeSessionConstru
 	}
 }
 
+func TestBuildRoomParticipantPlans_RejectsVoiceBeforeSessionConstructionWhenUpstreamContractIsAbsent(t *testing.T) {
+	opts, factoryCalls := newRoomTestRunOptions([]string{"alpha", "beta"}, map[string]*roomTestInferencer{
+		"alpha": {},
+		"beta":  {},
+	})
+	opts.Manifest.Participants[0].Voice = "alloy"
+
+	_, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
+	if err == nil {
+		t.Fatal("voice request returned nil error")
+	}
+	if !errors.Is(err, ErrRoomParticipantVoiceUnavailable) {
+		t.Fatalf("error = %v, want ErrRoomParticipantVoiceUnavailable", err)
+	}
+	if !strings.Contains(err.Error(), "SessionRunOptions.Voice") || !strings.Contains(err.Error(), "alloy") {
+		t.Fatalf("error = %v, want actionable voice contract guidance", err)
+	}
+	if strings.Contains(err.Error(), "secret-alpha") {
+		t.Fatalf("error leaked participant credential: %v", err)
+	}
+	if len(factoryCalls) != 0 {
+		t.Fatalf("session factory was called %d times for an unavailable voice request", len(factoryCalls))
+	}
+}
+
 func TestNewLiveSessionInferencerCarriesToolDefinitionsToProviderRequest(t *testing.T) {
 	definition := messages.ToolDefinition{
 		Name:        "participant_tool",
