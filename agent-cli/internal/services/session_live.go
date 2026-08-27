@@ -133,6 +133,11 @@ type sessionLoopOptions struct {
 	// SessionUpdatedTimeout overrides the bounded readiness wait in tests. Zero
 	// selects sessionScheduledAudioConfigTimeout.
 	SessionUpdatedTimeout time.Duration
+
+	// loopReady receives the constructed loop before its hot loop starts. The
+	// self-play coordinator uses this to bind an io.Pipe reader to the peer's
+	// session audio inbox without exposing the loop through SessionRunOptions.
+	loopReady chan<- *agentloop.AgentLoop
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
@@ -285,6 +290,13 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if opts.loopReady != nil {
+		select {
+		case opts.loopReady <- loop:
+		case <-runCtx.Done():
+			return runCtx.Err()
+		}
+	}
 	if opts.AudioIn != nil {
 		opts.AudioIn.bindContext(runCtx)
 	}

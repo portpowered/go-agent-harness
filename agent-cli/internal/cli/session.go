@@ -557,6 +557,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&mediaSource, "media-source", "", "External media source URL; requires --transport webrtc and cannot be combined with --audio-in")
 	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default) or webrtc")
 	cmd.Flags().StringVar(&signaling, "signaling", "", "WebRTC signaling endpoint; requires --transport webrtc, and --transport webrtc requires this flag")
+	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
 	return cmd
 }
 
