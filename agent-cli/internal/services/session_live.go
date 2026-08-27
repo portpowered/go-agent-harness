@@ -20,10 +20,19 @@ const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 // that ended before every queued input received an assistant response.
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 
+// ErrSessionScheduledAudioConfigTimeout identifies a live scheduled-audio run
+// whose current session never acknowledged its initial configuration.
+var ErrSessionScheduledAudioConfigTimeout = errors.New("scheduled audio session timed out awaiting session.updated")
+
 // sessionFirstTurnAckTimeout bounds how long the SESSION.OPEN handler waits
 // for the first user turn acceptance before failing the run instead of
 // streaming user audio over an unacknowledged turn.
 const sessionFirstTurnAckTimeout = 30 * time.Second
+
+// sessionScheduledAudioConfigTimeout bounds the wait after SESSION.OPEN for a
+// scheduled live session's initial SESSION.UPDATED acknowledgement. The
+// per-loop override exists only for deterministic service tests.
+const sessionScheduledAudioConfigTimeout = 30 * time.Second
 
 // awaitSessionFirstTurn blocks until the session's first user turn is
 // accepted (nil), the run is cancelled, or the bounded wait expires.
@@ -99,6 +108,15 @@ type sessionLoopOptions struct {
 	// Replay plans leave this false so capture-derived close behavior remains
 	// authoritative.
 	CloseAfterScheduledAudio bool
+
+	// RequireSessionUpdated makes scheduled audio wait for the current
+	// connection's initial SESSION.UPDATED acknowledgement before dispatch.
+	// It is enabled for live OpenAI scheduled sessions; replay paths and other
+	// session modes retain their existing lifecycle unless they opt in.
+	RequireSessionUpdated bool
+	// SessionUpdatedTimeout overrides the bounded readiness wait in tests. Zero
+	// selects sessionScheduledAudioConfigTimeout.
+	SessionUpdatedTimeout time.Duration
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
@@ -141,6 +159,14 @@ func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
 	return fmt.Errorf("%w: completed %d of %d", ErrSessionScheduledAudioIncomplete, opts.observer.turnsCompleted, opts.observer.scheduledInputs)
 }
 
+func sessionScheduledAudioConfigTimeoutError(opts sessionLoopOptions) error {
+	timeout := opts.SessionUpdatedTimeout
+	if timeout <= 0 {
+		timeout = sessionScheduledAudioConfigTimeout
+	}
+	return fmt.Errorf("%w after %s", ErrSessionScheduledAudioConfigTimeout, timeout)
+}
+
 type sessionLoopMessageState struct {
 	promptSent bool
 	closeSent  bool
@@ -173,7 +199,7 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 		}
 		startAudio()
 	}
-	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
+	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd || msg.Type == messages.StreamTypeSessionUpdated {
 		if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
 			return state, false, errors.Join(err, stopAndDrain())
 		}
@@ -273,6 +299,29 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		return stopErr
 	}
 
+	var sessionUpdatedTimer *time.Timer
+	var sessionUpdatedTimeout <-chan time.Time
+	startSessionUpdatedTimer := func() {
+		if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.scheduledAudioAwaitingConfiguration() || sessionUpdatedTimer != nil {
+			return
+		}
+		timeout := opts.SessionUpdatedTimeout
+		if timeout <= 0 {
+			timeout = sessionScheduledAudioConfigTimeout
+		}
+		sessionUpdatedTimer = time.NewTimer(timeout)
+		sessionUpdatedTimeout = sessionUpdatedTimer.C
+	}
+	stopSessionUpdatedTimer := func() {
+		if sessionUpdatedTimer == nil {
+			return
+		}
+		sessionUpdatedTimer.Stop()
+		sessionUpdatedTimer = nil
+		sessionUpdatedTimeout = nil
+	}
+	defer stopSessionUpdatedTimer()
+
 	promptSent := false
 	closeSent := false
 	// awaitingResponse is the explicit end-of-turn state: it turns on only
@@ -325,6 +374,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			return stopErr
 		case <-timeout:
 			return stopAndDrain()
+		case <-sessionUpdatedTimeout:
+			stopSessionUpdatedTimer()
+			return errors.Join(sessionScheduledAudioConfigTimeoutError(opts), stopAndDrain())
 		case <-ctx.Done():
 			stopErr := stop()
 			if awaitingResponse {
@@ -355,6 +407,12 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			closeSent = state.closeSent
 			if msgErr != nil {
 				return msgErr
+			}
+			if msg.Type == messages.StreamTypeSessionOpen {
+				startSessionUpdatedTimer()
+			}
+			if opts.observer != nil && opts.observer.scheduledAudioReady() {
+				stopSessionUpdatedTimer()
 			}
 			if stopLoop {
 				return nil

@@ -179,6 +179,10 @@ type SessionRunOptions struct {
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
 	AudioInputs []ScheduledAudioInput
+	// SessionUpdatedTimeout overrides the bounded wait for the initial
+	// SESSION.UPDATED acknowledgement in deterministic callers. Zero selects
+	// the production timeout.
+	SessionUpdatedTimeout time.Duration
 	// WaitForClose keeps the replay session loop running across multiple
 	// completed turns until an explicit SESSION.CLOSE arrives instead of
 	// stopping at the first completed turn. Defaults to false, which preserves

@@ -683,6 +683,29 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	defer timer.Stop()
 	timerCh := timer.C()
 
+	var sessionUpdatedTimer *time.Timer
+	var sessionUpdatedTimeout <-chan time.Time
+	startSessionUpdatedTimer := func() {
+		if !opts.RequireSessionUpdated || opts.observer == nil || !opts.observer.scheduledAudioAwaitingConfiguration() || sessionUpdatedTimer != nil {
+			return
+		}
+		timeout := opts.SessionUpdatedTimeout
+		if timeout <= 0 {
+			timeout = sessionScheduledAudioConfigTimeout
+		}
+		sessionUpdatedTimer = time.NewTimer(timeout)
+		sessionUpdatedTimeout = sessionUpdatedTimer.C
+	}
+	stopSessionUpdatedTimer := func() {
+		if sessionUpdatedTimer == nil {
+			return
+		}
+		sessionUpdatedTimer.Stop()
+		sessionUpdatedTimer = nil
+		sessionUpdatedTimeout = nil
+	}
+	defer stopSessionUpdatedTimer()
+
 	promptSent := false
 	closeSent := false
 	durationExpired := false
@@ -771,6 +794,9 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 				return finish(false, err)
 			}
 			return finish(true, nil)
+		case <-sessionUpdatedTimeout:
+			stopSessionUpdatedTimer()
+			return finish(false, sessionScheduledAudioConfigTimeoutError(opts))
 		case <-ctx.Done():
 			if err := finish(durationExpired, nil); err != nil {
 				return err
@@ -827,6 +853,12 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			durationTerminalWritten = result.durationTerminalWritten
 			if msgErr != nil {
 				return finish(false, msgErr)
+			}
+			if msg.Type == messages.StreamTypeSessionOpen {
+				startSessionUpdatedTimer()
+			}
+			if opts.observer != nil && opts.observer.scheduledAudioReady() {
+				stopSessionUpdatedTimer()
 			}
 			if result.stop {
 				return finish(result.planned, nil)
@@ -989,7 +1021,7 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 }
 
 func processDurationScheduledMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, opts sessionLoopOptions, closeSent bool) (bool, error) {
-	if msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeMessageEnd {
+	if msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeMessageEnd && msg.Type != messages.StreamTypeSessionUpdated {
 		return closeSent, nil
 	}
 	if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {

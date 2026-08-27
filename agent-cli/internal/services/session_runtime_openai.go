@@ -47,6 +47,7 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
 			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
 			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
+			RequireSessionUpdated:    len(opts.AudioInputs) > 0,
 		},
 		flushCapture: func() error {
 			return recordingDialer.FlushToFile(opts.RecordPath)

@@ -198,6 +198,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
+	obs.requireSessionUpdated = loop.RequireSessionUpdated
 	obs.scheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }
@@ -227,6 +228,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
+	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether
@@ -267,6 +269,7 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 				MaxDuration:              3 * time.Second,
 				AdvertiseToolDefinitions: true,
+				RequireSessionUpdated:    len(opts.AudioInputs) > 0 && strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI),
 			},
 		}, nil
 	}

@@ -128,21 +128,30 @@ func (c *audioInLifecycleConn) Close() error {
 // captured session.closed event. The session runner must close locally only
 // after the final scheduled response.
 type scheduledAudioLifecycleServer struct {
-	mu        sync.Mutex
-	writes    []string
-	responses chan int
-	events    chan string
-	closed    chan struct{}
-	closeOnce sync.Once
-	nextTurn  int
+	mu                    sync.Mutex
+	writes                []string
+	responses             chan int
+	events                chan string
+	closed                chan struct{}
+	closeOnce             sync.Once
+	sessionCreated        chan struct{}
+	sessionUpdatedRelease chan struct{}
+	nextTurn              int
 }
 
 func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 	return &scheduledAudioLifecycleServer{
-		responses: make(chan int, 8),
-		events:    make(chan string, 32),
-		closed:    make(chan struct{}),
+		responses:      make(chan int, 8),
+		events:         make(chan string, 32),
+		closed:         make(chan struct{}),
+		sessionCreated: make(chan struct{}),
 	}
+}
+
+func newDelayedScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
+	server := newScheduledAudioLifecycleServer()
+	server.sessionUpdatedRelease = make(chan struct{})
+	return server
 }
 
 func (s *scheduledAudioLifecycleServer) writesSnapshot() []string {
@@ -154,6 +163,15 @@ func (s *scheduledAudioLifecycleServer) writesSnapshot() []string {
 func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	go func() {
 		s.events <- `{"type":"session.created","session":{"id":"sess_scheduled","model":"gpt-realtime"}}`
+		closeOnce(s.sessionCreated)
+		if s.sessionUpdatedRelease != nil {
+			select {
+			case <-s.sessionUpdatedRelease:
+			case <-s.closed:
+				return
+			}
+		}
+		s.events <- `{"type":"session.updated","session":{"id":"sess_scheduled","model":"gpt-realtime"}}`
 		for {
 			select {
 			case turn := <-s.responses:
@@ -168,6 +186,13 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 		}
 	}()
 	return &scheduledAudioLifecycleConn{server: s}, nil
+}
+
+func (s *scheduledAudioLifecycleServer) releaseSessionUpdated() {
+	if s == nil || s.sessionUpdatedRelease == nil {
+		return
+	}
+	closeOnce(s.sessionUpdatedRelease)
 }
 
 func base64AudioForTurn(turn int) string {
@@ -391,6 +416,152 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	if inputArtifacts != 2 || outputArtifacts != 2 {
 		t.Fatalf("finalized audio artifacts = input:%d output:%d, want 2 each", inputArtifacts, outputArtifacts)
 	}
+}
+
+func TestLiveRecordRuntimeScheduledAudioWaitsForSessionUpdated(t *testing.T) {
+	server := newDelayedScheduledAudioLifecycleServer()
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			context.Background(),
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:      recordPath,
+				Provider:        "openai",
+				Model:           "gpt-realtime",
+				APIKey:          "test-key",
+				ConfigDir:       t.TempDir(),
+				WebSocketDialer: server,
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case <-server.sessionCreated:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for SESSION.OPEN fixture")
+	}
+
+	for _, writeType := range server.writesSnapshot() {
+		switch writeType {
+		case "input_audio_buffer.append", "input_audio_buffer.commit", "response.create":
+			t.Fatalf("scheduled turn crossed provider boundary before session.updated: %v", server.writesSnapshot())
+		}
+	}
+
+	server.releaseSessionUpdated()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("delayed-ack scheduled session error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("delayed-ack scheduled session did not complete after session.updated")
+	}
+
+	writes := server.writesSnapshot()
+	updatedIndex, appendIndex, commitIndex, responseIndex := -1, -1, -1, -1
+	for index, writeType := range writes {
+		switch writeType {
+		case "IN:session.updated":
+			if updatedIndex < 0 {
+				updatedIndex = index
+			}
+		case "input_audio_buffer.append":
+			if appendIndex < 0 {
+				appendIndex = index
+			}
+		case "input_audio_buffer.commit":
+			if commitIndex < 0 {
+				commitIndex = index
+			}
+		case "response.create":
+			if responseIndex < 0 {
+				responseIndex = index
+			}
+		}
+	}
+	if updatedIndex < 0 || appendIndex < 0 || commitIndex < 0 || responseIndex < 0 {
+		t.Fatalf("delayed-ack wire events = %v, want session.updated and one turn boundary", writes)
+	}
+	if !(updatedIndex < appendIndex && appendIndex < commitIndex && commitIndex < responseIndex) {
+		t.Fatalf("delayed-ack wire order = %v, want session.updated < append < commit < response.create", writes)
+	}
+	if countWireEvent(writes, "input_audio_buffer.append") != 1 || countWireEvent(writes, "input_audio_buffer.commit") != 1 || countWireEvent(writes, "response.create") != 1 {
+		t.Fatalf("delayed-ack wire boundary duplicated: %v", writes)
+	}
+}
+
+func TestLiveRecordRuntimeScheduledAudioConfigTimeoutSendsNoTurn(t *testing.T) {
+	server := newDelayedScheduledAudioLifecycleServer()
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			context.Background(),
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:            recordPath,
+				Provider:              "openai",
+				Model:                 "gpt-realtime",
+				APIKey:                "test-key",
+				ConfigDir:             t.TempDir(),
+				WebSocketDialer:       server,
+				SessionUpdatedTimeout: 25 * time.Millisecond,
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case <-server.sessionCreated:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for SESSION.OPEN fixture")
+	}
+
+	select {
+	case err := <-result:
+		if !errors.Is(err, services.ErrSessionScheduledAudioConfigTimeout) {
+			t.Fatalf("config-timeout error = %v, want ErrSessionScheduledAudioConfigTimeout", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("scheduled session did not fail at its configuration acknowledgement timeout")
+	}
+
+	writes := server.writesSnapshot()
+	for _, writeType := range []string{"input_audio_buffer.append", "input_audio_buffer.commit", "response.create"} {
+		if countWireEvent(writes, writeType) != 0 {
+			t.Fatalf("config timeout sent %s: %v", writeType, writes)
+		}
+	}
+}
+
+func countWireEvent(writes []string, want string) int {
+	count := 0
+	for _, writeType := range writes {
+		if writeType == want {
+			count++
+		}
+	}
+	return count
 }
 
 // TestLiveRecordRuntimeAudioInCancellationDuringAwaitSurfacesError proves a
