@@ -364,11 +364,29 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 		return fmt.Errorf("missing named invocation %q: recorded %d calls, want exactly one", toolCallScenarioName, len(calls))
 	}
 	call := calls[0]
+	if call.ID != toolConversationCallID {
+		return fmt.Errorf("executor invocation has call ID %q, want non-empty originating ID %q", call.ID, toolConversationCallID)
+	}
 	if call.Name != toolCallScenarioName {
 		return fmt.Errorf("executor invoked tool %q, want %q", call.Name, toolCallScenarioName)
 	}
-	if !json.Valid([]byte(call.Arguments)) || !strings.Contains(call.Arguments, "Lisbon") {
-		return fmt.Errorf("executor invoked %q with arguments %q, want valid arguments mentioning Lisbon", call.Name, call.Arguments)
+	var args struct {
+		City string `json:"city"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(call.Arguments))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil {
+		return fmt.Errorf("executor invoked %q with invalid arguments %q: %w", call.Name, call.Arguments, err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("executor invoked %q with multiple argument values %q", call.Name, call.Arguments)
+		}
+		return fmt.Errorf("executor invoked %q with trailing invalid arguments %q: %w", call.Name, call.Arguments, err)
+	}
+	if args.City != "Lisbon" {
+		return fmt.Errorf("executor invoked %q with decoded city %q, want %q", call.Name, args.City, "Lisbon")
 	}
 	return nil
 }

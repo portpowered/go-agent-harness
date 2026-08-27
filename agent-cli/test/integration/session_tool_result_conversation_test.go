@@ -316,18 +316,24 @@ func transcriptReflectionError(stdout string) error {
 	return nil
 }
 
+type providerFunctionCallOutput struct {
+	Sequence int
+	CallID   string
+	Output   string
+}
+
 // functionCallOutputsInExchange loads the authored provider exchange and
 // returns every function_call_output item recorded on the client-to-server
 // side. Because replay validation matches each outbound frame against these
 // records, a clean completion proves the live session sent exactly these
-// payloads.
-func functionCallOutputsInExchange(t *testing.T, wirePath string) []string {
+// payloads and the provider accepted them at the wire boundary.
+func functionCallOutputsInExchange(t *testing.T, wirePath string) []providerFunctionCallOutput {
 	t.Helper()
 	capture, err := gwtesting.LoadSessionCapture(wirePath)
 	if err != nil {
 		t.Fatalf("load replayed provider exchange: %v", err)
 	}
-	var outputs []string
+	var outputs []providerFunctionCallOutput
 	for _, record := range capture.Records {
 		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
 			continue
@@ -339,14 +345,54 @@ func functionCallOutputsInExchange(t *testing.T, wirePath string) []string {
 				Output string `json:"output"`
 			} `json:"item"`
 		}
-		if json.Unmarshal(record.Payload, &payload) != nil {
-			continue
+		if err := json.Unmarshal(record.Payload, &payload); err != nil {
+			t.Fatalf("decode provider function_call_output at sequence %d: %v", record.Sequence, err)
 		}
 		if payload.Item.Type == "function_call_output" {
-			outputs = append(outputs, payload.Item.Output)
+			outputs = append(outputs, providerFunctionCallOutput{
+				Sequence: record.Sequence,
+				CallID:   payload.Item.CallID,
+				Output:   payload.Item.Output,
+			})
 		}
 	}
 	return outputs
+}
+
+// assertToolResultFollowUpOrdering verifies the authored replay contract that
+// makes the positive path causal: no follow-up transcript or audio is
+// available before the provider-facing result frame. The replay connection
+// releases those later server records only after its exact outbound frame
+// comparison succeeds.
+func assertToolResultFollowUpOrdering(t *testing.T, wirePath string, resultSequence int) {
+	t.Helper()
+	capture, err := gwtesting.LoadSessionCapture(wirePath)
+	if err != nil {
+		t.Fatalf("load replayed provider exchange for ordering assertion: %v", err)
+	}
+	transcriptSequence := 0
+	audioSequence := 0
+	for _, record := range capture.Records {
+		if record.Direction != gwtesting.DirectionServerToClient {
+			continue
+		}
+		switch record.Type {
+		case "response.output_audio_transcript.delta":
+			if transcriptSequence == 0 {
+				transcriptSequence = record.Sequence
+			}
+		case "response.output_audio.delta":
+			if audioSequence == 0 {
+				audioSequence = record.Sequence
+			}
+		}
+	}
+	if transcriptSequence == 0 || transcriptSequence <= resultSequence {
+		t.Fatalf("follow-up transcript sequence = %d, want after accepted result sequence %d", transcriptSequence, resultSequence)
+	}
+	if audioSequence == 0 || audioSequence <= resultSequence {
+		t.Fatalf("follow-up audio sequence = %d, want after accepted result sequence %d", audioSequence, resultSequence)
+	}
 }
 
 // TestSessionToolCallConversationSpokenReplyReflectsRealToolResult is the full
@@ -389,9 +435,13 @@ func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing
 	if len(outputs) != 1 {
 		t.Fatalf("provider exchange contains %d function_call_output events, want exactly 1: %q", len(outputs), outputs)
 	}
-	if outputs[0] != returned[0] {
-		t.Fatalf("function_call_output output %q does not carry the executor's returned content %q verbatim", outputs[0], returned[0])
+	if outputs[0].CallID != toolConversationCallID {
+		t.Fatalf("function_call_output call ID %q does not match originating call ID %q", outputs[0].CallID, toolConversationCallID)
 	}
+	if outputs[0].Output != returned[0] {
+		t.Fatalf("function_call_output output %q does not carry the executor's returned content %q verbatim", outputs[0].Output, returned[0])
+	}
+	assertToolResultFollowUpOrdering(t, wirePath, outputs[0].Sequence)
 	assertRecordedSpeech(t, outputPath, len(reply))
 
 	if err := transcriptReflectionError(stdout); err != nil {
