@@ -167,6 +167,11 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			return nil, false
 		}
 		return []models.SessionEvent{models.NewAudioBufferAppendEvent(base64.StdEncoding.EncodeToString(v.Content))}, true
+	case messages.StreamTypeResponseCancel:
+		// RESPONSE.CANCEL is the provider-facing boundary for barge-in. Keep it
+		// as a single wire event so the cancellation is ordered before the
+		// interrupting audio append reaches the Realtime session.
+		return []models.SessionEvent{models.NewResponseCancelEvent()}, true
 	case messages.StreamTypeMessageEnd:
 		// End-of-turn: commit the input audio buffer and explicitly request a
 		// response so finite client-side audio sources (file --audio-in)
