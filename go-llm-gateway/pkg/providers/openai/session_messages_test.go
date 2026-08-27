@@ -2,7 +2,9 @@ package openai
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"testing"
 	"time"
@@ -173,13 +175,33 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if functionOutput.Type != "conversation.item.create" || functionOutput.Item.Type != "function_call_output" || functionOutput.Item.CallID != msg.ToolCallID {
 		t.Fatalf("function output event = %#v, want correlated function_call_output", functionOutput)
 	}
+	if functionOutput.Item.Output == "" {
+		t.Fatal("function_call_output output is empty for an image result")
+	}
+	var result struct {
+		Version    int    `json:"version"`
+		Status     string `json:"status"`
+		MIMEType   string `json:"mime_type"`
+		ByteLength int    `json:"byte_length"`
+		SHA256     string `json:"sha256"`
+		DataURL    string `json:"data_url"`
+	}
+	if err := json.Unmarshal([]byte(functionOutput.Item.Output), &result); err != nil {
+		t.Fatalf("decode image result envelope: %v", err)
+	}
+	digest := sha256.Sum256(imageBytes)
+	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	if result.Version != 1 || result.Status != "success" || result.MIMEType != "image/png" || result.ByteLength != len(imageBytes) || result.SHA256 != hex.EncodeToString(digest[:]) || result.DataURL != wantURL {
+		t.Fatalf("image result envelope = %#v, want exact non-empty image representation", result)
+	}
 
 	var imageItem struct {
 		Type string `json:"type"`
 		Item struct {
-			Type    string `json:"type"`
-			Role    string `json:"role"`
-			Content []struct {
+			Type     string            `json:"type"`
+			Role     string            `json:"role"`
+			Metadata map[string]string `json:"metadata"`
+			Content  []struct {
 				Type     string `json:"type"`
 				ImageURL string `json:"image_url"`
 			} `json:"content"`
@@ -191,7 +213,9 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if imageItem.Type != "conversation.item.create" || imageItem.Item.Type != "message" || imageItem.Item.Role != string(messages.RoleUser) || len(imageItem.Item.Content) != 1 {
 		t.Fatalf("tool image event = %#v, want one user image message", imageItem)
 	}
-	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	if imageItem.Item.Metadata["tool_call_id"] != msg.ToolCallID {
+		t.Fatalf("tool image metadata = %#v, want correlation to %q", imageItem.Item.Metadata, msg.ToolCallID)
+	}
 	if imageItem.Item.Content[0].Type != "input_image" || imageItem.Item.Content[0].ImageURL != wantURL {
 		t.Fatalf("tool image content = %#v, want exact PNG data URL", imageItem.Item.Content[0])
 	}

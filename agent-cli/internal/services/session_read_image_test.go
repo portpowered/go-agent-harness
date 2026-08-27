@@ -3,6 +3,9 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -245,8 +248,18 @@ func assertReadImageFailure(t *testing.T, response messages.ToolCallResponse, ca
 	if response.ToolCallID != callID || response.Name != tools.ReadImageToolID {
 		t.Fatalf("failure response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, tools.ReadImageToolID)
 	}
-	if !strings.Contains(response.Content, wantText) {
-		t.Fatalf("failure response = %q, want substring %q", response.Content, wantText)
+	if response.Content == "" {
+		t.Fatal("failure response is empty")
+	}
+	var result tools.ReadImageResult
+	if err := json.Unmarshal([]byte(response.Content), &result); err != nil {
+		t.Fatalf("failure response envelope = %q: %v", response.Content, err)
+	}
+	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error == "" || !strings.Contains(result.Error, wantText) {
+		t.Fatalf("failure response envelope = %#v, want version %d error containing %q", result, tools.ReadImageResultVersion, wantText)
+	}
+	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.DataURL != "" {
+		t.Fatalf("failure response unexpectedly carried image metadata: %#v", result)
 	}
 	for _, part := range response.ContentParts {
 		if _, ok := part.(messages.ImagePart); ok {
@@ -343,12 +356,30 @@ func assertReadImageResponse(t *testing.T, response messages.ToolCallResponse, c
 	if response.ToolCallID != callID || response.Name != tools.ReadImageToolID {
 		t.Fatalf("response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, tools.ReadImageToolID)
 	}
-	if response.Content != "" || len(response.ContentParts) != 1 {
-		t.Fatalf("response content = %q parts = %#v, want image-only rich result", response.Content, response.ContentParts)
+	if response.Content == "" || len(response.ContentParts) != 2 {
+		t.Fatalf("response content = %q parts = %#v, want envelope plus image rich result", response.Content, response.ContentParts)
 	}
-	part, ok := response.ContentParts[0].(messages.ImagePart)
+	var result tools.ReadImageResult
+	if err := json.Unmarshal([]byte(response.Content), &result); err != nil {
+		t.Fatalf("response envelope = %q: %v", response.Content, err)
+	}
+	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusSuccess {
+		t.Fatalf("response envelope = %#v, want version %d success", result, tools.ReadImageResultVersion)
+	}
+	if result.MIMEType != wantMIME || result.ByteLength != len(wantBytes) {
+		t.Fatalf("response envelope metadata = %#v, want %s and %d bytes", result, wantMIME, len(wantBytes))
+	}
+	digest := sha256.Sum256(wantBytes)
+	if result.SHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("response envelope sha256 = %q, want %q", result.SHA256, hex.EncodeToString(digest[:]))
+	}
+	wantDataURL := "data:" + wantMIME + ";base64," + base64.StdEncoding.EncodeToString(wantBytes)
+	if result.DataURL != wantDataURL {
+		t.Fatalf("response envelope data URL = %q, want exact image bytes", result.DataURL)
+	}
+	part, ok := response.ContentParts[1].(messages.ImagePart)
 	if !ok {
-		t.Fatalf("response content part = %T, want messages.ImagePart", response.ContentParts[0])
+		t.Fatalf("response content part = %T, want messages.ImagePart", response.ContentParts[1])
 	}
 	if part.MediaType != wantMIME || !bytes.Equal(part.Bytes, wantBytes) {
 		t.Fatalf("image part = (%q, %d bytes), want (%q, %d bytes)", part.MediaType, len(part.Bytes), wantMIME, len(wantBytes))
