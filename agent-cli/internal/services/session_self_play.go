@@ -378,10 +378,6 @@ func (b *selfPlayPCMBridge) write(pcm []byte) error {
 	return nil
 }
 
-func (b *selfPlayPCMBridge) pump(ctx context.Context, loopReady <-chan *agentloop.AgentLoop, fail func(error), name string) {
-	b.pumpWithObserver(ctx, loopReady, fail, name, nil)
-}
-
 func (b *selfPlayPCMBridge) pumpWithObserver(ctx context.Context, loopReady <-chan *agentloop.AgentLoop, fail func(error), name string, observeInput func([]byte)) {
 	var loop *agentloop.AgentLoop
 	select {
