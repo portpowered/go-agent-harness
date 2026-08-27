@@ -126,6 +126,61 @@ func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *te
 	}
 }
 
+func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-read-image"
+
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
+	})
+	providerToolCallEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(providerToolCallEnd)
+	if shouldStopSessionLoop(providerToolCallEnd, sessionLoopOptions{observer: observer}, false) {
+		t.Fatal("provider read_image MESSAGE.END stopped before the tool result")
+	}
+
+	toolRunnerEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleTool,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(toolRunnerEnd)
+	if shouldStopSessionLoop(toolRunnerEnd, sessionLoopOptions{observer: observer}, false) {
+		t.Fatal("ToolRunner MESSAGE.END stopped before the model continuation")
+	}
+
+	observer.noteToolResultAccepted(callID)
+	finalAssistantEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(finalAssistantEnd)
+	if !shouldStopSessionLoop(finalAssistantEnd, sessionLoopOptions{observer: observer}, false) {
+		t.Fatal("completed read_image continuation did not stop the default session loop")
+	}
+
+	// The default stop rule remains unchanged for ordinary tools; only the
+	// image continuation has a second provider response to wait for.
+	genericObserver := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	genericObserver.setToolResultsEnabled(true)
+	genericObserver.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue("call-generic", "lookup", `{}`),
+	})
+	if !shouldStopSessionLoop(providerToolCallEnd, sessionLoopOptions{observer: genericObserver}, false) {
+		t.Fatal("ordinary tool MESSAGE.END changed the default stop rule")
+	}
+}
+
 func TestSessionProgressObserver_ImageContinuationFailurePreservesPrimaryCause(t *testing.T) {
 	sink := &diagnosticRecordSink{}
 	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")

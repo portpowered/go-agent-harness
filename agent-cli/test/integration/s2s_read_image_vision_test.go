@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/color"
 	"image/png"
@@ -23,6 +24,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -121,6 +123,15 @@ func (o *readImageSessionObserver) snapshot() []messages.StreamMessage {
 }
 
 func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath string, imageBytes []byte) string {
+	return materializeReadImageReplayFixtureMode(t, committedPath, imagePath, imageBytes, true)
+}
+
+// materializeReadImageReplayFixtureMode injects the test-owned path and exact
+// image bytes into the hygiene-safe capture. When includeSessionClose is
+// false, the final assistant MESSAGE.END is the only completion boundary, so
+// the CLI test exercises the default lifecycle instead of a provider-close
+// shortcut.
+func materializeReadImageReplayFixtureMode(t *testing.T, committedPath, imagePath string, imageBytes []byte, includeSessionClose bool) string {
 	t.Helper()
 	capture := captureCopy(t, committedPath)
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
@@ -144,6 +155,16 @@ func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath st
 		}
 		record.Payload = rewriteReadImagePayload(t, payload, imagePath, dataURL, string(result))
 		record.Data = nil
+	}
+	if !includeSessionClose {
+		filtered := capture.Records[:0]
+		for _, record := range capture.Records {
+			if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
+				continue
+			}
+			filtered = append(filtered, record)
+		}
+		capture.Records = filtered
 	}
 	path := filepath.Join(t.TempDir(), filepath.Base(committedPath))
 	data, err := json.MarshalIndent(capture, "", "  ")
@@ -230,7 +251,6 @@ func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string,
 		"--replay", fixturePath,
 		"--provider", "openai",
 		"--model", "gpt-realtime",
-		"--max-duration", "3s",
 		prompt,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -268,8 +288,208 @@ func assertReadImageToolAdvertisement(t *testing.T, fixturePath string, wantRead
 	t.Fatal("replay fixture has no client session.update event")
 }
 
+// assertReadImageWireContract validates the provider-facing expectation that
+// the strict replay will enforce. The replay transport compares every actual
+// client frame before releasing the next server frame, so a mismatch here is
+// not merely a fixture check: an empty, wrong, duplicate, or uncorrelated
+// result prevents the continuation from being delivered to the CLI.
+func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, expectedBytes []byte) {
+	t.Helper()
+	capture := captureCopy(t, fixturePath)
+	wantDigest := sha256.Sum256(expectedBytes)
+	wantDigestHex := hex.EncodeToString(wantDigest[:])
+	wantDataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(expectedBytes)
+
+	callCount := 0
+	callID := ""
+	functionOutputCount := 0
+	functionOutputIndex := -1
+	imageItemCount := 0
+	imageItemIndex := -1
+	toolArgumentCount := 0
+	continuationResponseCreates := make([]int, 0, 2)
+	for index, record := range capture.Records {
+		payload := record.Payload
+		if len(payload) == 0 {
+			payload = record.Data
+		}
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_item.added" {
+			var event struct {
+				Item struct {
+					Type   string `json:"type"`
+					CallID string `json:"call_id"`
+					Name   string `json:"name"`
+				} `json:"item"`
+			}
+			if err := json.Unmarshal(payload, &event); err != nil {
+				t.Fatalf("decode read_image tool call: %v", err)
+			}
+			if event.Item.Type == "function_call" && event.Item.Name == tools.ReadImageToolID {
+				callCount++
+				callID = event.Item.CallID
+			}
+		}
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" {
+			var event struct {
+				CallID    string `json:"call_id"`
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			}
+			if err := json.Unmarshal(payload, &event); err != nil {
+				t.Fatalf("decode read_image arguments: %v", err)
+			}
+			if event.CallID != readImageCallID || event.Name != tools.ReadImageToolID {
+				t.Fatalf("read_image arguments correlation = (%q, %q), want (%q, %q)", event.CallID, event.Name, readImageCallID, tools.ReadImageToolID)
+			}
+			var arguments struct {
+				Path string `json:"path"`
+			}
+			if err := json.Unmarshal([]byte(event.Arguments), &arguments); err != nil {
+				t.Fatalf("decode read_image arguments JSON: %v", err)
+			}
+			if arguments.Path != imagePath {
+				t.Fatalf("wire read_image path = %q, want %q", arguments.Path, imagePath)
+			}
+			toolArgumentCount++
+		}
+		if record.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		switch record.Type {
+		case "conversation.item.create":
+			var event struct {
+				Item struct {
+					Type     string            `json:"type"`
+					CallID   string            `json:"call_id"`
+					Output   string            `json:"output"`
+					Role     string            `json:"role"`
+					Metadata map[string]string `json:"metadata"`
+					Content  []struct {
+						Type     string `json:"type"`
+						ImageURL string `json:"image_url"`
+					} `json:"content"`
+				} `json:"item"`
+			}
+			if err := json.Unmarshal(payload, &event); err != nil {
+				t.Fatalf("decode read_image conversation item: %v", err)
+			}
+			switch event.Item.Type {
+			case "function_call_output":
+				functionOutputCount++
+				functionOutputIndex = index
+				if event.Item.CallID != readImageCallID {
+					t.Fatalf("function_call_output call_id = %q, want %q", event.Item.CallID, readImageCallID)
+				}
+				if strings.TrimSpace(event.Item.Output) == "" {
+					t.Fatal("function_call_output output is empty")
+				}
+				var result tools.ReadImageResult
+				if err := json.Unmarshal([]byte(event.Item.Output), &result); err != nil {
+					t.Fatalf("decode function_call_output read_image envelope: %v", err)
+				}
+				if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusSuccess {
+					t.Fatalf("function_call_output result = %#v, want versioned success", result)
+				}
+				if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.DataURL != wantDataURL {
+					t.Fatalf("function_call_output result metadata = %#v, want MIME image/png, length %d, digest %s, exact data URL", result, len(expectedBytes), wantDigestHex)
+				}
+				const dataURLPrefix = "data:image/png;base64,"
+				encoded := strings.TrimPrefix(result.DataURL, dataURLPrefix)
+				decoded, err := base64.StdEncoding.DecodeString(encoded)
+				if err != nil || !bytes.Equal(decoded, expectedBytes) {
+					t.Fatalf("function_call_output data URL does not decode to fixture bytes: decode error=%v, bytes=%d want=%d", err, len(decoded), len(expectedBytes))
+				}
+			case "message":
+				if event.Item.Metadata["tool_call_id"] != readImageCallID {
+					continue
+				}
+				imageItemCount++
+				imageItemIndex = index
+				if event.Item.Role != string(messages.RoleUser) || len(event.Item.Content) != 1 || event.Item.Content[0].Type != "input_image" || event.Item.Content[0].ImageURL != wantDataURL {
+					t.Fatalf("correlated input_image item = %#v, want one user image with exact fixture bytes", event.Item)
+				}
+			}
+		case "response.create":
+			continuationResponseCreates = append(continuationResponseCreates, index)
+		}
+	}
+
+	if callCount != 1 || callID != readImageCallID {
+		t.Fatalf("read_image calls = %d with call ID %q, want one call ID %q", callCount, callID, readImageCallID)
+	}
+	if toolArgumentCount != 1 {
+		t.Fatalf("read_image argument event count = %d, want exactly one", toolArgumentCount)
+	}
+	if functionOutputCount != 1 {
+		t.Fatalf("function_call_output count = %d, want exactly one", functionOutputCount)
+	}
+	if imageItemCount != 1 {
+		t.Fatalf("correlated input_image count = %d, want exactly one", imageItemCount)
+	}
+	if len(continuationResponseCreates) != 2 {
+		t.Fatalf("response.create count = %d, want initial request plus exactly one continuation", len(continuationResponseCreates))
+	}
+	if !(functionOutputIndex < imageItemIndex && imageItemIndex < continuationResponseCreates[1]) {
+		t.Fatalf("read_image transaction order = function output %d, image item %d, continuation %d; want output < image < continuation", functionOutputIndex, imageItemIndex, continuationResponseCreates[1])
+	}
+}
+
+// rewriteReadImageCapture copies a materialized capture and applies a wire
+// mutation. It is used only for negative controls that must fail at the
+// provider boundary, before scripted grounded prose can be delivered.
+func rewriteReadImageCapture(t *testing.T, source string, mutate func(map[string]any)) string {
+	t.Helper()
+	capture := captureCopy(t, source)
+	mutated := false
+	for index := range capture.Records {
+		record := &capture.Records[index]
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+			continue
+		}
+		payload := record.Payload
+		if len(payload) == 0 {
+			payload = record.Data
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(payload, &decoded); err != nil {
+			t.Fatalf("decode read_image mutation payload: %v", err)
+		}
+		item, ok := decoded["item"].(map[string]any)
+		if !ok || item["type"] != "function_call_output" {
+			continue
+		}
+		mutate(item)
+		encoded, err := json.Marshal(decoded)
+		if err != nil {
+			t.Fatalf("encode read_image mutation payload: %v", err)
+		}
+		record.Payload = encoded
+		record.Data = nil
+		mutated = true
+	}
+	if !mutated {
+		t.Fatal("read_image mutation found no function_call_output")
+	}
+	path := filepath.Join(t.TempDir(), "read_image_mutated.session.json")
+	data, err := json.MarshalIndent(capture, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal mutated read_image capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write mutated read_image capture: %v", err)
+	}
+	if _, err := gwtesting.NewReplayWebSocketDialer(path); err != nil {
+		t.Fatalf("mutated read_image capture rejected: %v", err)
+	}
+	return path
+}
+
 func assertReadImageGrounded(output string, events []messages.StreamMessage, imagePath string, expectedBytes []byte) error {
-	if !strings.Contains(output, "[session closed: fixture_complete]") {
+	return assertReadImageGroundedWithProviderClose(output, events, imagePath, expectedBytes, true)
+}
+
+func assertReadImageGroundedWithProviderClose(output string, events []messages.StreamMessage, imagePath string, expectedBytes []byte, requireProviderClose bool) error {
+	if requireProviderClose && !strings.Contains(output, "[session closed: fixture_complete]") {
 		return fmt.Errorf("session did not complete cleanly, got:\n%s", output)
 	}
 	for _, marker := range readImageGroundedMarkers {
@@ -355,6 +575,76 @@ func assertReadImageGrounded(output string, events []messages.StreamMessage, ima
 		return fmt.Errorf("post-tool provider response started at event %d before image ended at event %d", providerMessageStarts[1], imageEndIndex)
 	}
 	return nil
+}
+
+// TestReadImageCLI_DefaultLifecycleWaitsForStrictContinuation drives the
+// model-initiated read_image transaction through the shipped CLI composition.
+// The provider-close record is intentionally omitted: the default session
+// path must finish on the final assistant response, after the strict replay
+// has accepted the non-empty function result, correlated image projection,
+// and exactly one continuation request.
+func TestReadImageCLI_DefaultLifecycleWaitsForStrictContinuation(t *testing.T) {
+	imagePath := readImageFixturePath(t)
+	imageBytes := readImageFixtureBytes(t)
+	if err := assertReadImageFixturePixels(imageBytes); err != nil {
+		t.Fatal(err)
+	}
+
+	configDir := writeReadImageConfig(t, true)
+	fixture := materializeReadImageReplayFixtureMode(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes, false)
+	assertReadImageToolAdvertisement(t, fixture, true)
+	assertReadImageWireContract(t, fixture, imagePath, imageBytes)
+
+	observer := &readImageSessionObserver{}
+	output, runErr := runReadImageSession(t, fixture, configDir, imagePath, observer)
+	if runErr != nil {
+		t.Fatalf("default read_image CLI replay failed: %v\noutput: %s", runErr, output)
+	}
+	if err := assertReadImageGroundedWithProviderClose(output, observer.snapshot(), imagePath, imageBytes, false); err != nil {
+		t.Fatal(err)
+	}
+
+	events := observer.snapshot()
+	imageEnd := -1
+	finalAssistantEnd := -1
+	for index, event := range events {
+		if event.Role == messages.RoleTool && event.Type == messages.StreamTypeImageEnd {
+			imageEnd = index
+		}
+		if event.Type == messages.StreamTypeMessageEnd && event.Role != messages.RoleTool && imageEnd >= 0 {
+			finalAssistantEnd = index
+		}
+	}
+	if imageEnd < 0 || finalAssistantEnd <= imageEnd {
+		t.Fatalf("default lifecycle ended without a post-image assistant continuation: image_end=%d final_assistant_end=%d events=%#v", imageEnd, finalAssistantEnd, events)
+	}
+}
+
+// TestReadImageCLI_DefaultLifecycleRejectsEmptyFunctionOutput is a negative
+// control for the strict provider boundary. The same grounded server reply is
+// present, but replay must reject an empty function_call_output before it can
+// release that reply to the CLI.
+func TestReadImageCLI_DefaultLifecycleRejectsEmptyFunctionOutput(t *testing.T) {
+	imagePath := readImageFixturePath(t)
+	imageBytes := readImageFixtureBytes(t)
+	configDir := writeReadImageConfig(t, true)
+	validFixture := materializeReadImageReplayFixtureMode(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes, false)
+	fixture := rewriteReadImageCapture(t, validFixture, func(item map[string]any) {
+		item["output"] = ""
+	})
+
+	output, runErr := runReadImageSession(t, fixture, configDir, imagePath, &readImageSessionObserver{})
+	if runErr == nil {
+		t.Fatalf("empty function_call_output completed cleanly; output=%s", output)
+	}
+	if !errors.Is(runErr, providers.ErrReplayMismatch) {
+		t.Fatalf("empty function_call_output error = %v, want typed replay mismatch", runErr)
+	}
+	for _, marker := range readImageGroundedMarkers {
+		if strings.Contains(output, marker) {
+			t.Fatalf("empty function_call_output released fabricated grounded reply %q: %s", marker, output)
+		}
+	}
 }
 
 func assertReadImageNoToolGrounding(output string, events []messages.StreamMessage, expectedBytes []byte) error {
