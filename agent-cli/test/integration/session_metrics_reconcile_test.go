@@ -338,12 +338,15 @@ func (f *accountingFold) record(direction metrics.Direction, modality metrics.Mo
 // foldAccounting is the independent replay oracle. Text and transcript deltas
 // are output/text observations; audio deltas are output/audio observations.
 // Every non-negative MESSAGE.END usage value is an incremental contribution for
-// that completed turn, regardless of whether a payload was observed in the
-// same turn. The initialized map makes every supported, unobserved series an
+// its completed output-bearing turn. A close with no observed output remains a
+// valid stream boundary but contributes no independently attributable usage;
+// this makes the missing-output negative control fail on both tokens and
+// metrics. The initialized map makes every supported, unobserved series an
 // exact zero, including its histogram state.
 func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 	fold := newAccountingFold()
 	inTurn := false
+	turnHasOutput := false
 	for index, entry := range ledger {
 		switch entry.typeName {
 		case messages.StreamTypeMessageStart:
@@ -351,10 +354,17 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 				return accountingFold{}, fmt.Errorf("ledger entry %d starts a turn before the prior turn ended", index+1)
 			}
 			inTurn = true
+			turnHasOutput = false
 		case messages.StreamTypeTextDelta, messages.StreamTypeTranscriptDelta:
-			fold.record(metrics.DirectionOutput, metrics.ModalityText, len(entry.text))
+			if entry.text != "" {
+				fold.record(metrics.DirectionOutput, metrics.ModalityText, len(entry.text))
+				turnHasOutput = true
+			}
 		case messages.StreamTypeAudioDelta:
-			fold.record(metrics.DirectionOutput, metrics.ModalityAudio, entry.audioLen)
+			if entry.audioLen > 0 {
+				fold.record(metrics.DirectionOutput, metrics.ModalityAudio, entry.audioLen)
+				turnHasOutput = true
+			}
 		case messages.StreamTypeMessageEnd:
 			if !inTurn || entry.usage == nil {
 				return accountingFold{}, fmt.Errorf("ledger entry %d is not a usage-bearing message close", index+1)
@@ -363,11 +373,14 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 			if usage.PromptTokens+usage.CompletionTokens != usage.TotalTokens {
 				return accountingFold{}, fmt.Errorf("ledger entry %d violates prompt+completion=total: %+v", index+1, usage)
 			}
-			fold.tokenTotal.PromptTokens += usage.PromptTokens
-			fold.tokenTotal.CompletionTokens += usage.CompletionTokens
-			fold.tokenTotal.TotalTokens += usage.TotalTokens
-			fold.tokenTotal.ReasoningTokens += usage.ReasoningTokens
+			if turnHasOutput {
+				fold.tokenTotal.PromptTokens += usage.PromptTokens
+				fold.tokenTotal.CompletionTokens += usage.CompletionTokens
+				fold.tokenTotal.TotalTokens += usage.TotalTokens
+				fold.tokenTotal.ReasoningTokens += usage.ReasoningTokens
+			}
 			inTurn = false
+			turnHasOutput = false
 		}
 	}
 	if inTurn {
@@ -380,6 +393,9 @@ func compareAccounting(expected accountingFold, actual *wire.SessionFinalAccount
 	var mismatches []string
 	if actual == nil {
 		return errors.New("session accounting does not reconcile: missing production final accounting")
+	}
+	if actual.UsageSemantics != wire.SessionTokenUsageIncremental {
+		mismatches = append(mismatches, fmt.Sprintf("token usage semantics: expected %q, actual %q", wire.SessionTokenUsageIncremental, actual.UsageSemantics))
 	}
 	if !reflect.DeepEqual(metrics.DefaultHistogramBounds(), actual.Metrics.HistogramBounds) {
 		mismatches = append(mismatches, fmt.Sprintf("histogram_bounds: expected %v, actual %v", metrics.DefaultHistogramBounds(), actual.Metrics.HistogramBounds))
@@ -632,6 +648,7 @@ func TestSessionCommandMetricsReconcileMissingOutputTextDeltaFails(t *testing.T)
 	} else {
 		got := err.Error()
 		for _, want := range []string{
+			"token total: expected 8, actual 26",
 			"output/text event_count: expected 0, actual 1",
 			"output/text total_bytes: expected 0, actual 16",
 		} {
