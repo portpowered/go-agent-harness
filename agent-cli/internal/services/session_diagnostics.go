@@ -437,6 +437,26 @@ func (o *sessionProgressObserver) hasPendingImageContinuations() bool {
 	return false
 }
 
+// hasImageContinuationObligation reports whether a provider read_image call
+// still owns the session turn. It intentionally includes the interval before
+// the tool result is accepted: the provider's first MESSAGE.END is only the
+// function-call response, so the default session loop must leave it open long
+// enough for the executor to send the result and for the model continuation
+// to arrive.
+func (o *sessionProgressObserver) hasImageContinuationObligation() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	for _, state := range o.imageContinuations {
+		if state != nil && !state.continuationComplete {
+			return true
+		}
+	}
+	return false
+}
+
 // pendingImageContinuationCallIDs returns a deterministic snapshot of calls
 // whose accepted result still lacks a terminal model continuation.
 func (o *sessionProgressObserver) pendingImageContinuationCallIDs() []string {
