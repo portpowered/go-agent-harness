@@ -33,9 +33,10 @@ response is allowed to preserve its current-response audio through its normal
 audio and response boundaries; the replay does not accept a cancel/redirect
 event. The local tool result returns and causes the second response request,
 while the replay server queues that continuation's audio until the current
-response finishes. A provider-facing result, when the leased production
-forwarding contract exists, must be emitted exactly once with the original
-call ID before that continuation request.
+response finishes. The production tool-result forwarder queues the provider-
+facing result before the coordinator queues that continuation request, and the
+OpenAI adapter emits exactly one `function_call_output` with the original call
+ID.
 
 The ordered collision is:
 
@@ -50,10 +51,9 @@ The ordered collision is:
    gated. The local `RoleTool` result is observed exactly once before the
    result-driven continuation.
 4. The current response's remaining audio then completes byte-for-byte. Under
-   the selected queue/sequence contract, a provider-facing result (when the
-   leased production forwarding contract exists) is delivered after that
-   boundary and before the result-driven continuation request. The replay then
-   releases the continuation audio.
+   the selected queue/sequence contract, the provider-facing result is
+   delivered after that boundary and before the result-driven continuation
+   request. The replay then releases the continuation audio.
 5. The exact fixture terminal event
    `[session closed: async_collision_complete]` is observed within the
    bounded duration.
@@ -61,11 +61,10 @@ The ordered collision is:
 The positive verifier checks the executor call/result cardinality and
 correlation, local tool-result deltas, causal gate order, three response creates
 with a continuation, exact concatenated PCM16 output, and the exact terminal
-boundary. It also contains a strict provider-facing `function_call_output`
-verifier. On the current origin/main baseline that verifier reports the
-missing `ToolResultForwarder` plus OpenAI
-`StreamTypeToolCallEnd`-to-`function_call_output` translation as an explicit
-canary; absent provider delivery is never treated as success.
+boundary. It also requires exactly one provider-facing `function_call_output`,
+with the original call ID and sentinel output, after the collision response
+boundary and before the continuation request. Zero or duplicate provider
+results are failures.
 
 ## Controls
 
@@ -85,11 +84,9 @@ and shared verifiers. Each changes one observable outcome:
   within the bound and the verifier reports the missing exact terminal event;
   it cannot wedge the test process.
 
-The result-loss control is intentionally a forward-compatible canary: on the
-current baseline the provider result is already absent, so it fails for the
-same named production gap even when the drop switch is enabled. Once the
-out-of-lease forwarding contract lands, the switch removes the result from
-the provider-facing exchange while leaving all other assertions unchanged.
+The result-loss control is discriminating because the healthy path carries a
+real provider result: the transport switch removes only that observed event,
+and the strict provider-result verifier fails with the outstanding call ID.
 
 ## Adjacent coverage
 

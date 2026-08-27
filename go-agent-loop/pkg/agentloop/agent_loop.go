@@ -133,9 +133,11 @@ func New(opts ...Option) (*AgentLoop, error) {
 
 	// Both Coordinator and CoordinatorDelta write to the same DeltaInbox so that
 	// full messages (SYSTEM.FULL_MESSAGE) and streaming deltas share a single
-	// FIFO queue, eliminating ordering races. Coordinator runs first (tick group 0)
-	// and enqueues full messages; CoordinatorDelta runs second (tick group 5) and
-	// enqueues LOOP.END, ensuring it always arrives after all messages.
+	// FIFO queue, eliminating ordering races. In session mode the tool-result
+	// forwarder runs before Coordinator so its provider event is queued before
+	// the result-driven follow-up request. Coordinator then enqueues full
+	// messages; CoordinatorDelta runs after it (tick group 5) and enqueues
+	// LOOP.END, ensuring it always arrives after all messages.
 	coordDelta := subsystems.NewCoordinatorDelta(kernelRunner.DeltaInbox, cfg.Logger)
 	hlps = append(hlps, coordDelta)
 
@@ -147,12 +149,12 @@ func New(opts ...Option) (*AgentLoop, error) {
 
 	// PingPong is only useful in session mode where keepalive pings are expected.
 	if cfg.Mode == engine.DuplexSession {
+		// Forward completed tool results before Coordinator emits the
+		// result-driven model request. This preserves provider-wire
+		// queue/sequence ordering when both are ready in the same tick.
+		hlps = append(hlps, subsystems.NewToolResultForwarder(modelRunner.UserEventInbox, cfg.Logger))
 		pingPong := subsystems.NewPingPong(kernelRunner.DeltaInbox, cfg.Logger)
 		hlps = append(hlps, pingPong)
-		// Forwarder delivers assembled tool results onto the provider-wire
-		// outbound path (session runner's UserEventInbox) so realtime providers
-		// observe each completed tool result exactly once. Session mode only.
-		hlps = append(hlps, subsystems.NewToolResultForwarder(modelRunner.UserEventInbox, cfg.Logger))
 	}
 
 	if cfg.Recorder != nil {

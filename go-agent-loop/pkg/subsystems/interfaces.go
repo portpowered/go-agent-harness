@@ -21,11 +21,16 @@ const (
 	// in-flight executions and reset pass state before the Coordinator reacts.
 	TickGroupInterruptHandler TickGroup = -1
 
+	// TickGroupToolResultForwarder runs after InterruptHandler but before the
+	// Coordinator so a duplex-session provider result is queued before the
+	// coordinator's result-driven follow-up request.
+	TickGroupToolResultForwarder TickGroup = 0
+
+	TickGroupCoordinator TickGroup = 1
+
 	// TickGroupPingPong runs after InterruptHandler and Coordinator so pong
 	// responses are emitted early in the tick cycle but after coordination.
-	TickGroupPingPong TickGroup = 1
-
-	TickGroupCoordinator             TickGroup = 0
+	TickGroupPingPong                TickGroup = 2
 	TickGroupInteractionEvents       TickGroup = 4
 	TickGroupCoordinatorDelta        TickGroup = 5
 	TickGroupConversationLoop        TickGroup = 10

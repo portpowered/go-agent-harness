@@ -49,11 +49,6 @@ func NewToolResultForwarder(sessionEvents chan<- messages.StreamMessage, logger 
 
 var _ Subsystem = (*ToolResultForwarder)(nil)
 
-// TickGroupToolResultForwarder runs after the Coordinator so forwarded tool
-// results are enqueued after the tick's coordination side effects but before
-// later bookkeeping groups.
-const TickGroupToolResultForwarder TickGroup = 2
-
 // TickGroup implements [Subsystem].
 func (f *ToolResultForwarder) TickGroup() TickGroup {
 	return TickGroupToolResultForwarder

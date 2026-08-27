@@ -15,11 +15,10 @@ package integration
 // the overlap causal rather than timing-based while keeping the behavior
 // assertion at the public `agent session` command boundary.
 //
-// The current origin/main baseline has no provider-facing translation for the
-// normalized tool-result stream. The test therefore preserves an explicit
-// provider-result diagnostic and records the exact local proof that precedes
-// that missing production contract; it does not treat absent wire delivery as
-// a successful result disposition.
+// The production session path forwards normalized tool results through the
+// provider-facing stream. The verifier therefore requires the real outbound
+// function_call_output, rather than treating local RoleTool delivery or a
+// scripted capture record as a substitute for wire evidence.
 
 import (
 	"bytes"
@@ -512,9 +511,9 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 			if err := c.waitForPhase(c.control.collisionResponseComplete); err != nil {
 				return fmt.Errorf("async collision replay could not reach the queue/sequence result boundary: %w", err)
 			}
-			// The loss control acts at the provider-facing transport boundary.
-			// It accepts the write but removes only the correlated result from
-			// the observed exchange, leaving the rest of the session healthy.
+			// The loss control acts at the provider-facing transport boundary. It
+			// accepts the write but removes only the correlated result from the
+			// observed exchange, leaving the rest of the session healthy.
 			if c.control.dropProviderResult {
 				return nil
 			}
@@ -897,9 +896,8 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 
 	// This is the expected queue/sequence boundary: the provider-facing result
 	// follows the current collision response's final audio boundary and
-	// precedes the result-driven continuation request. The current baseline
-	// does not yet emit this event; the strict verifier below keeps that gap
-	// explicit instead of accepting silent loss.
+	// precedes the result-driven continuation request. The real runtime emits
+	// this event through the tool-result forwarder and OpenAI session adapter.
 	add(gwtesting.DirectionClientToServer, "conversation.item.create", functionCallOutputPayload())
 	add(gwtesting.DirectionClientToServer, "conversation.item.create", string(userPayload))
 	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
@@ -1186,13 +1184,17 @@ func validateAsyncCollisionProviderResult(outbound []asyncCollisionOutbound) err
 	return nil
 }
 
-func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCollisionOutbound) error {
+func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCollisionOutbound, expectProviderResult bool) error {
 	count, err := countAsyncProviderResults(outbound)
 	if err != nil {
 		return err
 	}
-	if count == 0 {
-		return nil
+	wantCount := 0
+	if expectProviderResult {
+		wantCount = 1
+	}
+	if count != wantCount {
+		return fmt.Errorf("%s provider-facing result for outstanding call %q: observed %d function_call_output events, want %d", asyncCollisionDisposition, asyncCollisionCallID, count, wantCount)
 	}
 	positions := make(map[string]int, len(events))
 	counts := make(map[string]int, len(events))
@@ -1200,8 +1202,11 @@ func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCol
 		positions[event] = index
 		counts[event]++
 	}
-	if counts["provider_result_sent"] != 1 {
-		return fmt.Errorf("provider-facing result was observed %d times in the causal trace, want exactly one", counts["provider_result_sent"])
+	if counts["provider_result_sent"] != wantCount {
+		return fmt.Errorf("provider-facing result was observed %d times in the causal trace, want %d", counts["provider_result_sent"], wantCount)
+	}
+	if !expectProviderResult {
+		return nil
 	}
 	if positions["collision_response_completed"] >= positions["provider_result_sent"] || positions["provider_result_sent"] >= positions["continuation_requested"] {
 		return fmt.Errorf("%s provider result boundary is out of order: %v", asyncCollisionDisposition, events)
@@ -1209,11 +1214,22 @@ func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCol
 	return nil
 }
 
-func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expectedInputAudio []byte) error {
+func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expectedInputAudio []byte, expectProviderResult bool) error {
 	userTurnIndices := make([]int, 0, 2)
 	responseCreateIndices := make([]int, 0, 3)
-	providerResultIndex := -1
+	providerResultIndices := make([]int, 0, 1)
 	inputAppendIndex, inputCommitIndex := -1, -1
+	providerResultCount, err := countAsyncProviderResults(outbound)
+	if err != nil {
+		return err
+	}
+	wantProviderResultCount := 0
+	if expectProviderResult {
+		wantProviderResultCount = 1
+	}
+	if providerResultCount != wantProviderResultCount {
+		return fmt.Errorf("%s provider result for outstanding call %q: observed %d function_call_output events, want %d", asyncCollisionDisposition, asyncCollisionCallID, providerResultCount, wantProviderResultCount)
+	}
 	for index, event := range outbound {
 		switch event.Type {
 		case "conversation.item.create":
@@ -1229,7 +1245,7 @@ func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expec
 			if payload.Item.Type == "message" {
 				userTurnIndices = append(userTurnIndices, index)
 			} else if payload.Item.Type == "function_call_output" && payload.Item.CallID == asyncCollisionCallID {
-				providerResultIndex = index
+				providerResultIndices = append(providerResultIndices, index)
 			}
 		case "response.create":
 			responseCreateIndices = append(responseCreateIndices, index)
@@ -1263,8 +1279,15 @@ func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expec
 	if responseCreateIndices[0] >= userTurnIndices[0] || userTurnIndices[0] >= responseCreateIndices[1] {
 		return fmt.Errorf("later collision request is out of order: first response.create=%d later user=%d later response.create=%d", responseCreateIndices[0], userTurnIndices[0], responseCreateIndices[1])
 	}
-	if providerResultIndex >= 0 && providerResultIndex >= userTurnIndices[1] {
-		return fmt.Errorf("%s provider result for %q was sent after the result-driven continuation user turn", asyncCollisionDisposition, asyncCollisionCallID)
+	if expectProviderResult {
+		if len(providerResultIndices) != 1 {
+			return fmt.Errorf("%s provider result for %q was correlated %d times, want exactly one", asyncCollisionDisposition, asyncCollisionCallID, len(providerResultIndices))
+		}
+		if providerResultIndices[0] >= userTurnIndices[1] {
+			return fmt.Errorf("%s provider result for %q was sent after the result-driven continuation user turn", asyncCollisionDisposition, asyncCollisionCallID)
+		}
+	} else if len(providerResultIndices) != 0 {
+		return fmt.Errorf("result-loss control still carried %d provider results for %q", len(providerResultIndices), asyncCollisionCallID)
 	}
 	if responseCreateIndices[1] >= userTurnIndices[1] || userTurnIndices[1] >= responseCreateIndices[2] {
 		return fmt.Errorf("result-driven continuation is out of order: collision response.create=%d continuation user=%d continuation response.create=%d", responseCreateIndices[1], userTurnIndices[1], responseCreateIndices[2])
@@ -1287,7 +1310,7 @@ func validateAsyncCollisionTerminal(sessionOutput string, runErr error) error {
 // every control. A control can disable only the assertion it intentionally
 // damages; the other runtime, correlation, continuation, and terminal checks
 // remain identical.
-func validateAsyncCollisionRun(run asyncCollisionRunResult, collision, continuation [][]int16, verifyAudio bool) error {
+func validateAsyncCollisionRun(run asyncCollisionRunResult, collision, continuation [][]int16, verifyAudio, expectProviderResult bool) error {
 	if err := validateAsyncCollisionTerminal(run.sessionOutput, run.runErr); err != nil {
 		return err
 	}
@@ -1309,10 +1332,10 @@ func validateAsyncCollisionRun(run asyncCollisionRunResult, collision, continuat
 	if err := validateAsyncCollisionTrace(run.trace.snapshot()); err != nil {
 		return err
 	}
-	if err := validateAsyncCollisionProviderBoundary(run.trace.snapshot(), run.outbound); err != nil {
+	if err := validateAsyncCollisionProviderBoundary(run.trace.snapshot(), run.outbound, expectProviderResult); err != nil {
 		return err
 	}
-	if err := validateAsyncCollisionContinuation(run.outbound, asyncCollisionInputAudio()); err != nil {
+	if err := validateAsyncCollisionContinuation(run.outbound, asyncCollisionInputAudio(), expectProviderResult); err != nil {
 		return err
 	}
 	return nil
@@ -1327,29 +1350,19 @@ func cloneAsyncCollisionDeltas(deltas [][]int16) [][]int16 {
 }
 
 // TestSessionAsyncToolResultInterruptsSpeechThroughCLI is the first-story
-// positive collision proof. It validates every in-lease observable and keeps
-// the provider-facing result assertion explicit. On origin/main the latter
-// reports the production wire gap described in the PRD; a provider fix should
-// make the exact-one branch pass without changing this fixture or verifier.
+// positive collision proof. It validates every observable, including the
+// exact-one provider-facing result and its original call ID.
 func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{})
-	if err := validateAsyncCollisionRun(run, collision, continuation, true); err != nil {
+	if err := validateAsyncCollisionRun(run, collision, continuation, true, true); err != nil {
 		t.Logf("async collision run: err=%v trace=%v outbound=%v", run.runErr, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
 		t.Fatal(err)
 	}
-
-	count, err := countAsyncProviderResults(run.outbound)
-	if err != nil {
+	if err := validateAsyncCollisionProviderResult(run.outbound); err != nil {
 		t.Fatal(err)
 	}
-	if count == 0 {
-		t.Logf("provider-facing result assertion is blocked on origin/main (out-of-lease go-agent-loop ToolResultForwarder plus OpenAI StreamTypeToolCallEnd -> function_call_output translation): provider-facing result for %q was not emitted", asyncCollisionCallID)
-	} else if err := validateAsyncCollisionProviderResult(run.outbound); err != nil {
-		t.Fatal(err)
-	} else {
-		t.Logf("provider-facing result delivered exactly once for %q", asyncCollisionCallID)
-	}
+	t.Logf("provider-facing result delivered exactly once for %q", asyncCollisionCallID)
 }
 
 func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string {
@@ -1363,15 +1376,14 @@ func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string
 // TestSessionAsyncToolResultProviderResultLossFailsVerifier is the result-loss
 // control. It keeps the collision, audio, continuation, and terminal path
 // healthy, while suppressing only a provider-facing function_call_output at
-// the replay transport boundary. On origin/main no such event is emitted yet,
-// so the same strict verifier remains a useful canary for the missing wire
-// contract and names the outstanding call instead of accepting silent loss.
+// the replay transport boundary. The shared verifier still checks every
+// unrelated outcome before the targeted result-loss assertion names the call.
 func TestSessionAsyncToolResultProviderResultLossFailsVerifier(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{
 		dropProviderResult: true,
 	})
-	if err := validateAsyncCollisionRun(run, collision, continuation, true); err != nil {
+	if err := validateAsyncCollisionRun(run, collision, continuation, true, false); err != nil {
 		t.Fatalf("result-loss control changed an unrelated collision outcome: %v", err)
 	}
 
@@ -1392,7 +1404,7 @@ func TestSessionAsyncToolResultAudioDamageFailsVerifier(t *testing.T) {
 	damaged := cloneAsyncCollisionDeltas(collision)
 	damaged[1][0] ^= 1
 	run := runAsyncCollisionScenario(t, damaged, collision, continuation, asyncCollisionRunOptions{})
-	if err := validateAsyncCollisionRun(run, collision, continuation, false); err != nil {
+	if err := validateAsyncCollisionRun(run, collision, continuation, false, true); err != nil {
 		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v", err)
 	}
 
@@ -1414,7 +1426,7 @@ func TestSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 		maxDuration:      asyncCollisionControlMaxDuration,
 		withholdTerminal: true,
 	})
-	assertionErr := validateAsyncCollisionRun(run, collision, continuation, true)
+	assertionErr := validateAsyncCollisionRun(run, collision, continuation, true, true)
 	if assertionErr == nil {
 		t.Fatal("missing-terminal control unexpectedly passed the terminal verifier")
 	}
