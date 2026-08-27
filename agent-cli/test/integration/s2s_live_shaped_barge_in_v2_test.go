@@ -890,7 +890,7 @@ func TestSessionCommand_S2SLiveShapedBargeInV2NegativeControls(t *testing.T) {
 			want: "input appends: expected 4, actual 5",
 		},
 		{
-			name: "missing response terminal",
+			name: "non-terminal wait",
 			mutate: func(capture *gwtesting.SessionCapture) bool {
 				for index := len(capture.Records) - 1; index >= 0; index-- {
 					if capture.Records[index].Type == "response.done" {
@@ -902,6 +902,21 @@ func TestSessionCommand_S2SLiveShapedBargeInV2NegativeControls(t *testing.T) {
 				return false
 			},
 			want: "unresolved terminal disposition",
+		},
+		{
+			name: "missing cancel",
+			mutate: func(capture *gwtesting.SessionCapture) bool {
+				for index, record := range capture.Records {
+					if record.Type != "response.cancel" {
+						continue
+					}
+					capture.Records = append(capture.Records[:index], capture.Records[index+1:]...)
+					renumberDeterministicCapture(capture)
+					return true
+				}
+				return false
+			},
+			want: "reported cancelled without a preceding response.cancel",
 		},
 		{
 			name: "duplicate cancel",
@@ -918,6 +933,28 @@ func TestSessionCommand_S2SLiveShapedBargeInV2NegativeControls(t *testing.T) {
 				return false
 			},
 			want: "duplicate response.cancel",
+		},
+		{
+			name: "dropped replacement",
+			mutate: func(capture *gwtesting.SessionCapture) bool {
+				filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
+				removed := false
+				for _, record := range capture.Records {
+					id := deterministicJSONField(record.Payload, "response.id", "response_id")
+					if id == "resp-s2s-v2-4" {
+						removed = true
+						continue
+					}
+					filtered = append(filtered, record)
+				}
+				if !removed {
+					return false
+				}
+				capture.Records = filtered
+				renumberDeterministicCapture(capture)
+				return true
+			},
+			want: "responses: expected 4, actual 3",
 		},
 		{
 			name: "stale output after cancel",
