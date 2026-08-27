@@ -12,7 +12,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 
 - `s2s-v1-text-in-audio-out` — text -> streamed audio deltas -> playable WAV; transcript non-empty; first-audio tick recorded _(history: #159:MERGED)_
 - `s2s-v2a-audio-in-basic` — short corpus utterance in -> audio out with RMS above the silence threshold _(history: #161:MERGED)_
-- `s2s-v2b-audio-in-long` — explicit append/commit/clear event sequences over a long utterance, not just final audio _(history: #185:OPEN)_
+- `s2s-v2b-audio-in-long` — explicit append/commit/clear event sequences over a long utterance, not just final audio _(history: #185:MERGED 2026-08-27 as `4265de1`; exact-name recovery reused the original PR and restored board ownership)_
 - `s2s-v2c-audio-in-silence` — silence_* and noise_* inputs produce zero commits and zero turns _(history: #168:CLOSED, #176:MERGED)_
 - `s2s-v2d-audio-in-multi-utterance` — a long utterance streams as multiple appends producing exactly one commit _(history: #165:CLOSED)_
 - `s2s-v2e-audio-in-truncated` — truncated_* clips terminate cleanly, no wedged buffer _(history: #167:CLOSED, #179:MERGED)_
@@ -43,7 +43,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 
 - `s2s-e2e-audio-roundtrip-proof` — prove audio in + audio out through the public CLI end to end _(history: #157:MERGED)_
 - `s2s-e2e-multiturn-conversation` — a 3-7 turn audio conversation that holds together _(history: #158:MERGED)_
-- `s2s-e2e-tool-call-conversation` — customer asks by voice, agent calls a specific CLI tool, response reflects the real result _(history: #192:OPEN)_
+- `s2s-e2e-tool-call-conversation` — customer asks by voice, agent calls a specific CLI tool, response reflects the real result _(history: #192:MERGED 2026-08-27 as `4f061a0`; exact-name recovery reused the original PR and added adversarial missing-result controls before merge)_
 - `s2s-e2e-vision-describe` — customer asks by voice about a committed image, agent describes it from actual image content _(history: #200:CLOSED, #208:MERGED)_
 - `s2s-e2e-conversation-observability` — logs and recordings alone (not test instrumentation) prove the conversation happened _(history: #191:CLOSED with stale unmerged metadata; implementation commit `0c519f2` is on `origin/main` and the in-repo proof marks the outcome achieved)_
 
