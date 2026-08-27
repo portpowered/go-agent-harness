@@ -195,6 +195,10 @@ func (o *asyncCollisionObserver) observe(msg messages.StreamMessage) {
 	o.mu.Unlock()
 
 	switch value := msg.Value.(type) {
+	case *messages.SessionOpenValue:
+		o.trace.record("session_open_observed")
+	case *messages.SessionCreatedValue:
+		o.trace.record("session_created_observed")
 	case *messages.MessageEndValue:
 		o.mu.Lock()
 		o.responseCompleted++
@@ -436,7 +440,11 @@ func (c *asyncCollisionReplayConn) ReadMessage() (int, []byte, error) {
 		)
 		switch stage {
 		case 0:
-			waitFor = c.control.signals.sessionUpdateReady
+			// OpenAI ConnectSession writes its initial session.update before it
+			// starts the provider read loop. The outbound write is therefore the
+			// happens-before edge for this first server phase; waiting on a
+			// second notification here can strand an otherwise connected replay
+			// if the provider read loop starts after that notification.
 			phase = c.groups.handshake
 		case 1:
 			waitFor = c.control.signals.initialResponseReady
@@ -519,15 +527,13 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 			}
 			c.control.trace.record("provider_result_sent")
 		} else {
-			// The first user message is the later turn that must follow the
-			// completed tool-call response. The second is the result-driven
-			// continuation and must follow the collision response boundary.
-			if c.countOutboundUserMessages() == 0 {
-				if err := c.waitForPhase(c.control.turnOneCompleted); err != nil {
-					return fmt.Errorf("async collision replay could not reach the later-turn request boundary: %w", err)
+			// The initial positional prompt starts the outstanding tool call and
+			// is accepted immediately. The result-driven continuation is the
+			// second user message and must follow the collision response boundary.
+			if c.countOutboundUserMessages() > 0 {
+				if err := c.waitForPhase(c.control.collisionResponseComplete); err != nil {
+					return fmt.Errorf("async collision replay could not reach the continuation request boundary: %w", err)
 				}
-			} else if err := c.waitForPhase(c.control.collisionResponseComplete); err != nil {
-				return fmt.Errorf("async collision replay could not reach the continuation request boundary: %w", err)
 			}
 		}
 	case "input_audio_buffer.append":
@@ -675,6 +681,7 @@ func (c *asyncCollisionReplayConn) Close() error {
 // that unsupported outbound stream value into a test failure.
 type asyncCollisionSessionInferencer struct {
 	inner messages.SessionInferencer
+	trace *asyncCollisionTrace
 }
 
 func (i *asyncCollisionSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -682,18 +689,25 @@ func (i *asyncCollisionSessionInferencer) ConnectSession(ctx context.Context) (m
 	if err != nil {
 		return nil, err
 	}
-	return &asyncCollisionSession{inner: session}, nil
+	return &asyncCollisionSession{inner: session, trace: i.trace}, nil
 }
 
 type asyncCollisionSession struct {
 	inner messages.Session
+	trace *asyncCollisionTrace
 }
 
 func (s *asyncCollisionSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeSessionUpdate {
+		s.trace.record("generic_session_update_suppressed")
 		return true
 	}
-	return s.inner.Send(ctx, msg)
+	s.trace.record("session_send_" + string(msg.Type))
+	ok := s.inner.Send(ctx, msg)
+	if !ok {
+		s.trace.record("session_send_failed_" + string(msg.Type))
+	}
+	return ok
 }
 
 func (s *asyncCollisionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
@@ -870,22 +884,22 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 			"content": []map[string]string{{"type": "input_text", "text": asyncCollisionPrompt}},
 		},
 	})
-	// The first turn is a real audio request supplied through the CLI's
-	// --audio-in-turn path. It causes the outstanding tool call. The
-	// positional prompt below is a distinct later turn, after response one
-	// completes, so the collision response is never an unsolicited frame.
-	add(gwtesting.DirectionClientToServer, "input_audio_buffer.append", inputAudioPayload(inputAudio))
-	add(gwtesting.DirectionClientToServer, "input_audio_buffer.commit", `{"type":"input_audio_buffer.commit"}`)
+	// The positional prompt is the first user turn and causes the outstanding
+	// tool call. The CLI delays --audio-in-turn input until this response ends,
+	// making the second response a real later turn rather than an unsolicited
+	// provider frame.
+	add(gwtesting.DirectionClientToServer, "conversation.item.create", string(userPayload))
 	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
 	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseOne+`"}}`)
 	add(gwtesting.DirectionServerToClient, "response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`"}}`)
 	add(gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`","arguments":`+strconvQuote(asyncCollisionToolArgs)+`}`)
 	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseOne+`","status":"completed"}}`)
 
-	// The later prompt is the independent response that overlaps the still
-	// outstanding call's result. The gated transport requires this request to
-	// follow the first response boundary before releasing collision audio.
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", string(userPayload))
+	// The scheduled audio is the independent later response that overlaps the
+	// still outstanding call's result. The gated transport requires this request
+	// to follow the first response boundary before releasing collision audio.
+	add(gwtesting.DirectionClientToServer, "input_audio_buffer.append", inputAudioPayload(inputAudio))
+	add(gwtesting.DirectionClientToServer, "input_audio_buffer.commit", `{"type":"input_audio_buffer.commit"}`)
 	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
 	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseTwo+`"}}`)
 	for _, delta := range collision {
@@ -982,7 +996,7 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 	if err != nil {
 		t.Fatalf("build OpenAI realtime session inferencer: %v", err)
 	}
-	sessionInferencer = &asyncCollisionSessionInferencer{inner: sessionInferencer}
+	sessionInferencer = &asyncCollisionSessionInferencer{inner: sessionInferencer, trace: executor.trace}
 	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
 		executor,
 		&mockInferencer{response: "unused"},
@@ -1271,19 +1285,16 @@ func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expec
 		return fmt.Errorf("provider exchange contains %d response.create events, want the initial audio turn, later collision turn, and result-driven continuation", len(responseCreateIndices))
 	}
 	if inputAppendIndex < 0 || inputCommitIndex < 0 {
-		return fmt.Errorf("provider exchange is missing the first-turn input audio append/commit boundary")
+		return fmt.Errorf("provider exchange is missing the later-turn input audio append/commit boundary")
 	}
-	if inputAppendIndex >= inputCommitIndex || inputCommitIndex >= responseCreateIndices[0] {
-		return fmt.Errorf("first-turn input audio boundary is out of order: append=%d commit=%d response.create=%d", inputAppendIndex, inputCommitIndex, responseCreateIndices[0])
-	}
-	if responseCreateIndices[0] >= userTurnIndices[0] || userTurnIndices[0] >= responseCreateIndices[1] {
-		return fmt.Errorf("later collision request is out of order: first response.create=%d later user=%d later response.create=%d", responseCreateIndices[0], userTurnIndices[0], responseCreateIndices[1])
+	if userTurnIndices[0] >= responseCreateIndices[0] || responseCreateIndices[0] >= inputAppendIndex || inputAppendIndex >= inputCommitIndex || inputCommitIndex >= responseCreateIndices[1] {
+		return fmt.Errorf("initial text/later-turn audio boundary is out of order: user=%d initial response.create=%d append=%d commit=%d later response.create=%d", userTurnIndices[0], responseCreateIndices[0], inputAppendIndex, inputCommitIndex, responseCreateIndices[1])
 	}
 	if expectProviderResult {
 		if len(providerResultIndices) != 1 {
 			return fmt.Errorf("%s provider result for %q was correlated %d times, want exactly one", asyncCollisionDisposition, asyncCollisionCallID, len(providerResultIndices))
 		}
-		if providerResultIndices[0] >= userTurnIndices[1] {
+		if providerResultIndices[0] <= responseCreateIndices[1] || providerResultIndices[0] >= userTurnIndices[1] {
 			return fmt.Errorf("%s provider result for %q was sent after the result-driven continuation user turn", asyncCollisionDisposition, asyncCollisionCallID)
 		}
 	} else if len(providerResultIndices) != 0 {
@@ -1356,7 +1367,8 @@ func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, true); err != nil {
-		t.Logf("async collision run: err=%v trace=%v outbound=%v", run.runErr, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
+		calls, returned := run.executor.snapshot()
+		t.Logf("async collision run: err=%v trace=%v outbound=%v calls=%+v returned=%+v deltas=%v", run.runErr, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned, summarizeAsyncCollisionDeltas(run.observer.snapshot()))
 		t.Fatal(err)
 	}
 	if err := validateAsyncCollisionProviderResult(run.outbound); err != nil {
@@ -1373,6 +1385,14 @@ func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string
 	return types
 }
 
+func summarizeAsyncCollisionDeltas(deltas []messages.StreamMessage) []string {
+	types := make([]string, len(deltas))
+	for i, delta := range deltas {
+		types[i] = string(delta.Type)
+	}
+	return types
+}
+
 // TestSessionAsyncToolResultProviderResultLossFailsVerifier is the result-loss
 // control. It keeps the collision, audio, continuation, and terminal path
 // healthy, while suppressing only a provider-facing function_call_output at
@@ -1384,7 +1404,7 @@ func TestSessionAsyncToolResultProviderResultLossFailsVerifier(t *testing.T) {
 		dropProviderResult: true,
 	})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, false); err != nil {
-		t.Fatalf("result-loss control changed an unrelated collision outcome: %v", err)
+		t.Fatalf("result-loss control changed an unrelated collision outcome: %v\ntrace=%v outbound=%v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
 	}
 
 	assertionErr := validateAsyncCollisionProviderResult(run.outbound)
@@ -1405,7 +1425,7 @@ func TestSessionAsyncToolResultAudioDamageFailsVerifier(t *testing.T) {
 	damaged[1][0] ^= 1
 	run := runAsyncCollisionScenario(t, damaged, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, false, true); err != nil {
-		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v", err)
+		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v\ntrace=%v outbound=%v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
 	}
 
 	assertionErr := verifyAsyncCollisionAudio(run.outputPath, collision, continuation)

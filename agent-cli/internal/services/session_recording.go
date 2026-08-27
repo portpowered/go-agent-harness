@@ -101,6 +101,15 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	if err != nil {
 		return err
 	}
+	// The positional message (or explicit --prompt seed) is the first user
+	// turn. Delay scheduled audio until that response completes so the two
+	// caller-provided input surfaces cannot race each other on the provider
+	// session's outbound queue.
+	if strings.TrimSpace(opts.Prompt) != "" || seed.Present {
+		for index := range scheduled {
+			scheduled[index].AfterCompletedTurns++
+		}
+	}
 	opts.AudioInputs = scheduled
 	opts.WaitForClose = true
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
