@@ -11,13 +11,16 @@ import (
 )
 
 // ChatCommand is a typed chat slash command. Name is the token typed after the
-// leading '/', Summary is the /help description, Hidden excludes the command
-// from rendered /help output (it still dispatches), and Handler runs it.
+// leading '/', Summary is the /help description, AutocompleteDescription is the
+// description shown for the command in the autocomplete popup, Hidden excludes
+// the command from rendered /help and autocomplete output (it still dispatches),
+// and Handler runs it.
 type ChatCommand struct {
-	Name    string
-	Summary string
-	Hidden  bool
-	Handler func(m ChatModel) (tea.Model, tea.Cmd)
+	Name                    string
+	Summary                 string
+	AutocompleteDescription string
+	Hidden                  bool
+	Handler                 func(m ChatModel) (tea.Model, tea.Cmd)
 }
 
 // chatCommands is the ordered registry of built-in chat commands; dispatch
@@ -28,9 +31,24 @@ var chatCommands []ChatCommand
 
 func init() {
 	chatCommands = []ChatCommand{
-		{Name: "system", Summary: "Show the system prompt for this session", Handler: ChatModel.handleSystemCommand},
-		{Name: "help", Summary: "Show this help message", Handler: ChatModel.handleHelpCommand},
-		{Name: "clear", Summary: "Clear conversation history and start fresh", Handler: ChatModel.handleClearCommand},
+		{
+			Name:                    "system",
+			Summary:                 "Show the system prompt for this session",
+			AutocompleteDescription: "Show the system prompt",
+			Handler:                 ChatModel.handleSystemCommand,
+		},
+		{
+			Name:                    "help",
+			Summary:                 "Show this help message",
+			AutocompleteDescription: "Show available commands",
+			Handler:                 ChatModel.handleHelpCommand,
+		},
+		{
+			Name:                    "clear",
+			Summary:                 "Clear conversation history and start fresh",
+			AutocompleteDescription: "Clear conversation history",
+			Handler:                 ChatModel.handleClearCommand,
+		},
 	}
 }
 
@@ -233,13 +251,19 @@ func (m *ChatModel) updateCmdAutocomplete() {
 	m.cmdAutocomplete.SetFilter(prefix)
 }
 
-// buildCmdSuggestions returns a merged list of built-in commands and available skills.
+// buildCmdSuggestions returns a merged list of visible registry commands and
+// available skills. Both command surfaces consume the same ordered registry;
+// skills retain the loader's existing order and follow the built-ins.
 func (m *ChatModel) buildCmdSuggestions() []Suggestion {
-	// Built-in commands.
-	suggestions := []Suggestion{
-		{Label: "system", Description: "Show the system prompt"},
-		{Label: "help", Description: "Show available commands"},
-		{Label: "clear", Description: "Clear conversation history"},
+	suggestions := make([]Suggestion, 0, len(chatCommands))
+	for _, cmd := range chatCommands {
+		if cmd.Hidden {
+			continue
+		}
+		suggestions = append(suggestions, Suggestion{
+			Label:       cmd.Name,
+			Description: cmd.AutocompleteDescription,
+		})
 	}
 	// Append skills from the loader.
 	loader, err := m.newSkillsLoader()

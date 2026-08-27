@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -178,6 +179,50 @@ func TestChatCommands_ResolutionFailuresAndEmptySkillList(t *testing.T) {
 	}
 	if suggestions := harness.model.buildCmdSuggestions(); len(suggestions) != 3 {
 		t.Fatalf("fallback command suggestions = %#v, want three built-ins", suggestions)
+	}
+}
+
+func TestChatCommands_AutocompleteUsesVisibleRegistryAndPreservesSkillOrder(t *testing.T) {
+	harness := newChatTestHarness(t)
+	original := chatCommands
+	t.Cleanup(func() { chatCommands = original })
+	chatCommands = append([]ChatCommand{
+		{
+			Name:                    "hidden",
+			Summary:                 "Hidden test-only command",
+			AutocompleteDescription: "Hidden autocomplete command",
+			Hidden:                  true,
+			Handler:                 func(m ChatModel) (tea.Model, tea.Cmd) { return m, nil },
+		},
+	}, original...)
+
+	for _, skill := range []struct {
+		name        string
+		description string
+	}{
+		{name: "alpha", description: "First skill"},
+		{name: "beta", description: "Second skill"},
+	} {
+		skillDir := filepath.Join(harness.globalFlags.ConfigDirPath, "skills", skill.name)
+		if err := os.MkdirAll(skillDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		contents := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n", skill.name, skill.description)
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	suggestions := harness.model.buildCmdSuggestions()
+	want := []Suggestion{
+		{Label: "system", Description: "Show the system prompt"},
+		{Label: "help", Description: "Show available commands"},
+		{Label: "clear", Description: "Clear conversation history"},
+		{Label: "alpha", Description: "First skill"},
+		{Label: "beta", Description: "Second skill"},
+	}
+	if !slices.Equal(suggestions, want) {
+		t.Fatalf("autocomplete suggestions = %#v, want %#v", suggestions, want)
 	}
 }
 
