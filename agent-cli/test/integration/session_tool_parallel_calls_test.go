@@ -188,10 +188,10 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 	// The session loop schedules the next prompt turn after the tool batch and
 	// forwards both completed results. The strict replay keeps the provider's
 	// continuation behind those exact correlated function_call_output frames.
-	clientEvent("conversation.item.create", parallelUserItemCreatePayload(parallelPrompt))
-	clientEventRaw("response.create", `{"type":"response.create"}`)
 	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallAlphaID, parallelResultContent[parallelCallAlphaID]))
 	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallBravoID, parallelResultContent[parallelCallBravoID]))
+	clientEvent("conversation.item.create", parallelUserItemCreatePayload(parallelPrompt))
+	clientEventRaw("response.create", `{"type":"response.create"}`)
 
 	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_parallel_2"}}`)
 	transcriptDelta, marshalErr := json.Marshal(map[string]string{
