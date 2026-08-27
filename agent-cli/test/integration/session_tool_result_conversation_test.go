@@ -271,6 +271,14 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 // transport with file-backed audio-in and --audio-out, capturing stdout so
 // transcript rendering can be asserted.
 func runToolResultConversation(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor) (stdout string, outputPath string, runErr error) {
+	return runToolResultConversationWithBounds(t, wavPath, wirePath, executor, 8*time.Second, 10*time.Second)
+}
+
+// runToolResultConversationWithBounds is the bounded variant used by negative
+// controls. A control that deliberately leaves the replay waiting for an
+// impossible second result must have a short, explicit liveness bound rather
+// than inheriting the positive path's larger audio-session allowance.
+func runToolResultConversationWithBounds(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor, maxDuration, contextTimeout time.Duration) (stdout string, outputPath string, runErr error) {
 	t.Helper()
 	outputPath = filepath.Join(t.TempDir(), "response.wav")
 	stdoutBuffer := &testStdoutBuffer{}
@@ -287,9 +295,9 @@ func runToolResultConversation(t *testing.T, wavPath, wirePath string, executor 
 		"--replay", wirePath,
 		"--audio-in", wavPath,
 		"--audio-out", outputPath,
-		"--max-duration", "8s",
+		"--max-duration", maxDuration.String(),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 	runErr = rootCmd.ExecuteContext(ctx)
 	return stdoutBuffer.String(), outputPath, runErr
