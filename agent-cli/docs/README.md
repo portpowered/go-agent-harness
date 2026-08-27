@@ -8,6 +8,7 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [Agent session record and replay](session-record-replay.md) explains how to record live Grok and OpenAI Realtime sessions, replay captures without provider network calls, and interpret replay divergence errors.
 - [Blind acceptance probes](acceptance-probe.md) explains the artifact-backed verdict contract and live/replay transport seam.
 - [Room live visualizer](room-visualizer.html) is a zero-build browser page for the room's transcript, diagnostic, and lifecycle SSE events.
+- [Room Phase 1 live acceptance](room-live-acceptance.md) documents the billed/non-CI three-participant smoke procedure, artifact inspection, C1 wedge rule, and honest scenario ledger.
 - [Files TODO](FILES.md) describes planned provider file-upload behavior and the proposed `agent files` commands for managing uploaded files.
 
 ## Fixture and Test Authors
