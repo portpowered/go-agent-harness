@@ -141,6 +141,65 @@ func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
 	return fmt.Errorf("%w: completed %d of %d", ErrSessionScheduledAudioIncomplete, opts.observer.turnsCompleted, opts.observer.scheduledInputs)
 }
 
+type sessionLoopMessageState struct {
+	promptSent bool
+	closeSent  bool
+}
+
+func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stop func() error, stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
+	opts.observer.observe(msg)
+	if err := writeSessionReplayMessage(out, msg); err != nil {
+		return state, false, errors.Join(err, stop())
+	}
+	if msg.Type == messages.StreamTypeSessionOpen {
+		if opts.Prompt != "" && !state.promptSent {
+			state.promptSent = true
+			userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
+			if err := loop.Send(ctx, []messages.Message{userMsg}); err != nil {
+				return state, false, errors.Join(fmt.Errorf("send session message: %w", err), stop())
+			}
+			opts.observer.noteUserTextInput(opts.Prompt)
+			if opts.awaitFirstTurn != nil {
+				if err := awaitSessionFirstTurn(ctx, opts.awaitFirstTurn); err != nil {
+					return state, false, errors.Join(fmt.Errorf("send session first turn: %w", err), stop())
+				}
+			}
+		}
+		if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !state.closeSent {
+			state.closeSent = true
+			if err := sendSessionClose(ctx, loop); err != nil {
+				return state, false, errors.Join(err, stop())
+			}
+		}
+		startAudio()
+	}
+	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
+		if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
+			return state, false, errors.Join(err, stopAndDrain())
+		}
+	}
+	if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent {
+		state.closeSent = true
+		if err := sendSessionClose(ctx, loop); err != nil {
+			return state, false, errors.Join(err, stop())
+		}
+	}
+	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !state.closeSent {
+		state.closeSent = true
+		if err := sendSessionClose(ctx, loop); err != nil {
+			return state, false, errors.Join(err, stop())
+		}
+	}
+	if opts.AudioIn != nil {
+		if shouldStopAudioInputSessionLoop(msg, opts, state.closeSent, awaitingResponse) {
+			return state, true, stopAndDrain()
+		}
+	} else if shouldStopSessionLoop(msg, opts, state.closeSent) {
+		return state, true, stopAndDrain()
+	}
+	return state, false, nil
+}
+
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	var rtcPumpErrors <-chan error
 	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
@@ -291,55 +350,14 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			cancel()
 			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
-			opts.observer.observe(msg)
-			if err := writeSessionReplayMessage(out, msg); err != nil {
-				return errors.Join(err, stop())
+			state, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, sessionLoopMessageState{promptSent: promptSent, closeSent: closeSent}, awaitingResponse, startAudio, stop, stopAndDrain)
+			promptSent = state.promptSent
+			closeSent = state.closeSent
+			if msgErr != nil {
+				return msgErr
 			}
-			if msg.Type == messages.StreamTypeSessionOpen {
-				if opts.Prompt != "" && !promptSent {
-					promptSent = true
-					userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
-					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
-						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
-					}
-					opts.observer.noteUserTextInput(opts.Prompt)
-					if opts.awaitFirstTurn != nil {
-						if err := awaitSessionFirstTurn(runCtx, opts.awaitFirstTurn); err != nil {
-							return errors.Join(fmt.Errorf("send session first turn: %w", err), stop())
-						}
-					}
-				}
-				if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !closeSent {
-					closeSent = true
-					if err := sendSessionClose(runCtx, loop); err != nil {
-						return errors.Join(err, stop())
-					}
-				}
-				startAudio()
-			}
-			if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
-				if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
-					return errors.Join(err, stopAndDrain())
-				}
-			}
-			if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
-				closeSent = true
-				if err := sendSessionClose(runCtx, loop); err != nil {
-					return errors.Join(err, stop())
-				}
-			}
-			if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !closeSent {
-				closeSent = true
-				if err := sendSessionClose(runCtx, loop); err != nil {
-					return errors.Join(err, stop())
-				}
-			}
-			if opts.AudioIn != nil {
-				if shouldStopAudioInputSessionLoop(msg, opts, closeSent, awaitingResponse) {
-					return stopAndDrain()
-				}
-			} else if shouldStopSessionLoop(msg, opts, closeSent) {
-				return stopAndDrain()
+			if stopLoop {
+				return nil
 			}
 		}
 	}
