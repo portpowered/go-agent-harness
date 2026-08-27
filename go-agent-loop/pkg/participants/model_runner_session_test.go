@@ -292,6 +292,74 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	}
 }
 
+func TestSessionModelRunner_DropsStaleAssistantOutputAfterBargeIn(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+
+	runner.UserAudioInbox <- []byte{1, 2, 3}
+	if first := waitForSentMessage(t, ctx, session); first.Type != messages.StreamTypeResponseCancel {
+		t.Fatalf("first outbound type = %s, want %s", first.Type, messages.StreamTypeResponseCancel)
+	}
+	if second := waitForSentMessage(t, ctx, session); second.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
+	}
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeTranscriptDelta,
+		Role:  messages.RoleUser,
+		Value: messages.NewTranscriptDeltaValue("interrupting input"),
+	})
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("stale text"),
+	})
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{4, 5, 6}),
+	})
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	sawUserTranscript := false
+	for {
+		msg, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+		if !ok {
+			t.Fatal("context cancelled waiting for cancelled response boundary")
+		}
+		switch msg.Type {
+		case messages.StreamTypeTranscriptDelta:
+			if msg.Role == messages.RoleUser {
+				sawUserTranscript = true
+			}
+		case messages.StreamTypeTextDelta, messages.StreamTypeAudioDelta:
+			t.Fatalf("stale assistant output escaped after barge-in: %s", msg.Type)
+		case messages.StreamTypeMessageEnd:
+			if !sawUserTranscript {
+				t.Fatal("interrupting user transcript was dropped with stale assistant output")
+			}
+			return
+		}
+	}
+}
+
 func TestSessionModelRunner_CompletedResponseDoesNotCancelNextAudio(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)

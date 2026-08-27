@@ -30,8 +30,12 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
-	scheduledAudio := len(opts.AudioInputs) > 0
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, scheduledAudio)
+	var sessionInferencer messages.SessionInferencer
+	if opts.audioInputSelected && len(opts.AudioInputs) == 0 {
+		sessionInferencer, err = factory.newOpenAIManualAudioSessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions)
+	} else {
+		sessionInferencer, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, len(opts.AudioInputs) > 0)
+	}
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -164,6 +168,17 @@ func buildOpenAIRealtimeSessionInferencerWithScheduledAudio(sessionCfg config.Op
 	opts := []oaiprovider.Option{
 		oaiprovider.WithWebSocketDialer(dialer),
 		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
+	}
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithManualAudio(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	if dialer == nil {
+		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
+	}
+	opts := []oaiprovider.Option{
+		oaiprovider.WithWebSocketDialer(dialer),
+		oaiprovider.WithManualAudioTurnBoundaries(),
 	}
 	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
 }

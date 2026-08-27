@@ -9,8 +9,13 @@ import (
 )
 
 func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
+	if p.manualAudioTurnBoundaries {
+		config.TurnDetection = nil
+	} else if p.clientOwnsAudioTurnBoundaries {
+		config.TurnDetection = clientOwnedAudioTurnDetection(config.TurnDetection)
+	}
 	if p.realtimeLegacySessionUpdate {
-		return buildLegacyRealtimeSessionUpdate(config, model, p.clientOwnsAudioTurnBoundaries)
+		return buildLegacyRealtimeSessionUpdate(config, model, p.manualAudioTurnBoundaries || p.clientOwnsAudioTurnBoundaries)
 	}
 
 	update := map[string]any{
@@ -23,7 +28,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 	if config.Instructions != "" {
 		update["instructions"] = config.Instructions
 	}
-	audio := buildRealtimeAudioConfig(config, p.clientOwnsAudioTurnBoundaries)
+	audio := buildRealtimeAudioConfig(config, p.manualAudioTurnBoundaries || p.clientOwnsAudioTurnBoundaries)
 	if len(audio) > 0 {
 		update["audio"] = audio
 	}
@@ -36,6 +41,19 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 		return models.SessionEvent{}, fmt.Errorf("marshal session update: %w", err)
 	}
 	return models.NewSessionUpdateEvent(data), nil
+}
+
+func clientOwnedAudioTurnDetection(existing *models.TurnDetectionConfig) *models.TurnDetectionConfig {
+	detection := models.TurnDetectionConfig{Type: "server_vad"}
+	if existing != nil {
+		detection = *existing
+		if detection.Type == "" {
+			detection.Type = "server_vad"
+		}
+	}
+	createResponse := false
+	detection.CreateResponse = &createResponse
+	return &detection
 }
 
 func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string, disableTurnDetection bool) (models.SessionEvent, error) {

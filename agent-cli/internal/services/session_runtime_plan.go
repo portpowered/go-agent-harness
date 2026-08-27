@@ -43,16 +43,17 @@ type sessionReplayDialer interface {
 }
 
 type sessionRuntimeFactory struct {
-	newDefaultLiveDialer               func() transport.Dialer
-	newRecordingDialer                 func(transport.Dialer, string, string) sessionRecordingDialer
-	newReplayDialer                    func(string) (sessionReplayDialer, error)
-	newReplayInferencer                func(string) messages.SessionInferencer
-	newGrokSessionInferencer           func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
-	newOpenAISessionInf                func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error)
-	newGrokSessionWithTools            func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
-	newOpenAISessionWithTools          func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
-	newOpenAIScheduledSessionWithTools func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
-	newRTCRuntime                      SessionRTCRuntimeFactory
+	newDefaultLiveDialer                 func() transport.Dialer
+	newRecordingDialer                   func(transport.Dialer, string, string) sessionRecordingDialer
+	newReplayDialer                      func(string) (sessionReplayDialer, error)
+	newReplayInferencer                  func(string) messages.SessionInferencer
+	newGrokSessionInferencer             func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
+	newOpenAISessionInf                  func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error)
+	newGrokSessionWithTools              func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newOpenAISessionWithTools            func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newOpenAIScheduledSessionWithTools   func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newOpenAIManualAudioSessionWithTools func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
+	newRTCRuntime                        SessionRTCRuntimeFactory
 }
 
 var defaultSessionRuntimeFactory = sessionRuntimeFactory{
@@ -83,6 +84,9 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	newOpenAIScheduledSessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithScheduledAudio(sessionCfg, voice, dialer, toolDefinitions)
 	},
+	newOpenAIManualAudioSessionWithTools: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithManualAudio(sessionCfg, voice, dialer, toolDefinitions)
+	},
 }
 
 func (f sessionRuntimeFactory) newGrokSessionInferencerForTools(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
@@ -100,6 +104,13 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 		return f.newOpenAISessionWithTools(sessionCfg, voice, dialer, toolDefinitions)
 	}
 	return f.newOpenAISessionInf(sessionCfg, voice, dialer)
+}
+
+func (f sessionRuntimeFactory) newOpenAIManualAudioSessionInferencerForTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	if f.newOpenAIManualAudioSessionWithTools != nil {
+		return f.newOpenAIManualAudioSessionWithTools(sessionCfg, voice, dialer, toolDefinitions)
+	}
+	return f.newOpenAISessionInferencerForTools(sessionCfg, voice, dialer, toolDefinitions, false)
 }
 
 type sessionRuntimePlan struct {

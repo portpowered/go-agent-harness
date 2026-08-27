@@ -154,6 +154,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
+	opts.SessionRunOptions.audioInputSelected = true
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
 		return err

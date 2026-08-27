@@ -76,6 +76,7 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioInputAndOutputAndTex
 	if !sessionAudioInputSelected(input) {
 		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
 	}
+	opts.audioInputSelected = true
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, &input)
 }
 
@@ -178,6 +179,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	}
 	var audioSource *sessionAudioSource
 	if audioInput != nil {
+		opts.audioInputSelected = true
 		if err := validateSessionAudioInput(*audioInput); err != nil {
 			return err
 		}
@@ -240,6 +242,9 @@ func runSessionWithRecordingDirectory(
 	destination, err := prepareSessionRecordingDestination(directory)
 	if err != nil {
 		return err
+	}
+	if audioInput != nil {
+		opts.audioInputSelected = true
 	}
 
 	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, withInstructions)

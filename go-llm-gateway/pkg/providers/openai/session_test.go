@@ -411,6 +411,64 @@ func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableTurnDetection(t *te
 	}
 }
 
+func TestConnectSession_ManualAudioTurnBoundariesDisableTurnDetection(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		name := "ga"
+		if legacy {
+			name = "legacy"
+		}
+		t.Run(name, func(t *testing.T) {
+			conn := newMockWebSocketConn()
+			options := []Option{
+				WithAPIKey("test-key"),
+				WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+				WithWebSocketDialer(&mockWebSocketDialer{conn: conn}),
+				WithManualAudioTurnBoundaries(),
+			}
+			if legacy {
+				options = append(options, WithLegacyRealtimeSessionUpdate())
+			}
+			provider := New(options...)
+
+			session, err := provider.ConnectSession(context.Background(), models.SessionConfig{Model: "gpt-realtime"})
+			if err != nil {
+				t.Fatalf("ConnectSession: %v", err)
+			}
+			defer func() { _ = session.Close() }()
+
+			clientMessages := conn.getClientMessages()
+			if len(clientMessages) != 1 {
+				t.Fatalf("client messages: got %d, want one initial session.update", len(clientMessages))
+			}
+			var envelope map[string]json.RawMessage
+			if err := json.Unmarshal(clientMessages[0], &envelope); err != nil {
+				t.Fatalf("unmarshal session.update: %v", err)
+			}
+			var sessionPayload map[string]any
+			if err := json.Unmarshal(envelope["session"], &sessionPayload); err != nil {
+				t.Fatalf("unmarshal session payload: %v", err)
+			}
+			if legacy {
+				if value, ok := sessionPayload["turn_detection"]; !ok || value != nil {
+					t.Fatalf("legacy turn_detection = %#v, want explicit null", value)
+				}
+				return
+			}
+			audio, ok := sessionPayload["audio"].(map[string]any)
+			if !ok {
+				t.Fatalf("audio config: got %T", sessionPayload["audio"])
+			}
+			input, ok := audio["input"].(map[string]any)
+			if !ok {
+				t.Fatalf("audio.input config: got %T", audio["input"])
+			}
+			if value, ok := input["turn_detection"]; !ok || value != nil {
+				t.Fatalf("GA turn_detection = %#v, want explicit null", value)
+			}
+		})
+	}
+}
+
 func TestConnectSession_SendsGARealtimeG711AudioFormatValues(t *testing.T) {
 	conn := newMockWebSocketConn()
 	dialer := &mockWebSocketDialer{conn: conn}

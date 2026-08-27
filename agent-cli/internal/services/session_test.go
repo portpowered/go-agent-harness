@@ -165,6 +165,40 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 	}
 }
 
+func TestPlanOpenAIRecordRuntime_SingularAudioUsesClientOwnedBoundaries(t *testing.T) {
+	var scheduledSessionCalled bool
+	factory := sessionRuntimeFactory{
+		newDefaultLiveDialer: func() transport.Dialer {
+			return &stubRuntimeDialer{id: "singular-audio-live"}
+		},
+		newRecordingDialer: func(transport.Dialer, string, string) sessionRecordingDialer {
+			return &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "singular-audio-recording"}}
+		},
+		newOpenAIManualAudioSessionWithTools: func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error) {
+			scheduledSessionCalled = true
+			return &scriptedSessionInferencer{}, nil
+		},
+		newOpenAISessionInf: func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error) {
+			return nil, errors.New("singular audio unexpectedly used server-owned session boundaries")
+		},
+	}
+
+	_, err := planOpenAIRecordRuntime(SessionRunOptions{
+		RecordPath:         filepath.Join(t.TempDir(), "singular-audio.session.json"),
+		Provider:           config.ProviderOpenAI,
+		Model:              "gpt-realtime",
+		APIKey:             "test-key",
+		ConfigDir:          t.TempDir(),
+		audioInputSelected: true,
+	}, factory)
+	if err != nil {
+		t.Fatalf("plan singular audio runtime: %v", err)
+	}
+	if !scheduledSessionCalled {
+		t.Fatal("singular audio runtime did not select client-owned commit/response boundaries")
+	}
+}
+
 func TestPlanSessionRuntime_GrokRecordPreservesCallerOwnedDialer(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, `

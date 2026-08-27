@@ -82,3 +82,12 @@ func WithClientOwnedAudioTurnBoundaries() Option {
 		p.clientOwnsAudioTurnBoundaries = true
 	}
 }
+
+// WithManualAudioTurnBoundaries disables provider-side turn detection for a
+// finite client-owned audio source. The caller must send one explicit
+// input_audio_buffer.commit and response.create pair per turn.
+func WithManualAudioTurnBoundaries() Option {
+	return func(p *OpenAIProvider) {
+		p.manualAudioTurnBoundaries = true
+	}
+}

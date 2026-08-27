@@ -126,6 +126,7 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if !sessionAudioInputSelected(input) {
 		return RunSession(ctx, out, opts)
 	}
+	opts.audioInputSelected = true
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
@@ -156,6 +157,7 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	if !sessionAudioInputSelected(input) {
 		return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)
 	}
+	opts.audioInputSelected = true
 	if seed.Present {
 		opts.Prompt = seed.Value
 	}

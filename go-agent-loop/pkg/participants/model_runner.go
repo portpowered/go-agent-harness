@@ -316,6 +316,14 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 	if isOutputDelta(msg) {
 		hasOutput = true
 	}
+	// A provider can have already queued output when the cancellation reaches
+	// it. Keep the response lifecycle boundary so the next response can start,
+	// but do not leak stale assistant content through the loop after the
+	// barge-in cancellation has been accepted locally. User ASR transcripts
+	// remain observable because they belong to the interrupting input.
+	if responseCancelSent && isStaleResponseDelta(msg) {
+		return responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted
+	}
 	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
 	// session parameters (model, instructions, modalities) if set.
 	if msg.Type == messages.StreamTypeSessionCreated && r.sessionConfig != nil {
@@ -808,6 +816,24 @@ func isOutputDelta(msg messages.StreamMessage) bool {
 		messages.StreamTypeToolCallEnd,
 		messages.StreamTypeRefusal:
 		return true
+	default:
+		return false
+	}
+}
+
+func isStaleResponseDelta(msg messages.StreamMessage) bool {
+	switch msg.Type {
+	case messages.StreamTypeTextDelta,
+		messages.StreamTypeReasoningDelta,
+		messages.StreamTypeAudioDelta,
+		messages.StreamTypeImageDelta,
+		messages.StreamTypeVideoDelta,
+		messages.StreamTypeFileDelta,
+		messages.StreamTypeEmbeddingDelta,
+		messages.StreamTypeRefusal:
+		return true
+	case messages.StreamTypeTranscriptDelta:
+		return msg.Role != messages.RoleUser
 	default:
 		return false
 	}
