@@ -18,6 +18,10 @@ var (
 	// ErrRoomParticipantToolMismatch identifies a capability factory that did
 	// not return exactly the tools named by the participant manifest.
 	ErrRoomParticipantToolMismatch = errors.New("room participant tool capabilities do not match the manifest")
+	// ErrRoomParticipantVoiceUnavailable identifies a room configuration that
+	// requests voice before the upstream SessionRunOptions.Voice contract is
+	// available to this branch.
+	ErrRoomParticipantVoiceUnavailable = errors.New("room participant voice configuration is unavailable")
 )
 
 // RoomParticipantToolCapabilities is the isolated tool surface for one room

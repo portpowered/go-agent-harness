@@ -1026,6 +1026,14 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 		if !ok {
 			value = ""
 		}
+		if voice := strings.TrimSpace(participant.Voice); voice != "" {
+			return nil, secrets, roomParticipantFailure(participant.ID, fmt.Errorf(
+				"%w: participant %q requested voice %q, but SessionRunOptions.Voice is not available; omit voice or land the upstream voice contract first",
+				ErrRoomParticipantVoiceUnavailable,
+				participant.ID,
+				voice,
+			), []string{value})
+		}
 		sessionOptions := SessionRunOptions{
 			Provider:        participant.Provider,
 			Model:           participant.Model,
