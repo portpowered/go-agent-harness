@@ -14,13 +14,17 @@ or wall-clock sleep race. The command shape is:
 
 ```text
 agent session --replay <temporary-session-capture> \
-  --audio-out <temporary-pcm16-wav> --max-duration 3s \
+  --record-dir <temporary-recording-dir> \
+  --audio-in-turn <temporary-pcm16-raw> \
+  --wait-for-close --audio-out <temporary-pcm16-wav> --max-duration 3s \
   "finish the pending weather lookup"
 ```
 
-The test also passes `--wait-for-close` and supplies the result to a temporary
-`--audio-out` path. The capture and PCM deltas are generated from the committed
-audio corpus inside the test, then validated by the shared replay validator.
+The scheduled audio file creates the first provider response; the positional
+prompt creates a distinct later response after that first response completes.
+The test supplies the result to a temporary `--audio-out` path. The capture and
+PCM deltas are generated from the committed audio corpus inside the test, then
+validated by the shared replay validator.
 
 ## Selected runtime disposition
 
@@ -35,24 +39,27 @@ call ID before that continuation request.
 
 The ordered collision is:
 
-1. The first response emits exactly one `get_weather` call with ID
+1. The first audio response emits exactly one `get_weather` call with ID
    `call_async_weather_1`; the controllable executor remains blocked.
-2. A distinct later response starts and emits two distinguishable PCM16 audio
-   deltas. The first delta is observed by the CLI stream observer before the
-   executor is released.
+2. After the first response boundary, a distinct later response is requested
+   and emits two distinguishable PCM16 audio deltas. The first delta is
+   observed by the CLI stream observer before the executor is released.
 3. The executor returns the sentinel
    `{"temperature_c":24,"condition":"clear","sentinel":"async-result-001"}`
-   with the original call ID. The local `RoleTool` result is observed exactly
-   once while the second unrelated audio delta is still pending.
-4. The executor return precedes the second response request. The remaining
-   current-response audio then completes byte-for-byte before the replay
-   releases the result-driven continuation audio.
+   with the original call ID while the second unrelated audio delta remains
+   gated. The local `RoleTool` result is observed exactly once before the
+   result-driven continuation.
+4. The current response's remaining audio then completes byte-for-byte. Under
+   the selected queue/sequence contract, a provider-facing result (when the
+   leased production forwarding contract exists) is delivered after that
+   boundary and before the result-driven continuation request. The replay then
+   releases the continuation audio.
 5. The exact fixture terminal event
    `[session closed: async_collision_complete]` is observed within the
    bounded duration.
 
 The positive verifier checks the executor call/result cardinality and
-correlation, local tool-result deltas, causal gate order, two response creates
+correlation, local tool-result deltas, causal gate order, three response creates
 with a continuation, exact concatenated PCM16 output, and the exact terminal
 boundary. It also contains a strict provider-facing `function_call_output`
 verifier. On the current origin/main baseline that verifier reports the
