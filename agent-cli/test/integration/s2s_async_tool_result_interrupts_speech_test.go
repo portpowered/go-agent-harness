@@ -121,7 +121,9 @@ func newAsyncCollisionToolExecutor(trace *asyncCollisionTrace) *asyncCollisionTo
 func (e *asyncCollisionToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
+	callNumber := len(e.calls)
 	e.mu.Unlock()
+	e.trace.record(fmt.Sprintf("tool_execute_%d", callNumber))
 	e.startedOnce.Do(func() {
 		e.trace.record("tool_started")
 		close(e.started)
@@ -236,6 +238,10 @@ func (o *asyncCollisionObserver) observe(msg messages.StreamMessage) {
 			o.trace.record("collision_response_completed")
 			o.collisionCompletedOnce.Do(func() { close(o.collisionCompleted) })
 		}
+	case *messages.ToolCallStartValue:
+		o.trace.record("tool_call_start_observed")
+	case *messages.ToolCallEndValue:
+		o.trace.record("tool_call_end_observed")
 	case *messages.TextDeltaValue:
 		if msg.Role == messages.RoleTool && value != nil && value.Content == asyncCollisionResult {
 			o.trace.record("tool_result_observed")
@@ -1404,7 +1410,8 @@ func TestSessionAsyncToolResultProviderResultLossFailsVerifier(t *testing.T) {
 		dropProviderResult: true,
 	})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, false); err != nil {
-		t.Fatalf("result-loss control changed an unrelated collision outcome: %v\ntrace=%v outbound=%v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
+		calls, returned := run.executor.snapshot()
+		t.Fatalf("result-loss control changed an unrelated collision outcome: %v\ntrace=%v outbound=%v calls=%+v returned=%+v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned)
 	}
 
 	assertionErr := validateAsyncCollisionProviderResult(run.outbound)
@@ -1425,7 +1432,8 @@ func TestSessionAsyncToolResultAudioDamageFailsVerifier(t *testing.T) {
 	damaged[1][0] ^= 1
 	run := runAsyncCollisionScenario(t, damaged, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, false, true); err != nil {
-		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v\ntrace=%v outbound=%v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound))
+		calls, returned := run.executor.snapshot()
+		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v\ntrace=%v outbound=%v calls=%+v returned=%+v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned)
 	}
 
 	assertionErr := verifyAsyncCollisionAudio(run.outputPath, collision, continuation)
