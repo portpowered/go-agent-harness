@@ -379,6 +379,10 @@ func (b *selfPlayPCMBridge) write(pcm []byte) error {
 }
 
 func (b *selfPlayPCMBridge) pump(ctx context.Context, loopReady <-chan *agentloop.AgentLoop, fail func(error), name string) {
+	b.pumpWithObserver(ctx, loopReady, fail, name, nil)
+}
+
+func (b *selfPlayPCMBridge) pumpWithObserver(ctx context.Context, loopReady <-chan *agentloop.AgentLoop, fail func(error), name string, observeInput func([]byte)) {
 	var loop *agentloop.AgentLoop
 	select {
 	case loop = <-loopReady:
@@ -399,6 +403,9 @@ func (b *selfPlayPCMBridge) pump(ctx context.Context, loopReady <-chan *agentloo
 					fail(fmt.Errorf("%s PCM bridge send: %w", name, sendErr))
 				}
 				return
+			}
+			if observeInput != nil {
+				observeInput(pcm)
 			}
 		}
 		if err != nil {
@@ -424,6 +431,11 @@ func (b *selfPlayPCMBridge) close() {
 }
 
 func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, customer messages.SessionInferencer, assistant messages.SessionInferencer) (SelfPlayResult, error) {
+	evidence, err := newSelfPlayEvidence(opts.OutputDir, opts, time.Now().UTC())
+	if err != nil {
+		return SelfPlayResult{StopReason: SelfPlayStopFailure}, err
+	}
+
 	bridgeCtx, bridgeCancel := context.WithCancel(ctx)
 	defer bridgeCancel()
 	stop := newSelfPlayStopState(bridgeCancel)
@@ -437,17 +449,36 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	bridgeWG.Add(2)
 	go func() {
 		defer bridgeWG.Done()
-		customerToAssistant.pump(bridgeCtx, assistantReady, stop.fail, "customer-to-assistant")
+		customerToAssistant.pumpWithObserver(bridgeCtx, assistantReady, stop.fail, "customer-to-assistant", func(pcm []byte) {
+			if side := evidence.side(1); side != nil && side.runtimeRecord != nil {
+				side.runtimeRecord.audioInput(pcm)
+			}
+		})
 	}()
 	go func() {
 		defer bridgeWG.Done()
-		assistantToCustomer.pump(bridgeCtx, customerReady, stop.fail, "assistant-to-customer")
+		assistantToCustomer.pumpWithObserver(bridgeCtx, customerReady, stop.fail, "assistant-to-customer", func(pcm []byte) {
+			if side := evidence.side(0); side != nil && side.runtimeRecord != nil {
+				side.runtimeRecord.audioInput(pcm)
+			}
+		})
 	}()
 
 	results := make(chan selfPlaySideResult, 2)
 	runSide := func(name string, side int, inferencer messages.SessionInferencer, prompt string, output *selfPlayPCMBridge, ready chan<- *agentloop.AgentLoop) {
-		observer := newSessionProgressObserver(nil, nil, opts.Provider, opts.Model)
+		sideEvidence := evidence.side(side)
+		sideEvidence.diagnosticErr = func(err error) {
+			wrapped := fmt.Errorf("%s diagnostic evidence: %w", name, err)
+			evidence.fail(wrapped)
+			stop.fail(wrapped)
+		}
+		observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
+		observer.runtime = sideEvidence.runtimeRecord
 		observer.streamObserver = func(msg messages.StreamMessage) {
+			if err := sideEvidence.observeStreamDelta(msg); err != nil {
+				evidence.fail(fmt.Errorf("%s stream delta evidence: %w", name, err))
+				stop.fail(fmt.Errorf("%s stream delta evidence: %w", name, err))
+			}
 			if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
 				value, ok := msg.Value.(*messages.AudioDeltaValue)
 				if !ok {
@@ -456,6 +487,13 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 				}
 				if err := output.write(value.Content); err != nil && !isSessionCancellation(err) && !stop.stopped() {
 					stop.fail(fmt.Errorf("%s PCM bridge write: %w", name, err))
+				}
+				if err := sideEvidence.observeAudio(value.Content); err != nil {
+					evidence.fail(fmt.Errorf("%s WAV evidence: %w", name, err))
+					stop.fail(fmt.Errorf("%s WAV evidence: %w", name, err))
+				}
+				if sideEvidence.runtimeRecord != nil {
+					sideEvidence.runtimeRecord.audioOutput(value.Content)
 				}
 			}
 			if msg.Type == messages.StreamTypeMessageEnd {
@@ -469,6 +507,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 			Done:         stop.done,
 			DoneErr:      stop.doneErr,
 			observer:     observer,
+			runtime:      sideEvidence.runtimeRecord,
 			loopReady:    ready,
 		})
 		results <- selfPlaySideResult{name: name, err: err}
@@ -515,5 +554,10 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		stop.fail(errors.New("self-play ended without a stop reason"))
 		result = stop.result()
 	}
-	return result, stop.doneErr()
+	runErr := stop.doneErr()
+	if evidenceErr := evidence.err(); evidenceErr != nil {
+		runErr = errors.Join(runErr, evidenceErr)
+	}
+	finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
+	return result, errors.Join(runErr, finalizeErr)
 }
