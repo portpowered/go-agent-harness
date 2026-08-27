@@ -185,6 +185,7 @@ func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *tes
 }
 
 func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
+	createResponse := true
 	req := SessionRequest{
 		Config: models.SessionConfig{
 			Model:      "original",
@@ -193,8 +194,11 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 				Name:       "original-tool",
 				Parameters: []models.ToolParameter{{Name: "original-param"}},
 			}},
-			TurnDetection: &models.TurnDetectionConfig{Type: "server_vad"},
-			Config:        []byte(`{"mode":"original"}`),
+			TurnDetection: &models.TurnDetectionConfig{
+				Type:           "server_vad",
+				CreateResponse: &createResponse,
+			},
+			Config: []byte(`{"mode":"original"}`),
 		},
 	}
 	si := NewSessionGatewayInferencer(&mockSessionGateway{session: newMockSession()}, WithSessionRequest(req))
@@ -204,6 +208,7 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 	req.Config.Tools[0].Name = "mutated-tool"
 	req.Config.Tools[0].Parameters[0].Name = "mutated-param"
 	req.Config.TurnDetection.Type = "mutated"
+	*req.Config.TurnDetection.CreateResponse = false
 	req.Config.Config[9] = 'X'
 
 	snapshot := si.Request()
@@ -212,6 +217,8 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 		snapshot.Config.Tools[0].Name != "original-tool" ||
 		snapshot.Config.Tools[0].Parameters[0].Name != "original-param" ||
 		snapshot.Config.TurnDetection.Type != "server_vad" ||
+		snapshot.Config.TurnDetection.CreateResponse == nil ||
+		!*snapshot.Config.TurnDetection.CreateResponse ||
 		string(snapshot.Config.Config) != `{"mode":"original"}` {
 		t.Fatalf("request was not defensively copied: %#v", snapshot.Config)
 	}
@@ -220,6 +227,7 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 	snapshot.Config.Modalities[0] = models.SessionModalityAudio
 	snapshot.Config.Tools[0].Parameters[0].Name = "snapshot-mutated"
 	snapshot.Config.TurnDetection.Type = "snapshot-mutated"
+	*snapshot.Config.TurnDetection.CreateResponse = false
 	snapshot.Config.Config[9] = 'Y'
 
 	again := si.Request()
@@ -227,8 +235,62 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 		again.Config.Modalities[0] != models.SessionModalityText ||
 		again.Config.Tools[0].Parameters[0].Name != "original-param" ||
 		again.Config.TurnDetection.Type != "server_vad" ||
+		again.Config.TurnDetection.CreateResponse == nil ||
+		!*again.Config.TurnDetection.CreateResponse ||
 		string(again.Config.Config) != `{"mode":"original"}` {
 		t.Fatalf("Request returned mutable internal state: %#v", again.Config)
+	}
+}
+
+func TestSessionGatewayInferencer_ConnectSessionClonesTurnDetectionCreateResponse(t *testing.T) {
+	createResponse := true
+	sess := newMockSession()
+	gateway := &mockSessionGateway{session: sess}
+	si := NewSessionGatewayInferencer(gateway, WithSessionRequest(SessionRequest{
+		Config: models.SessionConfig{
+			Model: "gpt-realtime",
+			TurnDetection: &models.TurnDetectionConfig{
+				Type:           "server_vad",
+				CreateResponse: &createResponse,
+			},
+		},
+	}))
+
+	// The caller's bool is independent from the inferencer's persistent request.
+	createResponse = false
+	requestSnapshot := si.Request()
+	if requestSnapshot.Config.TurnDetection == nil || requestSnapshot.Config.TurnDetection.CreateResponse == nil || !*requestSnapshot.Config.TurnDetection.CreateResponse {
+		t.Fatalf("Request lost the configured CreateResponse value: %#v", requestSnapshot.Config.TurnDetection)
+	}
+
+	// A public Request snapshot is also independent from future connections.
+	*requestSnapshot.Config.TurnDetection.CreateResponse = false
+	if sessionRequest := si.Request(); sessionRequest.Config.TurnDetection == nil || sessionRequest.Config.TurnDetection.CreateResponse == nil || !*sessionRequest.Config.TurnDetection.CreateResponse {
+		t.Fatalf("Request snapshot mutated persistent CreateResponse state: %#v", sessionRequest.Config.TurnDetection)
+	}
+
+	firstSession, err := si.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("first ConnectSession: %v", err)
+	}
+	defer func() { _ = firstSession.Close() }()
+
+	firstConfig := gateway.capturedConfig
+	if firstConfig.TurnDetection == nil || firstConfig.TurnDetection.CreateResponse == nil || !*firstConfig.TurnDetection.CreateResponse {
+		t.Fatalf("ConnectSession lost the configured CreateResponse value: %#v", firstConfig.TurnDetection)
+	}
+
+	// The gateway's captured connection request must not alias persistent state.
+	*firstConfig.TurnDetection.CreateResponse = false
+	secondSession, err := si.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("second ConnectSession: %v", err)
+	}
+	defer func() { _ = secondSession.Close() }()
+
+	secondConfig := gateway.capturedConfig
+	if secondConfig.TurnDetection == nil || secondConfig.TurnDetection.CreateResponse == nil || !*secondConfig.TurnDetection.CreateResponse {
+		t.Fatalf("connection snapshot mutated persistent CreateResponse state: %#v", secondConfig.TurnDetection)
 	}
 }
 
