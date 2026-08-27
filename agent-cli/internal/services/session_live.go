@@ -210,10 +210,11 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 			return state, false, errors.Join(err, stop())
 		}
 	}
-	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !state.closeSent {
-		state.closeSent = true
-		if err := sendSessionClose(ctx, loop); err != nil {
-			return state, false, errors.Join(err, stop())
+	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd {
+		var closeErr error
+		state.closeSent, closeErr = closeScheduledAudioSessionIfReady(ctx, loop, opts, state.closeSent)
+		if closeErr != nil {
+			return state, false, errors.Join(closeErr, stop())
 		}
 	}
 	if opts.AudioIn != nil {
@@ -230,6 +231,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	var rtcPumpErrors <-chan error
 	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
 	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
+	observedInferencer.progress = opts.observer
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -332,8 +334,15 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// error, or max-duration expiry may end the session.
 	awaitingResponse := opts.AudioIn == nil
 	done := opts.Done
+	toolResultAccepted := opts.observer.toolResultAcceptedEvents()
 	for {
 		select {
+		case <-toolResultAccepted:
+			var closeErr error
+			closeSent, closeErr = closeScheduledAudioSessionIfReady(runCtx, loop, opts, closeSent)
+			if closeErr != nil {
+				return errors.Join(closeErr, stop())
+			}
 		case audioErr := <-audioCh:
 			audioCh = nil
 			if audioErr != nil && !isSessionCancellation(audioErr) {
@@ -421,11 +430,25 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	}
 }
 
+// closeScheduledAudioSessionIfReady is shared by provider response handling
+// and the asynchronous tool-result acceptance wake-up. The latter is needed
+// because the final accepted result can arrive after the final response.done.
+func closeScheduledAudioSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, opts sessionLoopOptions, closeSent bool) (bool, error) {
+	if closeSent || !opts.CloseAfterScheduledAudio || opts.observer == nil || !opts.observer.scheduledAudioComplete() {
+		return closeSent, nil
+	}
+	if err := sendSessionClose(ctx, loop); err != nil {
+		return closeSent, err
+	}
+	return true, nil
+}
+
 type observedSessionInferencer struct {
-	inner   messages.SessionInferencer
-	done    chan struct{}
-	once    sync.Once
-	runtime *sessionRuntimeObservationRecorder
+	inner    messages.SessionInferencer
+	done     chan struct{}
+	once     sync.Once
+	runtime  *sessionRuntimeObservationRecorder
+	progress *sessionProgressObserver
 
 	mu         sync.Mutex
 	connectErr error
@@ -478,7 +501,7 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		case <-ctx.Done():
 		}
 	}()
-	return &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime}, nil
+	return &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress}, nil
 }
 
 // connectFailure returns the remembered connect error, if any.
@@ -524,17 +547,33 @@ type observedSession struct {
 	messages.Session
 	closeDone func()
 	runtime   *sessionRuntimeObservationRecorder
+	progress  *sessionProgressObserver
 	once      sync.Once
 }
 
 var _ messages.Session = (*observedSession)(nil)
 
 func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	ok := s.Session.Send(ctx, msg)
-	if ok && msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+// SendWithOutcome keeps the provider-facing acceptance result visible at the
+// session lifecycle boundary. Tool calls are resolved only after this method
+// reports success from the wrapped provider session.
+func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
+	if !outcome.OK() {
+		return outcome
+	}
+	if msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
 		s.runtime.inputCommit()
 	}
-	return ok
+	if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
+		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+			s.progress.noteToolResultAccepted(value.ToolCallID)
+		}
+	}
+	return outcome
 }
 
 // SendMessage forwards the optional complete-message provider capability. The

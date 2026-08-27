@@ -10,7 +10,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -155,9 +157,10 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 }
 
 // sessionProgressObserver derives metrics observations and diagnostic records
-// from the delta stream consumed by the session runner. It is owned by the
-// runner's single consumer goroutine; no internal locking is required except
-// for the exactly-once terminal emission guard.
+// from the delta stream consumed by the session runner. Most state is owned by
+// the runner's single consumer goroutine. Outstanding tool state is also
+// touched by the provider-send wrapper, so that small state machine has its
+// own synchronization boundary.
 type sessionProgressObserver struct {
 	sink           SessionDiagnosticSink
 	recorder       metrics.Recorder
@@ -178,6 +181,11 @@ type sessionProgressObserver struct {
 	counters              audioTurnCounters
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
+
+	toolStateMu          sync.Mutex
+	unresolvedToolCalls  map[string]struct{}
+	acceptedToolCalls    map[string]struct{}
+	toolResultAcceptedCh chan struct{}
 
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
@@ -206,19 +214,113 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
-		sink:           sink,
-		recorder:       recorder,
-		productionSink: productionSink,
-		provider:       provider,
-		model:          model,
+		sink:                 sink,
+		recorder:             recorder,
+		productionSink:       productionSink,
+		provider:             provider,
+		model:                model,
+		unresolvedToolCalls:  make(map[string]struct{}),
+		acceptedToolCalls:    make(map[string]struct{}),
+		toolResultAcceptedCh: make(chan struct{}, 1),
 	}
 }
 
-// account is the single production accounting seam: every counted byte
-// crosses here exactly once, advancing the runtime-owned metrics sink, the
-// optional recorder, and both the per-turn counters and lifetime totals in one
-// step. Recording failures are diagnostics-only and never alter session
-// behavior.
+func (o *sessionProgressObserver) ensureToolStateLocked() {
+	if o.unresolvedToolCalls == nil {
+		o.unresolvedToolCalls = make(map[string]struct{})
+	}
+	if o.acceptedToolCalls == nil {
+		o.acceptedToolCalls = make(map[string]struct{})
+	}
+	if o.toolResultAcceptedCh == nil {
+		o.toolResultAcceptedCh = make(chan struct{}, 1)
+	}
+}
+
+// observeProviderToolCall records the creation of a provider tool obligation.
+// The completed call event is the first point at which the full provider call
+// identity is known. Empty IDs are deliberately ignored because they cannot be
+// correlated with a later result.
+func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEndValue) {
+	if o == nil || v == nil || strings.TrimSpace(v.ToolCallID) == "" {
+		return
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	o.ensureToolStateLocked()
+	if _, accepted := o.acceptedToolCalls[v.ToolCallID]; accepted {
+		return
+	}
+	o.unresolvedToolCalls[v.ToolCallID] = struct{}{}
+}
+
+// noteToolResultAccepted resolves exactly one provider call after the
+// provider-facing session send boundary reports success. Execution completion,
+// queueing, and rejected sends do not reach this method.
+func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
+		return
+	}
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	if _, outstanding := o.unresolvedToolCalls[callID]; !outstanding {
+		o.toolStateMu.Unlock()
+		return
+	}
+	delete(o.unresolvedToolCalls, callID)
+	o.acceptedToolCalls[callID] = struct{}{}
+	acceptedCh := o.toolResultAcceptedCh
+	o.toolStateMu.Unlock()
+
+	// One wake-up is enough even when several results are accepted before the
+	// session loop selects this branch: the close predicate observes the whole
+	// current set, not a count of wake-ups.
+	select {
+	case acceptedCh <- struct{}{}:
+	default:
+	}
+}
+
+func (o *sessionProgressObserver) toolResultAcceptedEvents() <-chan struct{} {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	ch := o.toolResultAcceptedCh
+	o.toolStateMu.Unlock()
+	return ch
+}
+
+func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	return len(o.unresolvedToolCalls) > 0
+}
+
+// unresolvedToolCallIDs returns a deterministic snapshot for lifecycle
+// consumers and future terminal diagnostics.
+func (o *sessionProgressObserver) unresolvedToolCallIDs() []string {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.unresolvedToolCalls))
+	for id := range o.unresolvedToolCalls {
+		ids = append(ids, id)
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids
+}
+
+// account is the single observation seam: every counted byte crosses here
+// exactly once, forwarding to the metrics recorder and advancing both the
+// per-turn counters and the lifetime totals in one step. Recording failures
+// are diagnostics-only and never alter session behavior.
 func (o *sessionProgressObserver) account(direction metrics.Direction, modality metrics.Modality, n int) {
 	if o == nil || n <= 0 {
 		return
@@ -290,6 +392,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
 		o.toolDeltaSeen = true
 	case *messages.ToolCallEndValue:
+		o.observeProviderToolCall(v)
 		o.emitToolCallRecord(v)
 		if !o.toolDeltaSeen {
 			o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.Arguments))
@@ -357,7 +460,7 @@ func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
 // owns the decision to close after the schedule, while replay follows its
 // captured lifecycle.
 func (o *sessionProgressObserver) scheduledAudioComplete() bool {
-	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs
+	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs && !o.hasUnresolvedToolCalls()
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on
