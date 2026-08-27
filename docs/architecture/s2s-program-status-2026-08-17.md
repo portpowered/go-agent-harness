@@ -1,6 +1,6 @@
 # s2s program — real status and restart plan (2026-08-17)
 
-> **v4a-tool-single-call status update (2026-08-24).** The vertical's
+> **Historical v4a-tool-single-call status update (2026-08-24).** The vertical's
 > CLI-verified hermetic integration proof landed in
 > `agent-cli/test/integration/session_tool_single_call_test.go` (PR:
 > s2s-v4a-tool-single-call). Proven end to end through the real `agent session`
@@ -8,15 +8,12 @@
 > replayed provider exchange carries exactly one named function tool call with
 > expected arguments, output speech produced after the tool call, and a
 > deterministic negative control proving the exactly-one invocation assertion
-> rejects a suppressed tool call. Remaining for full v4a "executor round trip"
-> proven status (out of this test lane's lease, filed separately): the session
-> loop in `services/session_live.go` constructs its `agentloop` without
-> `WithToolExecutor`, so the composed tool executor never executes the named
-> tool, and the realtime outbound translation does not yet forward tool
-> results to the provider. The positive-path test skips with that exact reason
-> and turns green automatically once that wiring lands.
+> rejects a suppressed tool call. At that snapshot the executor and provider
+> result seams were still pending; they were subsequently delivered by merged
+> PR #175 (session executor wiring) and merged PR #192 (the composed tool-call
+> proof). The historical snapshot must not be read as the current main state.
 
-> **CLI-verifiable evidence contract.** The proving test is
+> **Historical CLI-verifiable evidence contract.** The proving test is
 > `agent-cli/test/integration/session_tool_single_call_test.go`. Its command
 > shape is the real session surface (shown with the test's temporary replay
 > and output paths):
@@ -27,12 +24,11 @@
 > `get_weather` call with `{"city":"Lisbon"}` and scripted output audio. The
 > transport-level assertion is ordered and counted: one named provider call
 > with the expected arguments, then valid non-empty output audio. The executor
-> invocation and correlated result-delivery assertions are present in the
-> positive test but remain skipped until the out-of-lease session wiring emits
-> the provider-facing result; they must then sit between the call and resumed
-> audio. The no-invocation control uses the identical CLI and audio input with
-> the call suppressed; it still emits response audio, but the shared
-> exactly-one assertion fails with a missing `get_weather` invocation.
+> invocation and correlated result-delivery assertions were waiting on the
+> out-of-lease session wiring at that snapshot. The no-invocation control uses
+> the identical CLI and audio input with the call suppressed; it still emits
+> response audio, but the shared exactly-one assertion fails with a missing
+> `get_weather` invocation.
 > The longer `tool_request_16k.wav` corpus asset is 20.5 seconds and does not
 > fit the session runtime's current three-second bounded replay window, so it
 > is not substituted silently. This evidence is specifically the v4a tool
@@ -41,6 +37,8 @@
 
 > **Reconciliation (2026-08-25, lane `s2s-b3-audioin-truthing`).** PR #98 closed unmerged as superseded 2026-08-24 (closure comment 5402348205): every behavior it carried landed via #143/#150/#152/#154/#156 and is formally proven by #157's hermetic CLI roundtrip proof with negative controls; #110 merged independently (`c90ff89f`, 2026-08-25) with no seam dependency. All #98-citing rows below are amended in place; the capability was re-proven empirically on clean `origin/main` = `c5f5769` (2026-08-25) — all three #157 proof tests green under `CGO_ENABLED=0 -tags=nomicrophone`.
 
+> **Current lifecycle reconciliation (2026-08-27, lane `s2s-postdrain-pr-closure-and-status-doc-reconcile`).** Fresh `origin/main` is `4f061a0bfdcf2fd4f9b07ae006b2d1fb71ee2647`. PR #175 is **merged** (`e846c67c`, 2026-08-26T00:13:03Z) and proves the #83 session executor outcome. Independent mainline commits `29a2ec5` and `5544500` prove the provider-wire forwarding, OpenAI `function_call_output` serialization, composed delivery, and fixture-pairing outcomes; PR #181's original commits did not merge. PR #183 is **merged** (`6439b84a`, 2026-08-27T06:46:30Z), #185 is **merged** (`4265de1d`, 2026-08-27T06:35:31Z), and #192 is **merged** at the current main tip (`4f061a0b`, 2026-08-27T08:43:14Z). After evidence comments, #83 is **closed-superseded** (2026-08-27T08:57:51Z) and #181 is **closed-superseded** (2026-08-27T08:57:54Z); neither original PR merged. PR #184 remains **open-in-review** and is not predeclared merged. `factory-terminal` is a separate factory lifecycle state, not a GitHub merge result; this document makes no factory-terminal claim where no durable factory record is available.
+
 Ground truth from git + GitHub, not from the factory board (the board was
 in-memory and is gone). Everything here is reproducible with the commands in §8.
 
@@ -48,19 +46,19 @@ in-memory and is gone). Everything here is reproducible with the commands in §8
 
 ## 0. The one-paragraph version
 
-152 lanes were planned. **77 merged, 15 are stuck in review, 58 never started —
-and not one of the 58 can start**, because every one is transitively blocked
-behind the 15. The 77 that merged are foundation: file splits, coverage, new
-packages, CI gates. The 15 that are stuck are precisely the *integration seams*
-— the code that connects those new packages to the running CLI — and they are
-stuck for one shared, mechanical reason (§3). Net effect: on `main` today the
-product does **text in → audio out**, and nothing else. Audio in, images, tools,
-microphones, WebRTC, and the entire probe/acceptance layer are all unreachable.
-**No acceptance criterion for this program is currently testable.**
+The original 2026-08-17 inventory was **77 merged, 15 stuck in review, and 58
+never started**. That is a historical baseline, not the current GitHub state.
+At the 2026-08-27 reconciliation, #175, #183, #185, and #192 are merged;
+#83 and #181 are closed-superseded after their outcomes were independently
+verified on `main`; and #184 remains the open review vehicle for this narrow
+status-document lane. The current mainline includes the session executor,
+provider-wire result delivery, and the composed tool-call proof. Current open
+PRs outside the two closed originals are recorded as execution-time drift in
+§14; no open PR is described as merged.
 
 ---
 
-## 1. What actually works on `main` today (verified)
+## 1. What actually worked on `main` at the 2026-08-17 snapshot (historical baseline)
 
 - `main` CI: **green** (last 4 runs success).
 - Builds clean with `CGO_ENABLED=0 go build ./agent-cli/... ./go-llm-gateway/...`.
@@ -77,9 +75,21 @@ microphones, WebRTC, and the entire probe/acceptance layer are all unreachable.
   `--record-dir`, `--transport webrtc`, `agent devices list`, `agent probe run`.
 - `agent-cli/internal/services/` contains `session_audio_out.go` and no
   `session_audio_in.go`, `session_image.go`, or `session_tools.go`. Those files
-  exist **only inside the 15 open PRs**.
+  existed **only inside the 15 open PRs at that snapshot**.
 
-### 1.1 v10 WebRTC external source — bounded evidence (verified 2026-08-26)
+### 1.1 Current main corrections (verified 2026-08-27)
+
+- The session path now carries the composed executor through
+  `SessionRunOptions`, `NewSessionCommand`, the runtime plan, and
+  `agentloop.WithToolExecutor` via merged PR #175 (`e846c67c`).
+- Main now contains `ToolResultForwarder` delivery and OpenAI Realtime
+  `function_call_output` serialization in `29a2ec5`, with composed delivery and
+  fixture-pairing validation in `5544500`; focused tests for all four named
+  outcomes passed on this fresh checkout.
+- The current main tip is the merge commit for PR #192. PR #183 and PR #185
+  are also merged; their merge state is recorded in the lifecycle table below.
+
+### 1.2 v10 WebRTC external source — bounded evidence (verified 2026-08-26)
 
 The v10 vertical is proven through the shipped root CLI after the media/look
 surface landed on `origin/main`. No credentialed or live-camera claim is made.
@@ -133,20 +143,52 @@ coverage, and does not claim a credentialed or live-camera run.
 
 ## 2. Inventory
 
+The numeric inventory below is the 2026-08-17 baseline. The current
+execution-time lifecycle for the affected PRs is recorded immediately below;
+it supersedes the old open-PR table without rewriting the historical analysis.
+
 | bucket | count |
 |---|---|
-| Lanes merged | **77** |
-| Repair lanes merged (out-of-band fixes) | 4 (#66, #128, #136, #137) |
-| Lanes with an **open PR** | **15** |
-| Repair lane with an open PR | 1 (#138) |
-| Lanes with **no branch and no PR** (never started) | **58** |
+| Lanes merged | **77 (2026-08-17 baseline)** |
+| Repair lanes merged (out-of-band fixes) | 4 (#66, #128, #136, #137; baseline) |
+| Lanes with an **open PR** | **15 (2026-08-17 baseline)** |
+| Repair lane with an open PR | 1 (#138; baseline) |
+| Lanes with **no branch and no PR** (never started) | **58 (2026-08-17 baseline)** |
 | Operator loopback items (no PR by design) | 2 |
 | **Total named lanes** | **152** |
 
 There are no orphan branches: every lane either has a PR or has nothing.
-Nothing is half-pushed.
+Nothing was half-pushed at that snapshot.
 
-### 2.1 What merged (77) — by group
+### Current lifecycle snapshot (2026-08-27)
+
+The fresh-main execution snapshot was `origin/main` =
+`4f061a0bfdcf2fd4f9b07ae006b2d1fb71ee2647`. The pre-closure open set included
+`#83`, `#181`, `#182`, `#184`, `#199`, `#210`, and `#230`. This lane verified
+and dispositioned only #83 and #181; the other open PRs remain owned by their
+respective lanes.
+
+| PR | lane tag | evidence-backed lifecycle state |
+|---|---|---|
+| **#83** | `s2s-b3-session-tool-executor-wiring` | **closed-superseded** after #175 merged (closed 2026-08-27T08:57:51Z UTC; [closure comment](https://github.com/portpowered/go-agent-harness/pull/83#issuecomment-5436732135)); #83's original commit did not merge |
+| **#175** | `s2s-recut-tool-executor-wiring-pr83` | **merged** 2026-08-26T00:13:03Z UTC, `e846c67c`; landed the session executor wiring |
+| **#181** | `s2s-provider-wire-tool-result-delivery` | **closed-superseded** after independent mainline proof (closed 2026-08-27T08:57:54Z UTC; [closure comment](https://github.com/portpowered/go-agent-harness/pull/181#issuecomment-5436732717)); #181's original commits did not merge |
+| **#165** | `s2s-v2d-audio-in-multi-utterance` | **closed-superseded** 2026-08-25T23:42:54Z UTC; successor #177 merged 2026-08-25T20:30:39Z UTC (`6b397635`); #165's original commit did not merge |
+| **#166** | `s2s-v6d-error-malformed-response` | **closed-superseded** 2026-08-25T23:42:58Z UTC; successor #178 merged 2026-08-25T20:37:13Z UTC (`d0270fcd`); #166's original commit did not merge |
+| **#167** | `s2s-v2e-audio-in-truncated` | **closed-superseded** 2026-08-25T23:43:00Z UTC; successor #179 merged 2026-08-25T20:42:42Z UTC (`87871926`); #167's original commit did not merge |
+| **#168** | `s2s-v2c-audio-in-silence` | **closed-superseded** 2026-08-25T23:43:03Z UTC; successor #176 merged 2026-08-25T20:16:54Z UTC (`3f93068e`); #168's original commit did not merge |
+| **#183** | `s2s-chatcore-typed-slash-command-contract` | **merged** 2026-08-27T06:46:30Z UTC, `6439b84a` |
+| **#185** | `s2s-v2b-audio-in-long` | **merged** 2026-08-27T06:35:31Z UTC, `4265de1d` |
+| **#192** | `s2s-e2e-tool-call-conversation` | **merged** 2026-08-27T08:43:14Z UTC, `4f061a0b`; current `origin/main` tip |
+| **#184** | `s2s-postdrain-pr-closure-and-status-doc-reconcile` | **open-in-review**; this is the sole lane vehicle and is not predeclared merged |
+
+The remaining open drift PRs at this snapshot were #182, #199, #210, and
+#230; this lane did not reclassify or mutate them. `factory-terminal`, when
+used by a factory record, is independent of these GitHub lifecycle labels; no
+durable factory record is available here, so no row is labeled
+`factory-terminal`.
+
+### 2.1 What merged (77) — by group (historical 2026-08-17 baseline)
 
 | group | count | what it delivered |
 |---|---|---|
@@ -159,7 +201,10 @@ Nothing is half-pushed.
 | `s2s-lai-*` | 3 | LocalAI realtime fixture, LocalAI gateway provider, qwen3-tts GGUF format check |
 | `s2s-b0-*` | 1 | `gpt-realtime-2.1-mini` accepted; realtime model set is data, not a constant |
 
-### 2.2 The 15 open PRs — what each one is, and what to do with it
+### 2.2 The 15 open PRs at the 2026-08-17 snapshot (historical)
+
+The following table is retained as the original analysis. It is not a current
+open-PR inventory; use the current lifecycle snapshot above for present state.
 
 Ranked by **how many of the 58 not-started lanes it transitively gates.**
 
@@ -167,7 +212,7 @@ Ranked by **how many of the 58 not-started lanes it transitively gates.**
 |---|---|---|---|---|---|---|
 | **#118** | `s2s-b2-transport-grok-retype` | Retype the grok provider onto `pkg/transport` and migrate its consumers | **1 file, +7/−3** (`grok/dialer.go`) | **41** | **42 of 58** | **RESTART** |
 | **#98** | `s2s-b3-session-audio-in-file` | `agent session --audio-in` — feed a WAV into a realtime session | +1465/−0, 3 files (+10 to `cli/session.go`) | 59 | **24 of 58** | **CLOSED** — superseded 2026-08-24 (reconciliation note above) |
-| **#83** | `s2s-b3-session-tool-executor-wiring` | Wire the tool executor into the realtime session path | +241/−0, 2 **new** files, touches nothing existing | 55 | 10 of 58 | **RESTART** |
+| **#83** | `s2s-b3-session-tool-executor-wiring` | Wire the tool executor into the realtime session path | +241/−0, 2 **new** files, touches nothing existing | 55 | 10 of 58 | **RESTART at the 2026-08-17 snapshot; subsequently closed-superseded after #175 merged** |
 | **#97** | `s2s-b3-session-image-input` | `agent session --image` — send an image into a turn | +948/−0 (+12 to `cli/session.go`) | 56 | 7 of 58 | CONTINUE (blocked, §4.2) |
 | **#113** | `s2s-b2-audio-device-source-and-sink` | Device-backed AudioSource/sink behind the existing interface | +758/−0, 4 **new** files in `internal/audio` | 62 | 6 of 58 | CONTINUE (blocked, §4.2) |
 | **#132** | `s2s-b4-rtc-audio-track-egress` | Outbound WebRTC track, PCM16 → Opus | +1167/−0, `pkg/transport/rtc` | 28 | 6 of 58 | CONTINUE — closest to done |
@@ -183,24 +228,26 @@ Ranked by **how many of the 58 not-started lanes it transitively gates.**
 
 Also open: **#138** `s2s-repair-rtc-opus-codec-owner`, an out-of-band repair lane.
 
-### 2.3 The 58 that never started
+### 2.3 The 58 that never started (historical 2026-08-17 baseline)
 
-None has a branch. All are blocked. Grouped by layer, with the immediate blocker.
+None had a branch at the 2026-08-17 snapshot, and all were blocked then.
+Grouped by layer, with the immediate blocker; the dependency cells below carry
+current landing provenance where the former blocker has since resolved.
 
 **Ready the moment a specific PR merges (10 lanes) — this is the frontier:**
 
 | lane tag | operational task | waiting on |
 |---|---|---|
-| `s2s-b2-transport-recordreplay-retype` | Retype record/replay dialers onto `pkg/transport` | #118 |
+| `s2s-b2-transport-recordreplay-retype` | Retype record/replay dialers onto `pkg/transport` | delivered by #139 (merged 2026-08-23T16:02:53Z, `1db169fd`); #118 closed-superseded |
 | `s2s-e2e-audio-roundtrip-proof` | MILESTONE: audio in + audio out end-to-end through the CLI | delivered on main (#143/#150/#152/#154/#156/#157); #98 closed |
 | `s2s-b3-session-vad-gating` | Wire the energy VAD into the session input path | audio-in path delivered on main (#143/#150/#152/#154/#156/#157); #98 closed |
-| `s2s-b3-session-audio-in-device` | `--audio-in-device` — capture from a real mic | audio-in delivered on main (#143/#150/#152/#154/#156/#157); #98 closed, device capture still waits on #113 |
-| `s2s-b3-session-audio-out-device` | `--audio-out-device` — play to a real speaker | #113 |
-| `s2s-b3-session-default-toolset` | Default tool set for realtime sessions, `--tools` | #83 |
-| `s2s-b3-session-tool-definitions` | Tool schemas + argument validation | #83 |
-| `s2s-b3-session-replay-and-parity-commands` | `agent session replay` / `agent session parity` | #110 |
-| `s2s-b4-rtc-recording` | Record WebRTC both sides with verbatim RTP | #132, #133 |
-| `s2s-lai-blind-probe-local-tier` | Blind probe fleet against LocalAI, OpenAI for final gate | #107 |
+| `s2s-b3-session-audio-in-device` | `--audio-in-device` — capture from a real mic | audio-in delivered on main (#143/#150/#152/#154/#156/#157); #98 closed; device capture delivered by #113 (merged 2026-08-25T03:49:48Z, `f0dc3987`) |
+| `s2s-b3-session-audio-out-device` | `--audio-out-device` — play to a real speaker | delivered by #113 (merged 2026-08-25T03:49:48Z, `f0dc3987`) |
+| `s2s-b3-session-default-toolset` | Default tool set for realtime sessions, `--tools` | delivered by #175 (merged 2026-08-26T00:13:03Z, `e846c67c`); #83 closed-superseded |
+| `s2s-b3-session-tool-definitions` | Tool schemas + argument validation | delivered by #175 (merged 2026-08-26T00:13:03Z, `e846c67c`); #83 closed-superseded |
+| `s2s-b3-session-replay-and-parity-commands` | `agent session replay` / `agent session parity` | delivered by #110 (merged 2026-08-25T17:07:39Z, `c90ff89f`) |
+| `s2s-b4-rtc-recording` | Record WebRTC both sides with verbatim RTP | delivered by #137 (`30ae0bff`) + #138 (`cea68759`); #132/#133 closed-superseded |
+| `s2s-lai-blind-probe-local-tier` | Blind probe fleet against LocalAI, OpenAI for final gate | delivered by #107 (merged 2026-08-25T11:10:18Z, `c2841df9`) |
 
 **The probe chain (6 lanes) — the choke point for everything else:**
 
@@ -211,8 +258,9 @@ None has a branch. All are blocked. Grouped by layer, with the immediate blocker
 delivered through**). Plus `s2s-b3-probe-live-transport` (opt-in live API) and
 `s2s-b2-record-fixtures` (`make record-fixtures`).
 
-`s2s-b3-probe-cli-surface` alone gates **36 lanes**. Its whole chain hangs off
-**#118**.
+`s2s-b3-probe-cli-surface` alone gates **36 lanes** in the historical plan.
+Its transport dependency was delivered by #139 (merged
+2026-08-23T16:02:53Z, `1db169fd`); #118 is closed-superseded.
 
 **The verticals (28 lanes) — all gated on `s2s-b3-probe-cli-surface`:**
 
@@ -233,8 +281,8 @@ delivered through**). Plus `s2s-b3-probe-live-transport` (opt-in live API) and
 |---|---|---|
 | `s2s-e2e-audio-roundtrip-proof` | Prove audio in + out through the public CLI | delivered and proven on main (#143/#150/#152/#154/#156/#157); #98 closed |
 | `s2s-e2e-multiturn-conversation` | A 3–7 turn audio conversation that holds together | ← roundtrip-proof |
-| `s2s-e2e-tool-call-conversation` | Customer asks by voice, agent calls a specific CLI | ← multiturn + default-toolset (#83) |
-| `s2s-e2e-vision-describe` | Customer asks by voice about an image, agent describes it | ← multiturn + #97 |
+| `s2s-e2e-tool-call-conversation` | Customer asks by voice, agent calls a specific CLI | delivered and proven on main by #192 (merged 2026-08-27T08:43:14Z, `4f061a0b`); #175 supplied the executor outcome |
+| `s2s-e2e-vision-describe` | Customer asks by voice about an image, agent describes it | delivered by #208 (merged 2026-08-26T19:38:42Z, `bdc81da0`); #97 merged 2026-08-25T05:17:35Z (`81267d6e`) |
 | `s2s-e2e-conversation-observability` | Logs + recordings actually prove the conversation happened | ← tool-call + vision |
 
 **The acceptance gate (7 lanes) — the "all probes said it was easy" bar:**
@@ -249,7 +297,11 @@ delivered through**). Plus `s2s-b3-probe-live-transport` (opt-in live API) and
 
 ---
 
-## 3. What failed, and why — the single shared defect
+## 3. What failed, and why — the single shared defect (historical analysis)
+
+The causal analysis below describes the 2026-08-17 snapshot. Later merged
+successors and current lifecycle dispositions are authoritative for present
+state; see the current reconciliation and §14.
 
 Look at the `actual diff` column in §2.2. **Fourteen of the fifteen stuck PRs
 have zero deletions.** They add new, self-contained, heavily-tested files and
@@ -298,7 +350,11 @@ the quota ran out.
 
 ---
 
-## 4. What to restart, what to continue, what to drop
+## 4. What to restart, what to continue, what to drop (historical 2026-08-17 recommendations)
+
+The recommendations below are preserved for history. They are not current
+GitHub dispositions; the lifecycle table above and §14 carry the later
+evidence-backed state.
 
 ### 4.1 Restart — the current PR is not salvageable
 
@@ -384,7 +440,10 @@ s2s-b3-session-image-input             11
 
 ---
 
-## 5. Ordered restart plan
+## 5. Ordered restart plan (historical 2026-08-17 plan)
+
+This plan is retained as historical context. It is superseded by the later
+merged and closed-superseded outcomes recorded above and in §14.
 
 Steps 1–3 are cheap and unblock disproportionately.
 
@@ -621,9 +680,10 @@ and its real-router matrix at
 `agent-cli/test/integration/s2s_prereq_session_config_tool_filter_test.go`.
 
 Provider `function_call_output` translation, serialization, and result
-forwarding remain owned by PR #181. This entry records a prerequisite only;
-v5a is not complete and must be rerun after this filter and PR #181 are both
-available.
+forwarding are present on current `main` via independent commits `29a2ec5`
+and `5544500`; the focused provider and fixture-pairing proofs pass. PR #181
+is closed-superseded, and its original commits did not merge. The v5a lane
+still has its separate current open PR and is not declared complete here.
 
 ## 13. Vertical delivery: `s2s-v2b-audio-in-long` — 2026-08-25
 
@@ -633,4 +693,66 @@ Append-only section, recorded by the `s2s-v2b-audio-in-long` lane.
 
 | vertical | evidence |
 |---|---|
-| `v2b-audio-in-long` | Proven on branch `s2s-v2b-audio-in-long` 2026-08-25 — `utt_long_16k.wav` (14.3 s, 228750 samples) streams `ceil(samples/480)` = 477 byte-exact `input_audio_buffer.append` events through the shipped `agent session --replay --audio-in` command and ends the turn with exactly one commit, one `response.create`, one completed response, and non-silent recorded output audio; a per-chunk-commit negative capture (differing only by an inserted commit after every append) fails the identical invocation with `expected outbound payload for input_audio_buffer.commit at sequence 4, actual input_audio_buffer.append`. Tests: `TestS2SV2BAudioInLongCLIStaysOneTurn`, `TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation` (`agent-cli/test/integration/s2s_v2b_audio_in_long_test.go`). Reuses committed corpus audio; replay fixtures are runtime-generated, no new audio blobs committed. Details: `docs/architecture/s2s-v2b-audio-in-long-proof.md`. |
+| `v2b-audio-in-long` | Proven on merged PR #185 (`4265de1d`) 2026-08-27 — `utt_long_16k.wav` (14.3 s, 228750 samples) streams `ceil(samples/480)` = 477 byte-exact `input_audio_buffer.append` events through the shipped `agent session --replay --audio-in` command and ends the turn with exactly one commit, one `response.create`, one completed response, and non-silent recorded output audio; a per-chunk-commit negative capture (differing only by an inserted commit after every append) fails the identical invocation with `expected outbound payload for input_audio_buffer.commit at sequence 4, actual input_audio_buffer.append`. Tests: `TestS2SV2BAudioInLongCLIStaysOneTurn`, `TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation` (`agent-cli/test/integration/s2s_v2b_audio_in_long_test.go`). Reuses committed corpus audio; replay fixtures are runtime-generated, no new audio blobs committed. Details: `docs/architecture/s2s-v2b-audio-in-long-proof.md`. |
+
+## 14. Post-drain closure and current-main reconciliation — 2026-08-27
+
+This lane rebuilt the exact-name branch from fresh `origin/main` at
+`4f061a0bfdcf2fd4f9b07ae006b2d1fb71ee2647`. The prior #184 commit
+`059c1344809329e96ec5f7da6906651c1227a3a4` was used only as semantic input;
+its document tree was not replayed. The current lifecycle claims below are
+based on live GitHub state and repository artifacts on that fresh base.
+
+### 14.1 Evidence-backed dispositions
+
+| item | mainline or GitHub evidence | disposition |
+|---|---|---|
+| #175 / #83 | #175 is merged as `e846c67c` at 2026-08-26T00:13:03Z UTC. Its mainline session files carry the composed executor through `SessionRunOptions`, `NewSessionCommand`, the runtime plan, and `agentloop.WithToolExecutor`; focused service and CLI tests pass. #83's original commit is not a merge commit. | #175 **merged**; #83 **closed-superseded** at 2026-08-27T08:57:51Z UTC after [one evidence comment](https://github.com/portpowered/go-agent-harness/pull/83#issuecomment-5436732135) |
+| #181 | `29a2ec53535e197068efc03633cf1ac89c0a8901` contains `ToolResultForwarder` delivery and OpenAI Realtime `function_call_output` serialization. `554450008f074e7b89a48db242ed73495c153e67` contains the composed delivery proof and OpenAI fixture-pairing validation. Both are on `origin/main`; #181 commits `e2c4d62` and `f854acf` are not main ancestors. Focused loop, provider, and validator tests pass. | **closed-superseded** at 2026-08-27T08:57:54Z UTC after [one evidence comment](https://github.com/portpowered/go-agent-harness/pull/181#issuecomment-5436732717); #181's original commits did not merge |
+| #183 | Live GitHub merge record: `6439b84a5543f2a225d98194c0e81581f13f09ed`, 2026-08-27T06:46:30Z UTC. | **merged** |
+| #185 | Live GitHub merge record: `4265de1d8e887a0d0bcee8481dc176c2d09a7d15`, 2026-08-27T06:35:31Z UTC. | **merged** |
+| #192 | Live GitHub merge record and current `origin/main` tip: `4f061a0bfdcf2fd4f9b07ae006b2d1fb71ee2647`, 2026-08-27T08:43:14Z UTC. | **merged** |
+| #184 | Exact-name branch and existing PR remain the sole vehicle for this lane. The PR is open for review and must not be described as merged before GitHub records a merge. | **open-in-review** |
+
+### 14.2 Lifecycle vocabulary
+
+- **merged** means GitHub reports the PR merged into `main` and supplies a
+  merge commit; a successor or an equivalent patch does not make the original
+  PR merged.
+- **closed-superseded** means the original PR is closed only after a successor
+  or independent mainline artifact proves the intended outcome, with that
+  evidence recorded in a closing comment; it explicitly does not claim that
+  the original commit landed.
+- **open-blocked** means a still-open PR has a named, evidence-backed blocker;
+  no stale branch or missing merge is sufficient by itself. #184 is currently
+  **open-in-review**, not open-blocked.
+- **factory-terminal** is a separate factory lifecycle result and is never a
+  synonym for GitHub merged or closed. The factory board was in-memory and no
+  durable record is available for this reconciliation, so no affected row is
+  labeled factory-terminal.
+
+### 14.3 Reviewer-rerunnable proof
+
+```bash
+git fetch origin main
+git rev-parse origin/main
+git merge-base --is-ancestor e846c67c03e4b8d013096951ba9970876d6c0a27 origin/main
+git merge-base --is-ancestor 29a2ec53535e197068efc03633cf1ac89c0a8901 origin/main
+git merge-base --is-ancestor 554450008f074e7b89a48db242ed73495c153e67 origin/main
+git merge-base --is-ancestor e2c4d6267f41d36d4c98090cf5340e4e80c0deea origin/main  # must be false
+git merge-base --is-ancestor f854acf285a28c63f12af075e8c4588a4bad1245 origin/main  # must be false
+
+go test ./agent-cli/internal/services -run 'TestSessionTool(Executor|.*)' -count=1
+go test ./agent-cli/test/integration -run 'TestSessionTool(SingleCallRoundTripThroughCLI|SingleCallSuppressedFailsDeterministically)' -count=1
+go test ./go-agent-loop/pkg/agentloop ./go-agent-loop/pkg/subsystems -run 'Test(DuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder|DuplexSession_ZeroToolResultsDeliverNothing|ToolResultForwarder_ForwardsEachResultOnceInOrder|ToolResultForwarder_EmptyContentStillForwardedOnce|ToolResultForwarder_ZeroResultsDeliverNothing|ToolResultForwarder_NoOpOutsideDuplexSession|ToolResultForwarder_SkipsResultsWithoutCallID)' -count=1
+go test ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/internal/sessionfixturevalidator -run 'Test(RealtimeSession_ToolCallEndSendsSingleFunctionCallOutput|RealtimeSession_ToolCallEndInvalidValueFailsWithoutFrames|Composed_LoopDelivers|Run_(OpenAIOriginatedFunctionCallOutputPairsCleanly|UnpairedOpenAIFunctionCallOutputStillFails|EmptyCallIDFunctionCallOutputStillFails))' -count=1
+
+gh pr view 83 --json state,closedAt,comments
+gh pr view 181 --json state,closedAt,comments
+gh pr view 184 --json state,headRefName,mergeStateStatus,statusCheckRollup
+git diff --name-only origin/main...HEAD
+```
+
+The expected implementation diff is confined to this status document. CI run
+URLs and terminal check results belong in the PR #184 handoff comment, not in
+this commit.
