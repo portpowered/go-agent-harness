@@ -2,14 +2,13 @@ package sessionfixturevalidator
 
 import (
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-var committedSessionFixtureRoots = committedFixtureRoots()
+var committedSessionFixtureRoots = gatewayCommittedFixtureRoots()
 
 func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 	result, err := ValidatePaths(committedSessionFixtureRoots)
@@ -25,12 +24,13 @@ func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 }
 
 func TestAllCommittedSessionFixturesPassWithExactCount(t *testing.T) {
-	result, err := ValidatePaths(allCommittedFixtureRoots())
+	roots := allCommittedFixtureRoots()
+	result, err := ValidatePaths(roots)
 	if err != nil {
 		t.Fatalf("validate all committed session fixture roots: %v", err)
 	}
-	if result.FilesScanned != 39 {
-		t.Fatalf("ValidatePaths scanned %d committed session fixtures, want exact count 39", result.FilesScanned)
+	if err := verifyCommittedFixtureManifest(repoPathFromHere(committedFixtureManifestRelPath), roots, result.FilesScanned); err != nil {
+		t.Fatal(err)
 	}
 	if len(result.Errors) != 0 {
 		t.Fatalf("all committed session fixture validation failed:\n%s", formatValidationErrors(result.Errors))
@@ -90,24 +90,4 @@ func formatValidationErrors(errs []gatewaytesting.SessionFixtureValidationError)
 		lines = append(lines, err.Error())
 	}
 	return strings.Join(lines, "\n")
-}
-
-func committedFixtureRoots() []string {
-	return []string{
-		repoPathFromHere("../../pkg/providers/openai/testdata"),
-		filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")),
-	}
-}
-
-func allCommittedFixtureRoots() []string {
-	roots := committedFixtureRoots()
-	return append(roots, repoPathFromHere("../../../agent-cli/test/integration/testdata"))
-}
-
-func repoPathFromHere(rel string) string {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return rel
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), rel))
 }

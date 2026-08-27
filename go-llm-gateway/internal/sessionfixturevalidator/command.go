@@ -30,17 +30,23 @@ func Run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("session-fixture-validator", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		_, _ = fmt.Fprintf(flags.Output(), "Usage: %s [files-or-directories...]\n\n", flags.Name())
+		_, _ = fmt.Fprintf(flags.Output(), "Usage: %s [-emit-manifest FILE] [files-or-directories...]\n\n", flags.Name())
 		_, _ = fmt.Fprintln(flags.Output(), "Validates committed .session.json captures for fixture hygiene.")
 		_, _ = fmt.Fprintln(flags.Output(), "Checks require session.fixture_provenance, reject unsafe raw audio or credential-like fields and values,")
 		_, _ = fmt.Fprintln(flags.Output(), "and ensure provider wire events use payload_type \"websocket_message\" instead of generic \"stream_message\".")
+		_, _ = fmt.Fprintln(flags.Output(), "With -emit-manifest FILE, writes a generated manifest of the scanned fixture set")
 	}
+
+	emitManifestPath := flags.String("emit-manifest", "", "write a sorted fixture manifest for the scanned roots to this `FILE` instead of validating")
 
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 
 	paths := flags.Args()
+	if *emitManifestPath != "" {
+		return runEmitManifest(*emitManifestPath, paths, stdout)
+	}
 	if len(paths) == 0 {
 		flags.Usage()
 		return errors.New("at least one file or directory is required")
@@ -74,6 +80,28 @@ func ValidatePaths(paths []string) (Result, error) {
 		result.Errors = append(result.Errors, validateSessionFixtureFile(file)...)
 	}
 	return result, nil
+}
+
+// runEmitManifest scans paths and writes the generated fixture manifest to
+// outputPath instead of validating.
+func runEmitManifest(outputPath string, paths []string, stdout io.Writer) error {
+	roots, err := validateCommittedFixtureRootArguments(paths)
+	if err != nil {
+		return err
+	}
+	manifest, err := buildCommittedFixtureManifest(roots)
+	if err != nil {
+		return err
+	}
+	data, err := manifest.render()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+		return fmt.Errorf("write fixture manifest %s: %w", outputPath, err)
+	}
+	_, _ = fmt.Fprintf(stdout, "wrote fixture manifest %s: %d session fixture file(s)\n", outputPath, manifest.Count)
+	return nil
 }
 
 func collectSessionFixtureFiles(paths []string) ([]string, error) {
