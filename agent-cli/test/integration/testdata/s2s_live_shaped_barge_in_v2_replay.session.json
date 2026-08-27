@@ -1,0 +1,564 @@
+{
+  "version": 1,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime"
+  },
+  "session": {
+    "fixture_provenance": "provider_recorded"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 1,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "model": "gpt-realtime",
+          "type": "realtime"
+        },
+        "type": "session.update"
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 2,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.created",
+        "session": {
+          "id": "session-redacted",
+          "model": "gpt-realtime"
+        }
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "server_to_client",
+      "timestamp_ms": 3,
+      "type": "session.updated",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "session.updated",
+        "session": {
+          "id": "session-redacted",
+          "model": "gpt-realtime"
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 4,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio": {
+          "redacted": true,
+          "reference": "T1"
+        },
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 5,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "client_to_server",
+      "timestamp_ms": 6,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "client_to_server",
+      "timestamp_ms": 7,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "server_to_client",
+      "timestamp_ms": 8,
+      "type": "input_audio_buffer.speech_stopped",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_stopped"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 9,
+      "type": "input_audio_buffer.committed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.committed"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 10,
+      "type": "conversation.item.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.created",
+        "item": {
+          "id": "T1",
+          "role": "user"
+        }
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 11,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "R1"
+        }
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 12,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "response_id": "R1",
+        "delta": {
+          "redacted": true,
+          "reference": "R1"
+        },
+        "format": "pcm16"
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "client_to_server",
+      "timestamp_ms": 13,
+      "type": "response.cancel",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.cancel"
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "client_to_server",
+      "timestamp_ms": 14,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio": {
+          "redacted": true,
+          "reference": "T2"
+        },
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "server_to_client",
+      "timestamp_ms": 15,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 16,
+      "direction": "client_to_server",
+      "timestamp_ms": 16,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 17,
+      "direction": "client_to_server",
+      "timestamp_ms": 17,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 18,
+      "direction": "server_to_client",
+      "timestamp_ms": 18,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "R1",
+          "status": "cancelled"
+        }
+      }
+    },
+    {
+      "sequence": 19,
+      "direction": "server_to_client",
+      "timestamp_ms": 19,
+      "type": "input_audio_buffer.speech_stopped",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_stopped"
+      }
+    },
+    {
+      "sequence": 20,
+      "direction": "server_to_client",
+      "timestamp_ms": 20,
+      "type": "input_audio_buffer.committed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.committed"
+      }
+    },
+    {
+      "sequence": 21,
+      "direction": "server_to_client",
+      "timestamp_ms": 21,
+      "type": "conversation.item.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.created",
+        "item": {
+          "id": "T2",
+          "role": "user"
+        }
+      }
+    },
+    {
+      "sequence": 22,
+      "direction": "server_to_client",
+      "timestamp_ms": 22,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "R2"
+        }
+      }
+    },
+    {
+      "sequence": 23,
+      "direction": "client_to_server",
+      "timestamp_ms": 23,
+      "type": "response.cancel",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.cancel"
+      }
+    },
+    {
+      "sequence": 24,
+      "direction": "client_to_server",
+      "timestamp_ms": 24,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio": {
+          "redacted": true,
+          "reference": "T3"
+        },
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 25,
+      "direction": "server_to_client",
+      "timestamp_ms": 25,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 26,
+      "direction": "client_to_server",
+      "timestamp_ms": 26,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 27,
+      "direction": "client_to_server",
+      "timestamp_ms": 27,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 28,
+      "direction": "server_to_client",
+      "timestamp_ms": 28,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "R2",
+          "status": "cancelled"
+        }
+      }
+    },
+    {
+      "sequence": 29,
+      "direction": "server_to_client",
+      "timestamp_ms": 29,
+      "type": "input_audio_buffer.speech_stopped",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_stopped"
+      }
+    },
+    {
+      "sequence": 30,
+      "direction": "server_to_client",
+      "timestamp_ms": 30,
+      "type": "input_audio_buffer.committed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.committed"
+      }
+    },
+    {
+      "sequence": 31,
+      "direction": "server_to_client",
+      "timestamp_ms": 31,
+      "type": "conversation.item.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.created",
+        "item": {
+          "id": "T3",
+          "role": "user"
+        }
+      }
+    },
+    {
+      "sequence": 32,
+      "direction": "server_to_client",
+      "timestamp_ms": 32,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "R3"
+        }
+      }
+    },
+    {
+      "sequence": 33,
+      "direction": "server_to_client",
+      "timestamp_ms": 33,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "response_id": "R3",
+        "delta": {
+          "redacted": true,
+          "reference": "R3"
+        },
+        "format": "pcm16"
+      }
+    },
+    {
+      "sequence": 34,
+      "direction": "server_to_client",
+      "timestamp_ms": 34,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done",
+        "response_id": "R3"
+      }
+    },
+    {
+      "sequence": 35,
+      "direction": "server_to_client",
+      "timestamp_ms": 35,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "R3",
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "sequence": 36,
+      "direction": "client_to_server",
+      "timestamp_ms": 36,
+      "type": "input_audio_buffer.append",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio": {
+          "redacted": true,
+          "reference": "T4"
+        },
+        "type": "input_audio_buffer.append"
+      }
+    },
+    {
+      "sequence": 37,
+      "direction": "server_to_client",
+      "timestamp_ms": 37,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 38,
+      "direction": "client_to_server",
+      "timestamp_ms": 38,
+      "type": "input_audio_buffer.commit",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.commit"
+      }
+    },
+    {
+      "sequence": 39,
+      "direction": "client_to_server",
+      "timestamp_ms": 39,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 40,
+      "direction": "server_to_client",
+      "timestamp_ms": 40,
+      "type": "input_audio_buffer.speech_stopped",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.speech_stopped"
+      }
+    },
+    {
+      "sequence": 41,
+      "direction": "server_to_client",
+      "timestamp_ms": 41,
+      "type": "input_audio_buffer.committed",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "input_audio_buffer.committed"
+      }
+    },
+    {
+      "sequence": 42,
+      "direction": "server_to_client",
+      "timestamp_ms": 42,
+      "type": "conversation.item.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "conversation.item.created",
+        "item": {
+          "id": "T4",
+          "role": "user"
+        }
+      }
+    },
+    {
+      "sequence": 43,
+      "direction": "server_to_client",
+      "timestamp_ms": 43,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.created",
+        "response": {
+          "id": "R4"
+        }
+      }
+    },
+    {
+      "sequence": 44,
+      "direction": "server_to_client",
+      "timestamp_ms": 44,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.delta",
+        "response_id": "R4",
+        "delta": {
+          "redacted": true,
+          "reference": "R4"
+        },
+        "format": "pcm16"
+      }
+    },
+    {
+      "sequence": 45,
+      "direction": "server_to_client",
+      "timestamp_ms": 45,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.output_audio.done",
+        "response_id": "R4"
+      }
+    },
+    {
+      "sequence": 46,
+      "direction": "server_to_client",
+      "timestamp_ms": 46,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.done",
+        "response": {
+          "id": "R4",
+          "status": "completed"
+        }
+      }
+    }
+  ]
+}

@@ -84,6 +84,32 @@ The actual run logs only ordinals, event types, counts, byte counts, safe
 terminal statuses, and file sizes. It never logs provider IDs, transcripts,
 raw event payloads, keys, authorization data, or audio bytes.
 
+## Sanitized replay
+
+The passing live observation is preserved as the redacted
+`provider_recorded` fixture at
+`agent-cli/test/integration/testdata/s2s_live_shaped_barge_in_v2_replay.session.json`.
+It retains only ordered directions, event types, timing ordinals, redacted
+response and turn labels, terminal statuses, and audio placeholders. The
+default integration test materializes non-sensitive deterministic PCM sentinels
+in a private temporary copy, then replays that capture through the shipped
+`agent session` command and checks the same response ledger and runtime
+accounting. It also exercises dropped-replacement, duplicate-cancellation, and
+unresolved-terminal negative controls.
+
+Run the bounded default replay with:
+
+```bash
+go test ./agent-cli/test/integration \
+  -run '^TestSessionCommandS2SLiveShapedBargeInV2(ReplaysSanitizedLiveCapture|ReplayNegativeControls)$' \
+  -count=1
+```
+
+This replay is evidence of the prior live event shape, not a second live
+provider confirmation. Generated sentinel audio is only a deterministic
+transport substitute; it does not claim provider tool selection, WebRTC/device
+parity, echo cancellation, latency SLOs, or customer-audio fidelity.
+
 ## Coverage boundary
 
 The deterministic shipped-CLI matrix remains the reproducible lower-bound
