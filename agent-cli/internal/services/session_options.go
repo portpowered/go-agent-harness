@@ -509,6 +509,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		config.Voice = opts.Voice
+		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []oaiprovider.Option{
 			oaiprovider.WithAPIKey(sessionCfg.APIKey),
 			oaiprovider.WithModel(sessionCfg.Model),
@@ -531,6 +532,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey)}
 		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
 			providerOpts = append(providerOpts, grok.WithBaseURL(sessionCfg.BaseURL))

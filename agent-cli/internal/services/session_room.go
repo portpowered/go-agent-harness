@@ -130,6 +130,11 @@ type RoomRunOptions struct {
 
 	SessionFactory     RoomSessionInferencerFactory
 	SessionInferencers map[string]messages.SessionInferencer
+	// ToolCapabilitiesFactory supplies an isolated tool executor and matching
+	// provider definitions for each participant that names tools. A nil value
+	// uses the normal config-backed registry when tools are requested; an
+	// explicit empty tools list never constructs or advertises tools.
+	ToolCapabilitiesFactory RoomParticipantToolCapabilitiesFactory
 
 	// Validation is applied before any session factory is called. Setting
 	// CredentialLookup is a convenience override for Validation.LookupCredential.
@@ -891,11 +896,13 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 				}
 			}
 			runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, sessionLoopOptions{
-				WaitForClose: true,
-				Done:         coordinator.done,
-				DoneErr:      coordinator.roomError,
-				observer:     observer,
-				loopReady:    runtime.loopReady,
+				WaitForClose:    true,
+				Done:            coordinator.done,
+				DoneErr:         coordinator.roomError,
+				ToolExecutor:    plan.options.ToolExecutor,
+				ToolDefinitions: cloneRoomToolDefinitions(plan.options.ToolDefinitions),
+				observer:        observer,
+				loopReady:       runtime.loopReady,
 			})
 			runtime.lifecycle.markRunDone()
 			connected, connectErr, _, _, _, _, _ := runtime.lifecycle.snapshot()
@@ -1000,6 +1007,14 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 			return nil, secrets, fmt.Errorf("room session inferencer provided for unknown participant %q", id)
 		}
 	}
+	toolFactory := opts.ToolCapabilitiesFactory
+	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
+		defaultFactory, factoryErr := newDefaultRoomParticipantToolCapabilitiesFactory(opts.ConfigDir)
+		if factoryErr != nil {
+			return nil, secrets, fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, factoryErr)
+		}
+		toolFactory = defaultFactory
+	}
 
 	factory := opts.SessionFactory
 	if factory == nil {
@@ -1020,6 +1035,20 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 			ConfigDir:       opts.ConfigDir,
 			WebSocketDialer: opts.WebSocketDialer,
 			WaitForClose:    true,
+		}
+		if len(participant.Tools) > 0 {
+			if toolFactory == nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantToolsUnavailable, []string{value})
+			}
+			capabilities, capabilityErr := toolFactory(participant)
+			if capabilityErr != nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure participant tools: %w", capabilityErr), []string{value})
+			}
+			if capabilityErr := validateRoomParticipantToolCapabilities(participant, capabilities); capabilityErr != nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+			}
+			sessionOptions.ToolExecutor = capabilities.Executor
+			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(capabilities.Definitions)
 		}
 		if opts.WebSocketDialerFactory != nil {
 			sessionOptions.WebSocketDialer = opts.WebSocketDialerFactory(participant)
