@@ -272,7 +272,7 @@ func TestPlanSessionRuntime_OpenAIReplayUsesToolDefinitionsOnlyWhenCaptureAdvert
 				newReplayDialer: func(string) (sessionReplayDialer, error) {
 					return replayDialer, nil
 				},
-				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ transport.Dialer, definitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, definitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 					gotProviderDefinitions = definitions
 					return &scriptedSessionInferencer{}, nil
 				},
