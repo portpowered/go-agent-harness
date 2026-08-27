@@ -70,3 +70,58 @@ write failures, artifact flush/close failures, and finalization failures are
 still returned as nonzero command errors. If one of those errors accompanies a
 duration cutoff, the error remains visible rather than being hidden by the
 planned terminal.
+
+## Bundle terminal summary
+
+The `--record-dir` bundle's `manifest.json` is the bundle-level discovery point
+for the normalized terminal outcome. When a duration controller authors the
+terminal, the manifest contains one optional `terminal` object with the same
+five fields as the normalized sidecar:
+
+```json
+"terminal": {
+  "reason": "max_duration",
+  "classification": "max_duration",
+  "terminal_reason": "max_duration",
+  "terminal_provenance": "loop",
+  "output_state": "partial"
+}
+```
+
+The summary is typed recording state, not another transcript frame. In
+particular, `terminal_provenance=loop` identifies the duration controller as
+the author; it does not claim that the provider sent `response.done` or
+`session.closed`. The raw `--record` capture remains a provider-wire ledger,
+and no provider terminal is fabricated to make the manifest self-describing.
+Existing bundles and recording inputs without a normalized terminal remain
+valid because the manifest field is optional. This contract is proven here
+for the planned max-duration cutoff; it does not redefine natural completion,
+provider failure, or other terminal causes.
+
+## Exact live reproduction
+
+Following the validation standard, run the real OpenAI Realtime command with
+temporary destinations and an API key supplied only by the environment:
+
+```sh
+work_dir="$(mktemp -d)"
+agent session \
+  --config-dir "$work_dir" \
+  --provider openai \
+  --model gpt-realtime \
+  --api-key "$OPENAI_API_KEY" \
+  --record "$work_dir/max-duration.session.json" \
+  --record-dir "$work_dir/max-duration-recording" \
+  --max-duration 5s \
+  --system-prompt "Speak continuously for at least 60 seconds without stopping or ending the response." \
+  "Start speaking now and continue continuously."
+```
+
+Validation succeeds only when the command exits with status 0 after partial
+output, the sidecar has exactly one normalized terminal, and the finalized
+bundle has a hash-valid manifest whose `terminal` object matches
+`max_duration / max_duration / max_duration / loop / partial` field for field.
+A clean command or valid bundle with missing or misleading terminal metadata is
+the prior quiet failure and is not a passing result. Keep the live result in
+PR evidence; do not commit the API key, raw capture, audio, or generated
+recording directory.

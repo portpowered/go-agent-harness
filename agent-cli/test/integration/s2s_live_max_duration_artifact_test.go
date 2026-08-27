@@ -29,6 +29,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	defer server.Close()
 
 	recordPath := filepath.Join(t.TempDir(), "cutoff.session.json")
+	recordDir := filepath.Join(t.TempDir(), "cutoff-recording")
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
 		&mockInferencerError{err: os.ErrNotExist},
@@ -44,6 +45,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	rootCmd.SetArgs([]string{
 		"session",
 		"--record", recordPath,
+		"--record-dir", recordDir,
 		"--provider", "openai",
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
@@ -88,15 +90,59 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	if terminal.count != 1 {
 		t.Fatalf("duration sidecar terminal count = %d, want exactly one", terminal.count)
 	}
-	for field, want := range map[string]string{
-		"reason":              "max_duration",
-		"classification":      "max_duration",
-		"terminal_reason":     "max_duration",
-		"terminal_provenance": "loop",
-		"output_state":        "partial",
-	} {
-		if got := terminal.fields[field]; got != want {
-			t.Fatalf("duration sidecar %s = %q, want %q", field, got, want)
+	assertMaxDurationTerminalFields(t, "duration sidecar", terminal.fields)
+
+	manifestBytes, err := os.ReadFile(filepath.Join(recordDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read record-dir manifest: %v", err)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode record-dir manifest: %v", err)
+	}
+	wantSummary := transcript.RecordingTerminalSummary{
+		Reason:             "max_duration",
+		Classification:     "max_duration",
+		TerminalReason:     messages.TerminalReason("max_duration"),
+		TerminalProvenance: messages.TerminalProvenanceLoop,
+		OutputState:        messages.TerminalOutputPartial,
+	}
+	if manifest.Terminal == nil {
+		t.Fatal("record-dir manifest omitted terminal summary")
+	}
+	if *manifest.Terminal != wantSummary {
+		t.Fatalf("record-dir terminal summary = %+v, want %+v", *manifest.Terminal, wantSummary)
+	}
+	var manifestFields map[string]json.RawMessage
+	if err := json.Unmarshal(manifestBytes, &manifestFields); err != nil {
+		t.Fatalf("decode record-dir manifest fields: %v", err)
+	}
+	var terminalFields map[string]json.RawMessage
+	if err := json.Unmarshal(manifestFields["terminal"], &terminalFields); err != nil {
+		t.Fatalf("decode record-dir terminal fields: %v", err)
+	}
+	if len(terminalFields) != 5 {
+		t.Fatalf("record-dir terminal field count = %d, want exactly 5", len(terminalFields))
+	}
+	manifestTerminal := assertMaxDurationTerminalJSONFields(t, "record-dir manifest", terminalFields)
+	assertTerminalFieldAgreement(t, "duration sidecar vs record-dir manifest", terminal.fields, manifestTerminal)
+
+	if len(manifest.Artifacts) == 0 {
+		t.Fatal("record-dir manifest has no artifacts")
+	}
+	seenArtifacts := make(map[string]struct{}, len(manifest.Artifacts))
+	for _, artifact := range manifest.Artifacts {
+		if _, duplicate := seenArtifacts[artifact.Path]; duplicate {
+			t.Fatalf("record-dir manifest repeats artifact %q", artifact.Path)
+		}
+		seenArtifacts[artifact.Path] = struct{}{}
+		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(artifact.Path)))
+		if err != nil {
+			t.Fatalf("read record-dir artifact %q: %v", artifact.Path, err)
+		}
+		digest := sha256.Sum256(data)
+		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
+			t.Fatalf("record-dir artifact hash for %q = %s, want %s", artifact.Path, got, artifact.SHA256)
 		}
 	}
 }
@@ -352,6 +398,59 @@ type durationSidecarTerminal struct {
 	fields map[string]string
 }
 
+func assertMaxDurationTerminalFields(t *testing.T, label string, fields map[string]string) {
+	t.Helper()
+	want := map[string]string{
+		"reason":              "max_duration",
+		"classification":      "max_duration",
+		"terminal_reason":     "max_duration",
+		"terminal_provenance": "loop",
+		"output_state":        "partial",
+	}
+	if len(fields) != len(want) {
+		t.Fatalf("%s field count = %d, want exactly %d", label, len(fields), len(want))
+	}
+	for field, wantValue := range want {
+		got, ok := fields[field]
+		if !ok {
+			t.Fatalf("%s omitted terminal field %q", label, field)
+		}
+		if got != wantValue {
+			t.Fatalf("%s terminal field %q = %q, want %q", label, field, got, wantValue)
+		}
+	}
+}
+
+func assertMaxDurationTerminalJSONFields(t *testing.T, label string, fields map[string]json.RawMessage) map[string]string {
+	t.Helper()
+	decoded := make(map[string]string, len(fields))
+	for field, value := range fields {
+		var got string
+		if err := json.Unmarshal(value, &got); err != nil {
+			t.Fatalf("%s terminal field %q is not a string: %v", label, field, err)
+		}
+		decoded[field] = got
+	}
+	assertMaxDurationTerminalFields(t, label, decoded)
+	return decoded
+}
+
+func assertTerminalFieldAgreement(t *testing.T, label string, sidecar, manifest map[string]string) {
+	t.Helper()
+	if len(sidecar) != len(manifest) {
+		t.Fatalf("%s field counts = %d/%d, want equal", label, len(sidecar), len(manifest))
+	}
+	for field, want := range sidecar {
+		got, ok := manifest[field]
+		if !ok {
+			t.Fatalf("%s manifest omitted sidecar field %q", label, field)
+		}
+		if got != want {
+			t.Fatalf("%s field %q = %q, want %q", label, field, got, want)
+		}
+	}
+}
+
 func readSessionDurationSidecarTerminal(t *testing.T, path string) durationSidecarTerminal {
 	t.Helper()
 	file, err := os.Open(path)
@@ -379,8 +478,17 @@ func readSessionDurationSidecarTerminal(t *testing.T, path string) durationSidec
 		}
 		terminal.count++
 		for key, value := range event.Value {
-			if text, ok := value.(string); ok {
-				terminal.fields[key] = text
+			switch key {
+			case "type", "session_id":
+				// These are structural SESSION.CLOSE fields, not terminal
+				// metadata. The assertion below covers exactly the five fields
+				// that describe the terminal outcome.
+			case "reason", "classification", "terminal_reason", "terminal_provenance", "output_state":
+				if text, ok := value.(string); ok {
+					terminal.fields[key] = text
+				}
+			default:
+				t.Fatalf("duration sidecar terminal contains unexpected field %q", key)
 			}
 		}
 	}
