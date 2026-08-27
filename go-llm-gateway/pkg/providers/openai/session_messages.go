@@ -158,12 +158,17 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 	return events, true
 }
 
+const realtimeToolImageItemIDPrefix = "item_tool_result_"
+
 // realtimeToolImageItemID uses the documented client-supplied ID on a
 // Realtime user message to correlate a typed image projection with the
 // function_call_output that carries the same tool result. The provider's user
-// message schema does not define an extensible metadata field.
+// message schema does not define an extensible metadata field. Call IDs are
+// opaque provider values, so use a fixed-size URL-safe SHA-256 encoding rather
+// than copying their length or characters into the provider-facing ID.
 func realtimeToolImageItemID(toolCallID string) string {
-	return "item_tool_result_" + toolCallID
+	digest := sha256.Sum256([]byte(toolCallID))
+	return realtimeToolImageItemIDPrefix + base64.RawURLEncoding.EncodeToString(digest[:])
 }
 
 // fallbackRealtimeImageResult keeps the provider boundary lossless for older

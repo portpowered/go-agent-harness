@@ -1,11 +1,13 @@
 package openai
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,6 +230,66 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	}
 	if response.Type != "response.create" {
 		t.Fatalf("third event type = %q, want response.create", response.Type)
+	}
+}
+
+func TestRealtimeSessionSendMessage_ToolImageCorrelationIDIsBoundedForOpaqueCallID(t *testing.T) {
+	session, conn := newWireSeamSession(t)
+	toolCallID := "call/opaque id?" + strings.Repeat("/:? with spaces", 512)
+	msg := messages.Message{
+		Role:       messages.RoleTool,
+		ToolCallID: toolCallID,
+		ContentParts: []messages.ContentPart{
+			messages.ImagePart{Bytes: []byte{0x89, 'P', 'N', 'G'}, MediaType: "image/png"},
+		},
+	}
+
+	if !session.SendMessage(context.Background(), msg) {
+		t.Fatal("SendMessage returned false for an opaque long tool call ID")
+	}
+	written := waitForWireMessages(t, conn, 3)
+
+	var functionOutput struct {
+		Item struct {
+			CallID string `json:"call_id"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[0], &functionOutput); err != nil {
+		t.Fatalf("unmarshal function_call_output: %v", err)
+	}
+	if functionOutput.Item.CallID != toolCallID {
+		t.Fatalf("function_call_output call ID = %q, want opaque source ID preserved", functionOutput.Item.CallID)
+	}
+
+	var imageItem struct {
+		Item struct {
+			ID string `json:"id"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[1], &imageItem); err != nil {
+		t.Fatalf("unmarshal correlated image item: %v", err)
+	}
+	wantDigest := sha256.Sum256([]byte(toolCallID))
+	wantID := realtimeToolImageItemID(toolCallID)
+	if imageItem.Item.ID != wantID {
+		t.Fatalf("correlated image item ID = %q, want deterministic ID %q", imageItem.Item.ID, wantID)
+	}
+	if len(wantID) != len(realtimeToolImageItemIDPrefix)+43 {
+		t.Fatalf("correlated image item ID length = %d, want fixed 60-byte bound", len(wantID))
+	}
+	if !strings.HasPrefix(wantID, realtimeToolImageItemIDPrefix) {
+		t.Fatalf("correlated image item ID = %q, want prefix %q", wantID, realtimeToolImageItemIDPrefix)
+	}
+	encodedDigest := strings.TrimPrefix(wantID, realtimeToolImageItemIDPrefix)
+	decodedDigest, err := base64.RawURLEncoding.DecodeString(encodedDigest)
+	if err != nil {
+		t.Fatalf("decode correlated image item digest: %v", err)
+	}
+	if !bytes.Equal(decodedDigest, wantDigest[:]) {
+		t.Fatalf("correlated image item digest does not match opaque call ID")
+	}
+	if strings.ContainsAny(wantID, "+/=/:? ") {
+		t.Fatalf("correlated image item ID contains provider-unsafe characters: %q", wantID)
 	}
 }
 
