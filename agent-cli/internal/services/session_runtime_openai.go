@@ -36,14 +36,17 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}
 
 	return sessionRuntimePlan{
-		mode:       sessionRuntimeModeRecordOpenAI,
-		provider:   sessionProviderOpenAI,
-		model:      sessionCfg.Model,
-		announce:   fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
-		inferencer: sessionInferencer,
+		mode:        sessionRuntimeModeRecordOpenAI,
+		provider:    sessionProviderOpenAI,
+		model:       sessionCfg.Model,
+		capturePath: opts.RecordPath,
+		announce:    fmt.Sprintf("Starting OpenAI realtime session recording to %s", opts.RecordPath),
+		inferencer:  sessionInferencer,
 		loop: sessionLoopOptions{
-			Prompt:         opts.Prompt,
-			CloseAfterOpen: true,
+			Prompt:                   opts.Prompt,
+			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
+			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 		},
 		flushCapture: func() error {
 			return recordingDialer.FlushToFile(opts.RecordPath)

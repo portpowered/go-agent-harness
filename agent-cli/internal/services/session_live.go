@@ -16,6 +16,10 @@ import (
 
 const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 
+// ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run
+// that ended before every queued input received an assistant response.
+var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
+
 // sessionFirstTurnAckTimeout bounds how long the SESSION.OPEN handler waits
 // for the first user turn acceptance before failing the run instead of
 // streaming user audio over an unacknowledged turn.
@@ -89,6 +93,12 @@ type sessionLoopOptions struct {
 	// rtcDeviceBinding is opened by the enclosing runtime plan and is started
 	// against the real session-owned media endpoints after ConnectSession.
 	rtcDeviceBinding *RTCDeviceBinding
+
+	// CloseAfterScheduledAudio requests a live scheduled-audio session close
+	// only after every queued input has produced a terminal assistant turn.
+	// Replay plans leave this false so capture-derived close behavior remains
+	// authoritative.
+	CloseAfterScheduledAudio bool
 }
 
 // duplexSessionLoopOptions is the single duplex loop construction seam. Both
@@ -119,8 +129,75 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
+	err = scheduledAudioCompletionError(err, opts)
 	opts.observer.finish(err)
 	return err
+}
+
+func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
+	if err != nil || !opts.CloseAfterScheduledAudio || opts.observer == nil || opts.observer.scheduledAudioComplete() {
+		return err
+	}
+	return fmt.Errorf("%w: completed %d of %d", ErrSessionScheduledAudioIncomplete, opts.observer.turnsCompleted, opts.observer.scheduledInputs)
+}
+
+type sessionLoopMessageState struct {
+	promptSent bool
+	closeSent  bool
+}
+
+func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stop func() error, stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
+	opts.observer.observe(msg)
+	if err := writeSessionReplayMessage(out, msg); err != nil {
+		return state, false, errors.Join(err, stop())
+	}
+	if msg.Type == messages.StreamTypeSessionOpen {
+		if opts.Prompt != "" && !state.promptSent {
+			state.promptSent = true
+			userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
+			if err := loop.Send(ctx, []messages.Message{userMsg}); err != nil {
+				return state, false, errors.Join(fmt.Errorf("send session message: %w", err), stop())
+			}
+			opts.observer.noteUserTextInput(opts.Prompt)
+			if opts.awaitFirstTurn != nil {
+				if err := awaitSessionFirstTurn(ctx, opts.awaitFirstTurn); err != nil {
+					return state, false, errors.Join(fmt.Errorf("send session first turn: %w", err), stop())
+				}
+			}
+		}
+		if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !state.closeSent {
+			state.closeSent = true
+			if err := sendSessionClose(ctx, loop); err != nil {
+				return state, false, errors.Join(err, stop())
+			}
+		}
+		startAudio()
+	}
+	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd {
+		if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
+			return state, false, errors.Join(err, stopAndDrain())
+		}
+	}
+	if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent {
+		state.closeSent = true
+		if err := sendSessionClose(ctx, loop); err != nil {
+			return state, false, errors.Join(err, stop())
+		}
+	}
+	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && opts.observer.scheduledAudioComplete() && !state.closeSent {
+		state.closeSent = true
+		if err := sendSessionClose(ctx, loop); err != nil {
+			return state, false, errors.Join(err, stop())
+		}
+	}
+	if opts.AudioIn != nil {
+		if shouldStopAudioInputSessionLoop(msg, opts, state.closeSent, awaitingResponse) {
+			return state, true, stopAndDrain()
+		}
+	} else if shouldStopSessionLoop(msg, opts, state.closeSent) {
+		return state, true, stopAndDrain()
+	}
+	return state, false, nil
 }
 
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
@@ -189,6 +266,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		stopErr := stop()
 		if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 			stopErr = errors.Join(stopErr, drainErr)
+		}
+		if sessionErr := observedInferencer.sessionFailure(); sessionErr != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("session transport: %w", sessionErr))
 		}
 		return stopErr
 	}
@@ -270,45 +350,14 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			cancel()
 			return stopAndDrain()
 		case msg := <-loop.Deltas().Chan():
-			opts.observer.observe(msg)
-			opts.observer.dispatchScheduledInputs(runCtx, loop)
-			if err := writeSessionReplayMessage(out, msg); err != nil {
-				return errors.Join(err, stop())
+			state, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, sessionLoopMessageState{promptSent: promptSent, closeSent: closeSent}, awaitingResponse, startAudio, stop, stopAndDrain)
+			promptSent = state.promptSent
+			closeSent = state.closeSent
+			if msgErr != nil {
+				return msgErr
 			}
-			if msg.Type == messages.StreamTypeSessionOpen {
-				if opts.Prompt != "" && !promptSent {
-					promptSent = true
-					userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
-					if err := loop.Send(runCtx, []messages.Message{userMsg}); err != nil {
-						return errors.Join(fmt.Errorf("send session message: %w", err), stop())
-					}
-					opts.observer.noteUserTextInput(opts.Prompt)
-					if opts.awaitFirstTurn != nil {
-						if err := awaitSessionFirstTurn(runCtx, opts.awaitFirstTurn); err != nil {
-							return errors.Join(fmt.Errorf("send session first turn: %w", err), stop())
-						}
-					}
-				}
-				if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !closeSent {
-					closeSent = true
-					if err := sendSessionClose(runCtx, loop); err != nil {
-						return errors.Join(err, stop())
-					}
-				}
-				startAudio()
-			}
-			if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !closeSent {
-				closeSent = true
-				if err := sendSessionClose(runCtx, loop); err != nil {
-					return errors.Join(err, stop())
-				}
-			}
-			if opts.AudioIn != nil {
-				if shouldStopAudioInputSessionLoop(msg, opts, closeSent, awaitingResponse) {
-					return stopAndDrain()
-				}
-			} else if shouldStopSessionLoop(msg, opts, closeSent) {
-				return stopAndDrain()
+			if stopLoop {
+				return nil
 			}
 		}
 	}
@@ -321,6 +370,12 @@ type observedSessionInferencer struct {
 
 	mu         sync.Mutex
 	connectErr error
+	sessionErr error
+	session    messages.Session
+}
+
+type sessionTerminalErrorSource interface {
+	TerminalError() error
 }
 
 var _ messages.SessionInferencer = (*observedSessionInferencer)(nil)
@@ -344,9 +399,17 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		i.closeDone()
 		return nil, err
 	}
+	i.mu.Lock()
+	i.session = session
+	i.mu.Unlock()
 	go func() {
 		select {
 		case <-session.Done():
+			if err := terminalSessionError(session); err != nil {
+				i.mu.Lock()
+				i.sessionErr = err
+				i.mu.Unlock()
+			}
 			i.closeDone()
 		case <-ctx.Done():
 		}
@@ -359,6 +422,28 @@ func (i *observedSessionInferencer) connectFailure() error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.connectErr
+}
+
+// sessionFailure returns an unexpected terminal error reported by the
+// provider session after a successful connection. The optional interface keeps
+// the generic messages.Session contract unchanged for injected and replay
+// sessions that do not expose transport details.
+func (i *observedSessionInferencer) sessionFailure() error {
+	i.mu.Lock()
+	session, remembered := i.session, i.sessionErr
+	i.mu.Unlock()
+	if err := terminalSessionError(session); err != nil {
+		return err
+	}
+	return remembered
+}
+
+func terminalSessionError(session messages.Session) error {
+	source, ok := session.(sessionTerminalErrorSource)
+	if !ok {
+		return nil
+	}
+	return source.TerminalError()
 }
 
 func (i *observedSessionInferencer) Done() <-chan struct{} {

@@ -255,6 +255,24 @@ func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect
 	}
 }
 
+func TestRunSessionWithRecordingDirectoryPreservesProviderErrorOverEmptyRecording(t *testing.T) {
+	authErr := errors.New("openai realtime authentication failed")
+	destination := filepath.Join(t.TempDir(), "auth-failure")
+	err := RunSessionWithRecordingDirectory(context.Background(), io.Discard, SessionRunOptions{
+		Provider:          config.ProviderOpenAI,
+		Model:             "gpt-realtime",
+		APIKey:            "invalid-test-key",
+		ConfigDir:         t.TempDir(),
+		SessionInferencer: &failingSessionRecordingInferencer{err: authErr},
+	}, destination)
+	if !errors.Is(err, authErr) {
+		t.Fatalf("error = %v, want provider authentication error", err)
+	}
+	if errors.Is(err, transcript.ErrInvalidRecording) || strings.Contains(err.Error(), "at least one segment is required") {
+		t.Fatalf("empty recording validation masked provider error: %v", err)
+	}
+}
+
 func TestRunSessionWithRecordingDirectoryUsesProductionAudioInput(t *testing.T) {
 	inputPath := sessionRecordingAudioFixturePath(t, "utterance.wav")
 	destination := filepath.Join(t.TempDir(), "nested", "capture")
@@ -1156,6 +1174,12 @@ type countingSessionRecordingInferencer struct{ connects int }
 func (i *countingSessionRecordingInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	i.connects++
 	return newSessionRecordingTestSession(), nil
+}
+
+type failingSessionRecordingInferencer struct{ err error }
+
+func (i *failingSessionRecordingInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return nil, i.err
 }
 
 func recordingEntries(t *testing.T, root string) []string {

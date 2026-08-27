@@ -588,6 +588,10 @@ func (s *sessionAudioOutputSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.Session)
 }
 
+func (s *sessionAudioOutputSession) TerminalError() error {
+	return terminalSessionError(s.Session)
+}
+
 func (s *sessionAudioOutputSession) forward() {
 	defer s.once.Do(func() { close(s.done) })
 	input := s.Session.Receive()

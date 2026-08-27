@@ -9,6 +9,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -157,17 +158,18 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 // runner's single consumer goroutine; no internal locking is required except
 // for the exactly-once terminal emission guard.
 type sessionProgressObserver struct {
-	sink           SessionDiagnosticSink
-	recorder       metrics.Recorder
-	streamObserver SessionStreamObserver
-	runtime        *sessionRuntimeObservationRecorder
-	provider       string
-	model          string
-	sawSessionOpen bool
-	turnsCompleted int
-	counters       audioTurnCounters
-	totals         audioTurnCounters
-	pendingInputs  []ScheduledAudioInput
+	sink            SessionDiagnosticSink
+	recorder        metrics.Recorder
+	streamObserver  SessionStreamObserver
+	runtime         *sessionRuntimeObservationRecorder
+	provider        string
+	model           string
+	sawSessionOpen  bool
+	turnsCompleted  int
+	scheduledInputs int
+	counters        audioTurnCounters
+	totals          audioTurnCounters
+	pendingInputs   []ScheduledAudioInput
 
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
@@ -215,6 +217,7 @@ func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInp
 		return
 	}
 	o.pendingInputs = append(o.pendingInputs, inputs...)
+	o.scheduledInputs += len(inputs)
 }
 
 // observe consumes one delta crossing. It must run before any error-bearing
@@ -267,21 +270,34 @@ func (o *sessionProgressObserver) noteUserTextInput(text string) {
 
 // dispatchScheduledInputs delivers due scheduled audio through the loop's
 // existing SendAudioInput seam and attributes the bytes to the in-flight turn.
-func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop *agentloop.AgentLoop) {
+func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop *agentloop.AgentLoop) error {
 	if o == nil || loop == nil {
-		return
+		return nil
 	}
 	for len(o.pendingInputs) > 0 && o.pendingInputs[0].AfterCompletedTurns <= o.turnsCompleted {
 		input := o.pendingInputs[0]
-		o.pendingInputs = o.pendingInputs[1:]
+		inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
 		if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
-			continue
+			return fmt.Errorf("send scheduled audio input %d: %w", inputIndex, err)
 		}
-		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 		if input.EndOfTurn {
-			_ = loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+			if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
+			}
 		}
+		o.pendingInputs = o.pendingInputs[1:]
+		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	}
+	return nil
+}
+
+// scheduledAudioComplete reports whether every scheduled input has been
+// accepted and its corresponding assistant response has crossed MESSAGE.END.
+// It is intentionally separate from replay capture inspection: live planning
+// owns the decision to close after the schedule, while replay follows its
+// captured lifecycle.
+func (o *sessionProgressObserver) scheduledAudioComplete() bool {
+	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on

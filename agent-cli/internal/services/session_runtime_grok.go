@@ -34,14 +34,17 @@ func planGrokRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	}
 
 	return sessionRuntimePlan{
-		mode:       sessionRuntimeModeRecordGrok,
-		provider:   sessionProviderGrok,
-		model:      sessionCfg.Model,
-		announce:   fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath),
-		inferencer: sessionInferencer,
+		mode:        sessionRuntimeModeRecordGrok,
+		provider:    sessionProviderGrok,
+		model:       sessionCfg.Model,
+		capturePath: opts.RecordPath,
+		announce:    fmt.Sprintf("Starting Grok session recording to %s", opts.RecordPath),
+		inferencer:  sessionInferencer,
 		loop: sessionLoopOptions{
-			Prompt:         opts.Prompt,
-			CloseAfterOpen: true,
+			Prompt:                   opts.Prompt,
+			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
+			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 		},
 		flushCapture: func() error {
 			return recordingDialer.FlushToFile(opts.RecordPath)

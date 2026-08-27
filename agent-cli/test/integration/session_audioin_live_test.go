@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,154 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 		t.Fatalf("--audio-out recorded %d bytes; want non-empty response audio", info.Size())
 	}
 	t.Logf("live audio-in proof: transcript done, %d output audio bytes, %d recorded bytes", audioBytes, info.Size())
+}
+
+func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime record-dir audio-in-turn proof")
+	}
+	if os.Getenv("AGENT_HARNESS_LIVE_AUDIOIN") != "1" {
+		t.Skip("AGENT_HARNESS_LIVE_AUDIOIN!=1; this live test bills real API usage and must be opted into explicitly")
+	}
+
+	for _, testCase := range []struct {
+		name  string
+		turns int
+	}{
+		{name: "single turn", turns: 1},
+		{name: "two turns", turns: 2},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			workDir := t.TempDir()
+			recordDir := filepath.Join(workDir, "recording")
+
+			agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+			if err != nil {
+				t.Fatalf("initialize CLI: %v", err)
+			}
+			rootCmd := agentCLI.Generate()
+			rootCmd.SetOut(io.Discard)
+			rootCmd.SetErr(io.Discard)
+			args := []string{
+				"--config-dir", workDir,
+				"session",
+				"--provider", "openai",
+				"--model", "gpt-realtime",
+				"--api-key", apiKey,
+				"--record-dir", recordDir,
+				"--max-duration", liveAudioInTimeout.String(),
+			}
+			for index := 0; index < testCase.turns; index++ {
+				args = append(args, "--audio-in-turn", liveAudioInWAVPath(t))
+			}
+			rootCmd.SetArgs(args)
+
+			ctx, cancel := context.WithTimeout(context.Background(), liveAudioInTimeout+15*time.Second)
+			defer cancel()
+			if err := rootCmd.ExecuteContext(ctx); err != nil {
+				t.Fatalf("live record-dir audio-in-turn command: %v", err)
+			}
+			assertLiveRecordDirBundle(t, recordDir, testCase.turns)
+		})
+	}
+}
+
+func assertLiveRecordDirBundle(t *testing.T, destination string, wantTurns int) {
+	t.Helper()
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read live recording manifest: %v", err)
+	}
+	var manifest struct {
+		Artifacts []struct {
+			Path string `json:"path"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode live recording manifest: %v", err)
+	}
+
+	seen := make(map[string]bool, len(manifest.Artifacts))
+	manifestInputCount := 0
+	manifestOutputCount := 0
+	for _, artifact := range manifest.Artifacts {
+		seen[artifact.Path] = true
+		switch {
+		case strings.HasPrefix(artifact.Path, "audio/in-"):
+			manifestInputCount++
+		case strings.HasPrefix(artifact.Path, "audio/out-"):
+			manifestOutputCount++
+		}
+	}
+	if manifestInputCount != wantTurns || manifestOutputCount != wantTurns {
+		t.Fatalf("live recording manifest audio artifacts = input:%d output:%d, want %d each", manifestInputCount, manifestOutputCount, wantTurns)
+	}
+	for _, path := range []string{"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "manifest.json"} {
+		if path != "manifest.json" && !seen[path] {
+			t.Fatalf("live recording manifest does not list %q", path)
+		}
+		if info, err := os.Stat(filepath.Join(destination, path)); err != nil || info.Size() == 0 {
+			t.Fatalf("live recording artifact %q is missing or empty: %v", path, err)
+		}
+	}
+
+	inputCount := 0
+	outputCount := 0
+	for index := 0; index < wantTurns; index++ {
+		for _, side := range []string{"in", "out"} {
+			path := filepath.Join(destination, "audio", side+"-"+liveRecordingDigits(index)+".pcm")
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat live %s audio segment %q: %v", side, path, err)
+			}
+			if info.Size() == 0 {
+				t.Fatalf("live %s audio segment %q is empty", side, path)
+			}
+			if side == "in" {
+				inputCount++
+			} else {
+				outputCount++
+			}
+		}
+	}
+	if inputCount != wantTurns || outputCount != wantTurns {
+		t.Fatalf("live recording audio segments = input %d/output %d, want %d/%d", inputCount, outputCount, wantTurns, wantTurns)
+	}
+
+	logBytes, err := os.ReadFile(filepath.Join(destination, "session-log.jsonl"))
+	if err != nil {
+		t.Fatalf("read live session log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(logBytes)), "\n")
+	if len(lines) != wantTurns {
+		t.Fatalf("live session log entries = %d, want %d", len(lines), wantTurns)
+	}
+	for index, line := range lines {
+		var entry struct {
+			TurnIndex int `json:"turn_index"`
+			Input     struct {
+				AudioBytes uint64 `json:"audio_bytes"`
+				Committed  bool   `json:"committed"`
+			} `json:"input"`
+			Response struct {
+				AudioBytes uint64 `json:"audio_bytes"`
+				Complete   bool   `json:"complete"`
+			} `json:"response"`
+		}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("decode live session log entry %d: %v", index+1, err)
+		}
+		if entry.TurnIndex != index+1 || !entry.Input.Committed || entry.Input.AudioBytes == 0 || !entry.Response.Complete || entry.Response.AudioBytes == 0 {
+			t.Fatalf("live session log entry %d does not prove an ordered committed input and completed audio response: %#v", index+1, entry)
+		}
+	}
+	t.Logf("live record-dir proof: %d ordered turn bundle(s) finalized with non-empty input/output audio", wantTurns)
+}
+
+func liveRecordingDigits(index int) string {
+	value := strconv.Itoa(index)
+	return strings.Repeat("0", 3-len(value)) + value
 }
 
 func liveAudioInWAVPath(t *testing.T) string {

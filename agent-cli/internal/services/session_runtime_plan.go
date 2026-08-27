@@ -261,8 +261,9 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 			inferencer: opts.SessionInferencer,
 			loop: sessionLoopOptions{
 				Prompt:                   opts.Prompt,
-				CloseAfterOpen:           !opts.WaitForClose,
-				WaitForClose:             opts.WaitForClose,
+				CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
+				WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
 				MaxDuration:              3 * time.Second,
 				AdvertiseToolDefinitions: true,
 			},
