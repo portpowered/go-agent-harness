@@ -321,6 +321,7 @@ following command turns any match into a failure:
 
 ```bash
 if rg -n --glob '*.json' --glob '*.jsonl' --glob '*.txt' \
+    --glob '*.stdout' --glob '*.stderr' \
     'input_audio_buffer_commit_empty|conversation_already_has_active_response' \
     "$WORK_DIR"; then
   printf '%s\n' 'named provider collision found' >&2
