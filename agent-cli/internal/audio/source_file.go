@@ -27,6 +27,10 @@ var (
 	ErrTruncatedPCM = errors.New("truncated raw PCM16")
 	// ErrNilStream indicates that a standard stream dependency was not supplied.
 	ErrNilStream = errors.New("audio standard stream is nil")
+	// ErrEndOfTurn marks a boundary in a persistent raw PCM stream. FileSource
+	// propagates it without marking the source exhausted so the session layer can
+	// commit the current audio turn and continue reading the next one.
+	ErrEndOfTurn = errors.New("audio input end of turn")
 )
 
 // FormatError reports a path whose extension or audio properties are not
@@ -296,6 +300,12 @@ func (s *FileSource) readRawFrame(buf []int16) error {
 	if err == nil {
 		decodePCM16(buf, encoded[:])
 		return nil
+	}
+	if errors.Is(err, ErrEndOfTurn) {
+		if count != 0 {
+			return newStreamError("read", s.path, s.format, fmt.Errorf("end-of-turn marker after %d PCM bytes", count))
+		}
+		return ErrEndOfTurn
 	}
 
 	if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {

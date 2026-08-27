@@ -50,9 +50,18 @@ The positive verifier requires six ordered crossings, each with a harness
 direction, stable key (`A-turn-1` through `A-turn-3` or `B-turn-1` through
 `B-turn-3`), schedule ordinal, logical tick, deterministic timestamp, emitted
 PCM, delivered PCM, SHA-256, and RMS. It also requires three runtime audio
-outputs, three runtime audio inputs, three completed-turn events, and one clean
-terminal event per CLI. The runtime observations are produced inside the
-session command; the test coordinator only gates the raw stream and records
+outputs, three runtime audio inputs, three accepted client-to-server input
+commits, three completed-turn events, and one clean terminal event per CLI. The
+multi-turn raw stdin reader returns an explicit `audio.ErrEndOfTurn` marker
+between PCM frames. `FileSource` preserves the persistent stream at that
+marker, and the session audio producer sends `MESSAGE.END` before reading the
+next frame. The observed session wrapper emits an input-commit observation only
+after the underlying session accepts that `MESSAGE.END`; the observation owns
+the exact PCM accumulated since the previous commit and its one-based ordinal.
+The verifier binds commit *n* to the corresponding directional crossing,
+transcript marker, completed turn, deterministic timestamp, exact PCM/hash/RMS,
+and successful replay acceptance. The runtime observations are produced inside
+the session command; the test coordinator only gates the raw stream and records
 what the runtime reports.
 
 The four views are:
@@ -73,7 +82,7 @@ replay sessions, and settle to the established goroutine tolerance.
 
 ## Deterministic negative controls
 
-The positive run and positive verifier are reused unchanged by two controls:
+The positive run and positive verifier are reused unchanged by four controls:
 
 * `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl` replaces
   turn 2 in the delivered `B/agent` view with turn 1's non-silent PCM. The
@@ -83,11 +92,22 @@ The positive run and positive verifier are reused unchanged by two controls:
   A's turn-2 marker to B's turn 2. The command and runtime counts remain
   unchanged; the ordered transcript ledger rejects the wrong harness/turn
   attribution and reports the expected and observed markers.
+* `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/missing_commit`
+  removes A's second accepted input-commit observation. The remaining ordinal
+  is now attributed to turn 2, so the unchanged verifier reports the expected
+  ordinal 2 and observed ordinal 3 for stable `B-turn-2`.
+* `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls/cross-attributed_commit`
+  replaces A's second committed PCM with turn 1's PCM. The commit count and
+  command outcome remain plausible, but exact hash/RMS and crossing parity
+  reject the cross-attribution.
 
 Both mutations happen after the real CLI run, do not modify committed
 fixtures, and retain the same clock, bridge, lifecycle, and verification path.
 Diagnostics name the affected harness or direction, stable turn identity or
-ordinal, field, and expected-versus-observed identity.
+ordinal, field, and expected-versus-observed identity. The commit controls
+mutate only runtime evidence after the underlying CLI has already accepted all
+three commits, so they exercise the verifier's later-turn attribution checks
+without bypassing the production path.
 
 ## Focused reruns and scope
 

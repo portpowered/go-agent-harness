@@ -535,6 +535,12 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		}
 		clear(frame)
 		if err := source.source.ReadFrame(ctx, frame); err != nil {
+			if errors.Is(err, audio.ErrEndOfTurn) {
+				if endErr := sendSessionAudioEndOfTurn(ctx, loop, source); endErr != nil {
+					return endErr
+				}
+				continue
+			}
 			if errors.Is(err, io.EOF) {
 				return sendSessionAudioEndOfTurn(ctx, loop, source)
 			}

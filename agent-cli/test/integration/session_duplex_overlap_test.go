@@ -404,6 +404,8 @@ type v8MultiTurnBridge struct {
 	mu      sync.Mutex
 	writes  int
 	eofRead bool
+	eofSeen chan struct{}
+	eofOnce sync.Once
 }
 
 func newV8MultiTurnBridge(coordinator *v8MultiTurnCoordinator, direction string, sender, receiver *v8RecordingView, eofReady <-chan struct{}) *v8MultiTurnBridge {
@@ -416,6 +418,7 @@ func newV8MultiTurnBridge(coordinator *v8MultiTurnCoordinator, direction string,
 		runtimeOut:  make(chan services.SessionRuntimeObservation, 1),
 		runtimeIn:   make(chan v8RuntimeInputEvent),
 		packets:     make(chan v8MultiTurnBridgePacket, 2),
+		eofSeen:     make(chan struct{}),
 	}
 }
 
@@ -530,6 +533,11 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 			case <-b.coordinator.abort:
 				return 0, context.Canceled
 			}
+			select {
+			case <-b.eofSeen:
+			case <-b.coordinator.abort:
+				return 0, context.Canceled
+			}
 		}
 		return len(data), nil
 	}
@@ -577,6 +585,11 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 		case <-b.coordinator.abort:
 			return 0, context.Canceled
 		}
+		select {
+		case <-b.eofSeen:
+		case <-b.coordinator.abort:
+			return 0, context.Canceled
+		}
 	}
 	return len(data), nil
 }
@@ -607,6 +620,7 @@ func (b *v8MultiTurnBridge) read(ctx context.Context, destination []byte) (int, 
 			b.mu.Lock()
 			b.eofRead = true
 			b.mu.Unlock()
+			b.eofOnce.Do(func() { close(b.eofSeen) })
 			return 0, io.EOF
 		}
 		copy(destination, packet.crossing.Emitted)
@@ -632,14 +646,25 @@ type v8MultiTurnPCMWriter struct{ bridge *v8MultiTurnBridge }
 
 func (w v8MultiTurnPCMWriter) Write(data []byte) (int, error) { return w.bridge.write(data) }
 
-type v8MultiTurnPCMReader struct{ bridge *v8MultiTurnBridge }
-
-func (r v8MultiTurnPCMReader) Read(data []byte) (int, error) {
-	return r.bridge.read(context.Background(), data)
+type v8MultiTurnPCMReader struct {
+	bridge          *v8MultiTurnBridge
+	boundaryPending bool
 }
 
-func (r v8MultiTurnPCMReader) ReadContext(ctx context.Context, data []byte) (int, error) {
-	return r.bridge.read(ctx, data)
+func (r *v8MultiTurnPCMReader) Read(data []byte) (int, error) {
+	return r.ReadContext(context.Background(), data)
+}
+
+func (r *v8MultiTurnPCMReader) ReadContext(ctx context.Context, data []byte) (int, error) {
+	if r.boundaryPending {
+		r.boundaryPending = false
+		return 0, audio.ErrEndOfTurn
+	}
+	count, err := r.bridge.read(ctx, data)
+	if err == nil && count > 0 {
+		r.boundaryPending = true
+	}
+	return count, err
 }
 
 type v8BridgePacket struct {
@@ -1065,16 +1090,6 @@ func v8LoudFrameSet(t *testing.T, path string, count int) [][]byte {
 	return frames
 }
 
-func findFrameStart(samples []int16, frame []byte) int {
-	frameSamples := len(frame) / 2
-	for start := 0; start+frameSamples <= len(samples); start += audio.FrameSize {
-		if bytes.Equal(v8PCM16Bytes(samples[start:start+frameSamples]), frame) {
-			return start
-		}
-	}
-	return -1
-}
-
 func absInt(value int) int {
 	if value < 0 {
 		return -value
@@ -1210,6 +1225,7 @@ func writeV8MultiTurnReplayCapture(t *testing.T, path, sessionID, instruction, h
 	for turn := 1; turn <= 2; turn++ {
 		appendServerTurn(turn)
 		appendPeerInput(turn)
+		appendInputEnd()
 		appendResponseEnd()
 	}
 	// Turn three is the ordinary sequential boundary. A's output interval is
@@ -1492,8 +1508,8 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 			}
 		}()
 	}
-	start("A", v8HarnessAInstruction, aReplay, v8MultiTurnPCMReader{bridge: bToABridge}, v8MultiTurnPCMWriter{bridge: aToBBridge}, aCLI, aObserver, aStream)
-	start("B", v8HarnessBInstruction, bReplay, v8MultiTurnPCMReader{bridge: aToBBridge}, v8MultiTurnPCMWriter{bridge: bToABridge}, bCLI, bObserver, bStream)
+	start("A", v8HarnessAInstruction, aReplay, &v8MultiTurnPCMReader{bridge: bToABridge}, v8MultiTurnPCMWriter{bridge: aToBBridge}, aCLI, aObserver, aStream)
+	start("B", v8HarnessBInstruction, bReplay, &v8MultiTurnPCMReader{bridge: aToBBridge}, v8MultiTurnPCMWriter{bridge: bToABridge}, bCLI, bObserver, bStream)
 	close(startGate)
 
 	harnesses := make(map[string]v8HarnessResult, 2)
@@ -1797,6 +1813,89 @@ func verifyV8TranscriptMarkers(harness string, records []v8StreamRecord) error {
 	return nil
 }
 
+func v8InputDirection(harness string) string {
+	if harness == "A" {
+		return "B-to-A"
+	}
+	return "A-to-B"
+}
+
+func v8InputCrossingIndex(harness string, turn int) int {
+	index := (turn - 1) * 2
+	if harness == "A" {
+		index++
+	}
+	return index
+}
+
+func v8InputCommitFailure(harness string, crossing v8Crossing, expected, observed []byte) error {
+	wantHash, wantRMS := v8PCMStats(expected)
+	gotHash, gotRMS := v8PCMStats(observed)
+	return fmt.Errorf("multi-turn harness %s %s %s turn %d input commit PCM mismatch: expected hash=%s RMS=%.1f (> %.1f); observed hash=%s RMS=%.1f", harness, crossing.Direction, crossing.TurnKey, crossing.Turn, wantHash, wantRMS, v8VADThreshold, gotHash, gotRMS)
+}
+
+func verifyV8InputCommitLedger(harness string, result v8HarnessResult, crossings []v8Crossing, completions []services.SessionRuntimeObservation, expected [][]byte, base time.Time) error {
+	direction := v8InputDirection(harness)
+	commits := v8RuntimeObservations(result.Runtime, services.SessionRuntimeObservationInputCommit)
+	markers := v8StreamTextMarkers(result.Stream)
+	observedOrdinals := make([]int, 0, len(commits))
+	for turnIndex, observation := range commits {
+		turn := turnIndex + 1
+		observedOrdinals = append(observedOrdinals, observation.InputCommit)
+		if observation.InputCommit != turn {
+			return fmt.Errorf("multi-turn harness %s direction %s %s turn %d input commit ordinal mismatch: expected=%d observed=%d", harness, direction, v8MultiTurnKey(direction, turn), turn, turn, observation.InputCommit)
+		}
+	}
+	if len(commits) != v8MultiTurnCount {
+		missingTurn := 0
+		seen := make(map[int]struct{}, len(commits))
+		for _, ordinal := range observedOrdinals {
+			seen[ordinal] = struct{}{}
+		}
+		for turn := 1; turn <= v8MultiTurnCount; turn++ {
+			if _, ok := seen[turn]; !ok {
+				missingTurn = turn
+				break
+			}
+		}
+		if missingTurn == 0 {
+			return fmt.Errorf("multi-turn harness %s input commit ledger has %d commits, want %d; duplicate or unexpected commit ordinals=%v", harness, len(commits), v8MultiTurnCount, observedOrdinals)
+		}
+		return fmt.Errorf("multi-turn harness %s input commit ledger has %d commits, want %d; missing stable %s turn %d; observed ordinals=%v", harness, len(commits), v8MultiTurnCount, v8MultiTurnKey(direction, missingTurn), missingTurn, observedOrdinals)
+	}
+	if len(markers) != v8MultiTurnCount {
+		return fmt.Errorf("multi-turn harness %s input commit ledger cannot bind transcript markers: expected %d, observed %d", harness, v8MultiTurnCount, len(markers))
+	}
+	for turnIndex, observation := range commits {
+		turn := turnIndex + 1
+		crossing := crossings[v8InputCrossingIndex(harness, turn)]
+		turnKey := v8MultiTurnKey(direction, turn)
+		completion := completions[turnIndex]
+		wantTimestamp := base.Add(time.Duration(observation.Tick) * v8TickDuration)
+		if !observation.Timestamp.Equal(wantTimestamp) {
+			return fmt.Errorf("multi-turn harness %s %s turn %d input commit timestamp=%s is not deterministic for tick %d", harness, turnKey, turn, observation.Timestamp.Format(time.RFC3339Nano), observation.Tick)
+		}
+		if observation.Tick < crossing.Tick || (observation.Tick == crossing.Tick && observation.Timestamp.Before(crossing.Timestamp)) {
+			return fmt.Errorf("multi-turn harness %s %s turn %d input commit precedes its audio crossing: commit tick=%d timestamp=%s; crossing tick=%d timestamp=%s", harness, turnKey, turn, observation.Tick, observation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
+		}
+		if completion.TurnsCompleted != turn || completion.Tick < observation.Tick || (completion.Tick == observation.Tick && completion.Timestamp.Before(observation.Timestamp)) {
+			return fmt.Errorf("multi-turn harness %s %s turn %d input commit is not bound to completed turn: commit tick=%d timestamp=%s; completion turns=%d tick=%d timestamp=%s", harness, turnKey, turn, observation.Tick, observation.Timestamp.Format(time.RFC3339Nano), completion.TurnsCompleted, completion.Tick, completion.Timestamp.Format(time.RFC3339Nano))
+		}
+		if !bytes.Equal(observation.Payload, expected[turnIndex]) || !bytes.Equal(observation.Payload, crossing.Delivered) {
+			return v8InputCommitFailure(harness, crossing, expected[turnIndex], observation.Payload)
+		}
+		_, rms := v8PCMStats(observation.Payload)
+		if rms <= v8VADThreshold {
+			return v8InputCommitFailure(harness, crossing, expected[turnIndex], observation.Payload)
+		}
+		expectedMarker := fmt.Sprintf("%s transcript turn %d", harness, turn)
+		if markers[turnIndex] != expectedMarker {
+			return fmt.Errorf("multi-turn harness %s %s turn %d input commit transcript attribution mismatch: expected=%q observed=%q", harness, turnKey, turn, expectedMarker, markers[turnIndex])
+		}
+	}
+	return nil
+}
+
 func verifyV8ViewLedger(viewName string, view *v8RecordingView, crossings []v8Crossing, direction string, expected [][]byte) error {
 	if view == nil {
 		return fmt.Errorf("multi-turn recording view %s is missing", viewName)
@@ -1908,6 +2007,13 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 			}
 		}
 		if err := verifyV8TranscriptMarkers(name, result.Stream); err != nil {
+			return err
+		}
+		inputExpected := aToB
+		if name == "A" {
+			inputExpected = bToA
+		}
+		if err := verifyV8InputCommitLedger(name, result, run.crossings, turnObservations, inputExpected, run.base); err != nil {
 			return err
 		}
 		for index, observation := range outputObservations {
@@ -2115,6 +2221,64 @@ func mutateV8TranscriptMarker(run *v8DuplexRun, harness string, turn int, replac
 	return fmt.Errorf("multi-turn harness %s has no transcript marker for turn %d", harness, turn)
 }
 
+func mutateV8InputCommitPayload(run *v8DuplexRun, harness string, turn int, payload []byte) error {
+	if run == nil {
+		return fmt.Errorf("cannot mutate a nil multi-turn run")
+	}
+	if turn < 1 || turn > v8MultiTurnCount {
+		return fmt.Errorf("multi-turn harness %s input commit mutation turn %d is outside 1..%d", harness, turn, v8MultiTurnCount)
+	}
+	result, ok := run.harnesses[harness]
+	if !ok {
+		return fmt.Errorf("multi-turn harness %s is missing", harness)
+	}
+	commitOrdinal := 0
+	for index := range result.Runtime {
+		if result.Runtime[index].Kind != services.SessionRuntimeObservationInputCommit {
+			continue
+		}
+		commitOrdinal++
+		if commitOrdinal == turn {
+			result.Runtime[index].Payload = append([]byte(nil), payload...)
+			run.harnesses[harness] = result
+			return nil
+		}
+	}
+	return fmt.Errorf("multi-turn harness %s has no input commit for turn %d", harness, turn)
+}
+
+func dropV8InputCommit(run *v8DuplexRun, harness string, turn int) error {
+	if run == nil {
+		return fmt.Errorf("cannot mutate a nil multi-turn run")
+	}
+	if turn < 1 || turn > v8MultiTurnCount {
+		return fmt.Errorf("multi-turn harness %s input commit drop turn %d is outside 1..%d", harness, turn, v8MultiTurnCount)
+	}
+	result, ok := run.harnesses[harness]
+	if !ok {
+		return fmt.Errorf("multi-turn harness %s is missing", harness)
+	}
+	filtered := make([]services.SessionRuntimeObservation, 0, len(result.Runtime))
+	commitOrdinal := 0
+	dropped := false
+	for _, observation := range result.Runtime {
+		if observation.Kind == services.SessionRuntimeObservationInputCommit {
+			commitOrdinal++
+			if commitOrdinal == turn {
+				dropped = true
+				continue
+			}
+		}
+		filtered = append(filtered, observation)
+	}
+	if !dropped {
+		return fmt.Errorf("multi-turn harness %s has no input commit for turn %d", harness, turn)
+	}
+	result.Runtime = filtered
+	run.harnesses[harness] = result
+	return nil
+}
+
 func TestSessionCLI_DuplexPCMOverlap(t *testing.T) {
 	baselineGoroutines := runtime.NumGoroutine()
 	aToB, bToA := v8LoudFrames(t, v8AudioFixturePath(t, "overlap_16k.wav"))
@@ -2193,4 +2357,48 @@ func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl(t *testi
 	}
 	assertV8GoroutinesSettled(t, baselineGoroutines, "later-turn transcript negative control")
 	t.Logf("v8 later-turn transcript negative control rejected as expected: %v", err)
+}
+
+func TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls(t *testing.T) {
+	t.Run("missing commit", func(t *testing.T) {
+		baselineGoroutines := runtime.NumGoroutine()
+		frames := v8LoudFrameSet(t, v8AudioFixturePath(t, "overlap_16k.wav"), v8MultiTurnCount)
+		run := runV8MultiTurnDuplex(t, frames, frames)
+		if err := dropV8InputCommit(&run, "A", 2); err != nil {
+			t.Fatalf("drop later-turn input commit control: %v", err)
+		}
+		err := verifyV8MultiTurnRun(run, frames, frames)
+		if err == nil {
+			t.Fatal("missing later-turn input commit negative control passed the positive multi-turn verifier")
+		}
+		diagnostic := err.Error()
+		for _, part := range []string{"harness A", "B-to-A", "B-turn-2", "input commit", "expected=2", "observed=3"} {
+			if !strings.Contains(diagnostic, part) {
+				t.Fatalf("missing input commit diagnostic lacks %q: %v", part, err)
+			}
+		}
+		assertV8GoroutinesSettled(t, baselineGoroutines, "missing later-turn input commit negative control")
+		t.Logf("v8 missing later-turn input commit negative control rejected as expected: %v", err)
+	})
+
+	t.Run("cross-attributed commit", func(t *testing.T) {
+		baselineGoroutines := runtime.NumGoroutine()
+		frames := v8LoudFrameSet(t, v8AudioFixturePath(t, "overlap_16k.wav"), v8MultiTurnCount)
+		run := runV8MultiTurnDuplex(t, frames, frames)
+		if err := mutateV8InputCommitPayload(&run, "A", 2, frames[0]); err != nil {
+			t.Fatalf("mutate later-turn input commit control: %v", err)
+		}
+		err := verifyV8MultiTurnRun(run, frames, frames)
+		if err == nil {
+			t.Fatal("cross-attributed later-turn input commit negative control passed the positive multi-turn verifier")
+		}
+		diagnostic := err.Error()
+		for _, part := range []string{"harness A", "B-to-A", "B-turn-2", "input commit", "expected hash=", "observed hash="} {
+			if !strings.Contains(diagnostic, part) {
+				t.Fatalf("cross-attributed input commit diagnostic lacks %q: %v", part, err)
+			}
+		}
+		assertV8GoroutinesSettled(t, baselineGoroutines, "cross-attributed later-turn input commit negative control")
+		t.Logf("v8 cross-attributed later-turn input commit negative control rejected as expected: %v", err)
+	})
 }

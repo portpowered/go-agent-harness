@@ -126,7 +126,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
 	var rtcPumpErrors <-chan error
 	sessionInferencer, rtcPumpErrors = bindRTCDeviceSessionInferencer(sessionInferencer, opts.rtcDeviceBinding)
-	observedInferencer := newObservedSessionInferencer(sessionInferencer)
+	observedInferencer := newObservedSessionInferencer(sessionInferencer, opts.runtime)
 	loop, err := agentloop.New(duplexSessionLoopOptions(observedInferencer, opts)...)
 	if err != nil {
 		return fmt.Errorf("create session agent loop: %w", err)
@@ -315,9 +315,10 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 }
 
 type observedSessionInferencer struct {
-	inner messages.SessionInferencer
-	done  chan struct{}
-	once  sync.Once
+	inner   messages.SessionInferencer
+	done    chan struct{}
+	once    sync.Once
+	runtime *sessionRuntimeObservationRecorder
 
 	mu         sync.Mutex
 	connectErr error
@@ -325,10 +326,15 @@ type observedSessionInferencer struct {
 
 var _ messages.SessionInferencer = (*observedSessionInferencer)(nil)
 
-func newObservedSessionInferencer(inner messages.SessionInferencer) *observedSessionInferencer {
+func newObservedSessionInferencer(inner messages.SessionInferencer, runtime ...*sessionRuntimeObservationRecorder) *observedSessionInferencer {
+	var observationRecorder *sessionRuntimeObservationRecorder
+	if len(runtime) > 0 {
+		observationRecorder = runtime[0]
+	}
 	return &observedSessionInferencer{
-		inner: inner,
-		done:  make(chan struct{}),
+		inner:   inner,
+		done:    make(chan struct{}),
+		runtime: observationRecorder,
 	}
 }
 
@@ -351,7 +357,7 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		case <-ctx.Done():
 		}
 	}()
-	return &observedSession{Session: session, closeDone: i.closeDone}, nil
+	return &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime}, nil
 }
 
 // connectFailure returns the remembered connect error, if any.
@@ -374,10 +380,19 @@ func (i *observedSessionInferencer) closeDone() {
 type observedSession struct {
 	messages.Session
 	closeDone func()
+	runtime   *sessionRuntimeObservationRecorder
 	once      sync.Once
 }
 
 var _ messages.Session = (*observedSession)(nil)
+
+func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	ok := s.Session.Send(ctx, msg)
+	if ok && msg.Type == messages.StreamTypeMessageEnd && s.runtime != nil {
+		s.runtime.inputCommit()
+	}
+	return ok
+}
 
 func (s *observedSession) Close() error {
 	err := s.Session.Close()
