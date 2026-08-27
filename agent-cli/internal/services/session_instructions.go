@@ -209,14 +209,14 @@ func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFa
 	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}
-	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
+	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg, voice, dialer, instructions)
 	}
 	factory.newGrokSessionWithTools = func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
 	}
-	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
+	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, voice, dialer, instructions, toolDefinitions)
 	}
 	return factory
 }
@@ -247,11 +247,11 @@ func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokCo
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
-func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, nil)
+func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, voice, dialer, instructions, nil)
 }
 
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
@@ -271,6 +271,9 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg con
 	inferenceOpts := []inference.SessionOption{
 		inference.WithSessionModel(sessionCfg.Model),
 		inference.WithSessionInstructions(instructions),
+	}
+	if voice != "" {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
 	}
 	if len(toolDefinitions) > 0 {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionTools(toolDefinitions))

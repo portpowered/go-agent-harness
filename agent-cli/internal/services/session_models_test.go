@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
@@ -136,8 +137,9 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 		model    string
 		apiKey   string
 		baseURL  string
+		voice    string
 	}{
-		{name: "openai", provider: config.ProviderOpenAI, model: openAIRealtimeDefaultModel, apiKey: "sk-live-test", baseURL: "ws://openai.test/realtime"},
+		{name: "openai", provider: config.ProviderOpenAI, model: openAIRealtimeDefaultModel, apiKey: "sk-live-test", baseURL: "ws://openai.test/realtime", voice: "marin"},
 		{name: "grok", provider: config.ProviderGrok, model: "grok-session-model", apiKey: "xai-live-test", baseURL: "ws://grok.test/realtime"},
 	}
 	for _, tt := range tests {
@@ -148,6 +150,7 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 				APIKey:    tt.apiKey,
 				BaseURL:   tt.baseURL,
 				ConfigDir: t.TempDir(),
+				Voice:     tt.voice,
 			}, "respond with the device probe phrase")
 			if err != nil {
 				t.Fatalf("NewLiveSessionInferencer: %v", err)
@@ -165,6 +168,9 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 			if config.Model != tt.model || config.Instructions != "respond with the device probe phrase" {
 				t.Fatalf("session request identity = (%q, %q), want model/instructions", config.Model, config.Instructions)
 			}
+			if config.Voice != tt.voice {
+				t.Fatalf("session voice = %q, want %q", config.Voice, tt.voice)
+			}
 			if len(config.Modalities) != 2 || config.Modalities[0] != models.SessionModalityText || config.Modalities[1] != models.SessionModalityAudio {
 				t.Fatalf("session modalities = %#v, want text+audio", config.Modalities)
 			}
@@ -173,6 +179,76 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 				t.Fatalf("session audio contract = %#v, want PCM16 at 24 kHz in both directions", config)
 			}
 		})
+	}
+}
+
+func TestOpenAIRealtimeSessionVoiceIsPerInferencer(t *testing.T) {
+	type result struct {
+		voice string
+		got   string
+		err   error
+	}
+
+	voices := []string{"marin", "cedar"}
+	results := make(chan result, len(voices))
+	for _, voice := range voices {
+		voice := voice
+		go func() {
+			inferencer, err := buildOpenAIRealtimeSessionInferencer(
+				configOpenAIRealtimeTestConfig(openAIRealtimeDefaultModel),
+				voice,
+				&recordingOpenAIRealtimeDialer{},
+			)
+			if err != nil {
+				results <- result{voice: voice, err: err}
+				return
+			}
+			requested, ok := inferencer.(interface {
+				Request() inference.SessionRequest
+			})
+			if !ok {
+				results <- result{voice: voice, err: errors.New("inferencer does not expose its session request")}
+				return
+			}
+			results <- result{voice: voice, got: requested.Request().Config.Voice}
+		}()
+	}
+
+	for range voices {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("build OpenAI session for %q: %v", got.voice, got.err)
+		}
+		if got.got != got.voice {
+			t.Errorf("concurrent session voice = %q, want %q", got.got, got.voice)
+		}
+	}
+}
+
+func TestOpenAIRealtimeSessionVoicePreservesInstructionsAndTools(t *testing.T) {
+	toolDefinitions := []messages.ToolDefinition{{Name: "lookup", Description: "Look up a value"}}
+	inferencer, err := buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(
+		configOpenAIRealtimeTestConfig(openAIRealtimeDefaultModel),
+		"marin",
+		&recordingOpenAIRealtimeDialer{},
+		"Keep responses concise.",
+		toolDefinitions,
+	)
+	if err != nil {
+		t.Fatalf("build instruction-bearing OpenAI session: %v", err)
+	}
+	requested, ok := inferencer.(interface {
+		Request() inference.SessionRequest
+	})
+	if !ok {
+		t.Fatalf("inferencer type %T does not expose its session request", inferencer)
+	}
+	got := requested.Request().Config
+	if got.Voice != "marin" || got.Instructions != "Keep responses concise." {
+		t.Fatalf("session config = %#v, want voice and instructions", got)
+	}
+	if len(got.Tools) != 1 || got.Tools[0].Name != "lookup" {
+		t.Fatalf("session tools = %#v, want lookup", got.Tools)
 	}
 }
 

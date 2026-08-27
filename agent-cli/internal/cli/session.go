@@ -47,6 +47,33 @@ type SessionCommand struct {
 	imagePaths                []string
 }
 
+// sessionVoiceFlagValue validates the public voice flag while Cobra parses
+// arguments. The service package remains the single owner of the accepted
+// voice set and validation error identity.
+type sessionVoiceFlagValue struct {
+	target *string
+	err    error
+}
+
+func (v *sessionVoiceFlagValue) String() string {
+	if v == nil || v.target == nil {
+		return ""
+	}
+	return *v.target
+}
+
+func (v *sessionVoiceFlagValue) Set(value string) error {
+	if err := services.ValidateOpenAIRealtimeVoice(value); err != nil {
+		v.err = err
+		return err
+	}
+	v.err = nil
+	*v.target = value
+	return nil
+}
+
+func (*sessionVoiceFlagValue) Type() string { return "string" }
+
 // NewSessionCommand returns the session group command constructor. The tool
 // executor is the single composed instance from the wire graph (the same value
 // given to agent.NewExecutor); callers without one pass nil so session runs
@@ -151,6 +178,7 @@ func (c *SessionCommand) SetDeviceRegistry(registry audio.DeviceRegistry) {
 // Generate returns the cobra command for the session group.
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
+	var voice string
 	recordDirPath := ""
 	audioOutPath := ""
 	var maxDuration time.Duration
@@ -159,6 +187,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var audioInTurns []string
 	var audioInDevice audio.DeviceID
 	var audioOutDevice audio.DeviceID
+	voiceFlag := &sessionVoiceFlagValue{target: &voice}
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
@@ -167,6 +196,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			"Use repeatable audio-in-turn paths with record-dir to replay multiple finite spoken turns through one persistent session.\n\n" +
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
+		PreRunE: func(_ *cobra.Command, _ []string) error {
+			return services.ValidateOpenAIRealtimeVoice(voice)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := services.ValidateSessionAudioDeviceConflicts(
 				cmd.Flags().Changed("audio-in"),
@@ -225,6 +257,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				BaseURL:           c.askFlags.BaseURL,
 				ConfigDir:         c.globalFlags.ConfigDir(),
 				Prompt:            strings.Join(args, " "),
+				Voice:             voice,
 				SessionInferencer: c.sessionInferencerOverride,
 				ToolExecutor:      toolExecutor,
 				ToolDefinitions:   toolDefinitions,
@@ -325,6 +358,12 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		if voiceFlag.err != nil {
+			return voiceFlag.err
+		}
+		return err
+	})
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
 	cmd.Flags().StringVar(&recordDirPath, "record-dir", "", "Record a complete both-side session directory separately from --record")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
@@ -334,6 +373,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().BoolVar(&waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
+	cmd.Flags().Var(voiceFlag, "voice", fmt.Sprintf("OpenAI Realtime audio output voice (supported: %s)", strings.Join(services.SupportedOpenAIRealtimeVoices(), ", ")))
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
 	cmd.Flags().StringArrayVar(&audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
