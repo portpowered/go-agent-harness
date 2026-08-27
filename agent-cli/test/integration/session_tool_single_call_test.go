@@ -185,20 +185,6 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 	serverEvent("response.output_audio.delta", string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_single_call","status":"completed"}}`)
-	if includeToolCall {
-		resultPayload, marshalErr := json.Marshal(map[string]any{
-			"type": "conversation.item.create",
-			"item": map[string]any{
-				"type":    "function_call_output",
-				"call_id": "call_weather_1",
-				"output":  toolCallScenarioOutput,
-			},
-		})
-		if marshalErr != nil {
-			t.Fatalf("marshal tool result event: %v", marshalErr)
-		}
-		clientEvent("conversation.item.create", resultPayload)
-	}
 
 	baseCapture.Session.ID = "sess_tool_single_call"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
