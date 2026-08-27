@@ -90,4 +90,3 @@ The combined focused run is:
 cd agent-cli
 go test ./test/integration -run '^TestSessionCommand_DefaultToolSetActive' -count=1 -v
 ```
-
