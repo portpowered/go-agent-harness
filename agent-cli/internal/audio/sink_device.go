@@ -11,7 +11,11 @@ type DeviceSink struct {
 var _ AudioSink = (*DeviceSink)(nil)
 
 func NewDeviceSink(registry DeviceRegistry, id DeviceID) (*DeviceSink, error) {
-	handle, err := acquireDevice(registry, id, DirectionOutput)
+	resolvedID, err := resolveDeviceIDForOpen(registry, id, DirectionOutput)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := acquireDevice(registry, resolvedID, DirectionOutput)
 	if err != nil {
 		return nil, err
 	}
@@ -19,9 +23,19 @@ func NewDeviceSink(registry DeviceRegistry, id DeviceID) (*DeviceSink, error) {
 	bytes, hasBytes := handle.(deviceByteWriter)
 	if !hasFrames && !hasBytes {
 		_ = handle.Close()
-		return nil, &DeviceCapabilityError{ID: id, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
+		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
 	}
-	return &DeviceSink{newDeviceAdapter(handle, id, DirectionOutput), frames, bytes}, nil
+	return &DeviceSink{newDeviceAdapter(handle, resolvedID, DirectionOutput), frames, bytes}, nil
+}
+
+// DeviceID returns the stable ID acquired by the sink. When the sink was
+// opened with an empty selector, this is the ID returned by the registry's
+// directional default.
+func (s *DeviceSink) DeviceID() DeviceID {
+	if s == nil || s.adapter == nil {
+		return ""
+	}
+	return s.adapter.id
 }
 
 func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {

@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 var (
@@ -30,6 +31,9 @@ type realtimeSession struct {
 
 	done      chan struct{}
 	closeOnce sync.Once
+
+	mediaMu sync.Mutex
+	media   *rtc.SessionMedia
 }
 
 var _ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
@@ -112,6 +116,9 @@ func (s *realtimeSession) Close() error {
 	var closeErr error
 	s.closeOnce.Do(func() {
 		close(s.done)
+		if media := s.currentRTCMedia(); media != nil {
+			_ = media.Close()
+		}
 		closeErr = s.conn.Close()
 	})
 	return closeErr

@@ -169,12 +169,16 @@ func adapterTestRegistry(t *testing.T) *VirtualRegistry {
 }
 
 type adapterTestRegistryStub struct {
-	handle OpenedDevice
-	err    error
+	handle        OpenedDevice
+	err           error
+	defaultDevice Device
+	defaultErr    error
 }
 
-func (r *adapterTestRegistryStub) List() ([]Device, error)           { return nil, nil }
-func (r *adapterTestRegistryStub) Default(Direction) (Device, error) { return Device{}, nil }
+func (r *adapterTestRegistryStub) List() ([]Device, error) { return nil, nil }
+func (r *adapterTestRegistryStub) Default(Direction) (Device, error) {
+	return r.defaultDevice, r.defaultErr
+}
 func (r *adapterTestRegistryStub) Open(DeviceID) (OpenedDevice, error) {
 	return r.handle, r.err
 }

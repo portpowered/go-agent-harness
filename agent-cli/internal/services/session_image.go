@@ -457,6 +457,10 @@ func (s *sessionImageSession) signalFirstTurn(sent bool) {
 	s.firstTurn <- fmt.Errorf("%w: provider session rejected image turn", ErrSessionImageSend)
 }
 
+func (s *sessionImageSession) rtcMedia() (RTCMediaEndpoints, bool) {
+	return rtcMediaFromSession(s.Session)
+}
+
 // SendSessionImageTurn attaches validated parts to one reusable user turn.
 func SendSessionImageTurn(ctx context.Context, session messages.Session, text string, parts []messages.ImagePart) error {
 	if sendSessionImageTurn(ctx, session, text, parts, true) {

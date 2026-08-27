@@ -118,6 +118,7 @@ type sessionRuntimePlan struct {
 	transport         string
 	signalingEndpoint string
 	mediaSource       string
+	rtcDeviceRequest  RTCDeviceBindingRequest
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
@@ -137,6 +138,16 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 			if err := p.closeSession(); err != nil {
 				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
 			}
+		}()
+	}
+	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
+	if err != nil {
+		return err
+	}
+	if deviceBinding != nil {
+		p.loop.rtcDeviceBinding = deviceBinding
+		defer func() {
+			runErr = errors.Join(runErr, deviceBinding.Close())
 		}()
 	}
 	if p.announce != "" {
@@ -216,6 +227,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
+	plan.rtcDeviceRequest = opts.RTCDeviceBinding
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether
 	// tool execution is enabled. Nil keeps every plan unchanged.

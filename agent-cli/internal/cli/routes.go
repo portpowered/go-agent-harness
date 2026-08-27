@@ -69,6 +69,9 @@ func NewRouter(
 	if probeRunCommand != nil && probeRunCommand.deviceRegistry != nil {
 		deviceRegistry = probeRunCommand.deviceRegistry
 	}
+	if sessionCommand != nil && sessionCommand.deviceRegistry != nil {
+		deviceRegistry = sessionCommand.deviceRegistry
+	}
 	return &Router{
 		Flags:                    flags,
 		deviceRegistry:           deviceRegistry,

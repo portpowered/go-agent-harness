@@ -141,3 +141,18 @@ type OutboundMedia interface {
 	MediaEndpoint
 	WriteFrame(ctx context.Context, frame PCMFrame) error
 }
+
+// MediaEndpoints are the caller-owned PCM endpoints exposed by an RTC session
+// owner. The session owner creates and closes these endpoints; a local device
+// runtime may only use them for the duration of the owning session.
+type MediaEndpoints struct {
+	Inbound  InboundMedia
+	Outbound OutboundMedia
+}
+
+// MediaSession is an optional capability implemented by an RTC session owner.
+// It lives in the shared transport package so provider implementations can
+// expose their real tracks without importing an agent-cli internal package.
+type MediaSession interface {
+	RTCMedia() MediaEndpoints
+}
