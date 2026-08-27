@@ -59,7 +59,7 @@ Board naming convention: every lane below is submitted with an `s2s-` prefix (e.
 
 ## Remaining WebRTC engineering lanes (3)
 
-- `s2s-b4-rtc-device-binding` — --audio-in-device/--audio-out-device feed/play WebRTC tracks through the same device registry as the WS path _(history: #214:CLOSED, #220:OPEN/ACTIVE REVIEW)_
+- `s2s-b4-rtc-device-binding` — --audio-in-device/--audio-out-device feed/play WebRTC tracks through the same device registry as the WS path _(history: #214:CLOSED, #220:MERGED 2026-08-27; task-only token terminal-repaired)_
 - `s2s-b4-rtc-cli-surface` — --transport webrtc, --signaling, --media-source wired through the Router with documented mutual exclusions _(history: #210:OPEN; one retry admitted after runtime prerequisite #218 merged)_
 - `s2s-b4-rtc-transport-parity` — one scenario run over WS and over RTC produces the same Projection; a behavioral difference between transports is a failure _(history: #209:MERGED)_
 
