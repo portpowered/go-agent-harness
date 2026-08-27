@@ -60,7 +60,7 @@ const (
 	asyncCollisionDeltaSamples       = 1600
 	asyncCollisionDeltaCount         = 2
 	asyncCollisionInputSamples       = audio.FrameSize
-	asyncCollisionMaxDuration        = 3 * time.Second
+	asyncCollisionMaxDuration        = 10 * time.Second
 	asyncCollisionControlMaxDuration = 250 * time.Millisecond
 	asyncCollisionDisposition        = "queue/sequence"
 )
