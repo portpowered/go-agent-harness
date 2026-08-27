@@ -2,14 +2,13 @@ package sessionfixturevalidator
 
 import (
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-var committedSessionFixtureRoots = committedFixtureRoots()
+var committedSessionFixtureRoots = gatewayCommittedFixtureRoots()
 
 func TestCommittedSessionFixturesPassHygieneSmokeCheck(t *testing.T) {
 	result, err := ValidatePaths(committedSessionFixtureRoots)
@@ -30,17 +29,8 @@ func TestAllCommittedSessionFixturesPassWithExactCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate all committed session fixture roots: %v", err)
 	}
-	manifest, err := loadFixtureManifest(repoPathFromHere(committedFixtureManifestRelPath))
-	if err != nil {
-		t.Fatalf("load committed fixture manifest: %v", err)
-	}
-	liveFiles, _, err := relativeFixtureFiles(roots)
-	if err != nil {
-		t.Fatalf("collect committed session fixtures: %v", err)
-	}
-	unregistered, stale := diffFixtureSets(liveFiles, manifest.Files)
-	if len(unregistered) > 0 || len(stale) > 0 || result.FilesScanned != manifest.Count {
-		t.Fatalf("%s", formatManifestDrift(committedFixtureManifestRelPath, result.FilesScanned, manifest.Count, unregistered, stale))
+	if err := verifyCommittedFixtureManifest(repoPathFromHere(committedFixtureManifestRelPath), roots, result.FilesScanned); err != nil {
+		t.Fatal(err)
 	}
 	if len(result.Errors) != 0 {
 		t.Fatalf("all committed session fixture validation failed:\n%s", formatValidationErrors(result.Errors))
@@ -100,24 +90,4 @@ func formatValidationErrors(errs []gatewaytesting.SessionFixtureValidationError)
 		lines = append(lines, err.Error())
 	}
 	return strings.Join(lines, "\n")
-}
-
-func committedFixtureRoots() []string {
-	return []string{
-		repoPathFromHere("../../pkg/providers/openai/testdata"),
-		filepath.Dir(gatewaytesting.SharedSessionFixturePath("fixture.session.json")),
-	}
-}
-
-func allCommittedFixtureRoots() []string {
-	roots := committedFixtureRoots()
-	return append(roots, repoPathFromHere("../../../agent-cli/test/integration/testdata"))
-}
-
-func repoPathFromHere(rel string) string {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return rel
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), rel))
 }

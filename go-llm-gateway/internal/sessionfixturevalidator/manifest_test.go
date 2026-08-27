@@ -139,14 +139,16 @@ func TestFormatManifestDrift_NamesPathsAndRegenerateCommand(t *testing.T) {
 }
 
 func TestRun_EmitManifest_WritesDeterministicFile(t *testing.T) {
-	root := t.TempDir()
-	writeValidFixture(t, filepath.Join(root, "kept.session.json"))
 	outputA := filepath.Join(t.TempDir(), "a.manifest.json")
 	outputB := filepath.Join(t.TempDir(), "b.manifest.json")
+	roots := allCommittedFixtureRoots()
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	argsFor := func(output string) []string { return []string{"-emit-manifest", output, root} }
+	argsFor := func(output string) []string {
+		args := []string{"-emit-manifest", output}
+		return append(args, roots...)
+	}
 	if err := Run(argsFor(outputA), &stdout, &stderr); err != nil {
 		t.Fatalf("Run emit-manifest: %v; stderr=%s", err, stderr.String())
 	}
@@ -170,8 +172,11 @@ func TestRun_EmitManifest_WritesDeterministicFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load emitted manifest: %v", err)
 	}
-	if manifest.Count != 1 || strings.Join(manifest.Files, ",") != "kept.session.json" {
-		t.Fatalf("emitted manifest = %+v, want one entry kept.session.json", manifest)
+	if manifest.Count != len(manifest.Files) || manifest.Count == 0 {
+		t.Fatalf("emitted manifest = %+v, want a non-empty count derived from entries", manifest)
+	}
+	if err := validateCommittedFixtureManifest(manifest); err != nil {
+		t.Fatalf("emitted manifest scope: %v", err)
 	}
 }
 
@@ -183,7 +188,160 @@ func TestRun_EmitManifest_RequiresAtLeastOneRoot(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Run with -emit-manifest and no roots = nil error, want error")
 	}
-	if !strings.Contains(err.Error(), "-emit-manifest requires at least one file or directory") {
+	if !strings.Contains(err.Error(), "-emit-manifest requires at least one committed-fixture root") {
 		t.Fatalf("error = %v, want -emit-manifest root requirement message", err)
+	}
+}
+
+func TestRun_EmitManifest_RejectsOutsideOmittedAndDuplicateRoots(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "manifest.json")
+	allRoots := allCommittedFixtureRoots()
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "outside scope",
+			args: []string{"-emit-manifest", output, t.TempDir()},
+			want: "outside the supported repository scope",
+		},
+		{
+			name: "omitted root",
+			args: append([]string{"-emit-manifest", output}, allRoots[:2]...),
+			want: "missing authoritative committed-fixture root(s)",
+		},
+		{
+			name: "duplicate root",
+			args: append([]string{"-emit-manifest", output}, append(allRoots, allRoots[0])...),
+			want: "duplicate committed-fixture root",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			if err := Run(test.args, &stdout, &stderr); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Run error = %v, want substring %q", err, test.want)
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatalf("manifest output exists after rejected emission: %v", err)
+			}
+		})
+	}
+}
+
+func TestBuildFixtureManifest_RejectsOverlappingRoots(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "nested")
+	if err := os.Mkdir(nested, 0755); err != nil {
+		t.Fatalf("create nested directory: %v", err)
+	}
+	writeValidFixture(t, filepath.Join(nested, "duplicate.session.json"))
+
+	if _, err := buildFixtureManifest([]string{root, nested}); err == nil || !strings.Contains(err.Error(), "duplicate fixture discovery") {
+		t.Fatalf("buildFixtureManifest error = %v, want duplicate discovery error", err)
+	}
+}
+
+func TestCompareFixtureManifest_ReportsAddDeleteAndRenameDrift(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "first.session.json")
+	second := filepath.Join(root, "second.session.json")
+	writeValidFixture(t, first)
+	writeValidFixture(t, second)
+	manifest, err := buildFixtureManifest([]string{root})
+	if err != nil {
+		t.Fatalf("buildFixtureManifest: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "added.session.json"), []byte("not validated by inventory"), 0644); err != nil {
+		t.Fatalf("add fixture: %v", err)
+	}
+	addedLive, _, err := relativeFixtureFiles([]string{root})
+	if err != nil {
+		t.Fatalf("relativeFixtureFiles after add: %v", err)
+	}
+	addedErr := compareFixtureManifest("testdata/manifest.json", len(addedLive), addedLive, manifest)
+	if addedErr == nil || !strings.Contains(addedErr.Error(), "added.session.json") || !strings.Contains(addedErr.Error(), "unregistered") {
+		t.Fatalf("addition error = %v, want unregistered added path", addedErr)
+	}
+
+	if err := os.Remove(first); err != nil {
+		t.Fatalf("delete fixture: %v", err)
+	}
+	deletedLive, _, err := relativeFixtureFiles([]string{root})
+	if err != nil {
+		t.Fatalf("relativeFixtureFiles after delete: %v", err)
+	}
+	deletedErr := compareFixtureManifest("testdata/manifest.json", len(deletedLive), deletedLive, manifest)
+	if deletedErr == nil || !strings.Contains(deletedErr.Error(), "first.session.json") || !strings.Contains(deletedErr.Error(), "stale") {
+		t.Fatalf("deletion error = %v, want stale deleted path", deletedErr)
+	}
+
+	if err := os.Rename(second, filepath.Join(root, "renamed.session.json")); err != nil {
+		t.Fatalf("rename fixture: %v", err)
+	}
+	renamedLive, _, err := relativeFixtureFiles([]string{root})
+	if err != nil {
+		t.Fatalf("relativeFixtureFiles after rename: %v", err)
+	}
+	renameErr := compareFixtureManifest("testdata/manifest.json", len(renamedLive), renamedLive, manifest)
+	if renameErr == nil || !strings.Contains(renameErr.Error(), "renamed.session.json") || !strings.Contains(renameErr.Error(), "second.session.json") {
+		t.Fatalf("rename error = %v, want both renamed and stale paths", renameErr)
+	}
+	if !strings.Contains(renameErr.Error(), regenerateFixtureManifestCommand) {
+		t.Fatalf("rename error = %v, want canonical regeneration command", renameErr)
+	}
+}
+
+func TestCompareFixtureManifest_RejectsDuplicateLiveDiscovery(t *testing.T) {
+	manifest := fixtureManifest{Count: 1, Files: []string{"one.session.json"}}
+	err := compareFixtureManifest("testdata/manifest.json", 2,
+		[]string{"one.session.json", "one.session.json"}, manifest)
+	if err == nil || !strings.Contains(err.Error(), "duplicate live fixture discovery") || !strings.Contains(err.Error(), "one.session.json") {
+		t.Fatalf("compareFixtureManifest error = %v, want duplicate live path", err)
+	}
+}
+
+func TestLoadFixtureManifest_RejectsDuplicateCountAndNoncanonicalEntries(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "duplicate",
+			body: `{"count":2,"files":["one.session.json","one.session.json"]}`,
+			want: "duplicate manifest entry",
+		},
+		{
+			name: "inconsistent count",
+			body: `{"count":2,"files":["one.session.json"]}`,
+			want: "does not equal",
+		},
+		{
+			name: "parent traversal",
+			body: `{"count":1,"files":["../one.session.json"]}`,
+			want: "not canonical",
+		},
+		{
+			name: "backslash",
+			body: `{"count":1,"files":["dir\\one.session.json"]}`,
+			want: "slash separators",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+			if err := os.WriteFile(manifestPath, []byte(test.body), 0644); err != nil {
+				t.Fatalf("write manifest: %v", err)
+			}
+			if _, err := loadFixtureManifest(manifestPath); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("loadFixtureManifest error = %v, want substring %q", err, test.want)
+			}
+		})
 	}
 }

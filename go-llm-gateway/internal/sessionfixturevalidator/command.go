@@ -85,10 +85,11 @@ func ValidatePaths(paths []string) (Result, error) {
 // runEmitManifest scans paths and writes the generated fixture manifest to
 // outputPath instead of validating.
 func runEmitManifest(outputPath string, paths []string, stdout io.Writer) error {
-	if len(paths) == 0 {
-		return errors.New("-emit-manifest requires at least one file or directory")
+	roots, err := validateCommittedFixtureRootArguments(paths)
+	if err != nil {
+		return err
 	}
-	manifest, err := buildFixtureManifest(paths)
+	manifest, err := buildCommittedFixtureManifest(roots)
 	if err != nil {
 		return err
 	}

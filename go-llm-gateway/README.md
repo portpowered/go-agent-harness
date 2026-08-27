@@ -668,15 +668,17 @@ that `TestAllCommittedSessionFixturesPassWithExactCount` compares against a live
 scan. After intentionally adding or removing fixtures anywhere under the
 registered roots (`pkg/providers/openai/testdata`,
 `pkg/testing/testdata/session-fixtures`,
-`../agent-cli/test/integration/testdata`), regenerate it from the repository
-root (the directory containing `go.work`):
+`../agent-cli/test/integration/testdata`), pass all three registered roots and
+regenerate it from the repository root (the directory containing `go.work`):
 
 ```bash
 go run ./go-llm-gateway/cmd/session-fixture-validator -emit-manifest go-llm-gateway/internal/sessionfixturevalidator/testdata/committed-fixtures.manifest.json go-llm-gateway/pkg/providers/openai/testdata go-llm-gateway/pkg/testing/testdata/session-fixtures agent-cli/test/integration/testdata
 ```
 
 A fixture change without this regeneration turns the test red naming the drifted
-paths and this command.
+paths and this command. The emitter rejects missing roots, roots outside this
+registry, overlapping or duplicate roots, and partial scans; do not resolve an
+unexpected failure by freezing a new count or omitting a root.
 
 For fixture format details, start with
 [`pkg/testing/README.md`](./pkg/testing/README.md).

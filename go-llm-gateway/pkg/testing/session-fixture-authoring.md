@@ -57,7 +57,10 @@ go run ./go-llm-gateway/cmd/session-fixture-validator -emit-manifest go-llm-gate
 ```
 
 Until you do, `TestAllCommittedSessionFixturesPassWithExactCount` fails naming
-the drifted paths and this command.
+the drifted paths and this command. The command must include every registered
+root; missing, duplicate, overlapping, or out-of-scope roots are rejected
+before the manifest is written. Investigate unexpected drift rather than
+freezing a replacement count or omitting a root.
 
 ## Provenance Categories
 
