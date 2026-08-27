@@ -22,7 +22,10 @@ func TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials(t *testing.T
 	if err != nil {
 		t.Fatalf("ParseManifest JSON: %v", err)
 	}
-	assertNormalizedManifest(t, manifest)
+	if manifest.Room.MaxTurns != 3 || manifest.Room.MaxDuration != 30*time.Second {
+		t.Fatalf("JSON bounds = %+v", manifest.Room)
+	}
+	assertNormalizedParticipants(t, manifest)
 
 	yamlData := []byte(`schema_version: 1
 room:
@@ -413,6 +416,11 @@ func assertNormalizedManifest(t *testing.T, manifest Manifest) {
 	if manifest.SchemaVersion != SchemaVersion || manifest.Room.MaxTurns != 3 || manifest.Room.MaxDuration != 30*time.Second {
 		t.Fatalf("normalized manifest header = %+v", manifest)
 	}
+	assertNormalizedParticipants(t, manifest)
+}
+
+func assertNormalizedParticipants(t *testing.T, manifest Manifest) {
+	t.Helper()
 	if len(manifest.Participants) != 2 || manifest.Participants[0].Provider != "openai" {
 		t.Fatalf("normalized participants = %+v", manifest.Participants)
 	}
