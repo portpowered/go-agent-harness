@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	yamlv3 "gopkg.in/yaml.v3"
 )
 
 func TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials(t *testing.T) {
@@ -60,6 +62,13 @@ participants:
 	}
 	if !strings.Contains(string(encoded), `"max_duration":"2m0s"`) {
 		t.Fatalf("normalized manifest does not preserve duration: %s", encoded)
+	}
+	yamlEncoded, err := yamlv3.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal normalized YAML: %v", err)
+	}
+	if !strings.Contains(string(yamlEncoded), "max_duration: 2m0s") || strings.Contains(string(yamlEncoded), "customer-secret") || strings.Contains(string(yamlEncoded), "assistant-secret") {
+		t.Fatalf("normalized YAML bounds or credentials = %s", yamlEncoded)
 	}
 }
 

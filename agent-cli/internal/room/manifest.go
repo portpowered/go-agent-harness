@@ -109,6 +109,20 @@ func (r Room) MarshalJSON() ([]byte, error) {
 	return json.Marshal(output)
 }
 
+// MarshalYAML keeps normalized output human-readable while retaining the
+// time.Duration representation used by the runner internally.
+func (r Room) MarshalYAML() (any, error) {
+	type roomYAML struct {
+		MaxTurns    int    `yaml:"max_turns,omitempty"`
+		MaxDuration string `yaml:"max_duration,omitempty"`
+	}
+	output := roomYAML{MaxTurns: r.MaxTurns}
+	if r.MaxDuration > 0 {
+		output.MaxDuration = r.MaxDuration.String()
+	}
+	return output, nil
+}
+
 // Participant is one independently configured room member. APIKeyEnv is only
 // an environment variable name, never the resolved credential value.
 type Participant struct {
@@ -230,14 +244,14 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 	if m.SchemaVersion != SchemaVersion {
 		return validation("schema_version", fmt.Sprint(m.SchemaVersion), fmt.Sprintf("must be %d", SchemaVersion), ErrUnsupportedSchema)
 	}
-	if m.Room.MaxTurns <= 0 && m.Room.MaxDuration <= 0 {
-		return validation("room", "", "must set a positive max_turns and/or max_duration", ErrMissingBound)
-	}
 	if m.Room.MaxTurns < 0 {
 		return validation("room.max_turns", fmt.Sprint(m.Room.MaxTurns), "must be positive", ErrInvalidBound)
 	}
 	if m.Room.MaxDuration < 0 {
 		return validation("room.max_duration", "", "must be a positive duration", ErrInvalidBound)
+	}
+	if m.Room.MaxTurns == 0 && m.Room.MaxDuration == 0 {
+		return validation("room", "", "must set a positive max_turns and/or max_duration", ErrMissingBound)
 	}
 	if len(m.Participants) < 2 {
 		return validation("participants", "", "must contain at least two participants", ErrTooFewParticipants)
@@ -247,7 +261,7 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 	seenIDs := make(map[string]struct{}, len(m.Participants))
 	for index, participant := range m.Participants {
 		field := func(name string) string { return fmt.Sprintf("participants[%d].%s", index, name) }
-		if participant.ID == "" {
+		if strings.TrimSpace(participant.ID) == "" {
 			return validation(field("id"), "", "must not be empty", ErrInvalidParticipant)
 		}
 		if _, exists := seenIDs[participant.ID]; exists {
