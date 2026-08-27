@@ -74,6 +74,31 @@ func TestRunSessionWithMaxDuration_ZeroDoesNotCreateTimer(t *testing.T) {
 	}
 }
 
+func TestSessionDurationAdmission_PreservesCompleteMessageCapabilities(t *testing.T) {
+	inner := &durationCompleteMessageSession{
+		complete:        true,
+		withoutResponse: true,
+	}
+	wrapped := &sessionDurationAdmissionSession{inner: inner}
+	message := messages.NewTextMessage(messages.RoleUser, "image result")
+
+	if !wrapped.SendMessage(context.Background(), message) {
+		t.Fatal("duration admission rejected a complete message")
+	}
+	if !wrapped.SendMessageWithoutResponse(context.Background(), message) {
+		t.Fatal("duration admission rejected a deferred complete message")
+	}
+	if !wrapped.SupportsCompleteMessages() {
+		t.Fatal("duration admission hid complete-message capability")
+	}
+	if !wrapped.SupportsCompleteMessagesWithoutResponse() {
+		t.Fatal("duration admission hid deferred complete-message capability")
+	}
+	if len(inner.messages) != 1 || len(inner.deferredMessages) != 1 {
+		t.Fatalf("forwarded complete messages = %d/%d, want one of each", len(inner.messages), len(inner.deferredMessages))
+	}
+}
+
 func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -921,6 +946,43 @@ type durationArtifactLifecycleProbe struct {
 	closed   bool
 }
 
+type durationCompleteMessageSession struct {
+	messages         []messages.Message
+	deferredMessages []messages.Message
+	complete         bool
+	withoutResponse  bool
+}
+
+func (s *durationCompleteMessageSession) Send(context.Context, messages.StreamMessage) bool {
+	return true
+}
+
+func (s *durationCompleteMessageSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return messages.NewTypedBuffer[messages.StreamMessage](1)
+}
+
+func (s *durationCompleteMessageSession) Done() <-chan struct{} { return nil }
+
+func (s *durationCompleteMessageSession) Close() error { return nil }
+
+func (s *durationCompleteMessageSession) SendMessage(_ context.Context, message messages.Message) bool {
+	s.messages = append(s.messages, message)
+	return true
+}
+
+func (s *durationCompleteMessageSession) SendMessageWithoutResponse(_ context.Context, message messages.Message) bool {
+	s.deferredMessages = append(s.deferredMessages, message)
+	return true
+}
+
+func (s *durationCompleteMessageSession) SupportsCompleteMessages() bool {
+	return s.complete
+}
+
+func (s *durationCompleteMessageSession) SupportsCompleteMessagesWithoutResponse() bool {
+	return s.withoutResponse
+}
+
 func (p *durationArtifactLifecycleProbe) Accept(messages.StreamMessage) error {
 	p.accepted++
 	return nil
@@ -935,6 +997,9 @@ func (p *durationArtifactLifecycleProbe) Close() error {
 
 var _ messages.SessionInferencer = (*durationTestInferencer)(nil)
 var _ messages.Session = (*durationTestSession)(nil)
+var _ messages.Session = (*durationCompleteMessageSession)(nil)
+var _ SessionImageMessageSender = (*durationCompleteMessageSession)(nil)
+var _ SessionImageMessageSenderWithoutResponse = (*durationCompleteMessageSession)(nil)
 var _ SessionDurationClock = (*durationTestClock)(nil)
 var _ SessionDurationTimer = (*durationTestTimer)(nil)
 var _ SessionDurationArtifactLifecycle = (*durationArtifactLifecycleProbe)(nil)
