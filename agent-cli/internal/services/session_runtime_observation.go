@@ -19,6 +19,7 @@ type SessionRuntimeObservationKind string
 const (
 	SessionRuntimeObservationAudioOutput   SessionRuntimeObservationKind = "audio_output"
 	SessionRuntimeObservationAudioInput    SessionRuntimeObservationKind = "audio_input"
+	SessionRuntimeObservationInputCommit   SessionRuntimeObservationKind = "input_commit"
 	SessionRuntimeObservationTurnCompleted SessionRuntimeObservationKind = "turn_completed"
 	SessionRuntimeObservationTerminal      SessionRuntimeObservationKind = "terminal"
 )
@@ -33,8 +34,11 @@ type SessionRuntimeObservation struct {
 	Timestamp      time.Time
 	Payload        []byte
 	TurnsCompleted int
-	Clean          bool
-	Error          string
+	// InputCommit is the one-based ordinal of a client-to-server MESSAGE.END
+	// accepted by the session. It is populated only for InputCommit observations.
+	InputCommit int
+	Clean       bool
+	Error       string
 }
 
 // SessionRuntimeObserver receives runtime observations. It is optional and
@@ -53,6 +57,9 @@ type sessionRuntimeObservationRecorder struct {
 	sequence atomic.Uint64
 
 	terminalOnce sync.Once
+	inputMu      sync.Mutex
+	inputPayload []byte
+	inputCommits int
 }
 
 func newSessionRuntimeObservationRecorder(observer SessionRuntimeObserver, source platformclock.Source) *sessionRuntimeObservationRecorder {
@@ -66,6 +73,10 @@ func newSessionRuntimeObservationRecorder(observer SessionRuntimeObserver, sourc
 }
 
 func (r *sessionRuntimeObservationRecorder) observe(kind SessionRuntimeObservationKind, payload []byte, turns int, clean bool, runErr error) {
+	r.observeWithInputCommit(kind, payload, turns, 0, clean, runErr)
+}
+
+func (r *sessionRuntimeObservationRecorder) observeWithInputCommit(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error) {
 	if r == nil || r.observer == nil {
 		return
 	}
@@ -76,6 +87,7 @@ func (r *sessionRuntimeObservationRecorder) observe(kind SessionRuntimeObservati
 		Timestamp:      timestamp,
 		Payload:        append([]byte(nil), payload...),
 		TurnsCompleted: turns,
+		InputCommit:    inputCommit,
 		Clean:          clean,
 		Error:          sessionRuntimeObservationError(runErr),
 	})
@@ -86,7 +98,30 @@ func (r *sessionRuntimeObservationRecorder) audioOutput(payload []byte) {
 }
 
 func (r *sessionRuntimeObservationRecorder) audioInput(payload []byte) {
+	if r == nil {
+		return
+	}
+	r.inputMu.Lock()
+	r.inputPayload = append(r.inputPayload, payload...)
+	r.inputMu.Unlock()
 	r.observe(SessionRuntimeObservationAudioInput, payload, 0, false, nil)
+}
+
+// inputCommit records the exact raw PCM accumulated since the previous
+// client-to-server MESSAGE.END. It is called by the observed session wrapper
+// only after the underlying Session.Send succeeds, so replay validation has
+// accepted the actual outbound commit before this evidence is emitted.
+func (r *sessionRuntimeObservationRecorder) inputCommit() {
+	if r == nil {
+		return
+	}
+	r.inputMu.Lock()
+	r.inputCommits++
+	commit := r.inputCommits
+	payload := append([]byte(nil), r.inputPayload...)
+	r.inputPayload = nil
+	r.inputMu.Unlock()
+	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, commit, true, nil)
 }
 
 func (r *sessionRuntimeObservationRecorder) turnCompleted(turns int) {

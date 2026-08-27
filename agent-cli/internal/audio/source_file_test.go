@@ -102,6 +102,42 @@ func TestFileSourceRawFramingAndOwnership(t *testing.T) {
 	}
 }
 
+func TestFileSourceRawEndOfTurnMarkerDoesNotExhaustStream(t *testing.T) {
+	first := make([]int16, FrameSize)
+	first[0] = 101
+	second := make([]int16, FrameSize)
+	second[0] = -202
+	reader := &endOfTurnReader{frames: [][]byte{pcmBytes(first), pcmBytes(second)}}
+	source, err := NewFileSource("-", reader)
+	if err != nil {
+		t.Fatalf("NewFileSource() error = %v", err)
+	}
+	defer func() { _ = source.Close() }()
+
+	got := make([]int16, FrameSize)
+	if err := source.ReadFrame(context.Background(), got); err != nil {
+		t.Fatalf("first ReadFrame() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, first) {
+		t.Fatalf("first frame = %v, want %v", got, first)
+	}
+	if err := source.ReadFrame(context.Background(), got); !errors.Is(err, ErrEndOfTurn) {
+		t.Fatalf("ReadFrame() at turn boundary = %v, want ErrEndOfTurn", err)
+	}
+	if err := source.ReadFrame(context.Background(), got); err != nil {
+		t.Fatalf("second ReadFrame() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, second) {
+		t.Fatalf("second frame = %v, want %v", got, second)
+	}
+	if err := source.ReadFrame(context.Background(), got); !errors.Is(err, ErrEndOfTurn) {
+		t.Fatalf("second ReadFrame() at turn boundary = %v, want ErrEndOfTurn", err)
+	}
+	if err := source.ReadFrame(context.Background(), got); !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadFrame() after final turn = %v, want io.EOF", err)
+	}
+}
+
 func TestFileSourceEmptyAndTruncatedRaw(t *testing.T) {
 	t.Run("empty returns EOF", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "empty.raw")
@@ -392,3 +428,23 @@ func (r *countingReader) Read(destination []byte) (int, error) {
 type errorReader struct{ err error }
 
 func (r errorReader) Read([]byte) (int, error) { return 0, r.err }
+
+type endOfTurnReader struct {
+	frames          [][]byte
+	frame           int
+	boundaryPending bool
+}
+
+func (r *endOfTurnReader) Read(destination []byte) (int, error) {
+	if r.boundaryPending {
+		r.boundaryPending = false
+		return 0, ErrEndOfTurn
+	}
+	if r.frame == len(r.frames) {
+		return 0, io.EOF
+	}
+	copy(destination, r.frames[r.frame])
+	r.frame++
+	r.boundaryPending = true
+	return len(r.frames[r.frame-1]), nil
+}
