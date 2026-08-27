@@ -226,6 +226,44 @@ func TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM(t *testing
 	}
 }
 
+func TestSessionDirectoryRecordingPersistsOneAuthoritativeTerminalSummary(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "terminal-summary")
+	recording := newSessionDirectoryRecording(destination, sessionRuntimePlan{provider: sessionProviderOpenAI}, SessionRunOptions{Model: "gpt-realtime"})
+	recording.client.WriteString("client\n")
+	recording.agent.WriteString("agent\n")
+	want := transcript.RecordingTerminalSummary{
+		Reason:             "max_duration",
+		Classification:     "max_duration",
+		TerminalReason:     messages.TerminalReason("max_duration"),
+		TerminalProvenance: messages.TerminalProvenanceLoop,
+		OutputState:        messages.TerminalOutputPartial,
+	}
+	if err := recording.RecordTerminalSummary(want); err != nil {
+		t.Fatalf("record terminal summary: %v", err)
+	}
+	if err := recording.RecordTerminalSummary(want); err != nil {
+		t.Fatalf("repeat identical terminal summary: %v", err)
+	}
+	if recording.terminal == nil || *recording.terminal != want {
+		t.Fatalf("recording terminal summary = %+v, want %+v", recording.terminal, want)
+	}
+	if err := recording.Finalize(); err != nil {
+		t.Fatalf("finalize recording: %v", err)
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	if manifest.Terminal == nil || *manifest.Terminal != want {
+		t.Fatalf("manifest terminal summary = %+v, want %+v", manifest.Terminal, want)
+	}
+}
+
 func TestRunSessionWithRecordingDirectoryRejectsNonEmptyDestinationBeforeConnect(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
 	if err := os.MkdirAll(destination, 0o755); err != nil {

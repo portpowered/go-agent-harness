@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 const (
@@ -98,6 +100,9 @@ func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
 	if manifest.FormatVersion != RecordingManifestVersion {
 		t.Fatalf("manifest format_version = %d, want %d", manifest.FormatVersion, RecordingManifestVersion)
 	}
+	if manifest.Terminal != nil {
+		t.Fatalf("legacy manifest unexpectedly contains terminal summary: %+v", manifest.Terminal)
+	}
 	if manifest.MediaSource == nil || !strings.Contains(manifest.MediaSource.URL, RecordingRedactionMarker) {
 		t.Fatalf("manifest media source URL = %#v, want visible redaction", manifest.MediaSource)
 	}
@@ -137,6 +142,90 @@ func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
 	golden := strings.TrimSuffix(wantGolden, `\n`) + "\n"
 	if string(manifestBytes) != golden {
 		t.Fatalf("manifest golden mismatch:\n%s", manifestBytes)
+	}
+}
+
+func TestRecordingBundleEmitsDeterministicOptionalTerminalSummary(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	want := &RecordingTerminalSummary{
+		Reason:             "max_duration",
+		Classification:     "max_duration",
+		TerminalReason:     messages.TerminalReason("max_duration"),
+		TerminalProvenance: messages.TerminalProvenanceLoop,
+		OutputState:        messages.TerminalOutputPartial,
+	}
+	if err := WriteRecordingBundle(RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		Terminal:         want,
+	}); err != nil {
+		t.Fatalf("WriteRecordingBundle: %v", err)
+	}
+
+	manifestBytes := readBundleFile(t, destination, "manifest.json")
+	var manifest RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	if manifest.Terminal == nil {
+		t.Fatal("manifest omitted terminal summary")
+	}
+	if *manifest.Terminal != *want {
+		t.Fatalf("manifest terminal summary = %+v, want %+v", *manifest.Terminal, *want)
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(manifestBytes, &fields); err != nil {
+		t.Fatalf("decode manifest fields: %v", err)
+	}
+	const wantTerminal = `{"reason":"max_duration","classification":"max_duration","terminal_reason":"max_duration","terminal_provenance":"loop","output_state":"partial"}`
+	if got := string(fields["terminal"]); got != wantTerminal {
+		t.Fatalf("encoded terminal summary = %s, want %s", got, wantTerminal)
+	}
+	terminalFields := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(fields["terminal"], &terminalFields); err != nil {
+		t.Fatalf("decode terminal summary: %v", err)
+	}
+	if len(terminalFields) != 5 {
+		t.Fatalf("terminal summary field count = %d, want 5", len(terminalFields))
+	}
+
+	for field, value := range map[string]string{
+		"reason":              "max_duration",
+		"classification":      "max_duration",
+		"terminal_reason":     "max_duration",
+		"terminal_provenance": "loop",
+		"output_state":        "partial",
+	} {
+		var got string
+		if err := json.Unmarshal(terminalFields[field], &got); err != nil {
+			t.Fatalf("decode terminal field %s value: %v", field, err)
+		}
+		if got != value {
+			t.Fatalf("terminal %s = %q, want %q", field, got, value)
+		}
+	}
+}
+
+func TestRecordingBundleRejectsIncompleteTerminalSummary(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	err := WriteRecordingBundle(RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		Terminal: &RecordingTerminalSummary{
+			Reason:             "max_duration",
+			Classification:     "max_duration",
+			TerminalReason:     messages.TerminalReason("max_duration"),
+			TerminalProvenance: messages.TerminalProvenanceLoop,
+		},
+	})
+	if !errors.Is(err, ErrInvalidRecording) {
+		t.Fatalf("error = %v, want ErrInvalidRecording", err)
+	}
+	if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("failed destination stat error = %v, want absent", statErr)
 	}
 }
 

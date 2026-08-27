@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 const (
@@ -131,6 +133,51 @@ type ArtifactHash struct {
 	SHA256 string `json:"sha256"`
 }
 
+// RecordingTerminalSummary is the optional normalized terminal outcome for a
+// recording bundle. The summary describes the lifecycle authority that ended
+// the session; it is not a provider wire event and is therefore kept outside
+// the transcript artifacts.
+type RecordingTerminalSummary struct {
+	Reason             string                       `json:"reason"`
+	Classification     string                       `json:"classification"`
+	TerminalReason     messages.TerminalReason      `json:"terminal_reason"`
+	TerminalProvenance messages.TerminalProvenance  `json:"terminal_provenance"`
+	OutputState        messages.TerminalOutputState `json:"output_state"`
+}
+
+// Validate checks that an explicitly supplied summary is complete. A nil
+// summary is valid because terminal metadata is optional for legacy and
+// naturally incomplete recording inputs.
+func (s *RecordingTerminalSummary) Validate() error {
+	if s == nil {
+		return nil
+	}
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{name: "reason", value: s.Reason},
+		{name: "classification", value: s.Classification},
+		{name: "terminal_reason", value: string(s.TerminalReason)},
+		{name: "terminal_provenance", value: string(s.TerminalProvenance)},
+		{name: "output_state", value: string(s.OutputState)},
+	}
+	for _, field := range fields {
+		if field.value == "" {
+			return fmt.Errorf("terminal summary field %q is required", field.name)
+		}
+	}
+	return nil
+}
+
+func cloneRecordingTerminalSummary(summary *RecordingTerminalSummary) *RecordingTerminalSummary {
+	if summary == nil {
+		return nil
+	}
+	clone := *summary
+	return &clone
+}
+
 // RecordingMetadata contains the reproducibility facts supplied by the caller.
 // MediaSourceURL is a convenience for a source whose only supplied fact is its
 // URL.
@@ -176,6 +223,7 @@ type RecordingConfig struct {
 	SessionLog []byte
 
 	Metadata    RecordingMetadata
+	Terminal    *RecordingTerminalSummary
 	Corpus      []CorpusHash
 	Credentials []string
 
@@ -189,16 +237,17 @@ type RecordingConfig struct {
 // declaration and all variable-length collections are normalized before
 // marshaling.
 type RecordingManifest struct {
-	FormatVersion int                  `json:"format_version"`
-	InputDevice   DeviceMetadata       `json:"input_device"`
-	OutputDevice  DeviceMetadata       `json:"output_device"`
-	Transport     string               `json:"transport"`
-	Model         string               `json:"model"`
-	ClockBase     string               `json:"clock_base"`
-	MediaSource   *MediaSourceMetadata `json:"media_source,omitempty"`
-	Configuration map[string]string    `json:"configuration,omitempty"`
-	Corpus        []CorpusHash         `json:"corpus,omitempty"`
-	Artifacts     []ArtifactHash       `json:"artifacts"`
+	FormatVersion int                       `json:"format_version"`
+	InputDevice   DeviceMetadata            `json:"input_device"`
+	OutputDevice  DeviceMetadata            `json:"output_device"`
+	Transport     string                    `json:"transport"`
+	Model         string                    `json:"model"`
+	ClockBase     string                    `json:"clock_base"`
+	MediaSource   *MediaSourceMetadata      `json:"media_source,omitempty"`
+	Configuration map[string]string         `json:"configuration,omitempty"`
+	Corpus        []CorpusHash              `json:"corpus,omitempty"`
+	Terminal      *RecordingTerminalSummary `json:"terminal,omitempty"`
+	Artifacts     []ArtifactHash            `json:"artifacts"`
 }
 
 // RecordingWriter is a reusable finalizer for one RecordingConfig. It does
@@ -336,6 +385,7 @@ type normalizedRecording struct {
 	outputSegments   [][]byte
 	sessionLog       []byte
 	metadata         RecordingMetadata
+	terminal         *RecordingTerminalSummary
 	corpus           []CorpusHash
 	artifactPaths    []string
 	expectedPaths    []string
@@ -375,6 +425,10 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		return normalizedRecording{}, redactor, err
 	}
 	metadata := config.Metadata
+	terminal := cloneRecordingTerminalSummary(config.Terminal)
+	if err := terminal.Validate(); err != nil {
+		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate terminal summary", destination, err, redactor)
+	}
 	corpus := config.Corpus
 	writeFile := config.WriteFile
 	if writeFile == nil {
@@ -406,6 +460,7 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		outputSegments:   copySegments(outputSegments),
 		sessionLog:       append([]byte(nil), config.SessionLog...),
 		metadata:         metadata,
+		terminal:         terminal,
 		corpus:           append([]CorpusHash(nil), corpus...),
 		artifactPaths:    artifactPaths,
 		expectedPaths:    expectedPaths,
@@ -507,6 +562,7 @@ func buildManifest(recording normalizedRecording, redactor credentialRedactor, a
 		MediaSource:   mediaSource,
 		Configuration: configuration,
 		Corpus:        corpus,
+		Terminal:      cloneRecordingTerminalSummary(recording.terminal),
 		Artifacts:     artifacts,
 	}
 }

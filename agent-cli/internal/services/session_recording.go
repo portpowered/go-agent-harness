@@ -333,6 +333,7 @@ func runSessionWithRecordingDirectory(
 			}
 			return finalizeSessionDirectoryRecording(runErr, recording)
 		}
+		durationCtx = withSessionDurationTerminalRecorder(durationCtx, recording)
 		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
 	}
 
@@ -494,6 +495,7 @@ type sessionDirectoryRecording struct {
 	input        [][]byte
 	output       [][]byte
 	recordErr    error
+	terminal     *transcript.RecordingTerminalSummary
 	conversation sessionConversationCollector
 
 	finalizeOnce sync.Once
@@ -760,8 +762,44 @@ func (r *sessionDirectoryRecording) fail(err error) {
 	r.mu.Unlock()
 }
 
+func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
+	if r == nil {
+		return errors.New("nil session directory recording")
+	}
+	if err := summary.Validate(); err != nil {
+		return err
+	}
+	r.eventMu.Lock()
+	defer r.eventMu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.setTerminalSummaryLocked(summary); err != nil {
+		if r.recordErr == nil {
+			r.recordErr = recordingDestinationError(transcript.ErrRecordingWrite, "capture terminal summary", r.destination, err)
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *sessionDirectoryRecording) setTerminalSummaryLocked(summary transcript.RecordingTerminalSummary) error {
+	if r.recordErr != nil {
+		return r.recordErr
+	}
+	if r.terminal == nil {
+		r.terminal = &summary
+		return nil
+	}
+	if *r.terminal == summary {
+		return nil
+	}
+	return fmt.Errorf("conflicting terminal summary: existing=%+v received=%+v", *r.terminal, summary)
+}
+
 func (r *sessionDirectoryRecording) Finalize() error {
 	r.finalizeOnce.Do(func() {
+		r.eventMu.Lock()
+		defer r.eventMu.Unlock()
 		r.mu.Lock()
 		if r.recordErr != nil {
 			r.finalizeErr = r.recordErr
@@ -782,12 +820,21 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			OutputSegments:   copySessionRecordingSegments(r.output),
 			SessionLog:       sessionLog,
 			Metadata:         r.metadata,
+			Terminal:         cloneSessionRecordingTerminalSummary(r.terminal),
 			WriteFile:        r.writeFile,
 		}
 		r.mu.Unlock()
 		r.finalizeErr = transcript.WriteRecordingBundle(config)
 	})
 	return r.finalizeErr
+}
+
+func cloneSessionRecordingTerminalSummary(summary *transcript.RecordingTerminalSummary) *transcript.RecordingTerminalSummary {
+	if summary == nil {
+		return nil
+	}
+	clone := *summary
+	return &clone
 }
 
 func copySessionRecordingSegments(segments [][]byte) [][]byte {

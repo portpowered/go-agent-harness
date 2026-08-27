@@ -79,6 +79,79 @@ type SessionDurationArtifactLifecycle interface {
 	Close() error
 }
 
+// sessionDurationTerminalRecorder receives normalized terminal metadata that
+// the duration controller emits. It is deliberately separate from the raw
+// artifact lifecycle: a recording directory needs the controller-owned
+// summary, but must not be given a fabricated provider frame.
+type sessionDurationTerminalRecorder interface {
+	RecordTerminalSummary(transcript.RecordingTerminalSummary) error
+}
+
+type sessionDurationArtifactLifecycleWithTerminal struct {
+	artifacts SessionDurationArtifactLifecycle
+	recorder  sessionDurationTerminalRecorder
+}
+
+func (a *sessionDurationArtifactLifecycleWithTerminal) Accept(msg messages.StreamMessage) error {
+	if a == nil {
+		return nil
+	}
+	if a.artifacts != nil {
+		if err := a.artifacts.Accept(msg); err != nil {
+			return err
+		}
+	}
+	if a.recorder == nil || msg.Type != messages.StreamTypeSessionClose {
+		return nil
+	}
+	summary, present, err := recordingTerminalSummaryFromMessage(msg)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return nil
+	}
+	return a.recorder.RecordTerminalSummary(*summary)
+}
+
+func recordingTerminalSummaryFromMessage(msg messages.StreamMessage) (*transcript.RecordingTerminalSummary, bool, error) {
+	if msg.Type != messages.StreamTypeSessionClose {
+		return nil, false, nil
+	}
+	value, ok := msg.Value.(*messages.SessionCloseValue)
+	if !ok || value == nil {
+		return nil, false, nil
+	}
+	if value.Classification == "" && value.TerminalReason == "" && value.TerminalProvenance == "" && value.OutputState == "" {
+		return nil, false, nil
+	}
+	summary := &transcript.RecordingTerminalSummary{
+		Reason:             value.Reason,
+		Classification:     value.Classification,
+		TerminalReason:     value.TerminalReason,
+		TerminalProvenance: value.TerminalProvenance,
+		OutputState:        value.OutputState,
+	}
+	if err := summary.Validate(); err != nil {
+		return nil, false, err
+	}
+	return summary, true, nil
+}
+
+func (a *sessionDurationArtifactLifecycleWithTerminal) Flush() error {
+	if a == nil || a.artifacts == nil {
+		return nil
+	}
+	return a.artifacts.Flush()
+}
+
+func (a *sessionDurationArtifactLifecycleWithTerminal) Close() error {
+	if a == nil || a.artifacts == nil {
+		return nil
+	}
+	return a.artifacts.Close()
+}
+
 type sessionDurationArtifactsContextKey struct{}
 
 // SessionDurationArtifactPaths identifies the production-owned files that a
@@ -108,6 +181,16 @@ func sessionDurationArtifactsFromContext(ctx context.Context) SessionDurationArt
 	}
 	artifacts, _ := ctx.Value(sessionDurationArtifactsContextKey{}).(SessionDurationArtifactLifecycle)
 	return artifacts
+}
+
+func withSessionDurationTerminalRecorder(ctx context.Context, recorder sessionDurationTerminalRecorder) context.Context {
+	if recorder == nil {
+		return ctx
+	}
+	return WithSessionDurationArtifacts(ctx, &sessionDurationArtifactLifecycleWithTerminal{
+		artifacts: sessionDurationArtifactsFromContext(ctx),
+		recorder:  recorder,
+	})
 }
 
 // WithSessionDurationArtifactPaths asks the duration entry point to create
