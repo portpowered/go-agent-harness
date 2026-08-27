@@ -22,6 +22,8 @@ func TestBuildRoomParticipantPlans_UsesIsolatedRequestedCapabilities(t *testing.
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.Manifest.Participants[0].Tools = []string{"alpha_tool"}
 	opts.Manifest.Participants[1].Tools = []string{"beta_tool"}
+	opts.Manifest.Participants[0].Voice = "alloy"
+	opts.Manifest.Participants[1].Voice = "ash"
 	var capabilityCalls []string
 	opts.ToolCapabilitiesFactory = func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
 		capabilityCalls = append(capabilityCalls, participant.ID)
@@ -52,6 +54,10 @@ func TestBuildRoomParticipantPlans_UsesIsolatedRequestedCapabilities(t *testing.
 		}
 		if len(plan.options.ToolDefinitions) != 1 || plan.options.ToolDefinitions[0].Name != participantID+"_tool" {
 			t.Fatalf("participant %q definitions = %#v, want only its requested tool", participantID, plan.options.ToolDefinitions)
+		}
+		wantVoice := map[string]string{"alpha": "alloy", "beta": "ash"}[participantID]
+		if plan.options.Voice != wantVoice {
+			t.Fatalf("participant %q voice = %q, want %q", participantID, plan.options.Voice, wantVoice)
 		}
 		response, executeErr := plan.options.ToolExecutor.Execute(context.Background(), messages.ToolCall{
 			ID:   "call-" + participantID,
@@ -182,28 +188,23 @@ func TestBuildRoomParticipantPlans_RejectsCapabilityMismatchBeforeSessionConstru
 	}
 }
 
-func TestBuildRoomParticipantPlans_RejectsVoiceBeforeSessionConstructionWhenUpstreamContractIsAbsent(t *testing.T) {
+func TestBuildRoomParticipantPlans_OmittedVoicePreservesProviderDefault(t *testing.T) {
 	opts, factoryCalls := newRoomTestRunOptions([]string{"alpha", "beta"}, map[string]*roomTestInferencer{
 		"alpha": {},
 		"beta":  {},
 	})
-	opts.Manifest.Participants[0].Voice = "alloy"
 
-	_, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
-	if err == nil {
-		t.Fatal("voice request returned nil error")
+	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
+	if err != nil {
+		t.Fatalf("buildRoomParticipantPlans: %v", err)
 	}
-	if !errors.Is(err, ErrRoomParticipantVoiceUnavailable) {
-		t.Fatalf("error = %v, want ErrRoomParticipantVoiceUnavailable", err)
+	if len(factoryCalls) != 2 {
+		t.Fatalf("session factory calls = %d, want one per participant", len(factoryCalls))
 	}
-	if !strings.Contains(err.Error(), "SessionRunOptions.Voice") || !strings.Contains(err.Error(), "alloy") {
-		t.Fatalf("error = %v, want actionable voice contract guidance", err)
-	}
-	if strings.Contains(err.Error(), "secret-alpha") {
-		t.Fatalf("error leaked participant credential: %v", err)
-	}
-	if len(factoryCalls) != 0 {
-		t.Fatalf("session factory was called %d times for an unavailable voice request", len(factoryCalls))
+	for _, plan := range plans {
+		if plan.options.Voice != "" {
+			t.Fatalf("participant %q voice = %q, want provider default", plan.manifest.ID, plan.options.Voice)
+		}
 	}
 }
 

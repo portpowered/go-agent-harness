@@ -427,14 +427,6 @@ func assertManifestError(t *testing.T, err error, field string, cause error) {
 	}
 }
 
-func assertNormalizedManifest(t *testing.T, manifest Manifest) {
-	t.Helper()
-	if manifest.SchemaVersion != SchemaVersion || manifest.Room.MaxTurns != 3 || manifest.Room.MaxDuration != 30*time.Second {
-		t.Fatalf("normalized manifest header = %+v", manifest)
-	}
-	assertNormalizedParticipants(t, manifest)
-}
-
 func assertNormalizedParticipants(t *testing.T, manifest Manifest) {
 	t.Helper()
 	if len(manifest.Participants) != 2 || manifest.Participants[0].Provider != "openai" {
