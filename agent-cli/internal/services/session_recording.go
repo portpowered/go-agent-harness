@@ -577,6 +577,16 @@ func (s *sessionDirectoryRecordingSession) Send(ctx context.Context, msg message
 	return s.SendWithOutcome(ctx, msg).OK()
 }
 
+func (s *sessionDirectoryRecordingSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *sessionDirectoryRecordingSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
 func (s *sessionDirectoryRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	payload, err := gwtesting.MarshalStreamMessage(msg)
 	audio := sessionRecordingAudio(msg)

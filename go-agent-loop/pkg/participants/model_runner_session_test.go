@@ -13,12 +13,14 @@ import (
 // recordingSession records everything sent to the provider and allows tests to
 // feed inbound session events through its Receive buffer.
 type recordingSession struct {
-	mu     sync.Mutex
-	sent   []messages.StreamMessage
-	sendCh chan messages.StreamMessage
-	recv   *messages.TypedBuffer[messages.StreamMessage]
-	done   chan struct{}
-	once   sync.Once
+	mu                      sync.Mutex
+	sent                    []messages.StreamMessage
+	complete                []messages.Message
+	completeWithoutResponse []messages.Message
+	sendCh                  chan messages.StreamMessage
+	recv                    *messages.TypedBuffer[messages.StreamMessage]
+	done                    chan struct{}
+	once                    sync.Once
 }
 
 func newRecordingSession() *recordingSession {
@@ -45,6 +47,36 @@ func (s *recordingSession) sentMessages() []messages.StreamMessage {
 	defer s.mu.Unlock()
 	out := make([]messages.StreamMessage, len(s.sent))
 	copy(out, s.sent)
+	return out
+}
+
+func (s *recordingSession) SendMessage(_ context.Context, msg messages.Message) bool {
+	s.mu.Lock()
+	s.complete = append(s.complete, msg)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *recordingSession) SendMessageWithoutResponse(_ context.Context, msg messages.Message) bool {
+	s.mu.Lock()
+	s.completeWithoutResponse = append(s.completeWithoutResponse, msg)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *recordingSession) completeMessages() []messages.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]messages.Message, len(s.complete))
+	copy(out, s.complete)
+	return out
+}
+
+func (s *recordingSession) completeMessagesWithoutResponse() []messages.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]messages.Message, len(s.completeWithoutResponse))
+	copy(out, s.completeWithoutResponse)
 	return out
 }
 
@@ -302,6 +334,75 @@ func TestModelRunner_SendLatestUserTextSkipsEmptyAndNonUserMessages(t *testing.T
 	})
 	if sent = session.sentMessages(); len(sent) != 1 {
 		t.Fatalf("sent %d messages, want 1 for older user text after non-user skip", len(sent))
+	}
+}
+
+func TestModelRunner_SendLatestSessionToolResultsUsesCompleteMessagePath(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+	imageBytes := []byte{0x89, 'P', 'N', 'G'}
+
+	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{
+		Messages: []messages.Message{
+			messages.NewTextMessage(messages.RoleUser, "inspect the image"),
+			{
+				Role:         messages.RoleAssistant,
+				ToolCalls:    []messages.ToolCall{{ID: "call-read-image", Name: "read_image"}},
+				ContentParts: []messages.ContentPart{messages.TextPart{Text: "Reading the image."}},
+			},
+			{
+				Role:       messages.RoleTool,
+				ToolCallID: "call-read-image",
+				ContentParts: []messages.ContentPart{
+					messages.TextPart{Text: "image attached"},
+					messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
+				},
+			},
+		},
+	})
+
+	if got := len(session.sentMessages()); got != 0 {
+		t.Fatalf("tool-result request sent %d streaming messages, want complete-message path", got)
+	}
+	sent := session.completeMessages()
+	if len(sent) != 1 {
+		t.Fatalf("complete-message sends = %d, want 1", len(sent))
+	}
+	if sent[0].Role != messages.RoleTool || sent[0].ToolCallID != "call-read-image" {
+		t.Fatalf("complete message identity = %#v, want tool call-read-image", sent[0])
+	}
+	if len(sent[0].ContentParts) != 2 {
+		t.Fatalf("complete message parts = %d, want text and image", len(sent[0].ContentParts))
+	}
+	gotImage, ok := sent[0].ContentParts[1].(messages.ImagePart)
+	if !ok || gotImage.MediaType != "image/png" || string(gotImage.Bytes) != string(imageBytes) {
+		t.Fatalf("complete image part = %#v, want original PNG bytes", sent[0].ContentParts[1])
+	}
+}
+
+func TestModelRunner_SendLatestSessionToolResultsPreservesBatchOrder(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+	first := messages.Message{Role: messages.RoleTool, ToolCallID: "call-1", ContentParts: []messages.ContentPart{
+		messages.TextPart{Text: "one"},
+		messages.ImagePart{Bytes: []byte("first image"), MediaType: "image/png"},
+	}}
+	second := messages.Message{Role: messages.RoleTool, ToolCallID: "call-2", ContentParts: []messages.ContentPart{
+		messages.TextPart{Text: "two"},
+		messages.ImagePart{Bytes: []byte("second image"), MediaType: "image/png"},
+	}}
+
+	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{Messages: []messages.Message{first, second}})
+
+	deferred := session.completeMessagesWithoutResponse()
+	if len(deferred) != 1 || deferred[0].ToolCallID != "call-1" {
+		t.Fatalf("deferred tool results = %#v, want call-1", deferred)
+	}
+	sent := session.completeMessages()
+	if len(sent) != 1 || sent[0].ToolCallID != "call-2" {
+		t.Fatalf("final tool results = %#v, want call-2", sent)
 	}
 }
 

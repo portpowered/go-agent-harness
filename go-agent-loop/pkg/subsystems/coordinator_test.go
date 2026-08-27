@@ -42,7 +42,6 @@ func TestCoordinator_UserOutputDispatchesInference(t *testing.T) {
 	if req.LoopPassID != 1 {
 		t.Errorf("InferenceRequest.LoopPassID: got %d, want 1", req.LoopPassID)
 	}
-
 	// No tool batch or user request should be dispatched.
 	if _, ok := ls.Outputs.ToolInbox.Read(); ok {
 		t.Error("no ToolBatchRequest should be dispatched on user output")
@@ -137,6 +136,9 @@ func TestCoordinator_ToolOutputDispatchesInference(t *testing.T) {
 	}
 	if req.LoopPassID != 1 {
 		t.Errorf("InferenceRequest.LoopPassID: got %d, want 1", req.LoopPassID)
+	}
+	if len(req.Messages) != 2 || req.Messages[0].ToolCallID != "tc1" || req.Messages[1].ToolCallID != "tc2" {
+		t.Fatalf("InferenceRequest.Messages = %#v, want the two tool results in call order", req.Messages)
 	}
 
 	// Should not dispatch tool or user requests.

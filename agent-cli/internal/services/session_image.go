@@ -452,6 +452,22 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 	return false
 }
 
+// SendMessage forwards the optional complete-message capability of the
+// provider session. The image-turn wrapper embeds only the stream Session
+// interface, so optional multimodal delivery must be forwarded explicitly for
+// a later read_image tool result to reach the same provider connection.
+func (s *sessionImageSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+// SendMessageWithoutResponse forwards the deferred complete-message path used
+// when a tool batch contains more than one rich result.
+func (s *sessionImageSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
 // signalFirstTurn reports the image-turn outcome to awaitSessionFirstTurn
 // exactly once. The buffered channel makes this non-blocking, and callers
 // without a waiter (plain RunSessionWithImages without streamed audio) only

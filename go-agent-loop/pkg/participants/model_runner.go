@@ -315,6 +315,15 @@ func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMes
 }
 
 func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.Session, req messages.InferenceRequest) {
+	// A rich tool result is the newest conversation entry after the coordinator
+	// schedules the follow-up inference. Sessions that support complete
+	// messages (for example, multimodal realtime providers) must receive that
+	// result before the next response is requested; otherwise an image tool
+	// result would remain only in loop history and never reach the provider.
+	if handled := r.sendLatestSessionToolResults(ctx, session, req.Messages); handled {
+		return
+	}
+
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		msg := req.Messages[i]
 		if msg.Role != messages.RoleUser {
@@ -330,6 +339,75 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		})
 		return
 	}
+}
+
+// sessionMessageSender is an optional extension to the stream-only Session
+// contract. Keeping the assertion local preserves compatibility with existing
+// session implementations while allowing providers with a complete-message
+// path to deliver rich tool results.
+type sessionMessageSender interface {
+	SendMessage(context.Context, messages.Message) bool
+}
+
+type sessionMessageWithoutResponseSender interface {
+	SendMessageWithoutResponse(context.Context, messages.Message) bool
+}
+
+// sendLatestSessionToolResults sends the contiguous tool-result suffix from
+// one inference request. Tool results are emitted as one batch, so preserving
+// their order is important for providers that associate each result with its
+// originating call. The final result requests the next model response; any
+// preceding results use the provider's no-response variant when available.
+//
+// It returns true only when a tool-result suffix was found and every complete
+// message was accepted. A false result lets the caller retain the historical
+// latest-user-text fallback for wrappers whose underlying session does not
+// expose the optional complete-message path.
+func (r *ModelRunner) sendLatestSessionToolResults(ctx context.Context, session messages.Session, history []messages.Message) bool {
+	sender, ok := session.(sessionMessageSender)
+	if !ok {
+		return false
+	}
+
+	first := len(history)
+	for first > 0 && history[first-1].Role == messages.RoleTool {
+		first--
+	}
+	if first == len(history) {
+		return false
+	}
+	toolResults := history[first:]
+	if !sessionToolResultsContainImage(toolResults) {
+		// Text-only tool results retain the historical latest-user-text
+		// behavior. The complete-message extension is required for rich image
+		// results and should not change existing text-only session captures.
+		return false
+	}
+	withoutResponse, canDeferResponse := session.(sessionMessageWithoutResponseSender)
+	for index, result := range toolResults {
+		last := index == len(toolResults)-1
+		if !last && canDeferResponse {
+			if !withoutResponse.SendMessageWithoutResponse(ctx, result) {
+				return false
+			}
+			continue
+		}
+		if !sender.SendMessage(ctx, result) {
+			return false
+		}
+	}
+	return true
+}
+
+func sessionToolResultsContainImage(results []messages.Message) bool {
+	for _, result := range results {
+		for _, part := range result.ContentParts {
+			if _, ok := part.(messages.ImagePart); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r *ModelRunner) runInference(ctx context.Context) error {
