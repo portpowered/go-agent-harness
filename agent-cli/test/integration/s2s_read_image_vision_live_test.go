@@ -324,7 +324,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 					continue
 				}
 				observation.inputImageCount++
-				if event.Item.ID == "item_tool_result_"+observation.readImageCallID {
+				if event.Item.ID == readImageToolImageItemID(observation.readImageCallID) {
 					observation.correlatedImageCount++
 					observation.correlatedImageIndex = index
 					observation.correlatedImageURL = part.ImageURL

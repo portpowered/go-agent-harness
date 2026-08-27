@@ -38,6 +38,11 @@ const (
 	readImageCallID              = "call_read_image_1"
 )
 
+func readImageToolImageItemID(callID string) string {
+	digest := sha256.Sum256([]byte(callID))
+	return "item_tool_result_" + base64.RawURLEncoding.EncodeToString(digest[:])
+}
+
 var readImageGroundedMarkers = []string{
 	"one-by-one image",
 	"indigo pixel",
@@ -431,7 +436,7 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 					t.Fatalf("function_call_output data URL does not decode to fixture bytes: decode error=%v, bytes=%d want=%d", err, len(decoded), len(expectedBytes))
 				}
 			case "message":
-				if event.Item.ID != "item_tool_result_"+readImageCallID {
+				if event.Item.ID != readImageToolImageItemID(readImageCallID) {
 					continue
 				}
 				imageItemCount++
