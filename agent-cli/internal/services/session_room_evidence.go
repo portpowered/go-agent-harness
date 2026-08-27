@@ -484,16 +484,26 @@ func redactRoomStrings(values []string, redact func(string) string) []string {
 
 func prepareRoomEvidenceOutput(path string) (string, error) {
 	destination := filepath.Clean(strings.TrimSpace(path))
-	if destination == "." || destination == "" {
-		return "", errors.New("room evidence output directory is required")
-	}
-	if err := validateRoomEvidenceOutputTarget(destination); err != nil {
+	if err := ValidateRoomEvidenceOutput(path); err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(destination, 0o700); err != nil {
 		return "", fmt.Errorf("create room evidence output directory %q: %w", destination, err)
 	}
 	return destination, nil
+}
+
+// ValidateRoomEvidenceOutput checks that a room evidence destination is a
+// safe, writable empty directory target without creating the destination.
+// Its parent may be created for the write probe, matching the runtime
+// preparation performed immediately before live session construction.
+func ValidateRoomEvidenceOutput(path string) error {
+	rawPath := strings.TrimSpace(path)
+	destination := filepath.Clean(rawPath)
+	if rawPath == "" || destination == "." {
+		return errors.New("room evidence output directory is required")
+	}
+	return validateRoomEvidenceOutputTarget(destination)
 }
 
 func validateRoomEvidenceOutputTarget(destination string) error {
