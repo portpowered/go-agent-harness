@@ -150,10 +150,7 @@
       "payload": {
         "type": "response.output_audio.delta",
         "response_id": "R1",
-        "delta": {
-          "redacted": true,
-          "reference": "R1"
-        },
+        "delta": "redacted-audio-R1",
         "format": "pcm16"
       }
     },
@@ -396,10 +393,7 @@
       "payload": {
         "type": "response.output_audio.delta",
         "response_id": "R3",
-        "delta": {
-          "redacted": true,
-          "reference": "R3"
-        },
+        "delta": "redacted-audio-R3",
         "format": "pcm16"
       }
     },
@@ -528,10 +522,7 @@
       "payload": {
         "type": "response.output_audio.delta",
         "response_id": "R4",
-        "delta": {
-          "redacted": true,
-          "reference": "R4"
-        },
+        "delta": "redacted-audio-R4",
         "format": "pcm16"
       }
     },

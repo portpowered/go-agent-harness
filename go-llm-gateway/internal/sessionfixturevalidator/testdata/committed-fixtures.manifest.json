@@ -1,5 +1,5 @@
 {
-  "count": 39,
+  "count": 40,
   "files": [
     "agent-cli/test/integration/testdata/multiturn_zephyr_4turn.session.json",
     "agent-cli/test/integration/testdata/multiturn_zephyr_no_carry.session.json",
@@ -17,6 +17,7 @@
     "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated-dropped-commit.session.json",
     "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated-duplicated-turn.session.json",
     "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated.session.json",
+    "agent-cli/test/integration/testdata/s2s_live_shaped_barge_in_v2_replay.session.json",
     "go-llm-gateway/pkg/providers/openai/testdata/realtime_text.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6a-error-auth-healthy-control.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6a-error-auth-invalid-credentials.session.json",
