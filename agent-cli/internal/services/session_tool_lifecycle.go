@@ -14,6 +14,10 @@ const (
 	// failure caused by a result that never reached the provider-facing send
 	// boundary.
 	SessionUnresolvedToolResultClassification = "unresolved_tool_result"
+	// SessionImageContinuationClassification identifies a terminal session
+	// failure after a read_image result was accepted but its model continuation
+	// never reached a terminal response.
+	SessionImageContinuationClassification = "image_tool_continuation"
 )
 
 var (
@@ -21,6 +25,10 @@ var (
 	// terminated while one or more provider-requested tool results were still
 	// undelivered.
 	ErrSessionUnresolvedToolResults = errors.New("session ended with unresolved tool results")
+	// ErrSessionImageContinuationIncomplete is the stable sentinel for a
+	// read_image result that reached the provider but did not receive its
+	// follow-up model response before the session terminated.
+	ErrSessionImageContinuationIncomplete = errors.New("session ended before the image tool continuation")
 )
 
 // SessionUnresolvedToolResultsError carries the provider call IDs that were
@@ -110,4 +118,45 @@ func withUnresolvedToolResults(err error, observer *sessionProgressObserver) err
 		return unresolved
 	}
 	return errors.Join(err, unresolved)
+}
+
+// SessionImageContinuationError carries the read_image call IDs whose result
+// was accepted but whose post-tool model response did not reach a terminal
+// response event. It is deliberately separate from
+// SessionUnresolvedToolResultsError: provider acceptance is not conversation
+// completion.
+type SessionImageContinuationError struct {
+	CallIDs []string
+}
+
+func (e *SessionImageContinuationError) Error() string {
+	if e == nil || len(e.CallIDs) == 0 {
+		return ErrSessionImageContinuationIncomplete.Error()
+	}
+	return fmt.Sprintf("image tool continuation was not completed for %d call(s): %s", len(e.CallIDs), strings.Join(e.CallIDs, ", "))
+}
+
+func (e *SessionImageContinuationError) Unwrap() error {
+	return ErrSessionImageContinuationIncomplete
+}
+
+// withPendingImageContinuations preserves any primary provider, cancellation,
+// or timeout cause while adding the typed continuation failure once.
+func withPendingImageContinuations(err error, observer *sessionProgressObserver) error {
+	if observer == nil {
+		return err
+	}
+	ids := observer.pendingImageContinuationCallIDs()
+	if len(ids) == 0 {
+		return err
+	}
+	var existing *SessionImageContinuationError
+	if errors.As(err, &existing) {
+		return err
+	}
+	continuation := &SessionImageContinuationError{CallIDs: ids}
+	if err == nil {
+		return continuation
+	}
+	return errors.Join(err, continuation)
 }

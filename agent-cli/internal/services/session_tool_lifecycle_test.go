@@ -73,3 +73,100 @@ func TestSessionProgressObserver_IncompleteResponsePreservesAcceptedResultID(t *
 		t.Fatalf("late acceptance cleared unresolved ID = %v, want [%s]", got, callID)
 	}
 }
+
+func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-image-continuation"
+
+	// Provider acceptance may be observed before the outer stream consumer sees
+	// the completed function call. The later duplicate call event must attach to
+	// the same accepted obligation rather than creating a second one.
+	observer.noteToolResultAccepted(callID)
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "read_image", `{"path":"screen.png"}`),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if !observer.hasPendingImageContinuations() {
+		t.Fatal("accepted read_image result was complete before its continuation")
+	}
+	if got := observer.pendingImageContinuationCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("pending image continuation IDs = %v, want [%s]", got, callID)
+	}
+	if observer.hasUnresolvedToolCalls() {
+		t.Fatal("accepted read_image result remained a generic unresolved result")
+	}
+
+	// A non-tool terminal MESSAGE.END is the continuation boundary. Duplicate
+	// acceptance and duplicate terminal events must remain idempotent.
+	observer.noteToolResultAccepted(callID)
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if observer.hasPendingImageContinuations() {
+		t.Fatal("terminal image continuation remained pending after duplicate lifecycle events")
+	}
+	if got := observer.pendingImageContinuationCallIDs(); len(got) != 0 {
+		t.Fatalf("pending image continuation IDs after terminal response = %v, want none", got)
+	}
+}
+
+func TestSessionProgressObserver_ImageContinuationFailurePreservesPrimaryCause(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-image-premature-close"
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "read_image", `{"path":"missing.png"}`),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	observer.noteToolResultAccepted(callID)
+
+	primary := errors.New("provider websocket closed")
+	err := observer.finish(primary)
+	if !errors.Is(err, primary) {
+		t.Fatalf("finish error lost primary provider cause: %v", err)
+	}
+	if !errors.Is(err, ErrSessionImageContinuationIncomplete) {
+		t.Fatalf("finish error = %v, want image continuation sentinel", err)
+	}
+	var continuationErr *SessionImageContinuationError
+	if !errors.As(err, &continuationErr) {
+		t.Fatalf("finish error = %v, want SessionImageContinuationError", err)
+	}
+	if len(continuationErr.CallIDs) != 1 || continuationErr.CallIDs[0] != callID {
+		t.Fatalf("continuation error call IDs = %v, want [%s]", continuationErr.CallIDs, callID)
+	}
+
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("failure records = %d, want exactly one", len(failures))
+	}
+	if got := failures[0].Fields[SessionDiagnosticFieldPendingImageContinuationIDs]; got != callID {
+		t.Fatalf("pending continuation diagnostic IDs = %q, want %s", got, callID)
+	}
+	if got := failures[0].Fields[fieldClassification]; got != SessionImageContinuationClassification {
+		t.Fatalf("failure classification = %q, want %q", got, SessionImageContinuationClassification)
+	}
+}

@@ -304,6 +304,11 @@ func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (me
 			Value: messages.NewTextDeltaValue("next model turn after image tool result"),
 		})
 		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeMessageEnd,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+		session.recv.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("read-image-session", "test complete"),
 		})

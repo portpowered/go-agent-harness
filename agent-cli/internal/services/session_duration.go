@@ -800,7 +800,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 	durationTerminalWritten := false
 	artifacts := sessionDurationArtifactsFromContext(ctx)
 	terminalState := newSessionDurationTerminalState(admittedInferencer)
-	toolResultAccepted := opts.observer.toolResultAcceptedEvents()
+	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 
 	finish := func(planned bool, preferredErr error) error {
 		var preCancelDrainErr error
@@ -878,7 +878,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 
 		select {
-		case <-toolResultAccepted:
+		case <-toolLifecycleEvents:
 			state, closeErr := closePendingSessionIfReady(runCtx, loop, opts, sessionLoopMessageState{
 				closeSent:             closeSent,
 				closeAfterOpenPending: closeAfterOpenPending,
