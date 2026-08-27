@@ -102,9 +102,6 @@ tools:
 							Content:    currentResult[msg.ToolCallId],
 						})
 						delete(currentResult, msg.ToolCallId)
-						if len(results) == len(tc.calls) {
-							sessionInferencer.close()
-						}
 					}
 				}
 			})
@@ -272,6 +269,7 @@ type sessionConfigToolSession struct {
 	once          sync.Once
 	mu            sync.Mutex
 	nextCall      int
+	acceptedCalls int
 	observedCalls []sessionConfigToolCall
 	advertised    map[string]bool
 }
@@ -293,6 +291,16 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 			s.advertised[tool.Name] = true
 		}
 		s.mu.Unlock()
+		return true
+	}
+	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
+		s.mu.Lock()
+		s.acceptedCalls++
+		closeAfterAcceptance := s.acceptedCalls == len(s.inferencer.calls)
+		s.mu.Unlock()
+		if closeAfterAcceptance {
+			s.inferencer.close()
+		}
 		return true
 	}
 
