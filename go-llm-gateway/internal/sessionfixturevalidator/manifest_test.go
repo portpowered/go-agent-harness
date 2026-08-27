@@ -47,6 +47,22 @@ func TestRelativeFixtureFiles_RequiresInputPath(t *testing.T) {
 	}
 }
 
+func TestRepositoryRootPath_TrimpathCallerUsesWorkingDirectory(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "nested", "working-directory")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatalf("create nested working directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.work"), []byte("go 1.24.2\n"), 0644); err != nil {
+		t.Fatalf("write go.work marker: %v", err)
+	}
+
+	got := repositoryRootPathFrom(nested, "github.com/portpowered/go-agent-harness/go-llm-gateway/internal/sessionfixturevalidator/manifest.go")
+	if got != root {
+		t.Fatalf("repositoryRootPathFrom() = %q, want %q", got, root)
+	}
+}
+
 func TestBuildFixtureManifest_RenderLoadRoundTripIsByteStable(t *testing.T) {
 	root := t.TempDir()
 	sub := filepath.Join(root, "sub")

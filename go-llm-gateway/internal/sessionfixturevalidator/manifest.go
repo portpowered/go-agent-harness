@@ -24,6 +24,8 @@ const regenerateFixtureManifestCommand = "go run ./go-llm-gateway/cmd/session-fi
 
 const committedFixtureManifestRelPath = "testdata/committed-fixtures.manifest.json"
 
+const sessionFixtureValidatorPackageRelPath = "go-llm-gateway/internal/sessionfixturevalidator"
+
 // committedFixtureRootRegistry is the single authoritative registry for the
 // committed session-fixture roots. Keep these repository-relative paths
 // explicit: both the validator's committed-fixture check and manifest emitter
@@ -69,25 +71,58 @@ func gatewayCommittedFixtureRoots() []string {
 	return roots[:2]
 }
 
-// repositoryRootPath derives the checkout root from this package's source
-// location. The command and tests run from a checkout, so this keeps root
-// resolution independent of the caller's working directory.
+// repositoryRootPath derives the checkout root from a real filesystem anchor.
+// Go's -trimpath build mode can replace runtime.Caller filenames with import
+// paths, so the working-directory walk is preferred and the caller filename is
+// used only when it is an absolute path.
 func repositoryRootPath() string {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return "."
+	workingDirectory, _ := os.Getwd()
+	var callerFile string
+	if _, currentFile, _, ok := runtime.Caller(0); ok {
+		callerFile = currentFile
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../../"))
+	return repositoryRootPathFrom(workingDirectory, callerFile)
+}
+
+func repositoryRootPathFrom(workingDirectory, callerFile string) string {
+	if workingDirectory != "" {
+		if root, ok := findRepositoryRoot(workingDirectory); ok {
+			return root
+		}
+	}
+	if filepath.IsAbs(callerFile) {
+		return filepath.Clean(filepath.Join(filepath.Dir(callerFile), "../../../"))
+	}
+	return "."
+}
+
+func findRepositoryRoot(start string) (string, bool) {
+	absoluteStart, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+	directory := filepath.Clean(absoluteStart)
+	for {
+		workFile := filepath.Join(directory, "go.work")
+		if info, err := os.Stat(workFile); err == nil && !info.IsDir() {
+			return directory, true
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return "", false
+		}
+		directory = parent
+	}
 }
 
 // repoPathFromHere retains the package-relative path helper used by the
 // validator tests and keeps fixture data lookup anchored to this source tree.
 func repoPathFromHere(rel string) string {
 	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return rel
+	if ok && filepath.IsAbs(currentFile) {
+		return filepath.Clean(filepath.Join(filepath.Dir(currentFile), rel))
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), rel))
+	return filepath.Join(repositoryRootPath(), filepath.FromSlash(sessionFixtureValidatorPackageRelPath), filepath.FromSlash(rel))
 }
 
 // relativeFixtureFiles scans paths with the same recursive WalkDir semantics as
