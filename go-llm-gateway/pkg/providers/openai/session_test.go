@@ -99,11 +99,35 @@ func (c *mockWebSocketConn) getClientMessages() [][]byte {
 	return messages
 }
 
+type readErrorWebSocketConn struct {
+	err error
+}
+
+func (c *readErrorWebSocketConn) ReadMessage() (int, []byte, error) {
+	return 0, nil, c.err
+}
+
+func (c *readErrorWebSocketConn) WriteMessage(int, []byte) error {
+	return nil
+}
+
+func (c *readErrorWebSocketConn) Close() error {
+	return nil
+}
+
 type mockWebSocketDialer struct {
 	conn            *mockWebSocketConn
 	err             error
 	capturedURL     string
 	capturedHeaders map[string]string
+}
+
+type readErrorWebSocketDialer struct {
+	conn WebSocketConn
+}
+
+func (d *readErrorWebSocketDialer) Dial(string, map[string]string) (WebSocketConn, error) {
+	return d.conn, nil
 }
 
 func (d *mockWebSocketDialer) Dial(url string, headers map[string]string) (WebSocketConn, error) {
@@ -660,6 +684,42 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 		value.TerminalProvenance != messages.TerminalProvenanceProvider ||
 		value.OutputState != messages.TerminalOutputNone {
 		t.Fatalf("error terminal metadata: got %#v", value)
+	}
+}
+
+func TestConnectSession_SurfacesUnexpectedWebSocketReadError(t *testing.T) {
+	readErr := errors.New("websocket: close 1008 (policy violation): invalid API key")
+	dialer := &readErrorWebSocketDialer{conn: &readErrorWebSocketConn{err: readErr}}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	got, ok := session.Receive().ReadBlockingContext(ctx)
+	if !ok {
+		t.Fatal("did not receive unexpected WebSocket read error")
+	}
+	if got.Type != messages.StreamTypeError {
+		t.Fatalf("type: got %q, want %q", got.Type, messages.StreamTypeError)
+	}
+	value, ok := got.Value.(*messages.ErrorValue)
+	if !ok || value == nil {
+		t.Fatalf("value: got %T, want *messages.ErrorValue", got.Value)
+	}
+	if value.Message != readErr.Error() || value.Classification != providers.ErrorClassTransport {
+		t.Fatalf("transport error value: got %#v, want message %q and classification %q", value, readErr.Error(), providers.ErrorClassTransport)
+	}
+	if !errors.Is(value.Err, readErr) {
+		t.Fatalf("transport error cause = %v, want %v", value.Err, readErr)
 	}
 }
 

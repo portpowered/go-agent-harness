@@ -616,6 +616,10 @@ func (s *sessionDurationAdmissionSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.inner)
 }
 
+func (s *sessionDurationAdmissionSession) TerminalError() error {
+	return terminalSessionError(s.inner)
+}
+
 func (s *sessionDurationAdmissionSession) Close() error {
 	s.closeOnce.Do(func() {
 		s.closeAdmission()
@@ -926,14 +930,17 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
 		runErr := <-runErrCh
 		admittedInferencer.waitForClose()
+		sessionErr := observedInferencer.sessionFailure()
 		if drainErr := drainDurationSessionLoopMessages(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer); drainErr != nil {
 			return drainErr
 		}
 		runtimeErr := admittedInferencer.runtimeError()
 		closeErr := admittedInferencer.closeError()
 		if preferredErr != nil {
-			if lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr); lifecycleErr != nil {
-				return errors.Join(preferredErr, lifecycleErr)
+			lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr)
+			transportErr := sessionTransportError(sessionErr)
+			if lifecycleErr != nil || transportErr != nil {
+				return errors.Join(preferredErr, lifecycleErr, transportErr)
 			}
 			return preferredErr
 		}
@@ -942,6 +949,9 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 		if lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr); lifecycleErr != nil {
 			return lifecycleErr
+		}
+		if sessionErr != nil {
+			return sessionTransportError(sessionErr)
 		}
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {
 			return fmt.Errorf("session error: %w", runErr)
@@ -1039,6 +1049,13 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			}
 		}
 	}
+}
+
+func sessionTransportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("session transport: %w", err)
 }
 
 type sessionDurationMessageResult struct {

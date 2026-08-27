@@ -40,6 +40,7 @@ type cliLiveRecordDirServer struct {
 	dialCount     int
 	nextTurn      int
 	providerError bool
+	readErr       error
 }
 
 type cliLiveOutbound struct {
@@ -54,6 +55,12 @@ func newCLILiveRecordDirServer(providerError bool) *cliLiveRecordDirServer {
 		closed:        make(chan struct{}),
 		providerError: providerError,
 	}
+}
+
+func newCLILiveRecordDirReadErrorServer(readErr error) *cliLiveRecordDirServer {
+	server := newCLILiveRecordDirServer(false)
+	server.readErr = readErr
+	return server
 }
 
 func (s *cliLiveRecordDirServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
@@ -117,6 +124,9 @@ type cliLiveRecordDirConn struct {
 }
 
 func (c *cliLiveRecordDirConn) ReadMessage() (int, []byte, error) {
+	if c.server.readErr != nil {
+		return 0, nil, c.server.readErr
+	}
 	select {
 	case payload := <-c.server.events:
 		var envelope struct {
@@ -305,6 +315,52 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 	}
 	if errors.Is(err, transcript.ErrInvalidRecording) || strings.Contains(err.Error(), "at least one segment is required") {
 		t.Fatalf("recording validation masked provider authentication error: %v", err)
+	}
+}
+
+func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverIncompleteSchedule(t *testing.T) {
+	server := newCLILiveRecordDirReadErrorServer(errors.New("websocket: close 1008 (policy violation): Incorrect API key provided: invalid-test-key"))
+	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
+		oaiprovider.WithWebSocketDialer(server),
+	)
+	if err != nil {
+		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
+	}
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+		sessionInferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record-dir", filepath.Join(t.TempDir(), "failed-recording"),
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "invalid-test-key",
+		"--system-prompt", "none",
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = rootCmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("expected provider close error")
+	}
+	if !strings.Contains(err.Error(), "Incorrect API key") {
+		t.Fatalf("unexpected provider close error: %v", err)
+	}
+	if strings.Contains(err.Error(), "scheduled audio session ended before all turns completed") || strings.Contains(err.Error(), "at least one segment is required") {
+		t.Fatalf("provider close was masked by a secondary recording error: %v", err)
 	}
 }
 

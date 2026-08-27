@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // ConnectSession establishes an OpenAI Realtime WebSocket session through the
@@ -121,14 +120,12 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 				_ = s.Close()
 				return
 			}
-			if !transport.IsInjectedFault(err) {
-				_ = s.Close()
-				return
-			}
+			s.setTerminalError(err)
 			s.logger.Error("openai realtime: websocket read error", logging.Field{Key: "error", Value: err})
-			// A transport close is a provider-visible terminal failure. Preserve
-			// the typed read error in the stream so callers can distinguish an
-			// abrupt close from an intentional session shutdown.
+			// Every unexpected provider-side read failure is a provider-visible
+			// terminal failure. Preserve the raw error in the stream so callers
+			// can distinguish an abrupt close (including an authentication close
+			// returned after the WebSocket handshake) from intentional shutdown.
 			s.recvBuf.WriteTerminal(messages.StreamMessage{
 				Type:  messages.StreamTypeError,
 				Value: providers.NewStreamTransportErrorValue(err),
@@ -139,6 +136,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 
 		event, err := parseRealtimeServerEvent(data)
 		if err != nil {
+			s.setTerminalError(err)
 			s.logger.Warn("openai realtime: failed to parse server event", logging.Field{Key: "error", Value: err})
 			// An unparseable provider frame is a protocol violation, not a
 			// skippable event: surface a classified terminal ERROR so consumers
@@ -182,6 +180,7 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 			return
 		case event := <-s.sendQueue.Chan():
 			if err := s.writeEvent(event); err != nil {
+				s.setTerminalError(err)
 				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})
 				_ = s.Close()
 				return

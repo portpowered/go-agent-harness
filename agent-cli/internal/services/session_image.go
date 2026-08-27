@@ -418,6 +418,13 @@ type sessionImageSession struct {
 	deferResponse bool
 }
 
+func (s *sessionImageSession) TerminalError() error {
+	if s == nil {
+		return nil
+	}
+	return terminalSessionError(s.Session)
+}
+
 func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type != messages.StreamTypeTextDelta {
 		return s.Session.Send(ctx, msg)

@@ -478,6 +478,13 @@ type sessionRTCRuntimeSession struct {
 
 var _ messages.Session = (*sessionRTCRuntimeSession)(nil)
 
+func (s *sessionRTCRuntimeSession) TerminalError() error {
+	if s == nil {
+		return nil
+	}
+	return terminalSessionError(s.Session)
+}
+
 func (s *sessionRTCRuntimeSession) Close() error {
 	if s == nil {
 		return nil

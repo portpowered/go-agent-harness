@@ -119,6 +119,10 @@ func (s *sessionTextSeedSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.inner)
 }
 
+func (s *sessionTextSeedSession) TerminalError() error {
+	return terminalSessionError(s.inner)
+}
+
 func (s *sessionTextSeedSession) Close() error {
 	return s.inner.Close()
 }

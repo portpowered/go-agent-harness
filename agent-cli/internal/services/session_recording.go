@@ -600,6 +600,10 @@ func (s *sessionDirectoryRecordingSession) rtcMedia() (RTCMediaEndpoints, bool) 
 	return rtcMediaFromSession(s.inner)
 }
 
+func (s *sessionDirectoryRecordingSession) TerminalError() error {
+	return terminalSessionError(s.inner)
+}
+
 func (s *sessionDirectoryRecordingSession) Close() error {
 	err := s.inner.Close()
 	select {

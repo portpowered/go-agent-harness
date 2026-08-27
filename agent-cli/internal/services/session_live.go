@@ -208,6 +208,9 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		if drainErr := drainSessionLoopMessages(out, loop, opts.observer); drainErr != nil {
 			stopErr = errors.Join(stopErr, drainErr)
 		}
+		if sessionErr := observedInferencer.sessionFailure(); sessionErr != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("session transport: %w", sessionErr))
+		}
 		return stopErr
 	}
 
@@ -349,6 +352,12 @@ type observedSessionInferencer struct {
 
 	mu         sync.Mutex
 	connectErr error
+	sessionErr error
+	session    messages.Session
+}
+
+type sessionTerminalErrorSource interface {
+	TerminalError() error
 }
 
 var _ messages.SessionInferencer = (*observedSessionInferencer)(nil)
@@ -372,9 +381,17 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		i.closeDone()
 		return nil, err
 	}
+	i.mu.Lock()
+	i.session = session
+	i.mu.Unlock()
 	go func() {
 		select {
 		case <-session.Done():
+			if err := terminalSessionError(session); err != nil {
+				i.mu.Lock()
+				i.sessionErr = err
+				i.mu.Unlock()
+			}
 			i.closeDone()
 		case <-ctx.Done():
 		}
@@ -387,6 +404,28 @@ func (i *observedSessionInferencer) connectFailure() error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.connectErr
+}
+
+// sessionFailure returns an unexpected terminal error reported by the
+// provider session after a successful connection. The optional interface keeps
+// the generic messages.Session contract unchanged for injected and replay
+// sessions that do not expose transport details.
+func (i *observedSessionInferencer) sessionFailure() error {
+	i.mu.Lock()
+	session, remembered := i.session, i.sessionErr
+	i.mu.Unlock()
+	if err := terminalSessionError(session); err != nil {
+		return err
+	}
+	return remembered
+}
+
+func terminalSessionError(session messages.Session) error {
+	source, ok := session.(sessionTerminalErrorSource)
+	if !ok {
+		return nil
+	}
+	return source.TerminalError()
 }
 
 func (i *observedSessionInferencer) Done() <-chan struct{} {

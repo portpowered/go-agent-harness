@@ -419,6 +419,10 @@ func (s *sessionInstructionsSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.inner)
 }
 
+func (s *sessionInstructionsSession) TerminalError() error {
+	return terminalSessionError(s.inner)
+}
+
 func (s *sessionInstructionsSession) Close() error {
 	s.cancel()
 	return s.inner.Close()

@@ -29,8 +29,10 @@ type realtimeSession struct {
 	// session's output path).
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
-	done      chan struct{}
-	closeOnce sync.Once
+	done        chan struct{}
+	closeOnce   sync.Once
+	errMu       sync.Mutex
+	terminalErr error
 
 	mediaMu sync.Mutex
 	media   *rtc.SessionMedia
@@ -110,6 +112,26 @@ func (s *realtimeSession) OutputDrops() int64 { return s.recvBuf.Drops() }
 
 func (s *realtimeSession) Done() <-chan struct{} {
 	return s.done
+}
+
+// TerminalError returns the unexpected provider-side transport or protocol
+// error that terminated the session, if one was observed. A clean caller-side
+// Close and context cancellation do not set this value.
+func (s *realtimeSession) TerminalError() error {
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	return s.terminalErr
+}
+
+func (s *realtimeSession) setTerminalError(err error) {
+	if err == nil {
+		return
+	}
+	s.errMu.Lock()
+	if s.terminalErr == nil {
+		s.terminalErr = err
+	}
+	s.errMu.Unlock()
 }
 
 func (s *realtimeSession) Close() error {
