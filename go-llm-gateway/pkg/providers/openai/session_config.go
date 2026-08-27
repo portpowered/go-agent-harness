@@ -9,11 +9,8 @@ import (
 )
 
 func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
-	if p.clientOwnsAudioTurnBoundaries {
-		config.TurnDetection = clientOwnedAudioTurnDetection(config.TurnDetection)
-	}
 	if p.realtimeLegacySessionUpdate {
-		return buildLegacyRealtimeSessionUpdate(config, model)
+		return buildLegacyRealtimeSessionUpdate(config, model, p.clientOwnsAudioTurnBoundaries)
 	}
 
 	update := map[string]any{
@@ -26,7 +23,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 	if config.Instructions != "" {
 		update["instructions"] = config.Instructions
 	}
-	audio := buildRealtimeAudioConfig(config)
+	audio := buildRealtimeAudioConfig(config, p.clientOwnsAudioTurnBoundaries)
 	if len(audio) > 0 {
 		update["audio"] = audio
 	}
@@ -41,20 +38,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 	return models.NewSessionUpdateEvent(data), nil
 }
 
-func clientOwnedAudioTurnDetection(existing *models.TurnDetectionConfig) *models.TurnDetectionConfig {
-	detection := models.TurnDetectionConfig{Type: "server_vad"}
-	if existing != nil {
-		detection = *existing
-		if detection.Type == "" {
-			detection.Type = "server_vad"
-		}
-	}
-	createResponse := false
-	detection.CreateResponse = &createResponse
-	return &detection
-}
-
-func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
+func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string, disableTurnDetection bool) (models.SessionEvent, error) {
 	update := map[string]any{
 		"model": model,
 	}
@@ -73,7 +57,11 @@ func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string)
 	if config.OutputAudioFormat != "" {
 		update["output_audio_format"] = config.OutputAudioFormat
 	}
-	if config.TurnDetection != nil {
+	if disableTurnDetection {
+		// The explicit null is part of the client-owned turn-boundary contract.
+		// Leaving this field out would preserve the provider's effective VAD.
+		update["turn_detection"] = nil
+	} else if config.TurnDetection != nil {
 		update["turn_detection"] = config.TurnDetection
 	}
 	if len(config.Tools) > 0 {
@@ -98,7 +86,7 @@ func sessionModalitiesToStrings(modalities []models.SessionModality) []string {
 	return out
 }
 
-func buildRealtimeAudioConfig(config models.SessionConfig) map[string]any {
+func buildRealtimeAudioConfig(config models.SessionConfig, disableTurnDetection bool) map[string]any {
 	audio := map[string]any{}
 	input := map[string]any{}
 	output := map[string]any{}
@@ -106,7 +94,12 @@ func buildRealtimeAudioConfig(config models.SessionConfig) map[string]any {
 	if config.InputAudioFormat != "" || config.InputAudioSampleRate != 0 {
 		input["format"] = realtimeAudioFormat(config.InputAudioFormat, config.InputAudioSampleRate)
 	}
-	if config.TurnDetection != nil {
+	if disableTurnDetection {
+		// The GA Realtime schema places turn_detection under audio.input. Keep
+		// the key present with a JSON null so the provider cannot retain or
+		// select its default VAD configuration.
+		input["turn_detection"] = nil
+	} else if config.TurnDetection != nil {
 		input["turn_detection"] = config.TurnDetection
 	}
 	if len(input) > 0 {

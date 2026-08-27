@@ -124,10 +124,11 @@ test "$STARTUP_BYTES" -le 30720
 
 The helper below reads only event names, counts, safe status fields, and file
 sizes. It does not print event payloads or audio. It proves that the matching
-`session.updated` arrived before the first append, that scheduled VAD carries
-`create_response:false`, that each input has exactly one append/commit/
-response request and terminal `response.done`, and that each recording entry
-completed.
+`session.updated` arrived before the first append, that the acknowledged
+scheduled session update carries an explicit `turn_detection: null` (under
+`audio.input` in the current GA shape), that each input has exactly one
+append/commit/response request and terminal `response.done`, and that each
+recording entry completed.
 
 ```bash
 verify_run() {
@@ -161,13 +162,30 @@ def contains_string(value, needle):
         return any(contains_string(item, needle) for item in value)
     return False
 
-def has_false_create_response(value):
-    if isinstance(value, dict):
-        if value.get("create_response") is False:
-            return True
-        return any(has_false_create_response(item) for item in value.values())
+def has_explicit_null_turn_detection(value):
     if isinstance(value, list):
-        return any(has_false_create_response(item) for item in value)
+        return any(has_explicit_null_turn_detection(item) for item in value)
+    if not isinstance(value, dict):
+        return False
+
+    # Captures store the provider event envelope around the session payload.
+    session = value.get("session")
+    if isinstance(session, dict) and has_explicit_null_turn_detection(session):
+        return True
+
+    # Current GA Realtime sessions put the field at audio.input.turn_detection.
+    audio = value.get("audio")
+    if isinstance(audio, dict):
+        audio_input = audio.get("input")
+        if (isinstance(audio_input, dict) and
+                "turn_detection" in audio_input and
+                audio_input["turn_detection"] is None):
+            return True
+
+    # Retain the same explicit-null assertion for the legacy-compatible flat
+    # session.update form, where the field is session.turn_detection.
+    if "turn_detection" in value and value["turn_detection"] is None:
+        return True
     return False
 
 updated = positions("server_to_client", "session.updated")
@@ -179,8 +197,15 @@ updates = [
     record for record in records
     if record.get("direction") == "client_to_server" and record.get("type") == "session.update"
 ]
-if not any(has_false_create_response(record.get("payload")) for record in updates):
-    raise SystemExit("scheduled session.update did not carry create_response:false")
+if not any(has_explicit_null_turn_detection(record.get("payload")) for record in updates):
+    raise SystemExit("scheduled session.update did not carry explicit turn_detection:null")
+
+acknowledgements = [
+    record for record in records
+    if record.get("direction") == "server_to_client" and record.get("type") == "session.updated"
+]
+if not any(has_explicit_null_turn_detection(record.get("payload")) for record in acknowledgements):
+    raise SystemExit("session.updated did not acknowledge effective turn_detection:null")
 
 for event_type in ("input_audio_buffer.append", "input_audio_buffer.commit", "response.create", "response.done"):
     got = positions(
@@ -259,9 +284,9 @@ capture as evidence; retain only the redacted summary described below.
 
 This run sends the real speech fixture followed immediately by the equal-size
 all-zero fixture in the same persistent session. There is no client-side
-delay between the repeatable `--audio-in-turn` values. Server VAD observations
-may appear in the capture, but they must not add a boundary or create an
-overlapping response.
+delay between the repeatable `--audio-in-turn` values. The acknowledged
+`turn_detection: null` configuration leaves no provider VAD boundary to race
+the CLI's explicit commit, so the two boundaries remain client-owned.
 
 ```bash
 TURN_RECORD_DIR="$WORK_DIR/speech-silence-recording"
@@ -296,6 +321,7 @@ following command turns any match into a failure:
 
 ```bash
 if rg -n --glob '*.json' --glob '*.jsonl' --glob '*.txt' \
+    --glob '*.stdout' --glob '*.stderr' \
     'input_audio_buffer_commit_empty|conversation_already_has_active_response' \
     "$WORK_DIR"; then
   printf '%s\n' 'named provider collision found' >&2
@@ -316,7 +342,7 @@ filled in:
 
 ```text
 OpenAI live scheduled-turn confirmation (gpt-realtime, <date>).
-- Startup: session.updated preceded the first append; one append/commit/response.create/response.done; exit 0.
+- Startup: session.updated acknowledged turn_detection:null before the first append; one append/commit/response.create/response.done; exit 0.
 - Speech + exact silence: two append/commit/response.create/response.done sets; both recording entries completed; turn 2 followed turn 1 response.done; exit 0.
 - Collision search: zero input_audio_buffer_commit_empty and zero conversation_already_has_active_response in raw event names/payloads, recording logs, CLI output, and returned status.
 - Credentials, raw captures, customer audio, and unredacted payloads were not included.
