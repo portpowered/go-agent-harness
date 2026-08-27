@@ -29,6 +29,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	defer server.Close()
 
 	recordPath := filepath.Join(t.TempDir(), "cutoff.session.json")
+	recordDir := filepath.Join(t.TempDir(), "cutoff-recording")
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
 		&mockInferencerError{err: os.ErrNotExist},
@@ -44,6 +45,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	rootCmd.SetArgs([]string{
 		"session",
 		"--record", recordPath,
+		"--record-dir", recordDir,
 		"--provider", "openai",
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
@@ -97,6 +99,59 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	} {
 		if got := terminal.fields[field]; got != want {
 			t.Fatalf("duration sidecar %s = %q, want %q", field, got, want)
+		}
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(recordDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read record-dir manifest: %v", err)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode record-dir manifest: %v", err)
+	}
+	wantSummary := transcript.RecordingTerminalSummary{
+		Reason:             "max_duration",
+		Classification:     "max_duration",
+		TerminalReason:     messages.TerminalReason("max_duration"),
+		TerminalProvenance: messages.TerminalProvenanceLoop,
+		OutputState:        messages.TerminalOutputPartial,
+	}
+	if manifest.Terminal == nil {
+		t.Fatal("record-dir manifest omitted terminal summary")
+	}
+	if *manifest.Terminal != wantSummary {
+		t.Fatalf("record-dir terminal summary = %+v, want %+v", *manifest.Terminal, wantSummary)
+	}
+	var manifestFields map[string]json.RawMessage
+	if err := json.Unmarshal(manifestBytes, &manifestFields); err != nil {
+		t.Fatalf("decode record-dir manifest fields: %v", err)
+	}
+	var terminalFields map[string]json.RawMessage
+	if err := json.Unmarshal(manifestFields["terminal"], &terminalFields); err != nil {
+		t.Fatalf("decode record-dir terminal fields: %v", err)
+	}
+	if len(terminalFields) != 5 {
+		t.Fatalf("record-dir terminal field count = %d, want exactly 5", len(terminalFields))
+	}
+	assertMaxDurationTerminalJSONFields(t, "record-dir manifest", terminalFields)
+
+	if len(manifest.Artifacts) == 0 {
+		t.Fatal("record-dir manifest has no artifacts")
+	}
+	seenArtifacts := make(map[string]struct{}, len(manifest.Artifacts))
+	for _, artifact := range manifest.Artifacts {
+		if _, duplicate := seenArtifacts[artifact.Path]; duplicate {
+			t.Fatalf("record-dir manifest repeats artifact %q", artifact.Path)
+		}
+		seenArtifacts[artifact.Path] = struct{}{}
+		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(artifact.Path)))
+		if err != nil {
+			t.Fatalf("read record-dir artifact %q: %v", artifact.Path, err)
+		}
+		digest := sha256.Sum256(data)
+		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
+			t.Fatalf("record-dir artifact hash for %q = %s, want %s", artifact.Path, got, artifact.SHA256)
 		}
 	}
 }
@@ -350,6 +405,30 @@ func captureHasWireRecord(capture gwtesting.SessionCapture, direction gwtesting.
 type durationSidecarTerminal struct {
 	count  int
 	fields map[string]string
+}
+
+func assertMaxDurationTerminalJSONFields(t *testing.T, label string, fields map[string]json.RawMessage) {
+	t.Helper()
+	want := map[string]string{
+		"reason":              "max_duration",
+		"classification":      "max_duration",
+		"terminal_reason":     "max_duration",
+		"terminal_provenance": "loop",
+		"output_state":        "partial",
+	}
+	for field, wantValue := range want {
+		value, ok := fields[field]
+		if !ok {
+			t.Fatalf("%s omitted terminal field %q", label, field)
+		}
+		var got string
+		if err := json.Unmarshal(value, &got); err != nil {
+			t.Fatalf("%s terminal field %q is not a string: %v", label, field, err)
+		}
+		if got != wantValue {
+			t.Fatalf("%s terminal field %q = %q, want %q", label, field, got, wantValue)
+		}
+	}
 }
 
 func readSessionDurationSidecarTerminal(t *testing.T, path string) durationSidecarTerminal {
