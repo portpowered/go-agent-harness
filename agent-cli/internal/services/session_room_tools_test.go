@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
@@ -90,6 +91,66 @@ func TestBuildRoomParticipantPlans_EmptyToolsDoNotConstructCapabilities(t *testi
 		if plan.options.ToolExecutor != nil || len(plan.options.ToolDefinitions) != 0 {
 			t.Fatalf("participant %q has tools despite tools: []: executor=%T definitions=%#v", plan.manifest.ID, plan.options.ToolExecutor, plan.options.ToolDefinitions)
 		}
+	}
+}
+
+func TestBuildRoomParticipantPlans_IsolatesConcurrentCapabilityUse(t *testing.T) {
+	ids := []string{"alpha", "beta"}
+	opts, _ := newRoomTestRunOptions(ids, map[string]*roomTestInferencer{
+		"alpha": {},
+		"beta":  {},
+	})
+	for index, participant := range opts.Manifest.Participants {
+		participant.Tools = []string{ids[index] + "_tool"}
+		participant.Voice = []string{"alloy", "ash"}[index]
+		opts.Manifest.Participants[index] = participant
+	}
+	opts.ToolCapabilitiesFactory = func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
+		return RoomParticipantToolCapabilities{
+			Executor: roomScopedToolExecutor{participantID: participant.ID},
+			Definitions: []messages.ToolDefinition{{
+				Name: participant.ID + "_tool",
+			}},
+		}, nil
+	}
+
+	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: opts.CredentialLookup})
+	if err != nil {
+		t.Fatalf("buildRoomParticipantPlans: %v", err)
+	}
+
+	var waitGroup sync.WaitGroup
+	errs := make(chan error, len(plans))
+	for index, plan := range plans {
+		waitGroup.Add(1)
+		go func(index int, plan *roomParticipantPlan) {
+			defer waitGroup.Done()
+			wantID := ids[index]
+			wantVoice := []string{"alloy", "ash"}[index]
+			for callIndex := 0; callIndex < 64; callIndex++ {
+				if plan.options.Voice != wantVoice {
+					errs <- fmt.Errorf("participant %q observed voice %q, want %q", wantID, plan.options.Voice, wantVoice)
+					return
+				}
+				response, executeErr := plan.options.ToolExecutor.Execute(context.Background(), messages.ToolCall{
+					ID:   fmt.Sprintf("call-%d", callIndex),
+					Name: wantID + "_tool",
+				})
+				if executeErr != nil {
+					errs <- fmt.Errorf("participant %q call %d: %w", wantID, callIndex, executeErr)
+					return
+				}
+				if response.Content != wantID {
+					errs <- fmt.Errorf("participant %q observed result %q", wantID, response.Content)
+					return
+				}
+			}
+		}(index, plan)
+	}
+	waitGroup.Wait()
+	close(errs)
+	if err := <-errs; err != nil {
+		t.Fatal(err)
 	}
 }
 
