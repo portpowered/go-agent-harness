@@ -21,6 +21,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
@@ -187,9 +190,9 @@ func (c *cliLiveRecordDirConn) Close() error {
 
 // cliLiveScheduledBoundaryServer is a live-shaped OpenAI transport for the
 // production CLI scheduled-audio path. It can withhold the initial
-// session.updated acknowledgement, emits VAD observations for speech, and
-// models the provider-side collision that occurs when server VAD owns a
-// response while the client sends its explicit boundary.
+// session.updated acknowledgement, and models the provider-side auto-commit
+// that occurs when Server VAD owns a speech boundary before the client sends
+// its explicit boundary.
 type cliLiveScheduledBoundaryServer struct {
 	mu sync.Mutex
 
@@ -209,18 +212,23 @@ type cliLiveScheduledBoundaryServer struct {
 	sessionCreatedOnce    sync.Once
 	releaseOnce           sync.Once
 
-	serverVADCreatesResponse bool
-	turnObserved             bool
-	turnHasSpeech            bool
+	serverVADEnabled    bool
+	turnObserved        bool
+	turnHasAudio        bool
+	turnHasSpeech       bool
+	turnAutoCommitted   bool
+	clientCommitted     bool
+	providerAutoCommits int
+	sessionUpdates      []json.RawMessage
 }
 
 func newCLILiveScheduledBoundaryServer(delaySessionUpdated bool) *cliLiveScheduledBoundaryServer {
 	server := &cliLiveScheduledBoundaryServer{
-		responses:                make(chan int, 8),
-		events:                   make(chan []byte, 64),
-		closed:                   make(chan struct{}),
-		sessionCreated:           make(chan struct{}),
-		serverVADCreatesResponse: true,
+		responses:        make(chan int, 8),
+		events:           make(chan []byte, 64),
+		closed:           make(chan struct{}),
+		sessionCreated:   make(chan struct{}),
+		serverVADEnabled: true,
 	}
 	if delaySessionUpdated {
 		server.sessionUpdatedRelease = make(chan struct{})
@@ -291,7 +299,22 @@ func (s *cliLiveScheduledBoundaryServer) snapshots() ([]string, []cliLiveOutboun
 	for index, event := range s.outbound {
 		outbound[index] = cliLiveOutbound{typeName: event.typeName, audio: append([]byte(nil), event.audio...)}
 	}
-	return timeline, outbound, append([]string(nil), s.providerErrors...), s.dialCount, s.serverVADCreatesResponse
+	return timeline, outbound, append([]string(nil), s.providerErrors...), s.dialCount, s.serverVADEnabled
+}
+
+func (s *cliLiveScheduledBoundaryServer) sessionUpdateSnapshot() json.RawMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sessionUpdates) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), s.sessionUpdates[0]...)
+}
+
+func (s *cliLiveScheduledBoundaryServer) providerAutoCommitCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.providerAutoCommits
 }
 
 type cliLiveScheduledBoundaryConn struct {
@@ -342,44 +365,67 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 
 	var observations []string
 	var responseTurn int
-	var collision bool
+	var commitEmpty bool
+	var responseAccepted bool
 	c.server.mu.Lock()
 	c.server.timeline = append(c.server.timeline, "out:"+envelope.Type)
 	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio})
 	switch envelope.Type {
 	case "session.update":
-		c.server.serverVADCreatesResponse = scheduledServerVADCreatesResponse(envelope.Session)
+		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
+		c.server.serverVADEnabled = scheduledServerVADEnabled(envelope.Session)
 	case "input_audio_buffer.append":
+		c.server.turnHasAudio = true
 		if !c.server.turnObserved {
 			c.server.turnObserved = true
 			if hasNonZeroPCM(audio) {
 				c.server.turnHasSpeech = true
-				observations = append(observations, `{"type":"input_audio_buffer.speech_started"}`)
+				if c.server.serverVADEnabled {
+					observations = append(observations, `{"type":"input_audio_buffer.speech_started"}`)
+				}
 			}
 		} else if hasNonZeroPCM(audio) {
 			c.server.turnHasSpeech = true
 		}
-	case "input_audio_buffer.commit":
-		if c.server.turnHasSpeech {
+		if c.server.serverVADEnabled && c.server.turnHasSpeech && !c.server.turnAutoCommitted {
+			// A finite test append represents the provider having observed the
+			// speech stop for that input. Server VAD commits and clears its
+			// buffer before the later client boundary arrives, even when
+			// create_response is false.
 			observations = append(observations, `{"type":"input_audio_buffer.speech_stopped"}`)
+			c.server.turnAutoCommitted = true
+			c.server.turnHasAudio = false
+			c.server.providerAutoCommits++
+		}
+	case "input_audio_buffer.commit":
+		if c.server.turnAutoCommitted || !c.server.turnHasAudio {
+			// The client commit is redundant after provider VAD has already
+			// committed and cleared the input buffer.
+			commitEmpty = true
+		} else {
+			c.server.turnHasAudio = false
+			c.server.clientCommitted = true
 		}
 	case "response.create":
 		c.server.nextTurn++
 		responseTurn = c.server.nextTurn
-		collision = c.server.serverVADCreatesResponse && c.server.turnHasSpeech
+		responseAccepted = c.server.clientCommitted && !c.server.serverVADEnabled
 		c.server.turnObserved = false
+		c.server.turnHasAudio = false
 		c.server.turnHasSpeech = false
+		c.server.turnAutoCommitted = false
+		c.server.clientCommitted = false
 	}
 	c.server.mu.Unlock()
 
 	for _, observation := range observations {
 		c.server.sendEvent(observation)
 	}
-	if collision {
-		c.server.sendEvent(`{"type":"error","error":{"type":"invalid_request_error","code":"conversation_already_has_active_response","message":"server VAD already owns the response"}}`)
+	if commitEmpty {
+		c.server.sendEvent(`{"type":"error","error":{"type":"invalid_request_error","code":"input_audio_buffer_commit_empty","message":"input audio buffer is empty after provider VAD committed it"}}`)
 		return nil
 	}
-	if responseTurn > 0 {
+	if responseTurn > 0 && responseAccepted {
 		select {
 		case c.server.responses <- responseTurn:
 		case <-c.server.closed:
@@ -400,30 +446,26 @@ func closeChannelOnce(channel chan struct{}, once *sync.Once) {
 	once.Do(func() { close(channel) })
 }
 
-func scheduledServerVADCreatesResponse(session json.RawMessage) bool {
+func scheduledServerVADEnabled(session json.RawMessage) bool {
 	var update struct {
 		Audio struct {
 			Input struct {
-				TurnDetection *struct {
-					CreateResponse *bool `json:"create_response"`
-				} `json:"turn_detection"`
+				TurnDetection json.RawMessage `json:"turn_detection"`
 			} `json:"input"`
 		} `json:"audio"`
-		TurnDetection *struct {
-			CreateResponse *bool `json:"create_response"`
-		} `json:"turn_detection"`
+		TurnDetection json.RawMessage `json:"turn_detection"`
 	}
 	if err := json.Unmarshal(session, &update); err != nil {
 		return true
 	}
 	detection := update.Audio.Input.TurnDetection
-	if detection == nil {
+	if len(detection) == 0 {
 		detection = update.TurnDetection
 	}
-	if detection == nil || detection.CreateResponse == nil {
+	if len(detection) == 0 {
 		return true
 	}
-	return *detection.CreateResponse
+	return !bytes.Equal(bytes.TrimSpace(detection), []byte("null"))
 }
 
 func hasNonZeroPCM(audio []byte) bool {
@@ -456,6 +498,40 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 	return agentCLI
 }
 
+func newCLIServerVADBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
+	t.Helper()
+	createResponse := false
+	provider := oaiprovider.New(
+		oaiprovider.WithAPIKey("test-key"),
+		oaiprovider.WithModel("gpt-realtime"),
+		oaiprovider.WithRealtimeBaseURL("wss://hermetic.openai.test/v1/realtime"),
+		oaiprovider.WithWebSocketDialer(server),
+	)
+	sessionGateway, err := gateway.NewSessionGateway(gateway.WithSessionProvider(provider))
+	if err != nil {
+		t.Fatalf("create hermetic OpenAI server-VAD session gateway: %v", err)
+	}
+	sessionInferencer := inference.NewSessionGatewayInferencer(
+		sessionGateway,
+		inference.WithSessionRequest(inference.SessionRequest{Config: models.SessionConfig{
+			Model: "gpt-realtime",
+			TurnDetection: &models.TurnDetectionConfig{
+				Type:           "server_vad",
+				CreateResponse: &createResponse,
+			},
+		}}),
+	)
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+		sessionInferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize server-VAD CLI: %v", err)
+	}
+	return agentCLI
+}
+
 func scheduledBoundaryArgs(configDir, recordDir string, audioPaths ...string) []string {
 	args := []string{
 		"--config-dir", configDir,
@@ -479,11 +555,12 @@ func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) {
 		appendIndex := indexOfTimeline(timeline, "out:input_audio_buffer.append", turn)
 		commitIndex := indexOfTimeline(timeline, "out:input_audio_buffer.commit", turn)
 		responseIndex := indexOfTimeline(timeline, "out:response.create", turn)
-		if appendIndex < 0 || commitIndex < 0 || responseIndex < 0 {
+		doneIndex := indexOfTimeline(timeline, "in:response.done", turn)
+		if appendIndex < 0 || commitIndex < 0 || responseIndex < 0 || doneIndex < 0 {
 			t.Fatalf("scheduled turn %d is missing its boundary from %v", turn+1, timeline)
 		}
-		if !(appendIndex < commitIndex && commitIndex < responseIndex) {
-			t.Fatalf("scheduled turn %d wire order = %v, want append < commit < response.create", turn+1, timeline)
+		if !(appendIndex < commitIndex && commitIndex < responseIndex && responseIndex < doneIndex) {
+			t.Fatalf("scheduled turn %d lifecycle order = %v, want append < commit < response.create < response.done", turn+1, timeline)
 		}
 	}
 }
@@ -563,12 +640,12 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 		t.Fatal("delayed-ack production CLI session did not complete")
 	}
 
-	timeline, outbound, providerErrors, dialCount, serverVADCreatesResponse := server.snapshots()
+	timeline, outbound, providerErrors, dialCount, serverVADEnabled := server.snapshots()
 	if dialCount != 1 {
 		t.Fatalf("delayed-ack provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
 	}
-	if serverVADCreatesResponse {
-		t.Fatalf("scheduled session update left server VAD response ownership enabled: %v", timeline)
+	if serverVADEnabled {
+		t.Fatalf("scheduled session update left server VAD enabled: %v", timeline)
 	}
 	if len(providerErrors) != 0 {
 		t.Fatalf("delayed-ack provider errors = %v; timeline=%v", providerErrors, timeline)
@@ -596,9 +673,9 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 
 // TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence keeps a real
 // 24 kHz speech fixture and an equal-duration all-zero 24 kHz fixture in one
-// persistent production-CLI session. The transport emits a live-shaped VAD
-// observation for speech and fails the old server-VAD/client-boundary dual
-// ownership configuration with the provider collision code.
+// persistent production-CLI session. The transport would auto-commit a speech
+// stop while Server VAD is enabled, but explicit null keeps both turns under
+// the client's one-commit/one-response boundary.
 func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 	speechPath := locateCorpusWAV(t, "truncated_24k")
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
@@ -621,12 +698,15 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 		t.Fatalf("speech-then-silence production CLI session error: %v\nprovider errors=%v\ntimeline=%v\nappend lengths=%v\nstdout:\n%s\nstderr:\n%s", err, providerErrors, timeline, audioLengthsFromOutbound(outbound), stdout.String(), stderr.String())
 	}
 
-	timeline, outbound, providerErrors, dialCount, serverVADCreatesResponse := server.snapshots()
+	timeline, outbound, providerErrors, dialCount, serverVADEnabled := server.snapshots()
 	if dialCount != 1 {
 		t.Fatalf("speech-then-silence provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
 	}
-	if serverVADCreatesResponse {
-		t.Fatalf("scheduled session update left server VAD response ownership enabled: %v", timeline)
+	if serverVADEnabled {
+		t.Fatalf("scheduled session update left server VAD enabled: %v", timeline)
+	}
+	if got := server.providerAutoCommitCount(); got != 0 {
+		t.Fatalf("client-owned scheduled run unexpectedly auto-committed %d turn(s): %v", got, timeline)
 	}
 	if len(providerErrors) != 0 {
 		t.Fatalf("speech-then-silence provider errors = %v; timeline=%v", providerErrors, timeline)
@@ -640,8 +720,8 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 	if firstResponseDone < 0 || secondAppend <= firstResponseDone {
 		t.Fatalf("silence turn crossed the active first response: %v", timeline)
 	}
-	if countTimeline(timeline, "in:input_audio_buffer.speech_started") != 1 || countTimeline(timeline, "in:input_audio_buffer.speech_stopped") != 1 {
-		t.Fatalf("live-shaped VAD observations = %v, want one speech start/stop for the real speech turn", timeline)
+	if countTimeline(timeline, "in:input_audio_buffer.speech_started") != 0 || countTimeline(timeline, "in:input_audio_buffer.speech_stopped") != 0 {
+		t.Fatalf("client-owned scheduled run unexpectedly emitted VAD observations = %v", timeline)
 	}
 
 	appendAudio := audioPayloadsFromOutbound(outbound)
@@ -660,6 +740,84 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 		}
 	}
 	assertCLILiveRecordingBundle(t, recordDir, 2)
+}
+
+// TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl
+// drives the old server_vad plus create_response:false wire configuration
+// through the same production CLI boundary. The provider double auto-commits
+// and clears a speech buffer at speech stop, so the later client commit must
+// be rejected as input_audio_buffer_commit_empty.
+func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl(t *testing.T) {
+	speechPath := locateCorpusWAV(t, "truncated_24k")
+	silencePath := equalDuration24kSilenceFixture(t, speechPath)
+	server := newCLILiveScheduledBoundaryServer(false)
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIServerVADBoundaryAgent(t, server)
+	recordDir := filepath.Join(t.TempDir(), "server-vad-recording")
+	stdout := &syncBuffer{}
+	stderr := &syncBuffer{}
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+	rootCmd.SetArgs(scheduledBoundaryArgs(t.TempDir(), recordDir, speechPath, silencePath))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	err := rootCmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("former server-VAD scheduled configuration unexpectedly completed")
+	}
+
+	timeline, _, providerErrors, _, serverVADEnabled := server.snapshots()
+	if !serverVADEnabled {
+		t.Fatalf("negative control did not leave server VAD enabled: %v", timeline)
+	}
+	if server.providerAutoCommitCount() != 1 {
+		t.Fatalf("provider auto-commit count = %d, want one speech-stop auto-commit; timeline=%v", server.providerAutoCommitCount(), timeline)
+	}
+	if len(providerErrors) != 1 || providerErrors[0] != "input_audio_buffer_commit_empty" {
+		t.Fatalf("negative-control provider errors = %v, want one input_audio_buffer_commit_empty; timeline=%v", providerErrors, timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 1 || countTimeline(timeline, "out:input_audio_buffer.commit") != 1 {
+		t.Fatalf("negative-control client boundary = %v, want one append and one rejected commit", timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") >= 2 || countTimeline(timeline, "in:response.done") != 0 {
+		t.Fatalf("negative-control continued after the provider collision: %v", timeline)
+	}
+	if countTimeline(timeline, "in:input_audio_buffer.speech_started") != 1 || countTimeline(timeline, "in:input_audio_buffer.speech_stopped") != 1 {
+		t.Fatalf("negative-control VAD observations = %v, want one speech start and stop: %v", timeline, timeline)
+	}
+	assertScheduledServerVADCreateResponseFalse(t, server.sessionUpdateSnapshot())
+	if !strings.Contains(stdout.String()+stderr.String(), "input audio buffer is empty") {
+		t.Fatalf("negative-control CLI output did not preserve provider error: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
+func assertScheduledServerVADCreateResponseFalse(t *testing.T, session json.RawMessage) {
+	t.Helper()
+	var update struct {
+		Audio struct {
+			Input struct {
+				TurnDetection json.RawMessage `json:"turn_detection"`
+			} `json:"input"`
+		} `json:"audio"`
+	}
+	if err := json.Unmarshal(session, &update); err != nil {
+		t.Fatalf("decode negative-control session.update: %v", err)
+	}
+	if len(update.Audio.Input.TurnDetection) == 0 {
+		t.Fatal("negative-control session.update omitted audio.input.turn_detection")
+	}
+	var detection struct {
+		Type           string `json:"type"`
+		CreateResponse *bool  `json:"create_response"`
+	}
+	if err := json.Unmarshal(update.Audio.Input.TurnDetection, &detection); err != nil {
+		t.Fatalf("decode negative-control turn detection: %v", err)
+	}
+	if detection.Type != "server_vad" || detection.CreateResponse == nil || *detection.CreateResponse {
+		t.Fatalf("negative-control turn detection = %+v, want server_vad/create_response:false", detection)
+	}
 }
 
 func audioPayloadsFromOutbound(outbound []cliLiveOutbound) [][]byte {
