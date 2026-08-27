@@ -191,6 +191,27 @@ func removeConversationContinuationAfterResult(t *testing.T, capture *gwtesting.
 	capture.Records = filtered
 }
 
+// removeConversationSessionClose removes the terminal provider close so the
+// CLI must terminate at the final assistant MESSAGE.END. Without this
+// mutation, the replay planner opts into --wait-for-close behavior based on
+// the captured close and cannot exercise the default audio stop predicate.
+func removeConversationSessionClose(t *testing.T, capture *gwtesting.SessionCapture) {
+	t.Helper()
+	filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
+	removed := false
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+	if !removed {
+		t.Fatal("default audio stop control found no provider session.closed record to remove")
+	}
+	capture.Records = filtered
+}
+
 func removeConversationAudioDelta(t *testing.T, capture *gwtesting.SessionCapture) {
 	t.Helper()
 	filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
@@ -377,6 +398,38 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 			t.Fatalf("accepted-result audio rejected: %v", err)
 		}
 	})
+}
+
+func TestSessionToolResultConversationContinuesWithoutProviderCloseShortcut(t *testing.T) {
+	wavPath, reply := shortConversationFixtureInputs(t)
+	_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
+		removeConversationSessionClose(t, capture)
+	})
+
+	capture, err := gwtesting.LoadSessionCapture(wirePath)
+	if err != nil {
+		t.Fatalf("load no-close replay fixture: %v", err)
+	}
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
+			t.Fatal("default audio stop control still contains a provider session.closed record")
+		}
+	}
+
+	executor := &conversationResultExecutor{result: toolResultPositive}
+	stdout, outputPath, runErr := runToolResultConversationWithOptions(t, wavPath, wirePath, executor, 8*time.Second, 10*time.Second, false)
+	if runErr != nil {
+		t.Fatalf("default audio stop path failed before consuming the follow-up response: %v\nstdout=%s", runErr, stdout)
+	}
+	assertConversationAcceptedExchange(t, stdout, wirePath, executor)
+	outputs := functionCallOutputsInExchange(t, wirePath)
+	if len(outputs) != 1 {
+		t.Fatalf("default audio stop exchange contains %d function_call_output events, want exactly one", len(outputs))
+	}
+	assertToolResultFollowUpOrdering(t, wirePath, outputs[0].Sequence)
+	if err := validateConversationAudioArtifact(outputPath, len(reply)); err != nil {
+		t.Fatalf("default audio stop follow-up audio rejected: %v", err)
+	}
 }
 
 func TestSessionToolResultConversationMissingContinuationIsBounded(t *testing.T) {
