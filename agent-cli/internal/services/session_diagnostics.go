@@ -807,24 +807,6 @@ func (o *sessionProgressObserver) unresolvedToolResultSendStatuses() map[string]
 	return statuses
 }
 
-// account is the single observation seam: every counted byte crosses here
-// exactly once, forwarding to the metrics recorder and advancing both the
-// per-turn counters and the lifetime totals in one step. Recording failures
-// are diagnostics-only and never alter session behavior.
-func (o *sessionProgressObserver) account(direction metrics.Direction, modality metrics.Modality, n int) {
-	if o == nil || n <= 0 {
-		return
-	}
-	if o.productionSink != nil {
-		_ = o.productionSink.Record(direction, modality, int64(n))
-	}
-	if o.recorder != nil {
-		_ = o.recorder.Record(direction, modality, int64(n))
-	}
-	o.counters.account(direction, modality, uint64(n))
-	o.totals.account(direction, modality, uint64(n))
-}
-
 // scheduleAudioInputs registers caller-scheduled user audio injections.
 func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
 	if o == nil {
