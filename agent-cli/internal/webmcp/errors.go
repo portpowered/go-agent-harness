@@ -11,6 +11,9 @@ var (
 	ErrTargetNotFound     = errors.New("webmcp: target not found")
 	ErrInvocationNotFound = errors.New("webmcp: invocation not found")
 	ErrEventBufferFull    = errors.New("webmcp: event buffer full")
+	ErrInvalidToolInput   = errors.New("webmcp: invalid tool input")
+	ErrStaleSelection     = errors.New("webmcp: stale selection")
+	ErrStaleToolRef       = errors.New("webmcp: stale tool ref")
 )
 
 // ErrorCode is the model-facing, stable WebMCP failure vocabulary.
