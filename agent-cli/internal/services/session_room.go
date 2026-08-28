@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,13 @@ const (
 	// room CLI when --out is omitted. It is resolved relative to the process's
 	// working directory and must still satisfy the empty-directory safety check.
 	DefaultRoomOutputDir = "room-run"
+
+	// Room lifecycle cleanup is deliberately finite. Provider/session contracts
+	// are expected to make Close and cancellation progress, but a diagnostic is
+	// preferable to making the room caller wait forever when an injected or
+	// third-party owner violates that contract.
+	roomCleanupTimeout   = time.Second
+	roomAdmissionTimeout = 5 * time.Second
 
 	RoomTerminationStopped            RoomTerminationReason = "stopped"
 	RoomTerminationMaxTurnsReached    RoomTerminationReason = "max_turns_reached"
@@ -185,22 +193,143 @@ type roomParticipantPlan struct {
 }
 
 type roomParticipantRuntime struct {
-	plan      *roomParticipantPlan
-	ctx       context.Context
-	cancel    context.CancelFunc
-	loopReady chan *agentloop.AgentLoop
-	mixer     *room.PCM16Mixer
-	lifecycle *roomParticipantLifecycle
+	plan            *roomParticipantPlan
+	ctx             context.Context
+	cancel          context.CancelFunc
+	loopReady       chan *agentloop.AgentLoop
+	participantDone chan struct{}
+	mixerDone       chan struct{}
+	observerDone    chan struct{}
+	observerOnce    sync.Once
+	mixer           *room.PCM16Mixer
+	lifecycle       *roomParticipantLifecycle
+}
+
+func (r *roomParticipantRuntime) markObserverDone() {
+	if r == nil || r.observerDone == nil {
+		return
+	}
+	r.observerOnce.Do(func() { close(r.observerDone) })
+}
+
+type roomCleanupWaiter struct {
+	timer *time.Timer
+}
+
+func (w *roomCleanupWaiter) start() {
+	if w == nil || w.timer != nil {
+		return
+	}
+	w.timer = time.NewTimer(roomCleanupTimeout)
+}
+
+func (w *roomCleanupWaiter) done() <-chan time.Time {
+	if w == nil || w.timer == nil {
+		return nil
+	}
+	return w.timer.C
+}
+
+func (w *roomCleanupWaiter) stop() {
+	if w == nil || w.timer == nil {
+		return
+	}
+	if !w.timer.Stop() {
+		select {
+		case <-w.timer.C:
+		default:
+		}
+	}
+	w.timer = nil
+}
+
+type roomLifecycleWorkError struct {
+	outstanding []string
+}
+
+func (e *roomLifecycleWorkError) Error() string {
+	if e == nil || len(e.outstanding) == 0 {
+		return "room lifecycle work did not complete"
+	}
+	return "room lifecycle work did not complete: " + strings.Join(e.outstanding, "; ")
+}
+
+func newRoomLifecycleWorkError(outstanding ...string) error {
+	seen := make(map[string]struct{}, len(outstanding))
+	ordered := make([]string, 0, len(outstanding))
+	for _, item := range outstanding {
+		if item == "" {
+			continue
+		}
+		if _, exists := seen[item]; exists {
+			continue
+		}
+		seen[item] = struct{}{}
+		ordered = append(ordered, item)
+	}
+	if len(ordered) == 0 {
+		return nil
+	}
+	sort.Strings(ordered)
+	return &roomLifecycleWorkError{outstanding: ordered}
+}
+
+func roomLifecycleWorkLabel(participantID, phase string) string {
+	if participantID == "" {
+		return phase
+	}
+	return fmt.Sprintf("participant %q phase %s", participantID, phase)
+}
+
+func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
+	if runtime == nil || runtime.plan == nil {
+		return []string{"participant runtime"}
+	}
+	id := runtime.plan.manifest.ID
+	outstanding := make([]string, 0, 6)
+	if runtime.plan.tracker == nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
+	} else if _, ready := runtime.plan.tracker.outcome(); !ready {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
+	}
+	if runtime.lifecycle == nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "lifecycle"))
+		return outstanding
+	}
+	created, closed, transportDone, closeErr := runtime.lifecycle.ownedSessionSnapshot()
+	if created && !closed {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close"))
+	}
+	if closeErr != nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close.error"))
+	}
+	if created && !roomChannelClosed(transportDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.transport"))
+	}
+	if runtime.participantDone != nil && !roomChannelClosed(runtime.participantDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "participant.loop"))
+	}
+	if runtime.mixerDone != nil && !roomChannelClosed(runtime.mixerDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "mixer"))
+	}
+	if runtime.observerDone != nil && !roomChannelClosed(runtime.observerDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "observer"))
+	}
+	return outstanding
 }
 
 type roomParticipantLifecycle struct {
 	mu                   sync.Mutex
 	connected            bool
 	connectErr           error
+	sessionCreated       bool
+	ownedSessionClosed   bool
+	sessionCloseErr      error
 	sessionOpened        bool
 	sessionClosed        bool
 	transportEnded       bool
 	transportDone        <-chan struct{}
+	stateChanged         chan<- struct{}
 	roomStopping         bool
 	runDone              bool
 	closeReason          string
@@ -218,6 +347,37 @@ func (l *roomParticipantLifecycle) markConnected(err error) {
 	l.mu.Lock()
 	l.connected = err == nil
 	l.connectErr = err
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) signalLocked() {
+	if l == nil || l.stateChanged == nil {
+		return
+	}
+	select {
+	case l.stateChanged <- struct{}{}:
+	default:
+	}
+}
+
+func (l *roomParticipantLifecycle) markSessionCreated() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.sessionCreated = true
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) markOwnedSessionClosed(err error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.ownedSessionClosed = true
+	l.sessionCloseErr = err
+	l.signalLocked()
 	l.mu.Unlock()
 }
 
@@ -249,10 +409,12 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen:
 		l.sessionOpened = true
+		l.signalLocked()
 	case messages.StreamTypeMessageEnd:
 		l.turns++
 	case messages.StreamTypeSessionClose:
 		l.sessionClosed = true
+		l.signalLocked()
 		if value, ok := msg.Value.(*messages.SessionCloseValue); ok && value != nil {
 			l.closeReason = value.Reason
 			l.terminalReason = value.TerminalReason
@@ -281,6 +443,7 @@ func (l *roomParticipantLifecycle) markTransportEndedWithError(terminalErr error
 	}
 	l.mu.Lock()
 	l.transportEnded = true
+	l.signalLocked()
 	if !l.roomStopping {
 		if terminalErr != nil && !roomCancellationOnly(terminalErr) {
 			l.markTerminalLocked(ParticipantTerminationError, terminalErr)
@@ -302,6 +465,7 @@ func (l *roomParticipantLifecycle) setTransportDone(done <-chan struct{}, termin
 	l.mu.Lock()
 	l.transportDone = done
 	l.transportTerminalErr = terminalError
+	l.signalLocked()
 	l.mu.Unlock()
 	if roomChannelClosed(done) {
 		var terminalErr error
@@ -357,6 +521,7 @@ func (l *roomParticipantLifecycle) markCoordinatorStopping() {
 		}
 	}
 	l.roomStopping = true
+	l.signalLocked()
 	l.mu.Unlock()
 }
 
@@ -366,6 +531,7 @@ func (l *roomParticipantLifecycle) markRunDone(runErr error) {
 	}
 	l.mu.Lock()
 	l.runDone = true
+	l.signalLocked()
 	if runErr != nil && !roomCancellationOnly(runErr) {
 		l.markTerminalLocked(ParticipantTerminationError, runErr)
 	}
@@ -399,6 +565,15 @@ func (l *roomParticipantLifecycle) terminal() (ParticipantTerminationReason, err
 	return l.terminalKind, l.terminalErr, l.terminalKind != ""
 }
 
+func (l *roomParticipantLifecycle) ownedSessionSnapshot() (created, closed bool, transportDone <-chan struct{}, closeErr error) {
+	if l == nil {
+		return false, false, nil, nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.sessionCreated, l.ownedSessionClosed, l.transportDone, l.sessionCloseErr
+}
+
 // roomConnectTrackingInferencer preserves the existing SessionInferencer
 // contract while exposing the first ConnectSession outcome to the room's
 // initial-start barrier.
@@ -416,6 +591,73 @@ type roomConnectTrackingInferencer struct {
 type roomConnectionOutcome struct {
 	tracker *roomConnectTrackingInferencer
 	err     error
+}
+
+// roomTrackedSession makes the room's session owner explicit. The model
+// runner remains responsible for calling Close, while this decorator records
+// the completed ownership boundary and preserves the optional capabilities of
+// the underlying provider session.
+type roomTrackedSession struct {
+	messages.Session
+	lifecycle *roomParticipantLifecycle
+	once      sync.Once
+	closeErr  error
+}
+
+func (s *roomTrackedSession) Close() error {
+	if s == nil || s.Session == nil {
+		return nil
+	}
+	s.once.Do(func() {
+		s.closeErr = s.Session.Close()
+		if s.lifecycle != nil {
+			s.lifecycle.markOwnedSessionClosed(s.closeErr)
+		}
+	})
+	return s.closeErr
+}
+
+func (s *roomTrackedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if sender, ok := s.Session.(messages.SessionSendOutcomeSender); ok {
+		return sender.SendWithOutcome(ctx, msg)
+	}
+	return messages.SendSessionWithOutcome(ctx, s.Session, msg)
+}
+
+func (s *roomTrackedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *roomTrackedSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
+}
+
+func (s *roomTrackedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+
+func (s *roomTrackedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+
+func (s *roomTrackedSession) SupportsCompleteMessages() bool {
+	complete, _ := completeMessageCapabilities(s.Session)
+	return complete
+}
+
+func (s *roomTrackedSession) SupportsCompleteMessagesWithoutResponse() bool {
+	_, withoutResponse := completeMessageCapabilities(s.Session)
+	return withoutResponse
+}
+
+func (s *roomTrackedSession) TerminalError() error {
+	return terminalSessionError(s.Session)
+}
+
+func (s *roomTrackedSession) rtcMedia() (RTCMediaEndpoints, bool) {
+	return rtcMediaFromSession(s.Session)
 }
 
 func newRoomConnectTrackingInferencer(inner messages.SessionInferencer) *roomConnectTrackingInferencer {
@@ -466,24 +708,44 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 	if err == nil && session == nil {
 		err = errors.New("room participant session is nil")
 	}
-	i.publish(err)
+	if err != nil {
+		if session != nil {
+			if i.lifecycle != nil {
+				i.lifecycle.markSessionCreated()
+			}
+			tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle}
+			if i.lifecycle != nil {
+				terminalError := func() error { return terminalSessionError(tracked) }
+				i.lifecycle.setTransportDone(tracked.Done(), terminalError)
+			}
+			if closeErr := tracked.Close(); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close failed session: %w", closeErr))
+			}
+		}
+		i.publish(err)
+		return nil, err
+	}
 	if err == nil && session != nil && i.lifecycle != nil {
-		terminalError := func() error { return terminalSessionError(session) }
-		i.lifecycle.setTransportDone(session.Done(), terminalError)
+		i.lifecycle.markSessionCreated()
+		tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle}
+		terminalError := func() error { return terminalSessionError(tracked) }
+		i.lifecycle.setTransportDone(tracked.Done(), terminalError)
 		recordSessionEnd := func() {
 			i.lifecycle.markTransportEndedWithError(terminalError())
 		}
 		go func() {
 			select {
-			case <-session.Done():
+			case <-tracked.Done():
 				recordSessionEnd()
 			case <-ctx.Done():
-				if roomChannelClosed(session.Done()) {
+				if roomChannelClosed(tracked.Done()) {
 					recordSessionEnd()
 				}
 			}
 		}()
+		session = tracked
 	}
+	i.publish(err)
 	return session, err
 }
 
@@ -499,6 +761,7 @@ type roomCoordinator struct {
 	active   map[string]*roomParticipantRuntime
 	results  map[string]RoomParticipantResult
 	maxTurns int
+	progress chan struct{}
 
 	onParticipant RoomParticipantObserver
 }
@@ -510,8 +773,18 @@ func newRoomCoordinator(cancel context.CancelFunc, maxTurns int, onParticipant R
 		active:        make(map[string]*roomParticipantRuntime),
 		results:       make(map[string]RoomParticipantResult),
 		maxTurns:      maxTurns,
+		progress:      make(chan struct{}, 1),
 		onParticipant: onParticipant,
 	}
+}
+
+func (c *roomCoordinator) recordError(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.mu.Lock()
+	c.err = errors.Join(c.err, err)
+	c.mu.Unlock()
 }
 
 func (c *roomCoordinator) stop(reason RoomTerminationReason, err error) {
@@ -676,15 +949,19 @@ func (c *roomCoordinator) noteTurn(participantID string, turns int) {
 	c.stop(RoomTerminationMaxTurnsReached, nil)
 }
 
-func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, reason ParticipantTerminationReason, err error, secrets []string, mesh *room.Mesh) RoomParticipantResult {
+func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, reason ParticipantTerminationReason, err error, secrets []string, mesh *room.Mesh, cleanup *roomCleanupWaiter) RoomParticipantResult {
 	if runtime == nil || runtime.plan == nil {
 		return RoomParticipantResult{Reason: ParticipantTerminationError, Error: "room participant runtime is nil"}
 	}
 	id := runtime.plan.manifest.ID
 	connected, _, sessionClosed, closeReason, terminalReason, turns, connectErr := runtime.lifecycle.snapshot()
 	transportEnded := runtime.lifecycle.transportHasEnded()
+	_, _, _, sessionCloseErr := runtime.lifecycle.ownedSessionSnapshot()
 	if connectErr != nil && err == nil {
 		err = connectErr
+	}
+	if sessionCloseErr != nil {
+		err = errors.Join(err, fmt.Errorf("close participant session: %w", sessionCloseErr))
 	}
 	// A room-level failure is returned by every session loop through DoneErr.
 	// Keep it on the participant that caused the failure, but do not turn the
@@ -697,7 +974,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		reason = terminalKind
 		if terminalErr != nil {
 			err = terminalErr
-		} else if terminalKind != ParticipantTerminationError {
+		} else if terminalKind != ParticipantTerminationError && sessionCloseErr == nil {
 			err = nil
 		}
 	} else if reason == "" {
@@ -736,16 +1013,32 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	if runtime.cancel != nil {
 		runtime.cancel()
 	}
+	var cleanupErr error
 	if runtime.mixer != nil {
-		_ = runtime.mixer.Close()
+		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "mixer"), runtime.mixer.Close))
 	}
 	if mesh != nil {
-		if removeErr := mesh.Remove(id); removeErr != nil && !errors.Is(removeErr, room.ErrMeshUnknownParticipant) && !errors.Is(removeErr, room.ErrMeshClosed) {
-			c.fail(roomParticipantFailure(id, removeErr, secrets))
+		if removeErr := boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "mesh"), func() error { return mesh.Remove(id) }); removeErr != nil && !errors.Is(removeErr, room.ErrMeshUnknownParticipant) && !errors.Is(removeErr, room.ErrMeshClosed) {
+			cleanupErr = errors.Join(cleanupErr, removeErr)
+		}
+	}
+	if cleanupErr != nil {
+		if c.isStopping() {
+			c.recordError(cleanupErr)
+		} else {
+			c.fail(roomParticipantFailure(id, cleanupErr, secrets))
 		}
 	}
 	if c.onParticipant != nil {
-		c.onParticipant(result)
+		if observerErr := boundedRoomObserver(cleanup, roomLifecycleWorkLabel(id, "observer"), func() { c.onParticipant(result) }, runtime.markObserverDone); observerErr != nil {
+			if c.isStopping() {
+				c.recordError(observerErr)
+			} else {
+				c.fail(roomParticipantFailure(id, observerErr, secrets))
+			}
+		}
+	} else {
+		runtime.markObserverDone()
 	}
 	if shouldFailEmpty {
 		c.fail(fmt.Errorf("all room participants terminated"))
@@ -946,10 +1239,26 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	roomCtx, roomCancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer roomCancel()
 	mesh := room.NewParticipantMesh(roomCtx, opts.PairFactory)
-	defer func() { _ = mesh.Close() }()
+	meshCloseClaimed := false
+	defer func() {
+		if !meshCloseClaimed {
+			_ = mesh.Close()
+		}
+	}()
+	closeMeshNow := func() error {
+		if meshCloseClaimed {
+			return nil
+		}
+		meshCloseClaimed = true
+		cleanup := &roomCleanupWaiter{}
+		cleanup.start()
+		defer cleanup.stop()
+		return closeRoomMeshBounded(mesh, cleanup)
+	}
 	for _, plan := range plans {
 		if err := mesh.Join(roomCtx, plan.manifest.ID); err != nil {
 			safeErr := roomParticipantFailure(plan.manifest.ID, err, secrets)
+			safeErr = errors.Join(safeErr, closeMeshNow())
 			result := roomFailureResult(safeErr, secrets)
 			return finalizeEvidence(result, safeErr)
 		}
@@ -970,6 +1279,14 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		}
 	}
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
+	runtimes := make([]*roomParticipantRuntime, 0, len(plans))
+	cleanupSetup := func() error {
+		meshCloseClaimed = true
+		cleanup := &roomCleanupWaiter{}
+		cleanup.start()
+		defer cleanup.stop()
+		return cleanupRoomParticipantSetup(runtimes, mesh, cleanup)
+	}
 	if evidence != nil {
 		evidence.setErrorHandler(func(participantID string, evidenceErr error) {
 			coordinator.fail(roomParticipantFailure(participantID, fmt.Errorf("record room evidence: %w", evidenceErr), secrets))
@@ -982,29 +1299,31 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		if mixerErr != nil {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, mixerErr, secrets))
 			participantCancel()
-			roomErr := coordinator.roomError()
+			roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 			result := roomFailureResult(roomErr, secrets)
 			return finalizeEvidence(result, roomErr)
 		}
 		runtime := &roomParticipantRuntime{
-			plan:      plan,
-			ctx:       participantCtx,
-			cancel:    participantCancel,
-			loopReady: make(chan *agentloop.AgentLoop, 1),
-			mixer:     mixer,
-			lifecycle: &roomParticipantLifecycle{},
+			plan:            plan,
+			ctx:             participantCtx,
+			cancel:          participantCancel,
+			loopReady:       make(chan *agentloop.AgentLoop, 1),
+			participantDone: make(chan struct{}),
+			mixerDone:       make(chan struct{}),
+			observerDone:    make(chan struct{}),
+			mixer:           mixer,
+			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress},
 		}
 		plan.participant = runtime
 		plan.tracker.lifecycle = runtime.lifecycle
+		runtimes = append(runtimes, runtime)
 		for _, other := range plans {
 			if other.manifest.ID == plan.manifest.ID {
 				continue
 			}
 			if addErr := mixer.AddInput(other.manifest.ID); addErr != nil {
 				coordinator.fail(roomParticipantFailure(plan.manifest.ID, addErr, secrets))
-				_ = mixer.Close()
-				participantCancel()
-				roomErr := coordinator.roomError()
+				roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 				result := roomFailureResult(roomErr, secrets)
 				return finalizeEvidence(result, roomErr)
 			}
@@ -1030,9 +1349,11 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		plan.tracker.setOutcomeSink(connectionOutcomes)
 	}
 	var runWG sync.WaitGroup
+	var mixerWG sync.WaitGroup
 	runWG.Add(len(plans))
+	mixerWG.Add(len(plans))
 	for _, plan := range plans {
-		go runRoomParticipant(roomCtx, coordinator, plan.participant, startGate, opts, evidence, results, &runWG, secrets)
+		go runRoomParticipant(roomCtx, coordinator, plan.participant, startGate, opts, evidence, results, &runWG, &mixerWG, secrets)
 	}
 
 	// A room duration bounds the initial connection phase as well as the live
@@ -1043,34 +1364,52 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		defer timer.Stop()
 	}
 
-	startupErr := awaitRoomParticipantConnections(ctx, coordinator, plans, timer, secrets, connectionOutcomes)
+	cleanup := &roomCleanupWaiter{}
+	defer cleanup.stop()
+	startupErr := awaitRoomParticipantConnections(ctx, coordinator, plans, timer, secrets, connectionOutcomes, cleanup)
 	if startupErr != nil {
-		coordinator.fail(startupErr)
+		if coordinator.isStopping() {
+			coordinator.recordError(startupErr)
+		} else {
+			coordinator.fail(startupErr)
+		}
+		cleanup.start()
 	}
 	close(startGate)
-	remaining := len(plans)
-	for remaining > 0 {
-		select {
-		case <-timerChannel(timer):
-			coordinator.stop(RoomTerminationMaxDurationReached, nil)
-		case result := <-results:
-			remaining--
-			if result.connectErr != nil && !coordinator.isStopping() {
-				coordinator.fail(roomParticipantFailure(result.plan.manifest.ID, result.connectErr, secretsForPlan(result.plan)))
-			}
-			finishRoomParticipant(coordinator, mesh, result, secretsForPlan(result.plan))
-		}
+	collectErr := collectRoomParticipantResults(ctx, coordinator, plans, mesh, secrets, timer, results, cleanup)
+	workErr := waitRoomParticipantWork(&runWG, &mixerWG, plans, cleanup)
+	cleanupErr := errors.Join(collectErr, workErr)
+	if cleanupErr != nil {
+		coordinator.recordError(cleanupErr)
 	}
-	runWG.Wait()
-
-	reason, participantResults, active, roomErr := finalizeRoomParticipantResults(coordinator, mesh, plans, secrets)
+	meshCloseClaimed = true
+	cleanupErr = errors.Join(cleanupErr, closeRoomMeshBounded(mesh, cleanup))
+	reason, participantResults, active, roomErr := finalizeRoomParticipantResults(coordinator, plans, secrets, cleanupErr)
+	if cleanupErr != nil && roomErr == nil {
+		roomErr = cleanupErr
+	}
 	result := RoomResult{TerminationReason: reason, Reason: reason, Participants: participantResults, ActiveParticipants: append([]string(nil), active...)}
 	if roomErr != nil {
 		result.Error = sanitizeRoomError(roomErr, secrets)
 	}
 	result, roomErr = finalizeEvidence(result, roomErr)
 	if opts.OnRoomTerminated != nil {
-		opts.OnRoomTerminated(result)
+		// The room observer is an external ownership boundary too. Keep a
+		// blocked callback from turning an otherwise bounded room teardown into
+		// an unbounded caller wait, while still giving it the complete result.
+		observerResult := result
+		observerCleanup := &roomCleanupWaiter{}
+		observerCleanup.start()
+		observerErr := boundedRoomObserver(observerCleanup, "room observer", func() {
+			opts.OnRoomTerminated(observerResult)
+		}, nil)
+		observerCleanup.stop()
+		if observerErr != nil {
+			roomErr = errors.Join(roomErr, observerErr)
+			result.TerminationReason = RoomTerminationFailed
+			result.Reason = RoomTerminationFailed
+			result.Error = sanitizeRoomError(roomErr, secrets)
+		}
 	}
 	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d\n", result.Reason, len(result.Participants)); writeErr != nil {
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))
@@ -1181,7 +1520,14 @@ func awaitRoomParticipantConnections(
 	timer *time.Timer,
 	secrets []string,
 	outcomes <-chan roomConnectionOutcome,
+	cleanup *roomCleanupWaiter,
 ) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if cleanup == nil {
+		cleanup = &roomCleanupWaiter{}
+	}
 	byTracker := make(map[*roomConnectTrackingInferencer]*roomParticipantPlan, len(plans))
 	for _, plan := range plans {
 		if plan != nil && plan.tracker != nil {
@@ -1193,6 +1539,10 @@ func awaitRoomParticipantConnections(
 	var firstErr error
 	ctxDone := ctx.Done()
 	timerDone := timerChannel(timer)
+	admissionTimer := time.NewTimer(roomAdmissionTimeout)
+	defer admissionTimer.Stop()
+	admissionDone := admissionTimer.C
+	roomDone := coordinator.done
 	for remaining > 0 {
 		select {
 		case outcome := <-outcomes:
@@ -1228,6 +1578,44 @@ func awaitRoomParticipantConnections(
 				coordinator.stop(RoomTerminationMaxDurationReached, nil)
 			}
 			timerDone = nil
+		case <-admissionDone:
+			if firstErr != nil {
+				coordinator.fail(firstErr)
+			} else {
+				outstanding := make([]string, 0, remaining)
+				for tracker, plan := range byTracker {
+					if _, alreadySeen := seen[tracker]; alreadySeen || plan == nil {
+						continue
+					}
+					outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "connect"))
+				}
+				coordinator.fail(newRoomLifecycleWorkError(outstanding...))
+			}
+			admissionDone = nil
+			cleanup.start()
+		case <-roomDone:
+			roomDone = nil
+			cleanup.start()
+		case <-cleanup.done():
+			outstanding := make([]string, 0, remaining)
+			for tracker, plan := range byTracker {
+				if _, alreadySeen := seen[tracker]; alreadySeen || plan == nil {
+					continue
+				}
+				outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "connect"))
+			}
+			for _, plan := range plans {
+				if plan != nil {
+					outstanding = append(outstanding, roomParticipantOutstandingWork(plan.participant)...)
+				}
+			}
+			return newRoomLifecycleWorkError(outstanding...)
+		}
+	}
+	if !admissionTimer.Stop() {
+		select {
+		case <-admissionTimer.C:
+		default:
 		}
 	}
 	if firstErr != nil {
@@ -1236,6 +1624,9 @@ func awaitRoomParticipantConnections(
 	if coordinator.isStopping() {
 		return nil
 	}
+	readinessTimer := time.NewTimer(roomAdmissionTimeout)
+	defer readinessTimer.Stop()
+	readinessDone := readinessTimer.C
 	for {
 		allOpened := true
 		for _, plan := range plans {
@@ -1243,10 +1634,10 @@ func awaitRoomParticipantConnections(
 				continue
 			}
 			_, opened, closed, _, _, _, _ := plan.participant.lifecycle.snapshot()
-			if opened || plan.participant.lifecycle.runHasFinished() {
+			if opened {
 				continue
 			}
-			if closed || plan.participant.lifecycle.transportHasEnded() {
+			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
 				return roomParticipantFailure(plan.manifest.ID, errors.New("session ended before SESSION.OPEN"), append(secretsForPlan(plan), secrets...))
 			}
 			allOpened = false
@@ -1266,12 +1657,24 @@ func awaitRoomParticipantConnections(
 		case <-timerChannel(timer):
 			coordinator.stop(RoomTerminationMaxDurationReached, nil)
 			return nil
-		case <-time.After(time.Millisecond):
+		case <-readinessDone:
+			outstanding := make([]string, 0, len(plans))
+			for _, plan := range plans {
+				if plan == nil || plan.participant == nil {
+					continue
+				}
+				_, opened, _, _, _, _, _ := plan.participant.lifecycle.snapshot()
+				if !opened {
+					outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "session.open"))
+				}
+			}
+			return newRoomLifecycleWorkError(outstanding...)
+		case <-coordinator.progress:
 		}
 	}
 }
 
-func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result roomParticipantRunResult, secrets []string) {
+func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result roomParticipantRunResult, secrets []string, cleanup *roomCleanupWaiter) {
 	if result.runtime == nil || result.plan == nil {
 		return
 	}
@@ -1281,7 +1684,7 @@ func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result
 	roomStopping := coordinator.isStopping()
 	_, _, sessionClosed, closeReason, terminalReason, _, _ := result.runtime.lifecycle.snapshot()
 	reason := classifyRoomParticipantTermination(roomStopping, result.err, result.connected, result.runtime.lifecycle.transportHasEnded(), sessionClosed, closeReason, terminalReason)
-	coordinator.finishParticipant(result.runtime, reason, result.err, secrets, mesh)
+	coordinator.finishParticipant(result.runtime, reason, result.err, secrets, mesh, cleanup)
 }
 
 func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, observer RoomParticipantAudioObserver, secrets []string) {

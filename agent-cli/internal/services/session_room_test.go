@@ -147,6 +147,176 @@ func TestRunRoom_ParticipantCloseDoesNotStopViableRoom(t *testing.T) {
 	}
 }
 
+func TestRunRoom_WaitsForMixerWorkBeforeReturning(t *testing.T) {
+	ids := []string{"a", "b"}
+	inferencers := map[string]*roomTestInferencer{
+		"a": {events: []messages.StreamMessage{roomTestSessionOpen("a")}},
+		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var startOnce sync.Once
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts.OnAudioInput = func(string, []byte) error {
+		startOnce.Do(func() { close(started) })
+		<-release
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("mixer observer did not start")
+	}
+	cancel()
+	select {
+	case got := <-outcome:
+		if got.err == nil || got.result.Reason != RoomTerminationFailed {
+			t.Fatalf("room returned before mixer work completed: result=%+v err=%v", got.result, got.err)
+		}
+		if !strings.Contains(got.err.Error(), `participant "`) || !strings.Contains(got.err.Error(), "phase mixer") {
+			t.Fatalf("mixer cleanup error = %v, want participant/phase diagnostic", got.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("room did not return a bounded mixer cleanup diagnostic")
+	}
+	close(release)
+}
+
+func TestRunRoom_BoundsBlockedSessionCloseWithLifecycleDiagnostic(t *testing.T) {
+	ids := []string{"a", "b"}
+	closeStarted := make(chan struct{})
+	closeRelease := make(chan struct{})
+	inferencers := map[string]*roomTestInferencer{
+		"a": {
+			events:       []messages.StreamMessage{roomTestSessionOpen("a")},
+			closeStarted: closeStarted,
+			closeRelease: closeRelease,
+		},
+		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
+	}
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opened := make(chan string, len(ids))
+	opts.onParticipantSessionOpen = func(id string) { opened <- id }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	seenOpened := make(map[string]struct{}, len(ids))
+	for len(seenOpened) < len(ids) {
+		select {
+		case id := <-opened:
+			seenOpened[id] = struct{}{}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("session-open observations = %v, want %d participants", seenOpened, len(ids))
+		}
+	}
+	cancel()
+	select {
+	case <-closeStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("owned session Close did not start")
+	}
+	select {
+	case got := <-outcome:
+		if got.err == nil || got.result.Reason != RoomTerminationFailed {
+			t.Fatalf("blocked session close returned cleanly: result=%+v err=%v", got.result, got.err)
+		}
+		if !strings.Contains(got.err.Error(), `participant "a"`) || !strings.Contains(got.err.Error(), "session.close") {
+			t.Fatalf("session cleanup error = %v, want participant a/session.close diagnostic", got.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("room did not return a bounded session cleanup diagnostic")
+	}
+	close(closeRelease)
+	sessions := inferencers["a"].sessionsSnapshot()
+	if len(sessions) != 1 {
+		t.Fatalf("blocked session count = %d, want one", len(sessions))
+	}
+	select {
+	case <-sessions[0].Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocked session did not finish")
+	}
+	if calls := sessions[0].closeCallsSnapshot(); calls != 1 {
+		t.Fatalf("blocked session close calls = %d, want exactly once", calls)
+	}
+}
+
+func TestRunRoom_BoundsBlockedRoomObserverWithLifecycleDiagnostic(t *testing.T) {
+	ids := []string{"a", "b"}
+	inferencers := map[string]*roomTestInferencer{
+		"a": {events: []messages.StreamMessage{roomTestSessionOpen("a")}},
+		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
+	}
+	opened := make(chan string, len(ids))
+	observerStarted := make(chan struct{})
+	observerRelease := make(chan struct{})
+	observerDone := make(chan struct{})
+	var observerStartOnce sync.Once
+	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	opts.onParticipantSessionOpen = func(id string) { opened <- id }
+	opts.OnRoomTerminated = func(RoomResult) {
+		observerStartOnce.Do(func() { close(observerStarted) })
+		<-observerRelease
+		close(observerDone)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outcome := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		outcome <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	seenOpened := make(map[string]struct{}, len(ids))
+	openDeadline := time.NewTimer(2 * time.Second)
+	defer openDeadline.Stop()
+	for len(seenOpened) < len(ids) {
+		select {
+		case id := <-opened:
+			seenOpened[id] = struct{}{}
+		case <-openDeadline.C:
+			t.Fatalf("session-open observations = %v, want %d participants", seenOpened, len(ids))
+		}
+	}
+	cancel()
+
+	select {
+	case <-observerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room observer did not start")
+	}
+	select {
+	case got := <-outcome:
+		if got.err == nil || got.result.Reason != RoomTerminationFailed {
+			t.Fatalf("blocked room observer returned cleanly: result=%+v err=%v", got.result, got.err)
+		}
+		if !strings.Contains(got.err.Error(), "room observer") {
+			t.Fatalf("room observer cleanup error = %v, want room observer diagnostic", got.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("room did not return a bounded room observer cleanup diagnostic")
+	}
+	close(observerRelease)
+	select {
+	case <-observerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocked room observer did not finish after release")
+	}
+}
+
 func TestRunRoom_StartupFailureAbortsAllParticipants(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	secret := "room-secret-value"
@@ -375,10 +545,12 @@ type roomAudioFrame struct {
 }
 
 type roomTestInferencer struct {
-	connectErr error
-	events     []messages.StreamMessage
-	disconnect bool
-	onConnect  func()
+	connectErr   error
+	events       []messages.StreamMessage
+	disconnect   bool
+	onConnect    func()
+	closeStarted chan struct{}
+	closeRelease <-chan struct{}
 
 	mu       sync.Mutex
 	sessions []*roomTestSession
@@ -392,6 +564,8 @@ func (i *roomTestInferencer) ConnectSession(ctx context.Context) (messages.Sessi
 		return nil, i.connectErr
 	}
 	session := newRoomTestSession()
+	session.closeStarted = i.closeStarted
+	session.closeRelease = i.closeRelease
 	i.mu.Lock()
 	i.sessions = append(i.sessions, session)
 	i.mu.Unlock()
@@ -419,10 +593,13 @@ type roomTestSession struct {
 	receive *messages.TypedBuffer[messages.StreamMessage]
 	done    chan struct{}
 
-	mu         sync.Mutex
-	closeCalls int
-	sent       []messages.StreamMessage
-	once       sync.Once
+	mu             sync.Mutex
+	closeCalls     int
+	sent           []messages.StreamMessage
+	once           sync.Once
+	closeStartOnce sync.Once
+	closeStarted   chan struct{}
+	closeRelease   <-chan struct{}
 }
 
 func newRoomTestSession() *roomTestSession {
@@ -455,6 +632,14 @@ func (s *roomTestSession) Done() <-chan struct{} {
 }
 
 func (s *roomTestSession) Close() error {
+	s.closeStartOnce.Do(func() {
+		if s.closeStarted != nil {
+			close(s.closeStarted)
+		}
+	})
+	if s.closeRelease != nil {
+		<-s.closeRelease
+	}
 	s.mu.Lock()
 	s.closeCalls++
 	s.mu.Unlock()
