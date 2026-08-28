@@ -22,6 +22,7 @@
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming", "minimum": 68.50},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools", "minimum": 40.80},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery", "minimum": 67.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit", "minimum": 70.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools", "minimum": 0.00},

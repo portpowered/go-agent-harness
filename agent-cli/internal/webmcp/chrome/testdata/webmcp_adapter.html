@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP Lane D adapter fixture</title>
+</head>
+<body>
+  <main>
+    <h1>WebMCP Lane D adapter fixture</h1>
+    <p id="ready">starting</p>
+    <p>State: <strong id="state">initial</strong></p>
+
+    <form id="complete-form"
+          toolname="webmcp_lane_d_complete"
+          tooltitle="Complete Lane D invocation"
+          tooldescription="Update the fixture state and return a structured greeting."
+          toolautosubmit>
+      <label>Message
+        <input name="message" type="text" value=""
+               toolparamdescription="The message to record in the fixture state.">
+      </label>
+    </form>
+
+    <form id="pending-form"
+          toolname="webmcp_lane_d_pending"
+          tooltitle="Pending Lane D invocation"
+          tooldescription="Hold an invocation open until the adapter cancels it.">
+      <label>Message
+        <input name="message" type="text" value=""
+               toolparamdescription="The message that keeps the invocation pending.">
+      </label>
+    </form>
+  </main>
+  <script>
+    (() => {
+      const state = {
+        ready: false,
+        value: "initial",
+        pending: false,
+        invocations: []
+      };
+      window.__webmcpLaneD = state;
+
+      const ready = document.querySelector("#ready");
+      const visible = document.querySelector("#state");
+
+      const render = () => {
+        ready.textContent = state.ready ? "ready" : "starting";
+        visible.textContent = state.value;
+      };
+
+      const publishOracle = () => {
+        fetch("/__test/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ready: state.ready,
+            value: state.value,
+            visibleText: visible.textContent || "",
+            pending: state.pending,
+            invocations: state.invocations.slice()
+          })
+        }).catch(() => {});
+      };
+
+      const submit = (event) => {
+        const form = event.currentTarget;
+        const data = new FormData(form);
+        const message = String(data.get("message") || "");
+        const toolName = String(form.getAttribute("toolname") || "");
+        state.invocations.push(toolName + ":" + message);
+
+        if (toolName === "webmcp_lane_d_pending") {
+          state.pending = true;
+          state.value = "pending:" + message;
+          render();
+          publishOracle();
+          if (typeof event.respondWith === "function") {
+            event.preventDefault();
+            event.respondWith(new Promise(() => {}));
+          } else {
+            event.preventDefault();
+          }
+          return;
+        }
+
+        state.pending = false;
+        state.value = "completed:" + message;
+        render();
+        publishOracle();
+        if (typeof event.respondWith === "function") {
+          event.preventDefault();
+          event.respondWith(Promise.resolve({
+            greeting: "hello",
+            message,
+            number: 9007199254740993
+          }));
+        } else {
+          event.preventDefault();
+        }
+      };
+
+      const recordCancellation = (event) => {
+        const toolName = String(event.toolName || "");
+        state.invocations.push("canceled:" + toolName);
+        publishOracle();
+      };
+
+      const registerCancellationTool = async () => {
+        const modelContext = document.modelContext || navigator.modelContext;
+        if (!modelContext || typeof modelContext.registerTool !== "function") {
+          throw new Error("imperative WebMCP registration is unavailable");
+        }
+        await modelContext.registerTool({
+          name: "webmcp_lane_d_cancel",
+          title: "Cancel Lane D invocation",
+          description: "Hold an imperative invocation open until the adapter cancels it.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              message: { type: "string", description: "The message that keeps the invocation pending." }
+            }
+          },
+          execute: async (input) => {
+            const message = String(input && input.message || "");
+            state.invocations.push("webmcp_lane_d_cancel:" + message);
+            state.pending = true;
+            state.value = "pending:" + message;
+            render();
+            publishOracle();
+            return new Promise(() => {});
+          }
+        });
+      };
+
+      window.addEventListener("toolcancel", recordCancellation);
+      window.addEventListener("toolcanceled", recordCancellation);
+
+      document.querySelector("#complete-form").addEventListener("submit", submit);
+      document.querySelector("#pending-form").addEventListener("submit", submit);
+      registerCancellationTool().then(() => {
+        state.ready = true;
+        render();
+        publishOracle();
+      }, (error) => {
+        state.invocations.push("registration_error:" + String(error));
+        state.ready = true;
+        render();
+        publishOracle();
+      });
+    })();
+  </script>
+</body>
+</html>
