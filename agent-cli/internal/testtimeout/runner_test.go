@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const timeoutFixturePackage = "./internal/testtimeout/testdata/blockedchild"
+const (
+	timeoutFixturePackage       = "./internal/testtimeout/testdata/blockedchild"
+	blockedFixtureTimeoutBudget = 2 * time.Second
+)
 
 func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -25,7 +28,10 @@ func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T
 	for attempt := 0; attempt < 3; attempt++ {
 		t.Run(fmt.Sprintf("attempt-%d", attempt+1), func(t *testing.T) {
 			marker := filepath.Join(t.TempDir(), "blocked-child.markers")
-			result, runErr := runFixture(t, fixtureBinary, marker, "blocked", "TestTimeoutFixtureBlockedChild", 900*time.Millisecond)
+			// Leave enough startup headroom for the parent, child, and grandchild
+			// on cold or contended workers while keeping this test-only budget
+			// well below the contract's ten-second completion bound.
+			result, runErr := runFixture(t, fixtureBinary, marker, "blocked", "TestTimeoutFixtureBlockedChild", blockedFixtureTimeoutBudget)
 			if runErr == nil {
 				t.Fatalf("blocked fixture unexpectedly exited successfully: result=%+v output=%q", result, result.Output)
 			}

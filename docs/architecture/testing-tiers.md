@@ -67,9 +67,10 @@ The runner's focused cleanup contract lives in
 `agent-cli/internal/testtimeout`. Its intentionally blocking fixture is under
 `internal/testtimeout/testdata/blockedchild`, which Go excludes from ordinary
 `./...` package discovery. The contract invokes that fixture explicitly with
-a sub-second test-only watchdog, checks the active test and child identities,
-and verifies that the child and grandchild no longer run. The success control
-uses the same runner and reports its executed fixture test.
+a short two-second test-only watchdog (with startup headroom for cold or
+contended workers), checks the active test and child identities, and verifies
+that the child and grandchild no longer run. The success control uses the same
+runner and reports its executed fixture test.
 
 ## Microphone build configurations
 
