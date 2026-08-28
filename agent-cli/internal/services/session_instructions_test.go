@@ -195,6 +195,70 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 	}
 }
 
+func TestRunSessionWithInstructions_DefaultAgentsMDUsesEffectiveToolDefinitions(t *testing.T) {
+	workspaceDir := t.TempDir()
+	inferencer := newSessionInstructionsTestInferencer()
+	toolDefinitions := []messages.ToolDefinition{
+		{Name: "read_file", Description: "Read a UTF-8 file from the workspace."},
+		{Name: "exec", Description: "Execute a command in the workspace."},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), services.SessionRunOptions{
+		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+		ConfigDir:         workspaceDir,
+		Prompt:            userTurnMarker,
+		SessionInferencer: inferencer,
+		ToolDefinitions:   toolDefinitions,
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(workspaceDir, workspace.AgentsMDFileName))
+	if err != nil {
+		t.Fatalf("read generated AGENTS.md: %v", err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "### `read_file`") || !strings.Contains(got, "### `exec`") {
+		t.Fatalf("generated AGENTS.md does not reflect session tools: %s", got)
+	}
+	if strings.Contains(got, "No tools are currently registered.") {
+		t.Fatalf("generated AGENTS.md contradicts session tools: %s", got)
+	}
+	assertSessionInstructionEvents(t, inferencer, got, 1)
+}
+
+func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *testing.T) {
+	workspaceDir := t.TempDir()
+	staleAgents := "customer instructions\n\n## Available Tools\n\nNo tools are currently registered.\n## Notes\nkeep this section\n"
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), staleAgents)
+	promptPath := filepath.Join(workspaceDir, "prompt.md")
+	writeFile(t, promptPath, fileInstructionsMarker)
+	inferencer := newSessionInstructionsTestInferencer()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), services.SessionRunOptions{
+		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+		ConfigDir:         workspaceDir,
+		Prompt:            userTurnMarker,
+		SessionInferencer: inferencer,
+		ToolDefinitions: []messages.ToolDefinition{{
+			Name:        "read_file",
+			Description: "Read a UTF-8 file from the workspace.",
+		}},
+	}, promptPath)
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+	if got := string(mustReadFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName))); got != staleAgents {
+		t.Fatalf("explicit prompt resolution changed AGENTS.md:\n got: %q\nwant: %q", got, staleAgents)
+	}
+	assertSessionInstructionEvents(t, inferencer, fileInstructionsMarker, 1)
+}
+
 func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
@@ -453,6 +517,15 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
 }
 
 func formatSessionEvents(events []messages.StreamMessage) string {

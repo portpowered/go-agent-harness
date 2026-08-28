@@ -306,7 +306,7 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
-	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), nil)
+	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), opts.ToolDefinitions)
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
