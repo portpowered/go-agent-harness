@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -84,6 +85,10 @@ const (
 	SessionDiagnosticFieldScheduledInputCount  = "scheduled_input_count"
 	SessionDiagnosticFieldDispatchedInputCount = "dispatched_input_count"
 	SessionDiagnosticFieldCompletedTurnCount   = "completed_turn_count"
+	// These fields retain bounded provider terminal context for pending
+	// continuations. Values are encoded as comma-separated call_id=value pairs.
+	SessionDiagnosticFieldPendingContinuationStatuses = "pending_continuation_statuses"
+	SessionDiagnosticFieldPendingContinuationDetails  = "pending_continuation_details"
 )
 
 const (
@@ -220,16 +225,17 @@ type sessionProgressObserver struct {
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
 
-	toolStateMu           sync.Mutex
-	unresolvedToolCalls   map[string]struct{}
-	acceptedToolCalls     map[string]struct{}
-	toolResultRejections  map[string]messages.SessionSendStatus
-	toolLifecycleCh       chan struct{}
-	toolContinuations     map[string]*toolContinuationState
-	toolCallInTurn        bool
-	messageEndSeen        bool
-	providerToolCallSeen  bool
-	assistantResponseDone bool
+	toolStateMu             sync.Mutex
+	unresolvedToolCalls     map[string]struct{}
+	acceptedToolCalls       map[string]struct{}
+	toolResultRejections    map[string]messages.SessionSendStatus
+	toolLifecycleCh         chan struct{}
+	toolContinuations       map[string]*toolContinuationState
+	toolCallInTurn          bool
+	messageEndSeen          bool
+	providerToolCallSeen    bool
+	assistantResponseDone   bool
+	assistantOutputObserved bool
 	// toolResultsEnabled is false for explicit no-tools session plans, where a
 	// provider tool event is reported as unexecutable rather than creating an
 	// obligation that no executor can satisfy.
@@ -253,13 +259,17 @@ type sessionProgressObserver struct {
 }
 
 type toolContinuationState struct {
-	toolName                 string
-	providerCallObserved     bool
-	resultAccepted           bool
-	toolResponseComplete     bool
-	continuationRequested    bool
-	continuationTerminalSeen bool
-	continuationComplete     bool
+	toolName                    string
+	providerCallObserved        bool
+	resultAccepted              bool
+	toolResponseComplete        bool
+	continuationRequested       bool
+	continuationTerminalSeen    bool
+	continuationStatus          string
+	continuationStatusDetails   string
+	continuationOutputObserved  bool
+	continuationFailureObserved bool
+	continuationComplete        bool
 }
 
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {
@@ -310,6 +320,51 @@ func (o *sessionProgressObserver) ensureToolStateLocked() {
 	if o.toolContinuations == nil {
 		o.toolContinuations = make(map[string]*toolContinuationState)
 	}
+}
+
+func normalizeContinuationStatus(status string) string {
+	return strings.ToLower(strings.TrimSpace(status))
+}
+
+func sanitizeContinuationDetail(detail string) string {
+	detail = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, detail)
+	detail = strings.Join(strings.Fields(detail), " ")
+	const maxDetailBytes = 256
+	if len(detail) > maxDetailBytes {
+		return detail[:maxDetailBytes]
+	}
+	return detail
+}
+
+// continuationCanCompleteLocked is deliberately stricter than a provider
+// terminal boundary. A continuation is successful only when the provider
+// reports completed (or a legacy provider omits status) and the assistant
+// emitted customer-visible text, transcript, or audio.
+func continuationCanCompleteLocked(state *toolContinuationState) bool {
+	if state == nil || !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.continuationTerminalSeen {
+		return false
+	}
+	status := normalizeContinuationStatus(state.continuationStatus)
+	if state.continuationFailureObserved || (status != "" && status != "completed") {
+		return false
+	}
+	return state.continuationOutputObserved
+}
+
+func continuationTerminalFailureLocked(state *toolContinuationState) bool {
+	if state == nil || !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.continuationTerminalSeen || state.continuationComplete {
+		return false
+	}
+	status := normalizeContinuationStatus(state.continuationStatus)
+	if state.continuationFailureObserved || (status != "" && status != "completed") {
+		return true
+	}
+	return !state.continuationOutputObserved
 }
 
 // observeProviderToolCallStart records a provider tool call as soon as its
@@ -378,7 +433,7 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 		o.toolContinuations[callID] = state
 	}
 	state.resultAccepted = true
-	if state.continuationRequested && state.continuationTerminalSeen && state.toolResponseComplete {
+	if continuationCanCompleteLocked(state) {
 		state.continuationComplete = true
 	}
 	delete(o.toolResultRejections, callID)
@@ -420,7 +475,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 			continue
 		}
 		state.continuationRequested = true
-		if state.resultAccepted && state.continuationTerminalSeen && state.toolResponseComplete {
+		if continuationCanCompleteLocked(state) {
 			state.continuationComplete = true
 		}
 		changed = true
@@ -454,7 +509,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string
 	}
 	if state != nil && state.resultAccepted {
 		state.continuationRequested = true
-		if state.continuationTerminalSeen && state.toolResponseComplete {
+		if continuationCanCompleteLocked(state) {
 			state.continuationComplete = true
 		}
 	}
@@ -640,6 +695,81 @@ func (o *sessionProgressObserver) pendingNonImageToolContinuationCallIDs() []str
 	return ids
 }
 
+func (o *sessionProgressObserver) pendingImageContinuationSnapshot() ([]string, map[string]string, map[string]string) {
+	if o == nil {
+		return nil, nil, nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.toolContinuations))
+	statuses := make(map[string]string)
+	details := make(map[string]string)
+	for id, state := range o.toolContinuations {
+		if state == nil || state.toolName != tools.ReadImageToolID || !state.resultAccepted || state.continuationComplete {
+			continue
+		}
+		ids = append(ids, id)
+		if state.continuationStatus != "" {
+			statuses[id] = state.continuationStatus
+		}
+		if state.continuationStatusDetails != "" {
+			details[id] = state.continuationStatusDetails
+		}
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids, statuses, details
+}
+
+func (o *sessionProgressObserver) pendingNonImageToolContinuationSnapshot() ([]string, map[string]string, map[string]string) {
+	if o == nil {
+		return nil, nil, nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.toolContinuations))
+	statuses := make(map[string]string)
+	details := make(map[string]string)
+	for id, state := range o.toolContinuations {
+		if state == nil || state.toolName == tools.ReadImageToolID || !state.resultAccepted || state.continuationComplete {
+			continue
+		}
+		ids = append(ids, id)
+		if state.continuationStatus != "" {
+			statuses[id] = state.continuationStatus
+		}
+		if state.continuationStatusDetails != "" {
+			details[id] = state.continuationStatusDetails
+		}
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids, statuses, details
+}
+
+// pendingContinuationMetadata returns deterministic provider context for all
+// accepted continuations still pending at terminal time. The diagnostic uses
+// the same call-ID correlation as the typed errors.
+func (o *sessionProgressObserver) pendingContinuationMetadata() (map[string]string, map[string]string) {
+	if o == nil {
+		return nil, nil
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	statuses := make(map[string]string)
+	details := make(map[string]string)
+	for id, state := range o.toolContinuations {
+		if state == nil || !state.resultAccepted || state.continuationComplete {
+			continue
+		}
+		if state.continuationStatus != "" {
+			statuses[id] = state.continuationStatus
+		}
+		if state.continuationStatusDetails != "" {
+			details[id] = state.continuationStatusDetails
+		}
+	}
+	return statuses, details
+}
+
 // unresolvedToolCallIDs returns a deterministic snapshot for lifecycle
 // consumers and future terminal diagnostics.
 func (o *sessionProgressObserver) unresolvedToolCallIDs() []string {
@@ -744,6 +874,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.MessageStartValue:
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
+		o.assistantOutputObserved = false
 		o.toolCallInTurn = false
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
@@ -755,21 +886,52 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		// response from a duplicate MESSAGE.END for the previous one.
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
+		if o.messageEndSeen || o.assistantResponseDone {
+			o.assistantOutputObserved = false
+		}
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.AudioDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityAudio, len(v.Content))
 		o.toolStateMu.Lock()
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		if len(v.Content) > 0 && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.TextDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Content))
 		o.toolStateMu.Lock()
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		if strings.TrimSpace(v.Content) != "" && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.TranscriptDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Text))
 		o.toolStateMu.Lock()
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		if strings.TrimSpace(v.Text) != "" && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
+		o.messageEndSeen = false
+		o.toolStateMu.Unlock()
+	case *messages.TranscriptEndValue:
+		o.toolStateMu.Lock()
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		if strings.TrimSpace(v.FullText) != "" && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallStartValue:
@@ -805,7 +967,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolDeltaSeen = false
 	case *messages.MessageEndValue:
 		o.noteProviderUsage(v.Usage)
-		if o.observeProviderMessageEnd(msg.Role) {
+		if o.observeProviderMessageEnd(msg.Role, v) {
 			o.completeTurn()
 		}
 	case *messages.ErrorValue:
@@ -829,7 +991,7 @@ func (o *sessionProgressObserver) toolResultsEnabledForObservation() bool {
 // only a later non-tool MESSAGE.END can complete an accepted continuation.
 // The bool return reports whether this boundary is one new, terminal assistant
 // response and should therefore count as a completed turn.
-func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) bool {
+func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role, terminal *messages.MessageEndValue) bool {
 	if o == nil {
 		return false
 	}
@@ -849,9 +1011,35 @@ func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) 
 			if state == nil || !state.toolResponseComplete || state.continuationComplete {
 				continue
 			}
-			state.continuationTerminalSeen = true
-			if state.resultAccepted && state.continuationRequested {
+			if duplicateEnd && !state.continuationRequested {
+				// A second MESSAGE.END before the accepted result's explicit
+				// response request is still a duplicate of the provider's
+				// function-call response, not evidence of an empty continuation.
+				continue
+			}
+			if !state.continuationTerminalSeen {
+				state.continuationTerminalSeen = true
+				if terminal != nil {
+					state.continuationStatus = normalizeContinuationStatus(terminal.Status)
+					state.continuationStatusDetails = sanitizeContinuationDetail(terminal.StatusDetails)
+				}
+				state.continuationOutputObserved = o.assistantOutputObserved
+				if !state.continuationOutputObserved && state.continuationStatusDetails == "" {
+					state.continuationStatusDetails = "assistant continuation produced no observable output"
+				}
+				status := normalizeContinuationStatus(state.continuationStatus)
+				terminalFailed := !state.continuationOutputObserved || (status != "" && status != "completed")
+				if terminalFailed {
+					state.continuationFailureObserved = true
+				}
+			}
+			if continuationCanCompleteLocked(state) {
 				state.continuationComplete = true
+				continuationChanged = true
+			} else if state.resultAccepted && state.continuationRequested {
+				// A terminal failure or empty response is a state transition too;
+				// wake close controllers so they can stop on the primary failure
+				// instead of waiting for a later provider close.
 				continuationChanged = true
 			}
 		}
@@ -877,6 +1065,25 @@ func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) 
 		}
 	}
 	return terminalAssistantResponse && !duplicateEnd
+}
+
+// hasTerminalToolContinuationFailure reports a provider-authored terminal
+// response that cannot discharge an accepted continuation. It is checked by
+// both text and audio stop rules so failed or empty response.done events end
+// the run with a typed lifecycle error instead of hanging behind the pending
+// obligation.
+func (o *sessionProgressObserver) hasTerminalToolContinuationFailure() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	for _, state := range o.toolContinuations {
+		if continuationTerminalFailureLocked(state) {
+			return true
+		}
+	}
+	return false
 }
 
 // assistantResponseCompleted reports whether a non-tool assistant response

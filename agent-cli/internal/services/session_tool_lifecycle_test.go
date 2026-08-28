@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -183,9 +184,19 @@ func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *te
 	observer.noteToolResultAccepted(callID)
 	observer.noteToolContinuationRequested()
 	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("image described"),
+	})
+	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
 	})
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
@@ -227,9 +238,14 @@ func TestSessionProgressObserver_ContinuationRequestBeforeCallObservation(t *tes
 		Value: messages.NewMessageStartValue(),
 	})
 	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("lookup complete"),
+	})
+	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
 	})
 
 	if observer.hasToolLifecycleObligation() {
@@ -272,10 +288,15 @@ func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.
 
 	observer.noteToolResultAccepted(callID)
 	observer.noteToolContinuationRequested()
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("read image answer"),
+	})
 	finalAssistantEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
 	}
 	observer.observe(finalAssistantEnd)
 	if !shouldStopSessionLoop(finalAssistantEnd, sessionLoopOptions{observer: observer}, false) {
@@ -338,5 +359,164 @@ func TestSessionProgressObserver_ImageContinuationFailurePreservesPrimaryCause(t
 	}
 	if got := failures[0].Fields[fieldClassification]; got != SessionImageContinuationClassification {
 		t.Fatalf("failure classification = %q, want %q", got, SessionImageContinuationClassification)
+	}
+}
+
+func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     string
+		detail     string
+		outputType messages.StreamMessageType
+		wantError  bool
+	}{
+		{name: "failed empty", status: "failed", detail: "reason=max_output_tokens", wantError: true},
+		{name: "completed empty", status: "completed", wantError: true},
+		{name: "completed text", status: "completed", outputType: messages.StreamTypeTextDelta},
+		{name: "completed audio", status: "completed", outputType: messages.StreamTypeAudioDelta},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+			observer.setToolResultsEnabled(true)
+			const callID = "call-outcome"
+			observer.observe(messages.StreamMessage{
+				Type:  messages.StreamTypeToolCallEnd,
+				Role:  messages.RoleAssistant,
+				Value: messages.NewToolCallEndValue(callID, "read_image", `{"path":"photo.jpg"}`),
+			})
+			observer.observe(messages.StreamMessage{
+				Type:  messages.StreamTypeMessageEnd,
+				Role:  messages.RoleAssistant,
+				Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
+			})
+			observer.noteToolResultAccepted(callID)
+			observer.noteToolContinuationRequested()
+			observer.observe(messages.StreamMessage{
+				Type:  messages.StreamTypeMessageStart,
+				Role:  messages.RoleAssistant,
+				Value: messages.NewMessageStartValue(),
+			})
+			if tc.outputType == messages.StreamTypeTextDelta {
+				observer.observe(messages.StreamMessage{
+					Type:  messages.StreamTypeTextDelta,
+					Role:  messages.RoleAssistant,
+					Value: messages.NewTextDeltaValue("a grounded answer"),
+				})
+			}
+			if tc.outputType == messages.StreamTypeAudioDelta {
+				observer.observe(messages.StreamMessage{
+					Type:  messages.StreamTypeAudioDelta,
+					Role:  messages.RoleAssistant,
+					Value: messages.NewAudioDeltaValue([]byte{1, 2, 3}),
+				})
+			}
+			terminal := &messages.MessageEndValue{Type: "message_end", Status: tc.status, StatusDetails: tc.detail}
+			terminalMessage := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: terminal}
+			observer.observe(terminalMessage)
+
+			if got := observer.hasTerminalToolContinuationFailure(); got != tc.wantError {
+				t.Fatalf("terminal failure = %v, want %v", got, tc.wantError)
+			}
+			if got := shouldStopSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, WaitForClose: true}, false); got != tc.wantError {
+				t.Fatalf("wait-for-close stop = %v, want %v", got, tc.wantError)
+			}
+			if got := shouldStopAudioInputSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, WaitForClose: true}, false, true); got != tc.wantError {
+				t.Fatalf("audio wait-for-close stop = %v, want %v", got, tc.wantError)
+			}
+			err := observer.finish(nil)
+			if tc.wantError {
+				if err == nil {
+					t.Fatal("failed or empty continuation returned nil")
+				}
+				var continuationErr *SessionImageContinuationError
+				if !errors.As(err, &continuationErr) {
+					t.Fatalf("continuation error = %v, want SessionImageContinuationError", err)
+				}
+				if len(continuationErr.CallIDs) != 1 || continuationErr.CallIDs[0] != callID {
+					t.Fatalf("continuation IDs = %v, want [%s]", continuationErr.CallIDs, callID)
+				}
+				if tc.status != "" && continuationErr.ProviderStatuses[callID] != tc.status {
+					t.Fatalf("provider status = %q, want %q", continuationErr.ProviderStatuses[callID], tc.status)
+				}
+				if tc.detail != "" && continuationErr.ProviderDetails[callID] != tc.detail {
+					t.Fatalf("provider detail = %q, want %q", continuationErr.ProviderDetails[callID], tc.detail)
+				}
+				if tc.detail != "" && !strings.Contains(err.Error(), tc.detail) {
+					t.Fatalf("error %q does not include provider detail %q", err, tc.detail)
+				}
+			} else if err != nil {
+				t.Fatalf("successful continuation error = %v", err)
+			}
+		})
+	}
+}
+
+func TestSessionProgressObserverFailedContinuationDiagnosticIsSingleAndActionable(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-failed-diagnostic"
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "read_image", `{}`),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
+	})
+	observer.noteToolResultAccepted(callID)
+	observer.noteToolContinuationRequested()
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "failed", StatusDetails: "reason=max_output_tokens"},
+	})
+	// A later duplicate-looking successful boundary must not erase the first
+	// failed terminal cause or discharge the obligation.
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("late output"),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
+	})
+	if !observer.hasTerminalToolContinuationFailure() || !observer.hasToolLifecycleObligation() {
+		t.Fatal("later successful boundary cleared the failed continuation obligation")
+	}
+
+	err := observer.finish(nil)
+	if err == nil || !errors.Is(err, ErrSessionImageContinuationIncomplete) {
+		t.Fatalf("failed continuation error = %v, want image continuation sentinel", err)
+	}
+	observer.finish(err)
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("failure diagnostics = %d, want exactly one", len(failures))
+	}
+	fields := failures[0].Fields
+	if fields[SessionDiagnosticFieldPendingImageContinuationIDs] != callID {
+		t.Fatalf("diagnostic call IDs = %q, want %s", fields[SessionDiagnosticFieldPendingImageContinuationIDs], callID)
+	}
+	if fields[SessionDiagnosticFieldPendingContinuationStatuses] != callID+"=failed" {
+		t.Fatalf("diagnostic statuses = %q, want %s", fields[SessionDiagnosticFieldPendingContinuationStatuses], callID+"=failed")
+	}
+	if fields[SessionDiagnosticFieldPendingContinuationDetails] != callID+"=reason=max_output_tokens" {
+		t.Fatalf("diagnostic details = %q, want %s", fields[SessionDiagnosticFieldPendingContinuationDetails], callID+"=reason=max_output_tokens")
 	}
 }
