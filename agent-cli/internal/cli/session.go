@@ -261,12 +261,41 @@ func NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
 	sessionToolCapabilities SessionToolCapabilitiesFactory,
 	deviceRegistry audio.DeviceRegistry,
 ) *SessionCommand {
+	return NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime(
+		askFlags,
+		globalFlags,
+		toolExecutorOverride,
+		sessionInferencerOverride,
+		clockSource,
+		runtimeObserver,
+		sessionToolCapabilities,
+		deviceRegistry,
+		nil,
+	)
+}
+
+// NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime
+// is the production composition constructor. The generated Wire graph passes
+// the concrete runtime factory directly, so a shipped WebRTC command cannot
+// silently lose it between graph assembly and option generation.
+func NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime(
+	askFlags *flags.AskFlags,
+	globalFlags *flags.GlobalFlags,
+	toolExecutorOverride messages.ToolExecutor,
+	sessionInferencerOverride messages.SessionInferencer,
+	clockSource platformclock.Source,
+	runtimeObserver services.SessionRuntimeObserver,
+	sessionToolCapabilities SessionToolCapabilitiesFactory,
+	deviceRegistry audio.DeviceRegistry,
+	rtcRuntimeFactory services.SessionRTCRuntimeFactory,
+) *SessionCommand {
 	return &SessionCommand{
 		askFlags:                  askFlags,
 		globalFlags:               globalFlags,
 		toolExecutorOverride:      toolExecutorOverride,
 		sessionInferencerOverride: sessionInferencerOverride,
 		sessionToolCapabilities:   sessionToolCapabilities,
+		rtcRuntimeFactory:         rtcRuntimeFactory,
 		clockSource:               clockSource,
 		runtimeObserver:           runtimeObserver,
 		deviceRegistry:            deviceRegistry,
@@ -291,10 +320,9 @@ func (c *SessionCommand) SetDeviceRegistry(registry audio.DeviceRegistry) {
 }
 
 // SetSessionRTCRuntimeFactory supplies the protocol-owning WebRTC runtime to
-// the session command. The generated production graph leaves this unset until
-// a concrete RTC composition is available; tests and embedding callers can
-// provide the existing service-owned runtime seam without changing CLI flag
-// parsing or falling back to WebSocket.
+// the session command. The production graph installs this through the
+// constructor above; the setter remains for compatibility with embedding and
+// focused command tests that replace the runtime seam.
 func (c *SessionCommand) SetSessionRTCRuntimeFactory(factory services.SessionRTCRuntimeFactory) {
 	if c == nil {
 		return

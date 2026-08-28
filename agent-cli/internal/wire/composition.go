@@ -166,6 +166,8 @@ type compositionOptions struct {
 	inferencer           messages.Inferencer
 	sessionInferencer    messages.SessionInferencer
 	runtimeObserver      SessionRuntimeObserver
+	rtcComponents        services.SessionRTCComponents
+	rtcComponentsSet     bool
 	relaxModelValidation bool
 }
 
@@ -191,6 +193,18 @@ func WithSessionInferencer(inferencer messages.SessionInferencer) CompositionOpt
 func WithSessionRuntimeObserver(observer SessionRuntimeObserver) CompositionOption {
 	return func(options *compositionOptions) error {
 		options.runtimeObserver = observer
+		return nil
+	}
+}
+
+// WithSessionRTCComponents replaces only the external RTC component edges
+// while retaining the production service-owned runtime factory and CLI graph.
+// It is intended for hermetic command tests; omitted callers receive the
+// concrete production composition.
+func WithSessionRTCComponents(components services.SessionRTCComponents) CompositionOption {
+	return func(options *compositionOptions) error {
+		options.rtcComponents = components
+		options.rtcComponentsSet = true
 		return nil
 	}
 }
@@ -240,6 +254,7 @@ func ComposeAgentCLI(
 		runtimeObserver:   compositionOptions.runtimeObserver,
 		inferencer:        compositionOptions.inferencer,
 		sessionInferencer: compositionOptions.sessionInferencer,
+		rtcComponents:     effectiveSessionRTCComponents(compositionOptions),
 	}
 	normalizeClock(&values)
 	if err := validateDependencies(&values); err != nil {
@@ -260,6 +275,7 @@ func ComposeAgentCLI(
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
+		values.rtcComponents,
 		compositionOptions.relaxModelValidation,
 		nil,
 	)
@@ -340,6 +356,7 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		services.DefaultToolDefs(registry),
 		values.inferencer,
 		values.sessionInferencer,
+		values.rtcComponents,
 		relaxModelValidation,
 		withDefaultCallCounts(observer, values.defaultCalls),
 	)
@@ -360,7 +377,10 @@ func compositionValuesWithPorts(definitions []portDefinition, registry *tools.To
 		return compositionValues{}, err
 	}
 
-	values := compositionValues{defaultCalls: make(map[string]int, len(definitions))}
+	values := compositionValues{
+		defaultCalls:  make(map[string]int, len(definitions)),
+		rtcComponents: defaultSessionRTCComponents(),
+	}
 	swapped := make(map[string]struct{}, len(swaps))
 	for _, swap := range swaps {
 		swapped[swap.Name] = struct{}{}
@@ -406,7 +426,15 @@ type compositionValues struct {
 	runtimeObserver   SessionRuntimeObserver
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
+	rtcComponents     services.SessionRTCComponents
 	defaultCalls      map[string]int
+}
+
+func effectiveSessionRTCComponents(options compositionOptions) services.SessionRTCComponents {
+	if options.rtcComponentsSet {
+		return options.rtcComponents
+	}
+	return defaultSessionRTCComponents()
 }
 
 type portDefinition struct {

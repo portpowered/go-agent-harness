@@ -8,12 +8,23 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
+
+// provideSessionRTCRuntimeFactory installs the service-owned WebRTC runtime
+// composition in the generated CLI graph. The component functions keep
+// signaling, peer/data, and media implementations behind the service's
+// provider-neutral contracts while leaving runtime side effects lazy until a
+// session actually starts.
+func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents) services.SessionRTCRuntimeFactory {
+	return services.NewSessionRTCRuntimeFactory(components)
+}
 
 func provideModelValidation(
 	relaxModelValidation bool,
@@ -61,6 +72,14 @@ func provideFleetEntryExecutors() []fleet.EntryExecutor { return nil }
 // acceptance runner while leaving the command injectable for route tests.
 func provideAcceptanceCommands() []*cli.ProbeAcceptanceCommand { return nil }
 
+// provideProbeDeviceRegistries adapts the shared application registry to the
+// variadic probe constructor. Keeping the adapter in the source graph makes
+// the generated call retain the same device implementation as the session
+// command and device routes.
+func provideProbeDeviceRegistries(registry DeviceRegistry) []audio.DeviceRegistry {
+	return []audio.DeviceRegistry{registry}
+}
+
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
 	FlagsSet,
@@ -77,8 +96,10 @@ var CliSet = wire.NewSet(
 	cli.NewProbeFleetCommand,
 	provideFleetEntryExecutors,
 	provideAcceptanceCommands,
+	provideProbeDeviceRegistries,
 	provideSessionToolCapabilitiesFactory,
-	cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities,
+	provideSessionRTCRuntimeFactory,
+	cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime,
 	cli.NewSessionShowCommand,
 	cli.NewSessionListCommand,
 	cli.NewSessionDeleteCommand,
@@ -102,6 +123,7 @@ func assembleAgentCLI(
 	toolDefs []messages.ToolDefinition,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
+	rtcComponents services.SessionRTCComponents,
 	relaxModelValidation bool,
 	observer assemblyObserver,
 ) (*cli.AgentCLI, error) {

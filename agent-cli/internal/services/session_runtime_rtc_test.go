@@ -256,6 +256,47 @@ func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *t
 	}
 }
 
+func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
+	wantSendErr := errors.New("provider send rejected")
+	media := RTCMediaEndpoints{
+		Inbound:  &testRTCInboundMedia{},
+		Outbound: &testRTCOutboundMedia{},
+	}
+	provider := &runtimeCapabilitySession{
+		scriptedSession: newScriptedSession(),
+		media:           media,
+		sendOutcome:     messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: wantSendErr},
+		inputDrops:      3,
+		outputDrops:     5,
+	}
+	wrapper := &sessionRTCRuntimeSession{Session: provider}
+
+	gotMedia, ok := rtcMediaFromSession(wrapper)
+	if !ok {
+		t.Fatal("runtime session did not preserve provider RTC media capability")
+	}
+	if gotMedia.Inbound != media.Inbound || gotMedia.Outbound != media.Outbound {
+		t.Fatalf("forwarded RTC media = %#v, want %#v", gotMedia, media)
+	}
+
+	sender, ok := any(wrapper).(messages.SessionSendOutcomeSender)
+	if !ok {
+		t.Fatal("runtime session did not preserve SessionSendOutcomeSender")
+	}
+	outcome := sender.SendWithOutcome(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta})
+	if outcome.Status != messages.SessionSendTerminalFailure || !errors.Is(outcome.Err, wantSendErr) {
+		t.Fatalf("forwarded send outcome = %#v, want terminal failure with provider cause", outcome)
+	}
+
+	counters, ok := any(wrapper).(messages.SessionDropCounters)
+	if !ok {
+		t.Fatal("runtime session did not preserve SessionDropCounters")
+	}
+	if counters.InputDrops() != provider.inputDrops || counters.OutputDrops() != provider.outputDrops {
+		t.Fatalf("forwarded drop counters = (%d, %d), want (%d, %d)", counters.InputDrops(), counters.OutputDrops(), provider.inputDrops, provider.outputDrops)
+	}
+}
+
 func TestPlanWebRTCRecordSuppliesRuntimeDataPlaneToProvider(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, `
@@ -589,6 +630,28 @@ func (m *testRTCInboundMedia) Close() error {
 	}
 	return m.close()
 }
+
+type testRTCOutboundMedia struct{}
+
+func (*testRTCOutboundMedia) WriteFrame(context.Context, rtc.PCMFrame) error { return nil }
+func (*testRTCOutboundMedia) Close() error                                   { return nil }
+
+type runtimeCapabilitySession struct {
+	*scriptedSession
+	media       RTCMediaEndpoints
+	sendOutcome messages.SessionSendOutcome
+	inputDrops  int64
+	outputDrops int64
+}
+
+func (s *runtimeCapabilitySession) RTCMedia() rtc.MediaEndpoints { return s.media }
+
+func (s *runtimeCapabilitySession) SendWithOutcome(context.Context, messages.StreamMessage) messages.SessionSendOutcome {
+	return s.sendOutcome
+}
+
+func (s *runtimeCapabilitySession) InputDrops() int64  { return s.inputDrops }
+func (s *runtimeCapabilitySession) OutputDrops() int64 { return s.outputDrops }
 
 type testRTCDataPlane struct {
 	dial   func(string, map[string]string) (transport.Conn, error)

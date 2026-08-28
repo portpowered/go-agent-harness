@@ -477,6 +477,8 @@ type sessionRTCRuntimeSession struct {
 }
 
 var _ messages.Session = (*sessionRTCRuntimeSession)(nil)
+var _ messages.SessionSendOutcomeSender = (*sessionRTCRuntimeSession)(nil)
+var _ messages.SessionDropCounters = (*sessionRTCRuntimeSession)(nil)
 
 func (s *sessionRTCRuntimeSession) TerminalError() error {
 	if s == nil {
@@ -503,6 +505,51 @@ func (s *sessionRTCRuntimeSession) SupportsCompleteMessages() bool {
 func (s *sessionRTCRuntimeSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
+}
+
+// SendWithOutcome preserves the provider's typed send lifecycle through the
+// RTC owner wrapper. A provider that does not expose the optional capability
+// still receives the shared legacy-to-typed compatibility adaptation.
+func (s *sessionRTCRuntimeSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if s == nil || s.Session == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	return messages.SendSessionWithOutcome(ctx, s.Session, msg)
+}
+
+// InputDrops and OutputDrops preserve provider buffer accounting through the
+// RTC owner wrapper. Injected legacy sessions without drop counters retain a
+// zero value rather than making the runtime boundary fail.
+func (s *sessionRTCRuntimeSession) InputDrops() int64 {
+	if s == nil || s.Session == nil {
+		return 0
+	}
+	counters, ok := s.Session.(messages.SessionDropCounters)
+	if !ok {
+		return 0
+	}
+	return counters.InputDrops()
+}
+
+func (s *sessionRTCRuntimeSession) OutputDrops() int64 {
+	if s == nil || s.Session == nil {
+		return 0
+	}
+	counters, ok := s.Session.(messages.SessionDropCounters)
+	if !ok {
+		return 0
+	}
+	return counters.OutputDrops()
+}
+
+// rtcMedia preserves the provider-owned media capability through the local
+// runtime decorator. The private seam lets service-owned wrappers discover
+// optional media without changing the public messages.Session contract.
+func (s *sessionRTCRuntimeSession) rtcMedia() (RTCMediaEndpoints, bool) {
+	if s == nil || s.Session == nil {
+		return RTCMediaEndpoints{}, false
+	}
+	return rtcMediaFromSession(s.Session)
 }
 
 func (s *sessionRTCRuntimeSession) Close() error {
