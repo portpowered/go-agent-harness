@@ -229,11 +229,13 @@ func waitToolBargeInSignal(ctx context.Context, boundary string, signal <-chan s
 type toolBargeInServer struct {
 	mu sync.Mutex
 
-	events    chan []byte
-	closed    chan struct{}
-	closeOnce sync.Once
-	dialOnce  sync.Once
-	dialCount int
+	events             chan []byte
+	closed             chan struct{}
+	closeOnce          sync.Once
+	transportClosed    chan struct{}
+	transportCloseOnce sync.Once
+	dialOnce           sync.Once
+	dialCount          int
 
 	turnHasAudio     bool
 	commits          int
@@ -260,9 +262,10 @@ type toolBargeInServerResponse struct {
 
 func newToolBargeInServer() *toolBargeInServer {
 	return &toolBargeInServer{
-		events:         make(chan []byte, 128),
-		closed:         make(chan struct{}),
-		speechSignalCh: make(chan struct{}),
+		events:          make(chan []byte, 128),
+		closed:          make(chan struct{}),
+		transportClosed: make(chan struct{}),
+		speechSignalCh:  make(chan struct{}),
 	}
 }
 
@@ -311,7 +314,6 @@ func (s *toolBargeInServer) snapshot() (int, []*toolBargeInServerResponse, int, 
 
 func (s *toolBargeInServer) observeTransportClose() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	pending := s.toolResultCount != 1 || s.active != nil
 	for _, response := range s.responses {
 		if !response.TerminalSent {
@@ -320,6 +322,17 @@ func (s *toolBargeInServer) observeTransportClose() {
 	}
 	s.clientClosePending = pending
 	s.recordMilestoneLocked("transport_close")
+	s.mu.Unlock()
+	s.transportCloseOnce.Do(func() { close(s.transportClosed) })
+}
+
+func (s *toolBargeInServer) waitForTransportClose(ctx context.Context) error {
+	return probe.NewBargeInLedger().WaitFor(
+		ctx,
+		"transport close observation",
+		s.transportClosed,
+		toolBargeInGateTimeout,
+	)
 }
 
 type toolBargeInConn struct{ server *toolBargeInServer }
@@ -584,6 +597,16 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 			runErr = fmt.Errorf("tool-call barge-in CLI command await timed out at %s: %w", plainSpeechRunTimeout, probe.ErrBargeInWait)
 		}
 	}
+	closeCtx, closeCancel := context.WithTimeout(context.Background(), toolBargeInGateTimeout)
+	closeErr := server.waitForTransportClose(closeCtx)
+	closeCancel()
+	if closeErr != nil {
+		if runErr == nil {
+			runErr = closeErr
+		} else {
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}
 	return toolBargeInRun{
 		capture:  recorder.Capture(),
 		trace:    trace,
@@ -649,6 +672,13 @@ type toolBargeInToolIdentity struct {
 	turnID     string
 }
 
+type toolBargeInInputIdentity struct {
+	id               string
+	committed        bool
+	userTurnPending  bool
+	userTurnObserved bool
+}
+
 // normalizeToolBargeInCapture translates raw OpenAI records at the adapter
 // boundary. The ledger sees only stable identities; provider response and call
 // IDs are used for lookup and never appear in oracle diagnostics.
@@ -657,7 +687,7 @@ type toolBargeInCaptureAdapter struct {
 
 	nextSequence       int
 	inputOrdinal       int
-	currentInput       string
+	inputs             []toolBargeInInputIdentity
 	lastCommittedInput string
 	responseOrdinal    int
 	providerResponses  map[string]toolBargeInResponseIdentity
@@ -689,6 +719,62 @@ func (a *toolBargeInCaptureAdapter) nextEventSequence() int {
 	return a.nextSequence
 }
 
+func (a *toolBargeInCaptureAdapter) activeInputID() string {
+	if len(a.inputs) == 0 || a.inputs[len(a.inputs)-1].committed {
+		a.inputOrdinal++
+		a.inputs = append(a.inputs, toolBargeInInputIdentity{
+			id: plainSpeechInputID(a.inputOrdinal),
+		})
+	}
+	return a.inputs[len(a.inputs)-1].id
+}
+
+func (a *toolBargeInCaptureAdapter) latestUncommittedInputIndex() int {
+	for index := len(a.inputs) - 1; index >= 0; index-- {
+		if !a.inputs[index].committed {
+			return index
+		}
+	}
+	return -1
+}
+
+func (a *toolBargeInCaptureAdapter) nextUserTurnInputIndex() int {
+	for index := range a.inputs {
+		if !a.inputs[index].userTurnObserved && !a.inputs[index].userTurnPending {
+			return index
+		}
+	}
+	for index := range a.inputs {
+		if a.inputs[index].userTurnPending && !a.inputs[index].userTurnObserved {
+			return index
+		}
+	}
+	return -1
+}
+
+func (a *toolBargeInCaptureAdapter) emitUserTurn(index int) {
+	if index < 0 || index >= len(a.inputs) || a.inputs[index].userTurnObserved {
+		return
+	}
+	inputID := a.inputs[index].id
+	a.inputs[index].userTurnObserved = true
+	a.inputs[index].userTurnPending = false
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence: a.nextEventSequence(),
+		Kind:     probe.BargeInEventUserTurn,
+		InputID:  inputID,
+		TurnID:   plainSpeechTurnID(inputID),
+	})
+}
+
+func (a *toolBargeInCaptureAdapter) flushPendingUserTurns() {
+	for index := range a.inputs {
+		if a.inputs[index].committed && a.inputs[index].userTurnPending {
+			a.emitUserTurn(index)
+		}
+	}
+}
+
 func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEvent) {
 	payload := plainSpeechRecordPayload(record)
 	switch record.Type {
@@ -696,17 +782,14 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
-		if a.currentInput == "" {
-			a.inputOrdinal++
-			a.currentInput = plainSpeechInputID(a.inputOrdinal)
-		}
+		inputID := a.activeInputID()
 		decoded, _ := base64.StdEncoding.DecodeString(plainSpeechJSONField(payload, "audio"))
 		a.ledger.Observe(probe.BargeInEvent{
 			Sequence:      a.nextEventSequence(),
 			Kind:          probe.BargeInEventInputAppend,
-			InputID:       a.currentInput,
-			TurnID:        plainSpeechTurnID(a.currentInput),
-			AppendGroupID: a.currentInput,
+			InputID:       inputID,
+			TurnID:        plainSpeechTurnID(inputID),
+			AppendGroupID: inputID,
 			Bytes:         len(decoded),
 			NonEmpty:      len(decoded) > 0,
 		})
@@ -714,24 +797,43 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
+		inputIndex := a.latestUncommittedInputIndex()
+		inputID := ""
+		if inputIndex >= 0 {
+			inputID = a.inputs[inputIndex].id
+			a.inputs[inputIndex].committed = true
+		}
 		a.ledger.Observe(probe.BargeInEvent{
 			Sequence: a.nextEventSequence(),
 			Kind:     probe.BargeInEventInputCommit,
-			InputID:  a.currentInput,
-			TurnID:   plainSpeechTurnID(a.currentInput),
+			InputID:  inputID,
+			TurnID:   plainSpeechTurnID(inputID),
 		})
-		a.lastCommittedInput = a.currentInput
+		a.lastCommittedInput = inputID
+		a.flushPendingUserTurns()
 	case "conversation.item.created":
 		if record.Direction != gwtesting.DirectionServerToClient || plainSpeechJSONField(payload, "item.role") != "user" {
 			return
 		}
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence: a.nextEventSequence(),
-			Kind:     probe.BargeInEventUserTurn,
-			InputID:  a.currentInput,
-			TurnID:   plainSpeechTurnID(a.currentInput),
-		})
-		a.currentInput = ""
+		inputIndex := a.nextUserTurnInputIndex()
+		if inputIndex < 0 {
+			// Keep an explicit malformed observation so a duplicate or orphan
+			// acknowledgement fails the ledger instead of being silently ignored.
+			a.ledger.Observe(probe.BargeInEvent{
+				Sequence: a.nextEventSequence(),
+				Kind:     probe.BargeInEventUserTurn,
+			})
+			return
+		}
+		if !a.inputs[inputIndex].committed {
+			// A recording transport can observe the provider acknowledgement
+			// before the successful client commit has been appended to the
+			// capture. Retain the stable FIFO identity and emit the normalized
+			// user-turn event immediately after its commit boundary.
+			a.inputs[inputIndex].userTurnPending = true
+			return
+		}
+		a.emitUserTurn(inputIndex)
 	case "response.created":
 		if record.Direction != gwtesting.DirectionServerToClient {
 			return

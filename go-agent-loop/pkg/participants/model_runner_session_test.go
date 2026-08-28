@@ -152,6 +152,24 @@ func (*rejectingStreamSession) Send(context.Context, messages.StreamMessage) boo
 	return false
 }
 
+// outcomeRecordingSession exercises the typed provider-boundary result used by
+// live sessions. Rejected messages are intentionally not recorded as sent.
+type outcomeRecordingSession struct {
+	*recordingSession
+	outcomes map[messages.StreamMessageType]messages.SessionSendOutcome
+}
+
+func (s *outcomeRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	outcome := messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	if configured, ok := s.outcomes[msg.Type]; ok {
+		outcome = configured
+	}
+	if outcome.OK() {
+		s.recordingSession.Send(ctx, msg)
+	}
+	return outcome
+}
+
 type failingConnectInferencer struct{ err error }
 
 func (f *failingConnectInferencer) ConnectSession(context.Context) (messages.Session, error) {
@@ -310,6 +328,147 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	}
 	if second.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
+	}
+}
+
+func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T) {
+	tests := []struct {
+		name             string
+		responseInFlight bool
+		outcomes         map[messages.StreamMessageType]messages.SessionSendOutcome
+		wantSent         int
+		wantCancelSent   bool
+		wantError        string
+	}{
+		{
+			name:             "cancel buffer full",
+			responseInFlight: true,
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendBufferFull},
+			},
+			wantError: "response cancel",
+		},
+		{
+			name:             "cancel closed",
+			responseInFlight: true,
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendClosed},
+			},
+			wantError: "response cancel",
+		},
+		{
+			name: "audio buffer full",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeAudioDelta: {Status: messages.SessionSendBufferFull},
+			},
+			wantError: "audio",
+		},
+		{
+			name: "audio closed",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeAudioDelta: {Status: messages.SessionSendClosed},
+			},
+			wantError: "audio",
+		},
+		{
+			name:             "audio rejected after accepted cancel",
+			responseInFlight: true,
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendSucceeded},
+				messages.StreamTypeAudioDelta:     {Status: messages.SessionSendClosed},
+			},
+			wantSent:       1,
+			wantCancelSent: true,
+			wantError:      "audio",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			session := &outcomeRecordingSession{
+				recordingSession: newRecordingSession(),
+				outcomes:         test.outcomes,
+			}
+			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+			responseInFlight := test.responseInFlight
+			responseCancelSent := false
+
+			err := runner.forwardSessionAudio(context.Background(), session, []byte{1, 2, 3}, &responseInFlight, &responseCancelSent)
+			if err == nil || !contains(err.Error(), test.wantError) {
+				t.Fatalf("forwardSessionAudio error = %v, want %q failure", err, test.wantError)
+			}
+			if !contains(err.Error(), "buffer_full") && !contains(err.Error(), "closed") {
+				t.Fatalf("forwardSessionAudio error = %v, want typed send status", err)
+			}
+			if responseCancelSent != test.wantCancelSent {
+				t.Fatalf("responseCancelSent = %t, want %t", responseCancelSent, test.wantCancelSent)
+			}
+			if sent := session.sentMessages(); len(sent) != test.wantSent {
+				t.Fatalf("sent messages = %d, want %d (%#v)", len(sent), test.wantSent, sent)
+			}
+			if test.wantSent == 0 && responseCancelSent {
+				t.Fatal("rejected audio path claimed a cancellation without an accepted audio frame")
+			}
+		})
+	}
+}
+
+func TestSessionModelRunner_BargeInSendFailurePropagatesFromRun(t *testing.T) {
+	tests := []struct {
+		name     string
+		outcomes map[messages.StreamMessageType]messages.SessionSendOutcome
+		want     []string
+	}{
+		{
+			name: "cancel buffer full",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendBufferFull},
+			},
+			want: []string{"response cancel", "buffer_full"},
+		},
+		{
+			name: "audio closed after accepted cancel",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendSucceeded},
+				messages.StreamTypeAudioDelta:     {Status: messages.SessionSendClosed},
+			},
+			want: []string{"audio", "closed"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			session := &outcomeRecordingSession{
+				recordingSession: newRecordingSession(),
+				outcomes:         test.outcomes,
+			}
+			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			errCh := make(chan error, 1)
+			go func() { errCh <- runner.Run(ctx) }()
+			session.recv.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeMessageStart,
+				Value: messages.NewMessageStartValue(),
+			})
+			waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+			runner.UserAudioInbox <- []byte{7, 8, 9}
+
+			select {
+			case err := <-errCh:
+				if err == nil || !contains(err.Error(), "session") || !contains(err.Error(), "send failed") {
+					t.Fatalf("Run error = %v, want propagated session send failure", err)
+				}
+				for _, fragment := range test.want {
+					if !contains(err.Error(), fragment) {
+						t.Fatalf("Run error = %v, want detail %q", err, fragment)
+					}
+				}
+			case <-ctx.Done():
+				t.Fatal("Run did not return after barge-in send failure")
+			}
+		})
 	}
 }
 

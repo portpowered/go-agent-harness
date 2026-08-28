@@ -77,27 +77,52 @@ func (d *RecordingWebSocketDialer) Capture() SessionCapture {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	events := make([]CapturedSessionEvent, len(d.events))
-	copy(events, d.events)
+	events := make([]CapturedSessionEvent, 0, len(d.events))
+	for _, event := range d.events {
+		// An outbound reservation is made before the wrapped connection is
+		// called so a synchronous provider acknowledgement cannot be recorded
+		// ahead of the client event that caused it. Failed writes are marked and
+		// omitted here, keeping captures representative of accepted traffic.
+		if event.PayloadType == "" {
+			continue
+		}
+		events = append(events, event)
+	}
 
 	capture := d.capture
 	capture.Records = events
 	return capture
 }
 
-func (d *RecordingWebSocketDialer) recordMessage(dir SessionEventDirection, payload []byte) {
+func (d *RecordingWebSocketDialer) recordMessage(dir SessionEventDirection, payload []byte) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	d.sequence++
+	sequence := d.sequence
 	d.events = append(d.events, CapturedSessionEvent{
-		Sequence:    d.sequence,
+		Sequence:    sequence,
 		Direction:   dir,
 		TimestampMs: time.Since(d.startAt).Milliseconds(),
 		Type:        websocketPayloadType(payload),
 		PayloadType: SessionPayloadTypeWebSocketMessage,
 		Payload:     append([]byte(nil), payload...),
 	})
+	return sequence
+}
+
+func (d *RecordingWebSocketDialer) discardMessage(sequence int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for index := range d.events {
+		if d.events[index].Sequence != sequence {
+			continue
+		}
+		d.events[index].PayloadType = ""
+		d.events[index].Payload = nil
+		return
+	}
 }
 
 type recordingWebSocketConn struct {
@@ -116,10 +141,15 @@ func (c *recordingWebSocketConn) ReadMessage() (int, []byte, error) {
 }
 
 func (c *recordingWebSocketConn) WriteMessage(messageType int, payload []byte) error {
+	// Reserve the outbound event before invoking the wrapped connection. A
+	// hermetic provider may synchronously enqueue a response while processing
+	// this write; recording after the call lets that response appear before
+	// its causal client event in the capture.
+	sequence := c.recorder.recordMessage(DirectionClientToServer, payload)
 	if err := c.inner.WriteMessage(messageType, payload); err != nil {
+		c.recorder.discardMessage(sequence)
 		return err
 	}
-	c.recorder.recordMessage(DirectionClientToServer, payload)
 	return nil
 }
 
