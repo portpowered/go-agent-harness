@@ -179,7 +179,7 @@ type liveReadImageWireObservation struct {
 	sessionClosedIndices  []int
 	serverErrorCount      int
 	serverErrorTypes      []string
-	textChunks            []liveReadImageTextChunk
+	audioTranscriptDone   []liveReadImageTextChunk
 	continuationIndex     int
 	terminalResponseIndex int
 	finalText             string
@@ -251,17 +251,12 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 					Delta string `json:"delta"`
 				}
 				liveReadImageUnmarshal(t, payload, &event, "assistant text delta")
-				if event.Delta != "" {
-					observation.textChunks = append(observation.textChunks, liveReadImageTextChunk{index: index, text: event.Delta})
-				}
 			case "response.output_audio_transcript.done":
 				var event struct {
 					Transcript string `json:"transcript"`
 				}
 				liveReadImageUnmarshal(t, payload, &event, "assistant transcript")
-				if event.Transcript != "" {
-					observation.textChunks = append(observation.textChunks, liveReadImageTextChunk{index: index, text: event.Transcript})
-				}
+				observation.audioTranscriptDone = append(observation.audioTranscriptDone, liveReadImageTextChunk{index: index, text: event.Transcript})
 			case "response.done":
 				var event struct {
 					Response struct {
@@ -395,27 +390,91 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		}
 	}
 
-	var finalText strings.Builder
-	for _, chunk := range observation.textChunks {
-		if chunk.index > observation.continuationIndex {
-			finalText.WriteString(chunk.text)
-		}
+	transcript, err := liveReadImageAudioTranscriptDone(observation)
+	if err != nil {
+		t.Fatal(err)
 	}
-	observation.finalText = finalText.String()
-	if strings.TrimSpace(observation.finalText) == "" {
-		t.Fatal("live continuation emitted no assistant text after the accepted tool result")
-	}
-	finalTextIndex := -1
-	for _, chunk := range observation.textChunks {
-		if chunk.index > observation.continuationIndex {
-			finalTextIndex = chunk.index
-			break
-		}
-	}
-	if finalTextIndex <= observation.continuationIndex || finalTextIndex > observation.terminalResponseIndex {
-		t.Fatalf("live final assistant text index = %d, continuation = %d, terminal response = %d", finalTextIndex, observation.continuationIndex, observation.terminalResponseIndex)
-	}
+	observation.finalText = transcript
 	return observation
+}
+
+func liveReadImageAudioTranscriptDone(observation liveReadImageWireObservation) (string, error) {
+	transcriptIndex := -1
+	transcript := ""
+	for _, done := range observation.audioTranscriptDone {
+		if done.index <= observation.continuationIndex {
+			continue
+		}
+		if done.index > observation.terminalResponseIndex {
+			return "", fmt.Errorf("response.output_audio_transcript.done at record %d followed terminal response.done at record %d", done.index, observation.terminalResponseIndex)
+		}
+		if strings.TrimSpace(done.text) == "" {
+			return "", fmt.Errorf("response.output_audio_transcript.done at record %d has an empty transcript", done.index)
+		}
+		if transcriptIndex >= 0 {
+			return "", fmt.Errorf("found multiple response.output_audio_transcript.done events after continuation (records %d and %d)", transcriptIndex, done.index)
+		}
+		transcriptIndex = done.index
+		transcript = done.text
+	}
+	if transcriptIndex < 0 {
+		return "", fmt.Errorf("missing non-empty response.output_audio_transcript.done after continuation response.create")
+	}
+	return transcript, nil
+}
+
+func TestLiveReadImageAudioTranscriptDoneRequiresPostContinuationNonEmpty(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		done        []liveReadImageTextChunk
+		want        string
+		wantErrText string
+	}{
+		{
+			name: "post-continuation transcript is accepted",
+			done: []liveReadImageTextChunk{{index: 12, text: "one indigo pixel"}},
+			want: "one indigo pixel",
+		},
+		{
+			name:        "missing transcript is rejected",
+			wantErrText: "missing non-empty response.output_audio_transcript.done",
+		},
+		{
+			name:        "empty post-continuation transcript is rejected",
+			done:        []liveReadImageTextChunk{{index: 12, text: "  "}},
+			wantErrText: "has an empty transcript",
+		},
+		{
+			name:        "pre-continuation transcript does not satisfy the proof",
+			done:        []liveReadImageTextChunk{{index: 9, text: "one indigo pixel"}},
+			wantErrText: "missing non-empty response.output_audio_transcript.done",
+		},
+		{
+			name:        "transcript after terminal response is rejected",
+			done:        []liveReadImageTextChunk{{index: 21, text: "one indigo pixel"}},
+			wantErrText: "followed terminal response.done",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := liveReadImageAudioTranscriptDone(liveReadImageWireObservation{
+				audioTranscriptDone:   testCase.done,
+				continuationIndex:     10,
+				terminalResponseIndex: 20,
+			})
+			if testCase.wantErrText == "" {
+				if err != nil {
+					t.Fatalf("live transcript validation: %v", err)
+				}
+				if got != testCase.want {
+					t.Fatalf("validated transcript = %q, want %q", got, testCase.want)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), testCase.wantErrText) {
+				t.Fatalf("live transcript validation error = %v, want substring %q", err, testCase.wantErrText)
+			}
+		})
+	}
 }
 
 func assertLiveReadImageEnvelope(t *testing.T, output liveReadImageFunctionOutput, expectedBytes []byte, wantImage bool) {
