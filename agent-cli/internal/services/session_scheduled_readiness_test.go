@@ -221,3 +221,115 @@ func TestSessionProgressObserverLifecycleWakeReleasesNextScheduledAudio(t *testi
 		t.Fatalf("follow-on audio = %v, want [3 4]", probe.audio[1])
 	}
 }
+
+func TestSessionProgressObserverActiveResponseReleasesOnlyFollowingTurn(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduledAudioDispatch = ScheduledAudioDispatchActiveResponse
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+		{AfterCompletedTurns: 2, PCM: []byte{3}, EndOfTurn: true},
+	})
+
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first scheduled input: %v", err)
+	}
+	if len(probe.audio) != 1 {
+		t.Fatalf("initial scheduled inputs = %d, want 1", len(probe.audio))
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch active-response follow-on input: %v", err)
+	}
+	if len(probe.audio) != 2 || string(probe.audio[1]) != string([]byte{2}) {
+		t.Fatalf("active-response dispatch = %#v, want only second turn", probe.audio)
+	}
+
+	// The active response boundary only releases the immediately following
+	// input. The third turn remains ordered behind the second response.
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if observer.activeResponse {
+		t.Fatal("terminal MESSAGE.END left the response active")
+	}
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch after first response terminality: %v", err)
+	}
+	if len(probe.audio) != 2 {
+		t.Fatalf("third turn crossed the second-response gate = %#v, want only two turns", probe.audio)
+	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch third active-response input: %v", err)
+	}
+	if len(probe.audio) != 3 || string(probe.audio[2]) != string([]byte{3}) {
+		t.Fatalf("third active-response dispatch = %#v, want third turn exactly once", probe.audio)
+	}
+}
+
+func TestSessionProgressObserverTerminalResponseWinsBeforeActiveDispatch(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduledAudioDispatch = ScheduledAudioDispatchActiveResponse
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+	})
+
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first scheduled input: %v", err)
+	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if observer.activeResponse {
+		t.Fatal("terminal response remained active")
+	}
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch normal following turn after terminal response: %v", err)
+	}
+	if len(probe.audio) != 2 || string(probe.audio[1]) != string([]byte{2}) {
+		t.Fatalf("terminal-wins dispatch = %#v, want second turn exactly once", probe.audio)
+	}
+}
+
+func TestSessionProgressObserverCompletionGatedIgnoresActiveResponse(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+	})
+
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first completion-gated input: %v", err)
+	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch completion-gated input: %v", err)
+	}
+	if len(probe.audio) != 1 {
+		t.Fatalf("completion-gated scheduler dispatched %d inputs while response active, want 1", len(probe.audio))
+	}
+}

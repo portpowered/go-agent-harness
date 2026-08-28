@@ -173,6 +173,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
+	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
 	obs.scheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }

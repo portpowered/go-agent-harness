@@ -126,10 +126,11 @@ type SessionDiagnosticSink interface {
 type SessionStreamObserver func(messages.StreamMessage)
 
 // ScheduledAudioInput schedules one raw PCM user-audio injection through the
-// loop's existing audio-input seam (AgentLoop.SendAudioInput). The injection
-// fires as soon as AfterCompletedTurns assistant turns have completed, and its
-// bytes are attributed to the then in-flight turn (turn index
-// AfterCompletedTurns+1).
+// loop's existing audio-input seam (AgentLoop.SendAudioInput). The default
+// completion-gated policy fires after AfterCompletedTurns assistant turns have
+// completed; the active-response policy may fire at the immediately preceding
+// response's non-terminal boundary. Its bytes are attributed to the then
+// in-flight turn (turn index AfterCompletedTurns+1).
 type ScheduledAudioInput struct {
 	AfterCompletedTurns int
 	PCM                 []byte
@@ -218,17 +219,19 @@ type sessionProgressObserver struct {
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
-	sessionUpdated        bool
-	requireSessionUpdated bool
-	turnsCompleted        int
-	scheduledInputs       int
-	dispatchedInputs      int
-	completedScheduled    int
-	scheduledTurnBase     int
-	scheduledTurnBaseSet  bool
-	counters              audioTurnCounters
-	totals                audioTurnCounters
-	pendingInputs         []ScheduledAudioInput
+	sessionUpdated         bool
+	requireSessionUpdated  bool
+	scheduledAudioDispatch ScheduledAudioDispatchPolicy
+	activeResponse         bool
+	turnsCompleted         int
+	scheduledInputs        int
+	dispatchedInputs       int
+	completedScheduled     int
+	scheduledTurnBase      int
+	scheduledTurnBaseSet   bool
+	counters               audioTurnCounters
+	totals                 audioTurnCounters
+	pendingInputs          []ScheduledAudioInput
 
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}
@@ -840,9 +843,20 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.streamObserver(msg)
 	}
 	switch msg.Type {
+	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+		// The normalized provider boundary is active from response creation
+		// (MESSAGE.START) or the compatible audio-only start through its
+		// terminal MESSAGE.END. Use the envelope type as the source of truth so
+		// a provider with an empty value still participates in scheduling.
+		o.activeResponse = true
+	case messages.StreamTypeMessageEnd, messages.StreamTypeSessionClose:
+		o.activeResponse = false
+	}
+	switch msg.Type {
 	case messages.StreamTypeSessionOpen:
 		o.sawSessionOpen = true
 		o.sessionID = ""
+		o.activeResponse = false
 		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
 			o.sessionID = v.SessionID
 		}
@@ -1003,12 +1017,16 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 				o.admittedTurnObserver(msg)
 			}
 		}
+		o.activeResponse = false
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
+		o.activeResponse = false
 	}
 }
+
+ 
 
 func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue) {
 	if o.failure != nil || v == nil || v.IsNonTerminal() {

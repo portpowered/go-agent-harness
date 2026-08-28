@@ -297,7 +297,7 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 		}
 		startAudio()
 	}
-	if msg.Type == messages.StreamTypeSessionOpen || msg.Type == messages.StreamTypeMessageEnd || msg.Type == messages.StreamTypeSessionUpdated {
+	if shouldDispatchScheduledAudioForMessage(msg, opts.ScheduledAudioDispatch) {
 		if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {
 			return state, false, errors.Join(err, stopAndDrain())
 		}
@@ -325,6 +325,22 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 		return state, true, stopAndDrain()
 	}
 	return state, false, nil
+}
+
+// shouldDispatchScheduledAudioForMessage identifies stream boundaries that can
+// make the next scheduled input eligible. Completion-gated scheduling keeps
+// its existing session/open, configuration, terminal, and tool-lifecycle
+// wakeups. Active-response scheduling additionally wakes at the first live
+// response boundary so the model runner can own the normal barge-in path.
+func shouldDispatchScheduledAudioForMessage(msg messages.StreamMessage, policy ScheduledAudioDispatchPolicy) bool {
+	switch msg.Type {
+	case messages.StreamTypeSessionOpen, messages.StreamTypeMessageEnd, messages.StreamTypeSessionUpdated:
+		return true
+	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+		return policy == ScheduledAudioDispatchActiveResponse
+	default:
+		return false
+	}
 }
 
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {

@@ -152,6 +152,9 @@ type scheduledAudioLifecycleServer struct {
 	closeOnce             sync.Once
 	sessionCreated        chan struct{}
 	sessionUpdatedRelease chan struct{}
+	bargeIn               bool
+	firstResponseCancel   chan struct{}
+	firstCancelOnce       sync.Once
 	nextTurn              int
 }
 
@@ -167,6 +170,16 @@ func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 func newDelayedScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 	server := newScheduledAudioLifecycleServer()
 	server.sessionUpdatedRelease = make(chan struct{})
+	return server
+}
+
+func newBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
+	server := newScheduledAudioLifecycleServer()
+	// An unbuffered event path makes the active response boundary observable
+	// before the fixture waits for the cancellation owned by ModelRunner.
+	server.events = make(chan string)
+	server.bargeIn = true
+	server.firstResponseCancel = make(chan struct{})
 	return server
 }
 
@@ -200,6 +213,22 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 		for {
 			select {
 			case turn := <-s.responses:
+				if s.bargeIn && turn == 1 {
+					s.events <- `{"type":"input_audio_buffer.speech_started"}`
+					s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
+					s.events <- `{"type":"response.created","response":{"id":"resp_1"}}`
+					s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
+					select {
+					case <-s.firstResponseCancel:
+						// This delta is deliberately stale. ModelRunner must suppress
+						// it after its accepted RESPONSE.CANCEL boundary.
+						s.events <- `{"type":"response.output_audio.delta","delta":"Y2FuY2VsLXN0YWxl","format":"pcm16"}`
+						s.events <- `{"type":"response.done","response":{"id":"resp_1","status":"cancelled"}}`
+					case <-s.closed:
+						return
+					}
+					continue
+				}
 				audio := base64AudioForTurn(turn)
 				s.events <- `{"type":"input_audio_buffer.speech_started"}`
 				s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
@@ -259,6 +288,9 @@ func (c *scheduledAudioLifecycleConn) WriteMessage(_ int, payload []byte) error 
 	c.server.writes = append(c.server.writes, envelope.Type)
 	if envelope.Type == "session.update" && len(envelope.Session) > 0 {
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
+	}
+	if envelope.Type == "response.cancel" && c.server.bargeIn {
+		c.server.firstCancelOnce.Do(func() { close(c.server.firstResponseCancel) })
 	}
 	if envelope.Type == "response.create" {
 		c.server.nextTurn++
@@ -867,6 +899,99 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 	}
 }
 
+func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *testing.T) {
+	server := newBargeInScheduledAudioLifecycleServer()
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+	var observed []messages.StreamMessage
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			ctx,
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:       recordPath,
+				Provider:         "openai",
+				Model:            "gpt-realtime",
+				APIKey:           "test-key",
+				ConfigDir:        t.TempDir(),
+				WebSocketDialer:  server,
+				AudioInTurnBarge: true,
+				StreamObserver: func(msg messages.StreamMessage) {
+					observed = append(observed, msg)
+				},
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath, audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("barge-in scheduled live-mode session error = %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("barge-in scheduled live-mode session did not complete: %v", ctx.Err())
+	}
+
+	writes := server.writesSnapshot()
+	if got := countWireEvent(writes, "response.cancel"); got != 1 {
+		t.Fatalf("scheduled barge-in cancellations = %d, want exactly one: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "input_audio_buffer.append"); got != 2 {
+		t.Fatalf("scheduled barge-in appends = %d, want one append group per turn: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "input_audio_buffer.commit"); got != 2 {
+		t.Fatalf("scheduled barge-in commits = %d, want one per turn: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "response.create"); got != 2 {
+		t.Fatalf("scheduled barge-in responses = %d, want one per turn: %v", got, writes)
+	}
+
+	cancelIndex := indexOfWireEvent(writes, "response.cancel", 0)
+	secondAppendIndex := indexOfWireEvent(writes, "input_audio_buffer.append", 1)
+	firstResponseIndex := indexOfWireEvent(writes, "IN:response.created", 0)
+	if firstResponseIndex < 0 || cancelIndex <= firstResponseIndex || cancelIndex >= secondAppendIndex {
+		t.Fatalf("scheduled barge-in wire order = %v, want response.created < response.cancel < second append", writes)
+	}
+
+	seenSecondAudio, seenStaleAudio := false, false
+	for _, msg := range observed {
+		if msg.Type != messages.StreamTypeAudioDelta {
+			continue
+		}
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || value == nil {
+			t.Fatalf("observed scheduled audio delta value = %T, want *AudioDeltaValue", msg.Value)
+		}
+		switch string(value.Content) {
+		case string([]byte{1, 2, 3}):
+			// The active boundary is response.created. Depending on which
+			// already-queued provider delta the model runner drains first, the
+			// first response's output may or may not cross before cancellation.
+		case string([]byte{2, 0, 12, 0}):
+			seenSecondAudio = true
+		case "cancel-stale":
+			seenStaleAudio = true
+		}
+	}
+	if !seenSecondAudio {
+		t.Fatalf("replacement response audio was not observed; stream=%#v", observed)
+	}
+	if seenStaleAudio {
+		t.Fatalf("stale provider audio crossed the cancellation boundary: %#v", observed)
+	}
+}
+
 func TestLiveRecordRuntimeScheduledAudioWaitsForSessionUpdated(t *testing.T) {
 	server := newDelayedScheduledAudioLifecycleServer()
 	destination := filepath.Join(t.TempDir(), "recording")
@@ -1021,6 +1146,20 @@ func wireEventIndexes(writes []string, want string) []int {
 		}
 	}
 	return indexes
+}
+
+func indexOfWireEvent(writes []string, want string, occurrence int) int {
+	seen := 0
+	for index, writeType := range writes {
+		if writeType != want {
+			continue
+		}
+		if seen == occurrence {
+			return index
+		}
+		seen++
+	}
+	return -1
 }
 
 // TestLiveRecordRuntimeAudioInCancellationDuringAwaitSurfacesError proves a

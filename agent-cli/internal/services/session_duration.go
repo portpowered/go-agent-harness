@@ -1113,7 +1113,7 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 }
 
 func processDurationScheduledMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, opts sessionLoopOptions, closeSent bool) (bool, error) {
-	if msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeMessageEnd && msg.Type != messages.StreamTypeSessionUpdated {
+	if !shouldDispatchScheduledAudioForMessage(msg, opts.ScheduledAudioDispatch) {
 		return closeSent, nil
 	}
 	if err := opts.observer.dispatchScheduledInputs(ctx, loop); err != nil {

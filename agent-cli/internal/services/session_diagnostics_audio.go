@@ -58,7 +58,7 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 	if o.hasToolLifecycleObligation() || !o.scheduledAudioReady() {
 		return nil
 	}
-	for len(o.pendingInputs) > 0 && o.pendingInputs[0].AfterCompletedTurns <= o.turnsCompleted && !o.hasToolLifecycleObligation() {
+	for len(o.pendingInputs) > 0 && o.scheduledAudioInputDue(o.pendingInputs[0]) && !o.hasToolLifecycleObligation() {
 		input := o.pendingInputs[0]
 		inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
 		if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
@@ -78,6 +78,19 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	}
 	return nil
+}
+
+// scheduledAudioInputDue applies the explicit scheduling policy to the next
+// queued input. The active-response policy advances only one logical response
+// boundary beyond the completed-turn count; this keeps the ordered schedule
+// serialized while allowing the next input to reach the model runner while
+// that immediately preceding response is still non-terminal.
+func (o *sessionProgressObserver) scheduledAudioInputDue(input ScheduledAudioInput) bool {
+	if o == nil || input.AfterCompletedTurns <= o.turnsCompleted {
+		return true
+	}
+	return o.scheduledAudioDispatch == ScheduledAudioDispatchActiveResponse &&
+		o.activeResponse && input.AfterCompletedTurns <= o.turnsCompleted+1
 }
 
 // scheduledAudioReady reports whether the scheduler may release its next
