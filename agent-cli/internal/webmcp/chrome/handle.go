@@ -239,9 +239,13 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	ops.listen(targetContext, session.enqueueProtocolEvent)
 	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
 
-	attachCtx, cancelAttach := context.WithTimeout(targetContext, h.timeout())
-	err = ops.run(attachCtx, chromedp.ActionFunc(func(context.Context) error { return nil }))
-	cancelAttach()
+	// chromedp starts the target event reader with the context supplied to its
+	// first Run call. Keep that reader tied to the persistent target context;
+	// canceling a short-lived attach timeout here would stop every later target
+	// command from receiving a response. The caller's parent context remains
+	// the lifetime bound for this attached target, while individual operations
+	// use handle.timeout below.
+	err = ops.run(targetContext, chromedp.ActionFunc(func(context.Context) error { return nil }))
 	protocolTarget := ops.target(targetContext)
 	session.setProtocolTarget(protocolTarget)
 	if err != nil {

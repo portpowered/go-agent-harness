@@ -2,7 +2,9 @@ package chrome
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -56,11 +58,17 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 		return nil, classifiedOpenError(candidate, err)
 	}
 
-	allocatorOptions := make([]chromedp.RemoteAllocatorOption, 0, 1)
-	if isFullBrowserWebSocket(endpoint) {
-		allocatorOptions = append(allocatorOptions, chromedp.NoModifyURL)
+	endpoint, err = r.resolveBrowserWebSocket(ctx, endpoint)
+	if err != nil {
+		return nil, classifiedOpenError(candidate, err)
 	}
-	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(ctx, endpoint, allocatorOptions...)
+
+	// NewRemoteAllocator's cancellation path calls chromedp.Cancel on its
+	// root context. In chromedp v0.16.0 that root is considered the first
+	// context and may issue Browser.close while a remote browser is still
+	// owned by the caller. Keep the websocket connection under a plain client
+	// context instead; canceling it only closes this adapter's connection.
+	allocatorContext, cancelAllocator := context.WithCancel(ctx)
 	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
 	browserData := chromedp.FromContext(browserContext)
 	if browserData == nil || browserData.Allocator == nil {
@@ -69,7 +77,7 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 		return nil, classifiedOpenError(candidate, errors.New("invalid browser context"))
 	}
 
-	browser, err := browserData.Allocator.Allocate(browserContext)
+	browser, err := chromedp.NewBrowser(allocatorContext, endpoint)
 	if err != nil {
 		cancelBrowser()
 		cancelAllocator()
@@ -165,9 +173,53 @@ func browserEndpoint(candidate webmcp.BrowserCandidate) (string, error) {
 	return endpoint, nil
 }
 
-func isFullBrowserWebSocket(endpoint string) bool {
-	return (strings.HasPrefix(endpoint, "ws://") || strings.HasPrefix(endpoint, "wss://")) &&
-		strings.Contains(endpoint, "/devtools/browser/")
+func (r *Runtime) resolveBrowserWebSocket(ctx context.Context, endpoint string) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "", errors.New("browser endpoint is invalid")
+	}
+	if parsed.Scheme == "ws" || parsed.Scheme == "wss" {
+		if strings.Contains(parsed.Path, "/devtools/browser/") {
+			return endpoint, nil
+		}
+		parsed.Scheme = map[string]string{"ws": "http", "wss": "https"}[parsed.Scheme]
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", errors.New("browser endpoint scheme is unsupported")
+	}
+
+	requestURL := *parsed
+	requestURL.Path = "/json/version"
+	requestURL.RawQuery = ""
+	requestURL.Fragment = ""
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
+	if err != nil {
+		return "", errors.New("browser version endpoint is invalid")
+	}
+	client := r.options.HTTPClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return "", errors.New("browser version endpoint is unavailable")
+	}
+	var version struct {
+		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&version); err != nil {
+		return "", errors.New("browser version response is invalid")
+	}
+	websocket := strings.TrimSpace(version.WebSocketDebuggerURL)
+	parsedWebsocket, err := url.Parse(websocket)
+	if err != nil || parsedWebsocket.Host == "" || (parsedWebsocket.Scheme != "ws" && parsedWebsocket.Scheme != "wss") {
+		return "", errors.New("browser version response has no valid websocket")
+	}
+	return websocket, nil
 }
 
 func httpDefaultClient() *http.Client {
