@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -63,10 +64,20 @@ type ProbeRunCommand struct {
 	OutPath     string
 	SummaryPath string
 	JSONOut     bool
+	// RecordingRoot is the parent directory for v2 evidence bundles. An empty
+	// value creates a run-scoped temporary parent and exposes its path in each
+	// result for inspection.
+	RecordingRoot string
+	// BrowserExecutorMode is deliberately hermetic by default. Real browser
+	// execution is admitted only when a v2 scenario explicitly selects it.
+	BrowserExecutorMode ProbeScenarioV2BrowserExecutorMode
 
 	deviceRegistry      audio.DeviceRegistry
 	deviceProbeExec     DeviceProbeExecFunc
 	deviceProbeDeadline time.Duration
+	globalFlags         *flags.GlobalFlags
+	browserFlags        *flags.BrowserFlags
+	browserFactory      WebMCPDoctorFactory
 }
 
 // DeviceProbeExecFunc runs one validated scenario against the selected device
@@ -85,6 +96,9 @@ func NewProbeRunCommand(registries ...audio.DeviceRegistry) *ProbeRunCommand {
 		Provider:            "openai",
 		CaptureTime:         deviceProbeDefaultCaptureDuration,
 		deviceProbeDeadline: probeScenarioDeadline,
+		BrowserExecutorMode: ProbeScenarioV2BrowserExecutorHermetic,
+		browserFlags:        flags.NewBrowserFlags(),
+		browserFactory:      NewProductionWebMCPDoctorFactory(),
 	}
 	command.deviceProbeExec = func(ctx context.Context, scenario probe.Scenario, availability audio.DeviceProbeAvailability) (probe.ObservationSnapshot, error) {
 		return runDeviceProbeScenario(ctx, scenario, availability, command.deviceRegistry, deviceProbeRuntimeOptions{
@@ -99,8 +113,30 @@ func NewProbeRunCommand(registries ...audio.DeviceRegistry) *ProbeRunCommand {
 	return command
 }
 
+// SetGlobalFlags connects probe's real-mode configuration resolution to the
+// root command's persistent config directory.
+func (c *ProbeRunCommand) SetGlobalFlags(globalFlags *flags.GlobalFlags) {
+	if c != nil {
+		c.globalFlags = globalFlags
+	}
+}
+
+// SetBrowserExecutorFactory installs the real browser composition at the
+// probe boundary. The factory is ignored while the mode is hermetic.
+func (c *ProbeRunCommand) SetBrowserExecutorFactory(factory WebMCPDoctorFactory) {
+	if c != nil {
+		c.browserFactory = factory
+	}
+}
+
 // Generate returns the cobra command for probe run.
 func (c *ProbeRunCommand) Generate() *cobra.Command {
+	if c.BrowserExecutorMode == "" {
+		c.BrowserExecutorMode = ProbeScenarioV2BrowserExecutorHermetic
+	}
+	if c.browserFlags == nil {
+		c.browserFlags = flags.NewBrowserFlags()
+	}
 	cmd := &cobra.Command{
 		Use:   "run [scenario-path...]",
 		Short: "Run probe scenarios against recorded fixtures or device hardware",
@@ -127,6 +163,11 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.OutPath, "out", "", "Path for per-scenario JSONL result lines (default stdout)")
 	cmd.Flags().StringVar(&c.SummaryPath, "summary", "", "Path for the summary artifact (default stderr)")
 	cmd.Flags().BoolVar(&c.JSONOut, "json", false, "Emit pure machine-readable output without human-readable decoration")
+	cmd.Flags().StringVar(&c.RecordingRoot, "recording-root", "", "Parent directory for finalized v2 evidence bundles")
+	cmd.Flags().StringVar(&c.RecordingRoot, "evidence-root", "", "Alias for --recording-root")
+	cmd.Flags().Var(&probeScenarioV2BrowserExecutorModeValue{target: &c.BrowserExecutorMode}, "browser-executor", "Browser executor for probe.scenario.v2: hermetic or real")
+	cmd.Flags().Var(&probeScenarioV2BrowserExecutorModeValue{target: &c.BrowserExecutorMode}, "browser-mode", "Alias for --browser-executor")
+	registerSessionBrowserFlags(cmd, c.browserFlags)
 	return cmd
 }
 
@@ -159,6 +200,12 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 			return c.deviceProbeExec(ctx, scenario, availability)
 		}, c.deviceProbeDeadline))
 	}
+	selections := probeSelections(positional, c.Scenarios)
+	if hasV2, err := probeSelectionsContainV2(selections); err != nil {
+		return err
+	} else if hasV2 {
+		return c.runScenarioV2(cmd, selections)
+	}
 	if strings.TrimSpace(c.Replay) == "" {
 		return fmt.Errorf("--replay <fixture-path-or-dir> is required to select recorded fixtures")
 	}
@@ -174,6 +221,18 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	}
 
 	return c.runScenarios(cmd, scenarios, deadguardExec(exec, probeScenarioDeadline))
+}
+
+func probeSelectionsContainV2(selections []string) (bool, error) {
+	containsV2 := false
+	for _, selection := range selections {
+		isV2, err := probeScenarioFileIsV2(selection)
+		if err != nil {
+			return false, err
+		}
+		containsV2 = containsV2 || isV2
+	}
+	return containsV2, nil
 }
 
 func (c *ProbeRunCommand) runScenarios(cmd *cobra.Command, scenarios []probe.Scenario, exec probe.ExecFunc) error {

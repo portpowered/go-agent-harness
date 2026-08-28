@@ -69,6 +69,11 @@ type WebMCPDoctorRuntime struct {
 	VersionFunc WebMCPDoctorVersionFunc
 	Catalog     webmcp.DevToolsCatalog
 	Close       func() error
+	// Navigate and PageState are optional run-scoped browser observations used
+	// by probe.scenario.v2. Keeping them outside BrowserRuntime preserves the
+	// neutral broker contract for callers that do not need probe evidence.
+	Navigate  func(context.Context, string) error
+	PageState func(context.Context) (json.RawMessage, error)
 }
 
 // WebMCPDoctorFactory constructs one diagnostic runtime for a resolved
