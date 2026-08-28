@@ -5,6 +5,7 @@ BUILD_CGO_ENABLED ?= 0
 BUILD_OUTPUT ?= bin/agent
 GO_TEST_TIMEOUT ?= 10s
 GO_TEST_TIMING_TOP ?= 20
+TEST_TIMEOUT_RUNNER ?= ./cmd/testtimeout
 
 # Detect git worktree environment
 # In a worktree, --git-common-dir points to the main repo's .git directory,
@@ -28,7 +29,7 @@ build:
 	$(GO) build $(WORKTREE_FLAGS) -o $(BUILD_OUTPUT) ./cmd/agent
 
 test:
-	$(GO) test ./... -timeout $(GO_TEST_TIMEOUT) -v
+	$(GO) run $(TEST_TIMEOUT_RUNNER) --timeout $(GO_TEST_TIMEOUT) -- $(GO) test ./... -timeout $(GO_TEST_TIMEOUT) -v
 
 test-timing:
 	$(GO) run ./cmd/testtiming --go "$(GO)" --timeout $(GO_TEST_TIMEOUT) --top $(GO_TEST_TIMING_TOP)

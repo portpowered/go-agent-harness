@@ -1,6 +1,7 @@
 {
   "packages": [
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/cmd/agent", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/agent-cli/cmd/testtimeout", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/agent", "minimum": 40.20},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/audio", "minimum": 89.20},
@@ -19,6 +20,7 @@
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/session", "minimum": 31.60},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/skills", "minimum": 69.60},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/testtimeout", "minimum": 70.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming", "minimum": 68.50},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/tools", "minimum": 40.80},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp", "minimum": 0.00},

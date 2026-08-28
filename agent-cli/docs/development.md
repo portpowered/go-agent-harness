@@ -50,6 +50,7 @@ The Makefile exposes these override variables for local diagnostics and slower w
 | `BUILD_CGO_ENABLED` | `0` | `CGO_ENABLED` value exported for `make build` |
 | `BUILD_OUTPUT` | `bin/agent` | Binary path written by `make build` |
 | `GO_TEST_TIMEOUT` | `10s` | Full-suite timeout passed to `go test ./...` |
+| `TEST_TIMEOUT_RUNNER` | `./cmd/testtimeout` | Finite outer boundary that terminates blocked test descendants |
 
 Examples:
 
@@ -57,6 +58,12 @@ Examples:
 make build BUILD_OUTPUT=bin/agent-local-check.exe
 make test GO_TEST_TIMEOUT=180s
 ```
+
+`make test` uses `cmd/testtimeout` to apply the same finite value to the
+test-command process group, so a blocked test child cannot survive or hold
+the test output pipe open. The root repository's credential-free integration
+targets use the narrower `AGENT_CLI_INTEGRATION_TIMEOUT` contract documented
+in the shared testing-tier guide.
 
 `make test-timing` runs a no-test preflight before the full `go test -json -v` suite, then prints sorted package-level and test-level timing evidence. Use it when the default test path is too slow or when you need to separate dependency download, compilation, and cache warmup from product test runtime.
 

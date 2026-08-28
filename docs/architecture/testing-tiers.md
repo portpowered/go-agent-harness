@@ -54,6 +54,23 @@ diagnostics, keeping the value finite when exercising the root contract. Full
 repetition logs, JSON inventories, and CI status belong in review
 conversation/run artifacts, not in the repository.
 
+Every root target that executes the `agent-cli` module uses
+`agent-cli/cmd/testtimeout` as the outer termination boundary. The runner
+passes through the target's existing `go test -timeout` and applies the same
+finite value to its own process-group watchdog. On timeout it terminates the
+whole command group, including test-owned descendants, then returns a
+non-zero result with the command PID and cleanup diagnostic. This protects the
+budget from a blocked child keeping Go test output pipes open; it does not
+change the integration tests' command-level deadlines or selection.
+
+The runner's focused cleanup contract lives in
+`agent-cli/internal/testtimeout`. Its intentionally blocking fixture is under
+`internal/testtimeout/testdata/blockedchild`, which Go excludes from ordinary
+`./...` package discovery. The contract invokes that fixture explicitly with
+a sub-second test-only watchdog, checks the active test and child identities,
+and verifies that the child and grandchild no longer run. The success control
+uses the same runner and reports its executed fixture test.
+
 ## Microphone build configurations
 
 The ordinary Linux CI leg runs `make ci` without a `nomicrophone` tag, so its Go
