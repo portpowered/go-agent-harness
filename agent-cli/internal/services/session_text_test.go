@@ -108,6 +108,11 @@ func TestSessionCommandPromptPresenceMatrix(t *testing.T) {
 					t.Fatal("session sent more than one text seed")
 				}
 				inf.AddServerEvent(messages.StreamMessage{
+					Type:  messages.StreamTypeTextDelta,
+					Role:  messages.RoleAssistant,
+					Value: messages.NewTextDeltaValue("prompt test response"),
+				})
+				inf.AddServerEvent(messages.StreamMessage{
 					Type:  messages.StreamTypeMessageEnd,
 					Role:  messages.RoleAssistant,
 					Value: messages.NewMessageEndValue(messages.TokenUsage{}),
