@@ -46,6 +46,26 @@ const (
 // CLI does not understand.
 var ErrInvalidSessionTransport = errors.New("invalid session transport")
 
+// ErrSessionWebRTCUnavailable identifies the deliberately deferred customer
+// WebRTC path. The CLI still accepts and validates the transport flags so
+// their specific errors remain useful, but it must not start a session until
+// customer-reachable signaling and spoken-audio input are both wired.
+var ErrSessionWebRTCUnavailable = errors.New("WebRTC session customer path is unavailable")
+
+// SessionWebRTCUnavailableError explains why an otherwise valid WebRTC CLI
+// selection cannot be started yet. It unwraps to a stable sentinel so callers
+// can classify the capability failure without matching customer-facing text.
+type SessionWebRTCUnavailableError struct{}
+
+func (e *SessionWebRTCUnavailableError) Error() string {
+	if e == nil {
+		return ErrSessionWebRTCUnavailable.Error()
+	}
+	return "WebRTC CLI path is not yet customer-usable: no customer-reachable network signaling implementation and no supported spoken-audio input path are wired; use --transport ws with --audio-in or --audio-in-device"
+}
+
+func (*SessionWebRTCUnavailableError) Unwrap() error { return ErrSessionWebRTCUnavailable }
+
 // SessionTransportError describes an invalid --transport value before any
 // session provider or transport is initialized.
 type SessionTransportError struct {
@@ -378,6 +398,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			}
 			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
 				return err
+			}
+			if selectedTransport == SessionTransportWebRTC {
+				return &SessionWebRTCUnavailableError{}
 			}
 			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" && recordDirPath == "" && len(audioInTurns) == 0 {
 				return cmd.Help()

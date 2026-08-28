@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -128,48 +129,88 @@ func TestSessionCommandWebRTCWithoutSignalingIsRejectedBeforeSessionSetup(t *tes
 	}
 }
 
-func TestSessionCommandAcceptsWebRTCWithSignaling(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetArgs([]string{"--transport", "webrtc", "--signaling", " loopback ", "--media-source", "rtsp://fixture/camera"})
-
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("--transport webrtc --signaling loopback --media-source: %v", err)
+func TestSessionCommandRejectsValidWebRTCBeforeSessionSetup(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "missing-config")
+	registry, err := audio.NewVirtualRegistry(audio.DefaultVirtualBackendConfig())
+	if err != nil {
+		t.Fatalf("new virtual audio registry: %v", err)
 	}
-	if !strings.Contains(out.String(), "Usage:") {
-		t.Fatalf("accepted transport selection did not reach the normal session help path: %q", out.String())
-	}
-}
-
-func TestSessionCommandWebRTCNilRuntimeFailsWithoutWebSocketFallback(t *testing.T) {
-	inferencer := newCLITestSessionInferencer()
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
-	var out, errOut bytes.Buffer
-	command.SetOut(&out)
-	command.SetErr(&errOut)
-	command.SilenceUsage = true
-	command.SetArgs([]string{
-		"--provider", "grok",
-		"--record", filepath.Join(t.TempDir(), "nil-runtime.session.json"),
-		"--transport", "webrtc",
-		"--signaling", "loopback://nil-runtime",
-		"--media-source", "go2rtc://fixture.invalid/api/ws?src=nil-runtime",
-		"must not use a fallback",
+	inferencer := &cliSideEffectSessionInferencer{}
+	runtime := &cliSideEffectRTCRuntime{}
+	runtimeFactoryCalls := 0
+	toolCapabilityCalls := 0
+	owner := NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
+		flags.NewAskFlags(),
+		globalFlags,
+		nil,
+		inferencer,
+		nil,
+		nil,
+		func(*config.Config) (SessionToolCapabilities, error) {
+			toolCapabilityCalls++
+			return SessionToolCapabilities{}, nil
+		},
+		registry,
+	)
+	owner.SetSessionRTCRuntimeFactory(func(services.SessionRuntimeSelection) (services.SessionRTCRuntime, error) {
+		runtimeFactoryCalls++
+		return runtime, nil
 	})
 
-	err := command.ExecuteContext(context.Background())
+	recordPath := filepath.Join(t.TempDir(), "must-not-be-created.session.json")
+	command := owner.Generate()
+	command.SetArgs([]string{
+		"--provider", "grok",
+		"--record", recordPath,
+		"--transport", "webrtc",
+		"--signaling", "loopback://customer-boundary",
+		"--media-source", "fixture://customer-boundary",
+		"--audio-in-device", "virtual:input",
+		"--audio-out-device", "virtual:output",
+		"must fail before setup",
+	})
+
+	err = command.ExecuteContext(context.Background())
 	if err == nil {
-		t.Fatal("WebRTC command with a nil runtime unexpectedly succeeded")
+		t.Fatal("valid WebRTC command unexpectedly succeeded")
 	}
-	if !errors.Is(err, services.ErrSessionRTCRuntimeUnavailable) {
-		t.Fatalf("nil WebRTC runtime error = %v, want ErrSessionRTCRuntimeUnavailable", err)
+	var unavailableErr *SessionWebRTCUnavailableError
+	if !errors.As(err, &unavailableErr) {
+		t.Fatalf("error type = %T, want *SessionWebRTCUnavailableError: %v", err, err)
 	}
-	if strings.Contains(out.String(), "rtc CLI completed turn") || strings.Contains(errOut.String(), "rtc CLI completed turn") {
-		t.Fatalf("nil WebRTC runtime emitted fallback output: stdout=%q stderr=%q", out.String(), errOut.String())
+	if !errors.Is(err, ErrSessionWebRTCUnavailable) {
+		t.Fatalf("error does not preserve WebRTC capability classification: %v", err)
 	}
-	if strings.Contains(strings.ToLower(out.String()), "usage:") || strings.Contains(strings.ToLower(errOut.String()), "usage:") {
-		t.Fatalf("nil WebRTC runtime returned help instead of a typed setup error: stdout=%q stderr=%q", out.String(), errOut.String())
+	for _, want := range []string{
+		"not yet customer-usable",
+		"customer-reachable network signaling",
+		"spoken-audio input",
+		"--transport ws",
+		"--audio-in",
+		"--audio-in-device",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+	if runtimeFactoryCalls != 0 {
+		t.Fatalf("RTC runtime factory calls = %d, want zero", runtimeFactoryCalls)
+	}
+	if runtime.starts != 0 {
+		t.Fatalf("RTC runtime starts = %d, want zero", runtime.starts)
+	}
+	if inferencer.connects != 0 {
+		t.Fatalf("provider session connects = %d, want zero", inferencer.connects)
+	}
+	if toolCapabilityCalls != 0 {
+		t.Fatalf("session tool capability loads = %d, want zero", toolCapabilityCalls)
+	}
+	if got := registry.Observations(); got.OpenCount != 0 || got.ReleaseCount != 0 {
+		t.Fatalf("audio device observations = %+v, want no acquisition", got)
+	}
+	if _, statErr := os.Stat(recordPath); !os.IsNotExist(statErr) {
+		t.Fatalf("recording path stat error = %v, want path to remain absent", statErr)
 	}
 }
 
@@ -239,118 +280,22 @@ func TestValidateSessionMediaSourceRejectsEmptyExplicitValue(t *testing.T) {
 	}
 }
 
-func TestSessionCommandRunsSelectedWebRTCTransport(t *testing.T) {
-	const (
-		signaling = "loopback://cli-signaling"
-		media     = "fixture://cli-media"
-	)
-
-	inferencer := newCLITestSessionInferencer()
-	runtime := &cliTestRTCRuntime{}
-	owner := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer)
-	var got services.SessionRuntimeSelection
-	owner.SetSessionRTCRuntimeFactory(func(selection services.SessionRuntimeSelection) (services.SessionRTCRuntime, error) {
-		got = selection
-		return runtime, nil
-	})
-
-	command := owner.Generate()
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetArgs([]string{
-		"--provider", "grok",
-		"--record", filepath.Join(t.TempDir(), "cli-webrtc.session.json"),
-		"--transport", "webrtc",
-		"--signaling", signaling,
-		"--media-source", media,
-		"complete the CLI turn",
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := command.ExecuteContext(ctx); err != nil {
-		t.Fatalf("WebRTC session command: %v", err)
-	}
-
-	if got != (services.SessionRuntimeSelection{
-		Transport:         services.SessionTransportWebRTC,
-		SignalingEndpoint: signaling,
-		MediaSource:       media,
-	}) {
-		t.Fatalf("runtime selection = %#v, want transport/signaling/media values from CLI", got)
-	}
-	if gotStarts := runtime.startCount(); gotStarts != 1 {
-		t.Fatalf("RTC runtime starts = %d, want one selected WebRTC runtime", gotStarts)
-	}
-	if !strings.Contains(out.String(), "rtc CLI completed turn") {
-		t.Fatalf("CLI output does not contain completed turn:\n%s", out.String())
-	}
+type cliSideEffectSessionInferencer struct {
+	connects int
 }
 
-type cliTestRTCRuntime struct {
-	mu     sync.Mutex
+func (i *cliSideEffectSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	i.connects++
+	return nil, errors.New("provider session should not be connected")
+}
+
+type cliSideEffectRTCRuntime struct {
 	starts int
 }
 
-func (r *cliTestRTCRuntime) Start(context.Context) (services.SessionRTCDataPlane, error) {
-	r.mu.Lock()
+func (r *cliSideEffectRTCRuntime) Start(context.Context) (services.SessionRTCDataPlane, error) {
 	r.starts++
-	r.mu.Unlock()
-	return nil, nil
+	return nil, errors.New("RTC runtime should not be started")
 }
 
-func (r *cliTestRTCRuntime) startCount() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.starts
-}
-
-func (r *cliTestRTCRuntime) Close() error { return nil }
-
-type cliTestSessionInferencer struct {
-	session *cliTestSession
-}
-
-func newCLITestSessionInferencer() *cliTestSessionInferencer {
-	session := &cliTestSession{
-		receive: messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:    make(chan struct{}),
-	}
-	session.receive.Write(context.Background(), messages.StreamMessage{
-		Type:  messages.StreamTypeSessionOpen,
-		Value: messages.NewSessionOpenValue("cli-webrtc", "fixture"),
-	})
-	return &cliTestSessionInferencer{session: session}
-}
-
-func (i *cliTestSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	return i.session, nil
-}
-
-type cliTestSession struct {
-	receive      *messages.TypedBuffer[messages.StreamMessage]
-	done         chan struct{}
-	responseOnce sync.Once
-	closeOnce    sync.Once
-}
-
-func (s *cliTestSession) Send(ctx context.Context, _ messages.StreamMessage) bool {
-	s.responseOnce.Do(func() {
-		for _, msg := range []messages.StreamMessage{
-			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("rtc CLI completed turn")},
-			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("cli-webrtc", "completed")},
-		} {
-			s.receive.Write(ctx, msg)
-		}
-	})
-	return true
-}
-
-func (s *cliTestSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.receive }
-
-func (s *cliTestSession) Done() <-chan struct{} { return s.done }
-
-func (s *cliTestSession) Close() error {
-	s.closeOnce.Do(func() { close(s.done) })
-	return nil
-}
+func (*cliSideEffectRTCRuntime) Close() error { return nil }
