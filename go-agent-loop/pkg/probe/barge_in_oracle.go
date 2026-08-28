@@ -87,12 +87,16 @@ type BargeInResponseExpectation struct {
 }
 
 // BargeInToolExpectation identifies the response-owned tool call and its one
-// explicit result disposition.
+// explicit result disposition. ForbidResultAfterCancel is opt-in because some
+// providers legitimately let a tool call finish after its spoken response was
+// interrupted; a contract that requires cancellation to win for that tool can
+// reject a later delivered result explicitly.
 type BargeInToolExpectation struct {
-	ID          string
-	ResponseID  string
-	TurnID      string
-	Disposition BargeInDisposition
+	ID                      string
+	ResponseID              string
+	TurnID                  string
+	Disposition             BargeInDisposition
+	ForbidResultAfterCancel bool
 }
 
 // BargeInContract supplies stable identities expected by a proof. Supplying
@@ -718,6 +722,12 @@ func (l *BargeInLedger) Check(contract BargeInContract) BargeInValidationReport 
 			addViolation("tool.result", fmt.Sprintf("tool call %q has unresolved result disposition", expected.ID))
 		} else if expected.Disposition != "" && state.disposition != expected.Disposition {
 			addViolation("tool.result", fmt.Sprintf("tool call %q disposition is %q, want %q", expected.ID, state.disposition, expected.Disposition))
+		}
+		if expected.ForbidResultAfterCancel {
+			response := l.responses[state.responseID]
+			if response != nil && response.cancel > 0 && state.result > response.cancel && state.disposition == BargeInDispositionDelivered {
+				addViolation("tool.result", fmt.Sprintf("tool result for %q was delivered after response cancellation", expected.ID))
+			}
 		}
 	}
 	if len(tools) > 0 {

@@ -28,6 +28,13 @@ and turn. Each call must receive exactly one result disposition: `delivered`,
 or `rejected`, `cancelled`, or `failed` with a reason. Cancelling the owning
 response does not silently dispose of the tool call.
 
+Contracts that require the interruption to win for a specific tool can set
+`BargeInToolExpectation.ForbidResultAfterCancel`. With that opt-in rule, a
+`delivered` result observed after the owning response cancellation is invalid;
+an explicit rejected, cancelled, or failed result remains the documented
+disposition for that path. The default permits providers whose tool execution
+continues after spoken output is interrupted.
+
 Continuation events identify the replacement response and its input. A clean
 session terminal observation is valid only after every input, response, tool
 call, and required continuation has reached its documented boundary. Missing,

@@ -231,6 +231,15 @@ func TestBargeInLedgerRejectsCleanUnresolvedAndUndocumentedResults(t *testing.T)
 	}
 }
 
+func TestBargeInLedgerRejectsConfiguredPostCancelToolDelivery(t *testing.T) {
+	events, contract := validBargeInEvents()
+	contract.Tools[0].ForbidResultAfterCancel = true
+	err := replayBargeInEvents(events).Validate(contract)
+	if err == nil || !strings.Contains(err.Error(), `tool result for "c1" was delivered after response cancellation`) {
+		t.Fatalf("post-cancel tool delivery error = %v, want an explicit delivery-after-cancellation violation", err)
+	}
+}
+
 func TestBargeInLedgerRejectsForbiddenTurnStartOutput(t *testing.T) {
 	events, contract := validBargeInEvents()
 	contract.Responses[0].RequireOutput = false
