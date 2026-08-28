@@ -192,7 +192,7 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 		err          error
 		instructions string
 	)
-	if opts.SessionInferencer != nil || opts.ReplayPath != "" {
+	if opts.ReplayPath != "" {
 		plan, err = planSessionRuntime(opts)
 	} else {
 		instructions, err = resolveSessionInstructions(opts, systemPrompt)

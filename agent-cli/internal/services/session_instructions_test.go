@@ -227,7 +227,7 @@ func TestRunSessionWithInstructions_DefaultAgentsMDUsesEffectiveToolDefinitions(
 	if strings.Contains(got, "No tools are currently registered.") {
 		t.Fatalf("generated AGENTS.md contradicts session tools: %s", got)
 	}
-	assertSessionInstructionEvents(t, inferencer, got, 1)
+	assertSessionInstructionEventsWithGrounding(t, inferencer, got, 1)
 }
 
 func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *testing.T) {
@@ -256,7 +256,88 @@ func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *te
 	if got := string(mustReadFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName))); got != staleAgents {
 		t.Fatalf("explicit prompt resolution changed AGENTS.md:\n got: %q\nwant: %q", got, staleAgents)
 	}
-	assertSessionInstructionEvents(t, inferencer, fileInstructionsMarker, 1)
+	assertSessionInstructionEventsWithGrounding(t, inferencer, fileInstructionsMarker, 1)
+}
+
+func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	writeFile(t, filepath.Join(workspaceDir, config.ConfigFileName), "model:\n  provider: openai\n")
+	realtimeConn := newRecordingRealtimeTestConn()
+	recordPath := filepath.Join(t.TempDir(), "openai-grounding.session.json")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, io.Discard, services.SessionRunOptions{
+		RecordPath:      recordPath,
+		Provider:        config.ProviderOpenAI,
+		Model:           "gpt-realtime",
+		APIKey:          "test-api-key",
+		ConfigDir:       workspaceDir,
+		Prompt:          userTurnMarker,
+		ToolExecutor:    &messages.DefaultToolExecutor{},
+		ToolDefinitions: []messages.ToolDefinition{{Name: "inspect_machine", Description: "Inspect machine state"}},
+		WebSocketDialer: &recordingRealtimeTestDialer{conn: realtimeConn},
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("LoadSessionCapture: %v", err)
+	}
+	configCount := 0
+	configIndex := -1
+	userIndex := -1
+	gotInstructions := ""
+	toolCount := 0
+	for index, event := range capture.Records {
+		if event.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		payload := event.Payload
+		if len(payload) == 0 {
+			payload = event.Data
+		}
+		var envelope struct {
+			Type    string `json:"type"`
+			Session struct {
+				Instructions string            `json:"instructions"`
+				Tools        []json.RawMessage `json:"tools"`
+			} `json:"session"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			t.Fatalf("decode outbound event %q: %v", string(payload), err)
+		}
+		switch envelope.Type {
+		case "session.update":
+			configCount++
+			configIndex = index
+			gotInstructions = envelope.Session.Instructions
+			toolCount = len(envelope.Session.Tools)
+		case "conversation.item.create":
+			userIndex = index
+		}
+	}
+	if configCount != 1 {
+		t.Fatalf("instruction-bearing OpenAI session.update count = %d, want 1; capture=%#v", configCount, capture.Records)
+	}
+	if !strings.HasPrefix(gotInstructions, agentsInstructionsMarker+"\n\n") {
+		t.Fatalf("grounding instructions = %q, want workspace instructions first", gotInstructions)
+	}
+	if strings.Count(gotInstructions, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("grounding policy heading count = %d, want 1; instructions=%q", strings.Count(gotInstructions, "Tool-grounding requirements:"), gotInstructions)
+	}
+	if strings.Contains(gotInstructions, "No tools are currently registered") {
+		t.Fatalf("grounding instructions contradict advertised tools: %q", gotInstructions)
+	}
+	if toolCount != 1 {
+		t.Fatalf("OpenAI session.update tools = %d, want 1", toolCount)
+	}
+	if configIndex < 0 || userIndex < 0 || configIndex >= userIndex {
+		t.Fatalf("OpenAI session.update index = %d, first user index = %d; capture=%#v", configIndex, userIndex, capture.Records)
+	}
 }
 
 func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *testing.T) {
@@ -509,6 +590,42 @@ func assertSessionInstructionEvents(t *testing.T, inferencer *sessionInstruction
 	}
 	if wantConfigCount > 0 && configIndex >= userIndex {
 		t.Fatalf("session configuration index = %d, user-turn index = %d; events=%s", configIndex, userIndex, formatSessionEvents(events))
+	}
+}
+
+func assertSessionInstructionEventsWithGrounding(t *testing.T, inferencer *sessionInstructionsTestInferencer, wantBase string, wantConfigCount int) {
+	t.Helper()
+	events := inferencer.sentEvents()
+	configCount := 0
+	userCount := 0
+	gotInstructions := ""
+	for _, event := range events {
+		switch event.Type {
+		case messages.StreamTypeSessionUpdate:
+			configCount++
+			value, ok := event.Value.(*messages.SessionUpdateValue)
+			if !ok || value == nil {
+				t.Fatalf("session update event has value %T, want *SessionUpdateValue", event.Value)
+			}
+			gotInstructions = value.Instructions
+		case messages.StreamTypeTextDelta:
+			value, ok := event.Value.(*messages.TextDeltaValue)
+			if ok && value != nil {
+				userCount++
+			}
+		}
+	}
+	if configCount != wantConfigCount {
+		t.Fatalf("grounded session configuration count = %d, want %d; events=%s", configCount, wantConfigCount, formatSessionEvents(events))
+	}
+	if userCount != 1 {
+		t.Fatalf("grounded user-turn event count = %d, want 1; events=%s", userCount, formatSessionEvents(events))
+	}
+	if !strings.HasPrefix(gotInstructions, wantBase+"\n\n") {
+		t.Fatalf("grounded session instructions = %q, want base prefix %q", gotInstructions, wantBase+"\n\n")
+	}
+	if strings.Count(gotInstructions, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("grounding policy heading count = %d, want 1; instructions=%q", strings.Count(gotInstructions, "Tool-grounding requirements:"), gotInstructions)
 	}
 }
 

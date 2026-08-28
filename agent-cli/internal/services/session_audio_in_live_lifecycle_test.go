@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	functional "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -21,8 +22,9 @@ import (
 // audioInLifecycleServer is an in-process OpenAI Realtime websocket server
 // double used to exercise the live record runtime lifecycle hermetically.
 type audioInLifecycleServer struct {
-	mu     sync.Mutex
-	writes []string
+	mu             sync.Mutex
+	writes         []string
+	sessionUpdates []json.RawMessage
 
 	responseRequested chan struct{}
 	silentAfterCommit bool
@@ -46,6 +48,15 @@ func (s *audioInLifecycleServer) writesSnapshot() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.writes...)
+}
+
+func (s *audioInLifecycleServer) sessionUpdateSnapshot() json.RawMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sessionUpdates) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), s.sessionUpdates[0]...)
 }
 
 func (s *audioInLifecycleServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
@@ -101,13 +112,17 @@ func (c *audioInLifecycleConn) ReadMessage() (int, []byte, error) {
 
 func (c *audioInLifecycleConn) WriteMessage(_ int, payload []byte) error {
 	var envelope struct {
-		Type string `json:"type"`
+		Type    string          `json:"type"`
+		Session json.RawMessage `json:"session"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
 		return err
 	}
 	c.server.mu.Lock()
 	c.server.writes = append(c.server.writes, envelope.Type)
+	if envelope.Type == "session.update" && len(envelope.Session) > 0 {
+		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
+	}
 	c.server.mu.Unlock()
 	if envelope.Type == "response.create" {
 		closeOnce(c.server.responseRequested)
@@ -282,13 +297,22 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 	server := newScriptedRealtimeServer(false)
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
+	toolDefinitions := []messages.ToolDefinition{
+		{Name: "read_file", Description: "Read a UTF-8 file."},
+		{Name: "exec", Description: "Execute a command."},
+	}
 
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- services.RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(
 			context.Background(),
 			os.Stdout,
-			liveAudioInRunOptions(t, server, recordPath),
+			func() services.SessionRunOptions {
+				opts := liveAudioInRunOptions(t, server, recordPath)
+				opts.ToolExecutor = &messages.DefaultToolExecutor{}
+				opts.ToolDefinitions = toolDefinitions
+				return opts
+			}(),
 			outputPath,
 			15*time.Second,
 			services.SessionTextSeed{},
@@ -334,6 +358,29 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 	if appends == 0 {
 		t.Fatalf("no input_audio_buffer.append preceded the commit: %v", writes)
 	}
+	var sessionUpdate struct {
+		Instructions string `json:"instructions"`
+		Tools        []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(server.sessionUpdateSnapshot(), &sessionUpdate); err != nil {
+		t.Fatalf("decode streamed-audio session.update: %v", err)
+	}
+	if strings.Count(sessionUpdate.Instructions, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("streamed-audio grounding policy count = %d, want 1; instructions=%q", strings.Count(sessionUpdate.Instructions, "Tool-grounding requirements:"), sessionUpdate.Instructions)
+	}
+	if strings.Contains(sessionUpdate.Instructions, "No tools are currently registered") {
+		t.Fatalf("streamed-audio instructions contradict advertised tools: %q", sessionUpdate.Instructions)
+	}
+	if len(sessionUpdate.Tools) != len(toolDefinitions) {
+		t.Fatalf("streamed-audio advertised tools = %#v, want %#v", sessionUpdate.Tools, toolDefinitions)
+	}
+	for index, definition := range toolDefinitions {
+		if sessionUpdate.Tools[index].Name != definition.Name {
+			t.Fatalf("streamed-audio tool %d = %#v, want %q", index, sessionUpdate.Tools[index], definition.Name)
+		}
+	}
 	info, statErr := os.Stat(outputPath)
 	if statErr != nil {
 		t.Fatalf("stat recorded response audio: %v (writes=%v)", statErr, server.writesSnapshot())
@@ -348,6 +395,10 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
 	audioPath := committedSessionAudioInputWAVPath(t)
+	toolDefinitions := []messages.ToolDefinition{
+		{Name: "read_file", Description: "Read a UTF-8 file."},
+		{Name: "exec", Description: "Execute a command."},
+	}
 
 	result := make(chan error, 1)
 	go func() {
@@ -361,6 +412,8 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 				APIKey:          "test-key",
 				ConfigDir:       t.TempDir(),
 				WebSocketDialer: server,
+				ToolExecutor:    &messages.DefaultToolExecutor{},
+				ToolDefinitions: toolDefinitions,
 			},
 			destination,
 			"",
@@ -418,6 +471,27 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	var input map[string]json.RawMessage
 	if err := json.Unmarshal(audio["input"], &input); err != nil {
 		t.Fatalf("decode scheduled audio input config: %v", err)
+	}
+	var instructions string
+	if err := json.Unmarshal(sessionUpdate["instructions"], &instructions); err != nil {
+		t.Fatalf("decode scheduled instructions: %v", err)
+	}
+	if strings.Count(instructions, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("scheduled grounding policy count = %d, want 1; instructions=%q", strings.Count(instructions, "Tool-grounding requirements:"), instructions)
+	}
+	var advertisedTools []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(sessionUpdate["tools"], &advertisedTools); err != nil {
+		t.Fatalf("decode scheduled tools: %v", err)
+	}
+	if len(advertisedTools) != len(toolDefinitions) {
+		t.Fatalf("scheduled advertised tools = %#v, want %#v", advertisedTools, toolDefinitions)
+	}
+	for index, definition := range toolDefinitions {
+		if advertisedTools[index].Name != definition.Name {
+			t.Fatalf("scheduled tool %d = %#v, want %q", index, advertisedTools[index], definition.Name)
+		}
 	}
 	if detection := input["turn_detection"]; string(detection) != "null" {
 		t.Fatalf("scheduled session.update turn detection = %s, want explicit null", detection)

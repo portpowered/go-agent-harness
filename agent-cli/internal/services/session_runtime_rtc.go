@@ -151,7 +151,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inner, err = factory.newOpenAISessionInf(sessionCfg, opts.Voice, recordingDialer)
+		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false)
 		if err != nil {
 			return closeOnPlanError(err)
 		}
@@ -174,7 +174,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inner, err = factory.newGrokSessionInferencer(sessionCfg, recordingDialer)
+		inner, err = factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 		if err != nil {
 			return closeOnPlanError(err)
 		}

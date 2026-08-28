@@ -495,6 +495,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		return nil, "", fmt.Errorf("--devices real requires a realtime session provider; pass --provider openai or --provider grok")
 	}
 	opts.Provider = providerName
+	instructions = composeSessionInstructions(opts, instructions)
 
 	var (
 		model  string

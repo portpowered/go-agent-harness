@@ -433,6 +433,13 @@ func TestNewLiveSessionInferencerCarriesToolDefinitionsToProviderRequest(t *test
 			if len(tools[0].Parameters) != 1 || tools[0].Parameters[0].Name != "input" {
 				t.Fatalf("provider tool parameters = %#v, want copied parameters", tools[0].Parameters)
 			}
+			instructions := requested.Request().Config.Instructions
+			if !strings.HasPrefix(instructions, "participant instructions\n\n") {
+				t.Fatalf("provider instructions = %q, want participant instructions first", instructions)
+			}
+			if strings.Count(instructions, "Tool-grounding requirements:") != 1 {
+				t.Fatalf("grounding policy heading count = %d, want 1; instructions=%q", strings.Count(instructions, "Tool-grounding requirements:"), instructions)
+			}
 		})
 	}
 }
