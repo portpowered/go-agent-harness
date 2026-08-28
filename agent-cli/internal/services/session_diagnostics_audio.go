@@ -119,8 +119,8 @@ func (o *sessionProgressObserver) scheduledAudioIncomplete() bool {
 
 // scheduledAudioCounts returns the terminal schedule counters in a stable
 // order. Completed is the number of scheduled inputs whose assistant response
-// reached MESSAGE.END; it is distinct from the total session turn count when
-// a prompt or seed turn precedes scheduled audio.
+// reached MESSAGE.END; it is distinct from the total session turn count when a
+// prompt or seed turn precedes scheduled audio.
 func (o *sessionProgressObserver) scheduledAudioCounts() (completed, dispatched, scheduled int) {
 	if o == nil {
 		return 0, 0, 0

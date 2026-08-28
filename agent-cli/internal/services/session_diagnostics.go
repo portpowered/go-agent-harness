@@ -1026,7 +1026,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	}
 }
 
- 
+
 
 func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue) {
 	if o.failure != nil || v == nil || v.IsNonTerminal() {

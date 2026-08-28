@@ -333,3 +333,102 @@ func TestSessionProgressObserverCompletionGatedIgnoresActiveResponse(t *testing.
 		t.Fatalf("completion-gated scheduler dispatched %d inputs while response active, want 1", len(probe.audio))
 	}
 }
+
+func TestSessionProgressObserverScheduledAudioCountsOnlyItsOwnCompletedTurns(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	probe := &scheduledInputDispatchProbe{}
+
+	// A prompt/seed response belongs to the session, not to the scheduled
+	// sequence. The first dispatched input establishes the schedule baseline.
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 1, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 2, PCM: []byte{2}, EndOfTurn: true},
+	})
+
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first scheduled input: %v", err)
+	}
+	if completed, dispatched, scheduled := observer.scheduledAudioCounts(); completed != 0 || dispatched != 1 || scheduled != 2 {
+		t.Fatalf("initial scheduled counts = %d/%d/%d, want 0/1/2", completed, dispatched, scheduled)
+	}
+
+	for index := 0; index < 2; index++ {
+		observer.observe(messages.StreamMessage{
+			Type:  messages.StreamTypeMessageStart,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewMessageStartValue(),
+		})
+		observer.observe(messages.StreamMessage{
+			Type:  messages.StreamTypeMessageEnd,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+		if index == 0 {
+			if completed, dispatched, scheduled := observer.scheduledAudioCounts(); completed != 1 || dispatched != 1 || scheduled != 2 {
+				t.Fatalf("after first scheduled response counts = %d/%d/%d, want 1/1/2", completed, dispatched, scheduled)
+			}
+			if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+				t.Fatalf("dispatch second scheduled input: %v", err)
+			}
+		}
+	}
+
+	if completed, dispatched, scheduled := observer.scheduledAudioCounts(); completed != 2 || dispatched != 2 || scheduled != 2 {
+		t.Fatalf("final scheduled counts = %d/%d/%d, want 2/2/2", completed, dispatched, scheduled)
+	}
+	if !observer.scheduledAudioComplete() {
+		t.Fatal("completed scheduled sequence was not marked complete")
+	}
+}
+
+func TestScheduledAudioCompletionErrorCarriesCountsAndDiagnosticFields(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch scheduled input: %v", err)
+	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	err := scheduledAudioCompletionError(nil, sessionLoopOptions{
+		CloseAfterScheduledAudio: true,
+		observer:                 observer,
+	})
+	var incomplete *SessionScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("scheduled completion error = %v, want typed incomplete counts", err)
+	}
+	if !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+		t.Fatalf("scheduled completion error = %v, want incomplete sentinel", err)
+	}
+	if incomplete.Completed != 1 || incomplete.Dispatched != 1 || incomplete.Scheduled != 2 {
+		t.Fatalf("incomplete scheduled counts = %+v, want completed=1 dispatched=1 scheduled=2", incomplete)
+	}
+
+	if err := observer.finish(err); err == nil {
+		t.Fatal("observer finish erased scheduled completion failure")
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("scheduled failure records = %d, want exactly one", len(failures))
+	}
+	fields := failures[0].Fields
+	if fields[SessionDiagnosticFieldScheduledInputCount] != "2" ||
+		fields[SessionDiagnosticFieldDispatchedInputCount] != "1" ||
+		fields[SessionDiagnosticFieldCompletedTurnCount] != "1" {
+		t.Fatalf("scheduled failure fields = %#v, want configured/dispatched/completed 2/1/1", fields)
+	}
+}

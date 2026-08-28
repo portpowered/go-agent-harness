@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	// SessionUnresolvedToolResultClassification identifies a terminal session
-	// failure caused by a result that never reached the provider-facing send
-	// boundary.
-	SessionUnresolvedToolResultClassification = "unresolved_tool_result"
 	// SessionScheduledAudioClassification identifies a terminal session failure
 	// caused by a configured scheduled input or its assistant response not
 	// completing before shutdown.
 	SessionScheduledAudioClassification = "scheduled_audio_incomplete"
+	// SessionUnresolvedToolResultClassification identifies a terminal session
+	// failure caused by a result that never reached the provider-facing send
+	// boundary.
+	SessionUnresolvedToolResultClassification = "unresolved_tool_result"
 	// SessionImageContinuationClassification identifies a terminal session
 	// failure after a read_image result was accepted but its model continuation
 	// never reached a terminal response.
