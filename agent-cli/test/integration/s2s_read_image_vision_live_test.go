@@ -92,6 +92,48 @@ func TestLiveReadImageCLI_DefaultReadableAndMissing(t *testing.T) {
 	}
 }
 
+// TestLiveReadImageCLI_SpokenReadableImage is the story 005 live
+// confirmation. The user's request arrives through --audio-in; the system
+// instruction supplies only the local path needed by the tool and requires
+// the answer to be grounded in the returned pixels. This keeps the live proof
+// focused on one billed, successful read_image continuation.
+func TestLiveReadImageCLI_SpokenReadableImage(t *testing.T) {
+	apiKey := strings.TrimSpace(os.Getenv("AGENT_MODEL__OPENAI__API_KEY"))
+	if apiKey == "" {
+		t.Skip("AGENT_MODEL__OPENAI__API_KEY is not set; skipping the live spoken read_image proof")
+	}
+	if os.Getenv("AGENT_HARNESS_LIVE_READ_IMAGE") != "1" {
+		t.Skip("AGENT_HARNESS_LIVE_READ_IMAGE!=1; this live test bills real API usage and must be opted into explicitly")
+	}
+
+	imageBytes := readImageFixtureBytes(t)
+	if err := assertReadImageFixturePixels(imageBytes); err != nil {
+		t.Fatal(err)
+	}
+	imagePath := filepath.Join(t.TempDir(), "photo.jpg")
+	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
+		t.Fatalf("write live spoken-flow image: %v", err)
+	}
+	audioPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	configDir := writeReadImageModelConfig(t, true, liveReadImageModel)
+	systemPrompt := fmt.Sprintf("The user is speaking an image-description request. When the request asks you to describe the image, call the read_image tool exactly once with path %q. Do not infer the visual answer from the path or this instruction. After the tool returns, describe the image's dominant pixel color based only on the image.", imagePath)
+
+	run := runLiveReadImageSpokenSession(t, configDir, audioPath, systemPrompt)
+	if run.err != nil {
+		t.Fatalf("live spoken read_image session did not complete cleanly: %v", run.err)
+	}
+	combinedOutput := strings.ToLower(run.output + "\n" + run.stderr)
+	if strings.Contains(combinedOutput, "use of closed network connection") || strings.Contains(combinedOutput, "closed network connection") {
+		t.Fatalf("live spoken read_image session reported a closed-network error: %s", run.stderr)
+	}
+
+	observation := assertLiveReadImageWireContract(t, run.capture, imagePath, imageBytes, true)
+	inputAudioBytes := assertLiveReadImageSpokenInput(t, run.capture, audioPath)
+	assertLiveReadImageSemanticResult(t, run.output, observation.finalText, true)
+	assertLiveReadImageTerminalContinuation(t, run.events)
+	logLiveReadImageSpokenEvidence(t, run.capture, observation, inputAudioBytes, imagePath)
+}
+
 type liveReadImageRun struct {
 	output  string
 	stderr  string
@@ -101,6 +143,14 @@ type liveReadImageRun struct {
 }
 
 func runLiveReadImageSession(t *testing.T, apiKey, configDir, prompt string) liveReadImageRun {
+	return runLiveReadImageSessionWithInput(t, apiKey, configDir, prompt, "", "")
+}
+
+func runLiveReadImageSpokenSession(t *testing.T, configDir, audioPath, systemPrompt string) liveReadImageRun {
+	return runLiveReadImageSessionWithInput(t, "", configDir, "", audioPath, systemPrompt)
+}
+
+func runLiveReadImageSessionWithInput(t *testing.T, apiKey, configDir, prompt, audioPath, systemPrompt string) liveReadImageRun {
 	t.Helper()
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "read-image-live.session.json")
@@ -116,16 +166,27 @@ func runLiveReadImageSession(t *testing.T, apiKey, configDir, prompt string) liv
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)
-	rootCmd.SetArgs([]string{
+	args := []string{
 		"--config-dir", configDir,
 		"session",
 		"--provider", "openai",
 		"--model", liveReadImageModel,
-		"--api-key", apiKey,
 		"--record", capturePath,
 		"--max-duration", liveReadImageTimeout.String(),
-		prompt,
-	})
+	}
+	if strings.TrimSpace(apiKey) != "" {
+		args = append(args, "--api-key", apiKey)
+	}
+	if systemPrompt != "" {
+		args = append(args, "--system-prompt", systemPrompt)
+	}
+	if audioPath != "" {
+		args = append(args, "--audio-in", audioPath)
+	}
+	if prompt != "" {
+		args = append(args, prompt)
+	}
+	rootCmd.SetArgs(args)
 	ctx, cancel := context.WithTimeout(context.Background(), liveReadImageTimeout+5*time.Second)
 	defer cancel()
 	runErr := rootCmd.ExecuteContext(ctx)
@@ -160,29 +221,31 @@ type liveReadImageResponseDone struct {
 }
 
 type liveReadImageWireObservation struct {
-	eventTypes            []string
-	readImageCallIndex    int
-	readImageCallID       string
-	readImageCallCount    int
-	argumentIndex         int
-	argumentCallID        string
-	argumentName          string
-	argumentPath          string
-	argumentCount         int
-	functionOutputs       []liveReadImageFunctionOutput
-	inputImageCount       int
-	correlatedImageCount  int
-	correlatedImageIndex  int
-	correlatedImageURL    string
-	responseCreateIndices []int
-	responseDoneEvents    []liveReadImageResponseDone
-	sessionClosedIndices  []int
-	serverErrorCount      int
-	serverErrorTypes      []string
-	audioTranscriptDone   []liveReadImageTextChunk
-	continuationIndex     int
-	terminalResponseIndex int
-	finalText             string
+	eventTypes              []string
+	readImageCallIndex      int
+	readImageCallID         string
+	readImageCallCount      int
+	argumentIndex           int
+	argumentCallID          string
+	argumentName            string
+	argumentPath            string
+	argumentCount           int
+	functionOutputs         []liveReadImageFunctionOutput
+	inputImageCount         int
+	encodedImageOccurrences int
+	correlatedImageCount    int
+	correlatedImageIndex    int
+	correlatedImageURL      string
+	responseCreateIndices   []int
+	responseDoneEvents      []liveReadImageResponseDone
+	sessionClosedIndices    []int
+	serverErrorCount        int
+	serverErrorTypes        []string
+	audioTranscriptDone     []liveReadImageTextChunk
+	continuationIndex       int
+	terminalResponseIndex   int
+	terminalResponseStatus  string
+	finalText               string
 }
 
 // assertLiveReadImageWireContract validates only sanitized, observable facts
@@ -203,6 +266,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		continuationIndex:     -1,
 		terminalResponseIndex: -1,
 	}
+	expectedEncodedImage := base64.StdEncoding.EncodeToString(expectedBytes)
 	for index, record := range capture.Records {
 		prefix := "S"
 		if record.Direction == gwtesting.DirectionClientToServer {
@@ -212,6 +276,9 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		payload := liveReadImageRecordPayload(record)
 		if len(payload) == 0 {
 			t.Fatalf("live capture record %d (%s) has an empty payload", index, record.Type)
+		}
+		if record.Direction == gwtesting.DirectionClientToServer {
+			observation.encodedImageOccurrences += strings.Count(string(payload), expectedEncodedImage)
 		}
 
 		if record.Direction == gwtesting.DirectionServerToClient {
@@ -379,10 +446,17 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 			t.Fatalf("live continuation response.done status = %q at record %d", done.status, done.index)
 		}
 		observation.terminalResponseIndex = done.index
+		observation.terminalResponseStatus = done.status
 		break
 	}
 	if observation.terminalResponseIndex < 0 {
 		t.Fatalf("live capture has no terminal response.done after continuation response.create")
+	}
+	if observation.terminalResponseStatus != "completed" {
+		t.Fatalf("live continuation response.done status = %q, want completed", observation.terminalResponseStatus)
+	}
+	if wantImage && observation.encodedImageOccurrences != 1 {
+		t.Fatalf("live encoded image payload occurs %d times across client provider frames, want exactly once", observation.encodedImageOccurrences)
 	}
 	for _, closedIndex := range observation.sessionClosedIndices {
 		if closedIndex < observation.terminalResponseIndex {
@@ -396,6 +470,60 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 	}
 	observation.finalText = transcript
 	return observation
+}
+
+func assertLiveReadImageSpokenInput(t *testing.T, capture gwtesting.SessionCapture, audioPath string) int {
+	t.Helper()
+	frames := multiturnAudioFrames(t, audioPath)
+	appendCount := 0
+	inputBytes := 0
+	lastAppendIndex := -1
+	commitCount := 0
+	commitIndex := -1
+	firstResponseCreateIndex := -1
+	for index, record := range capture.Records {
+		if record.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		payload := liveReadImageRecordPayload(record)
+		switch record.Type {
+		case "input_audio_buffer.append":
+			var event struct {
+				Audio string `json:"audio"`
+			}
+			liveReadImageUnmarshal(t, payload, &event, "spoken audio append")
+			if appendCount >= len(frames) {
+				t.Fatalf("live spoken audio append count exceeded WAV frame count %d", len(frames))
+			}
+			decoded, err := base64.StdEncoding.DecodeString(event.Audio)
+			if err != nil {
+				t.Fatalf("decode live spoken audio append %d: %v", appendCount+1, err)
+			}
+			if !bytes.Equal(decoded, frames[appendCount]) {
+				t.Fatalf("live spoken audio frame %d differs from the committed WAV fixture", appendCount+1)
+			}
+			appendCount++
+			inputBytes += len(decoded)
+			lastAppendIndex = index
+		case "input_audio_buffer.commit":
+			commitCount++
+			commitIndex = index
+		case "response.create":
+			if firstResponseCreateIndex < 0 {
+				firstResponseCreateIndex = index
+			}
+		}
+	}
+	if appendCount != len(frames) {
+		t.Fatalf("live spoken audio append count = %d, want exactly %d WAV frames", appendCount, len(frames))
+	}
+	if commitCount != 1 || lastAppendIndex < 0 || commitIndex <= lastAppendIndex {
+		t.Fatalf("live spoken audio boundary = appends %d last=%d commits %d at %d; want one commit after all frames", appendCount, lastAppendIndex, commitCount, commitIndex)
+	}
+	if firstResponseCreateIndex <= commitIndex {
+		t.Fatalf("live spoken initial response.create index = %d, commit index = %d; response must follow the spoken turn", firstResponseCreateIndex, commitIndex)
+	}
+	return inputBytes
 }
 
 func liveReadImageAudioTranscriptDone(observation liveReadImageWireObservation) (string, error) {
@@ -589,6 +717,23 @@ func logLiveReadImageEvidence(t *testing.T, capture gwtesting.SessionCapture, ob
 		eventOrder = append(eventOrder, eventType)
 	}
 	t.Logf("sanitized live read_image evidence: started_at_utc=%s model=%s result_status=%s result_bytes=%d result_sha256=%s input_image_count=%d response_create_count=%d terminal_response_done=true exit=0 event_order=%s", capture.Session.StartedAtUTC, capture.Provider.Model, result.Status, result.ByteLength, result.SHA256, observation.inputImageCount, len(observation.responseCreateIndices), strings.Join(eventOrder, ">"))
+}
+
+func logLiveReadImageSpokenEvidence(t *testing.T, capture gwtesting.SessionCapture, observation liveReadImageWireObservation, inputAudioBytes int, actualImagePath string) {
+	t.Helper()
+	result := observation.functionOutputs[0]
+	eventOrder := make([]string, 0, len(observation.eventTypes))
+	for _, eventType := range observation.eventTypes {
+		if strings.Contains(eventType, "response.output_audio.delta") {
+			continue
+		}
+		eventOrder = append(eventOrder, eventType)
+	}
+	transcript := strings.TrimSpace(strings.ReplaceAll(observation.finalText, actualImagePath, "/tmp/photo.jpg"))
+	if len(transcript) > 240 {
+		transcript = transcript[:240] + "..."
+	}
+	t.Logf("sanitized live spoken read_image evidence: command=agent session --provider openai --model %s --audio-in <spoken-describe-image.wav> --record <temporary>.session.json --max-duration %s image_path=/tmp/photo.jpg started_at_utc=%s input_audio_bytes=%d read_image_calls=1 function_call_output_count=1 typed_input_image_count=%d encoded_image_occurrences=%d envelope_bytes=%d image_bytes=%d image_sha256=%s continuation_requests=1 terminal_status=%s exit=0 event_order=%s transcript=%q", capture.Provider.Model, liveReadImageTimeout, capture.Session.StartedAtUTC, inputAudioBytes, observation.inputImageCount, observation.encodedImageOccurrences, len(result.output), result.result.ByteLength, result.result.SHA256, observation.terminalResponseStatus, strings.Join(eventOrder, ">"), transcript)
 }
 
 func liveReadImageDataURL(data []byte) string {
