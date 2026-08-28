@@ -116,14 +116,11 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 	if text == "" && len(imageParts) == 1 {
 		text = fallbackRealtimeImageResult(imageParts[0])
 	}
-	if strings.TrimSpace(text) == "" {
-		return nil, false
-	}
 	if len(imageParts) > 0 {
 		// Realtime has no image-bearing function_call_output variant. The
 		// metadata envelope and the typed projection must therefore be a
 		// single internally consistent pair before either wire item is queued.
-		if len(imageParts) != 1 || !validRealtimeImageResult(text, imageParts[0]) {
+		if strings.TrimSpace(text) == "" || len(imageParts) != 1 || !validRealtimeImageResult(text, imageParts[0]) {
 			return nil, false
 		}
 	}
