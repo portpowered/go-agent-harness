@@ -104,6 +104,36 @@ type PCM16MixerConfig struct {
 	Format            PCM16Format
 	InputQueueFrames  int
 	OutputQueueFrames int
+	CadenceFactory    PCM16CadenceFactory
+}
+
+// PCM16Cadence is the timer contract used to advance mixer frames. The
+// production implementation is backed by time.Ticker; tests can provide a
+// manually advanced implementation without changing mixer lifecycle code.
+type PCM16Cadence interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+// PCM16CadenceFactory creates the cadence source for one mixer. The factory
+// receives the configured frame duration and must return a non-nil cadence.
+// A cadence is stopped when the mixer exits, including cancellation.
+type PCM16CadenceFactory func(time.Duration) PCM16Cadence
+
+type realPCM16Cadence struct {
+	ticker *time.Ticker
+}
+
+func (c *realPCM16Cadence) C() <-chan time.Time {
+	return c.ticker.C
+}
+
+func (c *realPCM16Cadence) Stop() {
+	c.ticker.Stop()
+}
+
+func realPCM16CadenceFactory(interval time.Duration) PCM16Cadence {
+	return &realPCM16Cadence{ticker: time.NewTicker(interval)}
 }
 
 // PCM16QueueStats describes queued PCM in both storage units and audio time.
@@ -140,6 +170,9 @@ func (c PCM16MixerConfig) normalized() (PCM16MixerConfig, int, error) {
 	if c.OutputQueueFrames == 0 {
 		c.OutputQueueFrames = DefaultPCM16OutputQueueFrames
 	}
+	if c.CadenceFactory == nil {
+		c.CadenceFactory = realPCM16CadenceFactory
+	}
 	if c.InputQueueFrames < 0 || c.OutputQueueFrames < 0 {
 		return PCM16MixerConfig{}, 0, fmt.Errorf("%w: queue frame limits must not be negative", ErrMixerInvalidFormat)
 	}
@@ -161,6 +194,7 @@ type PCM16Mixer struct {
 	format       PCM16Format
 	frameBytes   int
 	maxInputSize int
+	cadence      PCM16CadenceFactory
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -210,6 +244,7 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 		format:       config.Format,
 		frameBytes:   frameBytes,
 		maxInputSize: config.InputQueueFrames * frameBytes,
+		cadence:      config.CadenceFactory,
 		ctx:          mixerCtx,
 		cancel:       cancel,
 		out:          make(chan []byte, config.OutputQueueFrames),
@@ -512,13 +547,18 @@ func (m *PCM16Mixer) Close() error {
 func (m *PCM16Mixer) run() {
 	defer close(m.done)
 	defer close(m.out)
-	ticker := time.NewTicker(m.format.FrameDuration)
-	defer ticker.Stop()
+	cadence := m.cadence(m.format.FrameDuration)
+	if cadence == nil {
+		m.setError(fmt.Errorf("%w: cadence factory returned nil", ErrMixerInvalidFormat))
+		return
+	}
+	defer cadence.Stop()
+	ticks := cadence.C()
 	for {
 		select {
 		case <-m.ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticks:
 			frame, err := m.mixFrame()
 			if err != nil {
 				// Close marks the mixer before cancelling its context. If the
