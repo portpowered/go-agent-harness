@@ -25,8 +25,9 @@ const (
 	// SessionDiagnosticEventFailure is emitted exactly once per terminal
 	// session failure with the canonical failure field map.
 	SessionDiagnosticEventFailure = "session_failure"
-	// SessionDiagnosticEventTurn is emitted once per completed assistant turn
-	// (MESSAGE.END) with per-turn input/output byte accounting.
+	// SessionDiagnosticEventTurn is emitted once per admitted assistant turn
+	// (a non-empty output response at MESSAGE.END) with per-turn input/output
+	// byte accounting.
 	SessionDiagnosticEventTurn = "session_turn_completed"
 	// SessionDiagnosticEventToolCall is emitted per provider tool-call event
 	// that cannot be executed by the session runtime.
@@ -911,8 +912,9 @@ func (o *sessionProgressObserver) toolResultsEnabledForObservation() bool {
 // observeProviderMessageEnd advances the provider response state. The first
 // MESSAGE.END after a tool call closes the provider's function-call response;
 // only a later non-tool MESSAGE.END can complete an accepted continuation.
-// The bool return reports whether this boundary is one new, terminal assistant
-// response and should therefore count as a completed turn.
+// outputPresent is the current response's output-admission result. The bool
+// return reports whether this boundary is one new, terminal assistant response
+// and should therefore count as a completed turn.
 func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role, outputPresent bool) bool {
 	if o == nil {
 		return false
