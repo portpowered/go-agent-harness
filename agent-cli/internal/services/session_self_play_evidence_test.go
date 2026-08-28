@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -181,6 +182,99 @@ func TestRunSelfPlay_PreservesFailedEvidenceAndRedactsErrors(t *testing.T) {
 		}
 		for _, path := range []string{agent.Artifacts.WAV, agent.Artifacts.Diagnostics, agent.Artifacts.StreamDeltas} {
 			readSelfPlayArtifact(t, filepath.Join(outputDir, path))
+		}
+	}
+}
+
+func TestSelfPlayEvidence_FinalizeUsesOneTerminalSnapshot(t *testing.T) {
+	const target = 2
+	outputDir := filepath.Join(t.TempDir(), "run")
+	if err := os.MkdirAll(outputDir, 0o700); err != nil {
+		t.Fatalf("create evidence directory: %v", err)
+	}
+	evidence, err := newSelfPlayEvidence(outputDir, SelfPlayRunOptions{
+		Provider:    SelfPlayDefaultProvider,
+		Model:       SelfPlayDefaultModel,
+		MaxDuration: time.Second,
+		MaxTurns:    target,
+		OutputDir:   outputDir,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("new self-play evidence: %v", err)
+	}
+
+	published := make(chan struct{}, 1)
+	stop := newSelfPlayStopState(func() { published <- struct{}{} })
+	if !stop.recordTurn(0, target) || !stop.recordTurn(0, target) || !stop.recordTurn(1, target-1) {
+		t.Fatal("failed to establish pre-target state")
+	}
+
+	type finalizeResult struct {
+		result SelfPlayResult
+		err    error
+	}
+	finalized := make(chan finalizeResult, 1)
+	finalizerReady := make(chan struct{})
+	var finalizerWG sync.WaitGroup
+	finalizerWG.Add(1)
+	go func() {
+		defer finalizerWG.Done()
+		close(finalizerReady)
+		<-published
+		result, runErr := stop.snapshot()
+		finalized <- finalizeResult{
+			result: result,
+			err:    evidence.finalize(result, runErr, time.Now().UTC()),
+		}
+	}()
+	<-finalizerReady
+
+	if !stop.recordTurn(1, target) {
+		t.Fatal("final target turn was rejected")
+	}
+
+	var finalizedRun finalizeResult
+	select {
+	case finalizedRun = <-finalized:
+	case <-time.After(time.Second):
+		t.Fatal("evidence finalization did not cross the published stop boundary")
+	}
+	finalizerWG.Wait()
+	if finalizedRun.err != nil {
+		t.Fatalf("finalize: %v", finalizedRun.err)
+	}
+	if finalizedRun.result.StopReason != SelfPlayStopTurnTarget || finalizedRun.result.CustomerTurns != target || finalizedRun.result.AssistantTurns != target {
+		t.Fatalf("finalized stop snapshot = %+v, want exact target", finalizedRun.result)
+	}
+
+	for range 8 {
+		result, runErr := stop.snapshot()
+		if result != finalizedRun.result || runErr != finalizedRun.err {
+			t.Fatalf("terminal snapshot changed after finalization: %+v/%v vs %+v/%v", result, runErr, finalizedRun.result, finalizedRun.err)
+		}
+	}
+
+	// A later caller cannot replace the already-written terminal evidence with
+	// a fabricated reason or count, even if it tries to finalize again.
+	if err := evidence.finalize(SelfPlayResult{
+		StopReason:     SelfPlayStopFailure,
+		CustomerTurns:  99,
+		AssistantTurns: 99,
+	}, errors.New("late contender"), time.Now().UTC()); err != nil {
+		t.Fatalf("late finalize: %v", err)
+	}
+
+	manifestBytes := readSelfPlayArtifact(t, filepath.Join(outputDir, SelfPlayManifestPath))
+	var manifest selfPlayManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode finalized manifest: %v", err)
+	}
+	if manifest.StopReason != SelfPlayStopTurnTarget {
+		t.Fatalf("finalized manifest reason = %q, want %q", manifest.StopReason, SelfPlayStopTurnTarget)
+	}
+	for _, id := range []string{"agent-a", "agent-b"} {
+		if manifest.Agents[id].CompletedTurns != target {
+			t.Fatalf("finalized manifest %s turns = %d, want %d", id, manifest.Agents[id].CompletedTurns, target)
 		}
 	}
 }

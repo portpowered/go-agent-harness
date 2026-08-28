@@ -627,18 +627,15 @@ func (e *selfPlayEvidence) writeManifest(result SelfPlayResult, runErr error, en
 		if side == nil {
 			continue
 		}
-		runtimeTurns, terminalSeen, terminal := side.runtime.snapshot()
+		_, terminalSeen, terminal := side.runtime.snapshot()
 		turns := result.AssistantTurns
 		if index == 0 {
 			turns = result.CustomerTurns
 		}
-		// The session runner drains already-queued deltas during coordinated
-		// shutdown. Those deltas remain in the stream artifact, but a response
-		// observed after the coordinator reached its bound is not attributed to
-		// the bounded run's completed-turn count.
-		if turns == 0 && runtimeTurns > 0 && result.StopReason != SelfPlayStopTurnTarget {
-			turns = runtimeTurns
-		}
+		// Completed-turn counts come only from the shared stop-owner snapshot.
+		// The session runner may drain queued deltas after that boundary, but
+		// those raw events must not let evidence mix a later runtime observation
+		// into the terminal result.
 		terminalClean := terminalSeen && terminal.Clean
 		terminalError := ""
 		if terminalSeen {
