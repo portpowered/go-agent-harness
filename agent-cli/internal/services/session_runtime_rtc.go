@@ -478,6 +478,7 @@ type sessionRTCRuntimeSession struct {
 
 var _ messages.Session = (*sessionRTCRuntimeSession)(nil)
 var _ messages.SessionSendOutcomeSender = (*sessionRTCRuntimeSession)(nil)
+var _ messages.SessionResponseRequester = (*sessionRTCRuntimeSession)(nil)
 var _ messages.SessionDropCounters = (*sessionRTCRuntimeSession)(nil)
 
 func (s *sessionRTCRuntimeSession) TerminalError() error {
@@ -485,6 +486,17 @@ func (s *sessionRTCRuntimeSession) TerminalError() error {
 		return nil
 	}
 	return terminalSessionError(s.Session)
+}
+
+func (s *sessionRTCRuntimeSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if s == nil || s.Session == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *sessionRTCRuntimeSession) SupportsResponseRequests() bool {
+	return s != nil && messages.SupportsSessionResponseRequests(s.Session)
 }
 
 func (s *sessionRTCRuntimeSession) SendMessage(ctx context.Context, msg messages.Message) bool {

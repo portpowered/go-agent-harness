@@ -462,6 +462,16 @@ func (s *sessionInstructionsSession) Send(ctx context.Context, msg messages.Stre
 	return s.inner.Send(ctx, msg)
 }
 
+// RequestResponse forwards the optional explicit response capability without
+// changing the instruction-update lifecycle or replay behavior.
+func (s *sessionInstructionsSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.inner)
+}
+
+func (s *sessionInstructionsSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.inner)
+}
+
 // SendMessage forwards the optional complete-message capability of the
 // wrapped provider session. Instruction decoration must not hide the rich
 // message path used to deliver a tool result on the next model turn.

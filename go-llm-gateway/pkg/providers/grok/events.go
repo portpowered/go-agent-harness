@@ -233,6 +233,12 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		// Commit audio buffer at the end of an audio message.
 		return models.NewAudioBufferCommitEvent(), true
 
+	case messages.StreamTypeResponseCreate:
+		if v, ok := msg.Value.(*messages.ResponseCreateValue); !ok || v == nil {
+			return models.SessionEvent{}, false
+		}
+		return models.NewResponseCreateEvent(), true
+
 	case messages.StreamTypeTextDelta:
 		// Text input: send as conversation.item.create with a user message.
 		v, ok := msg.Value.(*messages.TextDeltaValue)

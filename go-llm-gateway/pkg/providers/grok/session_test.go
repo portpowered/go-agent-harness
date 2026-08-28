@@ -177,6 +177,44 @@ func TestSession_SendMessageEndRequestsResponseAndCompletesTurn(t *testing.T) {
 	}
 }
 
+func TestSession_SendExplicitResponseCreate(t *testing.T) {
+	conn := newMockConn()
+	session := newGrokSession(conn, logging.DummyLogger())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session.start(ctx)
+	defer func() { _ = session.Close() }()
+
+	if !session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}) {
+		t.Fatal("Send explicit response request returned false")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var clientMessages [][]byte
+	for {
+		clientMessages = conn.getClientMessages()
+		if len(clientMessages) == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(clientMessages) != 1 {
+		t.Fatalf("wire events = %d, want one response.create", len(clientMessages))
+	}
+	var event struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(clientMessages[0], &event); err != nil {
+		t.Fatalf("unmarshal response event: %v", err)
+	}
+	if event.Type != "response.create" {
+		t.Fatalf("event type = %q, want response.create", event.Type)
+	}
+}
+
 func TestSession_ReceiveAudioDelta(t *testing.T) {
 	conn := newMockConn()
 	audioBytes := []byte{0x01, 0x02, 0x03, 0x04}

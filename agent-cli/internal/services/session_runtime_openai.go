@@ -84,6 +84,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
+	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
 	return sessionRuntimePlan{
 		mode:       sessionRuntimeModeReplayOpenAI,
 		provider:   sessionProviderOpenAI,

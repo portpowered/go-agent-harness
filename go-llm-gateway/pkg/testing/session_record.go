@@ -33,6 +33,8 @@ type SessionRecorder struct {
 }
 
 var _ messages.Session = (*SessionRecorder)(nil)
+var _ messages.SessionResponseRequester = (*SessionRecorder)(nil)
+var _ messages.SessionResponseCapability = (*SessionRecorder)(nil)
 
 // SessionRecorderOption configures metadata on a SessionRecorder capture.
 type SessionRecorderOption func(*SessionRecorder)
@@ -98,6 +100,23 @@ func (r *SessionRecorder) Send(ctx context.Context, msg messages.StreamMessage) 
 func (r *SessionRecorder) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	r.recordMessage(DirectionClientToServer, msg)
 	return messages.SendSessionWithOutcome(ctx, r.inner, msg)
+}
+
+// RequestResponse forwards the optional explicit response capability while
+// recording its stream-level control event. A replay-backed inner session does
+// not expose the capability, so it remains compatible with older captures.
+func (r *SessionRecorder) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if !messages.SupportsSessionResponseRequests(r.inner) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	return r.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	})
+}
+
+func (r *SessionRecorder) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(r.inner)
 }
 
 // Receive returns a TypedBuffer whose reads are intercepted so that every

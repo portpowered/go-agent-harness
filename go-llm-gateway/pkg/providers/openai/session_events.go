@@ -175,6 +175,14 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			models.NewAudioBufferCommitEvent(),
 			models.NewResponseCreateEvent(),
 		}, true
+	case messages.StreamTypeResponseCreate:
+		// Tool results are delivered as conversation items without a response
+		// request. Audio-only turns have no user text event to trigger the
+		// continuation, so the model runner sends this explicit control event.
+		if v, ok := msg.Value.(*messages.ResponseCreateValue); !ok || v == nil {
+			return nil, false
+		}
+		return []models.SessionEvent{models.NewResponseCreateEvent()}, true
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)
 		if !ok || v == nil {

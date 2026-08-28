@@ -140,3 +140,17 @@ func (*ResponseCancelValue) streamMessageValue() {}
 func NewResponseCancelValue() *ResponseCancelValue {
 	return &ResponseCancelValue{Type: "response_cancel"}
 }
+
+// ResponseCreateValue is the value for RESPONSE.CREATE (outbound), sent to
+// the inference provider to request the next response without adding another
+// user message or committing a second audio buffer.
+type ResponseCreateValue struct {
+	Type string `json:"type"` // "response_create"
+}
+
+func (*ResponseCreateValue) streamMessageValue() {}
+
+// NewResponseCreateValue returns a value for RESPONSE.CREATE.
+func NewResponseCreateValue() *ResponseCreateValue {
+	return &ResponseCreateValue{Type: "response_create"}
+}

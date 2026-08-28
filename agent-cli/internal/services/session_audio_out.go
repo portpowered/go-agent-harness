@@ -558,6 +558,16 @@ func (s *sessionAudioOutputSession) Send(ctx context.Context, msg messages.Strea
 	return s.Session.Send(ctx, msg)
 }
 
+// RequestResponse forwards the optional explicit response capability while
+// keeping audio output observation local to inbound provider events.
+func (s *sessionAudioOutputSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *sessionAudioOutputSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
+}
+
 func (s *sessionAudioOutputSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)

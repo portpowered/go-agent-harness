@@ -186,6 +186,16 @@ func (s *sessionDurationAdmissionSession) Send(ctx context.Context, msg messages
 	return s.inner.Send(ctx, msg)
 }
 
+// RequestResponse forwards the optional explicit response capability while
+// retaining the admission wrapper's compatibility with replay sessions.
+func (s *sessionDurationAdmissionSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.inner)
+}
+
+func (s *sessionDurationAdmissionSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.inner)
+}
+
 // SendMessage forwards the optional complete-message capability of the
 // wrapped provider session. Duration admission must not hide the rich message
 // path used to deliver a tool result on the next model turn.

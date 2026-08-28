@@ -469,6 +469,16 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 	return false
 }
 
+// RequestResponse forwards the optional explicit response capability after a
+// tool result when the image-turn wrapper has no user text to send.
+func (s *sessionImageSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *sessionImageSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
+}
+
 // SendMessage forwards the optional complete-message capability of the
 // provider session. The image-turn wrapper embeds only the stream Session
 // interface, so optional multimodal delivery must be forwarded explicitly for

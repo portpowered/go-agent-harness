@@ -64,6 +64,13 @@ func (s *recordingSession) SendMessageWithoutResponse(_ context.Context, msg mes
 	return true
 }
 
+func (s *recordingSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.SendSessionWithOutcome(ctx, s, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	})
+}
+
 func (s *recordingSession) completeMessages() []messages.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -376,6 +383,37 @@ func TestModelRunner_SendLatestUserTextSkipsEmptyAndNonUserMessages(t *testing.T
 	})
 	if sent = session.sentMessages(); len(sent) != 1 {
 		t.Fatalf("sent %d messages, want 1 for older user text after non-user skip", len(sent))
+	}
+}
+
+func TestModelRunner_SendLatestUserTextRequestsResponseForAudioOnlyToolResult(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	runner.sendLatestUserText(context.Background(), session, messages.InferenceRequest{
+		Messages: []messages.Message{
+			{Role: messages.RoleUser},
+			{
+				Role:      messages.RoleAssistant,
+				ToolCalls: []messages.ToolCall{{ID: "call-read-file", Name: "read_file"}},
+			},
+			{
+				Role:         messages.RoleTool,
+				ToolCallID:   "call-read-file",
+				ContentParts: []messages.ContentPart{messages.TextPart{Text: "file not found"}},
+			},
+		},
+	})
+
+	sent := session.sentMessages()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d messages, want one explicit response request", len(sent))
+	}
+	if sent[0].Type != messages.StreamTypeResponseCreate {
+		t.Fatalf("sent type = %s, want %s", sent[0].Type, messages.StreamTypeResponseCreate)
+	}
+	if _, ok := sent[0].Value.(*messages.ResponseCreateValue); !ok {
+		t.Fatalf("sent value = %T, want *messages.ResponseCreateValue", sent[0].Value)
 	}
 }
 

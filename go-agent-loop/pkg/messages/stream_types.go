@@ -108,6 +108,11 @@ const (
 	// speaking while the model is still delivering an audio response.
 	StreamTypeResponseCancel StreamMessageType = "RESPONSE.CANCEL"
 
+	// StreamTypeResponseCreate is sent TO the inference provider (via
+	// session.Send) to request a response after an input that has no text
+	// representation, such as an audio-only tool continuation.
+	StreamTypeResponseCreate StreamMessageType = "RESPONSE.CREATE"
+
 	// StreamTypeRefusal carries the complete accumulated refusal text from a model.
 	// Emitted once after all refusal deltas are collected, before MESSAGE.END.
 	StreamTypeRefusal StreamMessageType = "REFUSAL"

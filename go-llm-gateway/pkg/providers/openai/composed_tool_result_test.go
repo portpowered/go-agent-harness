@@ -20,7 +20,9 @@ import (
 // conversation.item.create carrying a function_call_output item whose call_id
 // matches the originating call and whose output carries the serialized result,
 // while plain user-text turns keep producing the unchanged
-// conversation.item.create + response.create sequence.
+// conversation.item.create + response.create sequence. Audio-only tool
+// continuations explicitly request their response because they have no user
+// text event to trigger it.
 
 type composedSessionInferencer struct{ session *realtimeSession }
 
@@ -188,6 +190,7 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		"session.update",
 		"input_audio_buffer.append",
 		"conversation.item.create", // function_call_output
+		"response.create",          // audio-only tool continuation
 		"conversation.item.create", // user text turn
 		"response.create",
 	}
@@ -206,7 +209,7 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	}
 
 	// The user-text item keeps its byte-compatible shape.
-	textItem := frames[3].Item
+	textItem := frames[4].Item
 	if got, _ := textItem["type"].(string); got != "message" {
 		t.Errorf("text turn item.type = %q, want message", got)
 	}
@@ -222,16 +225,16 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		t.Errorf("text turn content part = %#v, want input_text %q", part, userReply)
 	}
 
-	// No response.create was emitted for the tool result itself: the only
-	// response.create in the whole run belongs to the plain-text turn.
+	// The audio-only tool continuation and the later plain-text turn each
+	// request exactly one response.
 	responseCreates := 0
 	for _, frame := range frames {
 		if frame.Type == "response.create" {
 			responseCreates++
 		}
 	}
-	if responseCreates != 1 {
-		t.Fatalf("response.create count = %d, want exactly 1 (plain-text turn only)", responseCreates)
+	if responseCreates != 2 {
+		t.Fatalf("response.create count = %d, want exactly 2 (tool continuation and plain-text turn)", responseCreates)
 	}
 }
 
