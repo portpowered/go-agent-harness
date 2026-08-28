@@ -216,6 +216,35 @@ func directInvocationFailed(state webmcp.InvocationState) bool {
 	}
 }
 
+type directInvocationWaiter interface {
+	WaitInvocation(context.Context, webmcp.InvocationID) (webmcp.InvokeResult, error)
+}
+
+// waitDirectInvocation adapts the broker's non-blocking Invoke contract to the
+// CLI contract: a direct command returns only after a live broker has emitted
+// the correlated terminal result. Keeping this as an optional seam preserves
+// compatibility with small command fakes whose Invoke result is already
+// terminal.
+func waitDirectInvocation(ctx context.Context, broker webmcp.Broker, result webmcp.InvokeResult) (webmcp.InvokeResult, error) {
+	if broker == nil || result.InvocationID == "" || result.ErrorCode != "" || directInvocationTerminal(result.State) {
+		return result, nil
+	}
+	waiter, ok := broker.(directInvocationWaiter)
+	if !ok {
+		return result, nil
+	}
+	return waiter.WaitInvocation(ctx, result.InvocationID)
+}
+
+func directInvocationTerminal(state webmcp.InvocationState) bool {
+	switch state {
+	case webmcp.InvocationCompleted, webmcp.InvocationError, webmcp.InvocationCanceled, webmcp.InvocationTimedOut, webmcp.InvocationOrphaned, webmcp.InvocationPolicyDenied:
+		return true
+	default:
+		return false
+	}
+}
+
 func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.ToolRef) error {
 	code := webmcp.ErrorCode(result.ErrorCode)
 	if !webmcp.IsKnownErrorCode(code) {
@@ -244,7 +273,13 @@ func runDirectWatch(ctx context.Context, broker webmcp.Broker, once bool) (WebMC
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	stream := broker.Watch(ctx)
+	return runDirectWatchStream(ctx, broker.Watch(ctx), once)
+}
+
+func runDirectWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WebMCPDirectWatchData, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	data := WebMCPDirectWatchData{Status: webmcpDirectWatchStatusEnded, Events: []WebMCPDirectEvent{}}
 	for {
 		select {

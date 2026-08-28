@@ -3,6 +3,7 @@ package webmcp
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,7 +27,10 @@ type BrokerOptions struct {
 	Runtime    BrowserRuntime
 	Discoverer BrowserDiscoverer
 	IDs        IDSource
-	Clock      Clock
+	// ToolRefFactory optionally derives references from a normalized page-tool
+	// descriptor. When omitted, IDs.NewToolRef provides random references.
+	ToolRefFactory ToolRefFactory
+	Clock          Clock
 	// Timers drives invocation deadlines. When omitted, a Clock that also
 	// implements TimerFactory is used; production falls back to wall time.
 	Timers TimerFactory
@@ -55,6 +59,7 @@ type StatefulBroker struct {
 	runtime           BrowserRuntime
 	discoverer        BrowserDiscoverer
 	ids               IDSource
+	toolRefFactory    ToolRefFactory
 	clock             Clock
 	timers            TimerFactory
 	cancelOnInterrupt string
@@ -189,6 +194,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		runtime:             options.Runtime,
 		discoverer:          options.Discoverer,
 		ids:                 ids,
+		toolRefFactory:      options.ToolRefFactory,
 		clock:               clock,
 		timers:              timers,
 		cancelOnInterrupt:   cancelOnInterrupt,
@@ -872,7 +878,7 @@ func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event Br
 		if current, ok := selected.catalog[key]; ok {
 			b.retireRefLocked(current.Ref)
 		}
-		ref, err := b.mintToolRefLocked()
+		ref, err := b.mintToolRefLocked(descriptor)
 		if err != nil {
 			selected.catalogError = err
 			continue
@@ -1016,9 +1022,17 @@ func (b *StatefulBroker) retireRefLocked(ref ToolRef) {
 	b.retired[ref] = struct{}{}
 }
 
-func (b *StatefulBroker) mintToolRefLocked() (ToolRef, error) {
+func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, error) {
 	for attempt := 0; attempt < maxToolRefMintAttempts; attempt++ {
-		ref, err := b.ids.NewToolRef()
+		var (
+			ref ToolRef
+			err error
+		)
+		if b.toolRefFactory != nil {
+			ref, err = b.toolRefFactory(descriptor)
+		} else {
+			ref, err = b.ids.NewToolRef()
+		}
 		if err != nil {
 			return "", err
 		}
@@ -1029,11 +1043,71 @@ func (b *StatefulBroker) mintToolRefLocked() (ToolRef, error) {
 			continue
 		}
 		if _, wasRetired := b.retired[ref]; wasRetired {
+			// A stable factory cannot produce a second value for the same
+			// descriptor. Fall back to the configured ID source after a
+			// same-generation remove/re-add so a retired ref stays stale.
+			if b.toolRefFactory != nil {
+				ref, err = b.ids.NewToolRef()
+				if err != nil {
+					return "", err
+				}
+				if err := validateToolRefSyntax(ref); err != nil {
+					continue
+				}
+				if _, active := b.refs[ref]; active {
+					continue
+				}
+				if _, wasRetired := b.retired[ref]; wasRetired {
+					continue
+				}
+				return ref, nil
+			}
 			continue
 		}
 		return ref, nil
 	}
 	return "", errors.New("webmcp: tool ref source did not produce a unique valid ref")
+}
+
+// StableToolRef derives the wire-shaped opaque reference from the complete
+// page-tool identity protected by a generation-bound binding. It intentionally
+// excludes Ref and AddedSequence, which are broker bookkeeping fields.
+func StableToolRef(descriptor ToolDescriptor) (ToolRef, error) {
+	identity := struct {
+		BrowserID    BrowserID
+		TargetID     TargetID
+		FrameID      FrameID
+		Generation   uint64
+		ToolName     string
+		SchemaDigest string
+		Origin       string
+		Description  string
+		InputSchema  string
+		ReadOnly     *bool
+		Untrusted    *bool
+		AutoSubmit   *bool
+		Annotations  string
+	}{
+		BrowserID:    descriptor.BrowserID,
+		TargetID:     descriptor.TargetID,
+		FrameID:      descriptor.FrameID,
+		Generation:   descriptor.Generation,
+		ToolName:     descriptor.Name,
+		SchemaDigest: descriptor.SchemaDigest,
+		Origin:       descriptor.Origin,
+		Description:  descriptor.Description,
+		InputSchema:  string(descriptor.InputSchema),
+		ReadOnly:     descriptor.Annotations.ReadOnly,
+		Untrusted:    descriptor.Annotations.UntrustedContent,
+		AutoSubmit:   descriptor.Annotations.AutoSubmit,
+		Annotations:  string(descriptor.Annotations.Raw),
+	}
+	encoded, err := json.Marshal(identity)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return ToolRef(ToolRefPrefix + base64.RawURLEncoding.EncodeToString(digest[:16])), nil
 }
 
 func refCurrentLocked(selected *brokerSession, record refRecord) bool {

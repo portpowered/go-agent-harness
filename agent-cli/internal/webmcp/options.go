@@ -59,6 +59,12 @@ type ToolCatalogSnapshot struct {
 	Tools      []ToolDescriptor
 }
 
+// ToolRefFactory mints an opaque page-tool reference after the broker has
+// normalized a descriptor. Production compositions may provide a stable
+// implementation so a reference returned by one short-lived CLI command can
+// be used by the next command without persisting transport state.
+type ToolRefFactory func(ToolDescriptor) (ToolRef, error)
+
 type InvokeRequest struct {
 	ToolRef     ToolRef
 	Input       json.RawMessage

@@ -186,6 +186,7 @@ func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPD
 		brokerOptions := webmcp.BrokerOptions{
 			Runtime:           composition,
 			Discoverer:        composition,
+			ToolRefFactory:    webmcp.StableToolRef,
 			CancelOnInterrupt: browser.Policy.CancelOnInterrupt,
 			MaxInputBytes:     browser.Limits.MaxInputBytes,
 			MaxResultBytes:    browser.Limits.MaxResultBytes,

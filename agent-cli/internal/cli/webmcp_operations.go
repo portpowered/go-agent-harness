@@ -619,6 +619,10 @@ func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
+				result, err = waitDirectInvocation(invokeCtx, broker, result)
+				if err != nil {
+					return nil, err
+				}
 				if result.ErrorCode != "" || directInvocationFailed(result.State) {
 					return nil, directInvocationResultError(result, toolRef)
 				}
@@ -684,14 +688,18 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return c.executeDirectWithContext(cmd, values, "watch", webmcp.ErrorEndpointUnreachable, func(ctx context.Context, broker webmcp.Broker, _ config.BrowserConfig) (any, error) {
+			return c.executeDirectWithContext(cmd, values, "watch", webmcp.ErrorEndpointUnreachable, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
 				watchCtx := ctx
 				if values.timeout > 0 {
 					var cancel context.CancelFunc
 					watchCtx, cancel = context.WithTimeout(ctx, values.timeout)
 					defer cancel()
 				}
-				return runDirectWatch(watchCtx, broker, values.once)
+				stream := broker.Watch(watchCtx)
+				if _, err := c.ensureDirectSelection(watchCtx, cmd, values, broker, browser); err != nil {
+					return nil, err
+				}
+				return runDirectWatchStream(watchCtx, stream, values.once)
 			})
 		},
 	}
