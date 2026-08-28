@@ -206,12 +206,6 @@ func (l *roomLifecycleLedger) participantTerminated(result RoomParticipantResult
 	l.mu.Unlock()
 }
 
-func (l *roomLifecycleLedger) observerPending(participantID string) {
-	l.mu.Lock()
-	l.markOutstandingLocked(participantID, "observer")
-	l.mu.Unlock()
-}
-
 func (l *roomLifecycleLedger) sessionOpened(participantID string) {
 	l.mu.Lock()
 	l.eventLocked(participantID, "session.opened")
@@ -317,14 +311,14 @@ func (i *roomLifecycleInferencer) sessionSnapshot() *roomLifecycleSessionRuntime
 }
 
 type roomLifecycleSessionRuntime struct {
-	id          string
-	ledger      *roomLifecycleLedger
-	receive     *messages.TypedBuffer[messages.StreamMessage]
-	done        chan struct{}
-	once        sync.Once
-	mu          sync.Mutex
-	closed      int
-	err         error
+	id      string
+	ledger  *roomLifecycleLedger
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	once    sync.Once
+	mu      sync.Mutex
+	closed  int
+	err     error
 }
 
 func newRoomLifecycleSessionRuntime(id string, ledger *roomLifecycleLedger) *roomLifecycleSessionRuntime {
@@ -386,12 +380,6 @@ func (s *roomLifecycleSessionRuntime) fail(err error) {
 	s.err = err
 	s.mu.Unlock()
 	s.end()
-}
-
-func (s *roomLifecycleSessionRuntime) closeCount() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.closed
 }
 
 type roomLifecycleRun struct {
