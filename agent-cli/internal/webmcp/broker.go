@@ -1140,7 +1140,10 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	if reason == "" {
 		reason = "session_closed"
 	}
-	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
+	// A target detach or browser loss retires the selected session; it does not
+	// create a new document generation. Keep this on the session lifecycle
+	// channel so consumers cannot mistake teardown for navigation.
+	b.emitLocked(BrokerEvent{Type: BrokerEventSessionClosed, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
 }
 
 func (b *StatefulBroker) markSessionEnded(selected *brokerSession, reason string) {

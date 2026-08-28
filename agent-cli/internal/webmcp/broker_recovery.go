@@ -15,6 +15,51 @@ func staleSelectionForSession(selected *brokerSession, reason string) error {
 	return staleSelectionError(selected.context.Key.BrowserID, selected.context.Key.TargetID, selected.context.Generation, reason)
 }
 
+// reconcileTargetLossLocked preserves the lifecycle outcome that raced with
+// an invocation's final adapter call. A target can disappear before the
+// broker's event loop acquires dispatchMu, so the adapter may only return a
+// generic closed/stale error even though the session is already terminal.
+func reconcileTargetLossLocked(invocation *brokerInvocation, cause error) error {
+	if invocation == nil || invocation.selected == nil {
+		return cause
+	}
+	// Preserve a classified adapter result when it already carries the
+	// operation phase that observed the loss (for example, list_targets).
+	// Session state is the fallback for adapters that only report ErrClosed or
+	// return a stale-selection error after the terminal event raced the call.
+	if _, ok := lifecycleClassifiedError(cause); ok {
+		return cause
+	}
+	if failure := sessionLifecycleFailure(invocation.selected); failure != nil {
+		return failure
+	}
+	if targetSessionEnded(invocation.selected.session) {
+		return classified(ErrorInvocationOrphaned, DefaultErrorMessage(ErrorInvocationOrphaned), map[string]any{
+			"invocation_id":     string(invocation.invocation.ID),
+			"target_id":         string(invocation.invocation.Tool.TargetID),
+			"generation":        invocation.invocation.Tool.Generation,
+			"terminal_observed": false,
+		}, cause)
+	}
+	return cause
+}
+
+func targetSessionEnded(session TargetSession) bool {
+	if session == nil {
+		return false
+	}
+	done := session.Done()
+	if done == nil {
+		return false
+	}
+	select {
+	case <-done:
+		return true
+	default:
+		return false
+	}
+}
+
 func targetAttachError(selector TargetSelector, phase string, cause error) error {
 	if _, lifecycle := lifecycleClassifiedError(cause); lifecycle {
 		return cause

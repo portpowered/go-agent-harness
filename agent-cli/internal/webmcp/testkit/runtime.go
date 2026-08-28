@@ -1249,7 +1249,7 @@ func (s *ScriptedTargetSession) terminateWithOptions(eventType webmcp.BrowserEve
 	} else if eventType == webmcp.EventTargetDetached {
 		event.ErrorCode = string(webmcp.ErrorTargetDetached)
 	}
-	published, eventErr := s.emitPublishedLocked(event)
+	published, eventErr := s.emitPublishedLocked(event, true)
 	s.closeResult = eventErr
 	close(s.events)
 	s.mu.Unlock()
@@ -1276,18 +1276,8 @@ func (s *ScriptedTargetSession) emit(event webmcp.BrowserEvent) error {
 }
 
 func (s *ScriptedTargetSession) emitLocked(event webmcp.BrowserEvent) error {
-	_, err := s.emitPublishedLocked(event)
+	_, err := s.emitPublishedLocked(event, false)
 	return err
-}
-
-func (s *ScriptedTargetSession) emitPublishedLocked(event webmcp.BrowserEvent) (PublishedEvent, error) {
-	decorated := s.decorateProducedEventLocked(event)
-	select {
-	case s.events <- decorated:
-		return s.runtime.publishEvent(decorated), nil
-	default:
-		return PublishedEvent{}, webmcp.ErrEventBufferFull
-	}
 }
 
 func (s *ScriptedTargetSession) notifyLocked() {

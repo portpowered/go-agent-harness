@@ -169,10 +169,22 @@ func TestLifecycleTargetCloseInvalidatesAndDetachesOnly(t *testing.T) {
 	}
 
 	var detached *Event
+	generationEvents := 0
+	detachedEvents := 0
 	for i := range recorder.events {
+		if recorder.events[i].Type == EventPageGenerationChanged {
+			generationEvents++
+		}
 		if recorder.events[i].Type == EventTargetDetached {
+			detachedEvents++
 			detached = &recorder.events[i]
 		}
+	}
+	if generationEvents != 0 {
+		t.Fatalf("target close generation events = %d, want none", generationEvents)
+	}
+	if detachedEvents != 1 {
+		t.Fatalf("target close detach events = %d, want one", detachedEvents)
 	}
 	if detached == nil || detached.Generation != 2 || detached.Payload["reason"] != "tab_closed" || detached.Payload["ownership_mode"] != string(TargetOwnershipExternal) {
 		t.Fatalf("detach event = %#v", detached)

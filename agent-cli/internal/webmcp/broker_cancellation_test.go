@@ -276,6 +276,142 @@ func TestStatefulBrokerNavigationTerminalizesCurrentInvocation(t *testing.T) {
 	}
 }
 
+func TestStatefulBrokerSeparatesTargetClosureFromPageNavigation(t *testing.T) {
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-lifecycle", Loopback: true}
+	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
+		testkit.RuntimeOptions{Clock: clock, IDs: ids},
+		testkit.BrowserConfig{
+			Candidate: candidate,
+			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+				webmcp.Target{BrowserID: candidate.ID, ID: "tab-lifecycle", Type: "page"},
+				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+			)},
+		},
+	)
+	defer func() { _ = runtime.Close() }()
+	broker, session, oldRef := newRecoveryInvocationBroker(t, runtime, candidate, "tab-lifecycle")
+	defer func() { _ = broker.Close() }()
+
+	watchContext, cancelWatch := context.WithCancel(context.Background())
+	defer cancelWatch()
+	watch := broker.Watch(watchContext)
+
+	if err := session.Navigate("https://fixture.test/next", "https://fixture.test"); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{})
+	if err != nil {
+		t.Fatalf("list after navigation: %v", err)
+	}
+	if snapshot.Generation != 2 || len(snapshot.Tools) != 0 || !snapshot.Context.Connected {
+		t.Fatalf("post-navigation snapshot = %#v, want connected generation two with an empty catalog", snapshot)
+	}
+	navigation := nextRecoveryBrokerEvent(t, watch)
+	if navigation.Type != webmcp.BrokerEventGenerationChanged || navigation.Generation != 2 {
+		t.Fatalf("navigation broker event = %#v, want generation_changed at generation two", navigation)
+	}
+
+	handle := runtime.Browser(candidate.ID)
+	if handle == nil {
+		t.Fatal("runtime browser handle is nil")
+	}
+	if err := handle.CloseTarget(context.Background(), "tab-lifecycle"); err != nil {
+		t.Fatalf("close target: %v", err)
+	}
+	closed := nextRecoveryBrokerEvent(t, watch)
+	if closed.Type != webmcp.BrokerEventSessionClosed || closed.BrowserID != candidate.ID || closed.TargetID != "tab-lifecycle" || closed.Generation != 2 || closed.Reason != "target_closed" {
+		t.Fatalf("target close broker event = %#v, want session_closed at the current generation", closed)
+	}
+
+	if _, err := broker.Selected(context.Background()); !isClassifiedCode(err, webmcp.ErrorStaleSelection) {
+		t.Fatalf("selected after target close = %v, want stale_selection", err)
+	}
+	assertBrokerError(t, func() error {
+		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: oldRef, Input: []byte(`{}`)})
+		return err
+	}, webmcp.ErrorStaleSelection, "closed target selection")
+	if operations := operationsOfKind(runtime.Operations(), testkit.OperationInvoke); len(operations) != 0 {
+		t.Fatalf("post-close invoke operations = %#v, want none", operations)
+	}
+	targets, err := handle.ListTargets(context.Background())
+	if err != nil || len(targets) != 0 || handle.IsDisconnected() {
+		t.Fatalf("browser after target close = targets %#v, err %v, disconnected %v; want no target and live browser", targets, err, handle.IsDisconnected())
+	}
+}
+
+func TestStatefulBrokerOrphansInvocationWhenTargetClosesBeforeReconciliation(t *testing.T) {
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-orphan", Loopback: true}
+	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
+		testkit.RuntimeOptions{Clock: clock, IDs: ids},
+		testkit.BrowserConfig{
+			Candidate: candidate,
+			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+				webmcp.Target{BrowserID: candidate.ID, ID: "tab-orphan", Type: "page"},
+				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+			)},
+		},
+	)
+	defer func() { _ = runtime.Close() }()
+	broker, _, ref := newRecoveryInvocationBroker(t, runtime, candidate, "tab-orphan")
+	defer func() { _ = broker.Close() }()
+
+	handle := runtime.Browser(candidate.ID)
+	if handle == nil {
+		t.Fatal("runtime browser handle is nil")
+	}
+	handle.BlockListTargets()
+	defer handle.UnblockListTargets()
+	watchContext, cancelWatch := context.WithCancel(context.Background())
+	defer cancelWatch()
+	watch := broker.Watch(watchContext)
+	operationCursor := runtime.OperationCursor()
+	invokeDone := make(chan invocationCall, 1)
+	go func() {
+		result, invokeErr := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: []byte(`{"value":1}`)})
+		invokeDone <- invocationCall{result: result, err: invokeErr}
+	}()
+	created := assertInvocationCreated(t, watch, ref)
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), testkit.OperationListTargets, operationCursor); err != nil {
+		t.Fatalf("wait blocked target check: %v", err)
+	}
+
+	if err := handle.CloseTarget(context.Background(), "tab-orphan"); err != nil {
+		t.Fatalf("close target: %v", err)
+	}
+	handle.UnblockListTargets()
+
+	call := receiveInvocationCall(t, invokeDone)
+	if call.err == nil || call.result.InvocationID != created.InvocationID || call.result.State != webmcp.InvocationOrphaned || call.result.ErrorCode != string(webmcp.ErrorInvocationOrphaned) {
+		t.Fatalf("closed-target invocation = %#v, %v; want one invocation_orphaned result", call.result, call.err)
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(call.err, &classified) || classified.Code != webmcp.ErrorInvocationOrphaned {
+		t.Fatalf("closed-target invocation error = %v, want invocation_orphaned", call.err)
+	}
+	if call.result.ErrorDetails["invocation_id"] != string(created.InvocationID) || call.result.ErrorDetails["target_id"] != "tab-orphan" || call.result.ErrorDetails["generation"] != uint64(1) || call.result.ErrorDetails["terminal_observed"] != false {
+		t.Fatalf("closed-target invocation details = %#v, want bounded orphan metadata", call.result.ErrorDetails)
+	}
+
+	terminal := nextRecoveryBrokerEvent(t, watch)
+	if terminal.Type != webmcp.BrokerEventInvocationTerminal || terminal.InvocationID != created.InvocationID || terminal.Reason != string(webmcp.ErrorInvocationOrphaned) {
+		t.Fatalf("orphan terminal event = %#v, want one correlated invocation terminal", terminal)
+	}
+	closed := nextRecoveryBrokerEvent(t, watch)
+	if closed.Type != webmcp.BrokerEventSessionClosed || closed.TargetID != "tab-orphan" || closed.Reason != "target_closed" {
+		t.Fatalf("orphan target lifecycle event = %#v, want session_closed after invocation reconciliation", closed)
+	}
+	if pending := broker.PendingInvocations(); len(pending) != 0 {
+		t.Fatalf("pending after closed-target reconciliation = %#v, want empty", pending)
+	}
+	if operations := operationsOfKind(runtime.Operations(), testkit.OperationInvoke); len(operations) != 0 {
+		t.Fatalf("closed-target invoke operations = %#v, want none", operations)
+	}
+}
+
 func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 	tests := []struct {
 		name       string

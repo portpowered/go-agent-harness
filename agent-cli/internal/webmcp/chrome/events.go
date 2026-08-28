@@ -246,7 +246,7 @@ func (s *targetSession) convertDestroyed(value *cdpTarget.EventTargetDestroyed) 
 	if !matched {
 		return webmcp.BrowserEvent{}
 	}
-	return webmcp.BrowserEvent{Type: webmcp.EventTargetDetached, Reason: "target_destroyed"}
+	return webmcp.BrowserEvent{Type: webmcp.EventTargetDetached, Reason: "target_closed"}
 }
 
 func (s *targetSession) convertCrashed(value *cdpTarget.EventTargetCrashed) webmcp.BrowserEvent {

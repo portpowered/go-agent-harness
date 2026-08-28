@@ -425,6 +425,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 			failure = staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
 		}
 		b.mu.Lock()
+		failure = reconcileTargetLossLocked(invocation, failure)
 		result := invocationFailureResultForError(invocation, failure, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, failure)
 		b.finishInvocationLocked(invocation, result)
@@ -460,6 +461,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	id, invokeErr := invokeWebMCP(ctx, session, invocation.invocation.ID, descriptor.FrameID, descriptor.Name, cloneJSON(invocation.invocation.Arguments))
 
 	b.mu.Lock()
+	invokeErr = reconcileTargetLossLocked(invocation, invokeErr)
 	if id == "" {
 		result := invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
 		b.reportDispatchLocked(invocation, result, invokeErr)

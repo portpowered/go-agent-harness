@@ -330,7 +330,7 @@ func (s *Service) applyNavigationLocked(ctx context.Context, event LifecycleEven
 }
 
 func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *TargetHandle, *DiscoveryError) {
-	state, previous, current, applied := s.advanceTargetGenerationLocked(event)
+	state, _, current, applied := s.advanceTargetGenerationLocked(event)
 	if !applied {
 		return s.currentSelectionLocked(), nil, nil
 	}
@@ -344,11 +344,8 @@ func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *Tar
 	if reason == "" {
 		reason = "target_closed"
 	}
-	s.emitTarget(EventPageGenerationChanged, event.BrowserID, event.TargetID, current, map[string]any{
-		"previous_generation": previous,
-		"current_generation":  current,
-		"reason":              reason,
-	})
+	// Keep the monotonic tombstone generation for stale-selection checks, but
+	// do not publish it as navigation: a closed target has no new document.
 	ownership := string(TargetOwnershipExternal)
 	var release *TargetHandle
 	if s.selection != nil && s.selection.BrowserID == event.BrowserID && s.selection.TargetID == event.TargetID {

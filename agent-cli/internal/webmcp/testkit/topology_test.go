@@ -211,6 +211,44 @@ func TestTopologyChurnClosesOneTargetWithoutDisconnectingBrowser(t *testing.T) {
 	}
 }
 
+func TestTopologyChurnPublishesTargetCloseWhenSessionBufferIsFull(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-buffer", Product: "fixture"}
+	runtime := NewScriptedBrowserRuntime(BrowserConfig{
+		Candidate: candidate,
+		Targets: []TargetConfig{NewTargetConfig(
+			webmcp.Target{BrowserID: candidate.ID, ID: "tab-buffer", Type: "page"},
+			WithEventBuffer(1),
+		)},
+	})
+	defer func() { _ = runtime.Close() }()
+
+	handleValue, err := runtime.Open(context.Background(), candidate)
+	if err != nil {
+		t.Fatalf("open browser: %v", err)
+	}
+	handle := handleValue.(*ScriptedBrowserHandle)
+	sessionValue, err := handle.Attach(context.Background(), "tab-buffer", webmcp.TargetOwnershipExternal)
+	if err != nil {
+		t.Fatalf("attach target: %v", err)
+	}
+	session := sessionValue.(*ScriptedTargetSession)
+	if err := handle.CloseTarget(context.Background(), "tab-buffer"); err != nil {
+		t.Fatalf("close full-buffer target: %v", err)
+	}
+	terminal, ok := <-session.Events()
+	if !ok || terminal.Type != webmcp.EventTargetDetached || terminal.Reason != "target_closed" || terminal.ErrorCode != string(webmcp.ErrorTargetDetached) {
+		t.Fatalf("full-buffer terminal event = %#v, open=%v; want target_closed target_detached", terminal, ok)
+	}
+	if _, ok := <-session.Events(); ok {
+		t.Fatal("session emitted an event after target-close terminal event")
+	}
+	select {
+	case <-session.Done():
+	case <-testContext(t).Done():
+		t.Fatal("target-close Done channel did not close")
+	}
+}
+
 func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst(t *testing.T) {
 	oldCandidate := webmcp.BrowserCandidate{
 		ID:           "browser-old",

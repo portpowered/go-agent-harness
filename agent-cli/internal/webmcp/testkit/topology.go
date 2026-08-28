@@ -626,7 +626,32 @@ func (s *ScriptedTargetSession) emitPublished(event webmcp.BrowserEvent) (Publis
 	if s.closed {
 		return PublishedEvent{}, webmcp.ErrClosed
 	}
-	return s.emitPublishedLocked(event)
+	return s.emitPublishedLocked(event, false)
+}
+
+func (s *ScriptedTargetSession) emitPublishedLocked(event webmcp.BrowserEvent, terminal bool) (PublishedEvent, error) {
+	decorated := s.decorateProducedEventLocked(event)
+	select {
+	case s.events <- decorated:
+		return s.runtime.publishEvent(decorated), nil
+	default:
+		if !terminal {
+			return PublishedEvent{}, webmcp.ErrEventBufferFull
+		}
+	}
+	// A terminal lifecycle event must remain observable even when a test has
+	// intentionally filled the session event buffer. Match the Chrome adapter's
+	// lossless terminal publication policy by evicting the oldest event.
+	select {
+	case <-s.events:
+	default:
+	}
+	select {
+	case s.events <- decorated:
+		return s.runtime.publishEvent(decorated), nil
+	default:
+		return PublishedEvent{}, webmcp.ErrEventBufferFull
+	}
 }
 
 // BlockEnableWebMCP holds the enable operation after admission. Disconnect
