@@ -192,14 +192,33 @@ func TestExecutorRequest_SystemPromptErrorAndSideEffectBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid prompt path reports stat error", func(t *testing.T) {
-		_, _, err := exec.LoadSystemPromptWithDetails(&Config{
-			SystemPrompt:        "invalid\x00prompt",
+	t.Run("long prose remains literal after failed stat", func(t *testing.T) {
+		longPrompt := strings.Repeat("Preserve this literal: spaces, punctuation !?; path-like fragments /tmp/not-a-file.md and ./missing-prompt.txt.\n", 16)
+		if len(longPrompt) < 1024 || len(longPrompt) > 2048 {
+			t.Fatalf("long prompt length = %d, want 1-2 KB", len(longPrompt))
+		}
+		prompt, details, err := exec.LoadSystemPromptWithDetails(&Config{
+			SystemPrompt:        longPrompt,
 			NoSystemInformation: true,
 		}, t.TempDir(), nil)
-		if err == nil || !strings.Contains(err.Error(), "system prompt path") {
-			t.Fatalf("invalid prompt error = %v, want path context", err)
+		if err != nil || prompt != longPrompt {
+			t.Fatalf("long literal result = %q, %v; want exact literal", prompt, err)
 		}
+		assertPromptSource(t, details, PromptSourceKindLiteralPrompt, "")
+		assertNoPromptSideEffect(t, details, PromptSideEffectReadPromptFile)
+	})
+
+	t.Run("invalid prompt syntax remains literal", func(t *testing.T) {
+		invalidPrompt := "invalid\x00prompt"
+		prompt, details, err := exec.LoadSystemPromptWithDetails(&Config{
+			SystemPrompt:        invalidPrompt,
+			NoSystemInformation: true,
+		}, t.TempDir(), nil)
+		if err != nil || prompt != invalidPrompt {
+			t.Fatalf("invalid literal result = %q, %v; want exact literal", prompt, err)
+		}
+		assertPromptSource(t, details, PromptSourceKindLiteralPrompt, "")
+		assertNoPromptSideEffect(t, details, PromptSideEffectReadPromptFile)
 	})
 
 	t.Run("default workspace failure is wrapped", func(t *testing.T) {
