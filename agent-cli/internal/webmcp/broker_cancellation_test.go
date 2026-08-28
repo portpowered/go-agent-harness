@@ -82,6 +82,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: "test_fixture"}),
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
