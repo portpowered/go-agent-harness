@@ -1,3 +1,3 @@
 module github.com/portpowered/go-agent-harness/go-agent-loop
 
-go 1.24.2
+go 1.26.7

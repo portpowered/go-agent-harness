@@ -1,6 +1,6 @@
 module github.com/portpowered/go-agent-harness/scripts/webmcp-o0
 
-go 1.26
+go 1.26.7
 
 require (
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f

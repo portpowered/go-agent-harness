@@ -1,6 +1,6 @@
 module github.com/portpowered/go-agent-harness/go-llm-gateway
 
-go 1.24.2
+go 1.26.7
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
