@@ -418,6 +418,7 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 	target.Origin = origin
 	pageWebSocket, normalizedWebSocket := normalizePageWebSocket(descriptor.WebSocketDebuggerURL)
 	target.WebSocketPresent = pageWebSocket
+	target.ContinuityMarker = targetContinuityMarker(browser.ID, rawID, origin, normalizedWebSocket, descriptor)
 	target.WebMCP, target.WebMCPKnown = descriptorWebMCP(descriptor)
 	target.ToolCount, target.ToolCountKnown = descriptorToolCount(descriptor)
 
@@ -457,6 +458,29 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 		pageWebSocket: normalizedWebSocket,
 		generation:    generation,
 	}, nil
+}
+
+// targetContinuityMarker turns adapter-provided continuity metadata into a
+// stable opaque value. When an adapter has no document marker, the normalized
+// page websocket path and raw target identity provide a useful best-effort
+// continuity claim; neither raw value crosses the persistence boundary.
+func targetContinuityMarker(browserID, rawID, origin, pageWebSocket string, descriptor TargetDescriptor) string {
+	marker := strings.TrimSpace(descriptor.ContinuityMarker)
+	if marker == "" {
+		marker = strings.TrimSpace(descriptor.Continuity)
+	}
+	if marker == "" {
+		marker = strings.TrimSpace(descriptor.DocumentID)
+	}
+	if marker == "" {
+		marker = pageWebSocket
+	}
+	if marker == "" {
+		marker = rawID
+	}
+	key := strings.Join([]string{browserID, rawID, origin, marker}, "\x00")
+	digest := sha256.Sum256([]byte(key))
+	return "continuity-" + hex.EncodeToString(digest[:12])
 }
 
 func normalizeTargetPublicID(value, browserID, rawID string) string {

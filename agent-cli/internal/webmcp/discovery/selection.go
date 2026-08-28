@@ -179,6 +179,13 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 		connected:  true,
 		ready:      true,
 	}
+	if failure := s.persistSelectionLocked(ctx, browser, target, selected.SelectedAt); failure != nil {
+		if handle != nil {
+			_ = handle.Close()
+		}
+		s.mu.Unlock()
+		return Selection{}, failure
+	}
 	previous := s.selection
 	s.selection = &selected
 	s.emitTarget(EventTargetSelected, browser.ID, target.ID, target.Generation, map[string]any{

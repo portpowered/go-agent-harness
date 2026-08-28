@@ -128,10 +128,16 @@ type TargetDescriptor struct {
 	Title                string `json:"title"`
 	URL                  string `json:"url"`
 	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
-	WebMCPSupported      *bool  `json:"webmcpSupported,omitempty"`
-	WebMCP               *bool  `json:"webmcp,omitempty"`
-	ToolCount            *int   `json:"toolCount,omitempty"`
-	Tools                []any  `json:"tools,omitempty"`
+	// ContinuityMarker and DocumentID are optional neutral-fake metadata. A
+	// browser adapter may use either value to prove that a target is still the
+	// same page across a process restart; neither value is exposed directly.
+	ContinuityMarker string `json:"continuityMarker,omitempty"`
+	Continuity       string `json:"continuity,omitempty"`
+	DocumentID       string `json:"documentId,omitempty"`
+	WebMCPSupported  *bool  `json:"webmcpSupported,omitempty"`
+	WebMCP           *bool  `json:"webmcp,omitempty"`
+	ToolCount        *int   `json:"toolCount,omitempty"`
+	Tools            []any  `json:"tools,omitempty"`
 }
 
 // DevToolsTarget and RawTarget are descriptive aliases for callers that
@@ -144,12 +150,15 @@ type RawTarget = TargetDescriptor
 // part of this public value. URL is query/fragment-free and Origin is a
 // canonical origin, so neither field can carry transport credentials.
 type Target struct {
-	BrowserID         string `json:"browser_id"`
-	ID                string `json:"id"`
-	Type              string `json:"type"`
-	Title             string `json:"title"`
-	URL               string `json:"url"`
-	Origin            string `json:"origin"`
+	BrowserID string `json:"browser_id"`
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Origin    string `json:"origin"`
+	// ContinuityMarker is an opaque digest of adapter-provided continuity
+	// metadata. It is safe to retain in selection state and persistence.
+	ContinuityMarker  string `json:"continuity_marker,omitempty"`
 	Generation        uint64 `json:"generation,omitempty"`
 	WebSocketPresent  bool   `json:"websocket_present"`
 	WebMCP            bool   `json:"webmcp"`

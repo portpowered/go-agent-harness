@@ -275,6 +275,15 @@ func (s *Service) applyNavigationLocked(ctx context.Context, event LifecycleEven
 	if event.Capabilities != nil || event.WebMCP != nil || event.ToolCount != nil {
 		applyLifecycleCapabilities(&state.target, event)
 	}
+	if event.DocumentID != "" {
+		state.target.ContinuityMarker = targetContinuityMarker(
+			event.BrowserID,
+			state.rawID,
+			state.target.Origin,
+			state.pageWebSocket,
+			TargetDescriptor{DocumentID: event.DocumentID},
+		)
+	}
 	s.storeLifecycleTargetLocked(event.BrowserID, event.TargetID, state)
 	reason := boundedLabel(event.Reason, maxLifecycleReason)
 	if reason == "" {
@@ -299,7 +308,16 @@ func (s *Service) applyNavigationLocked(ctx context.Context, event LifecycleEven
 	selection.connected = true
 	selection.ready = false
 	s.selection = &selection
-	return s.refreshSelectionLocked(ctx, event)
+	refreshed, refreshFailure := s.refreshSelectionLocked(ctx, event)
+	if refreshFailure != nil {
+		return refreshed, refreshFailure
+	}
+	if browser, ok := s.browsers[event.BrowserID]; ok {
+		if persistenceFailure := s.persistSelectionLocked(ctx, browser, refreshed.Target, refreshed.SelectedAt); persistenceFailure != nil {
+			return refreshed, persistenceFailure
+		}
+	}
+	return refreshed, nil
 }
 
 func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *TargetHandle, *DiscoveryError) {

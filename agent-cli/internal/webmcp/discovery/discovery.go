@@ -51,35 +51,53 @@ type Options struct {
 	MaxVersionBytes   int64
 	MaxTargetBytes    int64
 	ProbeTimeout      time.Duration
+	// SelectionStore is the preferred injected persistence seam. Persistence,
+	// SelectionPersistence, and Store are compatibility aliases for callers
+	// that name the same Lane B port differently; the first non-nil value is
+	// used. The value is intentionally accepted as any so byte-oriented and
+	// typed fake stores can share this neutral package.
+	SelectionStore       any
+	Persistence          any
+	SelectionPersistence any
+	Store                any
+	// PersistenceEnabled can explicitly turn persistence on or off. When it is
+	// nil, supplying a store enables persistence; PersistSelection is a
+	// convenient explicit opt-in for callers using a store alias.
+	PersistenceEnabled *bool
+	PersistSelection   bool
+	DisablePersistence bool
 }
 
 // Service performs deterministic, serialized browser endpoint discovery.
 // Serialized calls also keep semantic event sequence numbers monotonic when a
 // service instance is reused by more than one command adapter.
 type Service struct {
-	mu                sync.Mutex
-	httpClient        HTTPClient
-	activePortReader  ActivePortReader
-	processEnumerator ProcessEnumerator
-	webSocketProbe    WebSocketProbe
-	targetLister      TargetLister
-	targetProbe       TargetCapabilityProbe
-	targetAttacher    TargetAttacher
-	activator         TargetActivator
-	originPolicy      OriginPolicy
-	idMapper          IDMapper
-	targetIDMapper    TargetIDMapper
-	eventSink         EventSink
-	clock             Clock
-	maxVersionBytes   int64
-	maxTargetBytes    int64
-	probeTimeout      time.Duration
-	eventSequence     uint64
-	endpoints         map[string]targetEndpoint
-	targets           map[string]map[string]targetState
-	browsers          map[string]BrowserCandidate
-	selection         *Selection
-	lifecycleSeen     map[string]struct{}
+	mu                 sync.Mutex
+	httpClient         HTTPClient
+	activePortReader   ActivePortReader
+	processEnumerator  ProcessEnumerator
+	webSocketProbe     WebSocketProbe
+	targetLister       TargetLister
+	targetProbe        TargetCapabilityProbe
+	targetAttacher     TargetAttacher
+	activator          TargetActivator
+	originPolicy       OriginPolicy
+	idMapper           IDMapper
+	targetIDMapper     TargetIDMapper
+	eventSink          EventSink
+	clock              Clock
+	maxVersionBytes    int64
+	maxTargetBytes     int64
+	probeTimeout       time.Duration
+	eventSequence      uint64
+	endpoints          map[string]targetEndpoint
+	targets            map[string]map[string]targetState
+	browsers           map[string]BrowserCandidate
+	selection          *Selection
+	lifecycleSeen      map[string]struct{}
+	selectionStore     selectionStoreAdapter
+	persistenceError   error
+	persistenceEnabled bool
 }
 
 // New constructs a discovery service with standard-library defaults for the
@@ -137,27 +155,42 @@ func New(options Options) *Service {
 	if probeTimeout <= 0 {
 		probeTimeout = defaultProbeTimeout
 	}
+	configuredStore := firstConfiguredStore(options)
+	selectionStore, persistenceError := adaptSelectionStore(configuredStore)
+	persistenceEnabled := configuredStore != nil
+	if options.PersistenceEnabled != nil {
+		persistenceEnabled = *options.PersistenceEnabled
+	}
+	if options.PersistSelection {
+		persistenceEnabled = true
+	}
+	if options.DisablePersistence {
+		persistenceEnabled = false
+	}
 	return &Service{
-		httpClient:        client,
-		activePortReader:  activePortReader,
-		processEnumerator: options.ProcessEnumerator,
-		webSocketProbe:    webSocketProbe,
-		targetLister:      options.TargetLister,
-		targetProbe:       targetProbe,
-		targetAttacher:    targetAttacher,
-		activator:         activator,
-		originPolicy:      newOriginPolicy(options.OriginPolicy, options.AllowedOrigins, options.DeniedOrigins),
-		idMapper:          idMapper,
-		targetIDMapper:    targetIDMapper,
-		eventSink:         eventSink,
-		clock:             clock,
-		maxVersionBytes:   maxVersionBytes,
-		maxTargetBytes:    maxTargetBytes,
-		probeTimeout:      probeTimeout,
-		endpoints:         make(map[string]targetEndpoint),
-		targets:           make(map[string]map[string]targetState),
-		browsers:          make(map[string]BrowserCandidate),
-		lifecycleSeen:     make(map[string]struct{}),
+		httpClient:         client,
+		activePortReader:   activePortReader,
+		processEnumerator:  options.ProcessEnumerator,
+		webSocketProbe:     webSocketProbe,
+		targetLister:       options.TargetLister,
+		targetProbe:        targetProbe,
+		targetAttacher:     targetAttacher,
+		activator:          activator,
+		originPolicy:       newOriginPolicy(options.OriginPolicy, options.AllowedOrigins, options.DeniedOrigins),
+		idMapper:           idMapper,
+		targetIDMapper:     targetIDMapper,
+		eventSink:          eventSink,
+		clock:              clock,
+		maxVersionBytes:    maxVersionBytes,
+		maxTargetBytes:     maxTargetBytes,
+		probeTimeout:       probeTimeout,
+		endpoints:          make(map[string]targetEndpoint),
+		targets:            make(map[string]map[string]targetState),
+		browsers:           make(map[string]BrowserCandidate),
+		lifecycleSeen:      make(map[string]struct{}),
+		selectionStore:     selectionStore,
+		persistenceError:   persistenceError,
+		persistenceEnabled: persistenceEnabled,
 	}
 }
 
