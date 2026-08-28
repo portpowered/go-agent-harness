@@ -281,7 +281,32 @@ participant; omitted, the provider's own default applies, same as today's
 unconditional behavior — this field only ever narrows/specifies, it does not
 change default behavior for a manifest that doesn't set it.
 
-## 8. Human/browser join — real signaling, later phase, not in Phase 1
+## 8. Human/browser join and customer WebRTC availability — deferred
+
+**Customer-boundary finding (2026-08-28): the active WebRTC audio path is
+not customer-usable yet.** The CLI deliberately rejects an otherwise valid
+`agent session --transport webrtc` selection before config loading, provider
+connection, signaling resolution, peer/media setup, or audio-device
+acquisition. The rejection is the honest current contract: the repository's
+only concrete `rtc.Signaling` implementation is an in-process loopback pair,
+production CLI composition has no customer-reachable network signaling
+resolver, and spoken-audio inputs (`--audio-in`, stdin, and microphone/device
+speech) are not wired to the WebRTC runtime. Customers who need file, stdin,
+or microphone speech should use the supported WebSocket path instead:
+`--transport ws` with `--audio-in` or `--audio-in-device`.
+
+This is specifically a deferred **active audio-participant** capability. It
+must not be inferred from the receive-only external media ingestion path
+(`go2rtc://`/`rtsp://` `--media-source`), which pulls a camera/source feed and
+does not provide bidirectional offer/answer/ICE signaling or customer speech
+input. It is also separate from the passive visualization/event-streaming
+path (`--stream`), which observes events without audio, signaling, or room
+participation. The CLI guard may be removed only after a customer-reachable
+network signaling implementation and at least one supported spoken-audio
+source complete a real end-to-end WebRTC session that a customer can use;
+loopback-only tests and receive-only media ingestion do not satisfy that bar.
+The future phase must still address the NAT/ICE traversal, authentication,
+and safety/tool-boundary concerns documented below.
 
 **Single most important finding: the abstraction fork the directive worried
 about does not need to happen — it already exists in production code, one

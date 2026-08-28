@@ -16,7 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestSessionCommandTransportHelpDocumentsSupportedValues(t *testing.T) {
+func TestSessionCommandTransportHelpDocumentsDeferredWebRTCCapability(t *testing.T) {
 	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	var out bytes.Buffer
 	command.SetOut(&out)
@@ -28,13 +28,20 @@ func TestSessionCommandTransportHelpDocumentsSupportedValues(t *testing.T) {
 	help := out.String()
 	for _, want := range []string{
 		"--transport string",
-		"ws",
-		"webrtc",
+		"ws (default, supported)",
+		"webrtc (deferred/unavailable customer path)",
 		"--signaling string",
+		"Deferred/unavailable WebRTC signaling endpoint",
 		"requires --transport webrtc",
 		"--transport webrtc requires this flag",
 		"--media-source string",
+		"Deferred/unavailable WebRTC receive-only external media source",
 		"cannot be combined with --audio-in",
+		"customer-reachable network signaling",
+		"spoken-audio input wiring",
+		"file, stdin, or microphone speech input",
+		"supported --transport ws",
+		"--audio-in-device",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("session help does not document %q:\n%s", want, help)
