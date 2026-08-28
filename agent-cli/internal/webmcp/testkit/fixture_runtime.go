@@ -436,7 +436,7 @@ func compareOperation(expected OperationExpectation, actual OperationRequest) (s
 		}
 	case OperationNavigate:
 		if expected.URL != actual.URL {
-			return "url", fmt.Errorf("expected URL %q, got %q", expected.URL, actual.URL)
+			return "url", errors.New("URL values differ")
 		}
 	}
 	return "", nil

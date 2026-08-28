@@ -909,7 +909,7 @@ var eventDefinitions = map[EventType]eventDefinition{
 	EventBrowserInvocationError: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "code": payloadString, "error": payloadAny, "message": payloadString,
+			"invocation_id": payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "code": payloadString, "error": payloadAny, "message": payloadString,
 		}),
 	},
 	EventBrowserInvocationCancel: {

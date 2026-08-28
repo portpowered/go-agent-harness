@@ -42,15 +42,16 @@ type probeScenarioV2EvidenceSummary struct {
 }
 
 type probeScenarioV2ObjectiveEvidenceArtifact struct {
-	Version               string `json:"version"`
-	ScenarioID            string `json:"scenario_id"`
-	CheckedClaim          string `json:"checked_claim"`
-	Verified              bool   `json:"verified"`
-	ProviderCapturePath   string `json:"provider_capture_path"`
-	BrowserEventsPath     string `json:"browser_events_path,omitempty"`
-	PageStatePath         string `json:"page_state_path"`
-	WorkspaceSnapshotPath string `json:"workspace_snapshot_path"`
-	Error                 string `json:"error,omitempty"`
+	Version               string                     `json:"version"`
+	ScenarioID            string                     `json:"scenario_id"`
+	CheckedClaim          string                     `json:"checked_claim"`
+	Verified              bool                       `json:"verified"`
+	ProviderCapturePath   string                     `json:"provider_capture_path"`
+	BrowserEventsPath     string                     `json:"browser_events_path,omitempty"`
+	PageStatePath         string                     `json:"page_state_path"`
+	WorkspaceSnapshotPath string                     `json:"workspace_snapshot_path"`
+	Error                 string                     `json:"error,omitempty"`
+	Divergence            *probeScenarioV2Divergence `json:"divergence,omitempty"`
 }
 
 type probeScenarioV2WorkspaceSnapshot struct {
@@ -63,6 +64,7 @@ type probeScenarioV2ObjectiveVerification struct {
 	CheckedClaim string
 	Verified     bool
 	Error        string
+	Divergence   *probeScenarioV2Divergence
 }
 
 func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeScenarioV2EvidenceSummary, probe.ObjectiveEvidence, error) {
@@ -113,6 +115,7 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		PageStatePath:         probeScenarioV2PageStateArtifactPath,
 		WorkspaceSnapshotPath: probeScenarioV2WorkspaceArtifactPath,
 		Error:                 verification.Error,
+		Divergence:            verification.Divergence,
 	}
 	objective, err := probeScenarioV2JSONLine(objectiveArtifact)
 	if err != nil {
@@ -155,6 +158,7 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		_ = os.RemoveAll(destination)
 		return probeScenarioV2EvidenceSummary{}, probe.ObjectiveEvidence{}, fmt.Errorf("verify finalized v2 evidence: %w", err)
 	}
+	e.objectiveDivergence = post.Divergence
 	summary := probeScenarioV2EvidenceSummary{
 		ScenarioID:            e.scenario.ID,
 		ManifestPath:          filepath.Join(destination, "manifest.json"),
@@ -361,7 +365,7 @@ func verifyProbeScenarioV2Bundle(destination string, expected probe.ScenarioV2) 
 		return probeScenarioV2ObjectiveVerification{}, errors.New("objective evidence references a different run or artifact set")
 	}
 	computed := verifyProbeScenarioV2EvidenceData(workspace.Scenario, events, pageState, capture, hasBrowserArtifact)
-	if objective.CheckedClaim != computed.CheckedClaim || objective.Verified != computed.Verified || objective.Error != computed.Error {
+	if objective.CheckedClaim != computed.CheckedClaim || objective.Verified != computed.Verified || objective.Error != computed.Error || !probeScenarioV2DivergenceEqual(objective.Divergence, computed.Divergence) {
 		return probeScenarioV2ObjectiveVerification{}, errors.New("objective evidence is not reproducible from captured artifacts")
 	}
 	return computed, nil
@@ -397,46 +401,70 @@ func manifestBrowserArtifact(manifest transcript.RecordingManifest) *transcript.
 type probeScenarioV2PersistedBrowserEvidence struct {
 	browserCount      int64
 	browserCountSet   bool
+	browserCountPos   int
 	targets           map[string]probeScenarioV2PersistedTarget
 	selectedTarget    string
+	selectedTargetPos int
 	catalog           map[string]probeScenarioV2PersistedTool
 	catalogByRef      map[string]string
 	catalogGeneration int64
 	catalogSet        bool
+	catalogPos        int
 	invocations       []*probeScenarioV2PersistedInvocation
 	invocationByID    map[string]*probeScenarioV2PersistedInvocation
 	stale             bool
+	stalePos          int
+	staleToolRef      string
 	canceled          bool
+	canceledPos       int
 	closed            bool
+	closedPos         int
+	approvalRequested bool
+	approvalPos       int
+	operations        []probeScenarioV2ObservedOperation
+	methods           []probeScenarioV2ObservedOperation
 }
 
 type probeScenarioV2PersistedTarget struct {
 	Origin   string
 	Eligible bool
+	Position int
 }
 
 type probeScenarioV2PersistedTool struct {
 	Name        string
 	Ref         string
 	InputSchema json.RawMessage
+	Position    int
 }
 
 type probeScenarioV2PersistedInvocation struct {
-	ID        string
-	Name      string
-	ToolRef   string
-	Input     json.RawMessage
-	Output    json.RawMessage
-	State     string
-	ErrorCode string
-	Terminal  bool
+	ID            string
+	Name          string
+	ToolRef       string
+	Input         json.RawMessage
+	Output        json.RawMessage
+	State         string
+	ErrorCode     string
+	Terminal      bool
+	CreatedPos    int
+	DispatchedPos int
+	TerminalPos   int
+	Approval      bool
+	ApprovalPos   int
+}
+
+type probeScenarioV2ObservedOperation struct {
+	Name              string
+	OperationPosition int
+	EventPosition     int
 }
 
 func verifyProbeScenarioV2EvidenceData(
 	scenario probe.ScenarioV2,
 	events []testkit.Event,
 	pageState json.RawMessage,
-	_ gatewaytesting.SessionCapture,
+	capture gatewaytesting.SessionCapture,
 	hasBrowserArtifact bool,
 ) probeScenarioV2ObjectiveVerification {
 	verification := probeScenarioV2ObjectiveVerification{
@@ -450,19 +478,32 @@ func verifyProbeScenarioV2EvidenceData(
 		}
 		hasBrowserObjectives = true
 		if !hasBrowserArtifact || len(events) == 0 {
-			return failedProbeScenarioV2Objective(index, expectation.Type)
+			return failedProbeScenarioV2Objective(scenario, index, expectation, probeScenarioV2ObservationCheck{
+				Expected:         "captured objective evidence",
+				Actual:           "missing browser event artifact",
+				EvidenceArtifact: probeScenarioV2ExpectationArtifact(expectation.Type),
+			})
 		}
 	}
-	if !hasBrowserObjectives {
-		return verification
+	if hasBrowserObjectives {
+		evidence := indexProbeScenarioV2BrowserEvents(events)
+		for index, expectation := range scenario.Expectations {
+			if !isProbeScenarioV2BrowserObjective(expectation.Type) {
+				continue
+			}
+			check := probeScenarioV2BrowserObjectiveCheck(evidence, pageState, expectation)
+			if !check.Passed {
+				return failedProbeScenarioV2Objective(scenario, index, expectation, check)
+			}
+		}
 	}
-	evidence := indexProbeScenarioV2BrowserEvents(events)
 	for index, expectation := range scenario.Expectations {
-		if !isProbeScenarioV2BrowserObjective(expectation.Type) {
+		if !isProbeScenarioV2ProviderObjective(expectation.Type) {
 			continue
 		}
-		if passed := verifyProbeScenarioV2BrowserObjective(evidence, pageState, expectation); !passed {
-			return failedProbeScenarioV2Objective(index, expectation.Type)
+		check := probeScenarioV2ProviderObjectiveCheck(capture, expectation)
+		if !check.Passed {
+			return failedProbeScenarioV2Objective(scenario, index, expectation, check)
 		}
 	}
 	return verification
@@ -479,14 +520,26 @@ func probeScenarioV2CheckedClaim(scenario probe.ScenarioV2) string {
 			return "browser objectives"
 		}
 	}
+	for _, expectation := range scenario.Expectations {
+		if isProbeScenarioV2ProviderObjective(expectation.Type) {
+			return "provider objectives"
+		}
+	}
 	return "captured probe artifacts"
 }
 
-func failedProbeScenarioV2Objective(index int, kind probe.ScenarioV2ExpectationType) probeScenarioV2ObjectiveVerification {
+func failedProbeScenarioV2Objective(
+	scenario probe.ScenarioV2,
+	index int,
+	expectation probe.ScenarioV2Expectation,
+	check probeScenarioV2ObservationCheck,
+) probeScenarioV2ObjectiveVerification {
+	divergence := makeProbeScenarioV2Divergence(scenario, index, expectation, check)
 	return probeScenarioV2ObjectiveVerification{
-		CheckedClaim: probeScenarioV2CheckedClaim(probe.ScenarioV2{Expectations: []probe.ScenarioV2Expectation{{Type: kind}}}),
+		CheckedClaim: probeScenarioV2CheckedClaim(scenario),
 		Verified:     false,
-		Error:        fmt.Sprintf("browser objective %d (%s) was not proven by captured artifacts", index, kind),
+		Error:        divergence.Error(),
+		Divergence:   divergence,
 	}
 }
 
@@ -504,9 +557,15 @@ func isProbeScenarioV2BrowserObjective(kind probe.ScenarioV2ExpectationType) boo
 		probe.ScenarioV2ExpectationToolInputJSONEquals,
 		probe.ScenarioV2ExpectationToolResultJSONPathEquals,
 		probe.ScenarioV2ExpectationToolStatusEquals,
+		probe.ScenarioV2ExpectationChromeOperationOrder,
+		probe.ScenarioV2ExpectationNoUnexpectedChromeOperations,
+		probe.ScenarioV2ExpectationGeneratedCDPMethodOrder,
+		probe.ScenarioV2ExpectationNoUnexpectedGeneratedCDPMethods,
 		probe.ScenarioV2ExpectationNoPendingInvocations,
 		probe.ScenarioV2ExpectationPageStateEquals,
 		probe.ScenarioV2ExpectationResponseCanceled,
+		probe.ScenarioV2ExpectationApprovalRequested,
+		probe.ScenarioV2ExpectationApprovalNotRequested,
 		probe.ScenarioV2ExpectationStaleToolRejected,
 		probe.ScenarioV2ExpectationBrowserConnectionClosed:
 		return true
@@ -522,18 +581,29 @@ func indexProbeScenarioV2BrowserEvents(events []testkit.Event) probeScenarioV2Pe
 		catalogByRef:   make(map[string]string),
 		invocationByID: make(map[string]*probeScenarioV2PersistedInvocation),
 	}
-	for _, event := range events {
-		fields, ok := probeScenarioV2EventFields(event)
-		if !ok {
-			continue
+	for index, event := range events {
+		position := int(event.Sequence)
+		if position <= 0 {
+			position = index + 1
 		}
+		fields, ok := probeScenarioV2EventFields(event)
 		switch event.Type {
+		case testkit.EventBrowserDiscoveryStarted:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "connect", position)
 		case testkit.EventBrowserDiscoveryCompleted:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "discover", position)
+			if !ok {
+				continue
+			}
 			if count, ok := probeScenarioV2PayloadInt(fields, "candidate_count"); ok {
 				evidence.browserCount = count
 				evidence.browserCountSet = true
+				evidence.browserCountPos = position
 			}
 		case testkit.EventBrowserTargetsSnapshot:
+			if !ok {
+				continue
+			}
 			var targets []map[string]json.RawMessage
 			if raw := fields["targets"]; json.Unmarshal(raw, &targets) == nil {
 				for _, target := range targets {
@@ -544,12 +614,17 @@ func indexProbeScenarioV2BrowserEvents(events []testkit.Event) probeScenarioV2Pe
 					eligible, _ := probeScenarioV2PayloadBool(target, "eligible")
 					origin, _ := probeScenarioV2PayloadString(target, "origin")
 					key := string(event.BrowserID) + "\x00" + id
-					evidence.targets[key] = probeScenarioV2PersistedTarget{Origin: origin, Eligible: eligible}
+					evidence.targets[key] = probeScenarioV2PersistedTarget{Origin: origin, Eligible: eligible, Position: position}
 				}
 			}
 		case testkit.EventBrowserTargetSelected:
 			evidence.selectedTarget = string(event.TargetID)
+			evidence.selectedTargetPos = position
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "select", position)
 		case testkit.EventBrowserCatalogToolAdded:
+			if !ok {
+				continue
+			}
 			var tools []map[string]json.RawMessage
 			if raw := fields["tools"]; json.Unmarshal(raw, &tools) == nil {
 				for _, rawTool := range tools {
@@ -558,7 +633,7 @@ func indexProbeScenarioV2BrowserEvents(events []testkit.Event) probeScenarioV2Pe
 						continue
 					}
 					ref, _ := probeScenarioV2PayloadString(rawTool, "ref")
-					tool := probeScenarioV2PersistedTool{Name: name, Ref: ref, InputSchema: append(json.RawMessage(nil), rawTool["input_schema"]...)}
+					tool := probeScenarioV2PersistedTool{Name: name, Ref: ref, InputSchema: append(json.RawMessage(nil), rawTool["input_schema"]...), Position: position}
 					evidence.catalog[name] = tool
 					if ref != "" {
 						evidence.catalogByRef[ref] = name
@@ -578,7 +653,13 @@ func indexProbeScenarioV2BrowserEvents(events []testkit.Event) probeScenarioV2Pe
 		case testkit.EventBrowserCatalogReady:
 			evidence.catalogGeneration = int64(event.Generation)
 			evidence.catalogSet = true
+			evidence.catalogPos = position
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "list_tools", position)
 		case testkit.EventBrowserInvocationCreated:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "invoke", position)
+			if !ok {
+				continue
+			}
 			id, idOK := probeScenarioV2PayloadString(fields, "invocation_id")
 			if !idOK || id == "" {
 				continue
@@ -592,34 +673,78 @@ func indexProbeScenarioV2BrowserEvents(events []testkit.Event) probeScenarioV2Pe
 			invocation.Name, _ = probeScenarioV2PayloadString(fields, "tool_name")
 			invocation.ToolRef, _ = probeScenarioV2PayloadString(fields, "tool_ref")
 			invocation.State = string(webmcp.InvocationCreated)
+			invocation.CreatedPos = position
 		case testkit.EventBrowserInvocationDispatched:
+			appendProbeScenarioV2ObservedOperation(&evidence.methods, "WebMCP.invokeTool", position)
+			if !ok {
+				continue
+			}
 			if invocation := evidence.invocationForEvent(fields); invocation != nil {
 				invocation.Input = append(json.RawMessage(nil), fields["input"]...)
 				invocation.State = string(webmcp.InvocationDispatched)
+				invocation.DispatchedPos = position
+			}
+		case testkit.EventBrowserInvocationApproval:
+			if !ok {
+				continue
+			}
+			evidence.approvalRequested = true
+			evidence.approvalPos = position
+			if invocation := evidence.invocationForEvent(fields); invocation != nil {
+				invocation.Approval = true
+				invocation.ApprovalPos = position
 			}
 		case testkit.EventBrowserInvocationCompleted:
+			if !ok {
+				continue
+			}
 			if invocation := evidence.invocationForEvent(fields); invocation != nil {
 				invocation.Output = append(json.RawMessage(nil), fields["output"]...)
 				invocation.State, _ = probeScenarioV2PayloadString(fields, "status")
 				invocation.Terminal = true
+				invocation.TerminalPos = position
 			}
 		case testkit.EventBrowserInvocationError:
+			if !ok {
+				continue
+			}
 			if code, ok := probeScenarioV2PayloadString(fields, "code"); ok && code == string(webmcp.ErrorStaleToolRef) {
 				evidence.stale = true
+				evidence.stalePos = position
+				evidence.staleToolRef, _ = probeScenarioV2PayloadString(fields, "tool_ref")
 			}
 			if invocation := evidence.invocationForEvent(fields); invocation != nil {
 				invocation.ErrorCode, _ = probeScenarioV2PayloadString(fields, "code")
 				invocation.State = string(webmcp.InvocationError)
 				invocation.Terminal = true
+				invocation.TerminalPos = position
 			}
 		case testkit.EventBrowserInvocationCanceled:
 			evidence.canceled = true
+			evidence.canceledPos = position
+			if !ok {
+				continue
+			}
 			if invocation := evidence.invocationForEvent(fields); invocation != nil {
 				invocation.State = string(webmcp.InvocationCanceled)
 				invocation.Terminal = true
+				invocation.TerminalPos = position
 			}
+		case testkit.EventBrowserInvocationCancel:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "cancel", position)
+			appendProbeScenarioV2ObservedOperation(&evidence.methods, "WebMCP.cancelInvocation", position)
+		case testkit.EventBrowserWebMCPEnabled:
+			appendProbeScenarioV2ObservedOperation(&evidence.methods, "WebMCP.enable", position)
+		case testkit.EventBrowserPageGenerationChanged:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "navigate", position)
+		case testkit.EventBrowserChromeTargetAttached:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "attach", position)
+		case testkit.EventBrowserTargetDetached:
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "detach", position)
 		case testkit.EventBrowserChromeTargetClosed:
 			evidence.closed = true
+			evidence.closedPos = position
+			appendProbeScenarioV2ObservedOperation(&evidence.operations, "close", position)
 		}
 	}
 	for _, invocation := range evidence.invocations {
@@ -628,6 +753,17 @@ func indexProbeScenarioV2BrowserEvents(events []testkit.Event) probeScenarioV2Pe
 		}
 	}
 	return evidence
+}
+
+func appendProbeScenarioV2ObservedOperation(operations *[]probeScenarioV2ObservedOperation, name string, position int) {
+	if operations == nil || name == "" {
+		return
+	}
+	*operations = append(*operations, probeScenarioV2ObservedOperation{
+		Name:              name,
+		OperationPosition: len(*operations) + 1,
+		EventPosition:     position,
+	})
 }
 
 func (e probeScenarioV2PersistedBrowserEvidence) invocationForEvent(fields map[string]json.RawMessage) *probeScenarioV2PersistedInvocation {
@@ -678,99 +814,6 @@ func probeScenarioV2PayloadInt(fields map[string]json.RawMessage, key string) (i
 	}
 	parsed, err := number.Int64()
 	return parsed, err == nil
-}
-
-func verifyProbeScenarioV2BrowserObjective(
-	evidence probeScenarioV2PersistedBrowserEvidence,
-	pageState json.RawMessage,
-	expectation probe.ScenarioV2Expectation,
-) bool {
-	switch expectation.Type {
-	case probe.ScenarioV2ExpectationBrowserCountEquals:
-		return evidence.browserCountSet && evidence.browserCount == expectation.Equals
-	case probe.ScenarioV2ExpectationEligibleTabCountEquals:
-		if len(evidence.targets) == 0 {
-			return expectation.Equals == 0
-		}
-		var count int64
-		for _, target := range evidence.targets {
-			if target.Eligible {
-				count++
-			}
-		}
-		return count == expectation.Equals
-	case probe.ScenarioV2ExpectationSelectedTabEquals:
-		return evidence.selectedTarget == expectation.TargetID
-	case probe.ScenarioV2ExpectationSelectedOriginEquals:
-		for key, target := range evidence.targets {
-			if strings.HasSuffix(key, "\x00"+evidence.selectedTarget) {
-				return target.Origin == expectation.Origin
-			}
-		}
-		return false
-	case probe.ScenarioV2ExpectationCatalogGenerationEquals:
-		return evidence.catalogSet && evidence.catalogGeneration == expectation.Generation
-	case probe.ScenarioV2ExpectationToolCatalogContains, probe.ScenarioV2ExpectationToolCatalogNotContains:
-		_, found := evidence.catalog[expectation.Name]
-		if expectation.Type == probe.ScenarioV2ExpectationToolCatalogNotContains {
-			return !found
-		}
-		return found
-	case probe.ScenarioV2ExpectationToolSchemaEquals:
-		tool, found := evidence.catalog[expectation.Name]
-		return found && semanticJSONEqual(tool.InputSchema, expectation.Schema)
-	case probe.ScenarioV2ExpectationToolInvocationCount:
-		var count int64
-		for _, invocation := range evidence.invocations {
-			if invocation.Name == expectation.Name {
-				count++
-			}
-		}
-		return count == expectation.Equals
-	case probe.ScenarioV2ExpectationToolInputJSONEquals:
-		for index := len(evidence.invocations) - 1; index >= 0; index-- {
-			invocation := evidence.invocations[index]
-			if invocation.Name == expectation.Name {
-				return semanticJSONEqual(invocation.Input, json.RawMessage(expectation.InputJSON))
-			}
-		}
-		return false
-	case probe.ScenarioV2ExpectationToolResultJSONPathEquals:
-		for index := len(evidence.invocations) - 1; index >= 0; index-- {
-			invocation := evidence.invocations[index]
-			if invocation.Name != expectation.Name {
-				continue
-			}
-			value, err := jsonPathValue(invocation.Output, expectation.Path)
-			return err == nil && semanticJSONEqual(value, expectation.Value)
-		}
-		return false
-	case probe.ScenarioV2ExpectationToolStatusEquals:
-		for index := len(evidence.invocations) - 1; index >= 0; index-- {
-			if evidence.invocations[index].Name == expectation.Name {
-				return strings.EqualFold(evidence.invocations[index].State, expectation.Status)
-			}
-		}
-		return false
-	case probe.ScenarioV2ExpectationNoPendingInvocations:
-		for _, invocation := range evidence.invocations {
-			if !invocation.Terminal {
-				return false
-			}
-		}
-		return true
-	case probe.ScenarioV2ExpectationPageStateEquals:
-		value, err := jsonPathValue(pageState, expectation.Path)
-		return err == nil && semanticJSONEqual(value, expectation.Value)
-	case probe.ScenarioV2ExpectationResponseCanceled:
-		return evidence.canceled
-	case probe.ScenarioV2ExpectationStaleToolRejected:
-		return evidence.stale
-	case probe.ScenarioV2ExpectationBrowserConnectionClosed:
-		return evidence.closed
-	default:
-		return false
-	}
 }
 
 func (c *ProbeRunCommand) prepareProbeScenarioV2RecordingRoot(count int) (string, error) {
@@ -1003,7 +1046,14 @@ func (e *probeScenarioV2Executor) recordInvocationAdmission(invocation probeScen
 	targetID := e.selected.Key.TargetID
 	generation := e.selected.Generation
 	if invocation.PublicID == "" {
-		return e.recordInvocationError(browserID, targetID, generation, "", invocation.Err)
+		fields := map[string]any{"code": probeScenarioV2ErrorCode(invocation.Err)}
+		if invocation.ToolRef != "" {
+			fields["tool_ref"] = string(invocation.ToolRef)
+		}
+		if invocation.Name != "" {
+			fields["tool_name"] = invocation.Name
+		}
+		return e.recordBrowserEvent(testkit.EventBrowserInvocationError, browserID, targetID, generation, fields)
 	}
 	fields := map[string]any{
 		"invocation_id": string(invocation.PublicID),

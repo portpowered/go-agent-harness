@@ -100,6 +100,10 @@ func TestProbeRunScenarioV2ExecutesBrowserFixtureWithoutReplayFlag(t *testing.T)
 			{Type: probe.ScenarioV2ExpectationToolCatalogContains, Name: "read_state"},
 			{Type: probe.ScenarioV2ExpectationToolInvocationCount, Name: "read_state", Equals: 1, HasEquals: true},
 			{Type: probe.ScenarioV2ExpectationToolResultJSONPathEquals, Name: "read_state", Path: "$.value", Value: json.RawMessage(`9007199254740993`)},
+			{Type: probe.ScenarioV2ExpectationChromeOperationOrder, Operations: []string{"connect", "select", "invoke"}},
+			{Type: probe.ScenarioV2ExpectationNoUnexpectedChromeOperations, Operations: []string{"connect", "discover", "select", "attach", "list_tools", "invoke", "detach", "close"}},
+			{Type: probe.ScenarioV2ExpectationGeneratedCDPMethodOrder, Methods: []string{"WebMCP.enable", "WebMCP.invokeTool"}},
+			{Type: probe.ScenarioV2ExpectationNoUnexpectedGeneratedCDPMethods, Methods: []string{"WebMCP.enable", "WebMCP.invokeTool"}},
 			{Type: probe.ScenarioV2ExpectationNoPendingInvocations},
 			{Type: probe.ScenarioV2ExpectationBrowserConnectionClosed},
 			{Type: probe.ScenarioV2ExpectationPageStateEquals, Path: "$", Value: json.RawMessage(`{}`)},
@@ -257,6 +261,104 @@ func TestProbeRunScenarioV2ReportsBrowserFixtureFailureAsResult(t *testing.T) {
 	}
 }
 
+func TestProbeRunScenarioV2ReportsSafeFirstObjectiveDivergenceAndCleansUp(t *testing.T) {
+	dir := t.TempDir()
+	browserPath := filepath.Join(dir, "browser.json")
+	script := testkit.BrowserScript{
+		Version: testkit.BrowserScriptVersion,
+		Endpoint: testkit.BrowserEndpoint{
+			Version: testkit.EndpointVersionInfo{
+				Browser:              "Chrome/Fixture",
+				ProtocolVersion:      "1.3",
+				WebSocketDebuggerURL: "ws://fixture/browser?credential=endpoint-secret",
+			},
+			Targets: []testkit.BrowserTarget{{
+				ID:                   "tab-1",
+				Type:                 "page",
+				Title:                "Fixture",
+				URL:                  "https://fixture.test/?token=actual-secret#actual-fragment",
+				WebSocketDebuggerURL: "ws://fixture/page/tab-1?credential=page-secret",
+			}},
+		},
+		Operations: []testkit.BrowserScriptOperation{
+			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableLifecycle}, Result: json.RawMessage(`{}`)},
+			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableWebMCP}, Result: json.RawMessage(`{}`)},
+		},
+	}
+	browserData, err := json.Marshal(script)
+	if err != nil {
+		t.Fatalf("marshal browser fixture: %v", err)
+	}
+	if err := os.WriteFile(browserPath, browserData, 0o644); err != nil {
+		t.Fatalf("write browser fixture: %v", err)
+	}
+	scenarioPath := filepath.Join(dir, "divergence.scenario.json")
+	document := `{
+  "schema_version": "probe.scenario.v2",
+  "id": "safe-divergence",
+  "browser_fixture": "browser.json",
+  "steps": [
+    {"type":"browser_connect","browser_id":"fixture-browser"},
+    {"type":"browser_discover","browser_id":"fixture-browser"},
+    {"type":"browser_select","browser_id":"fixture-browser","target_id":"tab-1"},
+    {"type":"close"}
+  ],
+  "expectations": [
+    {"type":"selected_origin_equals","origin":"https://expected.example/?token=expected-secret#expected-fragment"},
+    {"type":"browser_connection_closed"}
+  ]
+}`
+	if err := os.WriteFile(scenarioPath, []byte(document), 0o644); err != nil {
+		t.Fatalf("write v2 scenario: %v", err)
+	}
+	recordingRoot := filepath.Join(dir, "evidence")
+	run := executeCLI("probe", "run", scenarioPath, "--json", "--recording-root", recordingRoot)
+	if run.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}
+	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
+	result := results[0]
+	if result["pass"] != false || summary["status"] != "fail" {
+		t.Fatalf("divergent result = %v summary=%v", result, summary)
+	}
+	errorText, _ := result["error"].(string)
+	for _, secret := range []string{"expected-secret", "actual-secret", "expected-fragment", "actual-fragment", "endpoint-secret", "page-secret"} {
+		if strings.Contains(errorText, secret) {
+			t.Fatalf("divergence error leaked %q: %s", secret, errorText)
+		}
+	}
+	if !strings.Contains(errorText, "safe-divergence") || !strings.Contains(errorText, "selected_origin_equals") || !strings.Contains(errorText, "expectation[0]") {
+		t.Fatalf("divergence error lacks stable context: %s", errorText)
+	}
+	divergence, ok := result["divergence"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing structured divergence: %v", result)
+	}
+	if divergence["expectation_index"] != float64(0) || divergence["expectation_type"] != string(probe.ScenarioV2ExpectationSelectedOriginEquals) || divergence["evidence_artifact"] != "browser.events.jsonl" {
+		t.Fatalf("unexpected divergence identity: %v", divergence)
+	}
+	if position, ok := divergence["event_position"].(float64); !ok || position <= 0 {
+		t.Fatalf("divergence event position = %v, want positive position", divergence["event_position"])
+	}
+	if divergence["expected"] != "https://expected.example/" || divergence["actual"] != "https://fixture.test" {
+		t.Fatalf("unexpected redacted origin divergence: %v", divergence)
+	}
+	evidence, ok := result["evidence"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing evidence summary for divergence: %v", result)
+	}
+	browserEvents, err := os.ReadFile(evidence["browser_events_path"].(string))
+	if err != nil {
+		t.Fatalf("read browser evidence: %v", err)
+	}
+	if !bytes.Contains(browserEvents, []byte(`browser.chrome.target_closed`)) {
+		t.Fatalf("cleanup event missing after objective divergence: %s", browserEvents)
+	}
+	if bytes.Contains(browserEvents, []byte("actual-secret")) || bytes.Contains(browserEvents, []byte("actual-fragment")) || bytes.Contains(browserEvents, []byte("page-secret")) {
+		t.Fatalf("browser evidence leaked endpoint data: %s", browserEvents)
+	}
+}
+
 func TestProbeScenarioV2ObjectiveVerifierUsesPersistedPageState(t *testing.T) {
 	scenario := probe.ScenarioV2{
 		SchemaVersion:  probe.ScenarioV2Version,
@@ -282,5 +384,71 @@ func TestProbeScenarioV2ObjectiveVerifierUsesPersistedPageState(t *testing.T) {
 	right := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{"value":"expected"}`), gatewaytesting.SessionCapture{}, true)
 	if !right.Verified {
 		t.Fatalf("matching oracle verification = %+v, want verified", right)
+	}
+}
+
+func TestProbeScenarioV2ObjectiveVerifierUsesProviderCaptureForTranscript(t *testing.T) {
+	scenario := probe.ScenarioV2{
+		SchemaVersion: probe.ScenarioV2Version,
+		ID:            "provider-transcript-objective",
+		Expectations: []probe.ScenarioV2Expectation{{
+			Type: probe.ScenarioV2ExpectationTranscriptContains,
+			Text: "expected-secret-transcript",
+		}},
+	}
+	capture := gatewaytesting.SessionCapture{
+		Version:  gatewaytesting.SessionCaptureVersion,
+		Provider: gatewaytesting.SessionProviderMetadata{Name: "fixture", Model: "fixture"},
+		Session:  gatewaytesting.SessionMetadata{ID: scenario.ID, FixtureProvenance: gatewaytesting.SessionFixtureProvenanceSynthetic},
+		Records: []gatewaytesting.CapturedSessionEvent{{
+			Sequence:    1,
+			Direction:   gatewaytesting.DirectionServerToClient,
+			Type:        "response.output_text.delta",
+			PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
+			Payload:     json.RawMessage(`{"delta":"expected-secret-transcript"}`),
+		}},
+	}
+	verification := verifyProbeScenarioV2EvidenceData(scenario, nil, json.RawMessage(`null`), capture, false)
+	if !verification.Verified {
+		t.Fatalf("provider transcript verification = %+v, want verified", verification)
+	}
+	wrong := scenario
+	wrong.Expectations = []probe.ScenarioV2Expectation{{Type: probe.ScenarioV2ExpectationTranscriptContains, Text: "missing-secret"}}
+	failed := verifyProbeScenarioV2EvidenceData(wrong, nil, json.RawMessage(`null`), capture, false)
+	if failed.Verified || !strings.Contains(failed.Error, "transcript_contains") || strings.Contains(failed.Error, "missing-secret") || strings.Contains(failed.Error, "expected-secret-transcript") {
+		t.Fatalf("safe provider transcript divergence = %+v", failed)
+	}
+}
+
+func TestProbeScenarioV2ObjectiveVerifierMatchesStaleToolReference(t *testing.T) {
+	toolRef := "webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA"
+	scenario := probe.ScenarioV2{
+		SchemaVersion:  probe.ScenarioV2Version,
+		ID:             "stale-ref-objective",
+		BrowserFixture: "fixture.browser.json",
+		Expectations: []probe.ScenarioV2Expectation{{
+			Type:    probe.ScenarioV2ExpectationStaleToolRejected,
+			ToolRef: toolRef,
+		}},
+	}
+	events := []testkit.Event{{
+		Version:    testkit.BrowserEventsVersion,
+		Sequence:   1,
+		BrowserID:  "fixture-browser",
+		TargetID:   "tab-1",
+		Generation: 2,
+		Type:       testkit.EventBrowserInvocationError,
+		Payload:    testkit.MustJSONValue(map[string]any{"code": string(webmcp.ErrorStaleToolRef), "tool_ref": toolRef}),
+		Redaction:  testkit.RedactionMetadata{Mode: testkit.RedactionNone},
+	}}
+	verification := verifyProbeScenarioV2EvidenceData(scenario, events, json.RawMessage(`{}`), gatewaytesting.SessionCapture{}, true)
+	if !verification.Verified {
+		t.Fatalf("matching stale reference verification = %+v, want verified", verification)
+	}
+	wrong := scenario
+	wrong.Expectations = []probe.ScenarioV2Expectation{{Type: probe.ScenarioV2ExpectationStaleToolRejected, ToolRef: "webmcp.tool-ref.v1:BBBBBBBBBBBBBBBBBBBBBB"}}
+	failed := verifyProbeScenarioV2EvidenceData(wrong, events, json.RawMessage(`{}`), gatewaytesting.SessionCapture{}, true)
+	if failed.Verified || !strings.Contains(failed.Error, "stale_tool_rejected") || !strings.Contains(failed.Error, "stale_tool_ref") {
+		t.Fatalf("mismatched stale reference verification = %+v", failed)
 	}
 }

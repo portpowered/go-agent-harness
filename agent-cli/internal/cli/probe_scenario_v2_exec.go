@@ -37,6 +37,7 @@ type probeScenarioV2Result struct {
 	TerminalProvenance string                             `json:"terminal_provenance,omitempty"`
 	OutputState        string                             `json:"output_state,omitempty"`
 	Error              string                             `json:"error,omitempty"`
+	Divergence         *probeScenarioV2Divergence         `json:"divergence,omitempty"`
 	InputDropCount     uint64                             `json:"input_drop_count"`
 	OutputDropCount    uint64                             `json:"output_drop_count"`
 	ObjectiveEvidence  probe.ObjectiveEvidence            `json:"objective_evidence"`
@@ -84,12 +85,13 @@ type probeScenarioV2Executor struct {
 	catalog    webmcp.ToolCatalogSnapshot
 	hasCatalog bool
 
-	invocations     []probeScenarioV2Invocation
-	provider        *probe.ObservationSnapshot
-	providerCapture gatewaytesting.SessionCapture
-	providerPath    string
-	providerSteps   []probe.Step
-	closed          bool
+	invocations         []probeScenarioV2Invocation
+	provider            *probe.ObservationSnapshot
+	providerCapture     gatewaytesting.SessionCapture
+	providerPath        string
+	providerSteps       []probe.Step
+	closed              bool
+	objectiveDivergence *probeScenarioV2Divergence
 }
 
 func loadProbeScenarioV2Selections(selections []string) ([]probeScenarioV2Selection, error) {
@@ -283,15 +285,24 @@ func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selecti
 	result = executor.populateResult(result)
 	if recordingDirectory != "" {
 		if evidence, objective, finalizeErr := executor.finalizeEvidence(recordingDirectory); finalizeErr != nil {
-			result.Error = finalizeErr.Error()
+			if result.Error == "" {
+				result.Error = finalizeErr.Error()
+			}
 			result.Pass = false
 		} else {
 			result.Evidence = &evidence
 			result.ObjectiveEvidence = objective
+			if result.Divergence == nil && executor.objectiveDivergence != nil {
+				result.Divergence = executor.objectiveDivergence
+			}
 			if !objective.Verified {
 				result.Pass = false
 				if result.Error == "" {
-					result.Error = "objective evidence did not verify the declared browser objectives"
+					if executor.objectiveDivergence != nil {
+						result.Error = executor.objectiveDivergence.Error()
+					} else {
+						result.Error = "objective evidence did not verify the declared browser objectives"
+					}
 				}
 			}
 		}
@@ -600,7 +611,7 @@ func (e *probeScenarioV2Executor) resolveInvocations(ctx context.Context) error 
 		}
 	}
 	for _, invocation := range e.invocations {
-		if invocation.Err != nil {
+		if invocation.Err != nil && !(e.scenarioExpects(probe.ScenarioV2ExpectationStaleToolRejected) && isStaleToolError(invocation.Err)) {
 			return invocation.Err
 		}
 	}
@@ -654,7 +665,14 @@ func (e *probeScenarioV2Executor) populateResult(result probeScenarioV2Result) p
 		result.InputDropCount = e.provider.InputDrops
 		result.OutputDropCount = e.provider.OutputDrops
 	}
-	result.ExpectationResults = e.evaluateExpectations()
+	var divergence *probeScenarioV2Divergence
+	result.ExpectationResults, divergence = e.evaluateExpectations()
+	if divergence != nil {
+		result.Divergence = divergence
+		if result.Error == "" {
+			result.Error = divergence.Error()
+		}
+	}
 	result.Pass = result.Error == ""
 	for _, outcome := range result.ExpectationResults {
 		if !outcome.Passed {
@@ -665,17 +683,29 @@ func (e *probeScenarioV2Executor) populateResult(result probeScenarioV2Result) p
 	return result
 }
 
-func (e *probeScenarioV2Executor) evaluateExpectations() []probeScenarioV2ExpectationResult {
+func (e *probeScenarioV2Executor) evaluateExpectations() ([]probeScenarioV2ExpectationResult, *probeScenarioV2Divergence) {
 	results := make([]probeScenarioV2ExpectationResult, 0, len(e.scenario.Expectations))
+	var firstDivergence *probeScenarioV2Divergence
+	evidence := e.persistedBrowserEvidence()
 	for index, expectation := range e.scenario.Expectations {
 		passed, expected, actual, err := e.evaluateExpectation(expectation)
 		outcome := probeScenarioV2ExpectationResult{Index: index, Type: expectation.Type, Passed: passed, Expected: expected, Actual: actual}
-		if err != nil {
-			outcome.Error = err.Error()
+		if !passed {
+			divergence := probeScenarioV2DivergenceForExpectation(e.scenario, index, expectation, expected, actual, err, evidence)
+			if firstDivergence == nil {
+				firstDivergence = divergence
+				outcome.Error = divergence.Error()
+			} else if err != nil {
+				outcome.Error = safeProbeScenarioV2Error(err)
+			} else {
+				outcome.Error = "expectation not satisfied"
+			}
+		} else if err != nil {
+			outcome.Error = safeProbeScenarioV2Error(err)
 		}
 		results = append(results, outcome)
 	}
-	return results
+	return results, firstDivergence
 }
 
 func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.ScenarioV2Expectation) (bool, string, string, error) {
@@ -705,7 +735,7 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 	case probe.ScenarioV2ExpectationSelectedTabEquals:
 		return e.selected.Key.TargetID == webmcp.TargetID(expectation.TargetID), expectation.TargetID, string(e.selected.Key.TargetID), nil
 	case probe.ScenarioV2ExpectationSelectedOriginEquals:
-		return e.selected.Origin == expectation.Origin, expectation.Origin, e.selected.Origin, nil
+		return e.selected.Origin == expectation.Origin, safeEvidenceURL(expectation.Origin), safeEvidenceURL(e.selected.Origin), nil
 	case probe.ScenarioV2ExpectationCatalogGenerationEquals:
 		generation := e.selected.Generation
 		if e.hasCatalog {
@@ -739,10 +769,10 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 		for _, tool := range e.catalog.Tools {
 			if tool.Name == expectation.Name {
 				passed := semanticJSONEqual(tool.InputSchema, expectation.Schema)
-				return passed, string(expectation.Schema), string(tool.InputSchema), nil
+				return passed, safeProbeScenarioV2JSON(expectation.Schema), safeProbeScenarioV2JSON(tool.InputSchema), nil
 			}
 		}
-		return false, string(expectation.Schema), "<missing>", nil
+		return false, safeProbeScenarioV2JSON(expectation.Schema), "<missing>", nil
 	case probe.ScenarioV2ExpectationToolInvocationCount:
 		var actual int64
 		for _, invocation := range e.invocations {
@@ -755,10 +785,10 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 		for index := len(e.invocations) - 1; index >= 0; index-- {
 			invocation := e.invocations[index]
 			if invocation.Name == expectation.Name {
-				return semanticJSONEqual(invocation.Input, json.RawMessage(expectation.InputJSON)), expectation.InputJSON, string(invocation.Input), nil
+				return semanticJSONEqual(invocation.Input, json.RawMessage(expectation.InputJSON)), safeProbeScenarioV2JSON(json.RawMessage(expectation.InputJSON)), safeProbeScenarioV2JSON(invocation.Input), nil
 			}
 		}
-		return false, expectation.InputJSON, "<missing>", nil
+		return false, safeProbeScenarioV2JSON(json.RawMessage(expectation.InputJSON)), "<missing>", nil
 	case probe.ScenarioV2ExpectationToolResultJSONPathEquals:
 		for index := len(e.invocations) - 1; index >= 0; index-- {
 			invocation := e.invocations[index]
@@ -767,11 +797,11 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 			}
 			value, err := jsonPathValue(invocation.Result.Output, expectation.Path)
 			if err != nil {
-				return false, string(expectation.Value), "<missing>", err
+				return false, safeProbeScenarioV2JSON(expectation.Value), "<missing>", err
 			}
-			return semanticJSONEqual(value, expectation.Value), string(expectation.Value), string(value), nil
+			return semanticJSONEqual(value, expectation.Value), safeProbeScenarioV2JSON(expectation.Value), safeProbeScenarioV2JSON(value), nil
 		}
-		return false, string(expectation.Value), "<missing>", nil
+		return false, safeProbeScenarioV2JSON(expectation.Value), "<missing>", nil
 	case probe.ScenarioV2ExpectationToolStatusEquals:
 		for index := len(e.invocations) - 1; index >= 0; index-- {
 			if e.invocations[index].Name == expectation.Name {
@@ -780,6 +810,29 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 			}
 		}
 		return false, expectation.Status, "<missing>", nil
+	case probe.ScenarioV2ExpectationChromeOperationOrder,
+		probe.ScenarioV2ExpectationNoUnexpectedChromeOperations,
+		probe.ScenarioV2ExpectationGeneratedCDPMethodOrder,
+		probe.ScenarioV2ExpectationNoUnexpectedGeneratedCDPMethods:
+		evidence := e.persistedBrowserEvidence()
+		if evidence == nil {
+			if expectation.Operations != nil {
+				return false, probeScenarioV2StringList(expectation.Operations), "<missing>", nil
+			}
+			return false, probeScenarioV2StringList(expectation.Methods), "<missing>", nil
+		}
+		var check probeScenarioV2ObservationCheck
+		switch expectation.Type {
+		case probe.ScenarioV2ExpectationChromeOperationOrder:
+			check = probeScenarioV2OrderedObservationCheck(evidence.operations, expectation.Operations)
+		case probe.ScenarioV2ExpectationNoUnexpectedChromeOperations:
+			check = probeScenarioV2AllowedObservationCheck(evidence.operations, expectation.Operations)
+		case probe.ScenarioV2ExpectationGeneratedCDPMethodOrder:
+			check = probeScenarioV2OrderedObservationCheck(evidence.methods, expectation.Methods)
+		default:
+			check = probeScenarioV2AllowedObservationCheck(evidence.methods, expectation.Methods)
+		}
+		return check.Passed, check.Expected, check.Actual, nil
 	case probe.ScenarioV2ExpectationNoPendingInvocations:
 		pending := 0
 		if e.runtime != nil {
@@ -796,15 +849,15 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 		}
 		actual, err := jsonPathValue(state, expectation.Path)
 		if err != nil {
-			return false, string(expectation.Value), "<missing>", err
+			return false, safeProbeScenarioV2JSON(expectation.Value), "<missing>", err
 		}
-		return semanticJSONEqual(actual, expectation.Value), string(expectation.Value), string(actual), nil
+		return semanticJSONEqual(actual, expectation.Value), safeProbeScenarioV2JSON(expectation.Value), safeProbeScenarioV2JSON(actual), nil
 	case probe.ScenarioV2ExpectationTranscriptContains:
 		actual := ""
 		if e.provider != nil {
 			actual = e.provider.Transcript
 		}
-		return strings.Contains(actual, expectation.Text), expectation.Text, actual, nil
+		return strings.Contains(actual, expectation.Text), "text-present", safeProbeScenarioV2Text(strings.Contains(actual, expectation.Text)), nil
 	case probe.ScenarioV2ExpectationResponseCanceled:
 		for _, invocation := range e.invocations {
 			if invocation.Result.State == webmcp.InvocationCanceled || strings.EqualFold(string(invocation.Result.State), "canceled") {
@@ -817,18 +870,23 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 		return false, "canceled", "<none>", nil
 	case probe.ScenarioV2ExpectationStaleToolRejected:
 		for _, invocation := range e.invocations {
-			if isStaleToolError(invocation.Err) {
+			if isStaleToolError(invocation.Err) && (expectation.ToolRef == "" || string(invocation.ToolRef) == expectation.ToolRef) {
 				return true, "stale_tool_ref", "stale_tool_ref", nil
 			}
 		}
 		return false, "stale_tool_ref", "<none>", nil
 	case probe.ScenarioV2ExpectationBrowserConnectionClosed:
 		return e.closed, "closed", fmt.Sprintf("%t", e.closed), nil
-	case probe.ScenarioV2ExpectationApprovalRequested,
-		probe.ScenarioV2ExpectationApprovalNotRequested,
-		probe.ScenarioV2ExpectationAssistantAudioStarted,
-		probe.ScenarioV2ExpectationAssistantAudioStopped:
-		return false, "supported by provider evidence", "not observed", nil
+	case probe.ScenarioV2ExpectationApprovalRequested, probe.ScenarioV2ExpectationApprovalNotRequested:
+		evidence := e.persistedBrowserEvidence()
+		if evidence == nil {
+			return false, "approval evidence", "<missing>", nil
+		}
+		check := probeScenarioV2BrowserObjectiveCheck(*evidence, nil, expectation)
+		return check.Passed, check.Expected, check.Actual, nil
+	case probe.ScenarioV2ExpectationAssistantAudioStarted, probe.ScenarioV2ExpectationAssistantAudioStopped:
+		check := probeScenarioV2ProviderObjectiveCheck(e.providerCapture, expectation)
+		return check.Passed, check.Expected, check.Actual, nil
 	default:
 		return false, string(expectation.Type), "unsupported", fmt.Errorf("unsupported probe.scenario.v2 expectation %q", expectation.Type)
 	}
