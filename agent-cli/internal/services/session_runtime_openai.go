@@ -30,8 +30,8 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
-	scheduledAudio := len(opts.AudioInputs) > 0
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, scheduledAudio)
+	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
+	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}

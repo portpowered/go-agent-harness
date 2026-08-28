@@ -191,6 +191,11 @@ type SessionRunOptions struct {
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
 	AudioInputs []ScheduledAudioInput
+	// ClientOwnsAudioTurnBoundaries requests an explicit client-owned realtime
+	// audio turn contract for a finite --audio-in source. The source sends the
+	// MESSAGE.END boundary itself; provider VAD must not auto-commit the same
+	// buffer before that boundary arrives.
+	ClientOwnsAudioTurnBoundaries bool
 	// SessionUpdatedTimeout overrides the bounded wait for the initial
 	// SESSION.UPDATED acknowledgement in deterministic callers. Zero selects
 	// the production timeout.

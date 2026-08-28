@@ -263,6 +263,11 @@ func runSessionWithRecordingDirectory(
 		return err
 	}
 
+	if audioInput != nil {
+		// The finite source sends MESSAGE.END after its final frame. Keep the
+		// provider from auto-committing the same buffer through server VAD.
+		opts.ClientOwnsAudioTurnBoundaries = true
+	}
 	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, withInstructions)
 	if err != nil {
 		return err
