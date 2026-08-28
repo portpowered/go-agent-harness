@@ -331,6 +331,51 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	}
 }
 
+func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+
+	// Room mixers emit zero-filled frames on every cadence before a peer has
+	// spoken. They must reach the provider, but cannot be treated as barge-in.
+	silence := make([]byte, 4)
+	runner.UserAudioInbox <- silence
+	sent := waitForSentMessage(t, ctx, session)
+	if sent.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("silence outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
+	}
+	if got := sent.Value.(*messages.AudioDeltaValue).Content; string(got) != string(silence) {
+		t.Fatalf("forwarded silence = %v, want %v", got, silence)
+	}
+	if got := len(session.sentMessages()); got != 1 {
+		t.Fatalf("silence sent %d messages, want 1 (no RESPONSE.CANCEL)", got)
+	}
+
+	// A later contentful frame still cancels the same in-flight response and
+	// remains ordered ahead of that frame.
+	runner.UserAudioInbox <- []byte{4, 5, 6, 7}
+	first := waitForSentMessage(t, ctx, session)
+	second := waitForSentMessage(t, ctx, session)
+	if first.Type != messages.StreamTypeResponseCancel {
+		t.Fatalf("contentful first outbound type = %s, want %s", first.Type, messages.StreamTypeResponseCancel)
+	}
+	if second.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("contentful second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
+	}
+}
+
 func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T) {
 	tests := []struct {
 		name             string

@@ -103,7 +103,15 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 		return msg.Type == messages.StreamTypeSessionClose
 	}
 	switch msg.Type {
-	case messages.StreamTypeMessageEnd, messages.StreamTypeTextEnd:
+	case messages.StreamTypeMessageEnd:
+		if opts.observer != nil && !opts.observer.lastMessageEndAdmitted() {
+			return false
+		}
+		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
+			return false
+		}
+		return true
+	case messages.StreamTypeTextEnd:
 		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
 			return false
 		}

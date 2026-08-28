@@ -399,8 +399,6 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 	case messages.StreamTypeSessionOpen:
 		l.sessionOpened = true
 		l.signalLocked()
-	case messages.StreamTypeMessageEnd:
-		l.turns++
 	case messages.StreamTypeSessionClose:
 		l.sessionClosed = true
 		l.signalLocked()
@@ -424,6 +422,22 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 		}
 	}
 	return l.turns
+}
+
+// observeAdmittedTurn advances room progress only after the shared session
+// observer has accepted a provider response as a completed turn. Raw
+// MESSAGE.END events are intentionally not sufficient: a provider can emit an
+// empty response boundary before producing any assistant output.
+func (l *roomParticipantLifecycle) observeAdmittedTurn() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	l.turns++
+	l.signalLocked()
+	turns := l.turns
+	l.mu.Unlock()
+	return turns
 }
 
 func (l *roomParticipantLifecycle) markTransportEndedWithError(terminalErr error) {

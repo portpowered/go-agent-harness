@@ -55,6 +55,10 @@ func runRoomParticipant(
 	observer.streamObserver = func(msg messages.StreamMessage) {
 		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
 	}
+	observer.admittedTurnObserver = func(messages.StreamMessage) {
+		turns := runtime.lifecycle.observeAdmittedTurn()
+		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+	}
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, sessionLoopOptions{
 		Prompt:          runtime.plan.options.Prompt,
 		WaitForClose:    true,
@@ -115,12 +119,9 @@ func observeRoomParticipantStream(
 			evidence.recordError(plan.manifest.ID, fmt.Errorf("write stream delta: %w", evidenceErr))
 		}
 	}
-	turns := runtime.lifecycle.observe(msg)
+	runtime.lifecycle.observe(msg)
 	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
 		opts.onParticipantSessionOpen(plan.manifest.ID)
-	}
-	if msg.Type == messages.StreamTypeMessageEnd {
-		coordinator.noteTurn(plan.manifest.ID, turns)
 	}
 	if msg.Type != messages.StreamTypeAudioDelta || !assistantAudioDelta(msg) {
 		return

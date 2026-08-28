@@ -644,6 +644,9 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
+		if opts.observer != nil && !opts.observer.lastMessageEndAdmitted() {
+			return false
+		}
 		if opts.RequireAssistantResponse {
 			if msg.Role == messages.RoleTool || opts.observer == nil || !opts.observer.assistantResponseCompleted() {
 				return false
