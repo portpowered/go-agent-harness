@@ -36,6 +36,12 @@ fail() {
 	exit 1
 }
 
+mode=${1:-chrome}
+case "$mode" in
+	chrome|webmcp) ;;
+	*) fail "usage: ./chrome-launch.sh [webmcp]" ;;
+esac
+
 for required_command in curl jq unzip shasum awk tail go; do
 	command -v "$required_command" >/dev/null 2>&1 || fail "required command not found: $required_command"
 done
@@ -105,6 +111,13 @@ esac
 # This process owns the temporary profile and is the only browser PID this
 # script terminates. --remote-debugging-port=0 lets Chrome choose a free port;
 # the DevTools websocket line is the deterministic handoff to the client.
+# The empty expansion is omitted for the ordinary launch. WebMCP mode uses the
+# command-line equivalents of the local WebMCP testing flag and DevTools
+# WebMCP domain enablement.
+webmcp_features=
+if [ "$mode" = "webmcp" ]; then
+	webmcp_features=--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport
+fi
 "$chrome_binary" \
 	--headless=new \
 	--disable-gpu \
@@ -116,6 +129,7 @@ esac
 	--no-first-run \
 	--remote-debugging-address=127.0.0.1 \
 	--remote-debugging-port=0 \
+	${webmcp_features} \
 	--user-data-dir="$profile_dir" \
 	about:blank >"$stdout_log" 2>"$stderr_log" &
 chrome_pid=$!
@@ -164,6 +178,69 @@ case "$cdp_product" in
 	*"$expected_version"*) ;;
 	*) fail "CDP browser version mismatch: got $cdp_product, want $expected_version" ;;
 esac
+
+if [ "$mode" = "webmcp" ]; then
+	matrix_report=$(GOWORK=off go run . webmcp-matrix "$browser_websocket") || fail "WebMCP capability matrix failed"
+	jq -n \
+		--arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		--arg channel "$channel" \
+		--arg manifestChannel "$manifest_channel" \
+		--arg manifestURL "$manifest_url" \
+		--arg manifestRetrievedAt "$manifest_retrieved_at" \
+		--arg platform "$platform" \
+		--arg version "$expected_version" \
+		--arg revision "$expected_revision" \
+		--arg archiveSHA256 "$actual_archive_sha" \
+		--arg executableVersion "$extracted_version" \
+		--arg websocketURL "$browser_websocket" \
+		--arg httpBrowser "$http_browser" \
+		--arg httpProtocolVersion "$http_protocol_version" \
+		--argjson launchCDP "$cdp_report" \
+		--argjson matrix "$matrix_report" \
+'
+{
+  observedAt: $observedAt,
+  channel: $channel,
+  manifestChannel: $manifestChannel,
+  manifestURL: $manifestURL,
+  manifestRetrievedAt: $manifestRetrievedAt,
+  platform: $platform,
+  version: $version,
+  revision: $revision,
+  archiveSHA256: $archiveSHA256,
+  executableVersion: $executableVersion,
+  flags: [
+    "--headless=new",
+    "--disable-gpu",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-extensions",
+    "--disable-sync",
+    "--no-default-browser-check",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=0",
+    "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+    "--user-data-dir=<temporary profile>"
+  ],
+  originTrial: {
+    state: "not supplied",
+    token: "none",
+    localFlag: "chrome://flags/#enable-webmcp-testing"
+  },
+  remoteDebuggingAddress: "127.0.0.1",
+  websocketURL: $websocketURL,
+  httpVersionEndpoint: {
+    Browser: $httpBrowser,
+    ProtocolVersion: $httpProtocolVersion
+  },
+  cdpBrowserGetVersion: $launchCDP,
+  fixtureOrigin: $matrix.fixtureOrigin,
+  matrix: $matrix,
+  verdict: $matrix.verdict
+}'
+	exit 0
+fi
 
 observed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 jq -n \

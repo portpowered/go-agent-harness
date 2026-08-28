@@ -153,18 +153,35 @@ func printJSON(value any) {
 
 func main() {
 	if len(os.Args) > 1 {
-		if os.Args[1] != "cdp-version" || len(os.Args) != 3 {
-			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint>]")
+		switch os.Args[1] {
+		case "cdp-version":
+			if len(os.Args) != 3 {
+				fmt.Fprintln(os.Stderr, "usage: go run . cdp-version <browser-websocket-endpoint>")
+				os.Exit(2)
+			}
+			report, err := readCDPVersion(os.Args[2])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "cdp-version: %v\n", err)
+				os.Exit(1)
+			}
+			printJSON(report)
+			return
+		case "webmcp-matrix":
+			if len(os.Args) != 3 {
+				fmt.Fprintln(os.Stderr, "usage: go run . webmcp-matrix <browser-websocket-endpoint>")
+				os.Exit(2)
+			}
+			report, err := runWebMCPMatrix(os.Args[2])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "webmcp-matrix: %v\n", err)
+				os.Exit(1)
+			}
+			printJSON(report)
+			return
+		default:
+			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint>]")
 			os.Exit(2)
 		}
-
-		report, err := readCDPVersion(os.Args[2])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cdp-version: %v\n", err)
-			os.Exit(1)
-		}
-		printJSON(report)
-		return
 	}
 
 	printJSON(bindingSmoke())

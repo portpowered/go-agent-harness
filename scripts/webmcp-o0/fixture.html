@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP O0 native probe</title>
+</head>
+<body>
+  <main>
+    <h1>WebMCP O0 native probe</h1>
+    <p id="status">registering probe tool</p>
+  </main>
+  <script>
+    (() => {
+      const toolName = "webmcp_o0_probe_tool";
+      const state = {
+        ready: false,
+        toolName,
+        contextKind: "none",
+        registration: {
+          attempted: false,
+          outcome: "not-attempted",
+          error: ""
+        },
+        invocations: []
+      };
+      window.__webmcpO0 = state;
+
+      let modelContext;
+      try {
+        if (document.modelContext) {
+          modelContext = document.modelContext;
+          state.contextKind = "document.modelContext";
+        } else if (navigator.modelContext) {
+          modelContext = navigator.modelContext;
+          state.contextKind = "navigator.modelContext";
+        }
+      } catch (error) {
+        state.registration.outcome = "error";
+        state.registration.error = String(error);
+      }
+
+      if (!modelContext || typeof modelContext.registerTool !== "function") {
+        state.ready = true;
+        document.querySelector("#status").textContent = "no native producer registration surface";
+        return;
+      }
+
+      state.registration.attempted = true;
+      try {
+        const registration = modelContext.registerTool({
+          name: toolName,
+          title: "WebMCP O0 probe tool",
+          description: "Returns a deterministic probe response and records the input.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              value: { type: "string" }
+            },
+            required: ["value"],
+            additionalProperties: false
+          },
+          execute: async (input) => {
+            const value = input && input.value;
+            state.invocations.push({ value: String(value) });
+            return {
+              content: [{ type: "text", text: `webmcp-o0:${String(value)}` }]
+            };
+          }
+        });
+
+        Promise.resolve(registration).then(() => {
+          state.registration.outcome = "registered";
+          state.ready = true;
+          document.querySelector("#status").textContent = "probe tool registered";
+        }, (error) => {
+          state.registration.outcome = "error";
+          state.registration.error = String(error);
+          state.ready = true;
+          document.querySelector("#status").textContent = "probe tool registration failed";
+        });
+      } catch (error) {
+        state.registration.outcome = "error";
+        state.registration.error = String(error);
+        state.ready = true;
+        document.querySelector("#status").textContent = "probe tool registration failed";
+      }
+    })();
+  </script>
+</body>
+</html>

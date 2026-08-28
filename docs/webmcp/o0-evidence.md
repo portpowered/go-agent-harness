@@ -1,8 +1,8 @@
 # WebMCP O0 evidence
 
-Status: stories `webmcp-o0-toolchain-gate-001` and
-`webmcp-o0-toolchain-gate-002` complete; WebMCP availability, external-target
-ownership, and fixture trials remain pending.
+Status: stories `webmcp-o0-toolchain-gate-001` through
+`webmcp-o0-toolchain-gate-003` complete; external-target ownership and the
+hermetic fixture trial remain pending.
 
 ## Run context
 
@@ -211,6 +211,123 @@ Lane D/I1 may treat this as the browser acquisition and generic CDP launch
 baseline, but it does not authorize a native WebMCP claim or change the
 detach-ownership rule that story 004 must prove.
 
+## Story 003: Determine native WebMCP surface availability
+
+### Researched requirements
+
+The [Chrome WebMCP documentation](https://developer.chrome.com/docs/ai/webmcp/)
+describes the local-development flag as
+`chrome://flags/#enable-webmcp-testing`, and says WebMCP is gated by origin
+isolation and the `tools` Permissions Policy. Its documented origin trial starts
+in Chrome 149; the [origin-trial announcement](https://developer.chrome.com/blog/ai-webmcp-origin-trial)
+does not provide a token for this local fixture. The [WebMCP draft](https://webmachinelearning.github.io/webmcp/)
+defines the producer API on `document.modelContext`, while the
+[CDP WebMCP domain](https://chromedevtools.github.io/devtools-protocol/tot/WebMCP/)
+advertises `enable`, `disable`, `invokeTool`, `cancelInvocation` and the four
+tool lifecycle events. These are research inputs, not claims about the pinned
+binary until the matrix below observes them.
+
+### Reproduction command and matrix row
+
+From `scripts/webmcp-o0/`:
+
+```sh
+./probe.sh webmcp
+```
+
+The command reuses the verified Stable artifact from story 002 and runs one
+row on the target machine at `2026-08-28T08:41:12Z`:
+
+| Field | Observed value |
+| --- | --- |
+| Channel / version / revision | `Stable` / `152.0.7977.64` / `1669021` |
+| Platform | `mac-arm64` |
+| Feature flags | `--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport` |
+| Other launch flags | `--headless=new`, loopback `--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=0`, isolated temporary profile, and the story 002 network/first-run flags |
+| Origin-trial state | No `Origin-Trial` response header and no token; local flag path only |
+| Fixture origin | Fresh `http://127.0.0.1:<ephemeral-port>/`, with `Origin-Agent-Cluster: ?1` and `Permissions-Policy: tools=(self)` |
+| Artifact integrity | Story 002 lock and archive SHA-256 revalidated before launch |
+
+The exact archive URL and SHA-256 remain the locked values in story 002. The
+matrix report includes the ephemeral fixture origin and the complete flag list;
+the port is intentionally not treated as a stable identifier.
+
+### Observed page surface
+
+The fixture was secure-context eligible (`isSecureContext: true`), origin-keyed
+(`originAgentCluster: true`), and permitted the `tools` feature. The page
+exposed `document.modelContext` and did not expose
+`navigator.modelContext` or `navigator.modelContextTesting`:
+
+```json
+{
+  "documentModelContext": {
+    "present": true,
+    "methods": {
+      "registerTool": {"present": true, "length": 1},
+      "getTools": {"present": true, "length": 0},
+      "executeTool": {"present": true, "length": 2},
+      "listTools": {"present": false},
+      "callTool": {"present": false},
+      "unregisterTool": {"present": false},
+      "clearContext": {"present": false}
+    }
+  },
+  "navigatorModelContext": {"present": false},
+  "navigatorModelContextTesting": {"present": false},
+  "descriptors": {
+    "Document.prototype.modelContext": {"present": true, "hasGetter": true},
+    "Navigator.prototype.modelContext": {"present": false},
+    "Navigator.prototype.modelContextTesting": {"present": false}
+  }
+}
+```
+
+The fixture registered `webmcp_o0_probe_tool`; `document.modelContext.getTools()`
+returned its name, description, origin, and serialized input schema. A direct
+page invocation also completed with
+`{"content":[{"type":"text","text":"webmcp-o0:producer"}]}` when the
+input argument was passed as a JSON string. Passing an object instead produced
+the observed `UnknownError: Failed to parse input arguments`; the probe keeps
+that implementation detail visible and uses the successful serialized form.
+
+### Observed CDP surface and binding coverage
+
+The script fetched the browser's `/json/protocol` endpoint rather than
+assuming a domain from the Go package. The pinned browser advertised:
+
+```text
+WebMCP methods: cancelInvocation, disable, enable, invokeTool
+WebMCP events:  toolInvoked, toolResponded, toolsAdded, toolsRemoved
+```
+
+The selected `cdproto` revision has typed constructors for all four commands
+(`WebMCP.enable`, `disable`, `invokeTool`, `cancelInvocation`) and typed event
+structures for all four advertised events. `WebMCP.enable` succeeded through
+the target executor; `toolsAdded` reported `webmcp_o0_probe_tool`, and the
+typed `WebMCP.invokeTool` call produced `toolInvoked`, `toolResponded` with
+status `Completed`, and output
+`{"content":[{"type":"text","text":"webmcp-o0:cdp"}]}`. No raw CDP command
+or unversioned binding was needed. Page evaluation is used for surface
+inspection only; the adapter access path can use generated `cdproto/webmcp`.
+
+### Verdict and downstream consequence
+
+**PASS for native WebMCP availability and binding coverage on this row.** The
+pinned Stable headless build exposed the native document producer API on a
+real loopback origin, and the same page tool completed through the advertised
+CDP domain and the selected generated Go bindings. This is native Chrome
+support, not a shim or polyfill; `navigator.modelContextTesting` was absent and
+is not substituted into the result. Lane D can target the generated CDP
+WebMCP adapter with `WebMCP,WebMCPTesting,DevToolsWebMCPSupport` enabled and
+must preserve the real-origin, origin-isolated, `tools`-permitted fixture
+constraints. Lane I1 may use the same native path for its integration gate;
+the page-side serialized-input behavior is an observed compatibility detail
+for diagnostics, while CDP invocation remains the preferred adapter path.
+No fallback is claimed or needed for this tested native row; a future pinned
+build that loses the row must reopen the gate rather than silently labeling a
+shim native.
+
 ## Remaining O0 assumptions
 
 The remaining rows will be filled by the later stories using the same dated
@@ -219,6 +336,6 @@ observed-versus-researched distinction:
 | Assumption | Verdict | Story |
 | --- | --- | --- |
 | Pinned Chrome for Testing launch | PASS | `webmcp-o0-toolchain-gate-002` |
-| Native WebMCP page/CDP surface and binding coverage | Pending | `webmcp-o0-toolchain-gate-003` |
+| Native WebMCP page/CDP surface and binding coverage | PASS | `webmcp-o0-toolchain-gate-003` |
 | Detach-only preservation of an external visible tab | Pending | `webmcp-o0-toolchain-gate-004` |
 | Hermetic loopback fixture control | Pending | `webmcp-o0-toolchain-gate-005` |

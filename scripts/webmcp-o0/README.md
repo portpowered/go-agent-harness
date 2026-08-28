@@ -18,6 +18,7 @@ and forces `GOWORK=off` for every Go command.
 ./probe.sh typecheck
 ./probe.sh smoke
 ./probe.sh chrome
+./probe.sh webmcp
 ./probe.sh go1.24.2
 ```
 
@@ -43,3 +44,12 @@ Chrome's startup output, checks `/json/version`, and issues CDP
 terminates only the Chrome PID it starts and removes its exact temporary
 directory. If Stable advances beyond the lock, it stops with an actionable
 refresh-the-pin error rather than silently changing the experiment.
+
+`webmcp` repeats the verified launch with the exact feature flags
+`WebMCP,WebMCPTesting,DevToolsWebMCPSupport`, serves `fixture.html` from a
+fresh `127.0.0.1` origin, and runs the Go page/protocol matrix. The fixture
+sets `Origin-Agent-Cluster: ?1` and `Permissions-Policy: tools=(self)`. No
+Origin-Trial token is supplied: this is the documented local-development flag
+path. The JSON report records the page-visible `document.modelContext` /
+`navigator.modelContextTesting` surfaces separately from the advertised CDP
+`WebMCP` domain and the generated binding calls.
