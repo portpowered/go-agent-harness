@@ -55,12 +55,17 @@ type BrowserVersion struct {
 // Target is a normalized browser target. Title and URL are display metadata;
 // ID is the authoritative selector.
 type Target struct {
-	BrowserID         BrowserID
-	ID                TargetID
-	Type              string
-	Title             string
-	URL               string
-	Origin            string
+	BrowserID BrowserID
+	ID        TargetID
+	Type      string
+	Title     string
+	URL       string
+	Origin    string
+	// ContinuityMarker and Generation are normalized selection state carried
+	// across the CLI composition boundary. They contain no browser transport
+	// values; adapters derive the marker from the target's continuity claim.
+	ContinuityMarker  string
+	Generation        uint64
 	WebSocketURL      string
 	Attached          bool
 	Eligible          bool

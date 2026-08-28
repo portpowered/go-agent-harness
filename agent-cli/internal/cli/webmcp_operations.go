@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -35,139 +32,6 @@ const (
 // and browser protocol seams that are intentionally not guessed by the CLI
 // composition root. Direct commands surface it as an unavailable operation.
 var ErrWebMCPOperationsRequiresLaneBOrD = ErrWebMCPDoctorRequiresLaneBOrD
-
-// WebMCPSelection is the small persisted record shared by separate direct
-// command invocations. It is intentionally limited to normalized IDs and a
-// redacted origin; endpoint credentials and websocket paths never cross this
-// boundary.
-type WebMCPSelection struct {
-	Version    int       `json:"version"`
-	EndpointID string    `json:"endpoint_id"`
-	BrowserID  string    `json:"browser_id"`
-	TargetID   string    `json:"target_id"`
-	Origin     string    `json:"origin"`
-	SelectedAt time.Time `json:"selected_at"`
-}
-
-// WebMCPSelectionStore persists and loads one opaque browser selection.
-// Implementations may be injected by embedders and command tests.
-type WebMCPSelectionStore interface {
-	Load() (WebMCPSelection, error)
-	Save(WebMCPSelection) error
-}
-
-// FileWebMCPSelectionStore is the default user-only selection store.
-type FileWebMCPSelectionStore struct {
-	Path string
-}
-
-// NewFileWebMCPSelectionStore constructs a selection store below configDir.
-// An empty configDir follows the same ~/.agent-cli default as ConfigStorage.
-func NewFileWebMCPSelectionStore(configDir string) *FileWebMCPSelectionStore {
-	if configDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			configDir = filepath.Join(home, config.ConfigDirName)
-		}
-	}
-	return &FileWebMCPSelectionStore{Path: filepath.Join(configDir, WebMCPSelectionFileName)}
-}
-
-func (s *FileWebMCPSelectionStore) Load() (WebMCPSelection, error) {
-	if s == nil || s.Path == "" {
-		return WebMCPSelection{}, errors.New("WebMCP selection path is unavailable")
-	}
-	data, err := os.ReadFile(s.Path)
-	if errors.Is(err, os.ErrNotExist) {
-		return WebMCPSelection{}, nil
-	}
-	if err != nil {
-		return WebMCPSelection{}, fmt.Errorf("read WebMCP selection: %w", err)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	var selection WebMCPSelection
-	if err := decoder.Decode(&selection); err != nil {
-		return WebMCPSelection{}, fmt.Errorf("decode WebMCP selection: %w", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return WebMCPSelection{}, errors.New("decode WebMCP selection: more than one JSON value")
-		}
-		return WebMCPSelection{}, fmt.Errorf("decode WebMCP selection: %w", err)
-	}
-	if err := validateWebMCPSelection(selection); err != nil {
-		return WebMCPSelection{}, err
-	}
-	if selection.Origin != "" {
-		selection.Origin = safeOrigin(selection.Origin)
-	}
-	return selection, nil
-}
-
-func (s *FileWebMCPSelectionStore) Save(selection WebMCPSelection) error {
-	if s == nil || s.Path == "" {
-		return errors.New("WebMCP selection path is unavailable")
-	}
-	if selection.Version == 0 {
-		selection.Version = WebMCPSelectionVersion
-	}
-	if selection.SelectedAt.IsZero() {
-		selection.SelectedAt = time.Now().UTC()
-	}
-	if selection.Origin != "" {
-		selection.Origin = safeOrigin(selection.Origin)
-	}
-	if err := validateWebMCPSelection(selection); err != nil {
-		return err
-	}
-	directory := filepath.Dir(s.Path)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return fmt.Errorf("create WebMCP selection directory: %w", err)
-	}
-	data, err := json.MarshalIndent(selection, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode WebMCP selection: %w", err)
-	}
-	data = append(data, '\n')
-	temporary, err := os.CreateTemp(directory, ".webmcp-selection-*")
-	if err != nil {
-		return fmt.Errorf("create WebMCP selection temporary file: %w", err)
-	}
-	temporaryName := temporary.Name()
-	defer func() { _ = os.Remove(temporaryName) }()
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("protect WebMCP selection temporary file: %w", err)
-	}
-	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("write WebMCP selection: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("close WebMCP selection temporary file: %w", err)
-	}
-	if err := os.Rename(temporaryName, s.Path); err != nil {
-		return fmt.Errorf("replace WebMCP selection: %w", err)
-	}
-	return nil
-}
-
-func validateWebMCPSelection(selection WebMCPSelection) error {
-	if selection.Version != WebMCPSelectionVersion {
-		return fmt.Errorf("WebMCP selection version %d is unsupported", selection.Version)
-	}
-	if selection.BrowserID == "" || selection.TargetID == "" {
-		return errors.New("WebMCP selection requires browser_id and target_id")
-	}
-	if selection.Origin != "" {
-		selectionOrigin := safeOrigin(selection.Origin)
-		if selectionOrigin == "" {
-			return errors.New("WebMCP selection origin is invalid")
-		}
-	}
-	return nil
-}
 
 // WebMCPDirectBrowser is the safe browser listing shape. Endpoint addresses
 // are redacted before they are copied into this result.
@@ -614,6 +478,10 @@ func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
+				result, err = waitDirectInvocation(invokeCtx, broker, result)
+				if err != nil {
+					return nil, err
+				}
 				if result.ErrorCode != "" || directInvocationFailed(result.State) {
 					return nil, directInvocationResultError(result, toolRef)
 				}
@@ -679,14 +547,23 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return c.executeDirectWithContext(cmd, values, "watch", webmcp.ErrorEndpointUnreachable, func(ctx context.Context, broker webmcp.Broker, _ config.BrowserConfig) (any, error) {
+			return c.executeDirectWithContext(cmd, values, "watch", webmcp.ErrorEndpointUnreachable, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
 				watchCtx := ctx
+				var cancelWatch context.CancelFunc
 				if values.timeout > 0 {
-					var cancel context.CancelFunc
-					watchCtx, cancel = context.WithTimeout(ctx, values.timeout)
-					defer cancel()
+					watchCtx, cancelWatch = context.WithTimeout(ctx, values.timeout)
+					defer cancelWatch()
 				}
-				return runDirectWatch(watchCtx, broker, values.once)
+				stream := broker.Watch(watchCtx)
+				// The target session must outlive the bounded watch stream. Passing
+				// watchCtx to selection would make it the chromedp target-context
+				// parent; when the watch deadline fires, the target would detach
+				// before broker cleanup could issue its explicit detach. Selection
+				// uses the command lifetime, while only event consumption is timed.
+				if _, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser); err != nil {
+					return nil, err
+				}
+				return runDirectWatchStream(watchCtx, stream, values.once)
 			})
 		},
 	}
@@ -1117,9 +994,36 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		if stored.Origin != "" && safeOrigin(stored.Origin) != safeOrigin(target.Origin) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "origin_changed", nil)
 		}
+		if stored.ContinuityMarker != "" && target.ContinuityMarker != "" && stored.ContinuityMarker != target.ContinuityMarker {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "continuity_changed", nil)
+		}
+		if stored.Generation != 0 && target.Generation != 0 && stored.Generation != target.Generation {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "generation_changed", nil)
+		}
 	}
 	if err := directTargetPolicyError(*target, browser); err != nil {
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, err
+	}
+	if target.Type != "" && !strings.EqualFold(target.Type, "page") {
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target is not a page", map[string]any{
+			"browser_id": browserID,
+			"target_id":  targetID,
+			"reason":     "not_page",
+		})
+	}
+	if !target.Eligible {
+		if strings.EqualFold(target.EligibilityReason, "unsupported_webmcp") {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "the selected target does not provide WebMCP", map[string]any{
+				"browser_id":          browserID,
+				"target_id":           targetID,
+				"required_capability": "webmcp",
+			})
+		}
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target is not eligible for WebMCP", map[string]any{
+			"browser_id": browserID,
+			"target_id":  targetID,
+			"reason":     boundedDirectReason(target.EligibilityReason),
+		})
 	}
 	if browser.Selection.Origin != "" && safeOrigin(target.Origin) != safeOrigin(browser.Selection.Origin) {
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target does not match the requested origin", map[string]any{
@@ -1130,6 +1034,22 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		})
 	}
 	return candidate, *target, stored, nil
+}
+
+func boundedDirectReason(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "ineligible"
+	}
+	if len(value) > 80 {
+		return value[:80]
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return "ineligible"
+		}
+	}
+	return value
 }
 
 func stalePersistedSelectionError(browserID, targetID, reason string, cause error) error {
@@ -1220,12 +1140,14 @@ func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *c
 	}
 	if browser.Selection.Persist {
 		if err := c.saveDirectSelection(WebMCPSelection{
-			Version:    WebMCPSelectionVersion,
-			EndpointID: string(candidate.ID),
-			BrowserID:  string(page.Key.BrowserID),
-			TargetID:   string(page.Key.TargetID),
-			Origin:     safeOrigin(page.Origin),
-			SelectedAt: time.Now().UTC(),
+			Version:          WebMCPSelectionVersion,
+			EndpointID:       string(candidate.ID),
+			BrowserID:        string(page.Key.BrowserID),
+			TargetID:         string(page.Key.TargetID),
+			Origin:           safeOrigin(page.Origin),
+			ContinuityMarker: target.ContinuityMarker,
+			Generation:       page.Generation,
+			SelectedAt:       time.Now().UTC(),
 		}); err != nil {
 			return nil, fmt.Errorf("persist WebMCP selection: %w", err)
 		}

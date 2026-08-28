@@ -165,6 +165,45 @@ func TestPersistedSelectionSurvivesRestartWithExactContinuity(t *testing.T) {
 	}
 }
 
+func TestPersistedSelectionRejectsQueryAndFragmentOnlyNavigation(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{name: "query", url: "https://restart.test/page?state=new#one"},
+		{name: "fragment", url: "https://restart.test/page?state=old#two"},
+		{name: "query and fragment", url: "https://restart.test/page?state=new#two"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := NewMemorySelectionStore()
+			descriptors := []TargetDescriptor{
+				targetDescriptor("raw-page", "Restart", "https://restart.test/page?state=old#one", 1),
+			}
+			selected, targetID := persistInitialSelection(t, store, &descriptors)
+			if selected.Target.ContinuityMarker == "" {
+				t.Fatal("initial selection has no continuity marker")
+			}
+			descriptors[0].URL = test.url
+
+			inputs, probe := persistenceInputs()
+			service := persistenceService(store, &descriptors, probe)
+			_, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{AutoSelect: AutoSelectPersisted})
+			stale := assertDiscoveryError(t, err, CodeStaleSelection)
+			if stale.Details["browser_id"] != persistenceBrowser().ID || stale.Details["target_id"] != targetID || stale.Details["reason"] != "continuity_changed" {
+				t.Fatalf("navigation continuity failure = %#v", stale.Details)
+			}
+			if _, ok := service.Selected(); ok {
+				t.Fatal("query/fragment-only navigation created a live selection")
+			}
+			if store.Writes() != 1 {
+				t.Fatalf("stale reconnect overwrote record: writes=%d", store.Writes())
+			}
+		})
+	}
+}
+
 func TestPersistedSelectionStaleAndUnsupportedFailuresNeverFallback(t *testing.T) {
 	tests := []struct {
 		name       string

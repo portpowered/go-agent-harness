@@ -285,6 +285,7 @@ func (s *Service) applyNavigationLocked(ctx context.Context, event LifecycleEven
 			event.BrowserID,
 			state.rawID,
 			state.target.Origin,
+			state.target.URL,
 			state.pageWebSocket,
 			TargetDescriptor{DocumentID: event.DocumentID},
 		)

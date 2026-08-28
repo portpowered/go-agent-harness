@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/spf13/cobra"
 )
 
@@ -51,12 +52,25 @@ var ErrWebMCPDoctorRequiresLaneBOrD = errors.New("requires Lane B or requires La
 // contains only browser operations needed by model-facing tools.
 type WebMCPDoctorVersionFunc func(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserVersion, error)
 
+// WebMCPDiscoveryService is the neutral Lane B service consumed by the
+// production composition. Keeping this interface at the CLI boundary lets
+// command tests inject a discovery fake without importing a browser protocol
+// package or depending on a concrete service implementation.
+type WebMCPDiscoveryService interface {
+	DiscoverAll(context.Context, discovery.ConnectionInputs) ([]discovery.BrowserCandidate, error)
+	ListTargetSnapshot(context.Context, discovery.BrowserCandidate, ...discovery.TargetListOptions) (discovery.TargetSnapshot, error)
+	Select(context.Context, discovery.TargetSelectionRequest) (discovery.Selection, error)
+	Selected() (discovery.Selection, bool)
+	RefreshSelection(context.Context) (discovery.Selection, error)
+}
+
 // WebMCPDoctorRuntime is the request-scoped set of seams used by doctor.
 // Broker is the real stateful broker in production-capable compositions;
 // VersionFunc or Catalog supplies the endpoint/version check. Close is
 // optional and owns any runtime resources not owned by Broker.
 type WebMCPDoctorRuntime struct {
 	Broker      webmcp.Broker
+	Discovery   WebMCPDiscoveryService
 	VersionFunc WebMCPDoctorVersionFunc
 	Catalog     webmcp.DevToolsCatalog
 	Close       func() error

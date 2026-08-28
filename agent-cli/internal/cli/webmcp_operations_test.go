@@ -285,8 +285,14 @@ func TestWebMCPDirectHumanOutputIsStableAndRedacted(t *testing.T) {
 func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
-	closedBroker := &directCommandBroker{watch: closedEventChannel()}
-	ended := executeDirectCommand(t, configDir, store, directFactory(closedBroker), "watch", "--json")
+	page, target, candidate, _ := directFixture()
+	closedBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		watch:      closedEventChannel(),
+	}
+	ended := executeDirectCommand(t, configDir, store, directFactory(closedBroker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
 	envelope := requireDirectSuccess(t, ended)
 	var endedData WebMCPDirectWatchData
 	decodeDirectData(t, envelope.Data, &endedData)
@@ -294,10 +300,15 @@ func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 		t.Fatalf("terminated watch = %+v", endedData)
 	}
 
-	blockedBroker := &directCommandBroker{watch: make(chan webmcp.BrokerEvent)}
+	blockedBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		watch:      make(chan webmcp.BrokerEvent),
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	canceled := executeDirectCommandContext(t, ctx, configDir, store, directFactory(blockedBroker), "watch", "--json")
+	canceled := executeDirectCommandContext(t, ctx, configDir, store, directFactory(blockedBroker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
 	if canceled.err != nil {
 		t.Fatalf("canceled watch: %v", canceled.err)
 	}

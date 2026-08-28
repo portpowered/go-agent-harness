@@ -2,11 +2,7 @@ package webmcp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +12,7 @@ import (
 const (
 	defaultBrokerWatchBuffer = 64
 	maxToolRefMintAttempts   = 64
+	initialCatalogWait       = time.Second
 )
 
 // BrokerOptions supplies the browser-neutral seams used by StatefulBroker.
@@ -26,7 +23,10 @@ type BrokerOptions struct {
 	Runtime    BrowserRuntime
 	Discoverer BrowserDiscoverer
 	IDs        IDSource
-	Clock      Clock
+	// ToolRefFactory optionally derives references from a normalized page-tool
+	// descriptor. When omitted, IDs.NewToolRef provides random references.
+	ToolRefFactory ToolRefFactory
+	Clock          Clock
 	// Timers drives invocation deadlines. When omitted, a Clock that also
 	// implements TimerFactory is used; production falls back to wall time.
 	Timers TimerFactory
@@ -55,6 +55,7 @@ type StatefulBroker struct {
 	runtime           BrowserRuntime
 	discoverer        BrowserDiscoverer
 	ids               IDSource
+	toolRefFactory    ToolRefFactory
 	clock             Clock
 	timers            TimerFactory
 	cancelOnInterrupt string
@@ -118,6 +119,13 @@ type brokerSession struct {
 	queueWorkerDone chan struct{}
 	current         *brokerInvocation
 	queueClosed     bool
+	// observedInvocations tracks page invocations initiated by another
+	// command-scoped broker. The browser event stream is shared by attached
+	// DevTools clients, so a watch command can report external invocation
+	// lifecycle events without claiming ownership of their result.
+	observedInvocations map[InvocationID]ToolRef
+	catalogObserved     bool
+	catalogSignal       chan struct{}
 }
 
 type catalogKey struct {
@@ -189,6 +197,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		runtime:             options.Runtime,
 		discoverer:          options.Discoverer,
 		ids:                 ids,
+		toolRefFactory:      options.ToolRefFactory,
 		clock:               clock,
 		timers:              timers,
 		cancelOnInterrupt:   cancelOnInterrupt,
@@ -400,17 +409,19 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		page.SelectedAt = b.clock.Now()
 	}
 	newSession := &brokerSession{
-		handle:          handle,
-		session:         session,
-		target:          cloneTarget(target),
-		context:         page,
-		active:          true,
-		catalog:         make(map[catalogKey]ToolDescriptor),
-		flush:           make(chan chan struct{}),
-		loopDone:        make(chan struct{}),
-		queueWake:       make(chan struct{}, 1),
-		queueStop:       make(chan struct{}),
-		queueWorkerDone: make(chan struct{}),
+		handle:              handle,
+		session:             session,
+		target:              cloneTarget(target),
+		context:             page,
+		active:              true,
+		catalog:             make(map[catalogKey]ToolDescriptor),
+		flush:               make(chan chan struct{}),
+		loopDone:            make(chan struct{}),
+		queueWake:           make(chan struct{}, 1),
+		queueStop:           make(chan struct{}),
+		queueWorkerDone:     make(chan struct{}),
+		observedInvocations: make(map[InvocationID]ToolRef),
+		catalogSignal:       make(chan struct{}),
 	}
 
 	b.mu.Lock()
@@ -439,6 +450,12 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		return PageContext{}, targetAttachError(selector, "enable_webmcp", err)
 	}
 	b.flushSession(newSession)
+	if err := b.waitForInitialCatalog(ctx, newSession); err != nil {
+		b.invalidateSession(newSession, "catalog_wait_canceled")
+		_ = session.Close()
+		return PageContext{}, targetAttachError(selector, "catalog", err)
+	}
+	b.flushSession(newSession)
 	b.mu.Lock()
 	if b.selected == newSession && newSession.active {
 		newSession.context.Ready = true
@@ -446,6 +463,40 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
 	return page, nil
+}
+
+// waitForInitialCatalog gives the browser a bounded opportunity to deliver
+// the toolsAdded event triggered by WebMCP.enable. Chrome returns from the
+// enable command before that event is necessarily queued, and a fresh CLI
+// process otherwise can observe a ready but empty catalog. A timeout is
+// intentionally non-fatal because a valid page may expose zero tools.
+func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *brokerSession) error {
+	if selected == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.mu.Lock()
+	if selected.catalogObserved {
+		b.mu.Unlock()
+		return nil
+	}
+	signal := selected.catalogSignal
+	loopDone := selected.loopDone
+	b.mu.Unlock()
+	timer := time.NewTimer(initialCatalogWait)
+	defer timer.Stop()
+	select {
+	case <-signal:
+		return nil
+	case <-loopDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // Selected returns the current selection after reconciling any already
@@ -831,7 +882,12 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 		b.applyToolsAddedLocked(selected, event)
 	case EventToolsRemoved:
 		b.applyToolsRemovedLocked(selected, event)
+	case EventToolInvoked:
+		b.observeBrowserInvocationLocked(selected, event)
 	case EventToolResponded:
+		if b.reconcileObservedBrowserResponseLocked(selected, event) {
+			return
+		}
 		b.reconcileBrowserResponseLocked(selected, event)
 	case EventPageNavigated, EventFrameNavigated:
 		b.applyGenerationChangeLocked(selected, event, string(event.Type))
@@ -844,7 +900,104 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	}
 }
 
+// observeBrowserInvocationLocked turns a protocol invocation initiated by a
+// different command-scoped broker into a safe lifecycle observation. Direct
+// CLI commands intentionally create a fresh broker for every process, while
+// Chrome broadcasts target events to every attached DevTools session. The
+// invoking broker already owns its ID and is therefore ignored here; a watch
+// broker records only the opaque invocation ID and the catalog-bound ref.
+func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession, event BrowserEvent) {
+	if selected == nil || event.InvocationID == "" {
+		return
+	}
+	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+		return
+	}
+	if _, observed := selected.observedInvocations[event.InvocationID]; observed {
+		return
+	}
+	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
+		return
+	}
+
+	var ref ToolRef
+	if descriptor, ok := observedToolDescriptorLocked(selected, event); ok {
+		ref = descriptor.Ref
+	}
+	selected.observedInvocations[event.InvocationID] = ref
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationCreated,
+		BrowserID:    selected.context.Key.BrowserID,
+		TargetID:     selected.context.Key.TargetID,
+		Generation:   selected.context.Generation,
+		InvocationID: event.InvocationID,
+		ToolRef:      ref,
+		State:        InvocationDispatched,
+		Reason:       "browser_observed",
+	})
+}
+
+func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *brokerSession, event BrowserEvent) bool {
+	if selected == nil || event.InvocationID == "" {
+		return false
+	}
+	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+		return false
+	}
+	ref, observed := selected.observedInvocations[event.InvocationID]
+	if !observed {
+		return false
+	}
+	delete(selected.observedInvocations, event.InvocationID)
+	state, _ := terminalState(event.Status)
+	reason := event.ErrorCode
+	if reason == "" {
+		reason = event.Reason
+	}
+	if reason == "" {
+		reason = strings.ToLower(strings.TrimSpace(event.Status))
+	}
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationTerminal,
+		At:           event.At,
+		BrowserID:    selected.context.Key.BrowserID,
+		TargetID:     selected.context.Key.TargetID,
+		Generation:   selected.context.Generation,
+		InvocationID: event.InvocationID,
+		ToolRef:      ref,
+		State:        state,
+		Reason:       reason,
+	})
+	return true
+}
+
+func observedToolDescriptorLocked(selected *brokerSession, event BrowserEvent) (ToolDescriptor, bool) {
+	if selected == nil {
+		return ToolDescriptor{}, false
+	}
+	if event.FrameID != "" {
+		if descriptor, ok := selected.catalog[catalogKey{frame: event.FrameID, name: event.ToolName}]; ok {
+			return descriptor, true
+		}
+	}
+	var match ToolDescriptor
+	for key, descriptor := range selected.catalog {
+		if key.name != event.ToolName {
+			continue
+		}
+		if match.Ref != "" {
+			return ToolDescriptor{}, false
+		}
+		match = descriptor
+	}
+	return match, match.Ref != ""
+}
+
 func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event BrowserEvent) {
+	if !selected.catalogObserved {
+		selected.catalogObserved = true
+		close(selected.catalogSignal)
+	}
 	if event.Generation > selected.context.Generation {
 		b.advanceGenerationLocked(selected, event.Generation, "catalog_generation")
 	}
@@ -872,7 +1025,7 @@ func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event Br
 		if current, ok := selected.catalog[key]; ok {
 			b.retireRefLocked(current.Ref)
 		}
-		ref, err := b.mintToolRefLocked()
+		ref, err := b.mintToolRefLocked(descriptor)
 		if err != nil {
 			selected.catalogError = err
 			continue
@@ -890,6 +1043,10 @@ func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event Br
 }
 
 func (b *StatefulBroker) applyToolsRemovedLocked(selected *brokerSession, event BrowserEvent) {
+	if !selected.catalogObserved {
+		selected.catalogObserved = true
+		close(selected.catalogSignal)
+	}
 	if event.Generation > selected.context.Generation {
 		b.advanceGenerationLocked(selected, event.Generation, "catalog_generation")
 	}
@@ -1016,9 +1173,17 @@ func (b *StatefulBroker) retireRefLocked(ref ToolRef) {
 	b.retired[ref] = struct{}{}
 }
 
-func (b *StatefulBroker) mintToolRefLocked() (ToolRef, error) {
+func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, error) {
 	for attempt := 0; attempt < maxToolRefMintAttempts; attempt++ {
-		ref, err := b.ids.NewToolRef()
+		var (
+			ref ToolRef
+			err error
+		)
+		if b.toolRefFactory != nil {
+			ref, err = b.toolRefFactory(descriptor)
+		} else {
+			ref, err = b.ids.NewToolRef()
+		}
 		if err != nil {
 			return "", err
 		}
@@ -1029,181 +1194,30 @@ func (b *StatefulBroker) mintToolRefLocked() (ToolRef, error) {
 			continue
 		}
 		if _, wasRetired := b.retired[ref]; wasRetired {
+			// A stable factory cannot produce a second value for the same
+			// descriptor. Fall back to the configured ID source after a
+			// same-generation remove/re-add so a retired ref stays stale.
+			if b.toolRefFactory != nil {
+				ref, err = b.ids.NewToolRef()
+				if err != nil {
+					return "", err
+				}
+				if err := validateToolRefSyntax(ref); err != nil {
+					continue
+				}
+				if _, active := b.refs[ref]; active {
+					continue
+				}
+				if _, wasRetired := b.retired[ref]; wasRetired {
+					continue
+				}
+				return ref, nil
+			}
 			continue
 		}
 		return ref, nil
 	}
 	return "", errors.New("webmcp: tool ref source did not produce a unique valid ref")
-}
-
-func refCurrentLocked(selected *brokerSession, record refRecord) bool {
-	if record.binding.BrowserID != selected.context.Key.BrowserID ||
-		record.binding.TargetID != selected.context.Key.TargetID ||
-		record.binding.Generation != selected.context.Generation {
-		return false
-	}
-	current, ok := selected.catalog[record.key]
-	if !ok {
-		return false
-	}
-	return descriptorEqual(current, record.descriptor) && bindingFor(current) == record.binding
-}
-
-func normalizeToolDescriptor(input ToolDescriptor, contextValue PageContext) (ToolDescriptor, error) {
-	descriptor := cloneToolDescriptor(input)
-	if descriptor.Name == "" || descriptor.FrameID == "" {
-		return ToolDescriptor{}, errors.New("webmcp: catalog descriptor requires name and frame")
-	}
-	if descriptor.BrowserID == "" {
-		descriptor.BrowserID = contextValue.Key.BrowserID
-	}
-	if descriptor.TargetID == "" {
-		descriptor.TargetID = contextValue.Key.TargetID
-	}
-	if descriptor.BrowserID != contextValue.Key.BrowserID || descriptor.TargetID != contextValue.Key.TargetID {
-		return ToolDescriptor{}, errors.New("webmcp: catalog descriptor target does not match selected page")
-	}
-	if descriptor.Generation == 0 {
-		descriptor.Generation = contextValue.Generation
-	}
-	if descriptor.Origin == "" {
-		descriptor.Origin = contextValue.Origin
-	}
-	canonical, digest, err := canonicalSchema(descriptor.InputSchema)
-	if err != nil {
-		return ToolDescriptor{}, err
-	}
-	descriptor.InputSchema = canonical
-	descriptor.SchemaDigest = digest
-	descriptor.Ref = ""
-	descriptor.AddedSequence = 0
-	return descriptor, nil
-}
-
-func canonicalSchema(raw json.RawMessage) (json.RawMessage, string, error) {
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		raw = json.RawMessage(`{}`)
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, "", fmt.Errorf("webmcp: invalid page input schema: %w", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return nil, "", errors.New("webmcp: page input schema contains multiple JSON values")
-		}
-		return nil, "", err
-	}
-	object, ok := value.(map[string]any)
-	if !ok || object == nil {
-		return nil, "", errors.New("webmcp: page input schema must be an object")
-	}
-	canonical, err := json.Marshal(object)
-	if err != nil {
-		return nil, "", err
-	}
-	digest := sha256.Sum256(canonical)
-	return json.RawMessage(canonical), fmt.Sprintf("%x", digest[:]), nil
-}
-
-func descriptorEqual(left, right ToolDescriptor) bool {
-	return left.Name == right.Name && left.Description == right.Description &&
-		bytesEqual(left.InputSchema, right.InputSchema) && annotationsEqual(left.Annotations, right.Annotations) &&
-		left.BrowserID == right.BrowserID && left.TargetID == right.TargetID && left.FrameID == right.FrameID &&
-		left.Origin == right.Origin && left.Generation == right.Generation && left.SchemaDigest == right.SchemaDigest
-}
-
-func bindingFor(descriptor ToolDescriptor) ToolRefBinding {
-	return ToolRefBinding{
-		BrowserID:    descriptor.BrowserID,
-		TargetID:     descriptor.TargetID,
-		FrameID:      descriptor.FrameID,
-		Generation:   descriptor.Generation,
-		ToolName:     descriptor.Name,
-		SchemaDigest: descriptor.SchemaDigest,
-	}
-}
-
-func cloneToolDescriptor(descriptor ToolDescriptor) ToolDescriptor {
-	descriptor.InputSchema = cloneJSON(descriptor.InputSchema)
-	descriptor.Annotations.Raw = cloneJSON(descriptor.Annotations.Raw)
-	if descriptor.Annotations.ReadOnly != nil {
-		value := *descriptor.Annotations.ReadOnly
-		descriptor.Annotations.ReadOnly = &value
-	}
-	if descriptor.Annotations.UntrustedContent != nil {
-		value := *descriptor.Annotations.UntrustedContent
-		descriptor.Annotations.UntrustedContent = &value
-	}
-	if descriptor.Annotations.AutoSubmit != nil {
-		value := *descriptor.Annotations.AutoSubmit
-		descriptor.Annotations.AutoSubmit = &value
-	}
-	return descriptor
-}
-
-func normalizePageContext(page PageContext, browserID BrowserID, target Target) PageContext {
-	if page.Key.BrowserID == "" {
-		page.Key.BrowserID = browserID
-	}
-	if page.Key.TargetID == "" {
-		page.Key.TargetID = target.ID
-	}
-	if page.Title == "" {
-		page.Title = target.Title
-	}
-	if page.URL == "" {
-		page.URL = target.URL
-	}
-	if page.Origin == "" {
-		page.Origin = target.Origin
-	}
-	if page.Generation == 0 {
-		page.Generation = 1
-	}
-	page.Connected = true
-	return page
-}
-
-func clonePageContext(page PageContext) PageContext { return page }
-
-func validateToolRefSyntax(ref ToolRef) error {
-	value := string(ref)
-	if !strings.HasPrefix(value, ToolRefPrefix) || len(value) != len(ToolRefPrefix)+22 {
-		return errors.New("tool reference must use the webmcp.tool-ref.v1 format")
-	}
-	for _, character := range value[len(ToolRefPrefix):] {
-		if (character < 'A' || character > 'Z') && (character < 'a' || character > 'z') &&
-			(character < '0' || character > '9') && character != '_' && character != '-' {
-			return errors.New("tool reference contains invalid characters")
-		}
-	}
-	return nil
-}
-
-// ValidateToolRef reports whether ref has the exact C0 wire grammar. It does
-// not assert that the reference is current in any broker session.
-func ValidateToolRef(ref ToolRef) error { return validateToolRefSyntax(ref) }
-
-// IsValidToolRef is the boolean form of ValidateToolRef.
-func IsValidToolRef(ref ToolRef) bool { return validateToolRefSyntax(ref) == nil }
-
-func invalidToolRefError(ref ToolRef, cause error) error {
-	return classified(ErrorInvalidToolInput, "the tool reference is invalid", map[string]any{
-		"tool_ref": string(ref),
-		"issues":   []ToolResultIssue{{Path: "/tool_ref", Code: "invalid_tool_ref"}},
-	}, errors.Join(ErrInvalidToolInput, cause))
-}
-
-func staleToolRefError(ref ToolRef, generation uint64) error {
-	return classified(ErrorStaleToolRef, "the page tool reference is no longer current", map[string]any{
-		"tool_ref":           string(ref),
-		"current_generation": generation,
-		"refresh_required":   true,
-	}, ErrStaleToolRef)
 }
 
 func staleSelectionError(browserID BrowserID, targetID TargetID, generation uint64, reason string) error {
