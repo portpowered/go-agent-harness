@@ -122,7 +122,13 @@ func sessionAudioInputKindError(kind SessionAudioInputErrorKind) error {
 // RunSessionWithAudioInput runs the shared session runtime while streaming the
 // selected file or raw stdin through the agent loop's session audio inbox.
 // The ordinary session path remains untouched when the flag is absent.
-func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRunOptions, input SessionAudioInput) error {
+func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRunOptions, input SessionAudioInput) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if !sessionAudioInputSelected(input) {
 		return RunSession(ctx, out, opts)
 	}
@@ -149,7 +155,13 @@ func RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration(ctx contex
 // composes the instructions, text-seed, duration, audio-input, and
 // audio-output extensions on the command surface. An empty audioOutPath
 // preserves the established audio-input-only behavior.
-func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) error {
+func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput, systemPrompt string) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}

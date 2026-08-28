@@ -93,7 +93,13 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	seed SessionTextSeed,
 	audioPaths []string,
 	systemPrompt string,
-) error {
+) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if len(audioPaths) == 0 {
 		return RunSessionWithRecordingDirectoryAndInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt)
 	}
@@ -150,6 +156,12 @@ func runSessionWithImagesAndRecordingDirectory(
 	directory string,
 	audioInput *SessionAudioInput,
 ) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
 		return runSessionWithRecordingDirectory(ctx, out, opts.SessionRunOptions, directory, opts.AudioOutPath, opts.MaxDuration, opts.TextSeed, opts.SystemPrompt, true, audioInput)
@@ -228,6 +240,11 @@ func runSessionWithRecordingDirectory(
 	withInstructions bool,
 	audioInput *SessionAudioInput,
 ) (runErr error) {
+	opts, coordinator := prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if strings.TrimSpace(directory) == "" {
 		if withInstructions {
 			return RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioOutPath, maxDuration, seed, systemPrompt)

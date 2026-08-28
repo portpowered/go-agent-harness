@@ -26,7 +26,13 @@ import (
 // realtime session's instructions are the configured workspace or explicit
 // prompt content, while the provider/session runtime continues to own its
 // model configuration.
-func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
+func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	// A pure replay has no provider session to configure. Preserve its captured
 	// outbound sequence; injected replay sessions remain configurable for tests
 	// and caller-owned session seams.
@@ -54,6 +60,12 @@ func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts Session
 // carrying the selected or default workspace instructions into provider
 // construction.
 func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}

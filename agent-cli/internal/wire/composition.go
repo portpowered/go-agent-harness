@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -120,17 +119,7 @@ func defaultTransportDialer() transport.Dialer { return inertTransportDialer{} }
 // execution time; explicitly injected executors remain caller-owned and keep
 // their legacy no-advertisement behavior.
 func provideSessionToolCapabilitiesFactory(toolExecutor messages.ToolExecutor) cli.SessionToolCapabilitiesFactory {
-	return func(cfg *config.Config) (cli.SessionToolCapabilities, error) {
-		if _, isRegistryExecutor := toolExecutor.(*tools.RegistryExecutor); !isRegistryExecutor && toolExecutor != nil {
-			return cli.SessionToolCapabilities{Executor: toolExecutor}, nil
-		}
-
-		registry := tools.NewToolRegistryFromConfig(cfg)
-		return cli.SessionToolCapabilities{
-			Executor:    tools.NewRegistryExecutor(registry),
-			Definitions: registry.ToAgentLoopDefs(),
-		}, nil
-	}
+	return cli.NewSessionToolCapabilitiesFactory(toolExecutor, nil)
 }
 
 // PortDescriptor is the public, read-only description of a live composition

@@ -147,10 +147,22 @@ type SessionRunOptions struct {
 	// session provider and the duplex agent loop. It must be derived from the
 	// same config snapshot as ToolExecutor.
 	ToolDefinitions []messages.ToolDefinition
+	// BrowserToolsEnabled records the resolved browser capability admission.
+	// It allows an explicitly activated live session to run without requiring
+	// the legacy provider-recording flag while keeping ordinary sessions on
+	// their existing validation path.
+	BrowserToolsEnabled bool
 	// LoadedConfig is the config snapshot used to derive session capabilities.
 	// When present, provider resolution reuses it instead of loading config a
 	// second time during runtime planning.
 	LoadedConfig *config.Config
+
+	// CapabilityClose is the optional cleanup hook transferred from the CLI
+	// session capability factory. The service wraps it in one shared
+	// SessionCapabilityCoordinator so planning, runtime, and nested wrappers
+	// cannot close the same capability more than once.
+	CapabilityClose       func() error
+	capabilityCoordinator *SessionCapabilityCoordinator
 
 	// ToolExecutionTimeout overrides the per-invocation session tool adapter
 	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
@@ -203,7 +215,7 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
 		return err
 	}
-	if opts.RecordPath == "" && opts.ReplayPath == "" {
+	if opts.RecordPath == "" && opts.ReplayPath == "" && !opts.BrowserToolsEnabled {
 		return fmt.Errorf("agent session requires --record <file>.json or --replay <file>.json")
 	}
 	if opts.RecordPath != "" && opts.ReplayPath != "" {

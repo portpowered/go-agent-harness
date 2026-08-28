@@ -26,6 +26,9 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// Close transfers ownership of any capability resources to the session
+	// coordinator. Nil means this capability has no closeable resources.
+	Close func() error
 }
 
 // SessionToolCapabilitiesFactory builds the session tool surface from the
@@ -365,6 +368,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var audioInTurns []string
 	var audioInDevice audio.DeviceID
 	var audioOutDevice audio.DeviceID
+	browserFlags := flags.NewBrowserFlags()
 	voiceFlag := &sessionVoiceFlagValue{target: &voice}
 	cmd := &cobra.Command{
 		Use:   "session [message]",
@@ -379,6 +383,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			return services.ValidateOpenAIRealtimeVoice(voice)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateBrowserToolsBackend(browserFlags.Tools, browserToolsAdmission(cmd)); err != nil {
+				return err
+			}
 			selectedTransport, err := validateSessionTransport(transport)
 			if err != nil {
 				return err
@@ -403,7 +410,19 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if selectedTransport == SessionTransportWebRTC {
 				return &SessionWebRTCUnavailableError{}
 			}
-			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" && recordDirPath == "" && len(audioInTurns) == 0 {
+			hasSessionMode := c.askFlags.RecordCapturePath != "" || c.askFlags.ReplayCapturePath != "" || recordDirPath != "" || len(audioInTurns) > 0
+			var loadedConfig *config.Config
+			// Resolve browser flags before admission so invalid values fail without
+			// touching a provider or browser. The explicit capability flag is the
+			// only new standalone admission trigger; other browser settings remain
+			// inert when no existing session mode is selected.
+			if hasSessionMode || hasSessionBrowserFlag(cmd) {
+				loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
+				if err != nil {
+					return err
+				}
+			}
+			if !hasSessionMode && !browserToolsAdmission(cmd) {
 				return cmd.Help()
 			}
 			sessionContext := cmd.Context()
@@ -420,56 +439,6 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					})
 				}
 			}
-			toolExecutor := c.toolExecutorOverride
-			var toolDefinitions []messages.ToolDefinition
-			var loadedConfig *config.Config
-			if c.sessionToolCapabilities != nil {
-				storage, err := config.NewDefaultConfigStorage(c.globalFlags.ConfigDir())
-				if err != nil {
-					return fmt.Errorf("load session config: %w", err)
-				}
-				loadedConfig, err = storage.Load()
-				if err != nil {
-					return fmt.Errorf("load session config: %w", err)
-				}
-				capabilities, err := c.sessionToolCapabilities(loadedConfig)
-				if err != nil {
-					return fmt.Errorf("configure session tools: %w", err)
-				}
-				toolExecutor = capabilities.Executor
-				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-			}
-			sessionOptions := services.SessionRunOptions{
-				RecordPath:        c.askFlags.RecordCapturePath,
-				ReplayPath:        c.askFlags.ReplayCapturePath,
-				Provider:          c.askFlags.Provider,
-				Model:             c.askFlags.Model,
-				ModelProvided:     cmd.Flags().Changed("model"),
-				APIKey:            c.askFlags.APIKey,
-				BaseURL:           c.askFlags.BaseURL,
-				ConfigDir:         c.globalFlags.ConfigDir(),
-				Prompt:            strings.Join(args, " "),
-				Voice:             voice,
-				Transport:         selectedTransport,
-				Signaling:         signaling,
-				MediaSource:       mediaSource,
-				RTCRuntimeFactory: c.rtcRuntimeFactory,
-				SessionInferencer: c.sessionInferencerOverride,
-				ToolExecutor:      toolExecutor,
-				ToolDefinitions:   toolDefinitions,
-				LoadedConfig:      loadedConfig,
-				WaitForClose:      waitForClose,
-				StreamObserver:    c.streamObserver,
-				Clock:             c.clockSource,
-				RuntimeObserver:   c.runtimeObserver,
-				RTCDeviceBinding: services.RTCDeviceBindingRequest{
-					Registry:      c.deviceRegistry,
-					InputDevice:   audioInDevice,
-					OutputDevice:  audioOutDevice,
-					InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
-					OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
-				},
-			}
 			seed := services.SessionTextSeed{
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
@@ -480,6 +449,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Present:       cmd.Flags().Changed("audio-in"),
 				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
 			}
+			// Validate command-only combinations before constructing the browser
+			// capability. Once construction succeeds, ownership transfers to the
+			// service coordinator and every remaining error is finalized there.
 			if len(audioInTurns) > 0 {
 				if audioInput.Present || audioInput.DevicePresent {
 					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
@@ -490,6 +462,62 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				if len(c.imagePaths) > 0 {
 					return fmt.Errorf("--audio-in-turn cannot be combined with --image")
 				}
+			}
+			toolExecutor := c.toolExecutorOverride
+			var toolDefinitions []messages.ToolDefinition
+			var capabilityClose func() error
+			if c.sessionToolCapabilities != nil {
+				if loadedConfig == nil {
+					loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
+					if err != nil {
+						return err
+					}
+				}
+				capabilities, err := c.sessionToolCapabilities(loadedConfig)
+				if err != nil {
+					return fmt.Errorf("configure session tools: %w", err)
+				}
+				toolExecutor = capabilities.Executor
+				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+				if capabilities.Close != nil {
+					capabilityCoordinator := services.NewSessionCapabilityCoordinator(capabilities.Close)
+					capabilityClose = capabilityCoordinator.Close
+				}
+			}
+			sessionOptions := services.SessionRunOptions{
+				RecordPath:          c.askFlags.RecordCapturePath,
+				ReplayPath:          c.askFlags.ReplayCapturePath,
+				Provider:            c.askFlags.Provider,
+				Model:               c.askFlags.Model,
+				ModelProvided:       cmd.Flags().Changed("model"),
+				APIKey:              c.askFlags.APIKey,
+				BaseURL:             c.askFlags.BaseURL,
+				ConfigDir:           c.globalFlags.ConfigDir(),
+				Prompt:              strings.Join(args, " "),
+				Voice:               voice,
+				Transport:           selectedTransport,
+				Signaling:           signaling,
+				MediaSource:         mediaSource,
+				RTCRuntimeFactory:   c.rtcRuntimeFactory,
+				SessionInferencer:   c.sessionInferencerOverride,
+				ToolExecutor:        toolExecutor,
+				ToolDefinitions:     toolDefinitions,
+				CapabilityClose:     capabilityClose,
+				LoadedConfig:        loadedConfig,
+				BrowserToolsEnabled: browserConfigEnablesTools(loadedConfig),
+				WaitForClose:        waitForClose,
+				StreamObserver:      c.streamObserver,
+				Clock:               c.clockSource,
+				RuntimeObserver:     c.runtimeObserver,
+				RTCDeviceBinding: services.RTCDeviceBindingRequest{
+					Registry:      c.deviceRegistry,
+					InputDevice:   audioInDevice,
+					OutputDevice:  audioOutDevice,
+					InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
+					OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
+				},
+			}
+			if len(audioInTurns) > 0 {
 				return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 					sessionContext,
 					cmd.OutOrStdout(),
@@ -581,6 +609,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&mediaSource, "media-source", "", "Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in")
 	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path)")
 	cmd.Flags().StringVar(&signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
+	registerSessionBrowserFlags(cmd, browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
 	return cmd
 }
