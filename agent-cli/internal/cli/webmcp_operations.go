@@ -946,12 +946,6 @@ func directRequiresLaneError(operation string) error {
 	return fmt.Errorf("%w: %s requires Lane B or requires Lane D", ErrWebMCPOperationsRequiresLaneBOrD, operation)
 }
 
-type directResolvedTarget struct {
-	candidate webmcp.BrowserCandidate
-	target    webmcp.Target
-	stored    *WebMCPSelection
-}
-
 func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
 	browserID := browser.Selection.Browser
 	targetID := browser.Selection.Tab

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"io"
 	"reflect"
@@ -79,7 +80,7 @@ func TestSessionRuntimePlanClosesTransferredCapabilityOnNormalExit(t *testing.T)
 		}),
 	}
 
-	if err := plan.run(nil, io.Discard); err != nil {
+	if err := plan.run(context.Background(), io.Discard); err != nil {
 		t.Fatalf("plan run: %v", err)
 	}
 	if closeCalls != 1 {
@@ -99,7 +100,7 @@ func TestSessionDurationPlanClosesTransferredCapabilityOnPreflightExit(t *testin
 		},
 	}
 
-	err := runSessionDurationPlan(nil, io.Discard, plan, 1, nil)
+	err := runSessionDurationPlan(context.Background(), io.Discard, plan, 1, nil)
 	if err == nil {
 		t.Fatal("duration preflight unexpectedly succeeded")
 	}

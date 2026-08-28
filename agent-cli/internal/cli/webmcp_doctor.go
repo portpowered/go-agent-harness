@@ -491,7 +491,7 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 	}
 	report.setCheck("policy", doctorCheckPass, "Origin policy permits the eligible target set.", map[string]any{"eligible_pages": len(selectionTargets)})
 
-	selectedTarget, selectErr, warning := chooseDoctorTarget(selectionTargets, browser.Selection)
+	selectedTarget, warning, selectErr := chooseDoctorTarget(selectionTargets, browser.Selection)
 	if selectErr != nil {
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(selectErr, webmcp.ErrorNoEligibleTab, map[string]any{"phase": "target_selection"})
@@ -979,52 +979,52 @@ func doctorSelectionTargets(targets []webmcp.Target, browser config.BrowserConfi
 	return eligible, nil
 }
 
-func chooseDoctorTarget(targets []webmcp.Target, selection config.BrowserSelectionConfig) (*webmcp.Target, error, string) {
+func chooseDoctorTarget(targets []webmcp.Target, selection config.BrowserSelectionConfig) (*webmcp.Target, string, error) {
 	if selection.Tab != "" {
 		for index := range targets {
 			if string(targets[index].ID) == selection.Tab {
 				selected := targets[index]
-				return &selected, nil, ""
+				return &selected, "", nil
 			}
 		}
-		return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the selected browser target is no longer current", map[string]any{
+		return nil, "", webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the selected browser target is no longer current", map[string]any{
 			"browser_id":          string(selection.Browser),
 			"target_id":           selection.Tab,
 			"selected_generation": uint64(0),
 			"reason":              "target_not_found",
-		}), ""
+		})
 	}
 	switch selection.AutoSelect {
 	case config.BrowserAutoSelectSingle:
 		if len(targets) == 0 {
-			return nil, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{"candidate_count": 0}), ""
+			return nil, "", webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{"candidate_count": 0})
 		}
 		if len(targets) > 1 {
 			ids := make([]string, 0, len(targets))
 			for _, target := range targets {
 				ids = append(ids, string(target.ID))
 			}
-			return nil, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
+			return nil, "", webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
 				"browser_id":           string(targets[0].BrowserID),
 				"candidate_target_ids": ids,
-			}), ""
+			})
 		}
 		selected := targets[0]
-		return &selected, nil, ""
+		return &selected, "", nil
 	case config.BrowserAutoSelectPersisted:
-		return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser target selection is not current", map[string]any{
+		return nil, "", webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser target selection is not current", map[string]any{
 			"browser_id":          string(selection.Browser),
 			"target_id":           "",
 			"selected_generation": uint64(0),
 			"reason":              "persisted_selection_missing",
-		}), ""
+		})
 	case config.BrowserAutoSelectOff, "":
 		if len(targets) == 0 {
-			return nil, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{"candidate_count": 0}), ""
+			return nil, "", webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{"candidate_count": 0})
 		}
-		return nil, nil, "No target selected; run `agent webmcp tabs` and `agent webmcp select` or set browser.selection.auto_select."
+		return nil, "No target selected; run `agent webmcp tabs` and `agent webmcp select` or set browser.selection.auto_select.", nil
 	default:
-		return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "browser target auto-selection is invalid", map[string]any{"reason": "invalid_auto_select"}), ""
+		return nil, "", webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "browser target auto-selection is invalid", map[string]any{"reason": "invalid_auto_select"})
 	}
 }
 
