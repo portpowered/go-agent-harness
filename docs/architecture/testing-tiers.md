@@ -34,13 +34,25 @@ duration of 110.788 seconds; the required safety calculation is
 wall time includes compilation; it is measured separately when collecting
 evidence and does not change the package-level calculation.
 
-This 180-second package budget is distinct from the GitHub job's 45-minute
-outer limit and must remain finite. It does not replace command-level
-deadlines inside the integration tests, and the general `GO_TEST_TIMEOUT`
-continues to govern unrelated packages until a root target explicitly opts
-into the integration-specific setting. Full repetition logs, JSON inventories,
-and CI status belong in review conversation/run artifacts, not in the
-repository.
+The root `Makefile` exposes this contract as
+`AGENT_CLI_INTEGRATION_TIMEOUT`, whose default is the finite `180s` value and
+whose effective value is printed by every affected target. The direct package
+paths in `make test-integration`, `make test-regressions`, and `make test-budget`
+use this setting for `agent-cli/test/integration`; `make coverage` and
+`make test-hermetic` use it for the same package under their existing coverage
+and `CGO_ENABLED=0`/`nomicrophone` modes. `make test` and those target-wide
+module invocations necessarily apply it to all packages in the `agent-cli`
+module, which is the narrowly scoped module-level consequence of one
+`go test ./...` invocation. Other modules and package paths retain the general
+`GO_TEST_TIMEOUT`. The composite `make ci` inherits these same settings from
+the targets it composes.
+
+The integration budget is distinct from the GitHub job's 45-minute limit and
+must remain finite. It does not replace command-level deadlines inside the
+integration tests. Override `AGENT_CLI_INTEGRATION_TIMEOUT` only for local
+diagnostics, keeping the value finite when exercising the root contract. Full
+repetition logs, JSON inventories, and CI status belong in review
+conversation/run artifacts, not in the repository.
 
 ## Microphone build configurations
 
