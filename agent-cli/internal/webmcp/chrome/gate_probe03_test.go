@@ -306,6 +306,7 @@ func TestPinnedChromeWebMCPProbe03ThroughActualBinary(t *testing.T) {
 	transcript = append(transcript,
 		fmt.Sprintf("oracle before_stale page_a={value:%q invocations:%d} page_b={value:%q invocations:%d}", pageAAfterStale.Value, len(pageAAfterStale.Invocations), pageBAfterNavigation.Value, len(pageBAfterNavigation.Invocations)),
 		fmt.Sprintf("oracle after_fresh page_a={value:%q invocations:%d} page_b={value:%q invocations:%d exact_once=true}", pageAAfterFresh.Value, len(pageAAfterFresh.Invocations), strings.ReplaceAll(pageBAfterFresh.Value, fixture.Token(), "<fixture-token>"), len(pageBAfterFresh.Invocations)),
+		fmt.Sprintf("independent_cdp_oracle page_b={url:%q value:%q visible:%q invocations:%d exact_once=true}", strings.ReplaceAll(pageBDirect.URL, fixture.Token(), "<fixture-token>"), strings.ReplaceAll(pageBDirect.Value, fixture.Token(), "<fixture-token>"), strings.ReplaceAll(pageBDirect.VisibleText, fixture.Token(), "<fixture-token>"), len(pageBDirect.Invocations)),
 		"cleanup browser=owned profile=<temporary> fixture=owned target_cleanup=detach_only external_target_retained=true",
 	)
 	for _, line := range transcript {
