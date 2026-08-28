@@ -703,10 +703,6 @@ type productionRootCLISession struct {
 	closeOnce sync.Once
 }
 
-func newProductionRootCLISession(conn transport.Conn) *productionRootCLISession {
-	return newProductionRootCLISessionWithMedia(conn, rtc.MediaEndpoints{})
-}
-
 func newProductionRootCLISessionWithMedia(conn transport.Conn, media rtc.MediaEndpoints) *productionRootCLISession {
 	session := &productionRootCLISession{
 		receive: messages.NewTypedBuffer[messages.StreamMessage](16),
