@@ -142,6 +142,45 @@ func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *te
 	}
 }
 
+func TestSessionProgressObserver_ContinuationRequestBeforeCallObservation(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-continuation-before-observation"
+
+	// Provider-send acknowledgements can reach the lifecycle observer before
+	// the outer delta consumer drains the originating TOOLCALL.END. The request
+	// must remain correlated with this call instead of being lost.
+	observer.noteToolResultAccepted(callID)
+	observer.noteToolContinuationRequested()
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "lookup", `{}`),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if observer.hasToolLifecycleObligation() {
+		t.Fatal("out-of-order accepted continuation remained pending")
+	}
+	if got := observer.pendingToolContinuationCallIDs(); len(got) != 0 {
+		t.Fatalf("pending continuation IDs = %v, want none", got)
+	}
+}
+
 func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	observer.setToolResultsEnabled(true)

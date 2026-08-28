@@ -16,7 +16,6 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
@@ -132,6 +131,15 @@ type ScheduledAudioInput struct {
 	EndOfTurn bool
 }
 
+// scheduledSessionInputSender is the narrow loop seam used by the scheduler.
+// Keeping it separate from AgentLoop makes the ordering contract directly
+// observable in service tests while production still uses AgentLoop's session
+// input APIs.
+type scheduledSessionInputSender interface {
+	SendAudioInput(context.Context, []byte) error
+	SendSessionEvent(context.Context, messages.StreamMessage) error
+}
+
 // failureFacts holds the typed terminal facts captured from the first
 // failure-bearing stream value observed for a session run.
 type failureFacts struct {
@@ -209,7 +217,7 @@ type sessionProgressObserver struct {
 	unresolvedToolCalls   map[string]struct{}
 	acceptedToolCalls     map[string]struct{}
 	toolResultRejections  map[string]messages.SessionSendStatus
-	toolResultAcceptedCh  chan struct{}
+	toolLifecycleCh       chan struct{}
 	toolContinuations     map[string]*toolContinuationState
 	toolCallInTurn        bool
 	messageEndSeen        bool
@@ -265,7 +273,7 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		unresolvedToolCalls:  make(map[string]struct{}),
 		acceptedToolCalls:    make(map[string]struct{}),
 		toolResultRejections: make(map[string]messages.SessionSendStatus),
-		toolResultAcceptedCh: make(chan struct{}, 1),
+		toolLifecycleCh:      make(chan struct{}, 1),
 		toolContinuations:    make(map[string]*toolContinuationState),
 	}
 }
@@ -289,8 +297,8 @@ func (o *sessionProgressObserver) ensureToolStateLocked() {
 	if o.toolResultRejections == nil {
 		o.toolResultRejections = make(map[string]messages.SessionSendStatus)
 	}
-	if o.toolResultAcceptedCh == nil {
-		o.toolResultAcceptedCh = make(chan struct{}, 1)
+	if o.toolLifecycleCh == nil {
+		o.toolLifecycleCh = make(chan struct{}, 1)
 	}
 	if o.toolContinuations == nil {
 		o.toolContinuations = make(map[string]*toolContinuationState)
@@ -347,14 +355,14 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 		state.continuationComplete = true
 	}
 	delete(o.toolResultRejections, callID)
-	acceptedCh := o.toolResultAcceptedCh
+	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 
 	// One wake-up is enough even when several results are accepted before the
 	// session loop selects this branch: the close predicate observes the whole
 	// current set, not a count of wake-ups.
 	select {
-	case acceptedCh <- struct{}{}:
+	case lifecycleCh <- struct{}{}:
 	default:
 	}
 }
@@ -371,8 +379,17 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
 	changed := false
-	for _, state := range o.toolContinuations {
-		if state == nil || !state.resultAccepted || state.continuationComplete || state.continuationRequested {
+	for callID := range o.acceptedToolCalls {
+		state := o.toolContinuations[callID]
+		if state == nil {
+			// The provider delta consumer can observe TOOLCALL.END after the
+			// model runner has already accepted the result and response.create.
+			// Preserve that early continuation request by creating a call-ID
+			// placeholder for the later provider event to enrich.
+			state = &toolContinuationState{resultAccepted: true}
+			o.toolContinuations[callID] = state
+		}
+		if !state.resultAccepted || state.continuationComplete || state.continuationRequested {
 			continue
 		}
 		state.continuationRequested = true
@@ -381,11 +398,11 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 		}
 		changed = true
 	}
-	acceptedCh := o.toolResultAcceptedCh
+	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 	if changed {
 		select {
-		case acceptedCh <- struct{}{}:
+		case lifecycleCh <- struct{}{}:
 		default:
 		}
 	}
@@ -401,7 +418,14 @@ func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	if state := o.toolContinuations[callID]; state != nil && state.resultAccepted {
+	state := o.toolContinuations[callID]
+	if state == nil {
+		if _, accepted := o.acceptedToolCalls[callID]; accepted {
+			state = &toolContinuationState{resultAccepted: true}
+			o.toolContinuations[callID] = state
+		}
+	}
+	if state != nil && state.resultAccepted {
 		state.continuationRequested = true
 		if state.continuationTerminalSeen && state.toolResponseComplete {
 			state.continuationComplete = true
@@ -421,7 +445,7 @@ func (o *sessionProgressObserver) toolLifecycleEvents() <-chan struct{} {
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	ch := o.toolResultAcceptedCh
+	ch := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 	return ch
 }
@@ -798,11 +822,11 @@ func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) 
 		o.assistantResponseDone = true
 	}
 	o.toolCallInTurn = false
-	acceptedCh := o.toolResultAcceptedCh
+	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 	if continuationChanged {
 		select {
-		case acceptedCh <- struct{}{}:
+		case lifecycleCh <- struct{}{}:
 		default:
 		}
 	}
@@ -840,7 +864,7 @@ func (o *sessionProgressObserver) noteUserTextInput(text string) {
 
 // dispatchScheduledInputs delivers due scheduled audio through the loop's
 // existing SendAudioInput seam and attributes the bytes to the in-flight turn.
-func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop *agentloop.AgentLoop) error {
+func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop scheduledSessionInputSender) error {
 	if o == nil || loop == nil {
 		return nil
 	}

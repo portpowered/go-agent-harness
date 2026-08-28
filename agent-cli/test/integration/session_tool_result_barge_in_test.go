@@ -25,19 +25,22 @@ type sessionToolBargeInSession struct {
 	closeOnce          sync.Once
 	resultAcceptedOnce sync.Once
 	continuationOnce   sync.Once
+	secondAudioOnce    sync.Once
 
-	mu             sync.Mutex
-	responseCount  int
-	sent           []messages.StreamMessage
-	lifecycle      []string
-	resultAccepted chan struct{}
+	mu              sync.Mutex
+	responseCount   int
+	sent            []messages.StreamMessage
+	lifecycle       []string
+	resultAccepted  chan struct{}
+	secondAudioSent chan struct{}
 }
 
 func newSessionToolBargeInSession() *sessionToolBargeInSession {
 	return &sessionToolBargeInSession{
-		recv:           messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:           make(chan struct{}),
-		resultAccepted: make(chan struct{}),
+		recv:            messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:            make(chan struct{}),
+		resultAccepted:  make(chan struct{}),
+		secondAudioSent: make(chan struct{}),
 	}
 }
 
@@ -55,6 +58,16 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 	s.mu.Unlock()
 
 	switch msg.Type {
+	case messages.StreamTypeAudioDelta:
+		s.mu.Lock()
+		secondTurn := s.responseCount >= 1
+		s.mu.Unlock()
+		if secondTurn {
+			s.secondAudioOnce.Do(func() {
+				s.recordLifecycle("second_audio_sent")
+				close(s.secondAudioSent)
+			})
+		}
 	case messages.StreamTypeMessageEnd:
 		s.mu.Lock()
 		s.responseCount++
@@ -324,6 +337,11 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	close(executor.release)
 	waitSessionToolBargeInSignal(t, session.resultAccepted, "correlated tool result acceptance")
 	waitSessionToolBargeInSignal(t, secondAssistantResponseObserved, "second assistant response.done")
+	select {
+	case <-session.secondAudioSent:
+		t.Fatal("second scheduled audio was sent before the first continuation boundary was released")
+	default:
+	}
 
 	if got := len(executor.callsSnapshot()); got != 1 {
 		t.Fatalf("slow tool executor received %d calls, want exactly one", got)
@@ -341,6 +359,7 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	// The next scheduled audio turn is eligible only after this observer barrier
 	// is released.
 	releaseObserverOnce.Do(func() { close(releaseSecondAssistantObserver) })
+	waitSessionToolBargeInSignal(t, session.secondAudioSent, "second scheduled audio dispatch")
 	waitSessionToolBargeInSignal(t, localSessionCloseObserved, "client close after accepted tool continuation")
 
 	select {
@@ -372,8 +391,8 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 		t.Fatalf("stream observer saw %d client closes, want exactly one", closeCount)
 	}
 	gotLifecycle := session.lifecycleSnapshot()
-	if len(gotLifecycle) != 2 || gotLifecycle[0] != "result_accepted" || gotLifecycle[1] != "client_close" {
-		t.Fatalf("session lifecycle order = %v, want [result_accepted client_close]", gotLifecycle)
+	if len(gotLifecycle) != 3 || gotLifecycle[0] != "result_accepted" || gotLifecycle[1] != "second_audio_sent" || gotLifecycle[2] != "client_close" {
+		t.Fatalf("session lifecycle order = %v, want [result_accepted second_audio_sent client_close]", gotLifecycle)
 	}
 }
 

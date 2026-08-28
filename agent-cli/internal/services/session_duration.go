@@ -879,6 +879,13 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 		select {
 		case <-toolLifecycleEvents:
+			// Tool lifecycle completion is an asynchronous scheduler wake. It
+			// must re-check pending audio before checking whether the session
+			// can close; otherwise a completed continuation can leave the next
+			// scheduled turn waiting for an unrelated provider delta.
+			if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
+				return finish(false, err)
+			}
 			state, closeErr := closePendingSessionIfReady(runCtx, loop, opts, sessionLoopMessageState{
 				closeSent:             closeSent,
 				closeAfterOpenPending: closeAfterOpenPending,

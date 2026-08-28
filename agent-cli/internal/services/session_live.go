@@ -396,6 +396,14 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	for {
 		select {
 		case <-toolLifecycleEvents:
+			// A tool lifecycle transition can make the next scheduled audio
+			// input eligible without producing a provider delta. Re-run the
+			// scheduler on the same serialized session-loop goroutine before
+			// evaluating close, so result acceptance and continuation
+			// completion cannot strand the next turn.
+			if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
+				return errors.Join(err, stop())
+			}
 			var closeErr error
 			state, closeErr = closePendingSessionIfReady(runCtx, loop, opts, state)
 			if closeErr != nil {
