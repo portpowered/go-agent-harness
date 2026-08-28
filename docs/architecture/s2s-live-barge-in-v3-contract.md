@@ -34,6 +34,11 @@ call, and required continuation has reached its documented boundary. Missing,
 duplicate, orphaned, wrong-ID, stale, or pending work is a failed proof even if
 the process exits with status zero.
 
+Turn-start proofs may additionally forbid output for a response whose first
+output is deliberately held behind the speech boundary. This distinguishes an
+input-winning race from a response that leaked its first audio or text before
+the cancellation boundary.
+
 ## Transport adapter mapping
 
 The OpenAI Realtime adapter uses the following illustrative mapping; another
@@ -64,4 +69,3 @@ awaits, stream drains, fixture barriers, and context-aware observer workers.
 returns `BargeInWaitError` containing the safe observed sequence and sorted
 unresolved identities. `StopAndWait` cancels the shared context and joins
 workers within a bounded teardown grace period; workers must honor the context.
-

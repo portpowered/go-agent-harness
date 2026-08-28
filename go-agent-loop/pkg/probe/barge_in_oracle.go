@@ -73,6 +73,7 @@ type BargeInInputExpectation struct {
 // BargeInResponseExpectation describes the expected owner and terminal
 // outcome of one response. RequireCancel and ForbidCancel make completion-vs-
 // interruption precedence explicit instead of inferring it from counts.
+// ForbidOutput makes a deliberately held first-output boundary observable.
 type BargeInResponseExpectation struct {
 	ID                  string
 	InputID             string
@@ -81,6 +82,7 @@ type BargeInResponseExpectation struct {
 	RequireCancel       bool
 	ForbidCancel        bool
 	RequireOutput       bool
+	ForbidOutput        bool
 	RequireContinuation bool
 }
 
@@ -677,6 +679,9 @@ func (l *BargeInLedger) Check(contract BargeInContract) BargeInValidationReport 
 		}
 		if expected.RequireOutput && state.outputCount == 0 {
 			addViolation("response.output", fmt.Sprintf("response %q has no non-empty output before interruption", expected.ID))
+		}
+		if expected.ForbidOutput && state.outputCount != 0 {
+			addViolation("response.output", fmt.Sprintf("response %q emitted %d non-empty output events although output is forbidden", expected.ID, state.outputCount))
 		}
 		if expected.RequireContinuation && state.continuation == 0 {
 			addViolation("continuation", fmt.Sprintf("response %q has no continuation identity", expected.ID))

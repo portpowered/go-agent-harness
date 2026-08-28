@@ -122,6 +122,10 @@ func (t *plainSpeechTrace) waitForAudio(ctx context.Context, minimum int) error 
 	return t.waitFor(ctx, t.audio, minimum)
 }
 
+func (t *plainSpeechTrace) waitForCreated(ctx context.Context, minimum int) error {
+	return t.waitFor(ctx, t.created, minimum)
+}
+
 func (t *plainSpeechTrace) waitForDone(ctx context.Context, minimum int) error {
 	return t.waitFor(ctx, t.done, minimum)
 }
@@ -229,12 +233,13 @@ type plainSpeechServer struct {
 	dialOnce  sync.Once
 	dialCount int
 
-	turnHasAudio  bool
-	commits       int
-	responses     []*plainSpeechServerResponse
-	active        *plainSpeechServerResponse
-	pendingCancel *plainSpeechServerResponse
-	protocolErrs  []string
+	turnHasAudio    bool
+	commits         int
+	responses       []*plainSpeechServerResponse
+	active          *plainSpeechServerResponse
+	pendingCancel   *plainSpeechServerResponse
+	holdFirstOutput bool
+	protocolErrs    []string
 }
 
 type plainSpeechServerResponse struct {
@@ -248,6 +253,12 @@ func newPlainSpeechServer() *plainSpeechServer {
 		events: make(chan []byte, 128),
 		closed: make(chan struct{}),
 	}
+}
+
+func newTurnStartPlainSpeechServer() *plainSpeechServer {
+	server := newPlainSpeechServer()
+	server.holdFirstOutput = true
+	return server
 }
 
 func (s *plainSpeechServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
@@ -347,7 +358,9 @@ func (c *plainSpeechConn) WriteMessage(_ int, payload []byte) error {
 		events = append(events, fmt.Sprintf(`{"type":"response.created","response":{"id":%q}}`, response.ID))
 		switch ordinal {
 		case 1:
-			events = append(events, plainSpeechAudioDelta(response.ID, 1))
+			if !s.holdFirstOutput {
+				events = append(events, plainSpeechAudioDelta(response.ID, 1))
+			}
 		case 2, 3:
 			events = append(events,
 				plainSpeechAudioDelta(response.ID, byte(ordinal)),

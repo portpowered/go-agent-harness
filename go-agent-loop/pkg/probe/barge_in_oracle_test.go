@@ -231,6 +231,16 @@ func TestBargeInLedgerRejectsCleanUnresolvedAndUndocumentedResults(t *testing.T)
 	}
 }
 
+func TestBargeInLedgerRejectsForbiddenTurnStartOutput(t *testing.T) {
+	events, contract := validBargeInEvents()
+	contract.Responses[0].RequireOutput = false
+	contract.Responses[0].ForbidOutput = true
+	err := replayBargeInEvents(events).Validate(contract)
+	if err == nil || !strings.Contains(err.Error(), `response "r1" emitted 1 non-empty output events although output is forbidden`) {
+		t.Fatalf("forbidden turn-start output error = %v", err)
+	}
+}
+
 func TestBargeInLedgerWaitForReportsBoundedDiagnostics(t *testing.T) {
 	ledger := NewBargeInLedger()
 	ledger.Observe(BargeInEvent{Sequence: 1, Kind: BargeInEventInputAppend, InputID: "i-wait", TurnID: "t-wait", Bytes: 2, NonEmpty: true})
