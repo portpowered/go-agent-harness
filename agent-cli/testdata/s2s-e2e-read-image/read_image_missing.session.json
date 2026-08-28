@@ -5,7 +5,7 @@
     "model": "gpt-realtime"
   },
   "session": {
-    "id": "sess_read_image_positive",
+    "id": "sess_read_image_missing",
     "started_at_utc": "2026-08-26T00:00:00Z",
     "fixture_provenance": "synthetic"
   },
@@ -50,7 +50,7 @@
       "payload": {
         "type": "session.created",
         "session": {
-          "id": "sess_read_image_positive",
+          "id": "sess_read_image_missing",
           "model": "gpt-realtime"
         }
       }
@@ -162,11 +162,10 @@
         "item": {
           "type": "message",
           "role": "user",
-          "id": "item_tool_result_S_H3OP2bM3-kv_s",
           "content": [
             {
-              "type": "input_image",
-              "image_url": "__READ_IMAGE_DATA_URL__"
+              "type": "input_text",
+              "text": "Please inspect the image at __READ_IMAGE_PATH__ without relying on its filename."
             }
           ]
         }
@@ -200,7 +199,7 @@
       "payload_type": "websocket_message",
       "payload": {
         "type": "response.output_text.delta",
-        "delta": "The image is a one-by-one image with a single indigo pixel."
+        "delta": "I could not read the image because the requested file is missing."
       }
     },
     {
@@ -224,18 +223,6 @@
         "response": {
           "status": "completed"
         }
-      }
-    },
-    {
-      "sequence": 16,
-      "direction": "server_to_client",
-      "timestamp_ms": 15,
-      "type": "session.closed",
-      "payload_type": "websocket_message",
-      "payload": {
-        "type": "session.closed",
-        "session_id": "sess_read_image_positive",
-        "reason": "fixture_complete"
       }
     }
   ]

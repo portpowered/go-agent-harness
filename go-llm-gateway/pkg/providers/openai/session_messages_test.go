@@ -1,9 +1,13 @@
 package openai
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,12 +177,32 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if functionOutput.Type != "conversation.item.create" || functionOutput.Item.Type != "function_call_output" || functionOutput.Item.CallID != msg.ToolCallID {
 		t.Fatalf("function output event = %#v, want correlated function_call_output", functionOutput)
 	}
+	if functionOutput.Item.Output == "" {
+		t.Fatal("function_call_output output is empty for an image result")
+	}
+	var result struct {
+		Version    int    `json:"version"`
+		Status     string `json:"status"`
+		MIMEType   string `json:"mime_type"`
+		ByteLength int    `json:"byte_length"`
+		SHA256     string `json:"sha256"`
+		DataURL    string `json:"data_url"`
+	}
+	if err := json.Unmarshal([]byte(functionOutput.Item.Output), &result); err != nil {
+		t.Fatalf("decode image result envelope: %v", err)
+	}
+	digest := sha256.Sum256(imageBytes)
+	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	if result.Version != 1 || result.Status != "success" || result.MIMEType != "image/png" || result.ByteLength != len(imageBytes) || result.SHA256 != hex.EncodeToString(digest[:]) || result.DataURL != wantURL {
+		t.Fatalf("image result envelope = %#v, want exact non-empty image representation", result)
+	}
 
 	var imageItem struct {
 		Type string `json:"type"`
 		Item struct {
 			Type    string `json:"type"`
 			Role    string `json:"role"`
+			ID      string `json:"id"`
 			Content []struct {
 				Type     string `json:"type"`
 				ImageURL string `json:"image_url"`
@@ -191,7 +215,9 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if imageItem.Type != "conversation.item.create" || imageItem.Item.Type != "message" || imageItem.Item.Role != string(messages.RoleUser) || len(imageItem.Item.Content) != 1 {
 		t.Fatalf("tool image event = %#v, want one user image message", imageItem)
 	}
-	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
+	if imageItem.Item.ID != realtimeToolImageItemID(msg.ToolCallID) {
+		t.Fatalf("tool image item ID = %q, want correlation ID %q", imageItem.Item.ID, realtimeToolImageItemID(msg.ToolCallID))
+	}
 	if imageItem.Item.Content[0].Type != "input_image" || imageItem.Item.Content[0].ImageURL != wantURL {
 		t.Fatalf("tool image content = %#v, want exact PNG data URL", imageItem.Item.Content[0])
 	}
@@ -204,6 +230,112 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	}
 	if response.Type != "response.create" {
 		t.Fatalf("third event type = %q, want response.create", response.Type)
+	}
+}
+
+func TestRealtimeSessionSendMessage_ToolImageCorrelationIDIsBoundedForOpaqueCallID(t *testing.T) {
+	session, conn := newWireSeamSession(t)
+	toolCallID := "call/opaque id?" + strings.Repeat("/:? with spaces", 512)
+	msg := messages.Message{
+		Role:       messages.RoleTool,
+		ToolCallID: toolCallID,
+		ContentParts: []messages.ContentPart{
+			messages.ImagePart{Bytes: []byte{0x89, 'P', 'N', 'G'}, MediaType: "image/png"},
+		},
+	}
+
+	if !session.SendMessage(context.Background(), msg) {
+		t.Fatal("SendMessage returned false for an opaque long tool call ID")
+	}
+	written := waitForWireMessages(t, conn, 3)
+
+	var functionOutput struct {
+		Item struct {
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[0], &functionOutput); err != nil {
+		t.Fatalf("unmarshal function_call_output: %v", err)
+	}
+	if functionOutput.Item.CallID != toolCallID {
+		t.Fatalf("function_call_output call ID = %q, want opaque source ID preserved", functionOutput.Item.CallID)
+	}
+	if functionOutput.Item.Output == "" {
+		t.Fatal("function_call_output output is empty for an image result")
+	}
+
+	var imageItem struct {
+		Item struct {
+			ID string `json:"id"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[1], &imageItem); err != nil {
+		t.Fatalf("unmarshal correlated image item: %v", err)
+	}
+	wantDigest := sha256.Sum256([]byte(toolCallID))
+	wantID := realtimeToolImageItemID(toolCallID)
+	if imageItem.Item.ID != wantID {
+		t.Fatalf("correlated image item ID = %q, want deterministic ID %q", imageItem.Item.ID, wantID)
+	}
+	if len(wantID) > 32 {
+		t.Fatalf("correlated image item ID length = %d, want at most 32 characters", len(wantID))
+	}
+	if !strings.HasPrefix(wantID, realtimeToolImageItemIDPrefix) {
+		t.Fatalf("correlated image item ID = %q, want prefix %q", wantID, realtimeToolImageItemIDPrefix)
+	}
+	encodedDigest := strings.TrimPrefix(wantID, realtimeToolImageItemIDPrefix)
+	decodedDigest, err := base64.RawURLEncoding.DecodeString(encodedDigest)
+	if err != nil {
+		t.Fatalf("decode correlated image item digest: %v", err)
+	}
+	if !bytes.Equal(decodedDigest, wantDigest[:realtimeToolImageItemIDDigestBytes]) {
+		t.Fatalf("correlated image item digest does not match the first %d SHA-256 bytes", realtimeToolImageItemIDDigestBytes)
+	}
+	if strings.ContainsAny(wantID, "+/=/:? ") {
+		t.Fatalf("correlated image item ID contains provider-unsafe characters: %q", wantID)
+	}
+}
+
+func TestRealtimeToolImageItemID_IsDeterministicURLSafeAndBounded(t *testing.T) {
+	cases := []struct {
+		name   string
+		callID string
+	}{
+		{name: "typical real call ID", callID: "call_read_image_12345"},
+		{name: "empty call ID", callID: ""},
+		{name: "long call ID", callID: strings.Repeat("opaque-call-id/", 16)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "long call ID" && len(tc.callID) <= 200 {
+				t.Fatalf("test call ID length = %d, want more than 200 characters", len(tc.callID))
+			}
+			got := realtimeToolImageItemID(tc.callID)
+			if len(got) > 32 {
+				t.Fatalf("correlation ID length = %d, want at most 32 characters", len(got))
+			}
+			if !strings.HasPrefix(got, realtimeToolImageItemIDPrefix) {
+				t.Fatalf("correlation ID = %q, want prefix %q", got, realtimeToolImageItemIDPrefix)
+			}
+			if got != realtimeToolImageItemID(tc.callID) {
+				t.Fatalf("correlation ID is not deterministic: first %q, second %q", got, realtimeToolImageItemID(tc.callID))
+			}
+			if strings.ContainsAny(got, "+/=/:? ") {
+				t.Fatalf("correlation ID contains provider-unsafe characters: %q", got)
+			}
+
+			wantDigest := sha256.Sum256([]byte(tc.callID))
+			encodedDigest := strings.TrimPrefix(got, realtimeToolImageItemIDPrefix)
+			decodedDigest, err := base64.RawURLEncoding.DecodeString(encodedDigest)
+			if err != nil {
+				t.Fatalf("decode correlation ID digest: %v", err)
+			}
+			if !bytes.Equal(decodedDigest, wantDigest[:realtimeToolImageItemIDDigestBytes]) {
+				t.Fatalf("decoded digest = %x, want first %d SHA-256 bytes %x", decodedDigest, realtimeToolImageItemIDDigestBytes, wantDigest[:realtimeToolImageItemIDDigestBytes])
+			}
+		})
 	}
 }
 

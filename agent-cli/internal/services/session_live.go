@@ -379,10 +379,10 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// error, or max-duration expiry may end the session.
 	awaitingResponse := opts.AudioIn == nil
 	done := opts.Done
-	toolResultAccepted := opts.observer.toolResultAcceptedEvents()
+	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	for {
 		select {
-		case <-toolResultAccepted:
+		case <-toolLifecycleEvents:
 			var closeErr error
 			state, closeErr = closePendingSessionIfReady(runCtx, loop, opts, state)
 			if closeErr != nil {
@@ -482,7 +482,7 @@ func closePendingSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, 
 	if state.closeSent {
 		return state, nil
 	}
-	if opts.observer != nil && opts.observer.hasUnresolvedToolCalls() {
+	if opts.observer != nil && (opts.observer.hasUnresolvedToolCalls() || opts.observer.hasPendingImageContinuations()) {
 		return state, nil
 	}
 	closeAfterOpen := opts.CloseAfterOpen && state.closeAfterOpenPending

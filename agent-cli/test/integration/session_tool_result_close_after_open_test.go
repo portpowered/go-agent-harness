@@ -27,8 +27,11 @@ type closeAfterOpenRichSession struct {
 	responseOnce       sync.Once
 	doneOnce           sync.Once
 	resultAcceptedOnce sync.Once
+	continuationOnce   sync.Once
 
-	resultAccepted chan struct{}
+	resultAccepted      chan struct{}
+	continuationRelease chan struct{}
+	continuationDone    chan struct{}
 
 	mu       sync.Mutex
 	complete []messages.Message
@@ -36,9 +39,11 @@ type closeAfterOpenRichSession struct {
 
 func newCloseAfterOpenRichSession() *closeAfterOpenRichSession {
 	return &closeAfterOpenRichSession{
-		recv:           messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:           make(chan struct{}),
-		resultAccepted: make(chan struct{}),
+		recv:                messages.NewTypedBuffer[messages.StreamMessage](32),
+		done:                make(chan struct{}),
+		resultAccepted:      make(chan struct{}),
+		continuationRelease: make(chan struct{}),
+		continuationDone:    make(chan struct{}),
 	}
 }
 
@@ -63,7 +68,10 @@ func (s *closeAfterOpenRichSession) SendMessage(ctx context.Context, msg message
 	s.mu.Lock()
 	s.complete = append(s.complete, msg)
 	s.mu.Unlock()
-	s.resultAcceptedOnce.Do(func() { close(s.resultAccepted) })
+	s.resultAcceptedOnce.Do(func() {
+		close(s.resultAccepted)
+		s.continuationOnce.Do(func() { go s.emitContinuation() })
+	})
 	return true
 }
 
@@ -82,6 +90,28 @@ func (s *closeAfterOpenRichSession) completeMessages() []messages.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]messages.Message(nil), s.complete...)
+}
+
+func (s *closeAfterOpenRichSession) releaseContinuation() {
+	close(s.continuationRelease)
+}
+
+func (s *closeAfterOpenRichSession) emitContinuation() {
+	defer close(s.continuationDone)
+	select {
+	case <-s.continuationRelease:
+	case <-s.done:
+		return
+	}
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("final grounded continuation")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		if !s.recv.Write(context.Background(), msg) {
+			return
+		}
+	}
 }
 
 func (s *closeAfterOpenRichSession) emitToolTurn() {
@@ -140,7 +170,8 @@ func (e *closeAfterOpenRichExecutor) Execute(ctx context.Context, call messages.
 // TestCloseAfterOpenWaitsForAcceptedRichToolResult drives the ordinary CLI
 // composition boundary with a prompt, which selects CloseAfterOpen. The
 // provider response completes while a rich tool is blocked; local close must
-// remain absent until SendMessage accepts the correlated complete message.
+// remain absent until the correlated complete message is accepted and its
+// terminal continuation is observed.
 func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 	session := newCloseAfterOpenRichSession()
 	executor := &closeAfterOpenRichExecutor{
@@ -180,6 +211,13 @@ func TestCloseAfterOpenWaitsForAcceptedRichToolResult(t *testing.T) {
 
 	close(executor.release)
 	waitForCloseAfterOpenSignal(t, session.resultAccepted, "provider acceptance of rich tool result")
+	select {
+	case <-localClose:
+		t.Fatal("CloseAfterOpen sent SESSION.CLOSE after result acceptance but before continuation")
+	default:
+	}
+	session.releaseContinuation()
+	waitForCloseAfterOpenSignal(t, session.continuationDone, "terminal rich continuation")
 	waitForCloseAfterOpenSignal(t, localClose, "SESSION.CLOSE after rich result acceptance")
 
 	select {
@@ -284,6 +322,13 @@ func TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult(t *testin
 
 	close(executor.release)
 	waitForCloseAfterOpenSignal(t, session.resultAccepted, "duration provider acceptance of rich tool result")
+	select {
+	case <-localClose:
+		t.Fatal("duration CloseAfterOpen sent SESSION.CLOSE after result acceptance but before continuation")
+	default:
+	}
+	session.releaseContinuation()
+	waitForCloseAfterOpenSignal(t, session.continuationDone, "duration terminal rich continuation")
 	waitForCloseAfterOpenSignal(t, localClose, "duration SESSION.CLOSE after rich result acceptance")
 
 	select {

@@ -98,7 +98,12 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 		return msg.Type == messages.StreamTypeSessionClose
 	}
 	switch msg.Type {
-	case messages.StreamTypeMessageEnd, messages.StreamTypeTextEnd, messages.StreamTypeSessionClose:
+	case messages.StreamTypeMessageEnd, messages.StreamTypeTextEnd:
+		if opts.observer != nil && opts.observer.hasImageContinuationObligation() {
+			return false
+		}
+		return true
+	case messages.StreamTypeSessionClose:
 		return true
 	default:
 		return false

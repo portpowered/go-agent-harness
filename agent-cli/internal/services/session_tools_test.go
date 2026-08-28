@@ -306,6 +306,11 @@ func (i *scriptedToolCallInferencer) ConnectSession(ctx context.Context) (messag
 			Value: messages.NewTextDeltaValue(i.followUpText),
 		})
 		session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeMessageEnd,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+		session.recv.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("roundtrip-session", "test complete"),
 		})
