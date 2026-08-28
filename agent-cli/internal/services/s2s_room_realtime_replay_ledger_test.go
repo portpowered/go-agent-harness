@@ -207,8 +207,25 @@ func TestRunRoomWithResult_PreservesExactThreeParticipantTurnLedgers(t *testing.
 	assertRoomRealtimeReplayAppend(t, harness.participant(sourceID), silence)
 	awaitRoomRealtimeLedgerAudio(t, sourceAudio, sourcePCM)
 	close(allowSourceFanout)
-	awaitRoomRealtimeLedgerFanout(t, fanouts, sourceID, alphaID, sourcePCM)
-	awaitRoomRealtimeLedgerFanout(t, fanouts, sourceID, betaID, sourcePCM)
+	seenFanouts := map[string][]byte{}
+	fanoutTimer := time.NewTimer(roomRealtimeReplayTestTimeout)
+	for len(seenFanouts) < 2 {
+		select {
+		case fanout := <-fanouts:
+			if fanout.sourceID != sourceID {
+				t.Fatalf("unexpected ledger fanout source = %q, want %q", fanout.sourceID, sourceID)
+			}
+			seenFanouts[fanout.targetID] = append([]byte(nil), fanout.pcm...)
+		case <-fanoutTimer.C:
+			t.Fatalf("ledger did not fan out source audio to both peers: %v", seenFanouts)
+		}
+	}
+	fanoutTimer.Stop()
+	for _, targetID := range []string{alphaID, betaID} {
+		if got, ok := seenFanouts[targetID]; !ok || !bytes.Equal(got, sourcePCM) {
+			t.Fatalf("ledger fanout %s -> %s = %v, want %v", sourceID, targetID, got, sourcePCM)
+		}
+	}
 	awaitRoomRealtimeLedgerResponseEnd(t, responseEnds, sourceID)
 
 	// Alpha reaches three non-empty responses while beta is still below the
@@ -302,26 +319,6 @@ func awaitRoomRealtimeLedgerAudio(t *testing.T, audio <-chan []byte, want []byte
 		}
 	case <-timer.C:
 		t.Fatalf("ledger source did not emit output PCM %v", want)
-	}
-}
-
-func awaitRoomRealtimeLedgerFanout(t *testing.T, fanouts <-chan roomRealtimeLedgerFanout, sourceID, targetID string, want []byte) {
-	t.Helper()
-	timer := time.NewTimer(roomRealtimeReplayTestTimeout)
-	defer timer.Stop()
-	for {
-		select {
-		case fanout := <-fanouts:
-			if fanout.sourceID != sourceID || fanout.targetID != targetID {
-				continue
-			}
-			if !bytes.Equal(fanout.pcm, want) {
-				t.Fatalf("ledger fanout %s -> %s = %v, want %v", sourceID, targetID, fanout.pcm, want)
-			}
-			return
-		case <-timer.C:
-			t.Fatalf("ledger did not fan out %s -> %s", sourceID, targetID)
-		}
 	}
 }
 
