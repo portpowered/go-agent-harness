@@ -89,6 +89,269 @@ func TestRunSelfPlay_BidirectionalPCMAndTextIsolation(t *testing.T) {
 	}
 }
 
+func TestSelfPlayStopState_ConcurrentFinalTurnsHaveExactTarget(t *testing.T) {
+	const target = 2
+	published := make(chan struct{}, 1)
+	stop := newSelfPlayStopState(func() { published <- struct{}{} })
+	if !stop.recordTurn(0, target) || !stop.recordTurn(1, target) {
+		t.Fatal("first turn pair was not admitted")
+	}
+
+	start := make(chan struct{})
+	ready := make(chan struct{}, 2)
+	accepted := make(chan bool, 2)
+	var wg sync.WaitGroup
+	for side := 0; side < 2; side++ {
+		wg.Add(1)
+		go func(side int) {
+			defer wg.Done()
+			ready <- struct{}{}
+			<-start
+			accepted <- stop.recordTurn(side, target)
+		}(side)
+	}
+	for range 2 {
+		<-ready
+	}
+	close(start)
+	wg.Wait()
+	for range 2 {
+		if !<-accepted {
+			t.Fatal("final turn was rejected")
+		}
+	}
+
+	result, err := stop.snapshot()
+	if err != nil {
+		t.Fatalf("stop error = %v, want nil", err)
+	}
+	if result.StopReason != SelfPlayStopTurnTarget || result.CustomerTurns != target || result.AssistantTurns != target {
+		t.Fatalf("stop snapshot = %+v, want turn-target with exact counts", result)
+	}
+	select {
+	case <-stop.done:
+	default:
+		t.Fatal("target transition did not publish the stop boundary")
+	}
+	select {
+	case <-published:
+	case <-time.After(time.Second):
+		t.Fatal("target transition did not cancel the bridge")
+	}
+	select {
+	case <-published:
+		t.Fatal("target transition published more than once")
+	default:
+	}
+}
+
+func TestSelfPlayStopState_RejectsExtraTurnAtBoundBeforePeerFinal(t *testing.T) {
+	const target = 2
+	published := make(chan struct{}, 1)
+	stop := newSelfPlayStopState(func() { published <- struct{}{} })
+	if !stop.recordTurn(0, target) {
+		t.Fatal("first customer turn was not admitted")
+	}
+	if !stop.recordTurn(0, target) {
+		t.Fatal("second customer turn was not admitted")
+	}
+	if !stop.recordTurn(1, target) {
+		t.Fatal("assistant turn was not admitted")
+	}
+
+	start := make(chan struct{})
+	ready := make(chan struct{}, 2)
+	type turnResult struct {
+		side     int
+		accepted bool
+	}
+	results := make(chan turnResult, 2)
+	var wg sync.WaitGroup
+	for _, side := range []int{0, 1} {
+		wg.Add(1)
+		go func(side int) {
+			defer wg.Done()
+			ready <- struct{}{}
+			<-start
+			results <- turnResult{side: side, accepted: stop.recordTurn(side, target)}
+		}(side)
+	}
+	for range 2 {
+		<-ready
+	}
+	close(start)
+	wg.Wait()
+	for range 2 {
+		turn := <-results
+		if turn.side == 0 && turn.accepted {
+			t.Fatal("extra customer turn was admitted at the bound")
+		}
+		if turn.side == 1 && !turn.accepted {
+			t.Fatal("peer final turn was rejected")
+		}
+	}
+
+	result, err := stop.snapshot()
+	if err != nil {
+		t.Fatalf("stop error = %v, want nil", err)
+	}
+	if result.StopReason != SelfPlayStopTurnTarget || result.CustomerTurns != target || result.AssistantTurns != target {
+		t.Fatalf("stop snapshot = %+v, want turn-target with exact counts", result)
+	}
+	if stop.recordTurn(0, target) {
+		t.Fatal("post-target customer turn was admitted")
+	}
+	select {
+	case <-published:
+	case <-time.After(time.Second):
+		t.Fatal("target transition did not cancel the bridge")
+	}
+	select {
+	case <-published:
+		t.Fatal("target transition published more than once")
+	default:
+	}
+}
+
+func TestSessionProgressObserver_TurnAdmissionRejectsPostBoundCompletion(t *testing.T) {
+	runtimeObserver := &recordingSessionRuntimeObserver{}
+	observer := newSessionProgressObserver(nil, nil, SelfPlayDefaultProvider, SelfPlayDefaultModel)
+	observer.runtime = newSessionRuntimeObservationRecorder(runtimeObserver, nil)
+	admitted := 0
+	observer.turnAdmission = func(messages.StreamMessage) bool {
+		admitted++
+		return admitted == 1
+	}
+	messageEnd := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	observer.observe(messageEnd)
+	observer.observe(messageEnd)
+
+	if observer.turnsCompleted != 1 {
+		t.Fatalf("observer completed turns = %d, want 1", observer.turnsCompleted)
+	}
+	if len(runtimeObserver.observations) != 1 || runtimeObserver.observations[0].Kind != SessionRuntimeObservationTurnCompleted || runtimeObserver.observations[0].TurnsCompleted != 1 {
+		t.Fatalf("runtime observations = %#v, want one admitted turn", runtimeObserver.observations)
+	}
+}
+
+func TestSelfPlayStopState_TerminalPrecedenceWithBarriers(t *testing.T) {
+	sideErr := errors.New("assistant session failed")
+	tests := []struct {
+		name        string
+		reason      SelfPlayStopReason
+		terminalErr error
+		targetFirst bool
+	}{
+		{name: "target before max duration", reason: SelfPlayStopMaxDuration, targetFirst: true},
+		{name: "max duration before target", reason: SelfPlayStopMaxDuration},
+		{name: "target before caller cancellation", reason: SelfPlayStopFailure, terminalErr: context.Canceled, targetFirst: true},
+		{name: "caller cancellation before target", reason: SelfPlayStopFailure, terminalErr: context.Canceled},
+		{name: "target before side failure", reason: SelfPlayStopFailure, terminalErr: sideErr, targetFirst: true},
+		{name: "side failure before target", reason: SelfPlayStopFailure, terminalErr: sideErr},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const target = 2
+			published := make(chan struct{}, 1)
+			stop := newSelfPlayStopState(func() { published <- struct{}{} })
+			if !stop.recordTurn(0, target) {
+				t.Fatal("first customer turn was not admitted")
+			}
+			if !stop.recordTurn(0, target) {
+				t.Fatal("second customer turn was not admitted")
+			}
+			if !stop.recordTurn(1, target-1) {
+				t.Fatal("failed to establish the final-turn barrier")
+			}
+
+			start := make(chan struct{})
+			targetCommitted := make(chan struct{})
+			contenderCommitted := make(chan struct{})
+			targetDone := make(chan bool, 1)
+			contenderDone := make(chan bool, 1)
+			if test.targetFirst {
+				go func() {
+					<-start
+					targetDone <- stop.recordTurn(1, target)
+					close(targetCommitted)
+				}()
+				go func() {
+					<-targetCommitted
+					contenderDone <- stop.stop(test.reason, test.terminalErr)
+					close(contenderCommitted)
+				}()
+			} else {
+				go func() {
+					<-start
+					contenderDone <- stop.stop(test.reason, test.terminalErr)
+					close(contenderCommitted)
+				}()
+				go func() {
+					<-contenderCommitted
+					targetDone <- stop.recordTurn(1, target)
+					close(targetCommitted)
+				}()
+			}
+			close(start)
+
+			acceptedTarget := <-targetDone
+			acceptedContender := <-contenderDone
+			if acceptedTarget != test.targetFirst {
+				t.Fatalf("target admission = %t, targetFirst = %t", acceptedTarget, test.targetFirst)
+			}
+			if acceptedContender == test.targetFirst {
+				t.Fatalf("contender admission = %t, targetFirst = %t", acceptedContender, test.targetFirst)
+			}
+
+			result, gotErr := stop.snapshot()
+			if test.targetFirst {
+				if result.StopReason != SelfPlayStopTurnTarget || result.CustomerTurns != target || result.AssistantTurns != target || gotErr != nil {
+					t.Fatalf("target-first snapshot = %+v, error = %v", result, gotErr)
+				}
+			} else {
+				if result.StopReason != test.reason || result.CustomerTurns != target || result.AssistantTurns != target-1 {
+					t.Fatalf("contender-first snapshot = %+v, want reason %q and exact accepted counts", result, test.reason)
+				}
+				if test.terminalErr == nil {
+					if gotErr != nil {
+						t.Fatalf("contender-first error = %v, want nil", gotErr)
+					}
+				} else if !errors.Is(gotErr, test.terminalErr) {
+					t.Fatalf("contender-first error = %v, want %v", gotErr, test.terminalErr)
+				}
+			}
+			if doneErr := stop.doneErr(); (doneErr == nil) != (gotErr == nil) || (doneErr != nil && !errors.Is(doneErr, gotErr)) {
+				t.Fatalf("done error = %v, snapshot error = %v", doneErr, gotErr)
+			}
+
+			for range 8 {
+				repeated, repeatedErr := stop.snapshot()
+				if repeated != result || (repeatedErr == nil) != (gotErr == nil) || (repeatedErr != nil && !errors.Is(repeatedErr, gotErr)) {
+					t.Fatalf("terminal snapshot changed: first=%+v/%v later=%+v/%v", result, gotErr, repeated, repeatedErr)
+				}
+			}
+			if stop.recordTurn(1, target) {
+				t.Fatal("post-terminal completed turn was admitted")
+			}
+			select {
+			case <-published:
+			default:
+				t.Fatal("terminal transition did not publish its stop notification")
+			}
+			select {
+			case <-published:
+				t.Fatal("terminal transition published more than once")
+			default:
+			}
+		})
+	}
+}
+
 func TestRunSelfPlay_MaxDurationStopsBothSides(t *testing.T) {
 	customer := newSelfPlayBlockingInferencer()
 	assistant := newSelfPlayBlockingInferencer()
@@ -111,6 +374,58 @@ func TestRunSelfPlay_MaxDurationStopsBothSides(t *testing.T) {
 	}
 	if !customer.closed() || !assistant.closed() {
 		t.Fatal("duration stop did not close both provider sessions")
+	}
+}
+
+func TestRunSelfPlay_CallerCancellationPreservesFailureAndShutsDown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	customer := newSelfPlayBlockingInferencer()
+	assistant := newSelfPlayBlockingInferencer()
+	resultCh := make(chan struct {
+		result SelfPlayResult
+		err    error
+	}, 1)
+	go func() {
+		result, err := RunSelfPlayWithResult(ctx, io.Discard, SelfPlayRunOptions{
+			OutputDir:           t.TempDir() + "/run",
+			MaxDuration:         time.Second,
+			MaxTurns:            20,
+			CustomerInferencer:  customer,
+			AssistantInferencer: assistant,
+		})
+		resultCh <- struct {
+			result SelfPlayResult
+			err    error
+		}{result: result, err: err}
+	}()
+
+	for _, connected := range []<-chan struct{}{customer.connected, assistant.connected} {
+		select {
+		case <-connected:
+		case <-time.After(time.Second):
+			t.Fatal("self-play side did not connect")
+		}
+	}
+	cancel()
+
+	var outcome struct {
+		result SelfPlayResult
+		err    error
+	}
+	select {
+	case outcome = <-resultCh:
+	case <-time.After(time.Second):
+		t.Fatal("caller cancellation did not shut down self-play")
+	}
+	if outcome.err == nil || !errors.Is(outcome.err, context.Canceled) {
+		t.Fatalf("caller cancellation error = %v, want context.Canceled", outcome.err)
+	}
+	if outcome.result.StopReason != SelfPlayStopFailure || outcome.result.CustomerTurns != 0 || outcome.result.AssistantTurns != 0 {
+		t.Fatalf("caller cancellation result = %+v, want failure with exact accepted counts", outcome.result)
+	}
+	if !customer.closed() || !assistant.closed() {
+		t.Fatal("caller cancellation did not close both provider sessions")
 	}
 }
 
@@ -377,14 +692,20 @@ func countMessageType(messagesToCheck []messages.StreamMessage, want messages.St
 }
 
 type selfPlayBlockingInferencer struct {
-	session *selfPlayEchoSession
+	session     *selfPlayEchoSession
+	connected   chan struct{}
+	connectOnce sync.Once
 }
 
 func newSelfPlayBlockingInferencer() *selfPlayBlockingInferencer {
-	return &selfPlayBlockingInferencer{session: newSelfPlayEchoSession(nil)}
+	return &selfPlayBlockingInferencer{
+		session:   newSelfPlayEchoSession(nil),
+		connected: make(chan struct{}),
+	}
 }
 
 func (i *selfPlayBlockingInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	i.connectOnce.Do(func() { close(i.connected) })
 	if !i.session.emit(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("blocking", "audio")}) {
 		return nil, errors.New("blocking session failed to publish SESSION.OPEN")
 	}

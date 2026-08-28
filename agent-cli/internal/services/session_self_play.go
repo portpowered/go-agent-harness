@@ -269,32 +269,59 @@ type selfPlaySideResult struct {
 	err  error
 }
 
+// selfPlayTerminalSnapshot is written once, before the shared stop boundary
+// is published, and is never mutated afterwards. Keeping the result and its
+// error together prevents finalization from observing a reason from one
+// transition with counts or an error from another.
+type selfPlayTerminalSnapshot struct {
+	result SelfPlayResult
+	err    error
+}
+
 type selfPlayStopState struct {
 	done         chan struct{}
 	bridgeCancel context.CancelFunc
 	once         sync.Once
 	mu           sync.Mutex
-	reason       SelfPlayStopReason
-	err          error
 	turns        [2]int
+	terminal     *selfPlayTerminalSnapshot
 }
 
 func newSelfPlayStopState(bridgeCancel context.CancelFunc) *selfPlayStopState {
 	return &selfPlayStopState{done: make(chan struct{}), bridgeCancel: bridgeCancel}
 }
 
-func (s *selfPlayStopState) stop(reason SelfPlayStopReason, err error) {
+func (s *selfPlayStopState) stop(reason SelfPlayStopReason, err error) bool {
 	if reason == "" {
 		reason = SelfPlayStopFailure
 	}
 	s.mu.Lock()
-	if s.reason != "" {
-		s.mu.Unlock()
-		return
+	defer s.mu.Unlock()
+	return s.transitionLocked(reason, err)
+}
+
+// transitionLocked commits the sole terminal snapshot and closes the shared
+// stop boundary after the reason, error, and accepted turn counts have been
+// committed. Callers must hold mu.
+func (s *selfPlayStopState) transitionLocked(reason SelfPlayStopReason, err error) bool {
+	if s.terminal != nil {
+		return false
 	}
-	s.reason = reason
-	s.err = err
-	s.mu.Unlock()
+	s.terminal = &selfPlayTerminalSnapshot{
+		result: SelfPlayResult{
+			StopReason:     reason,
+			CustomerTurns:  s.turns[0],
+			AssistantTurns: s.turns[1],
+		},
+		err: err,
+	}
+	s.publishLocked()
+	return true
+}
+
+// publishLocked closes the shared stop boundary after transitionLocked has
+// committed its immutable snapshot. Callers must hold mu.
+func (s *selfPlayStopState) publishLocked() {
 	s.once.Do(func() {
 		close(s.done)
 		if s.bridgeCancel != nil {
@@ -303,47 +330,61 @@ func (s *selfPlayStopState) stop(reason SelfPlayStopReason, err error) {
 	})
 }
 
-func (s *selfPlayStopState) fail(err error) {
+func (s *selfPlayStopState) fail(err error) bool {
 	if err == nil {
 		err = errors.New("self-play stopped because an agent failed")
 	}
-	s.stop(SelfPlayStopFailure, err)
+	return s.stop(SelfPlayStopFailure, err)
 }
 
 func (s *selfPlayStopState) doneErr() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.err
+	if s.terminal == nil {
+		return nil
+	}
+	return s.terminal.err
 }
 
 func (s *selfPlayStopState) stopped() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.reason != ""
+	return s.terminal != nil
 }
 
-func (s *selfPlayStopState) recordTurn(side int, target int) {
-	s.mu.Lock()
-	if s.reason != "" {
-		s.mu.Unlock()
-		return
-	}
-	s.turns[side]++
-	reached := s.turns[0] >= target && s.turns[1] >= target
-	s.mu.Unlock()
-	if reached {
-		s.stop(SelfPlayStopTurnTarget, nil)
-	}
-}
-
-func (s *selfPlayStopState) result() SelfPlayResult {
+// recordTurn admits one completed turn at the same synchronized boundary as
+// terminal publication. A false result means the event was already terminal
+// or that side had reached its bound, so no downstream completed-turn
+// observation should be emitted for it.
+func (s *selfPlayStopState) recordTurn(side int, target int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if side < 0 || side >= len(s.turns) || target <= 0 {
+		return false
+	}
+	if s.terminal != nil {
+		return false
+	}
+	if s.turns[side] >= target {
+		return false
+	}
+	s.turns[side]++
+	if s.turns[0] == target && s.turns[1] == target {
+		s.transitionLocked(SelfPlayStopTurnTarget, nil)
+	}
+	return true
+}
+
+func (s *selfPlayStopState) snapshot() (SelfPlayResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.terminal != nil {
+		return s.terminal.result, s.terminal.err
+	}
 	return SelfPlayResult{
-		StopReason:     s.reason,
 		CustomerTurns:  s.turns[0],
 		AssistantTurns: s.turns[1],
-	}
+	}, nil
 }
 
 type selfPlayPCMBridge struct {
@@ -432,7 +473,11 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		return SelfPlayResult{StopReason: SelfPlayStopFailure}, err
 	}
 
-	bridgeCtx, bridgeCancel := context.WithCancel(ctx)
+	// Keep bridge cancellation under the stop owner's control. Deriving this
+	// context directly from ctx would close the pipes before the coordinator
+	// can linearize caller cancellation as the run's terminal error, allowing a
+	// cancellation race to surface as an unrelated pipe failure.
+	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
 	defer bridgeCancel()
 	stop := newSelfPlayStopState(bridgeCancel)
 
@@ -445,7 +490,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	bridgeWG.Add(2)
 	go func() {
 		defer bridgeWG.Done()
-		customerToAssistant.pumpWithObserver(bridgeCtx, assistantReady, stop.fail, "customer-to-assistant", func(pcm []byte) {
+		customerToAssistant.pumpWithObserver(bridgeCtx, assistantReady, func(err error) { stop.fail(err) }, "customer-to-assistant", func(pcm []byte) {
 			if side := evidence.side(1); side != nil && side.runtimeRecord != nil {
 				side.runtimeRecord.audioInput(pcm)
 			}
@@ -453,7 +498,7 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	}()
 	go func() {
 		defer bridgeWG.Done()
-		assistantToCustomer.pumpWithObserver(bridgeCtx, customerReady, stop.fail, "assistant-to-customer", func(pcm []byte) {
+		assistantToCustomer.pumpWithObserver(bridgeCtx, customerReady, func(err error) { stop.fail(err) }, "assistant-to-customer", func(pcm []byte) {
 			if side := evidence.side(0); side != nil && side.runtimeRecord != nil {
 				side.runtimeRecord.audioInput(pcm)
 			}
@@ -470,10 +515,14 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		}
 		observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
 		observer.runtime = sideEvidence.runtimeRecord
+		observer.turnAdmission = func(messages.StreamMessage) bool {
+			return stop.recordTurn(side, opts.MaxTurns)
+		}
 		observer.streamObserver = func(msg messages.StreamMessage) {
 			if err := sideEvidence.observeStreamDelta(msg); err != nil {
-				evidence.fail(fmt.Errorf("%s stream delta evidence: %w", name, err))
-				stop.fail(fmt.Errorf("%s stream delta evidence: %w", name, err))
+				wrapped := fmt.Errorf("%s stream delta evidence: %w", name, err)
+				evidence.fail(wrapped)
+				stop.fail(wrapped)
 			}
 			if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
 				value, ok := msg.Value.(*messages.AudioDeltaValue)
@@ -485,15 +534,13 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 					stop.fail(fmt.Errorf("%s PCM bridge write: %w", name, err))
 				}
 				if err := sideEvidence.observeAudio(value.Content); err != nil {
-					evidence.fail(fmt.Errorf("%s WAV evidence: %w", name, err))
-					stop.fail(fmt.Errorf("%s WAV evidence: %w", name, err))
+					wrapped := fmt.Errorf("%s WAV evidence: %w", name, err)
+					evidence.fail(wrapped)
+					stop.fail(wrapped)
 				}
 				if sideEvidence.runtimeRecord != nil {
 					sideEvidence.runtimeRecord.audioOutput(value.Content)
 				}
-			}
-			if msg.Type == messages.StreamTypeMessageEnd {
-				stop.recordTurn(side, opts.MaxTurns)
 			}
 		}
 
@@ -545,12 +592,11 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	assistantToCustomer.close()
 	bridgeWG.Wait()
 
-	result := stop.result()
+	result, runErr := stop.snapshot()
 	if result.StopReason == "" {
 		stop.fail(errors.New("self-play ended without a stop reason"))
-		result = stop.result()
+		result, runErr = stop.snapshot()
 	}
-	runErr := stop.doneErr()
 	if evidenceErr := evidence.err(); evidenceErr != nil {
 		runErr = errors.Join(runErr, evidenceErr)
 	}
