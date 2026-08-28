@@ -654,6 +654,165 @@ func TestStatefulBrokerCloseOrphansWorkAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestStatefulBrokerCloseBoundsNonCooperativeHandle(t *testing.T) {
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
+	inner := testkit.NewScriptedBrowserRuntimeWithOptions(
+		testkit.RuntimeOptions{Clock: clock, IDs: ids},
+		testkit.BrowserConfig{Candidate: candidate},
+	)
+	runtime := &blockingCloseRuntime{
+		inner:   inner,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:      runtime,
+		Discoverer:   staticDiscoverer{candidate},
+		IDs:          ids,
+		Clock:        clock,
+		CloseTimeout: 20 * time.Millisecond,
+	})
+	if _, err := broker.ListTargets(context.Background(), webmcp.BrowserSelector{BrowserID: candidate.ID}); err != nil {
+		t.Fatalf("list targets: %v", err)
+	}
+
+	closeErr := broker.Close()
+	if !errors.Is(closeErr, webmcp.ErrCloseTimeout) {
+		t.Fatalf("bounded close error = %v, want ErrCloseTimeout", closeErr)
+	}
+	select {
+	case <-runtime.started:
+	default:
+		t.Fatal("non-cooperative handle was not asked to close")
+	}
+	if repeatedErr := broker.Close(); repeatedErr != closeErr {
+		t.Fatalf("repeated close error = %v, want recorded error %v", repeatedErr, closeErr)
+	}
+
+	close(runtime.release)
+	select {
+	case <-runtime.done:
+	case <-time.After(time.Second):
+		t.Fatal("non-cooperative handle did not finish after release")
+	}
+}
+
+type blockingCloseRuntime struct {
+	inner   *testkit.ScriptedBrowserRuntime
+	started chan struct{}
+	release chan struct{}
+	done    chan struct{}
+}
+
+func (r *blockingCloseRuntime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
+	handle, err := r.inner.Open(ctx, candidate)
+	if err != nil {
+		return nil, err
+	}
+	return &blockingCloseHandle{
+		BrowserHandle: handle,
+		started:       r.started,
+		release:       r.release,
+		done:          r.done,
+	}, nil
+}
+
+type blockingCloseHandle struct {
+	webmcp.BrowserHandle
+	started chan struct{}
+	release chan struct{}
+	done    chan struct{}
+	once    sync.Once
+}
+
+func (h *blockingCloseHandle) Close() error {
+	h.once.Do(func() { close(h.started) })
+	<-h.release
+	err := h.BrowserHandle.Close()
+	close(h.done)
+	return err
+}
+
+func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
+	inner := testkit.NewScriptedBrowserRuntimeWithOptions(
+		testkit.RuntimeOptions{Clock: clock, IDs: ids},
+		testkit.BrowserConfig{
+			Candidate: candidate,
+			Targets: []testkit.TargetConfig{
+				testkit.NewTargetConfig(
+					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+					testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`)),
+				),
+				testkit.NewTargetConfig(
+					webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"},
+					testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`)),
+				),
+			},
+		},
+	)
+	runtime := &externalProbeRuntime{inner: inner}
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:    runtime,
+		Discoverer: staticDiscoverer{candidate},
+		IDs:        ids,
+		Clock:      clock,
+	})
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+		t.Fatalf("select external target: %v", err)
+	}
+	if err := broker.Close(); err != nil {
+		t.Fatalf("close external target: %v", err)
+	}
+
+	probeHandle, err := runtime.Open(context.Background(), candidate)
+	if err != nil {
+		t.Fatalf("open independent post-session probe: %v", err)
+	}
+	targets, err := probeHandle.ListTargets(context.Background())
+	if err != nil {
+		t.Fatalf("list targets after session close: %v", err)
+	}
+	if len(targets) != 2 || targets[0].ID != "tab-a" || targets[1].ID != "tab-b" {
+		t.Fatalf("post-session targets = %#v, want both external targets", targets)
+	}
+	for _, targetID := range []webmcp.TargetID{"tab-a", "tab-b"} {
+		session, attachErr := probeHandle.Attach(context.Background(), targetID, webmcp.TargetOwnershipExternal)
+		if attachErr != nil {
+			t.Fatalf("attach post-session target %q: %v", targetID, attachErr)
+		}
+		if closeErr := session.Close(); closeErr != nil {
+			t.Fatalf("detach post-session target %q: %v", targetID, closeErr)
+		}
+	}
+	if closeErr := inner.Close(); closeErr != nil {
+		t.Fatalf("close scripted probe runtime: %v", closeErr)
+	}
+}
+
+type externalProbeRuntime struct {
+	inner *testkit.ScriptedBrowserRuntime
+}
+
+func (r *externalProbeRuntime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
+	handle, err := r.inner.Open(ctx, candidate)
+	if err != nil {
+		return nil, err
+	}
+	return externalProbeHandle{BrowserHandle: handle}, nil
+}
+
+type externalProbeHandle struct {
+	webmcp.BrowserHandle
+}
+
+func (externalProbeHandle) Close() error { return nil }
+
 func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T) {
 	for iteration := 0; iteration < 16; iteration++ {
 		clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))

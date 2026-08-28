@@ -497,8 +497,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
 				browserWatch = capabilities.BrowserWatch
 				if capabilities.Close != nil {
-					capabilityCoordinator := services.NewSessionCapabilityCoordinator(capabilities.Close)
-					capabilityClose = capabilityCoordinator.Close
+					// The service entry point creates the single coordinator after
+					// capability construction succeeds. Keeping the transferred hook
+					// intact avoids a second command-side ownership wrapper.
+					capabilityClose = capabilities.Close
 				}
 			}
 			audioInterruptions, capabilityClose, err := prepareSessionAudioInterruptions(cmd, audioInterrupts, audioInterruptTool, browserWatch, capabilityClose)

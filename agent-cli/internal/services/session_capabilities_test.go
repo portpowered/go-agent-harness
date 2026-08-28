@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestSessionCapabilityCoordinatorRunsOrderedCleanupExactlyOnce(t *testing.T) {
@@ -52,6 +53,58 @@ func TestSessionCapabilityCoordinatorIgnoresNilCleanup(t *testing.T) {
 	var coordinator *SessionCapabilityCoordinator
 	if err := coordinator.Close(); err != nil {
 		t.Fatalf("nil coordinator: %v", err)
+	}
+}
+
+func TestSessionCapabilityCoordinatorBoundsNonCooperativeCleanup(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{})
+	finished := make(chan struct{})
+	secondCalls := 0
+	secondErr := errors.New("second cleanup failed")
+
+	coordinator := NewSessionCapabilityCoordinatorWithTimeout(20*time.Millisecond,
+		func() error {
+			close(started)
+			<-release
+			close(finished)
+			return nil
+		},
+		func() error {
+			secondCalls++
+			return secondErr
+		},
+	)
+
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- coordinator.Close() }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("cleanup hook did not start")
+	}
+
+	var closeErr error
+	select {
+	case closeErr = <-closeDone:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("coordinator waited past the cleanup bound")
+	}
+	if !errors.Is(closeErr, ErrSessionCapabilityCleanupTimeout) || !errors.Is(closeErr, secondErr) {
+		t.Fatalf("bounded cleanup error = %v, want timeout and later cleanup failure", closeErr)
+	}
+	if secondCalls != 1 {
+		t.Fatalf("later cleanup calls = %d, want one after timeout", secondCalls)
+	}
+
+	close(release)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("timed-out cleanup hook did not finish after release")
+	}
+	if secondErrAgain := coordinator.Close(); secondErrAgain != closeErr {
+		t.Fatalf("repeated close error = %v, want recorded error %v", secondErrAgain, closeErr)
 	}
 }
 

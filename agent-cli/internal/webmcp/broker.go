@@ -45,6 +45,9 @@ type BrokerOptions struct {
 	// InvocationTimeout is the default deadline for admitted invocations. Zero
 	// uses DefaultInvocationTimeout.
 	InvocationTimeout time.Duration
+	// CloseTimeout bounds each browser session, handle, and worker shutdown
+	// step. Zero uses DefaultBrokerCloseTimeout.
+	CloseTimeout time.Duration
 }
 
 // StatefulBroker owns selection, page catalog, generation, and session-local
@@ -64,6 +67,7 @@ type StatefulBroker struct {
 	maxInputBytes     int
 	maxResultBytes    int
 	invocationTimeout time.Duration
+	closeTimeout      time.Duration
 
 	browsers map[BrowserID]*browserState
 	selected *brokerSession
@@ -218,6 +222,10 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	if invocationTimeout <= 0 {
 		invocationTimeout = DefaultInvocationTimeout
 	}
+	closeTimeout := options.CloseTimeout
+	if closeTimeout <= 0 {
+		closeTimeout = DefaultBrokerCloseTimeout
+	}
 	return &StatefulBroker{
 		runtime:             options.Runtime,
 		discoverer:          options.Discoverer,
@@ -231,6 +239,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		maxInputBytes:       maxInputBytes,
 		maxResultBytes:      maxResultBytes,
 		invocationTimeout:   invocationTimeout,
+		closeTimeout:        closeTimeout,
 		browsers:            make(map[BrowserID]*browserState),
 		refs:                make(map[ToolRef]refRecord),
 		retired:             make(map[ToolRef]struct{}),
@@ -635,12 +644,12 @@ func (b *StatefulBroker) Close() error {
 
 	var joined error
 	if selected != nil {
-		joined = errors.Join(joined, selected.session.Close())
+		joined = errors.Join(joined, invokeBrokerCloseWithTimeout(b.closeTimeout, "target session", selected.session.Close))
 	}
 	for _, handle := range handles {
-		joined = errors.Join(joined, handle.Close())
+		joined = errors.Join(joined, invokeBrokerCloseWithTimeout(b.closeTimeout, "browser handle", handle.Close))
 	}
-	b.wg.Wait()
+	joined = errors.Join(joined, waitForBrokerWorkersWithTimeout(b.closeTimeout, &b.wg))
 	b.mu.Lock()
 	b.closeErr = joined
 	close(b.closeDone)
