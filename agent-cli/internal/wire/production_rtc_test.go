@@ -11,14 +11,17 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -195,6 +198,186 @@ func TestGeneratedRootCLI_WebRTCTraversesProductionRTCComposition(t *testing.T) 
 	}
 	if terminal == nil || !terminal.Clean || terminal.TurnsCompleted != 1 || terminal.FinalAccounting == nil {
 		t.Fatalf("runtime terminal observation = %#v, want clean terminal accounting after one turn", terminal)
+	}
+}
+
+// TestGeneratedRootCLI_WebRTCDeviceBindingPreservesProviderMedia proves that
+// the generated/root path forwards the provider-owned RTC media capability
+// through the production runtime wrapper. The concrete production signaling,
+// Pion data plane, external media opener, and attachment still run; only the
+// provider session and virtual registry are deterministic test edges.
+func TestGeneratedRootCLI_WebRTCDeviceBindingPreservesProviderMedia(t *testing.T) {
+	source := startProductionCLIMediaFixture(t)
+	const signalingEndpoint = "loopback://production-root-cli/device-binding"
+	registry, inputDevice, inputFeedDevice, outputDevice, outputObserverDevice := newProductionRootCLIDeviceRegistry(t)
+	feed, err := audio.NewDeviceSink(registry, inputFeedDevice)
+	if err != nil {
+		t.Fatalf("open root CLI input feeder: %v", err)
+	}
+	observe, err := audio.NewDeviceSource(registry, outputObserverDevice)
+	if err != nil {
+		_ = feed.Close()
+		t.Fatalf("open root CLI output observer: %v", err)
+	}
+	deviceMedia := newProductionRootCLIDeviceMedia(productionRootCLIDeviceFrame())
+	inputFrame := productionRootCLIDeviceFrame()
+	if err := feed.WriteFrame(context.Background(), inputFrame.Samples); err != nil {
+		_ = feed.Close()
+		_ = observe.Close()
+		t.Fatalf("seed root CLI input device: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = deviceMedia.Close()
+		_ = feed.Close()
+		_ = observe.Close()
+	})
+
+	production := newProductionRTCComposition()
+	base := production.components()
+	var dataPlaneMu sync.Mutex
+	var dataPlane *productionRTCDataPlane
+	components := services.SessionRTCComponents{
+		ResolveSignaling: base.ResolveSignaling,
+		NewDataPlane: func(ctx context.Context, signaling rtc.Signaling) (services.SessionRTCDataPlane, error) {
+			plane, err := base.NewDataPlane(ctx, signaling)
+			if err == nil {
+				concrete, ok := plane.(*productionRTCDataPlane)
+				if !ok {
+					return nil, fmt.Errorf("production data-plane type = %T, want *productionRTCDataPlane", plane)
+				}
+				dataPlaneMu.Lock()
+				dataPlane = concrete
+				dataPlaneMu.Unlock()
+			}
+			return plane, err
+		},
+		OpenMediaSource: base.OpenMediaSource,
+	}
+	provider := &productionRootCLIInferencer{
+		dataPlane: func() *productionRTCDataPlane {
+			dataPlaneMu.Lock()
+			defer dataPlaneMu.Unlock()
+			return dataPlane
+		},
+		sessionMedia: func() rtc.MediaEndpoints {
+			return rtc.MediaEndpoints{Inbound: deviceMedia, Outbound: deviceMedia}
+		},
+	}
+	transportDialer := &recordingDialer{}
+	app, err := ComposeAgentCLI(
+		&recordingToolExecutor{},
+		transportDialer,
+		registry,
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		&recordingClock{now: time.Unix(123, 0)},
+		WithSessionInferencer(provider),
+		WithSessionRTCComponents(components),
+	)
+	if err != nil {
+		t.Fatalf("compose generated root CLI with device binding: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	root := app.Generate()
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SilenceUsage = true
+	root.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record", filepath.Join(t.TempDir(), "device-binding.session.json"),
+		"--provider", "grok",
+		"--model", "grok-production-root-cli-device-binding",
+		"--api-key", "test-provider-key",
+		"--transport", "webrtc",
+		"--signaling", signalingEndpoint,
+		"--media-source", source.rawURL,
+		"--audio-in-device", string(inputDevice),
+		"--audio-out-device", string(outputDevice),
+		"complete the production RTC device-binding turn",
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	observedFrameCh := make(chan []int16, 1)
+	observedErrCh := make(chan error, 1)
+	go func() {
+		frame := make([]int16, audio.FrameSize)
+		if err := observe.ReadFrame(ctx, frame); err != nil {
+			observedErrCh <- err
+			return
+		}
+		observedFrameCh <- frame
+	}()
+	executeErrCh := make(chan error, 1)
+	go func() { executeErrCh <- root.ExecuteContext(ctx) }()
+
+	var observedFrame []int16
+	select {
+	case err := <-observedErrCh:
+		t.Fatalf("root CLI output device read: %v", err)
+	case observedFrame = <-observedFrameCh:
+	}
+	select {
+	case err := <-executeErrCh:
+		if err != nil {
+			t.Fatalf("generated root WebRTC device-binding session: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
+		}
+	case <-ctx.Done():
+		t.Fatalf("generated root WebRTC device-binding session did not finish: %v", ctx.Err())
+	}
+
+	source.waitForFrames(t)
+	if got := source.snapshot(); got.err != "" || got.frames == 0 || got.nonZeroFrames == 0 {
+		t.Fatalf("production media fixture snapshot = %+v, want non-zero media without errors", got)
+	}
+	deviceSnapshot := deviceMedia.snapshot()
+	if deviceSnapshot.outboundFrames == 0 || deviceSnapshot.outboundEnergy == 0 {
+		t.Fatalf("provider-owned outbound device media = %+v, want non-zero input pump activity", deviceSnapshot)
+	}
+	if deviceSnapshot.inboundFrames == 0 {
+		t.Fatalf("provider-owned inbound device media = %+v, want output pump activity", deviceSnapshot)
+	}
+	wantOutput := productionRootCLIDeviceFrame()
+	if !reflect.DeepEqual(observedFrame, wantOutput.Samples) {
+		for index := range wantOutput.Samples {
+			if observedFrame[index] != wantOutput.Samples[index] {
+				t.Fatalf("output device frame differs at sample %d: got %d want %d", index, observedFrame[index], wantOutput.Samples[index])
+			}
+		}
+		t.Fatalf("output device frame differs from provider-owned RTC frame: got len=%d first=%d want len=%d first=%d", len(observedFrame), observedFrame[0], len(wantOutput.Samples), wantOutput.Samples[0])
+	}
+	if got := registry.Observations(); got.OpenCount != 4 || got.ReleaseCount != 2 {
+		t.Fatalf("device registry before external cleanup = %+v, want four opens and two binding releases", got)
+	}
+	if !strings.Contains(stdout.String(), productionRootCLITranscript) {
+		t.Fatalf("root CLI output does not contain the completed RTC transcript %q:\n%s", productionRootCLITranscript, stdout.String())
+	}
+	if strings.Contains(strings.ToLower(stdout.String()), "usage:") || stderr.Len() != 0 {
+		t.Fatalf("device-bound RTC session emitted help or stderr: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+
+	if err := feed.Close(); err != nil {
+		t.Fatalf("close root CLI input feeder: %v", err)
+	}
+	if err := observe.Close(); err != nil {
+		t.Fatalf("close root CLI output observer: %v", err)
+	}
+	if got := registry.Observations(); got.OpenCount != 4 || got.ReleaseCount != 4 {
+		t.Fatalf("device registry after cleanup = %+v, want four opens and releases", got)
+	}
+	dataPlaneMu.Lock()
+	concreteDataPlane := dataPlane
+	dataPlaneMu.Unlock()
+	if concreteDataPlane == nil {
+		t.Fatal("device-bound root CLI did not construct the production RTC data plane")
+	}
+	if concreteDataPlane.mediaFrames.Load() == 0 || concreteDataPlane.mediaPackets.Load() == 0 {
+		t.Fatalf("production RTC media activity = outbound frames %d, received packets %d; want both non-zero", concreteDataPlane.mediaFrames.Load(), concreteDataPlane.mediaPackets.Load())
+	}
+	if transportDials := transportDialer.dials.Load(); transportDials != 0 {
+		t.Fatalf("WebRTC device-bound session used the composed WebSocket transport dialer %d times", transportDials)
 	}
 }
 
@@ -453,8 +636,9 @@ func hasOrderedEvents(events, want []string) bool {
 }
 
 type productionRootCLIInferencer struct {
-	dataPlane func() *productionRTCDataPlane
-	record    func(string)
+	dataPlane    func() *productionRTCDataPlane
+	record       func(string)
+	sessionMedia func() rtc.MediaEndpoints
 }
 
 func (i *productionRootCLIInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -503,22 +687,32 @@ func (i *productionRootCLIInferencer) ConnectSession(ctx context.Context) (messa
 	if i.record != nil {
 		i.record("provider data echo")
 	}
-	return newProductionRootCLISession(conn), nil
+	var media rtc.MediaEndpoints
+	if i.sessionMedia != nil {
+		media = i.sessionMedia()
+	}
+	return newProductionRootCLISessionWithMedia(conn, media), nil
 }
 
 type productionRootCLISession struct {
 	receive   *messages.TypedBuffer[messages.StreamMessage]
 	done      chan struct{}
 	conn      transport.Conn
+	media     rtc.MediaEndpoints
 	sendOnce  sync.Once
 	closeOnce sync.Once
 }
 
 func newProductionRootCLISession(conn transport.Conn) *productionRootCLISession {
+	return newProductionRootCLISessionWithMedia(conn, rtc.MediaEndpoints{})
+}
+
+func newProductionRootCLISessionWithMedia(conn transport.Conn, media rtc.MediaEndpoints) *productionRootCLISession {
 	session := &productionRootCLISession{
 		receive: messages.NewTypedBuffer[messages.StreamMessage](16),
 		done:    make(chan struct{}),
 		conn:    conn,
+		media:   media,
 	}
 	session.receive.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
@@ -572,15 +766,173 @@ func (s *productionRootCLISession) Receive() *messages.TypedBuffer[messages.Stre
 
 func (s *productionRootCLISession) Done() <-chan struct{} { return s.done }
 
+func (s *productionRootCLISession) RTCMedia() rtc.MediaEndpoints {
+	if s == nil {
+		return rtc.MediaEndpoints{}
+	}
+	return s.media
+}
+
 func (s *productionRootCLISession) Close() error {
 	s.closeOnce.Do(func() {
 		close(s.done)
 		if s.conn != nil {
 			_ = s.conn.Close()
 		}
+		if s.media.Inbound != nil {
+			_ = s.media.Inbound.Close()
+		}
+		if s.media.Outbound != nil {
+			_ = s.media.Outbound.Close()
+		}
 	})
 	return nil
 }
+
+func newProductionRootCLIDeviceRegistry(t *testing.T) (*audio.VirtualRegistry, audio.DeviceID, audio.DeviceID, audio.DeviceID, audio.DeviceID) {
+	t.Helper()
+	registry, err := audio.NewVirtualRegistry(audio.VirtualBackendConfig{
+		Devices: []audio.VirtualDeviceConfig{
+			{ID: "root-cli-input", Name: "Root CLI Input", Direction: audio.DirectionInput, LoopbackID: "root-cli-input-feed"},
+			{ID: "root-cli-input-feed", Name: "Root CLI Input Feed", Direction: audio.DirectionOutput, LoopbackID: "root-cli-input"},
+			{ID: "root-cli-output", Name: "Root CLI Output", Direction: audio.DirectionOutput, LoopbackID: "root-cli-output-observer"},
+			{ID: "root-cli-output-observer", Name: "Root CLI Output Observer", Direction: audio.DirectionInput, LoopbackID: "root-cli-output"},
+		},
+		Defaults: map[audio.Direction]string{
+			audio.DirectionInput:  "root-cli-input",
+			audio.DirectionOutput: "root-cli-output",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new root CLI virtual device registry: %v", err)
+	}
+	return registry,
+		audio.DeviceID("virtual:root-cli-input"),
+		audio.DeviceID("virtual:root-cli-input-feed"),
+		audio.DeviceID("virtual:root-cli-output"),
+		audio.DeviceID("virtual:root-cli-output-observer")
+}
+
+type productionRootCLIDeviceMedia struct {
+	inbound chan rtc.PCMFrame
+	closed  chan struct{}
+
+	closeOnce      sync.Once
+	outboundFrames atomic.Uint64
+	outboundEnergy atomic.Uint64
+	inboundFrames  atomic.Uint64
+}
+
+type productionRootCLIDeviceMediaSnapshot struct {
+	outboundFrames uint64
+	outboundEnergy uint64
+	inboundFrames  uint64
+}
+
+func newProductionRootCLIDeviceMedia(frame rtc.PCMFrame) *productionRootCLIDeviceMedia {
+	media := &productionRootCLIDeviceMedia{
+		inbound: make(chan rtc.PCMFrame, 1),
+		closed:  make(chan struct{}),
+	}
+	media.inbound <- cloneProductionRootCLIFrame(frame)
+	return media
+}
+
+func (m *productionRootCLIDeviceMedia) WriteFrame(ctx context.Context, frame rtc.PCMFrame) error {
+	if m == nil {
+		return rtc.ErrSessionMediaClosed
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if len(frame.Samples) == 0 {
+		return errors.New("root CLI device media received an empty frame")
+	}
+	select {
+	case <-m.closed:
+		return rtc.ErrSessionMediaClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	m.outboundFrames.Add(1)
+	m.outboundEnergy.Add(productionRootCLIAudioEnergy(frame.Samples))
+	return nil
+}
+
+func (m *productionRootCLIDeviceMedia) ReadFrame(ctx context.Context) (rtc.PCMFrame, error) {
+	if m == nil {
+		return rtc.PCMFrame{}, rtc.ErrSessionMediaClosed
+	}
+	// Prefer a frame already queued even if the session is concurrently
+	// closing; this makes the seeded device-output assertion deterministic.
+	select {
+	case frame := <-m.inbound:
+		m.inboundFrames.Add(1)
+		return cloneProductionRootCLIFrame(frame), nil
+	default:
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case frame := <-m.inbound:
+		m.inboundFrames.Add(1)
+		return cloneProductionRootCLIFrame(frame), nil
+	case <-m.closed:
+		return rtc.PCMFrame{}, rtc.ErrSessionMediaClosed
+	case <-ctx.Done():
+		return rtc.PCMFrame{}, ctx.Err()
+	}
+}
+
+func (m *productionRootCLIDeviceMedia) Close() error {
+	if m == nil {
+		return nil
+	}
+	m.closeOnce.Do(func() { close(m.closed) })
+	return nil
+}
+
+func (m *productionRootCLIDeviceMedia) snapshot() productionRootCLIDeviceMediaSnapshot {
+	if m == nil {
+		return productionRootCLIDeviceMediaSnapshot{}
+	}
+	return productionRootCLIDeviceMediaSnapshot{
+		outboundFrames: m.outboundFrames.Load(),
+		outboundEnergy: m.outboundEnergy.Load(),
+		inboundFrames:  m.inboundFrames.Load(),
+	}
+}
+
+func cloneProductionRootCLIFrame(frame rtc.PCMFrame) rtc.PCMFrame {
+	frame.Samples = append([]int16(nil), frame.Samples...)
+	return frame
+}
+
+func productionRootCLIDeviceFrame() rtc.PCMFrame {
+	samples := make([]int16, audio.FrameSize)
+	for index := range samples {
+		samples[index] = int16((index % 97) + 1)
+	}
+	return rtc.PCMFrame{Samples: samples}
+}
+
+func productionRootCLIAudioEnergy(samples []int16) uint64 {
+	var energy uint64
+	for _, sample := range samples {
+		if sample < 0 {
+			energy += uint64(-int64(sample))
+			continue
+		}
+		energy += uint64(sample)
+	}
+	return energy
+}
+
+var _ rtc.InboundMedia = (*productionRootCLIDeviceMedia)(nil)
+var _ rtc.OutboundMedia = (*productionRootCLIDeviceMedia)(nil)
+var _ rtc.MediaSession = (*productionRootCLISession)(nil)
 
 type productionCLIMediaFixture struct {
 	server      *httptest.Server
