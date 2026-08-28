@@ -443,6 +443,7 @@ type gateWatchEvent struct {
 	Sequence     uint64 `json:"sequence"`
 	BrowserID    string `json:"browser_id"`
 	TargetID     string `json:"target_id"`
+	Generation   uint64 `json:"generation"`
 	InvocationID string `json:"invocation_id"`
 	ToolRef      string `json:"tool_ref"`
 	State        string `json:"state"`

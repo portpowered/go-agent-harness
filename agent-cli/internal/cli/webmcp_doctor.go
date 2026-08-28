@@ -36,27 +36,19 @@ const (
 	doctorCheckSkipped     = "skipped"
 
 	doctorErrorInvalidConfiguration = "invalid_configuration"
-	doctorErrorRuntimeUnavailable   = "runtime_unavailable"
-	doctorErrorRequiresLaneBOrD     = "requires_lane_b_or_d"
 	doctorErrorCleanupFailed        = "cleanup_failed"
 
 	doctorTestedChromeRow   = "Stable Chrome for Testing 152.0.7977.64 (mac-arm64, revision 1669021)"
 	doctorTestedChromeFlags = "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"
 )
 
-// ErrWebMCPDoctorRequiresLaneBOrD identifies the production browser seams
-// that are intentionally not guessed by the CLI composition root. A shipped
-// doctor must surface this as an unavailable check instead of reporting a
-// false ready result.
-var ErrWebMCPDoctorRequiresLaneBOrD = errors.New("requires Lane B or requires Lane D")
-
 // WebMCPDoctorVersionFunc supplies the browser version/protocol check. It is
 // separate from the broker because the broker's stable interface deliberately
 // contains only browser operations needed by model-facing tools.
 type WebMCPDoctorVersionFunc func(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserVersion, error)
 
-// WebMCPDiscoveryService is the neutral Lane B service consumed by the
-// production composition. Keeping this interface at the CLI boundary lets
+// WebMCPDiscoveryService is the discovery service consumed by the production
+// composition. Keeping this interface at the CLI boundary lets
 // command tests inject a discovery fake without importing a browser protocol
 // package or depending on a concrete service implementation.
 type WebMCPDiscoveryService interface {
@@ -201,10 +193,9 @@ type WebMCPDoctorCommand struct {
 }
 
 // NewWebMCPDoctorCommand constructs doctor with an optional injected runtime
-// factory. The default is intentionally unavailable until Lane B discovery
-// and Lane D browser protocol adapters are supplied.
+// factory. The default uses the production discovery and browser runtime.
 func NewWebMCPDoctorCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorFactory) *WebMCPDoctorCommand {
-	factory := unavailableWebMCPDoctorFactory
+	factory := defaultWebMCPDoctorFactory(globalFlags)
 	if len(factories) > 0 && factories[0] != nil {
 		factory = factories[0]
 	}
@@ -358,38 +349,21 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 
 	factory := c.factory
 	if factory == nil {
-		factory = unavailableWebMCPDoctorFactory
+		factory = defaultWebMCPDoctorFactory(c.globalFlags)
 	}
 	factoryRuntime, factoryErr := factory(loaded.Browser)
 	runtimeOwned = factoryRuntime.Close != nil || factoryRuntime.Broker != nil
 	if factoryErr != nil {
-		primary = factoryErr
-		if errors.Is(factoryErr, ErrWebMCPDoctorRequiresLaneBOrD) {
-			report.Status = doctorStatusUnavailable
-			report.Error = &WebMCPDoctorErrorData{
-				Code:      doctorErrorRequiresLaneBOrD,
-				Message:   "WebMCP doctor requires Lane B or requires Lane D for production browser discovery and CDP runtime.",
-				Retryable: false,
-				Details:   map[string]any{"requires": []string{"Lane B", "Lane D"}},
-			}
-			report.setCheck("discovery", doctorCheckUnavailable, "Production browser discovery is unavailable; requires Lane B.", map[string]any{"requires": "Lane B"})
-			report.setCheck("version", doctorCheckUnavailable, "Production browser protocol access is unavailable; requires Lane D.", map[string]any{"requires": "Lane D"})
-		} else {
-			report.Status = doctorStatusUnavailable
-			report.Error = doctorErrorDataFor(factoryErr, webmcp.ErrorEndpointUnreachable, map[string]any{"phase": "runtime_factory"})
-			report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime is unavailable.", map[string]any{"phase": "runtime_factory"})
-		}
+		primary = webmcpRuntimeFactoryError(factoryErr)
+		report.Status = doctorStatusUnavailable
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "runtime_factory"})
+		report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime could not be constructed.", map[string]any{"phase": "runtime_factory"})
 		return report, nil
 	}
 	if factoryRuntime.Broker == nil {
-		primary = errors.New("doctor runtime factory returned no broker")
+		primary = webmcpRuntimeUnavailableError("runtime_factory")
 		report.Status = doctorStatusUnavailable
-		report.Error = &WebMCPDoctorErrorData{
-			Code:      doctorErrorRuntimeUnavailable,
-			Message:   "WebMCP doctor runtime is unavailable; install the production discovery and browser protocol seams.",
-			Retryable: false,
-			Details:   map[string]any{"phase": "runtime_factory"},
-		}
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
 		report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime returned no broker.", nil)
 		return report, nil
 	}
@@ -458,15 +432,10 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 		return versionErr
 	}
 	if !versionAvailable {
-		primary := ErrWebMCPDoctorRequiresLaneBOrD
-		report.Status = doctorStatusUnavailable
-		report.Error = &WebMCPDoctorErrorData{
-			Code:      doctorErrorRequiresLaneBOrD,
-			Message:   "WebMCP doctor requires Lane D for the production browser protocol version check.",
-			Retryable: false,
-			Details:   map[string]any{"requires": "Lane D", "phase": "version"},
-		}
-		report.setCheck("version", doctorCheckUnavailable, "Browser protocol version access is unavailable; requires Lane D.", map[string]any{"requires": "Lane D"})
+		primary := webmcpRuntimeUnavailableError("version")
+		report.Status = doctorStatusNotReady
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
+		report.setCheck("version", doctorCheckFail, "Browser protocol metadata is unavailable.", map[string]any{"phase": "version"})
 		return primary
 	}
 	if version.Browser != "" || version.ProtocolVersion != "" {
@@ -715,10 +684,6 @@ func (r *WebMCPDoctorReport) addWarning(warning string) {
 		}
 	}
 	r.Warnings = append(r.Warnings, boundedDoctorText(warning, 240))
-}
-
-func unavailableWebMCPDoctorFactory(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
-	return WebMCPDoctorRuntime{}, ErrWebMCPDoctorRequiresLaneBOrD
 }
 
 func closeWebMCPDoctorRuntime(runtime WebMCPDoctorRuntime) (err error) {
@@ -1179,14 +1144,6 @@ func boundedDoctorText(value string, limit int) string {
 }
 
 func doctorErrorDataFor(err error, fallback webmcp.ErrorCode, details map[string]any) *WebMCPDoctorErrorData {
-	if errors.Is(err, ErrWebMCPDoctorRequiresLaneBOrD) {
-		return &WebMCPDoctorErrorData{
-			Code:      doctorErrorRequiresLaneBOrD,
-			Message:   "WebMCP doctor requires Lane B or requires Lane D for production browser discovery and CDP runtime.",
-			Retryable: false,
-			Details:   map[string]any{"requires": []string{"Lane B", "Lane D"}},
-		}
-	}
 	result := webmcp.ResultErrorFor(err, fallback, details)
 	return &WebMCPDoctorErrorData{Code: result.Code, Message: result.Message, Retryable: result.Retryable, Details: result.Details}
 }

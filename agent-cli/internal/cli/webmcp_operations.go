@@ -28,11 +28,6 @@ const (
 	webmcpDirectWatchStatusOnce     = "one_event"
 )
 
-// ErrWebMCPOperationsRequiresLaneBOrD identifies the production discovery
-// and browser protocol seams that are intentionally not guessed by the CLI
-// composition root. Direct commands surface it as an unavailable operation.
-var ErrWebMCPOperationsRequiresLaneBOrD = ErrWebMCPDoctorRequiresLaneBOrD
-
 // WebMCPDirectBrowser is the safe browser listing shape. Endpoint addresses
 // are redacted before they are copied into this result.
 type WebMCPDirectBrowser struct {
@@ -173,7 +168,7 @@ type WebMCPOperationsFactory = WebMCPDoctorFactory
 
 // NewWebMCPOperationsCommand constructs the direct operation group.
 func NewWebMCPOperationsCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorFactory) *WebMCPOperationsCommand {
-	factory := unavailableWebMCPDoctorFactory
+	factory := defaultWebMCPDoctorFactory(globalFlags)
 	if len(factories) > 0 && factories[0] != nil {
 		factory = factories[0]
 	}
@@ -357,7 +352,7 @@ func (c *WebMCPOperationsCommand) activateCommand() *cobra.Command {
 					SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
 				})
 				if !ok {
-					return nil, directRequiresLaneError("target activation")
+					return nil, webmcpRuntimeUnavailableError("target_activation")
 				}
 				page, err := selectorWithOptions.SelectWithOptions(ctx, selector, webmcp.SelectOptions{Activate: true})
 				if err != nil {
@@ -620,14 +615,14 @@ func (c *WebMCPOperationsCommand) runDirect(ctx context.Context, cmd *cobra.Comm
 	}
 	factory := c.factory
 	if factory == nil {
-		factory = unavailableWebMCPDoctorFactory
+		factory = defaultWebMCPDoctorFactory(c.globalFlags)
 	}
 	runtime, factoryErr := factory(browser)
 	if factoryErr != nil {
-		return nil, errors.Join(factoryErr, closeWebMCPDoctorRuntime(runtime))
+		return nil, errors.Join(webmcpRuntimeFactoryError(factoryErr), closeWebMCPDoctorRuntime(runtime))
 	}
 	if runtime.Broker == nil {
-		return nil, errors.Join(directRequiresLaneError("direct WebMCP operations"), closeWebMCPDoctorRuntime(runtime))
+		return nil, errors.Join(webmcpRuntimeUnavailableError("runtime_factory"), closeWebMCPDoctorRuntime(runtime))
 	}
 	data, err = operation(ctx, runtime.Broker, browser)
 	return data, errors.Join(err, closeWebMCPDoctorRuntime(runtime))
@@ -785,7 +780,7 @@ func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) conf
 
 func discoverDirectBrowsers(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig, browserID string) ([]webmcp.BrowserCandidate, error) {
 	if broker == nil {
-		return nil, directRequiresLaneError("browser discovery")
+		return nil, webmcpRuntimeUnavailableError("discovery")
 	}
 	candidates, err := broker.Discover(ctx, webmcp.DiscoverOptions{
 		BrowserID:        webmcp.BrowserID(browserID),
@@ -817,10 +812,6 @@ func discoverDirectBrowsers(ctx context.Context, broker webmcp.Broker, browser c
 		})
 	}
 	return candidates, nil
-}
-
-func directRequiresLaneError(operation string) error {
-	return fmt.Errorf("%w: %s requires Lane B or requires Lane D", ErrWebMCPOperationsRequiresLaneBOrD, operation)
 }
 
 func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
@@ -1237,7 +1228,7 @@ func selectDirectTarget(ctx context.Context, broker webmcp.Broker, selector webm
 		return selectorWithOptions.SelectWithOptions(ctx, selector, webmcp.SelectOptions{Activate: activate})
 	}
 	if activate {
-		return webmcp.PageContext{}, directRequiresLaneError("target activation")
+		return webmcp.PageContext{}, webmcpRuntimeUnavailableError("target_activation")
 	}
 	return broker.Select(ctx, selector)
 }

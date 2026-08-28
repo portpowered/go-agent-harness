@@ -117,6 +117,38 @@ browser:
 	}
 }
 
+func TestDefaultWebMCPDirectFactoryUsesProductionDiscovery(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/json/version" {
+			http.NotFound(writer, request)
+			return
+		}
+		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/default-browser"
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Default","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
+	}))
+	defer server.Close()
+
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
+browser:
+  connection:
+    cdp_url: %q
+  selection:
+    persist: false
+`, server.URL+"/json/version"))
+	result := executeDirectCommand(t, configDir, nil, nil, "browsers", "--json")
+	if result.err != nil {
+		t.Fatalf("default browsers: %v\nstdout=%s\nstderr=%s", result.err, result.stdout, result.stderr)
+	}
+	envelope := requireDirectSuccess(t, result)
+	var data WebMCPDirectBrowsersData
+	decodeDirectData(t, envelope.Data, &data)
+	if len(data.Browsers) != 1 || data.Browsers[0].Product != "Chrome/Default" || data.Browsers[0].Protocol != "1.3" {
+		t.Fatalf("default discovery browsers = %+v", data.Browsers)
+	}
+}
+
 func TestProductionWebMCPDirectFailuresRemainClassifiedAndFailClosed(t *testing.T) {
 	t.Run("endpoint unreachable", func(t *testing.T) {
 		server, _, _, runtime := newProductionTestEndpoint(t)

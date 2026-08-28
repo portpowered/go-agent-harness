@@ -17,7 +17,7 @@ type WebMCPCommand struct {
 // operations so a composition root cannot accidentally give the two surfaces
 // different browser ownership semantics.
 func NewWebMCPCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorFactory) *WebMCPCommand {
-	factory := unavailableWebMCPDoctorFactory
+	factory := defaultWebMCPDoctorFactory(globalFlags)
 	if len(factories) > 0 && factories[0] != nil {
 		factory = factories[0]
 	}
@@ -28,13 +28,36 @@ func NewWebMCPCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorF
 }
 
 func (c *WebMCPCommand) Generate() *cobra.Command {
-	doctor := c.DoctorCommand
-	if doctor == nil {
-		doctor = NewWebMCPDoctorCommand(nil)
+	var (
+		doctor      *WebMCPDoctorCommand
+		operations  *WebMCPOperationsCommand
+		globalFlags *flags.GlobalFlags
+		factory     WebMCPDoctorFactory
+	)
+	if c != nil {
+		doctor = c.DoctorCommand
+		operations = c.OperationsCommand
+		if doctor != nil {
+			globalFlags = doctor.globalFlags
+			factory = doctor.factory
+		}
+		if operations != nil {
+			if globalFlags == nil {
+				globalFlags = operations.globalFlags
+			}
+			if factory == nil {
+				factory = operations.factory
+			}
+		}
 	}
-	operations := c.OperationsCommand
+	if factory == nil {
+		factory = defaultWebMCPDoctorFactory(globalFlags)
+	}
+	if doctor == nil {
+		doctor = NewWebMCPDoctorCommand(globalFlags, factory)
+	}
 	if operations == nil {
-		operations = NewWebMCPOperationsCommand(nil, unavailableWebMCPDoctorFactory)
+		operations = NewWebMCPOperationsCommand(globalFlags, factory)
 	}
 	command := &cobra.Command{
 		Use:   "webmcp",

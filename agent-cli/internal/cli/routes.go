@@ -74,11 +74,6 @@ func NewRouter(
 	if sessionCommand != nil && sessionCommand.deviceRegistry != nil {
 		deviceRegistry = sessionCommand.deviceRegistry
 	}
-	productionWebMCPFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionSelectionStoreFactory(func() any {
-			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(flags))
-		}),
-	)
 	return &Router{
 		Flags:                    flags,
 		deviceRegistry:           deviceRegistry,
@@ -102,7 +97,7 @@ func NewRouter(
 		RoomRunCommand:           NewRoomRunCommand(flags),
 		ConfigCommand:            configCommand,
 		ConfigAddLocalCommand:    configAddLocalCommand,
-		WebMCPCommand:            NewWebMCPCommand(flags, productionWebMCPFactory),
+		WebMCPCommand:            NewWebMCPCommand(flags),
 	}
 }
 
@@ -152,11 +147,7 @@ func (r *Router) BuildRoot() *cobra.Command {
 
 	webmcpCommand := r.WebMCPCommand
 	if webmcpCommand == nil {
-		webmcpCommand = NewWebMCPCommand(r.Flags, NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionSelectionStoreFactory(func() any {
-				return NewFileWebMCPSelectionStore(configDirForGlobalFlags(r.Flags))
-			}),
-		))
+		webmcpCommand = NewWebMCPCommand(r.Flags)
 	}
 	root.AddCommand(NewPath("webmcp", webmcpCommand.Generate()))
 
