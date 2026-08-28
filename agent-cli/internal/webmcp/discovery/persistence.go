@@ -28,14 +28,15 @@ var ErrSelectionNotFound = errors.New("webmcp selection was not found")
 // token. Its JSON shape deliberately has no endpoint URL, page URL, websocket
 // URL, credentials, query string, fragment, or tool reference.
 type PersistedSelection struct {
-	Version          uint      `json:"version"`
-	EndpointID       string    `json:"endpoint_id"`
-	BrowserID        string    `json:"browser_id"`
-	TargetID         string    `json:"target_id"`
-	Origin           string    `json:"origin"`
-	ContinuityMarker string    `json:"continuity_marker"`
-	Generation       uint64    `json:"generation"`
-	SelectedAt       time.Time `json:"selected_at"`
+	Version           uint      `json:"version"`
+	EndpointID        string    `json:"endpoint_id"`
+	BrowserID         string    `json:"browser_id"`
+	BrowserInstanceID string    `json:"browser_instance_id,omitempty"`
+	TargetID          string    `json:"target_id"`
+	Origin            string    `json:"origin"`
+	ContinuityMarker  string    `json:"continuity_marker"`
+	Generation        uint64    `json:"generation"`
+	SelectedAt        time.Time `json:"selected_at"`
 
 	// These aliases make programmatic fakes readable without adding alternate
 	// fields to the persisted JSON contract. ContinuityMarker wins when both
@@ -339,6 +340,9 @@ func normalizePersistedSelection(record PersistedSelection) (PersistedSelection,
 	if !publicIDPattern.MatchString(record.EndpointID) || !publicIDPattern.MatchString(record.BrowserID) || !publicIDPattern.MatchString(record.TargetID) {
 		return PersistedSelection{}, newSelectionStateError("normalized_ids_required", nil)
 	}
+	if record.BrowserInstanceID != "" && !incarnationIDPattern.MatchString(record.BrowserInstanceID) {
+		return PersistedSelection{}, newSelectionStateError("browser_instance_id_invalid", nil)
+	}
 	if record.Origin == "" {
 		return PersistedSelection{}, newSelectionStateError("origin_required", nil)
 	}
@@ -373,14 +377,15 @@ func normalizePersistedSelection(record PersistedSelection) (PersistedSelection,
 
 func persistedSelectionFrom(browser BrowserCandidate, target Target, selectedAt time.Time) (PersistedSelection, error) {
 	return normalizePersistedSelection(PersistedSelection{
-		Version:          SelectionPersistenceVersion,
-		EndpointID:       browser.ID,
-		BrowserID:        browser.ID,
-		TargetID:         target.ID,
-		Origin:           target.Origin,
-		ContinuityMarker: target.ContinuityMarker,
-		Generation:       target.Generation,
-		SelectedAt:       selectedAt,
+		Version:           SelectionPersistenceVersion,
+		EndpointID:        browser.ID,
+		BrowserID:         browser.ID,
+		BrowserInstanceID: normalizedBrowserInstanceID(browser),
+		TargetID:          target.ID,
+		Origin:            target.Origin,
+		ContinuityMarker:  target.ContinuityMarker,
+		Generation:        target.Generation,
+		SelectedAt:        selectedAt,
 	})
 }
 
@@ -881,6 +886,9 @@ func (s *Service) reconnectPersisted(ctx context.Context, inputs ConnectionInput
 	}
 	if persisted.EndpointID != browser.ID {
 		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "endpoint_changed")
+	}
+	if persisted.BrowserInstanceID != "" && normalizedBrowserInstanceID(browser) != persisted.BrowserInstanceID {
+		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "browser_instance_changed")
 	}
 
 	s.mu.Lock()

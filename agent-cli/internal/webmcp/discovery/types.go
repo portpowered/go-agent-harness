@@ -104,16 +104,25 @@ type BrowserVersion struct {
 	Browser              string `json:"Browser"`
 	ProtocolVersion      string `json:"Protocol-Version"`
 	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+	// BrowserInstanceID is optional adapter/protocol metadata used to
+	// distinguish a fresh browser incarnation when an endpoint address and
+	// websocket path are reused. It is normalized to an opaque value before
+	// crossing the discovery boundary.
+	BrowserInstanceID string `json:"browserInstanceId,omitempty"`
+	// IncarnationID accepts the concise spelling used by hermetic probes. It is
+	// an input alias; BrowserInstanceID is the canonical normalized field.
+	IncarnationID string `json:"incarnationId,omitempty"`
 }
 
 // BrowserCandidate is the safe normalized discovery result. ID is the only
 // identity used by later selection layers. No transport URL is present here.
 type BrowserCandidate struct {
-	ID       string `json:"id"`
-	Source   Source `json:"source"`
-	Product  string `json:"product"`
-	Protocol string `json:"protocol"`
-	Loopback bool   `json:"loopback"`
+	ID                string `json:"id"`
+	Source            Source `json:"source"`
+	Product           string `json:"product"`
+	Protocol          string `json:"protocol"`
+	BrowserInstanceID string `json:"browser_instance_id,omitempty"`
+	Loopback          bool   `json:"loopback"`
 }
 
 // TargetDescriptor is the small, browser-neutral shape of one /json/list
@@ -492,10 +501,11 @@ type TargetIdentity struct {
 // query, or fragment. Host and path are used only to derive an opaque ID and
 // never appear in the public event payload.
 type BrowserIdentity struct {
-	Scheme string
-	Host   string
-	Port   string
-	Path   string
+	Scheme            string
+	Host              string
+	Port              string
+	Path              string
+	BrowserInstanceID string
 }
 
 // EventType is the Lane B semantic discovery event vocabulary.

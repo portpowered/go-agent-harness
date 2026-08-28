@@ -196,6 +196,9 @@ func (s *Service) ValidateSelectionGeneration(ctx context.Context, request Selec
 	targetID := strings.TrimSpace(request.TargetID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, retired := s.retiredBrowsers[browserID]; retired {
+		return Selection{}, newStaleSelection(browserID, targetID, request.Generation, "browser_replaced")
+	}
 	return s.validateSelectionGenerationLocked(browserID, targetID, request.Generation)
 }
 

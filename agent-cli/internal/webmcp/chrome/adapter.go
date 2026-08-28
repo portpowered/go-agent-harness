@@ -141,6 +141,7 @@ func (r *Runtime) Version(ctx context.Context, candidate webmcp.BrowserCandidate
 		Browser:              product,
 		ProtocolVersion:      protocolVersion,
 		WebSocketDebuggerURL: candidate.BrowserWSURL,
+		BrowserInstanceID:    candidate.BrowserInstanceID,
 	}, nil
 }
 

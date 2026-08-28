@@ -6,7 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -38,6 +40,35 @@ func addressClass(candidate BrowserCandidate) string {
 		return "loopback"
 	}
 	return "non_loopback"
+}
+
+func browserCandidateEndpointIdentity(candidate BrowserCandidate) (string, string) {
+	for _, raw := range []string{candidate.BrowserWSURL, candidate.HTTPURL} {
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || parsed == nil || parsed.Hostname() == "" {
+			continue
+		}
+		host := strings.ToLower(parsed.Hostname())
+		port := parsed.Port()
+		address := host + "\x00" + port
+		identity := strings.Join([]string{strings.ToLower(parsed.Scheme), host, port}, "\x00")
+		if instanceID := strings.TrimSpace(candidate.BrowserInstanceID); instanceID != "" {
+			identity += "\x00instance\x00" + instanceID
+		} else {
+			identity += "\x00path\x00" + parsed.EscapedPath()
+		}
+		return address, identity
+	}
+	return "", ""
+}
+
+func browserCandidatesReplaced(previous, current BrowserCandidate) bool {
+	previousAddress, previousIdentity := browserCandidateEndpointIdentity(previous)
+	currentAddress, currentIdentity := browserCandidateEndpointIdentity(current)
+	if previousAddress == "" || currentAddress == "" || previousAddress != currentAddress {
+		return false
+	}
+	return previous.ID != current.ID || previousIdentity != currentIdentity
 }
 
 func contextError(ctx context.Context) error {

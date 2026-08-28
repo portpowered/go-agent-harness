@@ -225,13 +225,6 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	}
 }
 
-// NewStatefulBroker is a descriptive constructor alias.
-func NewStatefulBroker(options BrokerOptions) *StatefulBroker { return NewBroker(options) }
-
-// New is a concise constructor alias for callers that use the package as a
-// broker implementation rather than only as a contract package.
-func New(options BrokerOptions) *StatefulBroker { return NewBroker(options) }
-
 // NewBrokerWithRuntime is a convenience constructor for small tests and
 // adapters that already have their runtime and discoverer separated.
 func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, options ...BrokerOptions) *StatefulBroker {
@@ -276,20 +269,22 @@ func (b *StatefulBroker) Discover(ctx context.Context, options DiscoverOptions) 
 	if err != nil {
 		return nil, err
 	}
-	filtered := make([]BrowserCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
+	allCandidates := cloneBrowserCandidates(candidates)
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return nil, ErrClosed
+	}
+	cleanups, replaced := b.reconcileBrowserReplacementsLocked(allCandidates)
+	filtered := make([]BrowserCandidate, 0, len(allCandidates))
+	for _, candidate := range allCandidates {
 		if options.BrowserID != "" && candidate.ID != options.BrowserID {
 			continue
 		}
-		filtered = append(filtered, cloneBrowserCandidate(candidate))
+		filtered = append(filtered, candidate)
 	}
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].ID < filtered[j].ID })
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closed {
-		return nil, ErrClosed
-	}
-	for _, candidate := range filtered {
+	for _, candidate := range allCandidates {
 		state := b.browsers[candidate.ID]
 		if state == nil {
 			state = &browserState{}
@@ -297,10 +292,20 @@ func (b *StatefulBroker) Discover(ctx context.Context, options DiscoverOptions) 
 		}
 		state.candidate = candidate
 	}
+	var failure error
 	if options.BrowserID != "" && len(filtered) == 0 {
-		return nil, classified(ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
-			"browser_id": string(options.BrowserID),
-		}, ErrBrowserNotFound)
+		if _, wasReplaced := replaced[options.BrowserID]; wasReplaced {
+			failure = staleSelectionError(options.BrowserID, "", 0, "browser_replaced")
+		} else {
+			failure = classified(ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
+				"browser_id": string(options.BrowserID),
+			}, ErrBrowserNotFound)
+		}
+	}
+	b.mu.Unlock()
+	closeBrowserReplacementCleanups(cleanups)
+	if failure != nil {
+		return nil, failure
 	}
 	return cloneBrowserCandidates(filtered), nil
 }

@@ -23,8 +23,10 @@ const (
 // targetEndpoint is retained only inside a Service so a normalized browser
 // candidate can be refreshed without returning its transport credentials.
 type targetEndpoint struct {
-	httpURL   string
-	browserWS string
+	httpURL     string
+	browserWS   string
+	addressKey  string
+	identityKey string
 }
 
 // targetState keeps the raw target identity for a later runtime adapter. The
@@ -73,10 +75,13 @@ func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandida
 	}
 	listOptions := resolvedTargetListOptions(firstTargetListOptions(options))
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer s.unlockDiscovery()
 
 	if browser.ID == "" {
 		return TargetSnapshot{}, newNoEligibleTab("", listOptions, 0)
+	}
+	if _, retired := s.retiredBrowsers[browser.ID]; retired {
+		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, newStaleSelection(browser.ID, listOptions.TargetID, 0, "browser_replaced")
 	}
 	if listOptions.BrowserID != "" && listOptions.BrowserID != browser.ID {
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, newNoEligibleTab(listOptions.BrowserID, listOptions, 0)
@@ -159,7 +164,7 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 		ctx = context.Background()
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer s.unlockDiscovery()
 
 	s.emit(EventDiscoveryStarted, "", map[string]any{
 		"source_plan": []string{
@@ -792,8 +797,49 @@ func (s *Service) rememberEndpoint(browserID string, endpoint targetEndpoint) {
 		if endpoint.browserWS == "" {
 			endpoint.browserWS = existing.browserWS
 		}
+		if endpoint.addressKey == "" {
+			endpoint.addressKey = existing.addressKey
+		}
+		if endpoint.identityKey == "" {
+			endpoint.identityKey = existing.identityKey
+		}
+	}
+	if endpoint.addressKey == "" {
+		endpoint.addressKey = endpointAddressKey(endpoint)
 	}
 	s.endpoints[browserID] = endpoint
+}
+
+func endpointAddressKey(endpoint targetEndpoint) string {
+	if endpoint.addressKey != "" {
+		return endpoint.addressKey
+	}
+	for _, raw := range []string{endpoint.browserWS, endpoint.httpURL} {
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || parsed == nil || parsed.Hostname() == "" {
+			continue
+		}
+		return browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port())
+	}
+	return ""
+}
+
+func browserAddressKey(scheme, host, port string) string {
+	return strings.ToLower(strings.TrimSpace(host)) + "\x00" + strings.TrimSpace(port)
+}
+
+func browserIdentityKey(identity BrowserIdentity) string {
+	parts := []string{
+		strings.ToLower(strings.TrimSpace(identity.Scheme)),
+		strings.ToLower(strings.TrimSpace(identity.Host)),
+		strings.TrimSpace(identity.Port),
+	}
+	if marker := strings.TrimSpace(identity.BrowserInstanceID); marker != "" {
+		parts = append(parts, marker)
+	} else {
+		parts = append(parts, strings.TrimSpace(identity.Path))
+	}
+	return strings.Join(parts, "\x00")
 }
 
 func newOriginPolicy(custom OriginPolicy, allowed, denied []string) OriginPolicy {

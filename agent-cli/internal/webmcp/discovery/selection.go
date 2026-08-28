@@ -292,6 +292,9 @@ func (s *Service) resolveSelectionBrowserLocked(request TargetSelectionRequest) 
 	}
 	if providedID != "" {
 		requestedID = providedID
+		if _, retired := s.retiredBrowsers[requestedID]; retired {
+			return BrowserCandidate{}, newStaleSelection(requestedID, request.TargetID, 0, "browser_replaced")
+		}
 		if s.browsers == nil {
 			s.browsers = make(map[string]BrowserCandidate)
 		}
@@ -309,6 +312,9 @@ func (s *Service) resolveSelectionBrowserLocked(request TargetSelectionRequest) 
 		default:
 			return BrowserCandidate{}, newAmbiguousBrowser(ids)
 		}
+	}
+	if _, retired := s.retiredBrowsers[requestedID]; retired {
+		return BrowserCandidate{}, newStaleSelection(requestedID, request.TargetID, 0, "browser_replaced")
 	}
 	browser, ok := s.browsers[requestedID]
 	if !ok && providedID == requestedID {

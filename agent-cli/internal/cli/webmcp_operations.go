@@ -991,6 +991,9 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		if stored.EndpointID != "" && stored.EndpointID != string(candidate.ID) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "endpoint_changed", nil)
 		}
+		if stored.BrowserInstanceID != "" && stored.BrowserInstanceID != candidate.BrowserInstanceID {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "browser_instance_changed", nil)
+		}
 		if stored.Origin != "" && safeOrigin(stored.Origin) != safeOrigin(target.Origin) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "origin_changed", nil)
 		}
@@ -1140,14 +1143,15 @@ func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *c
 	}
 	if browser.Selection.Persist {
 		if err := c.saveDirectSelection(WebMCPSelection{
-			Version:          WebMCPSelectionVersion,
-			EndpointID:       string(candidate.ID),
-			BrowserID:        string(page.Key.BrowserID),
-			TargetID:         string(page.Key.TargetID),
-			Origin:           safeOrigin(page.Origin),
-			ContinuityMarker: target.ContinuityMarker,
-			Generation:       page.Generation,
-			SelectedAt:       time.Now().UTC(),
+			Version:           WebMCPSelectionVersion,
+			EndpointID:        string(candidate.ID),
+			BrowserID:         string(page.Key.BrowserID),
+			BrowserInstanceID: candidate.BrowserInstanceID,
+			TargetID:          string(page.Key.TargetID),
+			Origin:            safeOrigin(page.Origin),
+			ContinuityMarker:  target.ContinuityMarker,
+			Generation:        page.Generation,
+			SelectedAt:        time.Now().UTC(),
 		}); err != nil {
 			return nil, fmt.Errorf("persist WebMCP selection: %w", err)
 		}
