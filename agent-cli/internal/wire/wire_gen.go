@@ -9,9 +9,11 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -21,7 +23,7 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, toolDefs []messages.ToolDefinition, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, rtcComponents services.SessionRTCComponents, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
 	v := provideModelValidation(relaxModelValidation, observer, toolExecutor, transportDialer, deviceRegistry, audioSource, audioSink, clockSource, runtimeObserver, inferencer, sessionInferencer)
@@ -35,25 +37,36 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	interactionCommand := cli.NewInteractionCommand()
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	probeCommand := cli.NewProbeCommand()
-	probeRunCommand := cli.NewProbeRunCommand()
+	v2 := provideProbeDeviceRegistries(deviceRegistry)
+	probeRunCommand := cli.NewProbeRunCommand(v2...)
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
-	v2 := provideFleetEntryExecutors()
-	probeFleetCommand := cli.NewProbeFleetCommand(v2...)
-	sessionToolCapabilities := provideSessionToolCapabilitiesFactory(toolExecutor)
-	sessionCommand := cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver, sessionToolCapabilities, deviceRegistry)
+	v3 := provideFleetEntryExecutors()
+	probeFleetCommand := cli.NewProbeFleetCommand(v3...)
+	sessionToolCapabilitiesFactory := provideSessionToolCapabilitiesFactory(toolExecutor)
+	sessionRTCRuntimeFactory := provideSessionRTCRuntimeFactory(rtcComponents)
+	sessionCommand := cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime(askFlags, globalFlags, toolExecutor, sessionInferencer, clockSource, runtimeObserver, sessionToolCapabilitiesFactory, deviceRegistry, sessionRTCRuntimeFactory)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	v3 := provideAcceptanceCommands()
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand, v3...)
+	v4 := provideAcceptanceCommands()
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, configCommand, configAddLocalCommand, v4...)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
 
 // wire.go:
+
+// provideSessionRTCRuntimeFactory installs the service-owned WebRTC runtime
+// composition in the generated CLI graph. The component functions keep
+// signaling, peer/data, and media implementations behind the service's
+// provider-neutral contracts while leaving runtime side effects lazy until a
+// session actually starts.
+func provideSessionRTCRuntimeFactory(components services.SessionRTCComponents) services.SessionRTCRuntimeFactory {
+	return services.NewSessionRTCRuntimeFactory(components)
+}
 
 func provideModelValidation(
 	relaxModelValidation bool,
@@ -96,8 +109,19 @@ func provideFleetEntryExecutors() []fleet.EntryExecutor { return nil }
 // acceptance runner while leaving the command injectable for route tests.
 func provideAcceptanceCommands() []*cli.ProbeAcceptanceCommand { return nil }
 
+// provideProbeDeviceRegistries adapts the shared application registry to the
+// variadic probe constructor. Keeping the adapter in the source graph makes
+// the generated call retain the same device implementation as the session
+// command and device routes.
+func provideProbeDeviceRegistries(registry DeviceRegistry) []audio.DeviceRegistry {
+	return []audio.DeviceRegistry{registry}
+}
+
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
 	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, cli.NewProbeRunCommand, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
-	provideAcceptanceCommands, provideSessionToolCapabilitiesFactory, cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	provideAcceptanceCommands,
+	provideProbeDeviceRegistries,
+	provideSessionToolCapabilitiesFactory,
+	provideSessionRTCRuntimeFactory, cli.NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilitiesAndRTCRuntime, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )
