@@ -317,6 +317,20 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 				"phase":    "invoke",
 			})
 		}
+		if invocationNeedsTerminalResult(result.State) {
+			if waiter, ok := s.broker.(webmcp.InvocationWaiter); ok {
+				invocationID := result.InvocationID
+				result, err = waiter.WaitInvocation(ctx, invocationID)
+				if err != nil {
+					return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
+						"invocation_id":       string(invocationID),
+						"tool_ref":            string(request.ToolRef),
+						"phase":               "result",
+						"side_effect_unknown": true,
+					})
+				}
+			}
+		}
 		if result.ErrorCode != "" || isFailedInvocationState(result.State) {
 			return invocationFailure(result, request.ToolRef)
 		}
@@ -657,6 +671,20 @@ func isFailedInvocationState(state webmcp.InvocationState) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func invocationNeedsTerminalResult(state webmcp.InvocationState) bool {
+	switch state {
+	case webmcp.InvocationCompleted,
+		webmcp.InvocationError,
+		webmcp.InvocationCanceled,
+		webmcp.InvocationTimedOut,
+		webmcp.InvocationOrphaned,
+		webmcp.InvocationPolicyDenied:
+		return false
+	default:
+		return true
 	}
 }
 
