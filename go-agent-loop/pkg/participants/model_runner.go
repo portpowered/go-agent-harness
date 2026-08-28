@@ -353,8 +353,12 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		return
 	case sessionToolResultsFlatFallback:
 		// Flat tool results do not request a response themselves. Preserve the
-		// established session trigger after the batch has been delivered.
-		r.sendLatestUserTextOnly(ctx, session, req.Messages)
+		// established session trigger after the batch has been delivered. An
+		// audio-only user turn has no text event to act as that trigger, so send
+		// an explicit response request instead.
+		if !r.sendLatestUserTextOnly(ctx, session, req.Messages) {
+			r.requestSessionResponse(ctx, session)
+		}
 		return
 	case sessionToolResultsFailed:
 		// A complete-message send may have partially reached the provider. Do
@@ -363,10 +367,12 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		return
 	}
 
-	r.sendLatestUserTextOnly(ctx, session, req.Messages)
+	if !r.sendLatestUserTextOnly(ctx, session, req.Messages) && sessionHasToolResultSuffix(req.Messages) {
+		r.requestSessionResponse(ctx, session)
+	}
 }
 
-func (r *ModelRunner) sendLatestUserTextOnly(ctx context.Context, session messages.Session, history []messages.Message) {
+func (r *ModelRunner) sendLatestUserTextOnly(ctx context.Context, session messages.Session, history []messages.Message) bool {
 	for i := len(history) - 1; i >= 0; i-- {
 		msg := history[i]
 		if msg.Role != messages.RoleUser {
@@ -374,14 +380,25 @@ func (r *ModelRunner) sendLatestUserTextOnly(ctx context.Context, session messag
 		}
 		text := msg.TextContent()
 		if text == "" {
-			return
+			return false
 		}
 		session.Send(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Value: messages.NewTextDeltaValue(text),
 		})
-		return
+		return true
 	}
+	return false
+}
+
+func sessionHasToolResultSuffix(history []messages.Message) bool {
+	return len(history) > 0 && history[len(history)-1].Role == messages.RoleTool
+}
+
+func (r *ModelRunner) requestSessionResponse(ctx context.Context, session messages.Session) {
+	// Replays and legacy injected sessions do not expose this optional
+	// capability, so their captured provider traffic remains unchanged.
+	messages.RequestSessionResponse(ctx, session)
 }
 
 // sessionMessageSender is an optional extension to the stream-only Session

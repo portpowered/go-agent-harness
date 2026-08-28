@@ -138,6 +138,8 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 		v = new(messages.SessionUpdateValue)
 	case messages.StreamTypeResponseCancel:
 		v = new(messages.ResponseCancelValue)
+	case messages.StreamTypeResponseCreate:
+		v = new(messages.ResponseCreateValue)
 	case messages.StreamTypeUsageInfo:
 		v = new(messages.UsageInfoValue)
 	case messages.StreamTypeError:

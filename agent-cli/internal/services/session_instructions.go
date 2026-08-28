@@ -185,6 +185,11 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 }
 
 func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
+	// This is the single service-owned boundary between prompt resolution and
+	// provider construction. The tool definitions in opts are the same snapshot
+	// that the runtime planner passes to the provider, so the grounding contract
+	// cannot drift from the advertised tool surface.
+	instructions = composeSessionInstructions(opts, instructions)
 	planFactory := defaultSessionRuntimeFactory
 	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
 	if useInitialProviderInstructions {
@@ -195,7 +200,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 		return sessionRuntimePlan{}, err
 	}
 	if instructions != "" && plan.inferencer != nil && !useInitialProviderInstructions {
-		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions)
+		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
 	}
 	return plan, nil
 }
@@ -306,11 +311,30 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
-	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), nil)
+	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), opts.ToolDefinitions)
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
 	return instructions, nil
+}
+
+const sessionToolGroundingPolicy = `Tool-grounding requirements:
+- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.
+- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.
+- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.`
+
+// composeSessionInstructions preserves the selected customer instructions and
+// adds the provider-neutral grounding contract exactly once for tool-enabled
+// sessions. The no-tools path remains byte-for-byte unchanged, and callers
+// that already supplied the policy do not receive a duplicate copy.
+func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
+	if len(opts.ToolDefinitions) == 0 || strings.Contains(instructions, sessionToolGroundingPolicy) {
+		return instructions
+	}
+	if instructions == "" {
+		return sessionToolGroundingPolicy
+	}
+	return instructions + "\n\n" + sessionToolGroundingPolicy
 }
 
 // sessionInstructionsInferencer decorates caller-owned session seams without
@@ -320,12 +344,29 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 type sessionInstructionsInferencer struct {
 	inner        messages.SessionInferencer
 	instructions string
+	tools        []messages.ToolDefinition
 }
 
 var _ messages.SessionInferencer = (*sessionInstructionsInferencer)(nil)
 
-func newSessionInstructionsInferencer(inner messages.SessionInferencer, instructions string) messages.SessionInferencer {
-	return &sessionInstructionsInferencer{inner: inner, instructions: instructions}
+func newSessionInstructionsInferencer(inner messages.SessionInferencer, instructions string, toolDefinitions []messages.ToolDefinition) messages.SessionInferencer {
+	return &sessionInstructionsInferencer{
+		inner:        inner,
+		instructions: instructions,
+		tools:        cloneSessionToolDefinitions(toolDefinitions),
+	}
+}
+
+func cloneSessionToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
+	if len(definitions) == 0 {
+		return nil
+	}
+	cloned := make([]messages.ToolDefinition, len(definitions))
+	for index, definition := range definitions {
+		cloned[index] = definition
+		cloned[index].Parameters = append([]messages.ToolParameter(nil), definition.Parameters...)
+	}
+	return cloned
 }
 
 func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -333,12 +374,13 @@ func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (mes
 	if err != nil {
 		return nil, err
 	}
-	return newSessionInstructionsSession(inner, ctx, i.instructions), nil
+	return newSessionInstructionsSession(inner, ctx, i.instructions, i.tools), nil
 }
 
 type sessionInstructionsSession struct {
 	inner         messages.Session
 	instructions  string
+	tools         []messages.ToolDefinition
 	receive       *messages.TypedBuffer[messages.StreamMessage]
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -348,11 +390,12 @@ type sessionInstructionsSession struct {
 var _ messages.Session = (*sessionInstructionsSession)(nil)
 var _ messages.SessionSendOutcomeSender = (*sessionInstructionsSession)(nil)
 
-func newSessionInstructionsSession(inner messages.Session, parent context.Context, instructions string) messages.Session {
+func newSessionInstructionsSession(inner messages.Session, parent context.Context, instructions string, toolDefinitions []messages.ToolDefinition) messages.Session {
 	ctx, cancel := context.WithCancel(parent)
 	session := &sessionInstructionsSession{
 		inner:        inner,
 		instructions: instructions,
+		tools:        cloneSessionToolDefinitions(toolDefinitions),
 		receive:      messages.NewTypedBuffer[messages.StreamMessage](inner.Receive().Cap()),
 		ctx:          ctx,
 		cancel:       cancel,
@@ -393,6 +436,7 @@ func (s *sessionInstructionsSession) forward(msg messages.StreamMessage) bool {
 				Type: messages.StreamTypeSessionUpdate,
 				Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
 					Instructions: s.instructions,
+					Tools:        s.tools,
 				}),
 			})
 			if !outcome.OK() {
@@ -416,6 +460,16 @@ func (s *sessionInstructionsSession) forward(msg messages.StreamMessage) bool {
 
 func (s *sessionInstructionsSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.inner.Send(ctx, msg)
+}
+
+// RequestResponse forwards the optional explicit response capability without
+// changing the instruction-update lifecycle or replay behavior.
+func (s *sessionInstructionsSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.inner)
+}
+
+func (s *sessionInstructionsSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.inner)
 }
 
 // SendMessage forwards the optional complete-message capability of the

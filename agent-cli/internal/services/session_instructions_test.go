@@ -195,6 +195,151 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 	}
 }
 
+func TestRunSessionWithInstructions_DefaultAgentsMDUsesEffectiveToolDefinitions(t *testing.T) {
+	workspaceDir := t.TempDir()
+	inferencer := newSessionInstructionsTestInferencer()
+	toolDefinitions := []messages.ToolDefinition{
+		{Name: "read_file", Description: "Read a UTF-8 file from the workspace."},
+		{Name: "exec", Description: "Execute a command in the workspace."},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), services.SessionRunOptions{
+		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+		ConfigDir:         workspaceDir,
+		Prompt:            userTurnMarker,
+		SessionInferencer: inferencer,
+		ToolDefinitions:   toolDefinitions,
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(workspaceDir, workspace.AgentsMDFileName))
+	if err != nil {
+		t.Fatalf("read generated AGENTS.md: %v", err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "### `read_file`") || !strings.Contains(got, "### `exec`") {
+		t.Fatalf("generated AGENTS.md does not reflect session tools: %s", got)
+	}
+	if strings.Contains(got, "No tools are currently registered.") {
+		t.Fatalf("generated AGENTS.md contradicts session tools: %s", got)
+	}
+	assertSessionInstructionEventsWithGrounding(t, inferencer, got, 1)
+}
+
+func TestRunSessionWithInstructions_ExplicitPromptDoesNotReconcileAgentsMD(t *testing.T) {
+	workspaceDir := t.TempDir()
+	staleAgents := "customer instructions\n\n## Available Tools\n\nNo tools are currently registered.\n## Notes\nkeep this section\n"
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), staleAgents)
+	promptPath := filepath.Join(workspaceDir, "prompt.md")
+	writeFile(t, promptPath, fileInstructionsMarker)
+	inferencer := newSessionInstructionsTestInferencer()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, bytes.NewBuffer(nil), services.SessionRunOptions{
+		ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+		ConfigDir:         workspaceDir,
+		Prompt:            userTurnMarker,
+		SessionInferencer: inferencer,
+		ToolDefinitions: []messages.ToolDefinition{{
+			Name:        "read_file",
+			Description: "Read a UTF-8 file from the workspace.",
+		}},
+	}, promptPath)
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+	if got := string(mustReadFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName))); got != staleAgents {
+		t.Fatalf("explicit prompt resolution changed AGENTS.md:\n got: %q\nwant: %q", got, staleAgents)
+	}
+	assertSessionInstructionEventsWithGrounding(t, inferencer, fileInstructionsMarker, 1)
+}
+
+func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	writeFile(t, filepath.Join(workspaceDir, config.ConfigFileName), "model:\n  provider: openai\n")
+	realtimeConn := newRecordingRealtimeTestConn()
+	recordPath := filepath.Join(t.TempDir(), "openai-grounding.session.json")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, io.Discard, services.SessionRunOptions{
+		RecordPath:      recordPath,
+		Provider:        config.ProviderOpenAI,
+		Model:           "gpt-realtime",
+		APIKey:          "test-api-key",
+		ConfigDir:       workspaceDir,
+		Prompt:          userTurnMarker,
+		ToolExecutor:    &messages.DefaultToolExecutor{},
+		ToolDefinitions: []messages.ToolDefinition{{Name: "inspect_machine", Description: "Inspect machine state"}},
+		WebSocketDialer: &recordingRealtimeTestDialer{conn: realtimeConn},
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("LoadSessionCapture: %v", err)
+	}
+	configCount := 0
+	configIndex := -1
+	userIndex := -1
+	gotInstructions := ""
+	toolCount := 0
+	for index, event := range capture.Records {
+		if event.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		payload := event.Payload
+		if len(payload) == 0 {
+			payload = event.Data
+		}
+		var envelope struct {
+			Type    string `json:"type"`
+			Session struct {
+				Instructions string            `json:"instructions"`
+				Tools        []json.RawMessage `json:"tools"`
+			} `json:"session"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			t.Fatalf("decode outbound event %q: %v", string(payload), err)
+		}
+		switch envelope.Type {
+		case "session.update":
+			configCount++
+			configIndex = index
+			gotInstructions = envelope.Session.Instructions
+			toolCount = len(envelope.Session.Tools)
+		case "conversation.item.create":
+			userIndex = index
+		}
+	}
+	if configCount != 1 {
+		t.Fatalf("instruction-bearing OpenAI session.update count = %d, want 1; capture=%#v", configCount, capture.Records)
+	}
+	if !strings.HasPrefix(gotInstructions, agentsInstructionsMarker+"\n\n") {
+		t.Fatalf("grounding instructions = %q, want workspace instructions first", gotInstructions)
+	}
+	if strings.Count(gotInstructions, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("grounding policy heading count = %d, want 1; instructions=%q", strings.Count(gotInstructions, "Tool-grounding requirements:"), gotInstructions)
+	}
+	if strings.Contains(gotInstructions, "No tools are currently registered") {
+		t.Fatalf("grounding instructions contradict advertised tools: %q", gotInstructions)
+	}
+	if toolCount != 1 {
+		t.Fatalf("OpenAI session.update tools = %d, want 1", toolCount)
+	}
+	if configIndex < 0 || userIndex < 0 || configIndex >= userIndex {
+		t.Fatalf("OpenAI session.update index = %d, first user index = %d; capture=%#v", configIndex, userIndex, capture.Records)
+	}
+}
+
 func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
@@ -448,11 +593,56 @@ func assertSessionInstructionEvents(t *testing.T, inferencer *sessionInstruction
 	}
 }
 
+func assertSessionInstructionEventsWithGrounding(t *testing.T, inferencer *sessionInstructionsTestInferencer, wantBase string, wantConfigCount int) {
+	t.Helper()
+	events := inferencer.sentEvents()
+	configCount := 0
+	userCount := 0
+	gotInstructions := ""
+	for _, event := range events {
+		switch event.Type {
+		case messages.StreamTypeSessionUpdate:
+			configCount++
+			value, ok := event.Value.(*messages.SessionUpdateValue)
+			if !ok || value == nil {
+				t.Fatalf("session update event has value %T, want *SessionUpdateValue", event.Value)
+			}
+			gotInstructions = value.Instructions
+		case messages.StreamTypeTextDelta:
+			value, ok := event.Value.(*messages.TextDeltaValue)
+			if ok && value != nil {
+				userCount++
+			}
+		}
+	}
+	if configCount != wantConfigCount {
+		t.Fatalf("grounded session configuration count = %d, want %d; events=%s", configCount, wantConfigCount, formatSessionEvents(events))
+	}
+	if userCount != 1 {
+		t.Fatalf("grounded user-turn event count = %d, want 1; events=%s", userCount, formatSessionEvents(events))
+	}
+	if !strings.HasPrefix(gotInstructions, wantBase+"\n\n") {
+		t.Fatalf("grounded session instructions = %q, want base prefix %q", gotInstructions, wantBase+"\n\n")
+	}
+	if strings.Count(gotInstructions, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("grounding policy heading count = %d, want 1; instructions=%q", strings.Count(gotInstructions, "Tool-grounding requirements:"), gotInstructions)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
 }
 
 func formatSessionEvents(events []messages.StreamMessage) string {

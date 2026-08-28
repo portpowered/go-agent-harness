@@ -647,6 +647,16 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	return outcome
 }
 
+// RequestResponse forwards the optional explicit response request while
+// preserving the capability boundary of replay and injected sessions.
+func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *observedSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
+}
+
 // SendMessage forwards the optional complete-message provider capability. The
 // observation wrapper embeds the stream-only public Session interface, so it
 // must preserve the rich tool-result path used by multimodal sessions.

@@ -159,6 +159,79 @@ func TestAgentsMDWorkspace_Golden(t *testing.T) {
 	})
 }
 
+func TestEnsureAgentsMD_ReconcilesAvailableToolsSection(t *testing.T) {
+	readFile := messages.ToolDefinition{
+		Name:        "read_file",
+		Description: "Read a UTF-8 file from the workspace.",
+	}
+	writeFile := messages.ToolDefinition{
+		Name:        "write_file",
+		Description: "Write text to a UTF-8 workspace file.",
+	}
+
+	t.Run("stale section becomes current and preserves surrounding content", func(t *testing.T) {
+		workspaceDir := t.TempDir()
+		stale := "customer before\n" +
+			"## Available Tools\n\n" +
+			"No tools are currently registered.\n" +
+			"### `write_file`\nold description\n" +
+			"## Customer Notes\ncustomer after\n"
+		writeAgentsMD(t, workspaceDir, stale)
+
+		if err := EnsureAgentsMD(workspaceDir, []messages.ToolDefinition{readFile}); err != nil {
+			t.Fatalf("EnsureAgentsMD: %v", err)
+		}
+		got := readAgentsMD(t, workspaceDir)
+		if !strings.HasPrefix(got, "customer before\n") {
+			t.Fatalf("content before managed section changed: %q", got)
+		}
+		if !strings.HasSuffix(got, "## Customer Notes\ncustomer after\n") {
+			t.Fatalf("content after managed section changed: %q", got)
+		}
+		if !strings.Contains(got, "### `read_file`\nRead a UTF-8 file from the workspace.") {
+			t.Fatalf("current tool definition missing: %q", got)
+		}
+		if strings.Contains(got, "No tools are currently registered.") || strings.Contains(got, "write_file") {
+			t.Fatalf("stale tool content remained: %q", got)
+		}
+		if strings.Count(got, availableToolsHeading) != 1 || strings.Count(got, availableToolsStartMarker) != 1 || strings.Count(got, availableToolsEndMarker) != 1 {
+			t.Fatalf("managed section markers are not unique: %q", got)
+		}
+	})
+
+	t.Run("same definitions are idempotent", func(t *testing.T) {
+		workspaceDir := t.TempDir()
+		writeAgentsMD(t, workspaceDir, generateAgentsMD(workspaceDir, []messages.ToolDefinition{readFile, writeFile}))
+
+		if err := EnsureAgentsMD(workspaceDir, []messages.ToolDefinition{readFile, writeFile}); err != nil {
+			t.Fatalf("first EnsureAgentsMD: %v", err)
+		}
+		first := readAgentsMD(t, workspaceDir)
+		if err := EnsureAgentsMD(workspaceDir, []messages.ToolDefinition{readFile, writeFile}); err != nil {
+			t.Fatalf("second EnsureAgentsMD: %v", err)
+		}
+		if got := readAgentsMD(t, workspaceDir); got != first {
+			t.Fatalf("same definitions changed AGENTS.md on repeat:\nfirst:\n%s\nsecond:\n%s", first, got)
+		}
+		if strings.Count(first, availableToolsHeading) != 1 || strings.Count(first, availableToolsStartMarker) != 1 || strings.Count(first, availableToolsEndMarker) != 1 {
+			t.Fatalf("repeated reconciliation duplicated managed section: %q", first)
+		}
+	})
+
+	t.Run("stale tool definitions are removed when no tools remain", func(t *testing.T) {
+		workspaceDir := t.TempDir()
+		writeAgentsMD(t, workspaceDir, generateAgentsMD(workspaceDir, []messages.ToolDefinition{readFile, writeFile}))
+
+		if err := EnsureAgentsMD(workspaceDir, nil); err != nil {
+			t.Fatalf("EnsureAgentsMD: %v", err)
+		}
+		got := readAgentsMD(t, workspaceDir)
+		if !strings.Contains(got, "No tools are currently registered.") || strings.Contains(got, "read_file") || strings.Contains(got, "write_file") {
+			t.Fatalf("zero-tool section is not current: %q", got)
+		}
+	})
+}
+
 func representativeToolDefinitions() []messages.ToolDefinition {
 	return []messages.ToolDefinition{
 		{

@@ -552,6 +552,42 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 	}
 }
 
+func TestConnectSession_SendsExplicitResponseCreate(t *testing.T) {
+	conn := newMockWebSocketConn()
+	dialer := &mockWebSocketDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	if !session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}) {
+		t.Fatal("Send explicit response request returned false")
+	}
+
+	clientMessages := waitForClientMessages(t, conn, 2)
+	var event struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(clientMessages[1], &event); err != nil {
+		t.Fatalf("unmarshal response event: %v", err)
+	}
+	if event.Type != string(models.SessionEventResponseCreate) {
+		t.Fatalf("event type = %q, want %q", event.Type, models.SessionEventResponseCreate)
+	}
+}
+
 func TestConnectSession_VADObservationsDoNotCreateAnOutboundTurnBoundary(t *testing.T) {
 	conn := newMockWebSocketConn()
 	conn.addServerEvent("input_audio_buffer.speech_started", nil)

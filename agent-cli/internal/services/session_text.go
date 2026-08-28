@@ -107,6 +107,16 @@ func (s *sessionTextSeedSession) Send(ctx context.Context, msg messages.StreamMe
 	return s.inner.Send(ctx, msg)
 }
 
+// RequestResponse forwards the optional explicit response capability while
+// leaving the text-seed replacement limited to the initial user turn.
+func (s *sessionTextSeedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.inner)
+}
+
+func (s *sessionTextSeedSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.inner)
+}
+
 func (s *sessionTextSeedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.inner.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)

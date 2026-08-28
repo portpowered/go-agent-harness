@@ -209,6 +209,7 @@ type cliLiveScheduledBoundaryServer struct {
 
 	sessionCreated        chan struct{}
 	sessionUpdatedRelease chan struct{}
+	sessionUpdateObserved chan struct{}
 	sessionCreatedOnce    sync.Once
 	releaseOnce           sync.Once
 
@@ -224,11 +225,12 @@ type cliLiveScheduledBoundaryServer struct {
 
 func newCLILiveScheduledBoundaryServer(delaySessionUpdated bool) *cliLiveScheduledBoundaryServer {
 	server := &cliLiveScheduledBoundaryServer{
-		responses:        make(chan int, 8),
-		events:           make(chan []byte, 64),
-		closed:           make(chan struct{}),
-		sessionCreated:   make(chan struct{}),
-		serverVADEnabled: true,
+		responses:             make(chan int, 8),
+		events:                make(chan []byte, 64),
+		closed:                make(chan struct{}),
+		sessionCreated:        make(chan struct{}),
+		sessionUpdateObserved: make(chan struct{}, 16),
+		serverVADEnabled:      true,
 	}
 	if delaySessionUpdated {
 		server.sessionUpdatedRelease = make(chan struct{})
@@ -311,6 +313,33 @@ func (s *cliLiveScheduledBoundaryServer) sessionUpdateSnapshot() json.RawMessage
 	return append(json.RawMessage(nil), s.sessionUpdates[0]...)
 }
 
+func (s *cliLiveScheduledBoundaryServer) sessionUpdatesSnapshot() []json.RawMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	updates := make([]json.RawMessage, len(s.sessionUpdates))
+	for index, update := range s.sessionUpdates {
+		updates[index] = append(json.RawMessage(nil), update...)
+	}
+	return updates
+}
+
+func (s *cliLiveScheduledBoundaryServer) waitForSessionUpdates(timeout time.Duration, ready func([]json.RawMessage) bool) bool {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		if ready(s.sessionUpdatesSnapshot()) {
+			return true
+		}
+		select {
+		case <-s.sessionUpdateObserved:
+		case <-deadline.C:
+			return false
+		case <-s.closed:
+			return false
+		}
+	}
+}
+
 func (s *cliLiveScheduledBoundaryServer) providerAutoCommitCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -373,7 +402,13 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 	switch envelope.Type {
 	case "session.update":
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
-		c.server.serverVADEnabled = scheduledServerVADEnabled(envelope.Session)
+		if enabled, present := scheduledServerVADSetting(envelope.Session); present {
+			c.server.serverVADEnabled = enabled
+		}
+		select {
+		case c.server.sessionUpdateObserved <- struct{}{}:
+		default:
+		}
 	case "input_audio_buffer.append":
 		c.server.turnHasAudio = true
 		if !c.server.turnObserved {
@@ -446,7 +481,7 @@ func closeChannelOnce(channel chan struct{}, once *sync.Once) {
 	once.Do(func() { close(channel) })
 }
 
-func scheduledServerVADEnabled(session json.RawMessage) bool {
+func scheduledServerVADSetting(session json.RawMessage) (bool, bool) {
 	var update struct {
 		Audio struct {
 			Input struct {
@@ -456,16 +491,16 @@ func scheduledServerVADEnabled(session json.RawMessage) bool {
 		TurnDetection json.RawMessage `json:"turn_detection"`
 	}
 	if err := json.Unmarshal(session, &update); err != nil {
-		return true
+		return true, false
 	}
 	detection := update.Audio.Input.TurnDetection
 	if len(detection) == 0 {
 		detection = update.TurnDetection
 	}
 	if len(detection) == 0 {
-		return true
+		return true, false
 	}
-	return !bytes.Equal(bytes.TrimSpace(detection), []byte("null"))
+	return !bytes.Equal(bytes.TrimSpace(detection), []byte("null")), true
 }
 
 func hasNonZeroPCM(audio []byte) bool {
@@ -494,6 +529,25 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
+	}
+	return agentCLI
+}
+
+func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
+	t.Helper()
+	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
+		oaiprovider.WithWebSocketDialer(server),
+		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
+	)
+	if err != nil {
+		t.Fatalf("create grounded hermetic OpenAI scheduled session inferencer: %v", err)
+	}
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
+	)
+	if err != nil {
+		t.Fatalf("initialize grounded production CLI: %v", err)
 	}
 	return agentCLI
 }
@@ -547,6 +601,138 @@ func scheduledBoundaryArgs(configDir, recordDir string, audioPaths ...string) []
 		args = append(args, "--audio-in-turn", path)
 	}
 	return args
+}
+
+// TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools
+// exercises the exact no-prompt command form that previously skipped the
+// instruction composition boundary. The production CLI graph owns the default
+// registry; only the OpenAI session transport is replaced by the hermetic
+// provider-shaped connection.
+func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t *testing.T) {
+	server := newCLILiveScheduledBoundaryServer(true)
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIGroundedScheduledBoundaryAgent(t, server)
+	configDir := t.TempDir()
+	recordDir := filepath.Join(t.TempDir(), "grounded-recording")
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs(scheduledBoundaryArgs(
+		configDir,
+		recordDir,
+		locateCLIFixture(t, "multiturn_turn1.wav"),
+	))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- rootCmd.ExecuteContext(ctx) }()
+
+	select {
+	case <-server.sessionCreated:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the no-prompt live SESSION.OPEN fixture")
+	}
+
+	timeline, _, _, _, _ := server.snapshots()
+	for _, event := range []string{"out:input_audio_buffer.append", "out:input_audio_buffer.commit", "out:response.create"} {
+		if containsTimeline(timeline, event) {
+			t.Fatalf("no-prompt scheduled audio crossed provider before configuration: %v", timeline)
+		}
+	}
+
+	groundedReady := server.waitForSessionUpdates(2*time.Second, func(updates []json.RawMessage) bool {
+		for _, raw := range updates {
+			var update struct {
+				Instructions string `json:"instructions"`
+				Tools        []struct {
+					Name string `json:"name"`
+				} `json:"tools"`
+			}
+			if json.Unmarshal(raw, &update) == nil && strings.Contains(update.Instructions, "Tool-grounding requirements:") && len(update.Tools) > 0 {
+				return true
+			}
+		}
+		return false
+	})
+	if !groundedReady {
+		timeline, _, _, _, _ := server.snapshots()
+		updates := server.sessionUpdatesSnapshot()
+		t.Fatalf("no-prompt scheduled route did not send a combined grounding/tool update; timeline=%v updates=%v", timeline, updates)
+	}
+
+	timeline, _, _, _, _ = server.snapshots()
+	updates := server.sessionUpdatesSnapshot()
+	groundedUpdateIndex := -1
+	for index, raw := range updates {
+		var update struct {
+			Instructions string `json:"instructions"`
+			Tools        []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		}
+		if err := json.Unmarshal(raw, &update); err != nil {
+			t.Fatalf("decode no-prompt scheduled session.update %d: %v", index, err)
+		}
+		if !strings.Contains(update.Instructions, "Tool-grounding requirements:") {
+			continue
+		}
+		if groundedUpdateIndex >= 0 {
+			t.Fatalf("no-prompt scheduled route sent grounding more than once: updates=%v", updates)
+		}
+		groundedUpdateIndex = index
+		if strings.Count(update.Instructions, "Tool-grounding requirements:") != 1 {
+			t.Fatalf("no-prompt grounding policy count = %d, want 1; instructions=%q", strings.Count(update.Instructions, "Tool-grounding requirements:"), update.Instructions)
+		}
+		if strings.Contains(update.Instructions, "No tools are currently registered") {
+			t.Fatalf("no-prompt grounding instructions contradict advertised tools: %q", update.Instructions)
+		}
+		advertised := make(map[string]bool, len(update.Tools))
+		for _, tool := range update.Tools {
+			advertised[tool.Name] = true
+		}
+		for _, name := range []string{"read_file", "exec"} {
+			if !advertised[name] {
+				t.Fatalf("no-prompt scheduled session.update omitted %q: %#v", name, update.Tools)
+			}
+		}
+	}
+	if groundedUpdateIndex < 0 {
+		t.Fatalf("no-prompt scheduled route sent no instruction-bearing tool update: %v", updates)
+	}
+	groundedWireIndex := indexOfTimeline(timeline, "out:session.update", groundedUpdateIndex)
+	if groundedWireIndex < 0 {
+		t.Fatalf("no-prompt grounding update is absent from outbound timeline: %v", timeline)
+	}
+	for _, event := range []string{"out:input_audio_buffer.append", "out:input_audio_buffer.commit", "out:response.create"} {
+		if eventIndex := indexOfTimeline(timeline, event, 0); eventIndex >= 0 && groundedWireIndex >= eventIndex {
+			t.Fatalf("grounding/tool session.update index=%d does not precede %s index=%d: %v", groundedWireIndex, event, eventIndex, timeline)
+		}
+	}
+
+	server.releaseSessionUpdated()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("no-prompt production CLI session error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no-prompt production CLI session did not complete")
+	}
+
+	timeline, _, providerErrors, _, serverVADEnabled := server.snapshots()
+	if len(providerErrors) != 0 {
+		t.Fatalf("no-prompt provider errors = %v; timeline=%v", providerErrors, timeline)
+	}
+	if serverVADEnabled {
+		t.Fatalf("no-prompt scheduled session left server VAD enabled: %v", timeline)
+	}
+	firstAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 0)
+	firstCommit := indexOfTimeline(timeline, "out:input_audio_buffer.commit", 0)
+	firstResponse := indexOfTimeline(timeline, "out:response.create", 0)
+	if firstAppend < 0 || firstCommit < 0 || firstResponse < 0 || !(groundedWireIndex < firstAppend && groundedWireIndex < firstCommit && groundedWireIndex < firstResponse) {
+		t.Fatalf("no-prompt configuration did not precede the first spoken turn: update=%d append=%d commit=%d response=%d timeline=%v", groundedWireIndex, firstAppend, firstCommit, firstResponse, timeline)
+	}
 }
 
 func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) {

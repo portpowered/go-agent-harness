@@ -15,9 +15,11 @@ import (
 )
 
 var (
-	_ messages.Session                  = (*grokSession)(nil)
-	_ messages.SessionSendOutcomeSender = (*grokSession)(nil)
-	_ messages.SessionDropCounters      = (*grokSession)(nil)
+	_ messages.Session                   = (*grokSession)(nil)
+	_ messages.SessionSendOutcomeSender  = (*grokSession)(nil)
+	_ messages.SessionResponseRequester  = (*grokSession)(nil)
+	_ messages.SessionResponseCapability = (*grokSession)(nil)
+	_ messages.SessionDropCounters       = (*grokSession)(nil)
 )
 
 // grokSession wraps a WebSocket connection as a bidirectional StreamMessage session.
@@ -87,6 +89,18 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 	}
 	return s.sendEvents(ctx, events)
 }
+
+// RequestResponse starts a response without adding another user turn. This is
+// needed when a tool result follows an audio-only input, whose history has no
+// text event that can request the continuation.
+func (s *grokSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return s.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	})
+}
+
+func (*grokSession) SupportsResponseRequests() bool { return true }
 
 func (s *grokSession) sendEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
 	select {

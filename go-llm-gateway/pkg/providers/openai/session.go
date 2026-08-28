@@ -13,9 +13,11 @@ import (
 )
 
 var (
-	_ messages.Session                  = (*realtimeSession)(nil)
-	_ messages.SessionSendOutcomeSender = (*realtimeSession)(nil)
-	_ messages.SessionDropCounters      = (*realtimeSession)(nil)
+	_ messages.Session                   = (*realtimeSession)(nil)
+	_ messages.SessionSendOutcomeSender  = (*realtimeSession)(nil)
+	_ messages.SessionResponseRequester  = (*realtimeSession)(nil)
+	_ messages.SessionResponseCapability = (*realtimeSession)(nil)
+	_ messages.SessionDropCounters       = (*realtimeSession)(nil)
 )
 
 type realtimeSession struct {
@@ -65,6 +67,18 @@ func (s *realtimeSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	}
 	return s.sendEvents(ctx, events)
 }
+
+// RequestResponse starts a response without adding another user turn. This is
+// needed when a tool result follows an audio-only input, whose history has no
+// text event that can request the continuation.
+func (s *realtimeSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return s.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	})
+}
+
+func (*realtimeSession) SupportsResponseRequests() bool { return true }
 
 func (s *realtimeSession) sendEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
 	select {

@@ -11,6 +11,8 @@ questions, reason through problems, and use tools to interact with the host syst
 
 ## Available Tools
 
+<!-- BEGIN AGENT CLI MANAGED AVAILABLE TOOLS -->
+
 ### `read_file`
 Read a UTF-8 file from the workspace.
 
@@ -21,6 +23,8 @@ Write text to a UTF-8 workspace file.
 |-----------|------|----------|-------------|
 | `path` | string | yes | Workspace-relative path. |
 | `content` | string | no | Bytes to write. |
+
+<!-- END AGENT CLI MANAGED AVAILABLE TOOLS -->
 
 ## Configuration
 

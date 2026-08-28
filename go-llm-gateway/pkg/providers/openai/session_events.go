@@ -175,6 +175,14 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			models.NewAudioBufferCommitEvent(),
 			models.NewResponseCreateEvent(),
 		}, true
+	case messages.StreamTypeResponseCreate:
+		// Tool results are delivered as conversation items without a response
+		// request. Audio-only turns have no user text event to trigger the
+		// continuation, so the model runner sends this explicit control event.
+		if v, ok := msg.Value.(*messages.ResponseCreateValue); !ok || v == nil {
+			return nil, false
+		}
+		return []models.SessionEvent{models.NewResponseCreateEvent()}, true
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)
 		if !ok || v == nil {
@@ -193,6 +201,29 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			{Type: conversationItemCreateEvent, Data: data},
 			models.NewResponseCreateEvent(),
 		}, true
+	case messages.StreamTypeSessionUpdate:
+		v, ok := msg.Value.(*messages.SessionUpdateValue)
+		if !ok || v == nil {
+			return nil, false
+		}
+		update := map[string]any{}
+		if v.Model != "" {
+			update["model"] = v.Model
+		}
+		if v.Instructions != "" {
+			update["instructions"] = v.Instructions
+		}
+		if len(v.Modalities) > 0 {
+			update["output_modalities"] = append([]string(nil), v.Modalities...)
+		}
+		if len(v.Tools) > 0 {
+			update["tools"] = realtimeToolsToParams(v.Tools)
+		}
+		data, err := json.Marshal(map[string]any{"session": update})
+		if err != nil {
+			return nil, false
+		}
+		return []models.SessionEvent{models.NewSessionUpdateEvent(data)}, true
 	case messages.StreamTypeToolCallEnd:
 		// Tool result: send as conversation.item.create with a
 		// function_call_output item so the model observes what its tool

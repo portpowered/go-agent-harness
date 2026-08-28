@@ -163,7 +163,7 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	if err := validateSessionAudioInput(input); err != nil {
 		return err
 	}
-	if systemPrompt == "" || (opts.ReplayPath != "" && opts.SessionInferencer == nil) {
+	if opts.ReplayPath != "" && (opts.SessionInferencer == nil || strings.TrimSpace(systemPrompt) == "") {
 		return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, func() (sessionRuntimePlan, error) {
 			if err := validateSessionRunOptions(opts); err != nil {
 				return sessionRuntimePlan{}, err

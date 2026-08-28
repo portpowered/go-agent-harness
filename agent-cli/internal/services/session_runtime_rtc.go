@@ -151,7 +151,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inner, err = factory.newOpenAISessionInf(sessionCfg, opts.Voice, recordingDialer)
+		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false)
 		if err != nil {
 			return closeOnPlanError(err)
 		}
@@ -174,7 +174,7 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inner, err = factory.newGrokSessionInferencer(sessionCfg, recordingDialer)
+		inner, err = factory.newGrokSessionInferencerForTools(sessionCfg, recordingDialer, opts.ToolDefinitions)
 		if err != nil {
 			return closeOnPlanError(err)
 		}
@@ -478,6 +478,7 @@ type sessionRTCRuntimeSession struct {
 
 var _ messages.Session = (*sessionRTCRuntimeSession)(nil)
 var _ messages.SessionSendOutcomeSender = (*sessionRTCRuntimeSession)(nil)
+var _ messages.SessionResponseRequester = (*sessionRTCRuntimeSession)(nil)
 var _ messages.SessionDropCounters = (*sessionRTCRuntimeSession)(nil)
 
 func (s *sessionRTCRuntimeSession) TerminalError() error {
@@ -485,6 +486,17 @@ func (s *sessionRTCRuntimeSession) TerminalError() error {
 		return nil
 	}
 	return terminalSessionError(s.Session)
+}
+
+func (s *sessionRTCRuntimeSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if s == nil || s.Session == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *sessionRTCRuntimeSession) SupportsResponseRequests() bool {
+	return s != nil && messages.SupportsSessionResponseRequests(s.Session)
 }
 
 func (s *sessionRTCRuntimeSession) SendMessage(ctx context.Context, msg messages.Message) bool {

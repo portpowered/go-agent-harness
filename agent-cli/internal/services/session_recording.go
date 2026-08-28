@@ -200,6 +200,10 @@ func runSessionWithImagesAndRecordingDirectory(
 		plan.loop.CloseAfterOpen = false
 		plan.loop.AudioIn = audioSource
 		plan.loop.MaxDuration = opts.MaxDuration
+		// A finite image-plus-audio source can produce an intermediate provider
+		// response containing a tool call. Keep the session open through the
+		// tool result and the follow-up assistant response.
+		plan.loop.RequireAssistantResponse = true
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
 	if plan.inferencer != nil {
@@ -265,6 +269,11 @@ func runSessionWithRecordingDirectory(
 		plan.loop.CloseAfterOpen = false
 		plan.loop.AudioIn = audioSource
 		plan.loop.MaxDuration = maxDuration
+		// A finite audio source can produce an intermediate provider response
+		// containing a tool call. Keep the session open through the tool result
+		// and the follow-up assistant response before treating MESSAGE.END as
+		// terminal.
+		plan.loop.RequireAssistantResponse = true
 		audioSource.bindRuntime(plan.runtime)
 	}
 
@@ -623,6 +632,23 @@ func (s *sessionDirectoryRecordingSession) SendWithOutcome(ctx context.Context, 
 		s.recording.observePayloadLocked(msg, payload, audio, err, true)
 	}
 	return outcome
+}
+
+// RequestResponse preserves the optional provider capability through the
+// recording wrapper. Replay sessions intentionally do not expose it, so old
+// captures remain valid without an unrecorded response.create expectation.
+func (s *sessionDirectoryRecordingSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if !messages.SupportsSessionResponseRequests(s.inner) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+	}
+	return s.SendWithOutcome(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	})
+}
+
+func (s *sessionDirectoryRecordingSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.inner)
 }
 
 func (s *sessionDirectoryRecordingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {

@@ -144,6 +144,14 @@ type rtcDeviceBoundSession struct {
 	binding *RTCDeviceBinding
 }
 
+func (s *rtcDeviceBoundSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *rtcDeviceBoundSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
+}
+
 func (s *rtcDeviceBoundSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)

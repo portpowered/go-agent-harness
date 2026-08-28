@@ -33,6 +33,23 @@ type SessionSendOutcomeSender interface {
 	SendWithOutcome(ctx context.Context, msg StreamMessage) SessionSendOutcome
 }
 
+// SessionResponseRequester is an optional session capability for requesting a
+// response without adding another user message or committing an input buffer.
+// It is used for audio-only tool continuations; sessions that do not expose
+// this capability, such as legacy replay fixtures, retain their existing wire
+// traffic.
+type SessionResponseRequester interface {
+	RequestResponse(ctx context.Context) SessionSendOutcome
+}
+
+// SessionResponseCapability reports whether an optional response request can
+// reach the underlying provider. Decorators implement this recursively so a
+// legacy replay session is not mistaken for a live-capable session merely
+// because an outer wrapper has the forwarding method.
+type SessionResponseCapability interface {
+	SupportsResponseRequests() bool
+}
+
 // SendSessionWithOutcome sends msg and returns a typed outcome. Sessions that
 // implement SessionSendOutcomeSender provide authoritative closed, buffer-full,
 // and terminal-failure states. Bool-only sessions are adapted for compatibility:
@@ -47,6 +64,31 @@ func SendSessionWithOutcome(ctx context.Context, session Session, msg StreamMess
 		return SessionSendOutcome{Status: SessionSendSucceeded}
 	}
 	return sessionSendContextOrFailure(ctx)
+}
+
+// RequestSessionResponse asks a session that supports the optional response
+// request capability to start the next response. Unsupported sessions return
+// a terminal failure without sending a new stream message.
+func RequestSessionResponse(ctx context.Context, session Session) SessionSendOutcome {
+	if !SupportsSessionResponseRequests(session) {
+		return SessionSendOutcome{Status: SessionSendTerminalFailure}
+	}
+	requester, ok := session.(SessionResponseRequester)
+	if !ok {
+		return SessionSendOutcome{Status: SessionSendTerminalFailure}
+	}
+	return requester.RequestResponse(ctx)
+}
+
+// SupportsSessionResponseRequests reports whether session exposes a response
+// request capability and, for decorated sessions, whether it reaches a live
+// provider rather than a replay fixture.
+func SupportsSessionResponseRequests(session Session) bool {
+	if capability, ok := session.(SessionResponseCapability); ok {
+		return capability.SupportsResponseRequests()
+	}
+	_, ok := session.(SessionResponseRequester)
+	return ok
 }
 
 func sessionSendContextOrFailure(ctx context.Context) SessionSendOutcome {

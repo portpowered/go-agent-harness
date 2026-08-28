@@ -183,6 +183,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	plan.loop.CloseAfterOpen = false
 	plan.loop.AudioIn = audioSource
 	plan.loop.MaxDuration = opts.MaxDuration
+	plan.loop.RequireAssistantResponse = true
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
@@ -192,7 +193,7 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 		err          error
 		instructions string
 	)
-	if opts.SessionInferencer != nil || opts.ReplayPath != "" {
+	if opts.ReplayPath != "" {
 		plan, err = planSessionRuntime(opts)
 	} else {
 		instructions, err = resolveSessionInstructions(opts, systemPrompt)
@@ -467,6 +468,16 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 	}
 	s.signalFirstTurn(false)
 	return false
+}
+
+// RequestResponse forwards the optional explicit response capability after a
+// tool result when the image-turn wrapper has no user text to send.
+func (s *sessionImageSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	return messages.RequestSessionResponse(ctx, s.Session)
+}
+
+func (s *sessionImageSession) SupportsResponseRequests() bool {
+	return messages.SupportsSessionResponseRequests(s.Session)
 }
 
 // SendMessage forwards the optional complete-message capability of the

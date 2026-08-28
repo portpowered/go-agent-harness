@@ -75,6 +75,7 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
+	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
 	return sessionRuntimePlan{
 		mode:       sessionRuntimeModeReplayGrok,
 		provider:   sessionProviderGrok,

@@ -11,7 +11,11 @@ questions, reason through problems, and use tools to interact with the host syst
 
 ## Available Tools
 
+<!-- BEGIN AGENT CLI MANAGED AVAILABLE TOOLS -->
 No tools are currently registered.
+
+<!-- END AGENT CLI MANAGED AVAILABLE TOOLS -->
+
 ## Configuration
 
 Configuration is loaded from `<workspace>/config.yaml`.
