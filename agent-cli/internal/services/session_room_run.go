@@ -125,7 +125,7 @@ func observeRoomParticipantStream(
 		if target == nil || target.mixer == nil {
 			continue
 		}
-		if writeErr := target.mixer.Write(plan.manifest.ID, pcm); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
+		if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
 		}
 	}

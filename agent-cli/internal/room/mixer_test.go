@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -119,6 +120,131 @@ func TestPCM16MixerCancellationUnblocksReadFrame(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerWriteContextCancellationPreservesQueuedPCM(t *testing.T) {
+	mixer, frameBytes := newFullInputMixer(t)
+	defer mixer.Close()
+	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+		t.Fatalf("fill input: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	writeDone := make(chan error, 1)
+	go func() {
+		writeDone <- mixer.WriteContext(ctx, "alpha", pcm16(7))
+	}()
+	select {
+	case err := <-writeDone:
+		t.Fatalf("blocked write returned before cancellation: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-writeDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled write = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled write remained blocked")
+	}
+	if got := mixer.Stats().Inputs["alpha"].Bytes; got != frameBytes {
+		t.Fatalf("queued bytes after cancelled write = %d, want %d", got, frameBytes)
+	}
+}
+
+func TestPCM16MixerBlockedWriteUnblocksOnClose(t *testing.T) {
+	mixer, frameBytes := newFullInputMixer(t)
+	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+		t.Fatalf("fill input: %v", err)
+	}
+	writeDone := make(chan error, 1)
+	go func() {
+		writeDone <- mixer.Write("alpha", pcm16(8))
+	}()
+	select {
+	case err := <-writeDone:
+		t.Fatalf("blocked write returned before close: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := mixer.Close(); err != nil {
+		t.Fatalf("close mixer: %v", err)
+	}
+	select {
+	case err := <-writeDone:
+		if !errors.Is(err, ErrMixerClosed) {
+			t.Fatalf("write after close = %v, want ErrMixerClosed", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close did not unblock write")
+	}
+}
+
+func TestPCM16MixerBlockedWriteUnblocksOnInputRemoval(t *testing.T) {
+	mixer, frameBytes := newFullInputMixer(t)
+	defer mixer.Close()
+	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+		t.Fatalf("fill input: %v", err)
+	}
+	writeDone := make(chan error, 1)
+	go func() {
+		writeDone <- mixer.Write("alpha", pcm16(9))
+	}()
+	select {
+	case err := <-writeDone:
+		t.Fatalf("blocked write returned before input removal: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := mixer.RemoveInput("alpha"); err != nil {
+		t.Fatalf("remove input: %v", err)
+	}
+	select {
+	case err := <-writeDone:
+		if !errors.Is(err, ErrMixerInputMissing) {
+			t.Fatalf("write after input removal = %v, want ErrMixerInputMissing", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("input removal did not unblock write")
+	}
+}
+
+func TestPCM16MixerBlockedWriteUnblocksOnInternalFailure(t *testing.T) {
+	mixer, frameBytes := newFullInputMixer(t)
+	defer mixer.Close()
+	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+		t.Fatalf("fill input: %v", err)
+	}
+	failure := errors.New("test mixer failure")
+	writeDone := make(chan error, 1)
+	go func() {
+		writeDone <- mixer.Write("alpha", pcm16(10))
+	}()
+	select {
+	case err := <-writeDone:
+		t.Fatalf("blocked write returned before internal failure: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	mixer.setError(failure)
+	select {
+	case err := <-writeDone:
+		if !errors.Is(err, failure) {
+			t.Fatalf("write after internal failure = %v, want %v", err, failure)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("internal failure did not unblock write")
+	}
+}
+
+func TestPCM16MixerRejectsChunkLargerThanBoundedQueue(t *testing.T) {
+	mixer, frameBytes := newFullInputMixer(t)
+	defer mixer.Close()
+	oversized := make([]byte, frameBytes+2)
+	if err := mixer.WriteContext(context.Background(), "alpha", oversized); !errors.Is(err, ErrMixerInputBufferFull) {
+		t.Fatalf("oversized write = %v, want ErrMixerInputBufferFull", err)
+	}
+	if got := mixer.Stats().Inputs["alpha"].Bytes; got != 0 {
+		t.Fatalf("queued bytes after oversized write = %d, want 0", got)
+	}
+}
+
 func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
 	format := DefaultPCM16Format()
 	frameBytes, err := format.FrameBytes()
@@ -220,32 +346,49 @@ func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
 
 		firstFrame := make(chan struct{})
 		releaseDownstream := make(chan struct{})
-		readErr := make(chan error, 1)
+		releaseOnce := sync.Once{}
+		type readResult struct {
+			pcm []byte
+			err error
+		}
+		readResultCh := make(chan readResult, 1)
+		allFrames := providerDeltas * providerFrames
 		go func() {
-			frame, frameErr := mixer.ReadFrame(ctx)
-			if frameErr != nil {
-				readErr <- frameErr
-				return
+			got := make([]byte, 0, allFrames*frameBytes)
+			for frameIndex := 0; frameIndex < allFrames; frameIndex++ {
+				frame, frameErr := mixer.ReadFrame(ctx)
+				if frameErr != nil {
+					readResultCh <- readResult{err: frameErr}
+					return
+				}
+				if len(frame) != frameBytes {
+					readResultCh <- readResult{err: errors.New("mixer emitted an invalid frame size")}
+					return
+				}
+				got = append(got, frame...)
+				if frameIndex == 0 {
+					close(firstFrame)
+					// This represents a room pump blocked in session ingestion after
+					// it consumed one frame from the mixer's output queue.
+					<-releaseDownstream
+				}
 			}
-			if len(frame) != frameBytes {
-				readErr <- errors.New("mixer emitted an invalid frame size")
-				return
-			}
-			close(firstFrame)
-			// This represents a room pump blocked in session ingestion after
-			// it consumed one frame from the mixer's output queue.
-			<-releaseDownstream
-			readErr <- nil
+			readResultCh <- readResult{pcm: got}
 		}()
-		defer close(releaseDownstream)
+		released := false
+		defer func() {
+			if !released {
+				releaseOnce.Do(func() { close(releaseDownstream) })
+			}
+		}()
 
 		if err := mixer.Write("alpha", providerPCM16Delta(0, providerDeltaBytes)); err != nil {
 			t.Fatalf("first provider delta: %v", err)
 		}
 		select {
 		case <-firstFrame:
-		case err := <-readErr:
-			t.Fatalf("receive first output frame: %v", err)
+		case result := <-readResultCh:
+			t.Fatalf("receive first output frame: %v", result.err)
 		case <-ctx.Done():
 			t.Fatalf("receive first output frame: %v", ctx.Err())
 		}
@@ -254,32 +397,86 @@ func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
 			return stats.Output.Frames == stats.Output.CapacityFrames && stats.Inputs["alpha"].Frames > 0
 		})
 
-		var overflowErr error
-		for delta := 1; delta < providerDeltas+3; delta++ {
-			time.Sleep(providerCadence)
-			overflowErr = mixer.Write("alpha", providerPCM16Delta(delta, providerDeltaBytes))
-			stats := mixer.Stats()
-			inputStats := stats.Inputs["alpha"]
-			t.Logf("stalled delta=%d input=%s/%s output=%s/%s write_error=%v", delta, inputStats.Duration, inputStats.CapacityDuration, stats.Output.Duration, stats.Output.CapacityDuration, overflowErr)
-			if errors.Is(overflowErr, ErrMixerInputBufferFull) {
-				break
-			}
-			if overflowErr != nil {
-				t.Fatalf("provider delta %d: %v", delta, overflowErr)
-			}
+		// Keep the provider-shaped 400 ms arrival cadence while the downstream
+		// consumer is stalled. The first additional delta still fits in the
+		// bounded input queue; the next one must wait rather than be rejected.
+		time.Sleep(providerCadence)
+		if err := mixer.Write("alpha", providerPCM16Delta(1, providerDeltaBytes)); err != nil {
+			t.Fatalf("provider delta 1: %v", err)
 		}
-		if !errors.Is(overflowErr, ErrMixerInputBufferFull) {
-			t.Fatalf("stalled downstream never exposed input pressure: %v", overflowErr)
+		time.Sleep(providerCadence)
+		writeDone := make(chan error, 1)
+		go func() {
+			writeDone <- mixer.WriteContext(ctx, "alpha", providerPCM16Delta(2, providerDeltaBytes))
+		}()
+		select {
+		case err := <-writeDone:
+			t.Fatalf("stalled provider delta returned before downstream release: %v", err)
+		case <-time.After(100 * time.Millisecond):
 		}
+
 		stats := mixer.Stats()
 		inputStats := stats.Inputs["alpha"]
+		t.Logf("stalled input=%s/%s output=%s/%s; provider delta 2 is waiting", inputStats.Duration, inputStats.CapacityDuration, stats.Output.Duration, stats.Output.CapacityDuration)
 		if stats.Output.Frames != stats.Output.CapacityFrames {
 			t.Fatalf("output queue recovered unexpectedly: %+v", stats.Output)
 		}
 		if inputStats.Duration < 600*time.Millisecond {
 			t.Fatalf("input occupancy = %s, want accumulated burst backlog", inputStats.Duration)
 		}
+
+		releaseOnce.Do(func() { close(releaseDownstream) })
+		released = true
+		select {
+		case err := <-writeDone:
+			if err != nil {
+				t.Fatalf("provider delta 2 after downstream recovery: %v", err)
+			}
+		case <-ctx.Done():
+			t.Fatalf("provider delta 2 remained blocked after downstream recovery: %v", ctx.Err())
+		}
+		var result readResult
+		select {
+		case result = <-readResultCh:
+		case <-ctx.Done():
+			t.Fatalf("drain provider-shaped output after downstream recovery: %v", ctx.Err())
+		}
+		if result.err != nil {
+			t.Fatalf("drain provider-shaped output after downstream recovery: %v", result.err)
+		}
+		want := make([]byte, 0, allFrames*frameBytes)
+		for delta := 0; delta < providerDeltas; delta++ {
+			want = append(want, providerPCM16Delta(delta, providerDeltaBytes)...)
+		}
+		if !bytes.Equal(result.pcm, want) {
+			t.Fatalf("recovered downstream changed PCM ordering: got %d bytes, want %d", len(result.pcm), len(want))
+		}
+		stats = mixer.Stats()
+		inputStats = stats.Inputs["alpha"]
+		if inputStats.Duration > inputStats.CapacityDuration || stats.Output.Duration > stats.Output.CapacityDuration {
+			t.Fatalf("queue occupancy exceeded capacity after recovery: %+v", stats)
+		}
+		if errors.Is(mixer.Err(), ErrMixerInputBufferFull) {
+			t.Fatalf("mixer recorded input overflow after bounded backpressure: %v", mixer.Err())
+		}
 	})
+}
+
+func newFullInputMixer(t *testing.T) (*PCM16Mixer, int) {
+	t.Helper()
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: time.Second},
+		InputQueueFrames:  1,
+		OutputQueueFrames: 1,
+	})
+	if err != nil {
+		t.Fatalf("new mixer: %v", err)
+	}
+	if err := mixer.AddInput("alpha"); err != nil {
+		mixer.Close()
+		t.Fatalf("add input: %v", err)
+	}
+	return mixer, mixer.FrameBytes()
 }
 
 func waitForMixerStats(t *testing.T, mixer *PCM16Mixer, predicate func(PCM16MixerStats) bool) PCM16MixerStats {

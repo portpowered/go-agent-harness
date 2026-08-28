@@ -19,12 +19,15 @@ var (
 	ErrMixerInputExists = errors.New("PCM16 mixer input already exists")
 	// ErrMixerInputMissing means that an input ID is not registered.
 	ErrMixerInputMissing = errors.New("PCM16 mixer input is not registered")
-	// ErrMixerInputBufferFull means that accepting a write would require
-	// dropping samples. Callers should treat it as an unrecoverable mixer
-	// failure instead of silently losing audio.
+	// ErrMixerInputBufferFull means that a single write is larger than the
+	// mixer's entire bounded input queue. Writes that are larger than current
+	// free capacity but fit in the queue wait for space instead of returning
+	// this error or dropping audio.
 	ErrMixerInputBufferFull = errors.New("PCM16 mixer input buffer is full")
-	// ErrMixerOutputBackpressure means that the bounded output queue could not
-	// keep up. No frame is discarded before this error is reported.
+	// ErrMixerOutputBackpressure identifies output pressure for callers that
+	// classify mixer failures. Ordinary output saturation is propagated to
+	// writers through bounded input backpressure rather than returned as an
+	// error or used to discard a frame.
 	ErrMixerOutputBackpressure = errors.New("PCM16 mixer output queue is full")
 	// ErrMixerInvalidFormat means that a mixer format cannot produce aligned
 	// PCM16 frames.
@@ -165,6 +168,7 @@ type PCM16Mixer struct {
 
 	mu        sync.Mutex
 	inputs    map[string]*pcm16MixerInput
+	writeWake chan struct{}
 	closed    bool
 	err       error
 	closeOnce sync.Once
@@ -210,6 +214,7 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 		cancel:       cancel,
 		out:          make(chan []byte, config.OutputQueueFrames),
 		inputs:       make(map[string]*pcm16MixerInput),
+		writeWake:    make(chan struct{}),
 		done:         make(chan struct{}),
 	}
 	go mixer.run()
@@ -320,14 +325,34 @@ func (m *PCM16Mixer) RemoveInput(inputID string) error {
 		return fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
 	}
 	delete(m.inputs, inputID)
+	m.signalWritersLocked()
 	return nil
 }
 
-// Write appends an even-byte PCM16 chunk to one active input. It never
-// partially accepts a chunk, so an error cannot create a dropped prefix.
+// Write appends an even-byte PCM16 chunk to one active input. It waits for
+// bounded capacity when necessary and never partially accepts a chunk, so
+// an error cannot create a dropped prefix. The mixer lifecycle is the
+// cancellation context for this compatibility method; use WriteContext
+// when the caller also owns a cancellation boundary.
 func (m *PCM16Mixer) Write(inputID string, pcm []byte) error {
+	return m.WriteContext(context.Background(), inputID, pcm)
+}
+
+// WriteContext appends a complete even-byte PCM16 chunk to one active input.
+// If the chunk fits in the bounded input queue but current capacity is
+// unavailable, it waits until the cadence drain frees space, ctx is canceled,
+// the input is removed, or the mixer shuts down. A chunk larger than the
+// entire queue is rejected immediately because it can never be accepted
+// atomically without an unbounded or partial write.
+func (m *PCM16Mixer) WriteContext(ctx context.Context, inputID string, pcm []byte) error {
 	if m == nil {
 		return ErrMixerClosed
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if len(pcm) == 0 {
 		return nil
@@ -339,28 +364,64 @@ func (m *PCM16Mixer) Write(inputID string, pcm []byte) error {
 	if err != nil {
 		return err
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return ErrMixerClosed
+
+	for {
+		m.mu.Lock()
+		if m.closed {
+			m.mu.Unlock()
+			return ErrMixerClosed
+		}
+		if m.err != nil {
+			err := m.err
+			m.mu.Unlock()
+			return err
+		}
+		if err := m.ctx.Err(); err != nil {
+			m.mu.Unlock()
+			return err
+		}
+		input, exists := m.inputs[inputID]
+		if !exists {
+			m.mu.Unlock()
+			return fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
+		}
+		if len(pcm) > m.maxInputSize {
+			m.mu.Unlock()
+			return fmt.Errorf("%w: input %q write is %d bytes but queue capacity is %d bytes", ErrMixerInputBufferFull, inputID, len(pcm), m.maxInputSize)
+		}
+		if err := ctx.Err(); err != nil {
+			m.mu.Unlock()
+			return err
+		}
+		if len(pcm) <= m.maxInputSize-len(input.data) {
+			input.data = append(input.data, pcm...)
+			m.mu.Unlock()
+			return nil
+		}
+		wake := m.writeWake
+		m.mu.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.ctx.Done():
+			return m.writeTerminationError()
+		case <-wake:
+		}
 	}
-	input, exists := m.inputs[inputID]
-	if !exists {
-		return fmt.Errorf("%w: %q", ErrMixerInputMissing, inputID)
-	}
-	if len(pcm) > m.maxInputSize-len(input.data) {
-		return fmt.Errorf("%w: input %q cannot buffer %d bytes", ErrMixerInputBufferFull, inputID, len(pcm))
-	}
-	input.data = append(input.data, pcm...)
-	return nil
 }
 
 // Write is the io.Writer-compatible spelling for a scoped input.
 func (i *PCM16Input) Write(pcm []byte) (int, error) {
+	return i.WriteContext(context.Background(), pcm)
+}
+
+// WriteContext is the cancellation-aware spelling for a scoped input.
+func (i *PCM16Input) WriteContext(ctx context.Context, pcm []byte) (int, error) {
 	if i == nil || i.mixer == nil {
 		return 0, ErrMixerClosed
 	}
-	if err := i.mixer.Write(i.id, pcm); err != nil {
+	if err := i.mixer.WriteContext(ctx, i.id, pcm); err != nil {
 		return 0, err
 	}
 	return len(pcm), nil
@@ -440,6 +501,7 @@ func (m *PCM16Mixer) Close() error {
 	m.closeOnce.Do(func() {
 		m.mu.Lock()
 		m.closed = true
+		m.signalWritersLocked()
 		m.mu.Unlock()
 		m.cancel()
 		<-m.done
@@ -506,6 +568,9 @@ func (m *PCM16Mixer) mixFrame() ([]byte, error) {
 			input.data = input.data[:len(input.data)-take]
 		}
 	}
+	if len(ids) > 0 {
+		m.signalWritersLocked()
+	}
 	for index, sample := range accumulated {
 		if sample > 32767 {
 			sample = 32767
@@ -524,8 +589,36 @@ func (m *PCM16Mixer) setError(err error) {
 	m.mu.Lock()
 	if m.err == nil {
 		m.err = err
+		m.signalWritersLocked()
 	}
 	m.mu.Unlock()
+}
+
+// signalWritersLocked wakes every writer that observed the previous input
+// occupancy. Replacing the channel lets a writer safely go back to sleep
+// without missing a signal that happened between its unlock and select.
+func (m *PCM16Mixer) signalWritersLocked() {
+	if m.writeWake == nil {
+		m.writeWake = make(chan struct{})
+		return
+	}
+	close(m.writeWake)
+	m.writeWake = make(chan struct{})
+}
+
+func (m *PCM16Mixer) writeTerminationError() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
+	if m.closed {
+		return ErrMixerClosed
+	}
+	if err := m.ctx.Err(); err != nil {
+		return err
+	}
+	return ErrMixerClosed
 }
 
 func (m *PCM16Mixer) queueStats(queuedBytes, capacityBytes int) PCM16QueueStats {

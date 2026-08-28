@@ -20,16 +20,16 @@ frames provide 800 ms of storage and four output frames provide 80 ms of
 output buffering. The normal case consumes each output frame promptly and
 delivers the exact concatenated PCM bytes in order.
 
-## Pressure ownership
+## Pressure ownership before the fix
 
 The controlled slow-consumer case reads the first mixed frame and then blocks
 at the simulated session-ingestion boundary. The output queue reaches its
 four-frame limit first. The mixer cadence goroutine then blocks trying to put
 the next frame on that queue, so it stops draining input. The source's first
 two complete provider deltas accumulate in the input queue; the next complete
-delta observes `ErrMixerInputBufferFull`. This distinguishes downstream/session
-ingestion blockage from a provider burst that a healthy 20 ms drain cannot
-handle.
+delta observes `ErrMixerInputBufferFull` with the pre-fix synchronous writer.
+This distinguishes downstream/session-ingestion blockage from a provider burst
+that a healthy 20 ms drain cannot handle.
 
 The production default of 250 input frames is five seconds of audio. The trace
 shows why increasing that limit alone is not a fix: a stalled output consumer
@@ -50,5 +50,11 @@ or cancellation rather than being hidden by a larger queue.
 
 The trace establishes the one-delta/400 ms shape and an 80 ms output-queue
 window; it does not claim support for an unmeasured larger burst or jitter
-window. The next implementation story owns the cancellation-aware wait at the
-input boundary while retaining these queue-duration diagnostics.
+window. The delivered mixer retains the five-second input and 160 ms output
+safety bounds and owns temporary pressure with a whole-chunk,
+cancellation-aware wait at the input boundary. `ErrMixerInputBufferFull` is
+reserved for a chunk larger than the entire input queue, which cannot be
+accepted atomically without an unbounded allocation or an unreported partial
+write. The room fan-out passes the source participant context to that wait;
+participant removal, mixer close, internal failure, and room cancellation wake
+the writer and preserve the corresponding terminal outcome.
