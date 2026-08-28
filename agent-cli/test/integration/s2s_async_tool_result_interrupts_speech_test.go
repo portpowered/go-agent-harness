@@ -1,24 +1,22 @@
 package integration
 
-// s2s async-tool-result collision vertical: CLI-verified hermetic (T1) proof
-// that an outstanding provider tool call can overlap a later response's
-// streamed audio without losing the local result, changing the audio bytes,
-// or wedging session teardown.
+// s2s async-tool-result serialization vertical: CLI-verified hermetic proof
+// that a scheduled spoken turn waits for an outstanding provider tool call's
+// accepted result and grounded continuation before its own audio reaches the
+// provider, without losing the local result or wedging session teardown.
 //
 // The replay transport is deliberately gated at the supported websocket
-// dialer seam. The real CLI schedules one first audio turn, the transport
-// waits for its tool response to complete, then accepts the positional prompt
-// as a distinct later user turn while the controllable executor remains
-// blocked. It emits one collision audio delta, releases the executor only
-// after that delta crosses the CLI stream observer, and holds the remaining
-// collision audio until the normalized tool result is ready. This makes
-// the overlap causal rather than timing-based while keeping the behavior
-// assertion at the public `agent session` command boundary.
+// dialer seam. The real CLI starts with a positional prompt that produces a
+// tool call, then holds the scheduled audio until the result-driven spoken
+// continuation reaches MESSAGE.END. The transport rejects any early audio
+// append, making the serialization causal rather than timing-based while
+// keeping the behavior assertion at the public `agent session` boundary.
 //
 // The production session path forwards normalized tool results through the
 // provider-facing stream. The verifier therefore requires the real outbound
-// function_call_output, rather than treating local RoleTool delivery or a
-// scripted capture record as a substitute for wire evidence.
+// function_call_output and one explicit continuation boundary, rather than
+// treating local RoleTool delivery or a scripted capture record as a substitute
+// for wire evidence.
 
 import (
 	"bytes"
@@ -176,6 +174,7 @@ type asyncCollisionObserver struct {
 	mu                        sync.Mutex
 	deltas                    []messages.StreamMessage
 	responseCompleted         int
+	toolCallInResponse        bool
 	collisionAudioSeen        int
 	collisionResponseComplete bool
 }
@@ -203,12 +202,19 @@ func (o *asyncCollisionObserver) observe(msg messages.StreamMessage) {
 		o.trace.record("session_created_observed")
 	case *messages.MessageEndValue:
 		o.mu.Lock()
-		o.responseCompleted++
-		firstResponseComplete := o.responseCompleted == 1
+		toolResponse := o.toolCallInResponse
+		toolResult := msg.Role == messages.RoleTool
+		o.toolCallInResponse = false
+		if !toolResponse && !toolResult {
+			o.responseCompleted++
+		}
+		firstResponseComplete := !toolResponse && !toolResult && o.responseCompleted == 1
 		o.mu.Unlock()
 		if firstResponseComplete {
 			o.trace.record("turn_one_completed")
 			o.turnOneCompletedOnce.Do(func() { close(o.turnOneCompleted) })
+		} else if toolResponse {
+			o.trace.record("tool_response_completed")
 		}
 	case *messages.AudioDeltaValue:
 		if value == nil {
@@ -239,9 +245,16 @@ func (o *asyncCollisionObserver) observe(msg messages.StreamMessage) {
 			o.collisionCompletedOnce.Do(func() { close(o.collisionCompleted) })
 		}
 	case *messages.ToolCallStartValue:
+		o.mu.Lock()
+		o.toolCallInResponse = true
+		o.mu.Unlock()
 		o.trace.record("tool_call_start_observed")
 	case *messages.ToolCallEndValue:
+		o.mu.Lock()
+		o.toolCallInResponse = true
+		o.mu.Unlock()
 		o.trace.record("tool_call_end_observed")
+		o.executor.releaseResult()
 	case *messages.TextDeltaValue:
 		if msg.Role == messages.RoleTool && value != nil && value.Content == asyncCollisionResult {
 			o.trace.record("tool_result_observed")
@@ -277,9 +290,8 @@ type asyncCollisionReplayDialer struct {
 
 type asyncCollisionReplayControl struct {
 	signals                   *asyncCollisionSignals
-	toolStarted               <-chan struct{}
-	turnOneCompleted          <-chan struct{}
-	toolResultReady           <-chan struct{}
+	continuationRequested     <-chan struct{}
+	continuationCompleted     <-chan struct{}
 	collisionResponseComplete <-chan struct{}
 	expectedInputAudio        []byte
 	trace                     *asyncCollisionTrace
@@ -456,22 +468,21 @@ func (c *asyncCollisionReplayConn) ReadMessage() (int, []byte, error) {
 			waitFor = c.control.signals.initialResponseReady
 			phase = c.groups.turnOne
 		case 2:
-			// This phase is released only by the second, independent
-			// response.create. The connection never emits the collision
-			// response merely because the tool started.
-			waitFor = c.control.signals.laterResponseReady
-			phase = c.groups.collisionHead
-		case 3:
-			// The executor's return is the result-availability boundary. The
-			// local RoleTool delta is observed independently by the shared
-			// verifier and must not be needed to release the response tail.
-			waitFor = c.control.toolResultReady
-			phase = c.groups.collisionTail
-		case 4:
-			waitFor = c.control.signals.continuationReady
+			// The result-driven response is the only response eligible after
+			// the first tool-call response. A scheduled audio request is not
+			// allowed to release a provider phase before this continuation.
+			waitFor = c.control.continuationRequested
 			phase = c.groups.continuation
+		case 3:
+			// Only after the grounded continuation reaches MESSAGE.END may
+			// the scheduled audio turn reach the provider.
+			waitFor = c.control.continuationCompleted
+			phase = c.groups.collisionHead
+		case 4:
+			phase = c.groups.collisionTail
 		case 5:
 			if !c.control.withholdTerminal {
+				waitFor = c.control.collisionResponseComplete
 				phase = c.groups.terminal
 			} else {
 				waitFor = c.control.signals.terminalReady
@@ -518,31 +529,20 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 			return err
 		}
 		if isAsyncCollisionFunctionCallOutput(payload) {
-			// Queue/sequence is the selected disposition. A provider-facing
-			// result is not recorded until the current collision response has
-			// crossed its final audio boundary, so a result cannot race ahead
-			// of the response it is queued behind.
-			if err := c.waitForPhase(c.control.collisionResponseComplete); err != nil {
-				return fmt.Errorf("async collision replay could not reach the queue/sequence result boundary: %w", err)
-			}
 			// The loss control acts at the provider-facing transport boundary. It
 			// accepts the write but removes only the correlated result from the
-			// observed exchange, leaving the rest of the session healthy.
+			// observed exchange, leaving the continuation request observable.
 			if c.control.dropProviderResult {
 				return nil
 			}
 			c.control.trace.record("provider_result_sent")
-		} else {
-			// The initial positional prompt starts the outstanding tool call and
-			// is accepted immediately. The result-driven continuation is the
-			// second user message and must follow the collision response boundary.
-			if c.countOutboundUserMessages() > 0 {
-				if err := c.waitForPhase(c.control.collisionResponseComplete); err != nil {
-					return fmt.Errorf("async collision replay could not reach the continuation request boundary: %w", err)
-				}
-			}
 		}
 	case "input_audio_buffer.append":
+		select {
+		case <-c.control.continuationCompleted:
+		default:
+			return errors.New("scheduled audio reached the provider before the grounded continuation completed")
+		}
 		if err := validateAsyncOutboundInputAudio(payload, c.control.expectedInputAudio); err != nil {
 			return err
 		}
@@ -574,17 +574,11 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 		if count := c.countOutboundType("response.create"); count == 1 {
 			c.control.signals.markInitialResponse()
 		} else if count == 2 {
-			if err := c.waitForPhase(c.control.toolStarted); err != nil {
-				return fmt.Errorf("async collision replay could not reach the outstanding tool-call boundary: %w", err)
-			}
-			if err := c.waitForPhase(c.control.turnOneCompleted); err != nil {
-				return fmt.Errorf("async collision replay could not reach the first response boundary: %w", err)
-			}
-			c.control.trace.record("later_turn_requested")
-			c.control.signals.markLaterResponse()
-		} else if count == 3 {
 			c.control.trace.record("continuation_requested")
 			c.control.signals.markContinuation()
+		} else if count == 3 {
+			c.control.trace.record("later_turn_requested")
+			c.control.signals.markLaterResponse()
 		} else {
 			return fmt.Errorf("async collision replay received %d response.create events, want exactly three", count)
 		}
@@ -639,26 +633,6 @@ func (c *asyncCollisionReplayConn) countOutboundType(eventType string) int {
 	count := 0
 	for _, event := range c.outbound {
 		if event.Type == eventType {
-			count++
-		}
-	}
-	return count
-}
-
-func (c *asyncCollisionReplayConn) countOutboundUserMessages() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	count := 0
-	for _, event := range c.outbound {
-		if event.Type != "conversation.item.create" {
-			continue
-		}
-		var payload struct {
-			Item struct {
-				Type string `json:"type"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(event.Payload, &payload) == nil && payload.Item.Type == "message" {
 			count++
 		}
 	}
@@ -752,12 +726,11 @@ func newAsyncCollisionSignals() *asyncCollisionSignals {
 	}
 }
 
-func (s *asyncCollisionSignals) control(toolStarted, turnOneCompleted, toolResultReady, collisionResponseComplete <-chan struct{}, expectedInputAudio []byte) asyncCollisionReplayControl {
+func (s *asyncCollisionSignals) control(continuationCompleted, collisionResponseComplete <-chan struct{}, expectedInputAudio []byte) asyncCollisionReplayControl {
 	return asyncCollisionReplayControl{
 		signals:                   s,
-		toolStarted:               toolStarted,
-		turnOneCompleted:          turnOneCompleted,
-		toolResultReady:           toolResultReady,
+		continuationRequested:     s.continuationReady,
+		continuationCompleted:     continuationCompleted,
 		collisionResponseComplete: collisionResponseComplete,
 		expectedInputAudio:        append([]byte(nil), expectedInputAudio...),
 	}
@@ -901,9 +874,22 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 	add(gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`","arguments":`+strconvQuote(asyncCollisionToolArgs)+`}`)
 	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseOne+`","status":"completed"}}`)
 
-	// The scheduled audio is the independent later response that overlaps the
-	// still outstanding call's result. The gated transport requires this request
-	// to follow the first response boundary before releasing collision audio.
+	// The result is the only outbound work eligible after the tool-call response.
+	// The grounded continuation must complete before the scheduled audio turn is
+	// allowed onto the provider wire.
+	add(gwtesting.DirectionClientToServer, "conversation.item.create", functionCallOutputPayload())
+	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
+
+	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseThree+`"}}`)
+	for _, delta := range continuation {
+		add(gwtesting.DirectionServerToClient, "response.output_audio.delta", audioDeltaPayload(delta))
+	}
+	add(gwtesting.DirectionServerToClient, "response.output_audio.done", `{"type":"response.output_audio.done"}`)
+	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseThree+`","status":"completed"}}`)
+
+	// The scheduled audio is a distinct later user turn. Its provider-facing
+	// append is rejected by the gated connection if it arrives before the
+	// result-driven continuation's terminal MESSAGE.END.
 	add(gwtesting.DirectionClientToServer, "input_audio_buffer.append", inputAudioPayload(inputAudio))
 	add(gwtesting.DirectionClientToServer, "input_audio_buffer.commit", `{"type":"input_audio_buffer.commit"}`)
 	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
@@ -913,21 +899,6 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 	}
 	add(gwtesting.DirectionServerToClient, "response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseTwo+`","status":"completed"}}`)
-
-	// This is the expected queue/sequence boundary: the provider-facing result
-	// follows the current collision response's final audio boundary and
-	// precedes the result-driven continuation request. The real runtime emits
-	// this event through the tool-result forwarder and OpenAI session adapter.
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", functionCallOutputPayload())
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", string(userPayload))
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
-
-	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseThree+`"}}`)
-	for _, delta := range continuation {
-		add(gwtesting.DirectionServerToClient, "response.output_audio.delta", audioDeltaPayload(delta))
-	}
-	add(gwtesting.DirectionServerToClient, "response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseThree+`","status":"completed"}}`)
 	add(gwtesting.DirectionServerToClient, "session.closed", `{"type":"session.closed","session_id":"`+asyncCollisionSessionID+`","reason":"`+asyncCollisionCloseReason+`"}`)
 
 	base.Session.ID = asyncCollisionSessionID
@@ -981,13 +952,7 @@ func runAsyncCollisionScenario(t *testing.T, fixtureCollision, expectedCollision
 func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.SessionCapture, inputAudio []byte, executor *asyncCollisionToolExecutor, observer *asyncCollisionObserver, signals *asyncCollisionSignals, options asyncCollisionRunOptions) (string, string, []asyncCollisionOutbound, error) {
 	t.Helper()
 	options = options.normalized()
-	control := signals.control(
-		executor.started,
-		observer.turnOneCompleted,
-		executor.resultReady,
-		observer.collisionCompleted,
-		inputAudio,
-	)
+	control := signals.control(observer.turnOneCompleted, observer.collisionCompleted, inputAudio)
 	control.trace = executor.trace
 	control.dropProviderResult = options.dropProviderResult
 	control.withholdTerminal = options.withholdTerminal
@@ -1055,16 +1020,31 @@ func verifyAsyncCollisionAudio(outputPath string, collision, continuation [][]in
 	if rate != 16000 {
 		return fmt.Errorf("recorded --audio-out WAV rate = %d, want 16000", rate)
 	}
+	segments := []struct {
+		name   string
+		deltas [][]int16
+	}{
+		{name: "continuation", deltas: continuation},
+		{name: "collision", deltas: collision},
+	}
 	want := make([]int16, 0, asyncCollisionDeltaSamples*asyncCollisionDeltaCount*2)
-	for _, delta := range append(append([][]int16(nil), collision...), continuation...) {
-		want = append(want, delta...)
+	for _, segment := range segments {
+		for _, delta := range segment.deltas {
+			want = append(want, delta...)
+		}
 	}
 	if len(got) != len(want) {
 		return fmt.Errorf("audio sample count = %d, want %d; collision/continuation delta loss or duplication", len(got), len(want))
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			return fmt.Errorf("audio sample mismatch at index %d (collision delta span %d), got %d want %d", i, i/asyncCollisionDeltaSamples, got[i], want[i])
+			deltaOrdinal := i / asyncCollisionDeltaSamples
+			segmentIndex := deltaOrdinal / asyncCollisionDeltaCount
+			deltaIndex := deltaOrdinal % asyncCollisionDeltaCount
+			if segmentIndex >= len(segments) {
+				return fmt.Errorf("audio sample mismatch at index %d, got %d want %d", i, got[i], want[i])
+			}
+			return fmt.Errorf("audio sample mismatch at index %d (%s delta span %d), got %d want %d", i, segments[segmentIndex].name, deltaIndex, got[i], want[i])
 		}
 	}
 	return nil
@@ -1143,19 +1123,16 @@ func validateAsyncCollisionTrace(events []string) error {
 			return fmt.Errorf("causal trace contains %d %q events, want exactly one: %v", counts[event], event, events)
 		}
 	}
-	// Tool start and completion of the first provider response are independent
-	// observer milestones. Both must precede the later request, but their
-	// relative scheduling is not part of the contract.
+	// The scheduled request is downstream of the complete tool lifecycle. The
+	// provider result and its continuation therefore precede the later request.
 	constraints := [][2]string{
-		{"tool_started", "later_turn_requested"},
+		{"tool_started", "tool_returned"},
+		{"tool_returned", "tool_result_observed"},
+		{"continuation_requested", "turn_one_completed"},
 		{"turn_one_completed", "later_turn_requested"},
 		{"later_turn_requested", "collision_audio_1_observed"},
-		{"collision_audio_1_observed", "tool_returned"},
-		{"tool_returned", "collision_audio_2_observed"},
+		{"collision_audio_1_observed", "collision_audio_2_observed"},
 		{"collision_audio_2_observed", "collision_response_completed"},
-		{"tool_returned", "tool_result_observed"},
-		{"tool_result_observed", "continuation_requested"},
-		{"collision_response_completed", "continuation_requested"},
 	}
 	for _, constraint := range constraints {
 		before, after := constraint[0], constraint[1]
@@ -1228,14 +1205,14 @@ func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCol
 	if !expectProviderResult {
 		return nil
 	}
-	if positions["collision_response_completed"] >= positions["provider_result_sent"] || positions["provider_result_sent"] >= positions["continuation_requested"] {
+	if positions["provider_result_sent"] >= positions["continuation_requested"] {
 		return fmt.Errorf("%s provider result boundary is out of order: %v", asyncCollisionDisposition, events)
 	}
 	return nil
 }
 
 func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expectedInputAudio []byte, expectProviderResult bool) error {
-	userTurnIndices := make([]int, 0, 2)
+	userTurnIndices := make([]int, 0, 1)
 	responseCreateIndices := make([]int, 0, 3)
 	providerResultIndices := make([]int, 0, 1)
 	inputAppendIndex, inputCommitIndex := -1, -1
@@ -1284,8 +1261,8 @@ func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expec
 			inputCommitIndex = index
 		}
 	}
-	if len(userTurnIndices) != 2 {
-		return fmt.Errorf("provider exchange contains %d text user turns, want one later turn and one result-driven continuation", len(userTurnIndices))
+	if len(userTurnIndices) != 1 {
+		return fmt.Errorf("provider exchange contains %d text user turns, want only the seeded prompt", len(userTurnIndices))
 	}
 	if len(responseCreateIndices) != 3 {
 		return fmt.Errorf("provider exchange contains %d response.create events, want the initial audio turn, later collision turn, and result-driven continuation", len(responseCreateIndices))
@@ -1293,21 +1270,18 @@ func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expec
 	if inputAppendIndex < 0 || inputCommitIndex < 0 {
 		return fmt.Errorf("provider exchange is missing the later-turn input audio append/commit boundary")
 	}
-	if userTurnIndices[0] >= responseCreateIndices[0] || responseCreateIndices[0] >= inputAppendIndex || inputAppendIndex >= inputCommitIndex || inputCommitIndex >= responseCreateIndices[1] {
-		return fmt.Errorf("initial text/later-turn audio boundary is out of order: user=%d initial response.create=%d append=%d commit=%d later response.create=%d", userTurnIndices[0], responseCreateIndices[0], inputAppendIndex, inputCommitIndex, responseCreateIndices[1])
+	if userTurnIndices[0] >= responseCreateIndices[0] || responseCreateIndices[0] >= responseCreateIndices[1] || responseCreateIndices[1] >= inputAppendIndex || inputAppendIndex >= inputCommitIndex || inputCommitIndex >= responseCreateIndices[2] {
+		return fmt.Errorf("initial text/tool continuation/later-turn audio boundary is out of order: user=%d initial response.create=%d continuation response.create=%d append=%d commit=%d later response.create=%d", userTurnIndices[0], responseCreateIndices[0], responseCreateIndices[1], inputAppendIndex, inputCommitIndex, responseCreateIndices[2])
 	}
 	if expectProviderResult {
 		if len(providerResultIndices) != 1 {
 			return fmt.Errorf("%s provider result for %q was correlated %d times, want exactly one", asyncCollisionDisposition, asyncCollisionCallID, len(providerResultIndices))
 		}
-		if providerResultIndices[0] <= responseCreateIndices[1] || providerResultIndices[0] >= userTurnIndices[1] {
-			return fmt.Errorf("%s provider result for %q was sent after the result-driven continuation user turn", asyncCollisionDisposition, asyncCollisionCallID)
+		if providerResultIndices[0] <= responseCreateIndices[0] || providerResultIndices[0] >= responseCreateIndices[1] {
+			return fmt.Errorf("%s provider result for %q was not sent between the initial tool response and its continuation response.create", asyncCollisionDisposition, asyncCollisionCallID)
 		}
 	} else if len(providerResultIndices) != 0 {
 		return fmt.Errorf("result-loss control still carried %d provider results for %q", len(providerResultIndices), asyncCollisionCallID)
-	}
-	if responseCreateIndices[1] >= userTurnIndices[1] || userTurnIndices[1] >= responseCreateIndices[2] {
-		return fmt.Errorf("result-driven continuation is out of order: collision response.create=%d continuation user=%d continuation response.create=%d", responseCreateIndices[1], userTurnIndices[1], responseCreateIndices[2])
 	}
 	return nil
 }

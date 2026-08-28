@@ -138,6 +138,20 @@ func (s *streamOnlyRecordingSession) Close() error {
 	return nil
 }
 
+// rejectingStreamSession keeps the legacy bool-only Session contract while
+// making provider-boundary rejection observable to the model runner tests.
+type rejectingStreamSession struct {
+	*recordingSession
+}
+
+func newRejectingStreamSession() *rejectingStreamSession {
+	return &rejectingStreamSession{recordingSession: newRecordingSession()}
+}
+
+func (*rejectingStreamSession) Send(context.Context, messages.StreamMessage) bool {
+	return false
+}
+
 type failingConnectInferencer struct{ err error }
 
 func (f *failingConnectInferencer) ConnectSession(context.Context) (messages.Session, error) {
@@ -317,6 +331,184 @@ func TestSessionModelRunner_AudioInboxCloseEndsRun(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Run did not return after UserAudioInbox closed")
 	}
+}
+
+func TestSessionModelRunner_ContinuesAfterAcceptedResponseRequest(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- runner.Run(ctx) }()
+
+	runner.UserEventInbox <- messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}
+	select {
+	case sent := <-session.sendCh:
+		if sent.Type != messages.StreamTypeResponseCreate {
+			t.Fatalf("sent type = %s, want %s", sent.Type, messages.StreamTypeResponseCreate)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for RESPONSE.CREATE")
+	}
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageEnd)
+
+	if err := session.Close(); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run = %v, want nil", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Run did not return after accepted continuation completed")
+	}
+}
+
+func TestSessionModelRunner_SuppressesContinuationAfterRejectedToolResult(t *testing.T) {
+	session := newRejectingStreamSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- runner.Run(ctx) }()
+
+	runner.UserEventInbox <- messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-rejected", "date", "result"),
+	}
+	runner.UserEventInbox <- messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}
+
+	failure := waitForDelta(t, ctx, runner, messages.StreamTypeError)
+	value, ok := failure.Value.(*messages.ErrorValue)
+	if !ok {
+		t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
+	}
+	if value.Classification != "unresolved_tool_result" {
+		t.Fatalf("failure classification = %q, want unresolved_tool_result", value.Classification)
+	}
+	if !contains(value.Message, "call-rejected") {
+		t.Fatalf("failure message = %q, want rejected call ID", value.Message)
+	}
+	if sent := session.sentMessages(); len(sent) != 0 {
+		t.Fatalf("rejected lifecycle sent %d provider messages, want 0", len(sent))
+	}
+
+	if err := session.Close(); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run = %v, want nil", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Run did not return after rejected continuation was reported")
+	}
+}
+
+func TestModelRunner_ForwardSessionEventReportsProviderBoundaryOutcomes(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ordinary rejection remains best effort", func(t *testing.T) {
+		runner := NewSessionModelRunner(nil, 8, nil)
+		session := newRejectingStreamSession()
+
+		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+			Type: messages.StreamTypeTextDelta,
+		})
+		if failure.Type != "" || deferred || accepted {
+			t.Fatalf("ordinary rejection outcome = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
+		}
+		if _, ok := runner.DeltaOutbox.Read(); ok {
+			t.Fatal("ordinary rejection emitted an error delta")
+		}
+	})
+
+	t.Run("result rejection is deferred", func(t *testing.T) {
+		runner := NewSessionModelRunner(nil, 8, nil)
+		session := newRejectingStreamSession()
+
+		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+			Type:  messages.StreamTypeToolCallEnd,
+			Value: messages.NewToolCallEndValue("call-result", "date", "today"),
+		})
+		if failure.Type != messages.StreamTypeError || !deferred || accepted {
+			t.Fatalf("result rejection outcome = (%#v, %v, %v), want ERROR/true/false", failure, deferred, accepted)
+		}
+		value, ok := failure.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("failure value = %T, want *messages.ErrorValue", failure.Value)
+		}
+		if value.Classification != "unresolved_tool_result" || !contains(value.Message, "call-result") {
+			t.Fatalf("failure = %+v, want unresolved call-result", value)
+		}
+
+		runner.flushPendingSessionSendErrors(ctx, []messages.StreamMessage{failure})
+		forwarded, ok := runner.DeltaOutbox.Read()
+		if !ok || forwarded.Type != messages.StreamTypeError {
+			t.Fatalf("flushed failure = %#v, ok=%v; want ERROR", forwarded, ok)
+		}
+	})
+
+	t.Run("continuation rejection is emitted immediately", func(t *testing.T) {
+		runner := NewSessionModelRunner(nil, 8, nil)
+		session := newRejectingStreamSession()
+
+		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+			Type: messages.StreamTypeResponseCreate,
+		})
+		if failure.Type != "" || deferred || accepted {
+			t.Fatalf("continuation rejection return = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
+		}
+		forwarded, ok := runner.DeltaOutbox.Read()
+		if !ok || forwarded.Type != messages.StreamTypeError {
+			t.Fatalf("continuation failure = %#v, ok=%v; want ERROR", forwarded, ok)
+		}
+		value, ok := forwarded.Value.(*messages.ErrorValue)
+		if !ok {
+			t.Fatalf("continuation failure value = %T, want *messages.ErrorValue", forwarded.Value)
+		}
+		if value.Classification != "unresolved_tool_continuation" || !contains(value.Message, "not requested") {
+			t.Fatalf("continuation failure = %+v, want unresolved continuation", value)
+		}
+	})
+}
+
+func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	runner.UserAudioInbox <- []byte{4, 5, 6}
+
+	audioStreaming := false
+	runner.drainSessionAudio(context.Background(), session, &audioStreaming)
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("drained sends = %#v, want one AUDIO.DELTA", sent)
+	}
+	value, ok := sent[0].Value.(*messages.AudioDeltaValue)
+	if !ok || string(value.Content) != string([]byte{4, 5, 6}) {
+		t.Fatalf("drained audio = %#v, want original frame", sent[0].Value)
+	}
+
+	close(runner.UserAudioInbox)
+	runner.drainSessionAudio(context.Background(), session, &audioStreaming)
 }
 
 func TestModelRunner_SendLatestUserTextPicksNewestUserText(t *testing.T) {
@@ -595,12 +787,11 @@ func TestModelRunner_SendLatestSessionToolResultsFallsBackForStreamOnlySession(t
 	if second.Arguments != "" || second.Name != "read_image" {
 		t.Fatalf("image fallback = %#v, want correlated empty flat output", second)
 	}
-	if sent[2].Type != messages.StreamTypeTextDelta {
-		t.Fatalf("response trigger type = %s, want TEXT.DELTA", sent[2].Type)
+	if sent[2].Type != messages.StreamTypeResponseCreate {
+		t.Fatalf("response trigger type = %s, want RESPONSE.CREATE", sent[2].Type)
 	}
-	trigger, ok := sent[2].Value.(*messages.TextDeltaValue)
-	if !ok || trigger.Content != "inspect both results" {
-		t.Fatalf("response trigger = %#v, want original user prompt", sent[2].Value)
+	if _, ok := sent[2].Value.(*messages.ResponseCreateValue); !ok {
+		t.Fatalf("response trigger value = %T, want *ResponseCreateValue", sent[2].Value)
 	}
 }
 

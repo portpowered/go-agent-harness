@@ -163,6 +163,7 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 			t.Fatalf("marshal function_call_output event: %v", outputMarshalErr)
 		}
 		clientEvent("conversation.item.create", outputPayload)
+		clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
 		serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_single_call_reply"}}`)
 	}
 	transcriptDelta, marshalErr := json.Marshal(map[string]string{

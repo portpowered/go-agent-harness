@@ -19,6 +19,7 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [PNIG interaction replay](interaction-replay.md) covers the normalized interaction fixture envelope, validation behavior, and CLI inspection flow for gateway event fixtures.
 - [Agent session record and replay](session-record-replay.md) covers capture sanitization, committed fixture locations, capture fields, and replay divergence cases for session replay tests.
 - [Live scheduled-turn boundary confirmation](../../docs/architecture/s2s-live-turn-boundary-commit-races.md) gives the opt-in OpenAI procedure for delayed acknowledgement and speech-then-exact-silence checks.
+- [S2S audio tool-turn lifecycle](../../docs/architecture/s2s-audio-tool-turn-lifecycle.md) defines the shared call-ID lifecycle, scheduled-turn/close gates, hermetic proof surface, and credential-safe live tool confirmation.
 - Shared committed `.session.json` replay fixtures are owned by `go-llm-gateway/pkg/testing/testdata/session-fixtures`; keep `agent-cli/test/integration/testdata` for CLI-private fixtures only, and use `go-llm-gateway/pkg/testing.SharedSessionFixturePath(...)` when Agent CLI tests need the shared canonical fixtures.
 
 ## Agent CLI Contributors

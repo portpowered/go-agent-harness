@@ -194,6 +194,22 @@ func (w *v4DObservableWriter) waitForOutput(want string, bound time.Duration) bo
 	}
 }
 
+func (w *v4DObservableWriter) waitForAnyOutput(wants []string, bound time.Duration) bool {
+	deadline := time.After(bound)
+	for {
+		select {
+		case chunk := <-w.observed:
+			for _, want := range wants {
+				if strings.Contains(chunk, want) {
+					return true
+				}
+			}
+		case <-deadline:
+			return false
+		}
+	}
+}
+
 // outcomeLatency reports when the timeout outcome first crossed, and whether
 // it was observed at all.
 func (w *v4DObservableWriter) outcomeLatency() (time.Duration, bool) {
@@ -273,9 +289,11 @@ func (i *v4DScriptedInferencer) ConnectSession(ctx context.Context) (messages.Se
 		) {
 			return
 		}
-		// CAUSAL GATE: continue only once the bounded timeout outcome actually
-		// crossed the rendered session stream.
-		if !i.out.waitForOutput(v4dTimeoutFailureText, v4dGateBound) {
+		// CAUSAL GATE: continue only once the first tool outcome actually crossed
+		// the rendered session stream. The fast-executor negative control uses
+		// the successful payload here; the shared validator then rejects its
+		// transcript for lacking the required timeout outcome.
+		if !i.out.waitForAnyOutput([]string{v4dTimeoutFailureText, v4dQuickResultPayload}, v4dGateBound) {
 			return
 		}
 		// Post-timeout recovery turn plus a second, fast-succeeding tool call.
@@ -297,6 +315,7 @@ func (i *v4DScriptedInferencer) ConnectSession(ctx context.Context) (messages.Se
 			messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 			messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(v4dContinuationText)},
 			messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
+			messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 			messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("sess_v4d_timeout", "fixture_complete")},
 		) {
 			return

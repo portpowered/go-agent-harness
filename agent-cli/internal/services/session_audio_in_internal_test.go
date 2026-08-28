@@ -341,6 +341,7 @@ func TestShouldStopAudioInputSessionLoopWaitsForFinalAssistantResponse(t *testin
 	}
 
 	observer.noteToolResultAccepted("call-1")
+	observer.noteToolContinuationRequested()
 	finalAssistantEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,

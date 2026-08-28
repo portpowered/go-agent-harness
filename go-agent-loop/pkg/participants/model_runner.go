@@ -48,9 +48,23 @@ type ModelRunner struct {
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
 	currentPassID int    // LoopPassID from the current InferenceRequest
 
+	// sessionToolContinuation records the result of the session-loop's explicit
+	// tool-result boundary. It lets the request-driven compatibility helper
+	// distinguish a continuation already queued by ToolResultForwarder from an
+	// isolated caller that still needs to request one.
+	sessionToolContinuation sessionToolContinuationState
+
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
+
+type sessionToolContinuationState uint8
+
+const (
+	sessionToolContinuationNone sessionToolContinuationState = iota
+	sessionToolContinuationAccepted
+	sessionToolContinuationSuppressed
+)
 
 func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRunner {
 	return &ModelRunner{
@@ -120,6 +134,9 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 	sessionClosed := false
 	hasOutput := false
 	responseCompleted := false
+	var pendingSendErrors []messages.StreamMessage
+	awaitingToolContinuationResponse := false
+	suppressNextToolContinuation := false
 
 	for {
 		// User audio and control events are queued by the session loop after
@@ -127,8 +144,9 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 		// deterministic transport turn before accepting the next inbound
 		// provider event, so a scheduled audio turn cannot be interleaved
 		// ahead of its own commit/response.create boundary.
-		handled, closed := r.forwardPendingSessionInputs(ctx, session, &audioStreaming)
+		handled, closed := r.forwardPendingSessionInputs(ctx, session, &audioStreaming, &pendingSendErrors, &awaitingToolContinuationResponse, &suppressNextToolContinuation)
 		if closed {
+			r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 			return nil
 		}
 		if handled {
@@ -136,6 +154,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 		}
 		select {
 		case <-ctx.Done():
+			r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 			return ctx.Err()
 		case <-session.Done():
 			for {
@@ -144,7 +163,13 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 					break
 				}
 				audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
+				if msg.Type == messages.StreamTypeMessageEnd && awaitingToolContinuationResponse {
+					r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
+					pendingSendErrors = nil
+					awaitingToolContinuationResponse = false
+				}
 			}
+			r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 			if !sessionClosed {
 				terminalProvenance := messages.TerminalProvenanceProvider
 				terminalOutputState := outputState(hasOutput)
@@ -170,25 +195,68 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			return nil
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				return nil
 			}
 			r.forwardSessionAudio(ctx, session, pcm, &audioStreaming)
 		case evt, ok := <-r.UserEventInbox:
 			if !ok {
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				return nil
 			}
+			if evt.Type == messages.StreamTypeResponseCreate && suppressNextToolContinuation {
+				// A result in this batch was rejected at the provider boundary. Do
+				// not ask the provider to continue from a partially delivered batch;
+				// the accepted sibling remains pending and the deferred result error
+				// names the rejected call when the session reaches a terminal path.
+				suppressNextToolContinuation = false
+				r.sessionToolContinuation = sessionToolContinuationSuppressed
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
+				pendingSendErrors = nil
+				continue
+			}
 			r.drainSessionAudio(ctx, session, &audioStreaming)
-			r.forwardSessionEvent(ctx, session, evt)
+			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred {
+				pendingSendErrors = append(pendingSendErrors, failure)
+				if evt.Type == messages.StreamTypeToolCallEnd {
+					suppressNextToolContinuation = true
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
+				}
+				if responseAccepted {
+					awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
+				}
+			} else {
+				if responseAccepted {
+					awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
+				} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate {
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
+				}
+			}
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				return nil
 			}
 			r.sendLatestUserText(ctx, session, req)
 		case msg, ok := <-session.Receive().Chan():
 			if !ok {
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				return nil
 			}
+			if msg.Type == messages.StreamTypeSessionClose {
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
+				pendingSendErrors = nil
+				awaitingToolContinuationResponse = false
+				r.sessionToolContinuation = sessionToolContinuationNone
+			}
 			audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
+			if msg.Type == messages.StreamTypeMessageEnd && awaitingToolContinuationResponse {
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
+				pendingSendErrors = nil
+				awaitingToolContinuationResponse = false
+			}
 		}
 	}
 }
@@ -196,7 +264,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 // forwardPendingSessionInputs gives queued user audio/control messages
 // priority over the provider receive path. It returns whether it forwarded
 // anything and whether either user inbox was closed.
-func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, audioStreaming *bool) (handled, closed bool) {
+func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, audioStreaming *bool, pendingSendErrors *[]messages.StreamMessage, awaitingToolContinuationResponse *bool, suppressNextToolContinuation *bool) (handled, closed bool) {
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
@@ -209,8 +277,37 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 			if !ok {
 				return true, true
 			}
+			if evt.Type == messages.StreamTypeResponseCreate && suppressNextToolContinuation != nil && *suppressNextToolContinuation {
+				// See the main session-event branch: one rejected result makes the
+				// batch continuation invalid, even when another result was accepted.
+				*suppressNextToolContinuation = false
+				r.sessionToolContinuation = sessionToolContinuationSuppressed
+				if pendingSendErrors != nil {
+					r.flushPendingSessionSendErrors(ctx, *pendingSendErrors)
+					*pendingSendErrors = nil
+				}
+				handled = true
+				continue
+			}
 			r.drainSessionAudio(ctx, session, audioStreaming)
-			r.forwardSessionEvent(ctx, session, evt)
+			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred && pendingSendErrors != nil {
+				*pendingSendErrors = append(*pendingSendErrors, failure)
+				if evt.Type == messages.StreamTypeToolCallEnd && suppressNextToolContinuation != nil {
+					*suppressNextToolContinuation = true
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
+				}
+				if responseAccepted && awaitingToolContinuationResponse != nil {
+					*awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
+				}
+			} else {
+				if responseAccepted && awaitingToolContinuationResponse != nil {
+					*awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
+				} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate {
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
+				}
+			}
 			handled = true
 		default:
 			return handled, false
@@ -249,31 +346,54 @@ func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.
 }
 
 // forwardSessionEvent preserves the legacy best-effort behavior for ordinary
-// user events, but turns a rejected tool-result send into an observable stream
-// error. The session lifecycle can then report the still-unresolved call ID
-// instead of allowing a false clean close.
-func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.Session, msg messages.StreamMessage) {
+// user events, but turns a rejected tool-result or continuation send into an
+// observable stream error. The session lifecycle can then report the still-
+// unresolved obligation instead of allowing a false clean close.
+func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.Session, msg messages.StreamMessage) (messages.StreamMessage, bool, bool) {
 	outcome := messages.SendSessionWithOutcome(ctx, session, msg)
-	if outcome.OK() || msg.Type != messages.StreamTypeToolCallEnd {
-		return
+	if outcome.OK() {
+		return messages.StreamMessage{}, false, msg.Type == messages.StreamTypeResponseCreate
 	}
 	callID := ""
+	classification := "unresolved_tool_result"
 	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 		callID = value.ToolCallID
 	}
 	message := fmt.Sprintf("tool result %q was not delivered: session send status %q", callID, outcome.Status)
+	if msg.Type == messages.StreamTypeResponseCreate {
+		classification = "unresolved_tool_continuation"
+		message = fmt.Sprintf("tool continuation was not requested: session send status %q", outcome.Status)
+	}
+	if msg.Type != messages.StreamTypeToolCallEnd && msg.Type != messages.StreamTypeResponseCreate {
+		return messages.StreamMessage{}, false, false
+	}
 	value := messages.NewErrorValueWithTerminal(
 		message,
-		"unresolved_tool_result",
+		classification,
 		messages.TerminalReasonTerminalFailure,
 		messages.TerminalProvenanceLoop,
 		messages.TerminalOutputNone,
 	)
 	value.Err = outcome.Err
-	r.DeltaOutbox.Write(ctx, messages.StreamMessage{
+	failure := messages.StreamMessage{
 		Type:  messages.StreamTypeError,
 		Value: value,
-	})
+	}
+	if msg.Type == messages.StreamTypeToolCallEnd {
+		// A batch may contain another result that was accepted. Keep this
+		// failure until the batch's continuation boundary so the caller can
+		// suppress that invalid continuation and then report every remaining
+		// per-call obligation together.
+		return failure, true, false
+	}
+	r.DeltaOutbox.Write(ctx, failure)
+	return messages.StreamMessage{}, false, false
+}
+
+func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failures []messages.StreamMessage) {
+	for _, failure := range failures {
+		r.DeltaOutbox.Write(ctx, failure)
+	}
 }
 
 func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, audioStreaming bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool) {
@@ -352,10 +472,19 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 	case sessionToolResultsComplete:
 		return
 	case sessionToolResultsFlatFallback:
-		// Flat tool results do not request a response themselves. Preserve the
-		// established session trigger after the batch has been delivered. An
-		// audio-only user turn has no text event to act as that trigger, so send
-		// an explicit response request instead.
+		// The flat fallback sends one explicit RESPONSE.CREATE after the
+		// correlated result batch. Do not inject the previous user text, which
+		// would create a duplicate or ungrounded response.
+		return
+	case sessionToolResultsAlreadyForwarded:
+		// Text-only results are delivered by ToolResultForwarder before this
+		// result-driven inference request reaches the session runner. Consume
+		// that boundary when the session loop recorded it; an isolated caller
+		// still needs the explicit request below.
+		if r.sessionToolContinuation != sessionToolContinuationNone {
+			r.sessionToolContinuation = sessionToolContinuationNone
+			return
+		}
 		if !r.sendLatestUserTextOnly(ctx, session, req.Messages) {
 			r.requestSessionResponse(ctx, session)
 		}
@@ -429,6 +558,7 @@ const (
 	sessionToolResultsNotFound sessionToolResultDelivery = iota
 	sessionToolResultsComplete
 	sessionToolResultsFlatFallback
+	sessionToolResultsAlreadyForwarded
 	sessionToolResultsFailed
 )
 
@@ -452,10 +582,11 @@ func (r *ModelRunner) sendLatestSessionToolResults(ctx context.Context, session 
 	}
 	toolResults := history[first:]
 	if !sessionToolResultsContainImage(toolResults) {
-		// Text-only tool results retain the historical latest-user-text
-		// behavior. The complete-message extension is required for rich image
-		// results and should not change existing text-only session captures.
-		return sessionToolResultsNotFound
+		// Text-only results are forwarded by ToolResultForwarder in the same
+		// tick as the coordinator's request. The forwarder also emits the
+		// single explicit continuation boundary, so this request must not send
+		// the original user text a second time.
+		return sessionToolResultsAlreadyForwarded
 	}
 
 	sender, hasCompleteMessagePath := session.(sessionMessageSender)
@@ -488,10 +619,9 @@ func (r *ModelRunner) sendLatestSessionToolResults(ctx context.Context, session 
 
 // sendSessionToolResultsAsStream is the explicit compatibility fallback for
 // sessions that cannot accept complete messages. It preserves one correlated
-// TOOLCALL.END per result, while the caller sends the historical latest user
-// text afterward to request the next response. Image bytes cannot be
-// represented by the stream-only contract, so they are intentionally not
-// claimed as delivered on this path.
+// TOOLCALL.END per result, followed by one explicit RESPONSE.CREATE. Image
+// bytes cannot be represented by the stream-only contract, so they are
+// intentionally not claimed as delivered on this path.
 func sendSessionToolResultsAsStream(ctx context.Context, session messages.Session, history, results []messages.Message) bool {
 	for _, result := range results {
 		if result.ToolCallID == "" {
@@ -508,7 +638,10 @@ func sendSessionToolResultsAsStream(ctx context.Context, session messages.Sessio
 			return false
 		}
 	}
-	return true
+	return session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	})
 }
 
 func sessionToolResultName(history []messages.Message, result messages.Message) string {

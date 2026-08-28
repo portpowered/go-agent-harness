@@ -176,6 +176,9 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 			models.NewResponseCreateEvent(),
 		}, true
 	case messages.StreamTypeResponseCreate:
+		// Tool-result delivery and response creation are separate boundaries.
+		// The result item is queued first; this control event starts exactly one
+		// grounded continuation without committing a new user-audio turn.
 		// Tool results are delivered as conversation items without a response
 		// request. Audio-only turns have no user text event to trigger the
 		// continuation, so the model runner sends this explicit control event.

@@ -663,6 +663,23 @@ func TestRunSession_RecordFlushesCaptureWhenContextCanceled(t *testing.T) {
 	assertCapturedDirectionAndType(t, capture.Records, gwtesting.DirectionServerToClient, "session.created")
 }
 
+func TestSessionRunTerminationErrorPreservesCallerCancellationAfterCleanLoopExit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := sessionRunTerminationError(ctx, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("clean loop termination after caller cancellation = %v, want context.Canceled", err)
+	}
+}
+
+func TestSessionRunTerminationErrorPreservesCleanupFailure(t *testing.T) {
+	wantErr := errors.New("session cleanup failed")
+	if err := sessionRunTerminationError(context.Background(), wantErr); !errors.Is(err, wantErr) {
+		t.Fatalf("cleanup failure = %v, want %v", err, wantErr)
+	}
+}
+
 func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

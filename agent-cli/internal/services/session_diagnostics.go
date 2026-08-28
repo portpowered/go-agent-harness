@@ -8,7 +8,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -16,8 +15,6 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -78,6 +75,10 @@ const (
 	// continuation did not reach a terminal response.
 	SessionDiagnosticFieldPendingImageContinuationCount = "pending_image_continuation_count"
 	SessionDiagnosticFieldPendingImageContinuationIDs   = "pending_image_continuation_call_ids"
+	// These fields identify provider-accepted non-image tool results whose model
+	// continuation did not reach a terminal response.
+	SessionDiagnosticFieldPendingToolContinuationCount = "pending_tool_continuation_count"
+	SessionDiagnosticFieldPendingToolContinuationIDs   = "pending_tool_continuation_call_ids"
 )
 
 const (
@@ -126,6 +127,15 @@ type ScheduledAudioInput struct {
 	// commit the audio and create one response before the next scheduled turn.
 	// The zero value preserves the diagnostics-only injection behavior.
 	EndOfTurn bool
+}
+
+// scheduledSessionInputSender is the narrow loop seam used by the scheduler.
+// Keeping it separate from AgentLoop makes the ordering contract directly
+// observable in service tests while production still uses AgentLoop's session
+// input APIs.
+type scheduledSessionInputSender interface {
+	SendAudioInput(context.Context, []byte) error
+	SendSessionEvent(context.Context, messages.StreamMessage) error
 }
 
 // failureFacts holds the typed terminal facts captured from the first
@@ -201,16 +211,16 @@ type sessionProgressObserver struct {
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
 
-	toolStateMu            sync.Mutex
-	unresolvedToolCalls    map[string]struct{}
-	acceptedToolCalls      map[string]struct{}
-	toolResultRejections   map[string]messages.SessionSendStatus
-	toolResultAcceptedCh   chan struct{}
-	toolResultsInvalidated bool
-	imageContinuations     map[string]*imageContinuationState
-	toolCallInTurn         bool
-	providerToolCallSeen   bool
-	assistantResponseDone  bool
+	toolStateMu           sync.Mutex
+	unresolvedToolCalls   map[string]struct{}
+	acceptedToolCalls     map[string]struct{}
+	toolResultRejections  map[string]messages.SessionSendStatus
+	toolLifecycleCh       chan struct{}
+	toolContinuations     map[string]*toolContinuationState
+	toolCallInTurn        bool
+	messageEndSeen        bool
+	providerToolCallSeen  bool
+	assistantResponseDone bool
 	// toolResultsEnabled is false for explicit no-tools session plans, where a
 	// provider tool event is reported as unexecutable rather than creating an
 	// obligation that no executor can satisfy.
@@ -233,9 +243,12 @@ type sessionProgressObserver struct {
 	metricsOnce sync.Once
 }
 
-type imageContinuationState struct {
+type toolContinuationState struct {
+	toolName                 string
+	providerCallObserved     bool
 	resultAccepted           bool
 	toolResponseComplete     bool
+	continuationRequested    bool
 	continuationTerminalSeen bool
 	continuationComplete     bool
 }
@@ -258,8 +271,8 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		unresolvedToolCalls:  make(map[string]struct{}),
 		acceptedToolCalls:    make(map[string]struct{}),
 		toolResultRejections: make(map[string]messages.SessionSendStatus),
-		toolResultAcceptedCh: make(chan struct{}, 1),
-		imageContinuations:   make(map[string]*imageContinuationState),
+		toolLifecycleCh:      make(chan struct{}, 1),
+		toolContinuations:    make(map[string]*toolContinuationState),
 	}
 }
 
@@ -282,20 +295,20 @@ func (o *sessionProgressObserver) ensureToolStateLocked() {
 	if o.toolResultRejections == nil {
 		o.toolResultRejections = make(map[string]messages.SessionSendStatus)
 	}
-	if o.toolResultAcceptedCh == nil {
-		o.toolResultAcceptedCh = make(chan struct{}, 1)
+	if o.toolLifecycleCh == nil {
+		o.toolLifecycleCh = make(chan struct{}, 1)
 	}
-	if o.imageContinuations == nil {
-		o.imageContinuations = make(map[string]*imageContinuationState)
+	if o.toolContinuations == nil {
+		o.toolContinuations = make(map[string]*toolContinuationState)
 	}
 }
 
-// observeProviderToolCall records the creation of a provider tool obligation.
-// The completed call event is the first point at which the full provider call
-// identity is known. Empty IDs are deliberately ignored because they cannot be
-// correlated with a later result.
-func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEndValue) {
-	if o == nil || v == nil || strings.TrimSpace(v.ToolCallID) == "" {
+// observeProviderToolCallStart records a provider tool call as soon as its
+// correlated ID is available. A provider can terminate between TOOLCALL.START
+// and TOOLCALL.END; retaining that partial request prevents cancellation or
+// transport close from looking like a clean session.
+func (o *sessionProgressObserver) observeProviderToolCallStart(callID, name string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
 		return
 	}
 	o.toolStateMu.Lock()
@@ -304,22 +317,39 @@ func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEn
 	if !o.toolResultsEnabled {
 		return
 	}
-	_, accepted := o.acceptedToolCalls[v.ToolCallID]
-	if v.Name == tools.ReadImageToolID {
-		state := o.imageContinuations[v.ToolCallID]
-		if state == nil {
-			state = &imageContinuationState{}
-			o.imageContinuations[v.ToolCallID] = state
-		}
-		state.resultAccepted = accepted
-		if accepted && state.continuationTerminalSeen && state.toolResponseComplete {
-			state.continuationComplete = true
-		}
+	_, accepted := o.acceptedToolCalls[callID]
+	state := o.toolContinuations[callID]
+	if state == nil {
+		state = &toolContinuationState{}
+		o.toolContinuations[callID] = state
 	}
+	if strings.TrimSpace(name) != "" {
+		state.toolName = name
+	}
+	state.providerCallObserved = true
+	state.resultAccepted = accepted
+	o.providerToolCallSeen = true
 	if accepted {
 		return
 	}
-	o.unresolvedToolCalls[v.ToolCallID] = struct{}{}
+	o.unresolvedToolCalls[callID] = struct{}{}
+}
+
+// observeProviderToolCall records the completed provider tool-call obligation.
+// Empty IDs are deliberately ignored because they cannot be correlated with a
+// later result.
+func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEndValue) {
+	if o == nil || v == nil {
+		return
+	}
+	o.observeProviderToolCallWithID(v.ToolCallID, v.Name)
+}
+
+func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
+		return
+	}
+	o.observeProviderToolCallStart(callID, name)
 }
 
 // noteToolResultAccepted resolves exactly one provider call after the
@@ -331,27 +361,96 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	if !o.toolResultsInvalidated {
-		delete(o.unresolvedToolCalls, callID)
-	}
+	delete(o.unresolvedToolCalls, callID)
 	o.acceptedToolCalls[callID] = struct{}{}
-	if state := o.imageContinuations[callID]; state != nil {
-		state.resultAccepted = true
-		if state.continuationTerminalSeen && state.toolResponseComplete {
-			state.continuationComplete = true
-		}
+	state := o.toolContinuations[callID]
+	if state == nil {
+		state = &toolContinuationState{}
+		o.toolContinuations[callID] = state
+	}
+	state.resultAccepted = true
+	if state.continuationRequested && state.continuationTerminalSeen && state.toolResponseComplete {
+		state.continuationComplete = true
 	}
 	delete(o.toolResultRejections, callID)
-	acceptedCh := o.toolResultAcceptedCh
+	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 
 	// One wake-up is enough even when several results are accepted before the
 	// session loop selects this branch: the close predicate observes the whole
 	// current set, not a count of wake-ups.
 	select {
-	case acceptedCh <- struct{}{}:
+	case lifecycleCh <- struct{}{}:
 	default:
 	}
+}
+
+// noteToolContinuationRequested advances every accepted result in the
+// current provider batch at the explicit response.create send boundary. The
+// control event carries no call ID because one provider response may continue
+// several parallel function calls; accepted results are therefore the
+// correlation set. The operation is idempotent for duplicate control events.
+func (o *sessionProgressObserver) noteToolContinuationRequested() {
+	if o == nil {
+		return
+	}
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	changed := false
+	for callID := range o.acceptedToolCalls {
+		state := o.toolContinuations[callID]
+		if state == nil {
+			// The provider delta consumer can observe TOOLCALL.END after the
+			// model runner has already accepted the result and response.create.
+			// Preserve that early continuation request by creating a call-ID
+			// placeholder for the later provider event to enrich.
+			state = &toolContinuationState{resultAccepted: true}
+			o.toolContinuations[callID] = state
+		}
+		if !state.resultAccepted || state.continuationComplete || state.continuationRequested {
+			continue
+		}
+		state.continuationRequested = true
+		if state.resultAccepted && state.continuationTerminalSeen && state.toolResponseComplete {
+			state.continuationComplete = true
+		}
+		changed = true
+	}
+	lifecycleCh := o.toolLifecycleCh
+	o.toolStateMu.Unlock()
+	if changed {
+		select {
+		case lifecycleCh <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// noteToolContinuationRequestedFor is used by complete-message providers.
+// SendMessage may represent a whole rich batch, so the exact call is marked
+// first and any already accepted sibling is advanced by the batch-level
+// method as well.
+func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
+		return
+	}
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	state := o.toolContinuations[callID]
+	if state == nil {
+		if _, accepted := o.acceptedToolCalls[callID]; accepted {
+			state = &toolContinuationState{resultAccepted: true}
+			o.toolContinuations[callID] = state
+		}
+	}
+	if state != nil && state.resultAccepted {
+		state.continuationRequested = true
+		if state.continuationTerminalSeen && state.toolResponseComplete {
+			state.continuationComplete = true
+		}
+	}
+	o.toolStateMu.Unlock()
+	o.noteToolContinuationRequested()
 }
 
 // toolLifecycleEvents wakes the session close controller whenever a result or
@@ -364,29 +463,46 @@ func (o *sessionProgressObserver) toolLifecycleEvents() <-chan struct{} {
 	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
-	ch := o.toolResultAcceptedCh
+	ch := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 	return ch
 }
 
-// invalidateAcceptedToolResults records that queued result sends are no longer
-// sufficient evidence of delivery when a tool-call turn terminated without its
-// required final assistant response. The provider-facing send API acknowledges
-// queue acceptance before its asynchronous writer reaches the transport, so a
-// terminal close can otherwise erase the only copy of the originating call ID.
-// Keep the invalidation latched: a late writer callback must not turn a
-// terminated, incomplete conversation back into clean success.
-func (o *sessionProgressObserver) invalidateAcceptedToolResults() {
+// observeBufferedProviderToolLifecycle recovers provider tool identity that
+// the engine has already committed to conversation history but that could not
+// reach the consumer-facing delta buffer before a terminal shutdown. It only
+// observes model/assistant tool events; tool-runner result deltas are not
+// provider requests and must not create a second obligation.
+func (o *sessionProgressObserver) observeBufferedProviderToolLifecycle(deltas []messages.StreamMessage) {
 	if o == nil {
 		return
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	o.ensureToolStateLocked()
-	o.toolResultsInvalidated = true
-	for callID := range o.acceptedToolCalls {
-		o.unresolvedToolCalls[callID] = struct{}{}
+	for _, msg := range deltas {
+		if msg.Role != messages.RoleAssistant && msg.ActorID != messages.Model {
+			continue
+		}
+		switch v := msg.Value.(type) {
+		case *messages.ToolCallStartValue:
+			if v != nil {
+				o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+			}
+		case *messages.ToolCallDeltaValue:
+			if v != nil {
+				o.observeProviderToolCallStart(strings.TrimSpace(msg.ToolCallId), "")
+			}
+		case *messages.ToolCallEndValue:
+			if v != nil {
+				o.observeProviderToolCallWithID(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+			}
+		}
 	}
+}
+
+func firstNonBlankToolCallID(primary, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return fallback
 }
 
 // noteToolResultRejected remembers a failed provider-facing result send
@@ -420,6 +536,31 @@ func (o *sessionProgressObserver) hasUnresolvedToolCalls() bool {
 	return len(o.unresolvedToolCalls) > 0
 }
 
+// hasPendingToolContinuations reports accepted results that still own the
+// current turn. It intentionally includes the interval before the explicit
+// continuation request so provider acceptance alone cannot release dispatch
+// or close eligibility.
+func (o *sessionProgressObserver) hasPendingToolContinuations() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	for _, state := range o.toolContinuations {
+		if state != nil && state.resultAccepted && !state.continuationComplete {
+			return true
+		}
+	}
+	return false
+}
+
+// hasToolLifecycleObligation is the shared close/dispatch predicate for all
+// tool kinds. An unresolved result and an accepted-but-not-terminal
+// continuation are both incomplete provider work.
+func (o *sessionProgressObserver) hasToolLifecycleObligation() bool {
+	return o != nil && (o.hasUnresolvedToolCalls() || o.hasPendingToolContinuations())
+}
+
 // hasPendingImageContinuations is distinct from unresolved tool results. A
 // read_image result can be accepted by the provider while its response.create
 // continuation is still in flight.
@@ -429,28 +570,8 @@ func (o *sessionProgressObserver) hasPendingImageContinuations() bool {
 	}
 	o.toolStateMu.Lock()
 	defer o.toolStateMu.Unlock()
-	for _, state := range o.imageContinuations {
-		if state != nil && state.resultAccepted && !state.continuationComplete {
-			return true
-		}
-	}
-	return false
-}
-
-// hasImageContinuationObligation reports whether a provider read_image call
-// still owns the session turn. It intentionally includes the interval before
-// the tool result is accepted: the provider's first MESSAGE.END is only the
-// function-call response, so the default session loop must leave it open long
-// enough for the executor to send the result and for the model continuation
-// to arrive.
-func (o *sessionProgressObserver) hasImageContinuationObligation() bool {
-	if o == nil {
-		return false
-	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	for _, state := range o.imageContinuations {
-		if state != nil && !state.continuationComplete {
+	for _, state := range o.toolContinuations {
+		if state != nil && state.toolName == tools.ReadImageToolID && state.resultAccepted && !state.continuationComplete {
 			return true
 		}
 	}
@@ -464,9 +585,44 @@ func (o *sessionProgressObserver) pendingImageContinuationCallIDs() []string {
 		return nil
 	}
 	o.toolStateMu.Lock()
-	ids := make([]string, 0, len(o.imageContinuations))
-	for id, state := range o.imageContinuations {
+	ids := make([]string, 0, len(o.toolContinuations))
+	for id, state := range o.toolContinuations {
+		if state != nil && state.toolName == tools.ReadImageToolID && state.resultAccepted && !state.continuationComplete {
+			ids = append(ids, id)
+		}
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids
+}
+
+// pendingToolContinuationCallIDs returns accepted call IDs that have not yet
+// reached a terminal continuation. IDs are sorted for deterministic errors and
+// diagnostics.
+func (o *sessionProgressObserver) pendingToolContinuationCallIDs() []string {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.toolContinuations))
+	for id, state := range o.toolContinuations {
 		if state != nil && state.resultAccepted && !state.continuationComplete {
+			ids = append(ids, id)
+		}
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids
+}
+
+func (o *sessionProgressObserver) pendingNonImageToolContinuationCallIDs() []string {
+	if o == nil {
+		return nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.toolContinuations))
+	for id, state := range o.toolContinuations {
+		if state != nil && state.toolName != tools.ReadImageToolID && state.resultAccepted && !state.continuationComplete {
 			ids = append(ids, id)
 		}
 	}
@@ -580,34 +736,56 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
 		o.toolCallInTurn = false
+		o.messageEndSeen = false
+		o.toolStateMu.Unlock()
+	case *messages.TextStartValue, *messages.AudioStartValue, *messages.ReasoningStartValue,
+		*messages.ImageStartValue, *messages.VideoStartValue, *messages.FileStartValue,
+		*messages.EmbeddingStartValue, *messages.TranscriptStartValue:
+		// Compatible providers may omit MESSAGE.START between persistent
+		// responses. Any content-start boundary is enough to distinguish a new
+		// response from a duplicate MESSAGE.END for the previous one.
+		o.toolStateMu.Lock()
+		o.assistantResponseDone = false
+		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.AudioDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityAudio, len(v.Content))
+		o.toolStateMu.Lock()
+		o.messageEndSeen = false
+		o.toolStateMu.Unlock()
 	case *messages.TextDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Content))
+		o.toolStateMu.Lock()
+		o.messageEndSeen = false
+		o.toolStateMu.Unlock()
 	case *messages.TranscriptDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Text))
+		o.toolStateMu.Lock()
+		o.messageEndSeen = false
+		o.toolStateMu.Unlock()
 	case *messages.ToolCallStartValue:
+		o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
 		o.toolDeltaSeen = false
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
-		o.toolCallInTurn = true
+		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallDeltaValue:
+		o.observeProviderToolCallStart(strings.TrimSpace(msg.ToolCallId), "")
 		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
 		o.toolDeltaSeen = true
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
-		o.toolCallInTurn = true
+		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallEndValue:
-		o.observeProviderToolCall(v)
+		o.observeProviderToolCallWithID(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
 		if !o.toolResultsEnabledForObservation() {
 			o.emitToolCallRecord(v)
 		}
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
-		o.toolCallInTurn = true
+		o.toolCallInTurn = o.toolResultsEnabled
 		if o.toolResultsEnabled {
 			o.providerToolCallSeen = true
 		}
@@ -618,8 +796,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolDeltaSeen = false
 	case *messages.MessageEndValue:
 		o.noteProviderUsage(v.Usage)
-		o.observeProviderMessageEnd(msg.Role)
-		o.completeTurn()
+		if o.observeProviderMessageEnd(msg.Role) {
+			o.completeTurn()
+		}
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
@@ -637,53 +816,58 @@ func (o *sessionProgressObserver) toolResultsEnabledForObservation() bool {
 }
 
 // observeProviderMessageEnd advances the provider response state. The first
-// MESSAGE.END after a read_image TOOLCALL.END closes the tool-call response;
-// only a later non-tool MESSAGE.END can complete the continuation. This keeps
-// the initial function-call response from satisfying the new obligation.
-func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) {
+// MESSAGE.END after a tool call closes the provider's function-call response;
+// only a later non-tool MESSAGE.END can complete an accepted continuation.
+// The bool return reports whether this boundary is one new, terminal assistant
+// response and should therefore count as a completed turn.
+func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) bool {
 	if o == nil {
-		return
+		return false
 	}
 	o.toolStateMu.Lock()
 	toolTurn := o.toolCallInTurn
+	duplicateEnd := o.messageEndSeen
+	o.messageEndSeen = true
 	continuationChanged := false
 	if toolTurn {
-		for _, state := range o.imageContinuations {
-			if state != nil && !state.toolResponseComplete {
+		for _, state := range o.toolContinuations {
+			if state != nil && state.providerCallObserved && !state.toolResponseComplete {
 				state.toolResponseComplete = true
 			}
 		}
 	} else if role != messages.RoleTool {
-		for _, state := range o.imageContinuations {
+		for _, state := range o.toolContinuations {
 			if state == nil || !state.toolResponseComplete || state.continuationComplete {
 				continue
 			}
 			state.continuationTerminalSeen = true
-			if state.resultAccepted {
+			if state.resultAccepted && state.continuationRequested {
 				state.continuationComplete = true
 				continuationChanged = true
 			}
 		}
 	}
 	pending := false
-	for _, state := range o.imageContinuations {
+	for _, state := range o.toolContinuations {
 		if state != nil && state.resultAccepted && !state.continuationComplete {
 			pending = true
 			break
 		}
 	}
-	if role != messages.RoleTool && !toolTurn && len(o.unresolvedToolCalls) == 0 && !pending {
+	terminalAssistantResponse := role != messages.RoleTool && !toolTurn && len(o.unresolvedToolCalls) == 0 && !pending
+	if terminalAssistantResponse {
 		o.assistantResponseDone = true
 	}
 	o.toolCallInTurn = false
-	acceptedCh := o.toolResultAcceptedCh
+	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 	if continuationChanged {
 		select {
-		case acceptedCh <- struct{}{}:
+		case lifecycleCh <- struct{}{}:
 		default:
 		}
 	}
+	return terminalAssistantResponse && !duplicateEnd
 }
 
 // assistantResponseCompleted reports whether a non-tool assistant response
@@ -717,14 +901,18 @@ func (o *sessionProgressObserver) noteUserTextInput(text string) {
 
 // dispatchScheduledInputs delivers due scheduled audio through the loop's
 // existing SendAudioInput seam and attributes the bytes to the in-flight turn.
-func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop *agentloop.AgentLoop) error {
+func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop scheduledSessionInputSender) error {
 	if o == nil || loop == nil {
 		return nil
 	}
-	if !o.scheduledAudioReady() {
+	// A response boundary is not enough to release the next spoken turn. The
+	// current provider call must have its accepted result and terminal
+	// continuation first; this check keeps scheduling independent of the
+	// particular input source that created the call.
+	if o.hasToolLifecycleObligation() || !o.scheduledAudioReady() {
 		return nil
 	}
-	for len(o.pendingInputs) > 0 && o.pendingInputs[0].AfterCompletedTurns <= o.turnsCompleted {
+	for len(o.pendingInputs) > 0 && o.pendingInputs[0].AfterCompletedTurns <= o.turnsCompleted && !o.hasToolLifecycleObligation() {
 		input := o.pendingInputs[0]
 		inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
 		if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
@@ -758,7 +946,7 @@ func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
 // owns the decision to close after the schedule, while replay follows its
 // captured lifecycle.
 func (o *sessionProgressObserver) scheduledAudioComplete() bool {
-	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs && !o.hasUnresolvedToolCalls()
+	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs && !o.hasToolLifecycleObligation()
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on
@@ -898,6 +1086,16 @@ func (o *sessionProgressObserver) imageContinuationFailureFacts(failingEvent str
 	}
 }
 
+func (o *sessionProgressObserver) toolContinuationFailureFacts(failingEvent string) *failureFacts {
+	return &failureFacts{
+		classification: SessionToolContinuationClassification,
+		terminalReason: string(messages.TerminalReasonTerminalFailure),
+		provenance:     string(messages.TerminalProvenanceSession),
+		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
+		failingEvent:   failingEvent,
+	}
+}
+
 // emitToolCallRecord reports a provider tool-call event that cannot be
 // executed because this session has no tool executor. Tool-enabled sessions
 // resolve the call through their participant-local executor instead.
@@ -917,91 +1115,6 @@ func (o *sessionProgressObserver) emitToolCallRecord(v *messages.ToolCallEndValu
 	})
 }
 
-// emitTerminal emits at most one canonical failure record per session run. A
-// captured stream failure always wins; otherwise a non-cancellation run error
-// becomes a synthesized connect/run-phase failure. Clean runs emit nothing.
-func (o *sessionProgressObserver) emitTerminal(runErr error) {
-	if o == nil || o.sink == nil {
-		return
-	}
-	o.emitOnce.Do(func() {
-		unresolvedIDs := o.unresolvedToolCallIDs()
-		pendingContinuationIDs := o.pendingImageContinuationCallIDs()
-		f := o.failure
-		if f == nil && len(unresolvedIDs) == 0 && len(pendingContinuationIDs) == 0 {
-			if runErr == nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
-				return
-			}
-		}
-		if f == nil && len(unresolvedIDs) > 0 && errors.Is(runErr, ErrSessionUnresolvedToolResults) {
-			f = o.unresolvedToolResultFailureFacts(failingEventRun)
-		}
-		if f == nil && len(pendingContinuationIDs) > 0 && errors.Is(runErr, ErrSessionImageContinuationIncomplete) {
-			f = o.imageContinuationFailureFacts(failingEventRun)
-		}
-		if f == nil && runErr != nil {
-			var deltaErr *engine.StreamDeltaError
-			if errors.As(runErr, &deltaErr) && deltaErr.Value != nil {
-				// The engine terminates the hot loop on ERROR deltas and the
-				// typed value may never cross the consumer deltas; recover the
-				// canonical facts from the run error itself.
-				f = factsFromErrorValue(deltaErr.Value)
-			}
-		}
-		if f == nil {
-			if len(unresolvedIDs) > 0 {
-				f = o.unresolvedToolResultFailureFacts(failingEventRun)
-			} else if len(pendingContinuationIDs) > 0 {
-				f = o.imageContinuationFailureFacts(failingEventRun)
-			} else {
-				classification := providers.ErrorClassification(runErr)
-				if classification == "" {
-					classification = providers.ErrorClassUnknown
-				}
-				failingEvent := failingEventRun
-				if !o.sawSessionOpen {
-					failingEvent = failingEventConnect
-				}
-				f = &failureFacts{
-					classification: classification,
-					terminalReason: string(messages.TerminalReasonTerminalFailure),
-					provenance:     string(messages.TerminalProvenanceCLI),
-					outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-					failingEvent:   failingEvent,
-				}
-			}
-		}
-		fields := map[string]string{
-			fieldClassification:     f.classification,
-			fieldTerminalReason:     f.terminalReason,
-			fieldTerminalProvenance: f.provenance,
-			fieldOutputState:        f.outputState,
-			fieldProvider:           o.provider,
-			fieldModel:              o.model,
-			fieldTurnsCompleted:     strconv.Itoa(o.turnsCompleted),
-			fieldFailingEvent:       f.failingEvent,
-		}
-		if f.errorType != "" {
-			fields[fieldProviderErrorType] = f.errorType
-		}
-		if f.code != "" {
-			fields[fieldProviderErrorCode] = f.code
-		}
-		if len(unresolvedIDs) > 0 {
-			fields[fieldUnresolvedToolResultCount] = strconv.Itoa(len(unresolvedIDs))
-			fields[fieldUnresolvedToolCallIDs] = strings.Join(unresolvedIDs, ", ")
-		}
-		if len(pendingContinuationIDs) > 0 {
-			fields[SessionDiagnosticFieldPendingImageContinuationCount] = strconv.Itoa(len(pendingContinuationIDs))
-			fields[SessionDiagnosticFieldPendingImageContinuationIDs] = strings.Join(pendingContinuationIDs, ", ")
-		}
-		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
-			Event:  SessionDiagnosticEventFailure,
-			Fields: fields,
-		})
-	})
-}
-
 // finish enriches err with any unresolved lifecycle failure, emits terminal
 // records, and returns the enriched error so termination paths read as plain
 // returns.
@@ -1010,6 +1123,7 @@ func (o *sessionProgressObserver) finish(err error) error {
 		return err
 	}
 	err = withUnresolvedToolResults(err, o)
+	err = withPendingToolContinuations(err, o)
 	err = withPendingImageContinuations(err, o)
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()

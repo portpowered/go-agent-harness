@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -44,10 +45,69 @@ func TestSessionProgressObserver_RejectedResultRegistersBeforeCallObservation(t 
 	}
 }
 
-func TestSessionProgressObserver_IncompleteResponsePreservesAcceptedResultID(t *testing.T) {
-	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+func TestSessionProgressObserver_InterruptedProviderCallFailsWithCallID(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
 	observer.setToolResultsEnabled(true)
-	const callID = "call-incomplete-response"
+	const callID = "call-interrupted-before-end"
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallStart,
+		Role:       messages.RoleAssistant,
+		ToolCallId: callID,
+		Value:      messages.NewToolCallStartValue(callID, "lookup"),
+	})
+	if !observer.providerToolCallObserved() {
+		t.Fatal("interrupted provider tool call was not recorded at TOOLCALL.START")
+	}
+	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("interrupted provider tool IDs = %v, want [%s]", got, callID)
+	}
+
+	err := observer.finish(context.Canceled)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("interrupted provider call error = %v, want context.Canceled preserved", err)
+	}
+	if !errors.Is(err, ErrSessionUnresolvedToolResults) {
+		t.Fatalf("interrupted provider call error = %v, want unresolved-result sentinel", err)
+	}
+	var unresolved *SessionUnresolvedToolResultsError
+	if !errors.As(err, &unresolved) {
+		t.Fatalf("interrupted provider call error = %v, want SessionUnresolvedToolResultsError", err)
+	}
+	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("interrupted provider unresolved IDs = %v, want [%s]", got, callID)
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("interrupted provider failure records = %d, want exactly one", len(failures))
+	}
+	if got := failures[0].Fields[SessionDiagnosticFieldUnresolvedToolCallIDs]; got != callID {
+		t.Fatalf("interrupted provider diagnostic IDs = %q, want %s", got, callID)
+	}
+
+	// A terminal shutdown can recover a call committed to engine history even
+	// when the consumer-facing delta was never drained.
+	recovered := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	recovered.setToolResultsEnabled(true)
+	recovered.observeBufferedProviderToolLifecycle([]messages.StreamMessage{
+		{
+			Type:       messages.StreamTypeToolCallStart,
+			Role:       messages.RoleAssistant,
+			ToolCallId: "call-recovered-from-history",
+			Value:      messages.NewToolCallStartValue("call-recovered-from-history", "lookup"),
+		},
+	})
+	if got := recovered.unresolvedToolCallIDs(); len(got) != 1 || got[0] != "call-recovered-from-history" {
+		t.Fatalf("recovered provider unresolved IDs = %v, want [call-recovered-from-history]", got)
+	}
+}
+
+func TestSessionProgressObserver_IncompleteResponseReportsAcceptedContinuationID(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-incomplete-continuation"
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,
 		Role:  messages.RoleAssistant,
@@ -62,15 +122,29 @@ func TestSessionProgressObserver_IncompleteResponsePreservesAcceptedResultID(t *
 	if !errors.Is(err, ErrSessionAudioResponseIncomplete) {
 		t.Fatalf("incomplete response error = %v, want ErrSessionAudioResponseIncomplete", err)
 	}
-	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
-		t.Fatalf("unresolved IDs after incomplete response = %v, want [%s]", got, callID)
+	err = observer.finish(err)
+	if errors.Is(err, ErrSessionUnresolvedToolResults) {
+		t.Fatalf("accepted result was reported as undelivered: %v", err)
 	}
-
-	// A provider writer can report queue acceptance after the terminal path has
-	// started. That late callback must not clear the preserved obligation.
-	observer.noteToolResultAccepted(callID)
-	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
-		t.Fatalf("late acceptance cleared unresolved ID = %v, want [%s]", got, callID)
+	if !errors.Is(err, ErrSessionToolContinuationIncomplete) {
+		t.Fatalf("incomplete response error = %v, want tool continuation sentinel", err)
+	}
+	var continuationErr *SessionToolContinuationError
+	if !errors.As(err, &continuationErr) {
+		t.Fatalf("incomplete response error = %v, want SessionToolContinuationError", err)
+	}
+	if len(continuationErr.CallIDs) != 1 || continuationErr.CallIDs[0] != callID {
+		t.Fatalf("continuation IDs = %v, want [%s]", continuationErr.CallIDs, callID)
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("failure records = %d, want exactly one", len(failures))
+	}
+	if got := failures[0].Fields[SessionDiagnosticFieldPendingToolContinuationIDs]; got != callID {
+		t.Fatalf("pending tool continuation IDs = %q, want %s", got, callID)
+	}
+	if got := failures[0].Fields[fieldClassification]; got != SessionToolContinuationClassification {
+		t.Fatalf("failure classification = %q, want %q", got, SessionToolContinuationClassification)
 	}
 }
 
@@ -107,6 +181,7 @@ func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *te
 	// A non-tool terminal MESSAGE.END is the continuation boundary. Duplicate
 	// acceptance and duplicate terminal events must remain idempotent.
 	observer.noteToolResultAccepted(callID)
+	observer.noteToolContinuationRequested()
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
@@ -123,6 +198,45 @@ func TestSessionProgressObserver_ImageContinuationWaitsForTerminalResponse(t *te
 	}
 	if got := observer.pendingImageContinuationCallIDs(); len(got) != 0 {
 		t.Fatalf("pending image continuation IDs after terminal response = %v, want none", got)
+	}
+}
+
+func TestSessionProgressObserver_ContinuationRequestBeforeCallObservation(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-continuation-before-observation"
+
+	// Provider-send acknowledgements can reach the lifecycle observer before
+	// the outer delta consumer drains the originating TOOLCALL.END. The request
+	// must remain correlated with this call instead of being lost.
+	observer.noteToolResultAccepted(callID)
+	observer.noteToolContinuationRequested()
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeToolCallEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(callID, "lookup", `{}`),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if observer.hasToolLifecycleObligation() {
+		t.Fatal("out-of-order accepted continuation remained pending")
+	}
+	if got := observer.pendingToolContinuationCallIDs(); len(got) != 0 {
+		t.Fatalf("pending continuation IDs = %v, want none", got)
 	}
 }
 
@@ -157,6 +271,7 @@ func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.
 	}
 
 	observer.noteToolResultAccepted(callID)
+	observer.noteToolContinuationRequested()
 	finalAssistantEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
@@ -167,8 +282,7 @@ func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.
 		t.Fatal("completed read_image continuation did not stop the default session loop")
 	}
 
-	// The default stop rule remains unchanged for ordinary tools; only the
-	// image continuation has a second provider response to wait for.
+	// Ordinary tools use the same continuation gate as image tools.
 	genericObserver := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	genericObserver.setToolResultsEnabled(true)
 	genericObserver.observe(messages.StreamMessage{
@@ -176,8 +290,9 @@ func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.
 		Role:  messages.RoleAssistant,
 		Value: messages.NewToolCallEndValue("call-generic", "lookup", `{}`),
 	})
-	if !shouldStopSessionLoop(providerToolCallEnd, sessionLoopOptions{observer: genericObserver}, false) {
-		t.Fatal("ordinary tool MESSAGE.END changed the default stop rule")
+	genericObserver.observe(providerToolCallEnd)
+	if shouldStopSessionLoop(providerToolCallEnd, sessionLoopOptions{observer: genericObserver}, false) {
+		t.Fatal("ordinary tool MESSAGE.END stopped before the tool result")
 	}
 }
 

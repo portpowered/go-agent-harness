@@ -165,16 +165,18 @@ type roundTripSession struct {
 	done chan struct{}
 	once sync.Once
 
-	mu   sync.Mutex
-	sent []messages.StreamMessage
+	mu         sync.Mutex
+	sent       []messages.StreamMessage
+	sentEvents chan messages.StreamMessage
 }
 
 var _ messages.Session = (*roundTripSession)(nil)
 
 func newRoundTripSession() *roundTripSession {
 	return &roundTripSession{
-		recv: messages.NewTypedBuffer[messages.StreamMessage](64),
-		done: make(chan struct{}),
+		recv:       messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:       make(chan struct{}),
+		sentEvents: make(chan messages.StreamMessage, 64),
 	}
 }
 
@@ -182,7 +184,24 @@ func (s *roundTripSession) Send(_ context.Context, msg messages.StreamMessage) b
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
 	s.mu.Unlock()
+	select {
+	case s.sentEvents <- msg:
+	default:
+	}
 	return true
+}
+
+func (s *roundTripSession) waitForSent(ctx context.Context, want messages.StreamMessageType) bool {
+	for {
+		select {
+		case msg := <-s.sentEvents:
+			if msg.Type == want {
+				return true
+			}
+		case <-ctx.Done():
+			return false
+		}
+	}
 }
 
 func (s *roundTripSession) SentCount() int {
@@ -290,6 +309,9 @@ func (i *scriptedToolCallInferencer) ConnectSession(ctx context.Context) (messag
 				if !session.recv.Write(ctx, evt) {
 					return
 				}
+			}
+			if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+				return
 			}
 		}
 		if i.followUpGate != "" && !i.out.waitForOutput(i.followUpGate, 5*time.Second) {

@@ -25,18 +25,23 @@ type lifecycleSession struct {
 	closeOnce          sync.Once
 	responseOnce       sync.Once
 	resultAcceptedOnce sync.Once
+	continuationOnce   sync.Once
 
 	mu   sync.Mutex
 	sent []messages.StreamMessage
 
-	resultAccepted chan struct{}
+	resultAccepted        chan struct{}
+	continuationRequested chan struct{}
+	continuationRelease   chan struct{}
 }
 
 func newLifecycleSession() *lifecycleSession {
 	return &lifecycleSession{
-		recv:           messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:           make(chan struct{}),
-		resultAccepted: make(chan struct{}),
+		recv:                  messages.NewTypedBuffer[messages.StreamMessage](32),
+		done:                  make(chan struct{}),
+		resultAccepted:        make(chan struct{}),
+		continuationRequested: make(chan struct{}),
+		continuationRelease:   make(chan struct{}),
 	}
 }
 
@@ -62,6 +67,14 @@ func (s *lifecycleSession) SendWithOutcome(ctx context.Context, msg messages.Str
 		if ok && value != nil && value.ToolCallID == sessionToolLifecycleCallID {
 			s.resultAcceptedOnce.Do(func() { close(s.resultAccepted) })
 		}
+	case messages.StreamTypeResponseCreate:
+		s.continuationOnce.Do(func() { close(s.continuationRequested) })
+		select {
+		case <-s.continuationRelease:
+			s.emitProviderContinuation()
+		case <-ctx.Done():
+			return lifecycleSessionContextOutcome(ctx.Err())
+		}
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
@@ -84,6 +97,16 @@ func (s *lifecycleSession) emitProviderToolTurn() {
 	}
 }
 
+func (s *lifecycleSession) emitProviderContinuation() {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("grounded lifecycle continuation")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(context.Background(), msg)
+	}
+}
+
 func (s *lifecycleSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
 
 func (s *lifecycleSession) Done() <-chan struct{} { return s.done }
@@ -97,6 +120,14 @@ func (s *lifecycleSession) sentSnapshot() []messages.StreamMessage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]messages.StreamMessage(nil), s.sent...)
+}
+
+func (s *lifecycleSession) releaseContinuation() {
+	select {
+	case <-s.continuationRelease:
+	default:
+		close(s.continuationRelease)
+	}
 }
 
 type lifecycleSessionInferencer struct {
@@ -151,9 +182,9 @@ func waitLifecycleSignal(t *testing.T, signal <-chan struct{}, name string) {
 
 // TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone drives the
 // real session composition boundary with one scheduled turn. The provider's
-// response.done is observed while the executor is still blocked; close is
-// absent until the exact correlated result send is accepted, after which the
-// normal close is emitted once.
+// response.done is observed while the executor is still blocked; result
+// acceptance alone cannot close the session. A second barrier then releases
+// the explicit continuation, after which the normal close is emitted once.
 func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.T) {
 	inferencer := &lifecycleSessionInferencer{}
 	inferencer.ready = make(chan struct{})
@@ -218,7 +249,19 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 
 	close(executor.release)
 	waitLifecycleSignal(t, sessionReady.resultAccepted, "correlated tool result acceptance")
-	waitLifecycleSignal(t, localSessionClose, "SESSION.CLOSE after result acceptance")
+	select {
+	case <-localSessionClose:
+		t.Fatal("session emitted SESSION.CLOSE after result acceptance but before continuation")
+	default:
+	}
+	waitLifecycleSignal(t, sessionReady.continuationRequested, "provider continuation request")
+	select {
+	case <-localSessionClose:
+		t.Fatal("session emitted SESSION.CLOSE before continuation terminal response")
+	default:
+	}
+	sessionReady.releaseContinuation()
+	waitLifecycleSignal(t, localSessionClose, "SESSION.CLOSE after continuation")
 
 	select {
 	case err := <-runErr:
@@ -230,6 +273,7 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 	}
 
 	var resultCount int
+	var continuationCount int
 	for _, msg := range sessionReady.sentSnapshot() {
 		switch msg.Type {
 		case messages.StreamTypeToolCallEnd:
@@ -237,10 +281,15 @@ func TestScheduledSessionWaitsForAcceptedToolResultAfterResponseDone(t *testing.
 			if ok && value != nil && value.ToolCallID == sessionToolLifecycleCallID {
 				resultCount++
 			}
+		case messages.StreamTypeResponseCreate:
+			continuationCount++
 		}
 	}
 	if resultCount != 1 {
 		t.Fatalf("provider sends contained %d correlated tool results, want exactly one", resultCount)
+	}
+	if continuationCount != 1 {
+		t.Fatalf("provider sends contained %d continuation requests, want exactly one", continuationCount)
 	}
 	traceMu.Lock()
 	observed := append([]messages.StreamMessage(nil), trace...)

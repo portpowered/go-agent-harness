@@ -296,9 +296,15 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
 		s.mu.Lock()
 		s.acceptedCalls++
+		s.mu.Unlock()
+		return true
+	}
+	if msg.Type == messages.StreamTypeResponseCreate {
+		s.mu.Lock()
 		closeAfterAcceptance := s.acceptedCalls == len(s.inferencer.calls)
 		s.mu.Unlock()
 		if closeAfterAcceptance {
+			s.emitContinuation()
 			s.inferencer.close()
 		}
 		return true
@@ -337,6 +343,20 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		}
 	}
 	return true
+}
+
+func (s *sessionConfigToolSession) emitContinuation() {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("session config tool continuation")},
+		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		if !s.recv.Write(context.Background(), msg) {
+			return
+		}
+	}
 }
 
 func (s *sessionConfigToolSession) advertisedToolNames() map[string]bool {

@@ -155,26 +155,6 @@
       "sequence": 10,
       "direction": "client_to_server",
       "timestamp_ms": 9,
-      "type": "conversation.item.create",
-      "payload_type": "websocket_message",
-      "payload": {
-        "type": "conversation.item.create",
-        "item": {
-          "type": "message",
-          "role": "user",
-          "content": [
-            {
-              "type": "input_text",
-              "text": "Please inspect the image at __READ_IMAGE_PATH__ without relying on its filename."
-            }
-          ]
-        }
-      }
-    },
-    {
-      "sequence": 11,
-      "direction": "client_to_server",
-      "timestamp_ms": 10,
       "type": "response.create",
       "payload_type": "websocket_message",
       "payload": {
@@ -182,9 +162,9 @@
       }
     },
     {
-      "sequence": 12,
+      "sequence": 11,
       "direction": "server_to_client",
-      "timestamp_ms": 11,
+      "timestamp_ms": 10,
       "type": "response.created",
       "payload_type": "websocket_message",
       "payload": {
@@ -192,9 +172,9 @@
       }
     },
     {
-      "sequence": 13,
+      "sequence": 12,
       "direction": "server_to_client",
-      "timestamp_ms": 12,
+      "timestamp_ms": 11,
       "type": "response.output_text.delta",
       "payload_type": "websocket_message",
       "payload": {
@@ -203,9 +183,9 @@
       }
     },
     {
-      "sequence": 14,
+      "sequence": 13,
       "direction": "server_to_client",
-      "timestamp_ms": 13,
+      "timestamp_ms": 12,
       "type": "response.output_text.done",
       "payload_type": "websocket_message",
       "payload": {
@@ -213,9 +193,9 @@
       }
     },
     {
-      "sequence": 15,
+      "sequence": 14,
       "direction": "server_to_client",
-      "timestamp_ms": 14,
+      "timestamp_ms": 13,
       "type": "response.done",
       "payload_type": "websocket_message",
       "payload": {

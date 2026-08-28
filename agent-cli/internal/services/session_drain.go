@@ -73,7 +73,9 @@ func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop,
 	for {
 		select {
 		case msg := <-loop.Deltas().Chan():
-			obs.observe(msg)
+			if obs != nil {
+				obs.observe(msg)
+			}
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
 			}
@@ -99,7 +101,7 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd, messages.StreamTypeTextEnd:
-		if opts.observer != nil && opts.observer.hasImageContinuationObligation() {
+		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
 			return false
 		}
 		return true
@@ -116,7 +118,9 @@ func drainSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *ses
 		if !ok {
 			return nil
 		}
-		obs.observe(msg)
+		if obs != nil {
+			obs.observe(msg)
+		}
 		if err := writeSessionReplayMessage(out, msg); err != nil {
 			return err
 		}
@@ -133,7 +137,9 @@ func drainSessionLoopMessagesUntilQuiet(out io.Writer, loop *agentloop.AgentLoop
 			if !ok {
 				return nil
 			}
-			obs.observe(msg)
+			if obs != nil {
+				obs.observe(msg)
+			}
 			if err := writeSessionReplayMessage(out, msg); err != nil {
 				return err
 			}

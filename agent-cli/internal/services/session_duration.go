@@ -879,6 +879,13 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 		select {
 		case <-toolLifecycleEvents:
+			// Tool lifecycle completion is an asynchronous scheduler wake. It
+			// must re-check pending audio before checking whether the session
+			// can close; otherwise a completed continuation can leave the next
+			// scheduled turn waiting for an unrelated provider delta.
+			if err := opts.observer.dispatchScheduledInputs(runCtx, loop); err != nil {
+				return finish(false, err)
+			}
 			state, closeErr := closePendingSessionIfReady(runCtx, loop, opts, sessionLoopMessageState{
 				closeSent:             closeSent,
 				closeAfterOpenPending: closeAfterOpenPending,
@@ -917,30 +924,30 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		case err := <-runErrCh:
 			admittedInferencer.waitForClose()
 			if drainErr := drainDurationSessionLoopMessages(out, loop, durationExpired, &durationTerminalWritten, artifacts, opts.observer, terminalState); drainErr != nil {
-				return drainErr
+				return sessionRunTerminationError(ctx, drainErr)
 			}
 			if runtimeErr := admittedInferencer.runtimeError(); runtimeErr != nil {
-				return wrapSessionPhaseError("session runtime", runtimeErr)
+				return sessionRunTerminationError(ctx, wrapSessionPhaseError("session runtime", runtimeErr))
 			}
 			if closeErr := admittedInferencer.closeError(); closeErr != nil {
-				return wrapSessionPhaseError("close session", closeErr)
+				return sessionRunTerminationError(ctx, wrapSessionPhaseError("close session", closeErr))
 			}
 			if err != nil && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("session error: %w", err)
+				return sessionRunTerminationError(ctx, fmt.Errorf("session error: %w", err))
 			}
 			if durationExpired && !terminalState.terminalWritten {
 				if err := terminalState.writeObservedProviderTerminal(out, artifacts); err != nil {
-					return err
+					return sessionRunTerminationError(ctx, err)
 				}
 			}
 			if durationExpired && !terminalState.terminalWritten {
 				if err := writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
-					return err
+					return sessionRunTerminationError(ctx, err)
 				}
 				terminalState.terminalWritten = true
 				durationTerminalWritten = true
 			}
-			return nil
+			return sessionRunTerminationError(ctx, nil)
 		case msg, ok := <-loop.Deltas().Chan():
 			if !ok {
 				return finish(durationExpired, nil)

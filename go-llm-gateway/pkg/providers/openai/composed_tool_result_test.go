@@ -190,7 +190,7 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		"session.update",
 		"input_audio_buffer.append",
 		"conversation.item.create", // function_call_output
-		"response.create",          // audio-only tool continuation
+		"response.create",          // grounded continuation after tool result
 		"conversation.item.create", // user text turn
 		"response.create",
 	}
@@ -225,8 +225,8 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		t.Errorf("text turn content part = %#v, want input_text %q", part, userReply)
 	}
 
-	// The audio-only tool continuation and the later plain-text turn each
-	// request exactly one response.
+	// The tool result and the later plain-text turn each own exactly one
+	// response.create boundary.
 	responseCreates := 0
 	for _, frame := range frames {
 		if frame.Type == "response.create" {

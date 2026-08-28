@@ -29,8 +29,8 @@ const (
 // the production CLI composition. The replay capture blocks the continuation
 // until the CLI sends the exact correlated function_call_output for the tool
 // call, so the final response and session close also prove result reinjection.
-// The production session path must also send its normal follow-up text trigger
-// before the replay can deliver the continuation.
+// The production session path must also send the explicit response.create
+// continuation boundary before the replay can deliver the continuation.
 func TestSessionCommand_DefaultToolSetActive(t *testing.T) {
 	capturePath := writeV5ADefaultSleepCapture(t)
 	output, err := executeV5ADefaultSleepSession(t, capturePath, t.TempDir())
@@ -146,9 +146,8 @@ func writeV5ADefaultSleepCapture(t *testing.T) string {
 	add(gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+v5aDefaultSleepCallID+`","name":"sleep","arguments":`+strconv.Quote(v5aDefaultSleepArgs)+`}`)
 	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp_v5a_default_sleep","status":"completed"}}`)
 	add(gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"`+v5aDefaultSleepCallID+`","output":"`+v5aDefaultSleepResult+`"}}`)
-	// The stream-only session contract requests the next response by replaying
-	// the latest user text after the independently forwarded flat tool result.
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"`+v5aDefaultSleepPrompt+`"}]}}`)
+	// The flat result is followed by one explicit provider response boundary;
+	// no duplicate user message is needed to ground the continuation.
 	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
 	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp_v5a_default_sleep_continuation"}}`)
 	add(gwtesting.DirectionServerToClient, "response.output_text.delta", `{"type":"response.output_text.delta","delta":"Sleep tool result reinjected."}`)
