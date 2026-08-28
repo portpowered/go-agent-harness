@@ -131,9 +131,9 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 		ClientTranscript: []byte("probe.scenario.v2:" + e.scenario.ID + "\n"),
 		AgentTranscript:  []byte("probe.scenario.v2 evidence\n"),
 		Metadata: transcript.RecordingMetadata{
-			Transport: "replay",
+			Transport: probeScenarioV2EvidenceTransport(e),
 			Model:     model,
-			ClockBase: "fake:0",
+			ClockBase: probeScenarioV2EvidenceClockBase(e),
 		},
 		ManifestVersion: transcript.RecordingManifestV2Version,
 		AdditionalArtifacts: []transcript.RecordingArtifact{
@@ -178,7 +178,9 @@ func (e *probeScenarioV2Executor) finalizeEvidence(destination string) (probeSce
 
 func probeScenarioV2PageStateBytes(executor *probeScenarioV2Executor) ([]byte, error) {
 	state := json.RawMessage(`null`)
-	if executor != nil && executor.runtime != nil && len(executor.runtime.PageState()) > 0 {
+	if executor != nil && executor.pageStateSet {
+		state = executor.pageState
+	} else if executor != nil && executor.runtime != nil && len(executor.runtime.PageState()) > 0 {
 		state = executor.runtime.PageState()
 	}
 	normalized, err := testkit.JSONValue(state)
@@ -886,8 +888,8 @@ func (e *probeScenarioV2Executor) recordBrowserEvent(eventType testkit.EventType
 
 func (e *probeScenarioV2Executor) recordDiscoveryStarted() error {
 	return e.recordBrowserEvent(testkit.EventBrowserDiscoveryStarted, "", "", 0, map[string]any{
-		"source": "browser-script",
-		"mode":   "hermetic",
+		"source": e.browserEvidenceSource(),
+		"mode":   e.browserEvidenceMode(),
 	})
 }
 
@@ -895,7 +897,7 @@ func (e *probeScenarioV2Executor) recordDiscoveryEvidence(ctx context.Context) e
 	if err := e.recordBrowserEvent(testkit.EventBrowserDiscoveryCompleted, discoveryBrowserID(e.discovered), "", 0, map[string]any{
 		"candidate_count": len(e.discovered),
 		"candidates":      discoveryCandidateEvidence(e.discovered),
-		"source":          "browser-script",
+		"source":          e.browserEvidenceSource(),
 	}); err != nil {
 		return err
 	}
@@ -919,6 +921,34 @@ func (e *probeScenarioV2Executor) recordDiscoveryEvidence(ctx context.Context) e
 		}
 	}
 	return nil
+}
+
+func (e *probeScenarioV2Executor) browserEvidenceMode() string {
+	if e != nil && e.mode == ProbeScenarioV2BrowserExecutorReal {
+		return string(ProbeScenarioV2BrowserExecutorReal)
+	}
+	return string(ProbeScenarioV2BrowserExecutorHermetic)
+}
+
+func (e *probeScenarioV2Executor) browserEvidenceSource() string {
+	if e != nil && e.mode == ProbeScenarioV2BrowserExecutorReal {
+		return "webmcp-browser-adapter"
+	}
+	return "browser-script"
+}
+
+func probeScenarioV2EvidenceTransport(e *probeScenarioV2Executor) string {
+	if e != nil && e.mode == ProbeScenarioV2BrowserExecutorReal {
+		return "browser"
+	}
+	return "replay"
+}
+
+func probeScenarioV2EvidenceClockBase(e *probeScenarioV2Executor) string {
+	if e != nil && e.mode == ProbeScenarioV2BrowserExecutorReal {
+		return "runtime"
+	}
+	return "fake:0"
 }
 
 func discoveryBrowserID(candidates []webmcp.BrowserCandidate) webmcp.BrowserID {
@@ -1089,6 +1119,10 @@ func (e *probeScenarioV2Executor) recordInvocationError(browserID webmcp.Browser
 func probeScenarioV2ErrorCode(err error) string {
 	if err == nil {
 		return "invocation_error"
+	}
+	var executorErr *ProbeScenarioV2BrowserExecutorError
+	if errors.As(err, &executorErr) && executorErr != nil {
+		return string(executorErr.Code)
 	}
 	var classified *webmcp.ClassifiedError
 	if errors.As(err, &classified) && classified != nil && classified.Code != "" {

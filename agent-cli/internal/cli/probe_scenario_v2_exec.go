@@ -9,12 +9,14 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/spf13/cobra"
 )
 
 // probeScenarioV2Result is intentionally compatible with the legacy result
@@ -36,7 +38,9 @@ type probeScenarioV2Result struct {
 	TerminalReason     string                             `json:"terminal_reason,omitempty"`
 	TerminalProvenance string                             `json:"terminal_provenance,omitempty"`
 	OutputState        string                             `json:"output_state,omitempty"`
+	BrowserExecutor    ProbeScenarioV2BrowserExecutorMode `json:"browser_executor"`
 	Error              string                             `json:"error,omitempty"`
+	ErrorCode          string                             `json:"error_code,omitempty"`
 	Divergence         *probeScenarioV2Divergence         `json:"divergence,omitempty"`
 	InputDropCount     uint64                             `json:"input_drop_count"`
 	OutputDropCount    uint64                             `json:"output_drop_count"`
@@ -68,14 +72,34 @@ type probeScenarioV2Invocation struct {
 	Err      error
 }
 
+// probeScenarioV2StatefulBroker is the shared browser execution contract.
+// Both the hermetic testkit broker and the production StatefulBroker satisfy
+// this extension of the public broker interface, so mode selection does not
+// create a second step grammar or evidence projection.
+type probeScenarioV2StatefulBroker interface {
+	webmcp.Broker
+	SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
+	WaitInvocation(context.Context, webmcp.InvocationID) (webmcp.InvokeResult, error)
+	PendingInvocations() []webmcp.Invocation
+}
+
 type probeScenarioV2Executor struct {
 	scenario probe.ScenarioV2
+	mode     ProbeScenarioV2BrowserExecutorMode
 
 	clock   *testkit.FakeClock
 	ids     *testkit.DeterministicIDSource
 	runtime *testkit.BrowserScriptRuntime
 	adapter *testkit.BrowserScriptAdapter
-	broker  *webmcp.StatefulBroker
+	broker  probeScenarioV2StatefulBroker
+
+	browserClose     func() error
+	browserCloseOnce sync.Once
+	browserCloseErr  error
+	browserNavigate  func(context.Context, string) error
+	browserPageState func(context.Context) (json.RawMessage, error)
+	pageState        json.RawMessage
+	pageStateSet     bool
 
 	recorder    *testkit.Recorder
 	eventOutput bytes.Buffer
@@ -143,12 +167,12 @@ func probeScenarioFileIsV2(path string) (bool, error) {
 	return hasScenarioV2Envelope(data), nil
 }
 
-func (c *ProbeRunCommand) runScenarioV2(cmd interface {
-	Context() context.Context
-	OutOrStdout() io.Writer
-	ErrOrStderr() io.Writer
-}, selections []string) error {
+func (c *ProbeRunCommand) runScenarioV2(cmd *cobra.Command, selections []string) error {
 	entries, err := loadProbeScenarioV2Selections(selections)
+	if err != nil {
+		return err
+	}
+	browserOptions, err := c.probeScenarioV2BrowserExecutorOptions(cmd)
 	if err != nil {
 		return err
 	}
@@ -165,7 +189,12 @@ func (c *ProbeRunCommand) runScenarioV2(cmd interface {
 	}
 	for index, entry := range entries {
 		recordingDirectory := probeScenarioV2RecordingDirectory(recordingRoot, index, entry)
-		result := executeProbeScenarioV2(cmd.Context(), entry, recordingDirectory)
+		result := executeProbeScenarioV2(cmd.Context(), entry, recordingDirectory,
+			WithProbeScenarioV2BrowserExecutorMode(browserOptions.Mode),
+			WithProbeScenarioV2BrowserExecutorFactory(browserOptions.Factory),
+			WithProbeScenarioV2BrowserExecutorConfig(browserOptions.Browser),
+			WithProbeScenarioV2BrowserExecutorConfigError(browserOptions.ConfigError),
+		)
 		encoded, encodeErr := json.Marshal(result)
 		if encodeErr != nil {
 			return fmt.Errorf("encode result for scenario %q: %w", result.Name, encodeErr)
@@ -240,15 +269,24 @@ func (c *ProbeRunCommand) openProbeOutputs(cmd interface {
 	return resultsOut, summaryOut, closeOutputs, nil
 }
 
-func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selection, recordingDirectory string) (result probeScenarioV2Result) {
+func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selection, recordingDirectory string, options ...ProbeScenarioV2BrowserExecutorOption) (result probeScenarioV2Result) {
+	resolvedOptions, optionsErr := resolveProbeScenarioV2BrowserExecutorOptions(options...)
 	result = probeScenarioV2Result{
-		ID:            entry.Scenario.ID,
-		Name:          entry.Scenario.Name,
-		SchemaVersion: entry.Scenario.SchemaVersion,
-		StepCount:     len(entry.Scenario.Steps),
-		Steps:         entry.Scenario.Steps,
-		Expectations:  entry.Scenario.Expectations,
-		Pass:          false,
+		ID:              entry.Scenario.ID,
+		Name:            entry.Scenario.Name,
+		SchemaVersion:   entry.Scenario.SchemaVersion,
+		StepCount:       len(entry.Scenario.Steps),
+		Steps:           entry.Scenario.Steps,
+		Expectations:    entry.Scenario.Expectations,
+		Pass:            false,
+		BrowserExecutor: ProbeScenarioV2BrowserExecutorHermetic,
+	}
+	if optionsErr == nil {
+		result.BrowserExecutor = resolvedOptions.Mode
+	} else {
+		result.Error = optionsErr.Error()
+		result.ErrorCode = probeScenarioV2ErrorCode(optionsErr)
+		return result
 	}
 	if result.Name == "" {
 		result.Name = result.ID
@@ -266,12 +304,13 @@ func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selecti
 	}
 	ctx, cancel := context.WithTimeout(ctx, probeScenarioDeadline)
 	defer cancel()
-	executor, err := newProbeScenarioV2Executor(entry.Scenario)
+	executor, err := newProbeScenarioV2Executor(entry.Scenario, options...)
 	if err == nil {
 		err = executor.execute(ctx)
 	}
 	if err != nil {
 		result.Error = err.Error()
+		result.ErrorCode = probeScenarioV2ErrorCode(err)
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			result.Stuck = true
 			result.StuckReason = "v2 scenario execution exceeded the deadguard deadline"
@@ -310,11 +349,40 @@ func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selecti
 	return result
 }
 
-func newProbeScenarioV2Executor(scenario probe.ScenarioV2) (*probeScenarioV2Executor, error) {
-	executor := &probeScenarioV2Executor{scenario: scenario}
+func newProbeScenarioV2Executor(scenario probe.ScenarioV2, options ...ProbeScenarioV2BrowserExecutorOption) (*probeScenarioV2Executor, error) {
+	resolved, err := resolveProbeScenarioV2BrowserExecutorOptions(options...)
+	if err != nil {
+		return &probeScenarioV2Executor{scenario: scenario, mode: ProbeScenarioV2BrowserExecutorHermetic}, err
+	}
+	executor := &probeScenarioV2Executor{scenario: scenario, mode: resolved.Mode}
 	executor.clock = testkit.NewFakeClock(0)
 	executor.ids = testkit.NewDeterministicIDSource("probe")
-	if scenario.BrowserFixture != "" {
+	if resolved.Mode == ProbeScenarioV2BrowserExecutorReal {
+		if resolved.ConfigError != nil {
+			return executor, newProbeScenarioV2BrowserExecutorError(resolved.Mode, "configuration", webmcp.ErrorBrowserProtocol, resolved.ConfigError)
+		}
+		if resolved.Factory == nil {
+			return executor, newProbeScenarioV2BrowserExecutorError(resolved.Mode, "composition", webmcp.ErrorUnsupportedWebMCP, ErrProbeScenarioV2RealAdapterUnavailable)
+		}
+		runtime, factoryErr := resolved.Factory(resolved.Browser)
+		if factoryErr != nil {
+			_ = closeWebMCPDoctorRuntime(runtime)
+			return executor, newProbeScenarioV2BrowserExecutorError(resolved.Mode, "construction", webmcp.ErrorEndpointNotFound, factoryErr)
+		}
+		if runtime.Broker == nil {
+			_ = closeWebMCPDoctorRuntime(runtime)
+			return executor, newProbeScenarioV2BrowserExecutorError(resolved.Mode, "composition", webmcp.ErrorUnsupportedWebMCP, errors.New("real runtime has no stateful broker"))
+		}
+		broker, ok := runtime.Broker.(probeScenarioV2StatefulBroker)
+		if !ok {
+			_ = closeWebMCPDoctorRuntime(runtime)
+			return executor, newProbeScenarioV2BrowserExecutorError(resolved.Mode, "composition", webmcp.ErrorUnsupportedWebMCP, errors.New("real runtime broker does not implement the v2 stateful seam"))
+		}
+		executor.broker = broker
+		executor.browserClose = func() error { return closeWebMCPDoctorRuntime(runtime) }
+		executor.browserNavigate = runtime.Navigate
+		executor.browserPageState = runtime.PageState
+	} else if scenario.BrowserFixture != "" {
 		script, err := testkit.LoadBrowserScriptFile(scenario.BrowserFixturePath)
 		if err != nil {
 			return executor, fmt.Errorf("load browser fixture %q: %w", scenario.BrowserFixture, err)
@@ -359,7 +427,6 @@ func newProbeScenarioV2Executor(scenario probe.ScenarioV2) (*probeScenarioV2Exec
 		executor.providerCapture = capture
 		executor.providerPath = scenario.ProviderFixturePath
 	}
-	var err error
 	executor.recorder, err = testkit.NewRecorder(&executor.eventOutput,
 		testkit.WithClock(executor.clock),
 		testkit.WithIDSource(executor.ids),
@@ -377,10 +444,16 @@ func (e *probeScenarioV2Executor) execute(ctx context.Context) error {
 	}
 	for index, step := range e.scenario.Steps {
 		if err := e.dispatchStep(ctx, step); err != nil {
+			if e.mode == ProbeScenarioV2BrowserExecutorReal {
+				err = probeScenarioV2BrowserOperationError(e.mode, "step_"+string(step.Type), err)
+			}
 			return fmt.Errorf("step %d (%s): %w", index, step.Type, err)
 		}
 	}
 	if err := e.resolveInvocations(ctx); err != nil {
+		if e.mode == ProbeScenarioV2BrowserExecutorReal {
+			err = probeScenarioV2BrowserOperationError(e.mode, "resolve_invocations", err)
+		}
 		return fmt.Errorf("resolve browser invocations: %w", err)
 	}
 	if e.providerPath != "" {
@@ -393,8 +466,11 @@ func (e *probeScenarioV2Executor) execute(ctx context.Context) error {
 	} else if len(e.providerSteps) > 0 {
 		return errors.New("provider session steps require provider_fixture")
 	}
+	if err := e.capturePageState(ctx); err != nil {
+		return err
+	}
 	if e.broker != nil {
-		closeErr := e.broker.Close()
+		closeErr := e.closeBrowser()
 		e.closed = true
 		if recordErr := e.recordCleanupEvidence(); recordErr != nil {
 			return recordErr
@@ -415,22 +491,54 @@ func (e *probeScenarioV2Executor) cleanup() {
 	if e == nil {
 		return
 	}
-	if e.broker != nil {
-		_ = e.broker.Close()
-		e.closed = true
-		return
-	}
-	if e.adapter != nil {
-		_ = e.adapter.Disconnect(context.Background())
+	if e.broker != nil || e.browserClose != nil || e.adapter != nil {
+		_ = e.closeBrowser()
 		e.closed = true
 	}
+	if e.runtime != nil {
+		_ = e.runtime.Complete()
+	}
+}
+
+func (e *probeScenarioV2Executor) closeBrowser() error {
+	if e == nil {
+		return nil
+	}
+	e.browserCloseOnce.Do(func() {
+		switch {
+		case e.browserClose != nil:
+			e.browserCloseErr = e.browserClose()
+		case e.broker != nil:
+			e.browserCloseErr = e.broker.Close()
+		case e.adapter != nil:
+			e.browserCloseErr = e.adapter.Disconnect(context.Background())
+		}
+	})
+	return e.browserCloseErr
+}
+
+func (e *probeScenarioV2Executor) capturePageState(ctx context.Context) error {
+	if e == nil || e.browserPageState == nil {
+		return nil
+	}
+	state, err := e.browserPageState(ctx)
+	if err != nil {
+		return probeScenarioV2BrowserOperationError(e.mode, "page_state", err)
+	}
+	normalized, err := testkit.JSONValue(state)
+	if err != nil {
+		return newProbeScenarioV2BrowserExecutorError(e.mode, "page_state", webmcp.ErrorBrowserProtocol, err)
+	}
+	e.pageState = append(json.RawMessage(nil), normalized...)
+	e.pageStateSet = true
+	return nil
 }
 
 func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.ScenarioV2Step) error {
 	switch step.Type {
 	case probe.ScenarioV2StepBrowserConnect, probe.ScenarioV2StepBrowserDiscover:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		if err := e.recordDiscoveryStarted(); err != nil {
 			return err
@@ -443,7 +551,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		return e.recordDiscoveryEvidence(ctx)
 	case probe.ScenarioV2StepBrowserSelect:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		browserID := webmcp.BrowserID(step.BrowserID)
 		if browserID == "" && len(e.discovered) == 1 {
@@ -457,7 +565,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		return e.recordSelectionEvidence(page, "selected")
 	case probe.ScenarioV2StepBrowserActivate:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		browserID := webmcp.BrowserID(step.BrowserID)
 		if browserID == "" {
@@ -475,7 +583,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		return e.recordSelectionEvidence(page, "activated")
 	case probe.ScenarioV2StepWebMCPWaitReady:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		page, err := e.broker.Selected(ctx)
 		if err != nil {
@@ -485,7 +593,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		return nil
 	case probe.ScenarioV2StepWebMCPListTools:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		catalog, err := e.broker.ListTools(ctx, webmcp.ListToolsOptions{
 			Refresh:        step.Refresh,
@@ -501,7 +609,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		return e.recordCatalogEvidence(catalog)
 	case probe.ScenarioV2StepWebMCPInvoke:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		input := json.RawMessage(step.InputJSON)
 		result, err := e.broker.Invoke(ctx, webmcp.InvokeRequest{ToolRef: webmcp.ToolRef(step.ToolRef), Input: input, Reason: step.Reason})
@@ -522,15 +630,33 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		return nil
 	case probe.ScenarioV2StepWebMCPCancel:
 		if e.broker == nil {
-			return errors.New("browser fixture is not configured")
+			return errors.New("browser executor is not configured")
 		}
 		if err := e.broker.Cancel(ctx, webmcp.CancelRequest{InvocationID: webmcp.InvocationID(step.InvocationID), Reason: step.Reason}); err != nil {
 			return err
 		}
 		return e.recordInvocationCancel(step)
 	case probe.ScenarioV2StepBrowserNavigateFixture:
-		if e.adapter == nil {
-			return errors.New("browser fixture is not configured")
+		if e.broker == nil {
+			return errors.New("browser executor is not configured")
+		}
+		if e.mode == ProbeScenarioV2BrowserExecutorReal {
+			if step.FixturePath != "" {
+				return newProbeScenarioV2BrowserExecutorError(e.mode, "navigate", webmcp.ErrorUnsupportedWebMCP, errors.New("real browser execution does not consume navigation fixtures"))
+			}
+			if e.browserNavigate == nil {
+				return newProbeScenarioV2BrowserExecutorError(e.mode, "navigate", webmcp.ErrorUnsupportedWebMCP, errors.New("real browser runtime does not provide navigation"))
+			}
+			if err := e.browserNavigate(ctx, step.URL); err != nil {
+				return probeScenarioV2BrowserOperationError(e.mode, "navigate", err)
+			}
+			page, err := e.broker.Selected(ctx)
+			if err != nil {
+				return err
+			}
+			previous := e.selected.Generation
+			e.selected = page
+			return e.recordGenerationChange(previous, page.Generation)
 		}
 		targetURL := step.URL
 		if step.FixturePath != "" {
@@ -557,8 +683,8 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		}
 		return nil
 	case probe.ScenarioV2StepBrowserDisconnect, probe.ScenarioV2StepCloseTab:
-		if e.adapter == nil {
-			return errors.New("browser fixture is not configured")
+		if e.broker == nil {
+			return errors.New("browser executor is not configured")
 		}
 		// Defer physical teardown until terminal invocation evidence has been
 		// drained. The broker keeps its bounded terminal cache available until
@@ -844,8 +970,12 @@ func (e *probeScenarioV2Executor) evaluateExpectation(expectation probe.Scenario
 		return pending == 0, "0", fmt.Sprintf("%d", pending), nil
 	case probe.ScenarioV2ExpectationPageStateEquals:
 		state := json.RawMessage(`null`)
-		if e.runtime != nil && len(e.runtime.PageState()) > 0 {
+		if e.pageStateSet {
+			state = e.pageState
+		} else if e.runtime != nil && len(e.runtime.PageState()) > 0 {
 			state = e.runtime.PageState()
+		} else if e.mode == ProbeScenarioV2BrowserExecutorReal {
+			return false, safeProbeScenarioV2JSON(expectation.Value), "<unavailable>", newProbeScenarioV2BrowserExecutorError(e.mode, "page_state", webmcp.ErrorUnsupportedWebMCP, errors.New("real browser runtime does not provide an independent page-state oracle"))
 		}
 		actual, err := jsonPathValue(state, expectation.Path)
 		if err != nil {

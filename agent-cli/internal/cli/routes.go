@@ -74,6 +74,15 @@ func NewRouter(
 	if sessionCommand != nil && sessionCommand.deviceRegistry != nil {
 		deviceRegistry = sessionCommand.deviceRegistry
 	}
+	productionWebMCPFactory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionSelectionStoreFactory(func() any {
+			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(flags))
+		}),
+	)
+	if probeRunCommand != nil {
+		probeRunCommand.SetGlobalFlags(flags)
+		probeRunCommand.SetBrowserExecutorFactory(productionWebMCPFactory)
+	}
 	return &Router{
 		Flags:                    flags,
 		deviceRegistry:           deviceRegistry,
