@@ -171,8 +171,8 @@ func TestNewLiveSessionInferencerBuildsAudioSessionRequest(t *testing.T) {
 			if config.Voice != tt.voice {
 				t.Fatalf("session voice = %q, want %q", config.Voice, tt.voice)
 			}
-			if len(config.Modalities) != 2 || config.Modalities[0] != models.SessionModalityText || config.Modalities[1] != models.SessionModalityAudio {
-				t.Fatalf("session modalities = %#v, want text+audio", config.Modalities)
+			if len(config.Modalities) != 1 || config.Modalities[0] != models.SessionModalityAudio {
+				t.Fatalf("session modalities = %#v, want audio only", config.Modalities)
 			}
 			if config.InputAudioFormat != models.AudioFormatPCM16 || config.OutputAudioFormat != models.AudioFormatPCM16 ||
 				config.InputAudioSampleRate != models.SampleRate24000 || config.OutputAudioSampleRate != models.SampleRate24000 {

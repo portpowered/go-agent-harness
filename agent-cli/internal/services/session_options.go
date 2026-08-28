@@ -553,7 +553,7 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 func deviceProbeSessionConfig(model, instructions string, input, output models.AudioFormat) models.SessionConfig {
 	return models.SessionConfig{
 		Model:                 model,
-		Modalities:            []models.SessionModality{models.SessionModalityText, models.SessionModalityAudio},
+		Modalities:            []models.SessionModality{models.SessionModalityAudio},
 		Instructions:          instructions,
 		InputAudioFormat:      input,
 		OutputAudioFormat:     output,
