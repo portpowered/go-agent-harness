@@ -195,6 +195,143 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 	}
 }
 
+func TestRunSessionWithInstructions_ToolGroundingBoundary(t *testing.T) {
+	tests := []struct {
+		name           string
+		explicit       string
+		wantBase       string
+		advertiseTools bool
+	}{
+		{
+			name:           "workspace instructions remain the base",
+			wantBase:       agentsInstructionsMarker,
+			advertiseTools: true,
+		},
+		{
+			name:           "explicit instructions retain precedence",
+			explicit:       rawInstructionsMarker,
+			wantBase:       rawInstructionsMarker,
+			advertiseTools: true,
+		},
+		{
+			name:     "no advertised tools retain existing instructions",
+			wantBase: agentsInstructionsMarker,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workspaceDir := t.TempDir()
+			writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+			inferencer := newSessionInstructionsTestInferencer()
+			opts := services.SessionRunOptions{
+				ReplayPath:        filepath.Join(workspaceDir, "session.json"),
+				ConfigDir:         workspaceDir,
+				Prompt:            userTurnMarker,
+				SessionInferencer: inferencer,
+			}
+			if tt.advertiseTools {
+				inferencer = newSessionInstructionsTestInferencerWithSessionCreated()
+				opts.SessionInferencer = inferencer
+				opts.ToolExecutor = &messages.DefaultToolExecutor{}
+				opts.ToolDefinitions = []messages.ToolDefinition{{
+					Name:        "inspect_machine",
+					Description: "Inspect machine state",
+				}}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if err := services.RunSessionWithInstructions(ctx, io.Discard, opts, tt.explicit); err != nil {
+				t.Fatalf("RunSessionWithInstructions: %v", err)
+			}
+
+			if !tt.advertiseTools {
+				assertSessionInstructionEvents(t, inferencer, tt.wantBase, 1)
+				return
+			}
+			assertGroundedSessionInstructionEvents(t, inferencer, tt.wantBase)
+		})
+	}
+}
+
+func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	realtimeConn := newRecordingRealtimeTestConn()
+	recordPath := filepath.Join(t.TempDir(), "openai-grounding.session.json")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := services.RunSessionWithInstructions(ctx, io.Discard, services.SessionRunOptions{
+		RecordPath:      recordPath,
+		Provider:        config.ProviderOpenAI,
+		Model:           "gpt-realtime",
+		APIKey:          "test-api-key",
+		ConfigDir:       workspaceDir,
+		Prompt:          userTurnMarker,
+		ToolExecutor:    &messages.DefaultToolExecutor{},
+		ToolDefinitions: []messages.ToolDefinition{{Name: "inspect_machine", Description: "Inspect machine state"}},
+		WebSocketDialer: &recordingRealtimeTestDialer{conn: realtimeConn},
+	}, "")
+	if err != nil {
+		t.Fatalf("RunSessionWithInstructions: %v", err)
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("LoadSessionCapture: %v", err)
+	}
+	configCount := 0
+	configIndex := -1
+	userIndex := -1
+	gotInstructions := ""
+	toolCount := 0
+	for index, event := range capture.Records {
+		if event.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		payload := event.Payload
+		if len(payload) == 0 {
+			payload = event.Data
+		}
+		var envelope struct {
+			Type    string `json:"type"`
+			Session struct {
+				Instructions string            `json:"instructions"`
+				Tools        []json.RawMessage `json:"tools"`
+			} `json:"session"`
+			Item struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			t.Fatalf("decode outbound event %q: %v", string(payload), err)
+		}
+		switch envelope.Type {
+		case "session.update":
+			configCount++
+			configIndex = index
+			gotInstructions = envelope.Session.Instructions
+			toolCount = len(envelope.Session.Tools)
+		case "conversation.item.create":
+			userIndex = index
+		}
+	}
+	if configCount != 1 {
+		t.Fatalf("instruction-bearing OpenAI session.update count = %d, want 1; capture=%#v", configCount, capture.Records)
+	}
+	assertGroundingPolicyText(t, gotInstructions, agentsInstructionsMarker)
+	if toolCount != 1 {
+		t.Fatalf("OpenAI session.update tools = %d, want 1", toolCount)
+	}
+	if configIndex < 0 || userIndex < 0 || configIndex >= userIndex {
+		t.Fatalf("OpenAI session.update index = %d, first user index = %d; capture=%#v", configIndex, userIndex, capture.Records)
+	}
+}
+
 func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
@@ -448,6 +585,83 @@ func assertSessionInstructionEvents(t *testing.T, inferencer *sessionInstruction
 	}
 }
 
+func assertGroundedSessionInstructionEvents(t *testing.T, inferencer *sessionInstructionsTestInferencer, wantBase string) {
+	t.Helper()
+	events := inferencer.sentEvents()
+	instructionUpdates := 0
+	toolUpdates := 0
+	instructionIndex := -1
+	userIndex := -1
+	gotInstructions := ""
+	for index, event := range events {
+		switch event.Type {
+		case messages.StreamTypeSessionUpdate:
+			value, ok := event.Value.(*messages.SessionUpdateValue)
+			if !ok || value == nil {
+				t.Fatalf("session update event has value %T, want *SessionUpdateValue", event.Value)
+			}
+			if value.Instructions != "" {
+				instructionUpdates++
+				instructionIndex = index
+				gotInstructions = value.Instructions
+			}
+			if len(value.Tools) > 0 {
+				toolUpdates++
+			}
+		case messages.StreamTypeTextDelta:
+			value, ok := event.Value.(*messages.TextDeltaValue)
+			if ok && value != nil && value.Content == userTurnMarker {
+				userIndex = index
+			}
+		}
+	}
+	if instructionUpdates != 1 {
+		t.Fatalf("grounding instruction update count = %d, want 1; events=%s", instructionUpdates, formatSessionEvents(events))
+	}
+	if toolUpdates != 1 {
+		t.Fatalf("advertised tool update count = %d, want 1; events=%s", toolUpdates, formatSessionEvents(events))
+	}
+	assertGroundingPolicyText(t, gotInstructions, wantBase)
+	if instructionIndex < 0 || userIndex < 0 || instructionIndex >= userIndex {
+		t.Fatalf("grounding configuration index = %d, first user index = %d; events=%s", instructionIndex, userIndex, formatSessionEvents(events))
+	}
+}
+
+func assertGroundingPolicyText(t *testing.T, got, wantBase string) {
+	t.Helper()
+	wantPrefix := wantBase + "\n\n"
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("grounding instructions = %q, want selected content prefix %q", got, wantPrefix)
+	}
+	if strings.Count(got, "Tool-grounding requirements:") != 1 {
+		t.Fatalf("grounding policy heading count = %d, want 1; instructions=%q", strings.Count(got, "Tool-grounding requirements:"), got)
+	}
+	for _, phrase := range []string{
+		"actual files",
+		"commands",
+		"web resources",
+		"images",
+		"machine state",
+		"relevant advertised tool",
+		"corresponding tool result",
+		"missing resources",
+		"permission denials",
+		"non-zero command exits",
+		"instead of guessing",
+		"Never invent output",
+		"apparent success",
+	} {
+		if !strings.Contains(got, phrase) {
+			t.Fatalf("grounding instructions omitted %q: %q", phrase, got)
+		}
+	}
+	for _, providerDetail := range []string{"session.update", "function_call", "function_call_output", "OpenAI", "Grok"} {
+		if strings.Contains(got, providerDetail) {
+			t.Fatalf("grounding instructions contain provider/wire detail %q: %q", providerDetail, got)
+		}
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
@@ -535,12 +749,17 @@ func (c *recordingRealtimeTestConn) Close() error {
 type sessionInstructionsTestInferencer struct {
 	mu                   sync.Mutex
 	connected            bool
+	emitSessionCreated   bool
 	rejectSessionUpdates bool
 	session              *sessionInstructionsTestSession
 }
 
 func newSessionInstructionsTestInferencer() *sessionInstructionsTestInferencer {
 	return &sessionInstructionsTestInferencer{}
+}
+
+func newSessionInstructionsTestInferencerWithSessionCreated() *sessionInstructionsTestInferencer {
+	return &sessionInstructionsTestInferencer{emitSessionCreated: true}
 }
 
 func newSessionInstructionsTestInferencerRejectingUpdates() *sessionInstructionsTestInferencer {
@@ -554,6 +773,12 @@ func (i *sessionInstructionsTestInferencer) ConnectSession(ctx context.Context) 
 	session := i.session
 	i.mu.Unlock()
 	go func() {
+		if i.emitSessionCreated {
+			session.receive.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeSessionCreated,
+				Value: messages.NewSessionCreatedValue("instructions-test-session", "test"),
+			})
+		}
 		session.receive.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionOpen,
 			Value: messages.NewSessionOpenValue("instructions-test-session", "test"),
