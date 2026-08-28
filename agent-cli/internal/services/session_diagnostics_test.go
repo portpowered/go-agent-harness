@@ -623,6 +623,40 @@ func TestSessionDiagnostics_CleanCloseProducesNoFailureRecord(t *testing.T) {
 	}
 }
 
+func TestSessionDiagnostics_OnlyNoExecutorToolCallsAreUnexecutable(t *testing.T) {
+	newToolCall := func() messages.StreamMessage {
+		return messages.StreamMessage{
+			Type:  messages.StreamTypeToolCallEnd,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewToolCallEndValue("call-room-proof", "exec", `{"command":"printf ROOMPROOF"}`),
+		}
+	}
+
+	t.Run("tool-enabled session", func(t *testing.T) {
+		sink := &diagnosticRecordSink{}
+		observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime-2.1-mini")
+		observer.setToolResultsEnabled(true)
+		observer.observe(newToolCall())
+		if records := sink.events(SessionDiagnosticEventToolCall); len(records) != 0 {
+			t.Fatalf("tool-enabled session emitted %d unexecutable records: %v", len(records), records)
+		}
+	})
+
+	t.Run("no-executor session", func(t *testing.T) {
+		sink := &diagnosticRecordSink{}
+		observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime-2.1-mini")
+		observer.setToolResultsEnabled(false)
+		observer.observe(newToolCall())
+		records := sink.events(SessionDiagnosticEventToolCall)
+		if len(records) != 1 {
+			t.Fatalf("no-executor session emitted %d unexecutable records, want one", len(records))
+		}
+		if records[0].Fields["tool_call_id"] != "call-room-proof" || records[0].Fields["tool_name"] != "exec" {
+			t.Fatalf("unexecutable record = %#v, want correlated exec call", records[0])
+		}
+	})
+}
+
 // Guard the harness itself against accidental dependence on prose: the
 // assertions above must keep compiling when the human-readable stream text
 // changes. This test pins that behavior by asserting the disconnect fixture's
