@@ -71,6 +71,31 @@ func TestWebMCPWatchHelpDocumentsCrossProcessObservationBoundary(t *testing.T) {
 			} {
 				if !strings.Contains(test.text, want) {
 					t.Errorf("help text does not contain %q:\n%s", want, test.text)
+ 				}
+			}
+		})
+	}
+}
+
+func TestWebMCPDirectInvokeAndCancelHelpDocumentHandoff(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		want []string
+	}{
+		{name: "invoke", want: []string{"stderr", "invocation_id", "dispatched", "Stdout", "SIGINT"}},
+		{name: "cancel", want: []string{"Two-process flow", "receipt", "exact", "falls back", "stdout"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			operations := NewWebMCPOperationsCommand(flags.NewGlobalFlags())
+			var description string
+			if test.name == "invoke" {
+				description = operations.invokeCommand().Long
+			} else {
+				description = operations.cancelCommand().Long
+			}
+			for _, want := range test.want {
+				if !strings.Contains(description, want) {
+					t.Fatalf("help omitted %q:\n%s", want, description)
 				}
 			}
 		})
@@ -273,7 +298,7 @@ func TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations(t *testing.T) {
 		},
 		{
 			name: "cancel",
-			args: []string{"cancel", "inv-23", "--json"},
+			args: []string{"cancel", "inv-23", "--browser", "browser-a", "--tab", "tab-a", "--json"},
 			check: func(t *testing.T, result directCommandResult, broker *directCommandBroker) {
 				envelope := requireDirectSuccess(t, result)
 				var data WebMCPDirectCancelData
@@ -289,10 +314,185 @@ func TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations(t *testing.T) {
 			broker := newBroker()
 			result := executeDirectCommand(t, configDir, store, directFactory(broker), test.args...)
 			test.check(t, result, broker)
-			if result.stderr != "" {
+			if test.name == "invoke" {
+				var receipt WebMCPDirectInvocationReceipt
+				decoder := json.NewDecoder(strings.NewReader(result.stderr))
+				if err := decoder.Decode(&receipt); err != nil {
+					t.Fatalf("decode dispatch receipt: %v; stderr=%q", err, result.stderr)
+				}
+				if receipt.Version != webmcpDirectInvocationReceiptVersion || receipt.InvocationID != "inv-23" || receipt.ToolRef != string(tool.Ref) || receipt.State != string(webmcp.InvocationDispatched) {
+					t.Fatalf("dispatch receipt = %+v", receipt)
+				}
+				var extra any
+				if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+					t.Fatalf("dispatch stderr contains more than one receipt: err=%v extra=%#v", err, extra)
+				}
+			} else if result.stderr != "" {
 				t.Fatalf("stderr = %q", result.stderr)
 			}
 		})
+	}
+}
+
+func TestWebMCPDirectInvokeReceiptUsesBrowserIDAndOnlyHandoffFields(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	page, target, candidate, tool := directFixture()
+	broker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		catalog:    webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
+		invokeResult: webmcp.InvokeResult{
+			InvocationID:        "broker-invocation-1",
+			BrowserInvocationID: "browser-invocation-9",
+			State:               webmcp.InvocationCompleted,
+			Output:              json.RawMessage(`{"page_output":"do-not-put-in-receipt"}`),
+		},
+	}
+
+	result := executeDirectCommand(t, configDir, NewFileWebMCPSelectionStore(configDir), directFactory(broker),
+		"invoke", "--browser", "browser-a", "--tab", "tab-a", "--tool-ref", string(tool.Ref),
+		"--input-json", `{"input_secret":"do-not-put-in-receipt"}`, "--json")
+	if result.err != nil {
+		t.Fatalf("invoke: %v\nstdout=%s\nstderr=%s", result.err, result.stdout, result.stderr)
+	}
+	if len(result.stderr) > webmcpDirectInvocationReceiptMaxBytes {
+		t.Fatalf("dispatch receipt is %d bytes, want <= %d: %q", len(result.stderr), webmcpDirectInvocationReceiptMaxBytes, result.stderr)
+	}
+	decoder := json.NewDecoder(strings.NewReader(result.stderr))
+	var fields map[string]json.RawMessage
+	if err := decoder.Decode(&fields); err != nil {
+		t.Fatalf("decode dispatch receipt: %v; stderr=%q", err, result.stderr)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		t.Fatalf("dispatch receipt has more than one JSON value: err=%v extra=%#v", err, extra)
+	}
+	wantFields := map[string]struct{}{"version": {}, "invocation_id": {}, "tool_ref": {}, "state": {}}
+	if len(fields) != len(wantFields) {
+		t.Fatalf("dispatch receipt fields = %#v, want exactly %#v", fields, wantFields)
+	}
+	for field := range wantFields {
+		if _, ok := fields[field]; !ok {
+			t.Fatalf("dispatch receipt omitted %q: %#v", field, fields)
+		}
+	}
+	var receipt WebMCPDirectInvocationReceipt
+	if err := json.Unmarshal([]byte(result.stderr), &receipt); err != nil {
+		t.Fatalf("decode typed dispatch receipt: %v", err)
+	}
+	if receipt.Version != webmcpDirectInvocationReceiptVersion || receipt.InvocationID != "browser-invocation-9" || receipt.ToolRef != string(tool.Ref) || receipt.State != string(webmcp.InvocationDispatched) {
+		t.Fatalf("dispatch receipt = %+v", receipt)
+	}
+	for _, secret := range []string{"broker-invocation-1", "input_secret", "do-not-put-in-receipt", "page_output", "127.0.0.1", "password", "fragment"} {
+		if strings.Contains(result.stderr, secret) {
+			t.Fatalf("dispatch receipt exposed %q: %q", secret, result.stderr)
+		}
+	}
+	envelope := requireDirectSuccess(t, result)
+	var data WebMCPDirectInvocation
+	decodeDirectData(t, envelope.Data, &data)
+	if data.InvocationID != "browser-invocation-9" {
+		t.Fatalf("final invocation ID = %q, want browser protocol ID", data.InvocationID)
+	}
+}
+
+func TestWebMCPDirectCancelRehydratesExactSelectionWithoutLocalRegistry(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, candidate, _ := directFixture()
+	if err := store.Save(WebMCPSelection{
+		Version:          WebMCPSelectionVersion,
+		EndpointID:       string(candidate.ID),
+		BrowserID:        string(candidate.ID),
+		TargetID:         string(target.ID),
+		Origin:           target.Origin,
+		ContinuityMarker: target.ContinuityMarker,
+		Generation:       page.Generation,
+	}); err != nil {
+		t.Fatalf("seed persisted selection: %v", err)
+	}
+	base := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	broker := &directCancelCommandBroker{directCommandBroker: base}
+
+	result := executeDirectCommand(t, configDir, store, directFactory(broker), "cancel", "--invocation", "browser-invocation-9", "--json")
+	envelope := requireDirectSuccess(t, result)
+	var data WebMCPDirectCancelData
+	decodeDirectData(t, envelope.Data, &data)
+	if data.InvocationID != "browser-invocation-9" || data.Status != "cancel_requested" {
+		t.Fatalf("cancel data = %+v", data)
+	}
+	if got := broker.directCancelRequest; got.Target != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) || got.InvocationID != "browser-invocation-9" {
+		t.Fatalf("direct cancel request = %+v", got)
+	}
+	if base.cancelRequest.InvocationID != "" {
+		t.Fatalf("fresh direct cancel consulted local broker registry: %+v", base.cancelRequest)
+	}
+	if len(base.selectCalls) != 1 || base.selectCalls[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
+		t.Fatalf("exact selection calls = %+v", base.selectCalls)
+	}
+}
+
+func TestWebMCPDirectCancelRejectsConvenientFallbackTarget(t *testing.T) {
+	configDir := writeDirectConfig(t, "  selection:\n    auto_select: single\n")
+	page, target, candidate, _ := directFixture()
+	base := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	broker := &directCancelCommandBroker{directCommandBroker: base}
+
+	result := executeDirectCommand(t, configDir, nil, directFactory(broker), "cancel", "--browser", "browser-a", "--invocation", "browser-invocation-9", "--json")
+	if result.err == nil {
+		t.Fatal("cancel unexpectedly selected a convenient fallback target")
+	}
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+		t.Fatalf("fallback cancellation envelope = %+v", envelope)
+	}
+	if len(base.selectCalls) != 0 || broker.directCancelRequest.InvocationID != "" {
+		t.Fatalf("fallback cancellation touched target/cancel path: selections=%+v request=%+v", base.selectCalls, broker.directCancelRequest)
+	}
+}
+
+func TestWebMCPDirectCancelClassifiesBrowserRejection(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, candidate, _ := directFixture()
+	if err := store.Save(WebMCPSelection{
+		Version:    WebMCPSelectionVersion,
+		EndpointID: string(candidate.ID),
+		BrowserID:  string(candidate.ID),
+		TargetID:   string(target.ID),
+		Origin:     target.Origin,
+	}); err != nil {
+		t.Fatalf("seed persisted selection: %v", err)
+	}
+	base := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	broker := &directCancelCommandBroker{
+		directCommandBroker: base,
+		directCancelErr:     errors.New("browser response leaked credential=secret"),
+	}
+
+	result := executeDirectCommand(t, configDir, store, directFactory(broker), "cancel", "--invocation", "browser-invocation-9", "--json")
+	if result.err == nil {
+		t.Fatal("browser rejection unexpectedly succeeded")
+	}
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvocationFailed) {
+		t.Fatalf("browser rejection envelope = %+v", envelope)
+	}
+	if strings.Contains(result.stdout, "credential=secret") || strings.Contains(result.stderr, "credential=secret") {
+		t.Fatalf("browser rejection leaked raw error: stdout=%q stderr=%q", result.stdout, result.stderr)
 	}
 }
 
@@ -751,6 +951,18 @@ func (b *selectionOrderingWatchBroker) SelectWithOptions(_ context.Context, sele
 	b.stream <- webmcp.BrokerEvent{Version: webmcp.BrowserEventsVersion, Type: webmcp.BrokerEventCatalogChanged, Sequence: 2, BrowserID: selector.BrowserID, TargetID: selector.TargetID, Generation: page.Generation, Reason: "tools_added"}
 	close(b.stream)
 	return page, nil
+}
+
+type directCancelCommandBroker struct {
+	*directCommandBroker
+
+	directCancelRequest webmcp.DirectCancelRequest
+	directCancelErr     error
+}
+
+func (b *directCancelCommandBroker) CancelDirect(_ context.Context, request webmcp.DirectCancelRequest) error {
+	b.directCancelRequest = request
+	return b.directCancelErr
 }
 
 func (b *directCommandBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {

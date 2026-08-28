@@ -1909,6 +1909,26 @@ agent webmcp invoke \
 agent webmcp cancel --invocation inv-23
 ```
 
+After the browser accepts an invocation, `invoke` writes one bounded JSON
+dispatch receipt to stderr before it waits for the terminal response. The
+receipt contains only `version`, `invocation_id`, `tool_ref`, and
+`state: "dispatched"`; `--json` stdout remains one final
+`webmcp.tool-result.v1` envelope. Persist the exact browser/target selection
+before starting a handoff, then pass the receipt's browser invocation ID to a
+separate cancellation process:
+
+```bash
+agent webmcp select --browser chrome-demo --tab A1B2 --persist-selection --json
+agent webmcp invoke --tool-ref wmcp_... --input-json '{"move":"R U"}' --json 2>invoke.receipt
+agent webmcp cancel --invocation "$(jq -r .invocation_id < invoke.receipt)" --json
+```
+
+`cancel` rehydrates only that exact persisted target (or an explicitly
+provided `--browser` and `--tab`). It does not search for or fall back to a
+different target. Cancellation is a browser request and does not claim that a
+page side effect was rolled back; stale selection or browser rejection is a
+classified non-zero result.
+
 Also support:
 
 ```bash

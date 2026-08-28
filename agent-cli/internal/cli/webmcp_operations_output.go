@@ -14,6 +14,61 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+func writeWebMCPDirectInvocationReceipt(out io.Writer, result webmcp.InvokeResult, toolRef webmcp.ToolRef) (webmcp.InvocationID, error) {
+	invocationID := result.BrowserInvocationID
+	if invocationID == "" {
+		invocationID = result.InvocationID
+	}
+	if invocationID == "" {
+		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("browser returned no invocation ID"))
+	}
+	if out == nil {
+		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("stderr writer is unavailable"))
+	}
+	receipt, err := json.Marshal(WebMCPDirectInvocationReceipt{
+		Version:      webmcpDirectInvocationReceiptVersion,
+		InvocationID: string(invocationID),
+		ToolRef:      string(toolRef),
+		State:        string(webmcp.InvocationDispatched),
+	})
+	if err != nil {
+		return "", directInvocationReceiptError(invocationID, toolRef, err)
+	}
+	if len(receipt)+1 > webmcpDirectInvocationReceiptMaxBytes {
+		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("receipt exceeds the bounded size"))
+	}
+	receipt = append(receipt, '\n')
+	for len(receipt) > 0 {
+		written, writeErr := out.Write(receipt)
+		if written > 0 {
+			receipt = receipt[written:]
+		}
+		if writeErr != nil {
+			return "", directInvocationReceiptError(invocationID, toolRef, writeErr)
+		}
+		if written == 0 {
+			return "", directInvocationReceiptError(invocationID, toolRef, io.ErrShortWrite)
+		}
+	}
+	if flusher, ok := out.(interface{ Flush() error }); ok {
+		if err := flusher.Flush(); err != nil {
+			return "", directInvocationReceiptError(invocationID, toolRef, err)
+		}
+	}
+	return invocationID, nil
+}
+
+func directInvocationReceiptError(invocationID webmcp.InvocationID, toolRef webmcp.ToolRef, cause error) error {
+	err := webmcp.NewClassifiedError(webmcp.ErrorInvocationFailed, "the WebMCP dispatch receipt could not be written", map[string]any{
+		"invocation_id":       string(invocationID),
+		"tool_ref":            string(toolRef),
+		"phase":               "dispatch_receipt",
+		"side_effect_unknown": true,
+	})
+	err.Cause = cause
+	return err
+}
+
 func (c *WebMCPOperationsCommand) contextWithCatalog(ctx context.Context, broker webmcp.Broker, page webmcp.PageContext, refresh bool) (WebMCPDirectContext, error) {
 	if refresh {
 		refreshed, err := selectedDirectContext(ctx, broker, true)
@@ -261,6 +316,14 @@ func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.Tool
 	details := result.ErrorDetails
 	if details == nil {
 		details = map[string]any{"invocation_id": string(result.InvocationID), "tool_ref": string(toolRef), "phase": "invoke"}
+	}
+	if result.BrowserInvocationID != "" {
+		copied := make(map[string]any, len(details)+1)
+		for key, value := range details {
+			copied[key] = value
+		}
+		copied["invocation_id"] = string(result.BrowserInvocationID)
+		details = copied
 	}
 	return webmcp.NewClassifiedError(code, "the WebMCP invocation could not be completed", details)
 }

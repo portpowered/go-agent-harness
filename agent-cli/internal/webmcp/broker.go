@@ -256,6 +256,7 @@ func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, 
 }
 
 var _ Broker = (*StatefulBroker)(nil)
+var _ DirectCanceller = (*StatefulBroker)(nil)
 
 // Discover obtains candidates from the injected discovery seam and retains
 // their normalized identity for exact later selection.
@@ -547,6 +548,14 @@ func (b *StatefulBroker) Invoke(ctx context.Context, request InvokeRequest) (Inv
 // browser cancellation is sent.
 func (b *StatefulBroker) Cancel(ctx context.Context, request CancelRequest) error {
 	return b.cancelInvocation(ctx, request)
+}
+
+// CancelDirect requests cancellation from a direct command that may have
+// been started in a different process. It deliberately accepts the browser's
+// protocol invocation ID and an exact target selector, so it never guesses a
+// target or depends on this broker having admitted the original invocation.
+func (b *StatefulBroker) CancelDirect(ctx context.Context, request DirectCancelRequest) error {
+	return b.cancelDirectInvocation(ctx, request)
 }
 
 // Close retires every session-local reference and closes the broker-owned
