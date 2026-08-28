@@ -1,6 +1,6 @@
 module github.com/portpowered/go-agent-harness/agent-cli
 
-go 1.24.2
+go 1.26.7
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
