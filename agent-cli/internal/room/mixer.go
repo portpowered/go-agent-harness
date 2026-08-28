@@ -103,6 +103,26 @@ type PCM16MixerConfig struct {
 	OutputQueueFrames int
 }
 
+// PCM16QueueStats describes queued PCM in both storage units and audio time.
+// Duration is calculated from the mixer's sample rate and channel count, so it
+// remains meaningful for partial-frame input buffers as well as whole output
+// frames.
+type PCM16QueueStats struct {
+	Bytes            int
+	CapacityBytes    int
+	Frames           int
+	CapacityFrames   int
+	Duration         time.Duration
+	CapacityDuration time.Duration
+}
+
+// PCM16MixerStats is a point-in-time snapshot of mixer occupancy. Inputs is a
+// copy keyed by participant ID; mutating it does not affect the mixer.
+type PCM16MixerStats struct {
+	Inputs map[string]PCM16QueueStats
+	Output PCM16QueueStats
+}
+
 func (c PCM16MixerConfig) normalized() (PCM16MixerConfig, int, error) {
 	if c.Format == (PCM16Format{}) {
 		c.Format = DefaultPCM16Format()
@@ -210,6 +230,25 @@ func (m *PCM16Mixer) FrameBytes() int {
 		return 0
 	}
 	return m.frameBytes
+}
+
+// Stats returns a point-in-time snapshot of input and output queue occupancy.
+// The snapshot is intended for runtime diagnostics and bounded-pressure
+// tests; it does not reserve capacity or change mixer scheduling.
+func (m *PCM16Mixer) Stats() PCM16MixerStats {
+	stats := PCM16MixerStats{Inputs: make(map[string]PCM16QueueStats)}
+	if m == nil {
+		return stats
+	}
+
+	m.mu.Lock()
+	for id, input := range m.inputs {
+		stats.Inputs[id] = m.queueStats(len(input.data), m.maxInputSize)
+	}
+	m.mu.Unlock()
+
+	stats.Output = m.queueStats(len(m.out)*m.frameBytes, cap(m.out)*m.frameBytes)
+	return stats
 }
 
 // AddInput registers one participant source. The change takes effect on the
@@ -487,6 +526,32 @@ func (m *PCM16Mixer) setError(err error) {
 		m.err = err
 	}
 	m.mu.Unlock()
+}
+
+func (m *PCM16Mixer) queueStats(queuedBytes, capacityBytes int) PCM16QueueStats {
+	return PCM16QueueStats{
+		Bytes:            queuedBytes,
+		CapacityBytes:    capacityBytes,
+		Frames:           queueFrameCount(queuedBytes, m.frameBytes),
+		CapacityFrames:   queueFrameCount(capacityBytes, m.frameBytes),
+		Duration:         pcm16Duration(queuedBytes, m.format),
+		CapacityDuration: pcm16Duration(capacityBytes, m.format),
+	}
+}
+
+func queueFrameCount(bytes, frameBytes int) int {
+	if bytes <= 0 || frameBytes <= 0 {
+		return 0
+	}
+	return (bytes + frameBytes - 1) / frameBytes
+}
+
+func pcm16Duration(bytes int, format PCM16Format) time.Duration {
+	if bytes <= 0 || format.SampleRate <= 0 || format.Channels <= 0 {
+		return 0
+	}
+	bytesPerSecond := int64(format.SampleRate) * int64(format.Channels) * 2
+	return time.Duration(int64(bytes) * int64(time.Second) / bytesPerSecond)
 }
 
 func normalizeMixerInputID(inputID string) (string, error) {

@@ -119,6 +119,198 @@ func TestPCM16MixerCancellationUnblocksReadFrame(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
+	format := DefaultPCM16Format()
+	frameBytes, err := format.FrameBytes()
+	if err != nil {
+		t.Fatalf("frame bytes: %v", err)
+	}
+	const (
+		providerDeltaBytes = 19_200
+		providerDeltas     = 3
+		providerCadence    = 400 * time.Millisecond
+		inputQueueFrames   = 40
+		outputQueueFrames  = 4
+	)
+	if providerDeltaBytes%frameBytes != 0 {
+		t.Fatalf("provider delta bytes = %d, want a whole number of %d-byte frames", providerDeltaBytes, frameBytes)
+	}
+	providerFrames := providerDeltaBytes / frameBytes
+
+	t.Run("cadence-drained", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		mixer, err := NewPCM16MixerWithConfig(ctx, PCM16MixerConfig{
+			Format:            format,
+			InputQueueFrames:  inputQueueFrames,
+			OutputQueueFrames: outputQueueFrames,
+		})
+		if err != nil {
+			t.Fatalf("new mixer: %v", err)
+		}
+		defer mixer.Close()
+		if err := mixer.AddInput("alpha"); err != nil {
+			t.Fatalf("add input: %v", err)
+		}
+
+		want := make([]byte, 0, providerDeltas*providerDeltaBytes)
+		for delta := 0; delta < providerDeltas; delta++ {
+			want = append(want, providerPCM16Delta(delta, providerDeltaBytes)...)
+		}
+		got := make([]byte, 0, len(want))
+		readErr := make(chan error, 1)
+		go func() {
+			for frame := 0; frame < providerDeltas*providerFrames; frame++ {
+				pcm, frameErr := mixer.ReadFrame(ctx)
+				if frameErr != nil {
+					readErr <- frameErr
+					return
+				}
+				got = append(got, pcm...)
+				// Model a healthy session-ingestion hop that is slower than the
+				// test goroutine but still well inside the 20 ms cadence.
+				time.Sleep(2 * time.Millisecond)
+			}
+			readErr <- nil
+		}()
+
+		for delta := 0; delta < providerDeltas; delta++ {
+			if delta > 0 {
+				time.Sleep(providerCadence)
+			}
+			if err := mixer.Write("alpha", providerPCM16Delta(delta, providerDeltaBytes)); err != nil {
+				t.Fatalf("provider delta %d: %v", delta, err)
+			}
+			stats := mixer.Stats()
+			inputStats := stats.Inputs["alpha"]
+			t.Logf("delta=%d input=%s/%s output=%s/%s", delta, inputStats.Duration, inputStats.CapacityDuration, stats.Output.Duration, stats.Output.CapacityDuration)
+			if inputStats.Duration > inputStats.CapacityDuration || stats.Output.Duration > stats.Output.CapacityDuration {
+				t.Fatalf("queue occupancy exceeded capacity: %+v", stats)
+			}
+		}
+
+		select {
+		case err := <-readErr:
+			if err != nil {
+				t.Fatalf("drain provider-shaped output: %v", err)
+			}
+		case <-ctx.Done():
+			t.Fatalf("drain provider-shaped output: %v", ctx.Err())
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("delivered PCM changed: got %d bytes, want %d", len(got), len(want))
+		}
+	})
+
+	t.Run("downstream-stall", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		mixer, err := NewPCM16MixerWithConfig(ctx, PCM16MixerConfig{
+			Format:            format,
+			InputQueueFrames:  inputQueueFrames,
+			OutputQueueFrames: outputQueueFrames,
+		})
+		if err != nil {
+			t.Fatalf("new mixer: %v", err)
+		}
+		defer mixer.Close()
+		if err := mixer.AddInput("alpha"); err != nil {
+			t.Fatalf("add input: %v", err)
+		}
+
+		firstFrame := make(chan struct{})
+		releaseDownstream := make(chan struct{})
+		readErr := make(chan error, 1)
+		go func() {
+			frame, frameErr := mixer.ReadFrame(ctx)
+			if frameErr != nil {
+				readErr <- frameErr
+				return
+			}
+			if len(frame) != frameBytes {
+				readErr <- errors.New("mixer emitted an invalid frame size")
+				return
+			}
+			close(firstFrame)
+			// This represents a room pump blocked in session ingestion after
+			// it consumed one frame from the mixer's output queue.
+			<-releaseDownstream
+			readErr <- nil
+		}()
+		defer close(releaseDownstream)
+
+		if err := mixer.Write("alpha", providerPCM16Delta(0, providerDeltaBytes)); err != nil {
+			t.Fatalf("first provider delta: %v", err)
+		}
+		select {
+		case <-firstFrame:
+		case err := <-readErr:
+			t.Fatalf("receive first output frame: %v", err)
+		case <-ctx.Done():
+			t.Fatalf("receive first output frame: %v", ctx.Err())
+		}
+
+		waitForMixerStats(t, mixer, func(stats PCM16MixerStats) bool {
+			return stats.Output.Frames == stats.Output.CapacityFrames && stats.Inputs["alpha"].Frames > 0
+		})
+
+		var overflowErr error
+		for delta := 1; delta < providerDeltas+3; delta++ {
+			time.Sleep(providerCadence)
+			overflowErr = mixer.Write("alpha", providerPCM16Delta(delta, providerDeltaBytes))
+			stats := mixer.Stats()
+			inputStats := stats.Inputs["alpha"]
+			t.Logf("stalled delta=%d input=%s/%s output=%s/%s write_error=%v", delta, inputStats.Duration, inputStats.CapacityDuration, stats.Output.Duration, stats.Output.CapacityDuration, overflowErr)
+			if errors.Is(overflowErr, ErrMixerInputBufferFull) {
+				break
+			}
+			if overflowErr != nil {
+				t.Fatalf("provider delta %d: %v", delta, overflowErr)
+			}
+		}
+		if !errors.Is(overflowErr, ErrMixerInputBufferFull) {
+			t.Fatalf("stalled downstream never exposed input pressure: %v", overflowErr)
+		}
+		stats := mixer.Stats()
+		inputStats := stats.Inputs["alpha"]
+		if stats.Output.Frames != stats.Output.CapacityFrames {
+			t.Fatalf("output queue recovered unexpectedly: %+v", stats.Output)
+		}
+		if inputStats.Duration < 600*time.Millisecond {
+			t.Fatalf("input occupancy = %s, want accumulated burst backlog", inputStats.Duration)
+		}
+	})
+}
+
+func waitForMixerStats(t *testing.T, mixer *PCM16Mixer, predicate func(PCM16MixerStats) bool) PCM16MixerStats {
+	t.Helper()
+	deadline := time.NewTimer(500 * time.Millisecond)
+	defer deadline.Stop()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		stats := mixer.Stats()
+		if predicate(stats) {
+			return stats
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Fatalf("mixer stats did not reach expected state: %+v", stats)
+			return stats
+		}
+	}
+}
+
+func providerPCM16Delta(delta, byteCount int) []byte {
+	pcm := make([]byte, byteCount)
+	for sample := 0; sample < byteCount/2; sample++ {
+		value := int16(1000 + delta*300 + sample%200)
+		binary.LittleEndian.PutUint16(pcm[sample*2:sample*2+2], uint16(value))
+	}
+	return pcm
+}
+
 func readMixerFrame(t *testing.T, mixer *PCM16Mixer, want []byte) []byte {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
