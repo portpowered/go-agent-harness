@@ -31,19 +31,23 @@ type BrokerOptions struct {
 	Clock       Clock
 	Ownership   TargetOwnership
 	WatchBuffer int
+	// MaxInputBytes bounds the serialized UTF-8 input_json sent to a page
+	// tool. Zero uses DefaultMaxInputBytes.
+	MaxInputBytes int
 }
 
 // StatefulBroker owns selection, page catalog, generation, and session-local
 // ToolRef state. Browser calls happen outside the broker mutex; all catalog
 // and reference transitions are reconciled back through that mutex.
 type StatefulBroker struct {
-	mu          sync.Mutex
-	runtime     BrowserRuntime
-	discoverer  BrowserDiscoverer
-	ids         IDSource
-	clock       Clock
-	ownership   TargetOwnership
-	watchBuffer int
+	mu            sync.Mutex
+	runtime       BrowserRuntime
+	discoverer    BrowserDiscoverer
+	ids           IDSource
+	clock         Clock
+	ownership     TargetOwnership
+	watchBuffer   int
+	maxInputBytes int
 
 	browsers map[BrowserID]*browserState
 	selected *brokerSession
@@ -124,19 +128,24 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	if watchBuffer <= 0 {
 		watchBuffer = defaultBrokerWatchBuffer
 	}
+	maxInputBytes := options.MaxInputBytes
+	if maxInputBytes <= 0 {
+		maxInputBytes = DefaultMaxInputBytes
+	}
 	return &StatefulBroker{
-		runtime:     options.Runtime,
-		discoverer:  options.Discoverer,
-		ids:         ids,
-		clock:       clock,
-		ownership:   ownership,
-		watchBuffer: watchBuffer,
-		browsers:    make(map[BrowserID]*browserState),
-		refs:        make(map[ToolRef]refRecord),
-		retired:     make(map[ToolRef]struct{}),
-		watchers:    make(map[chan BrokerEvent]struct{}),
-		closedCh:    make(chan struct{}),
-		closeDone:   make(chan struct{}),
+		runtime:       options.Runtime,
+		discoverer:    options.Discoverer,
+		ids:           ids,
+		clock:         clock,
+		ownership:     ownership,
+		watchBuffer:   watchBuffer,
+		maxInputBytes: maxInputBytes,
+		browsers:      make(map[BrowserID]*browserState),
+		refs:          make(map[ToolRef]refRecord),
+		retired:       make(map[ToolRef]struct{}),
+		watchers:      make(map[chan BrokerEvent]struct{}),
+		closedCh:      make(chan struct{}),
+		closeDone:     make(chan struct{}),
 	}
 }
 
@@ -468,10 +477,10 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 	return ToolCatalogSnapshot{Context: clonePageContext(selected.context), Generation: selected.context.Generation, Tools: tools}, nil
 }
 
-// Invoke performs the generation/ref/selection checks that must happen just
-// before a page command. Full admission, input-schema validation, queueing,
-// and terminal reconciliation are layered on this dispatch seam in the
-// following broker stories.
+// Invoke performs the generation/ref/selection checks and validates page input
+// immediately before a page command. Full admission, queueing, and terminal
+// reconciliation are layered on this dispatch seam in the following broker
+// stories.
 func (b *StatefulBroker) Invoke(ctx context.Context, request InvokeRequest) (InvokeResult, error) {
 	if err := contextError(ctx); err != nil {
 		return InvokeResult{}, err
@@ -507,6 +516,10 @@ func (b *StatefulBroker) Invoke(ctx context.Context, request InvokeRequest) (Inv
 	session := selected.session
 	descriptor := cloneToolDescriptor(record.descriptor)
 	b.mu.Unlock()
+
+	if issues := validatePageToolInput(request.Input, descriptor.InputSchema, b.maxInputBytes); len(issues) > 0 {
+		return InvokeResult{}, invalidPageInputError(request.ToolRef, descriptor, issues)
+	}
 
 	// Verify the selected target itself immediately before the page command.
 	targets, err := handle.ListTargets(ctx)

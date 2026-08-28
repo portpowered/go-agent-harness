@@ -2,6 +2,10 @@ package webmcp
 
 import "encoding/json"
 
+// DefaultMaxInputBytes is the C0 bound for the UTF-8 input_json payload sent
+// to a page tool before validation or dispatch.
+const DefaultMaxInputBytes = 262144
+
 type DiscoverOptions struct {
 	BrowserID        BrowserID
 	ExplicitOnly     bool
