@@ -14,6 +14,11 @@ type ToolDefinition struct {
 	Name        string
 	Description string
 	Parameters  []ToolParameter
+	// ParametersClosed asks provider adapters that reconstruct JSON Schema to
+	// emit `additionalProperties: false`. It is transport metadata for the
+	// small flat contract and is intentionally omitted from direct JSON
+	// marshaling for compatibility with existing provider payloads.
+	ParametersClosed bool `json:"-"`
 }
 
 // ToolParameter describes a single parameter of a tool.

@@ -77,9 +77,10 @@ func (s *BrokerToolSet) Definitions() []messages.ToolDefinition {
 	result := make([]messages.ToolDefinition, 0, len(s.definitions))
 	for _, definition := range s.definitions {
 		result = append(result, messages.ToolDefinition{
-			Name:        definition.Name,
-			Description: definition.Description,
-			Parameters:  flatParameters(definition.Parameters),
+			Name:             definition.Name,
+			Description:      definition.Description,
+			Parameters:       flatParameters(definition.Parameters),
+			ParametersClosed: true,
 		})
 	}
 	return result
