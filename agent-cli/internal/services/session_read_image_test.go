@@ -293,6 +293,9 @@ func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (me
 		case <-ctx.Done():
 			return
 		}
+		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+			return
+		}
 		session.recv.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeMessageStart,
 			Role:  messages.RoleAssistant,

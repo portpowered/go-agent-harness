@@ -385,6 +385,8 @@ type sessionInstructionsSession struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	configureOnce sync.Once
+	done          chan struct{}
+	doneOnce      sync.Once
 }
 
 var _ messages.Session = (*sessionInstructionsSession)(nil)
@@ -399,12 +401,14 @@ func newSessionInstructionsSession(inner messages.Session, parent context.Contex
 		receive:      messages.NewTypedBuffer[messages.StreamMessage](inner.Receive().Cap()),
 		ctx:          ctx,
 		cancel:       cancel,
+		done:         make(chan struct{}),
 	}
 	go session.relay()
 	return session
 }
 
 func (s *sessionInstructionsSession) relay() {
+	defer s.markDone()
 	innerReceive := s.inner.Receive()
 	for {
 		select {
@@ -506,7 +510,7 @@ func (s *sessionInstructionsSession) Receive() *messages.TypedBuffer[messages.St
 }
 
 func (s *sessionInstructionsSession) Done() <-chan struct{} {
-	return s.inner.Done()
+	return s.done
 }
 
 func (s *sessionInstructionsSession) rtcMedia() (RTCMediaEndpoints, bool) {
@@ -519,5 +523,11 @@ func (s *sessionInstructionsSession) TerminalError() error {
 
 func (s *sessionInstructionsSession) Close() error {
 	s.cancel()
-	return s.inner.Close()
+	err := s.inner.Close()
+	s.markDone()
+	return err
+}
+
+func (s *sessionInstructionsSession) markDone() {
+	s.doneOnce.Do(func() { close(s.done) })
 }

@@ -18,6 +18,10 @@ const (
 	// failure after a read_image result was accepted but its model continuation
 	// never reached a terminal response.
 	SessionImageContinuationClassification = "image_tool_continuation"
+	// SessionToolContinuationClassification identifies a terminal session
+	// failure after an ordinary tool result was accepted but its grounded model
+	// continuation never reached a terminal response.
+	SessionToolContinuationClassification = "tool_continuation"
 )
 
 var (
@@ -29,6 +33,10 @@ var (
 	// read_image result that reached the provider but did not receive its
 	// follow-up model response before the session terminated.
 	ErrSessionImageContinuationIncomplete = errors.New("session ended before the image tool continuation")
+	// ErrSessionToolContinuationIncomplete is the stable sentinel for any
+	// non-image tool result that reached the provider but did not receive its
+	// follow-up model response before the session terminated.
+	ErrSessionToolContinuationIncomplete = errors.New("session ended before the tool continuation")
 )
 
 // SessionUnresolvedToolResultsError carries the provider call IDs that were
@@ -138,6 +146,47 @@ func (e *SessionImageContinuationError) Error() string {
 
 func (e *SessionImageContinuationError) Unwrap() error {
 	return ErrSessionImageContinuationIncomplete
+}
+
+// SessionToolContinuationError carries ordinary tool call IDs whose accepted
+// result still lacks a terminal model continuation. CallIDs is expected to be
+// sorted and deduplicated by the observer snapshot.
+type SessionToolContinuationError struct {
+	CallIDs []string
+}
+
+func (e *SessionToolContinuationError) Error() string {
+	if e == nil || len(e.CallIDs) == 0 {
+		return ErrSessionToolContinuationIncomplete.Error()
+	}
+	return fmt.Sprintf("tool continuation was not completed for %d call(s): %s", len(e.CallIDs), strings.Join(e.CallIDs, ", "))
+}
+
+func (e *SessionToolContinuationError) Unwrap() error {
+	return ErrSessionToolContinuationIncomplete
+}
+
+// withPendingToolContinuations preserves any primary provider, cancellation,
+// or timeout cause while adding the typed continuation failure once. Image
+// calls retain their more specific existing error so callers do not receive
+// two lifecycle errors for the same read_image obligation.
+func withPendingToolContinuations(err error, observer *sessionProgressObserver) error {
+	if observer == nil {
+		return err
+	}
+	ids := observer.pendingNonImageToolContinuationCallIDs()
+	if len(ids) == 0 {
+		return err
+	}
+	var existing *SessionToolContinuationError
+	if errors.As(err, &existing) {
+		return err
+	}
+	continuation := &SessionToolContinuationError{CallIDs: ids}
+	if err == nil {
+		return continuation
+	}
+	return errors.Join(err, continuation)
 }
 
 // withPendingImageContinuations preserves any primary provider, cancellation,

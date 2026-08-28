@@ -23,7 +23,8 @@ import (
 // UserEventInbox — the same outbound path used for user audio and control
 // plane turns. Providers translate TOOLCALL.END into their wire shape (e.g.
 // conversation.item.create with a function_call_output item on OpenAI
-// Realtime).
+// Realtime). After the batch, it emits one StreamTypeResponseCreate so the
+// provider generates the grounded continuation without a second user turn.
 //
 // Delivery is exactly-once per ToolCallID for the lifetime of the loop:
 // forwarded IDs are remembered, so re-running ticks over the same loop state
@@ -68,6 +69,7 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 	// batch so text-only siblings cannot be sent here and then sent again via
 	// the complete-message path.
 	richBatch := toolResultsContainImage(curr.Inputs.ToolOutputMessage)
+	delivered := false
 	for _, msg := range curr.Inputs.ToolOutputMessage {
 		callID := msg.ToolCallID
 		if callID == "" {
@@ -96,7 +98,19 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 			return ctx.Err()
 		}
 		f.forwarded[callID] = struct{}{}
+		delivered = true
 		f.logInfo("tool result forwarder: delivered tool result", logging.Field{Key: "tool_call_id", Value: callID})
+	}
+	if delivered {
+		// TOOLCALL.END only carries the correlated function_call_output item.
+		// Keep response creation as a distinct, single batch boundary so
+		// parallel tool results cannot create one provider response per call.
+		select {
+		case f.sessionEvents <- messages.StreamMessage{Type: messages.StreamTypeResponseCreate}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		f.logInfo("tool result forwarder: requested one grounded continuation")
 	}
 	return nil
 }

@@ -34,6 +34,20 @@ func recvToolEnd(t *testing.T, ch <-chan messages.StreamMessage) messages.Stream
 	}
 }
 
+func recvResponseCreate(t *testing.T, ch <-chan messages.StreamMessage) messages.StreamMessage {
+	t.Helper()
+	select {
+	case msg := <-ch:
+		if msg.Type != messages.StreamTypeResponseCreate {
+			t.Fatalf("forwarded continuation type = %s, want %s", msg.Type, messages.StreamTypeResponseCreate)
+		}
+		return msg
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for forwarded RESPONSE.CREATE")
+		return messages.StreamMessage{}
+	}
+}
+
 func assertNoSessionSend(ch chan messages.StreamMessage) bool {
 	select {
 	case <-ch:
@@ -85,6 +99,7 @@ func TestToolResultForwarder_ForwardsEachResultOnceInOrder(t *testing.T) {
 	if v2.ToolCallID != "tc-2" || v2.Name != "get_time" || v2.Arguments != `{"time":"noon"}` {
 		t.Fatalf("second forward = %+v", v2)
 	}
+	recvResponseCreate(t, ch)
 
 	// Re-running ticks over the same loop state must not deliver again.
 	ls.Inputs.ToolOutputMessage = append(ls.Inputs.ToolOutputMessage[:0],
@@ -118,6 +133,7 @@ func TestToolResultForwarder_EmptyContentStillForwardedOnce(t *testing.T) {
 	if v.ToolCallID != "tc-empty" || v.Arguments != "" {
 		t.Fatalf("forward = %+v, want empty output keeping the call paired", v)
 	}
+	recvResponseCreate(t, ch)
 	if !assertNoSessionSend(ch) {
 		t.Fatal("empty-content result delivered more than once")
 	}
@@ -205,6 +221,7 @@ func TestToolResultForwarder_SkipsResultsWithoutCallID(t *testing.T) {
 	if v.ToolCallID != "tc-1" {
 		t.Fatalf("forwarded call id = %q, want tc-1", v.ToolCallID)
 	}
+	recvResponseCreate(t, ch)
 	if !assertNoSessionSend(ch) {
 		t.Fatal("result without ToolCallID was forwarded and cannot be paired on the wire")
 	}
@@ -228,4 +245,5 @@ func TestToolResultForwarder_NameFallsBackToMessageField(t *testing.T) {
 	if v.Name != "explicit_tool" {
 		t.Fatalf("name = %q, want explicit_tool", v.Name)
 	}
+	recvResponseCreate(t, ch)
 }

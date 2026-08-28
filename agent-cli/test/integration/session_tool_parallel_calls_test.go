@@ -185,12 +185,11 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 		`{"type":"response.function_call_arguments.done","call_id":"`+parallelCallBravoID+`","name":"`+parallelCallBravoName+`","arguments":`+strconvQuote(parallelCallBravoArgs)+`}`)
 	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_parallel_1","status":"completed"}}`)
 
-	// The session loop schedules the next prompt turn after the tool batch and
-	// forwards both completed results. The strict replay keeps the provider's
+	// The session loop forwards both completed results and then emits one
+	// explicit provider continuation boundary. The strict replay keeps the
 	// continuation behind those exact correlated function_call_output frames.
 	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallAlphaID, parallelResultContent[parallelCallAlphaID]))
 	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallBravoID, parallelResultContent[parallelCallBravoID]))
-	clientEvent("conversation.item.create", parallelUserItemCreatePayload(parallelPrompt))
 	clientEventRaw("response.create", `{"type":"response.create"}`)
 
 	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_parallel_2"}}`)
@@ -582,56 +581,63 @@ func inspectParallelExchange(t *testing.T, wirePath string) ([]parallelExchangeT
 
 // verifyFollowUpUserTurn verifies the outbound client-to-provider side of the
 // replayed exchange: exactly one seeded user turn carrying the prompt opens
-// the session, and exactly one identical follow-up user turn appears strictly
-// after every function_call_arguments.done event. Production emits this pair
-// only from the inference request that the reconstructed tool outputs
-// schedule, so its presence and placement in the strictly matched exchange is
-// exchange-level evidence that both results flowed back into the model-facing
-// conversation state.
+// the session, and exactly one continuation response.create appears strictly
+// after both function_call_output items. Production emits this boundary only
+// after the reconstructed tool outputs are accepted, so its placement in the
+// strictly matched exchange is exchange-level evidence that both results
+// flowed back into the provider conversation.
 func verifyFollowUpUserTurn(t *testing.T, wirePath string) {
 	t.Helper()
 	capture, err := gwtesting.LoadSessionCapture(wirePath)
 	if err != nil {
 		t.Fatalf("load replayed provider exchange: %v", err)
 	}
-	seeded, followUp := 0, 0
-	lastIssuedCallIndex := -1
+	seeded := 0
+	functionOutputCount := 0
+	lastFunctionOutputIndex := -1
+	responseCreates := make([]int, 0, 2)
 	for i, record := range capture.Records {
-		switch record.Direction {
-		case gwtesting.DirectionServerToClient:
-			if record.Type == "response.function_call_arguments.done" {
-				lastIssuedCallIndex = i
+		if record.Direction != gwtesting.DirectionClientToServer {
+			continue
+		}
+		switch record.Type {
+		case "response.create":
+			responseCreates = append(responseCreates, i)
+		case "conversation.item.create":
+			var payload struct {
+				Item struct {
+					Type    string `json:"type"`
+					Role    string `json:"role"`
+					Content []struct {
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"item"`
 			}
-			continue
-		case gwtesting.DirectionClientToServer:
-		default:
-			continue
-		}
-		if record.Type != "conversation.item.create" {
-			continue
-		}
-		var payload struct {
-			Item struct {
-				Role    string `json:"role"`
-				Content []struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(record.Payload, &payload) != nil || payload.Item.Role != "user" || len(payload.Item.Content) != 1 {
-			continue
-		}
-		if payload.Item.Content[0].Text != parallelPrompt {
-			t.Fatalf("outbound user turn %d carries text %q, want the seeded prompt %q", i, payload.Item.Content[0].Text, parallelPrompt)
-		}
-		if lastIssuedCallIndex >= 0 && i > lastIssuedCallIndex {
-			followUp++
-		} else {
+			if json.Unmarshal(record.Payload, &payload) != nil {
+				continue
+			}
+			if payload.Item.Type == "function_call_output" {
+				functionOutputCount++
+				lastFunctionOutputIndex = i
+				continue
+			}
+			if payload.Item.Type != "message" || payload.Item.Role != "user" || len(payload.Item.Content) != 1 {
+				continue
+			}
+			if payload.Item.Content[0].Text != parallelPrompt {
+				t.Fatalf("outbound user turn %d carries text %q, want the seeded prompt %q", i, payload.Item.Content[0].Text, parallelPrompt)
+			}
 			seeded++
 		}
 	}
-	if seeded != 1 || followUp != 1 {
-		t.Fatalf("exchange shows %d seeded and %d post-tool follow-up user turns, want exactly 1 of each (the follow-up turn proves executed results reached the model-facing conversation)", seeded, followUp)
+	if seeded != 1 {
+		t.Fatalf("exchange shows %d seeded user turns, want exactly 1", seeded)
+	}
+	if functionOutputCount != len(parallelRequestOrder) {
+		t.Fatalf("exchange shows %d function_call_output items, want exactly %d", functionOutputCount, len(parallelRequestOrder))
+	}
+	if len(responseCreates) != 2 || responseCreates[1] <= lastFunctionOutputIndex {
+		t.Fatalf("exchange response.create boundaries = %v, last function_call_output = %d; want initial plus one continuation after all results", responseCreates, lastFunctionOutputIndex)
 	}
 }
 
@@ -746,8 +752,8 @@ func TestSessionParallelToolCallsRoundTripThroughCLI(t *testing.T) {
 	}
 
 	// Exchange-level consequence of correct pairing: the seeded turn opens the
-	// session and exactly one identical follow-up turn opens after the tool
-	// batch, proving the reconstructed results drove the next inference pass.
+	// session and the explicit continuation opens after the tool batch, proving
+	// the reconstructed results drove the next inference pass.
 	verifyFollowUpUserTurn(t, wirePath)
 
 	// Outbound exchange pairing: each function_call_output delivered to the

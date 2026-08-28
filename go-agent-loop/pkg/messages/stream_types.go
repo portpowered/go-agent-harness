@@ -109,8 +109,11 @@ const (
 	StreamTypeResponseCancel StreamMessageType = "RESPONSE.CANCEL"
 
 	// StreamTypeResponseCreate is sent TO the inference provider (via
-	// session.Send) to request a response after an input that has no text
-	// representation, such as an audio-only tool continuation.
+	// session.Send) after one or more correlated tool results have been
+	// accepted. It explicitly asks a realtime provider to generate the grounded
+	// continuation for an input with no text representation, such as an
+	// audio-only tool continuation; unlike MESSAGE.END, it does not commit user
+	// audio.
 	StreamTypeResponseCreate StreamMessageType = "RESPONSE.CREATE"
 
 	// StreamTypeRefusal carries the complete accumulated refusal text from a model.

@@ -234,6 +234,9 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		return models.NewAudioBufferCommitEvent(), true
 
 	case messages.StreamTypeResponseCreate:
+		// Tool-result delivery and response creation are separate boundaries.
+		// The result item is queued first; this control event starts exactly one
+		// grounded continuation without committing a new user-audio turn.
 		if v, ok := msg.Value.(*messages.ResponseCreateValue); !ok || v == nil {
 			return models.SessionEvent{}, false
 		}

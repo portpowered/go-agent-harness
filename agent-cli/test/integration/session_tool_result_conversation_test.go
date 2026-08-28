@@ -201,6 +201,10 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 			t.Fatalf("marshal function_call_output event: %v", outputMarshalErr)
 		}
 		clientEvent("conversation.item.create", outputPayload)
+		// The function_call_output item is not itself a response boundary.
+		// Realtime must receive one explicit response.create after the complete
+		// result batch before the grounded spoken continuation can begin.
+		clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
 
 		serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_result_conversation_reply"}}`)
 	}

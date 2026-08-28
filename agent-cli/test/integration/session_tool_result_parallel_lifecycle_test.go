@@ -48,7 +48,8 @@ type parallelLifecycleSession struct {
 	rejectedResultID  string
 	rejectedResultErr error
 
-	closeOnce sync.Once
+	closeOnce        sync.Once
+	continuationOnce sync.Once
 
 	mu                 sync.Mutex
 	responseCount      int
@@ -107,6 +108,9 @@ func (s *parallelLifecycleSession) SendWithOutcome(ctx context.Context, msg mess
 
 	if responseNumber == 1 {
 		s.emitTwoCallResponse()
+	}
+	if msg.Type == messages.StreamTypeResponseCreate {
+		s.continuationOnce.Do(s.emitContinuation)
 	}
 
 	if msg.Type != messages.StreamTypeToolCallEnd {
@@ -177,6 +181,16 @@ func (s *parallelLifecycleSession) emitTwoCallResponse() {
 		Role:  messages.RoleAssistant,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
+}
+
+func (s *parallelLifecycleSession) emitContinuation() {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("parallel grounded continuation")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(context.Background(), msg)
+	}
 }
 
 func (s *parallelLifecycleSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
@@ -552,10 +566,11 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 	}
 }
 
-// TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall covers
+// TestSessionParallelToolResultsTerminalFailureNamesEachIncompleteCall covers
 // the negative terminal path with the same two-call provider turn. Alpha is
-// accepted, bravo's provider send is deliberately rejected, and the typed
-// failure plus structured diagnostic must name bravo only.
+// accepted but cannot receive a continuation after bravo's provider send is
+// rejected, so the typed failures must identify alpha's pending continuation
+// and bravo's undelivered result independently.
 func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *testing.T) {
 	session := newParallelLifecycleSession("", parallelLifecycleBravoID)
 	session.rejectedResultErr = errors.New("provider result buffer is full")
@@ -614,8 +629,15 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	if got := unresolved.SendStatuses[parallelLifecycleBravoID]; got != messages.SessionSendBufferFull {
 		t.Fatalf("terminal-path send status = %q, want %q", got, messages.SessionSendBufferFull)
 	}
-	if !strings.Contains(err.Error(), parallelLifecycleBravoID) || strings.Contains(err.Error(), parallelLifecycleAlphaID) {
-		t.Fatalf("terminal-path human error = %q, want only remaining call ID %q", err, parallelLifecycleBravoID)
+	var continuation *services.SessionToolContinuationError
+	if !errors.As(err, &continuation) {
+		t.Fatalf("terminal-path error = %v, want SessionToolContinuationError for accepted result without continuation", err)
+	}
+	if got := continuation.CallIDs; len(got) != 1 || got[0] != parallelLifecycleAlphaID {
+		t.Fatalf("terminal-path pending continuation IDs = %v, want only [%s]", got, parallelLifecycleAlphaID)
+	}
+	if !strings.Contains(err.Error(), parallelLifecycleBravoID) || !strings.Contains(err.Error(), parallelLifecycleAlphaID) {
+		t.Fatalf("terminal-path human error = %q, want both incomplete call IDs", err)
 	}
 
 	failures := sink.failureRecords()
@@ -628,6 +650,12 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	}
 	if fields[services.SessionDiagnosticFieldUnresolvedToolCallIDs] != parallelLifecycleBravoID {
 		t.Fatalf("terminal-path unresolved IDs diagnostic = %q, want only %s", fields[services.SessionDiagnosticFieldUnresolvedToolCallIDs], parallelLifecycleBravoID)
+	}
+	if fields[services.SessionDiagnosticFieldPendingToolContinuationCount] != "1" {
+		t.Fatalf("terminal-path pending continuation count = %q, want 1", fields[services.SessionDiagnosticFieldPendingToolContinuationCount])
+	}
+	if fields[services.SessionDiagnosticFieldPendingToolContinuationIDs] != parallelLifecycleAlphaID {
+		t.Fatalf("terminal-path pending continuation IDs diagnostic = %q, want only %s", fields[services.SessionDiagnosticFieldPendingToolContinuationIDs], parallelLifecycleAlphaID)
 	}
 	assertParallelLifecycleResults(t, session.sentSnapshot(), parallelLifecycleAlphaID, parallelLifecycleBravoID)
 	if got := observation.closeCount(); got != 0 {

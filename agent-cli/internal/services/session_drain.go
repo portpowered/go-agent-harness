@@ -99,7 +99,7 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd, messages.StreamTypeTextEnd:
-		if opts.observer != nil && opts.observer.hasImageContinuationObligation() {
+		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
 			return false
 		}
 		return true

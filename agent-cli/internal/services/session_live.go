@@ -174,19 +174,20 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	return err
 }
 
-// audioResponseCompletionError prevents an audio session from reporting clean
+// audioResponseCompletionError prevents any session from reporting clean
 // success when it observed a tool-call response but never observed the final
-// assistant response that should follow accepted tool-result delivery.
+// assistant response that should follow accepted tool-result delivery. The
+// guard is input-source agnostic; RequireAssistantResponse remains a stop-rule
+// compatibility option, not the lifecycle contract.
 func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 	if opts.AudioOutputError != nil {
 		if outputErr := opts.AudioOutputError(); outputErr != nil {
 			return err
 		}
 	}
-	if !opts.RequireAssistantResponse || opts.observer == nil || !opts.observer.providerToolCallObserved() || opts.observer.assistantResponseCompleted() {
+	if opts.observer == nil || !opts.observer.providerToolCallObserved() || opts.observer.assistantResponseCompleted() {
 		return err
 	}
-	opts.observer.invalidateAcceptedToolResults()
 	incomplete := ErrSessionAudioResponseIncomplete
 	if err == nil {
 		return incomplete
@@ -494,7 +495,7 @@ func closePendingSessionIfReady(ctx context.Context, loop *agentloop.AgentLoop, 
 	if state.closeSent {
 		return state, nil
 	}
-	if opts.observer != nil && (opts.observer.hasUnresolvedToolCalls() || opts.observer.hasPendingImageContinuations()) {
+	if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
 		return state, nil
 	}
 	closeAfterOpen := opts.CloseAfterOpen && state.closeAfterOpenPending
@@ -644,6 +645,9 @@ func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 			s.progress.noteToolResultAccepted(value.ToolCallID)
 		}
 	}
+	if msg.Type == messages.StreamTypeResponseCreate && s.progress != nil {
+		s.progress.noteToolContinuationRequested()
+	}
 	return outcome
 }
 
@@ -666,7 +670,7 @@ func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message)
 		return false
 	}
 	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessage(ctx, msg))
-	s.observeCompleteMessageToolResult(msg, outcome)
+	s.observeCompleteMessageToolResult(msg, outcome, true)
 	return outcome.OK()
 }
 
@@ -678,7 +682,7 @@ func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg me
 		return false
 	}
 	outcome := sessionCompleteMessageSendOutcome(ctx, sender.SendMessageWithoutResponse(ctx, msg))
-	s.observeCompleteMessageToolResult(msg, outcome)
+	s.observeCompleteMessageToolResult(msg, outcome, false)
 	return outcome.OK()
 }
 
@@ -697,12 +701,15 @@ func sessionCompleteMessageSendOutcome(ctx context.Context, sent bool) messages.
 	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 }
 
-func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message, outcome messages.SessionSendOutcome) {
+func (s *observedSession) observeCompleteMessageToolResult(msg messages.Message, outcome messages.SessionSendOutcome, requestsContinuation bool) {
 	if s == nil || s.progress == nil || msg.ToolCallID == "" {
 		return
 	}
 	if outcome.OK() {
 		s.progress.noteToolResultAccepted(msg.ToolCallID)
+		if requestsContinuation {
+			s.progress.noteToolContinuationRequestedFor(msg.ToolCallID)
+		}
 		return
 	}
 	s.progress.noteToolResultRejected(msg.ToolCallID, outcome)

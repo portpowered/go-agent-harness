@@ -595,12 +595,11 @@ func TestModelRunner_SendLatestSessionToolResultsFallsBackForStreamOnlySession(t
 	if second.Arguments != "" || second.Name != "read_image" {
 		t.Fatalf("image fallback = %#v, want correlated empty flat output", second)
 	}
-	if sent[2].Type != messages.StreamTypeTextDelta {
-		t.Fatalf("response trigger type = %s, want TEXT.DELTA", sent[2].Type)
+	if sent[2].Type != messages.StreamTypeResponseCreate {
+		t.Fatalf("response trigger type = %s, want RESPONSE.CREATE", sent[2].Type)
 	}
-	trigger, ok := sent[2].Value.(*messages.TextDeltaValue)
-	if !ok || trigger.Content != "inspect both results" {
-		t.Fatalf("response trigger = %#v, want original user prompt", sent[2].Value)
+	if sent[2].Value != nil {
+		t.Fatalf("response trigger value = %#v, want nil", sent[2].Value)
 	}
 }
 

@@ -24,6 +24,7 @@ type sessionToolBargeInSession struct {
 
 	closeOnce          sync.Once
 	resultAcceptedOnce sync.Once
+	continuationOnce   sync.Once
 
 	mu             sync.Mutex
 	responseCount  int
@@ -63,8 +64,13 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 		case 1:
 			s.emitFirstResponse()
 		case 2:
-			s.emitSecondResponse()
+			s.emitThirdResponse()
 		}
+	case messages.StreamTypeResponseCreate:
+		// A requested continuation completes the first scheduled turn. The
+		// second scheduled input is not committed until this response reaches
+		// its terminal MESSAGE.END.
+		s.continuationOnce.Do(s.emitSecondResponse)
 	case messages.StreamTypeToolCallEnd:
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
 		if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
@@ -106,6 +112,21 @@ func (s *sessionToolBargeInSession) emitSecondResponse() {
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{3, 0, 4, 0})},
+		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(context.Background(), msg)
+	}
+}
+
+func (s *sessionToolBargeInSession) emitThirdResponse() {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second scheduled response")},
+		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{5, 0, 6, 0})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
@@ -221,10 +242,10 @@ func waitSessionToolBargeInSignal(t *testing.T, signal <-chan struct{}, name str
 
 // TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose drives
 // the real agent session command with two scheduled audio turns. The first
-// provider response requests a deliberately blocked tool; the second turn is
-// dispatched and completed before that tool is released. A stream-observer
-// barrier makes the later response.done boundary explicit, while the command
-// must keep the provider session open until the correlated result is accepted.
+// provider response requests a deliberately blocked tool; its continuation is
+// released before the second scheduled turn can commit. A stream-observer
+// barrier makes the continuation boundary explicit, while the command must
+// keep the provider session open until the correlated result is accepted.
 func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testing.T) {
 	inferencer := newSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
@@ -300,6 +321,8 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 		t.Fatal("connected session was not retained")
 	}
 	waitSessionToolBargeInSignal(t, executor.started, "slow tool executor to start")
+	close(executor.release)
+	waitSessionToolBargeInSignal(t, session.resultAccepted, "correlated tool result acceptance")
 	waitSessionToolBargeInSignal(t, secondAssistantResponseObserved, "second assistant response.done")
 
 	if got := len(executor.callsSnapshot()); got != 1 {
@@ -314,19 +337,11 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	default:
 	}
 
-	// Let the session runner finish observing response.done while the executor
-	// remains blocked. A bounded absence check is only a deadlock guard; all
-	// lifecycle ordering is controlled by the observer and executor barriers.
+	// Let the session runner finish observing the first grounded continuation.
+	// The next scheduled audio turn is eligible only after this observer barrier
+	// is released.
 	releaseObserverOnce.Do(func() { close(releaseSecondAssistantObserver) })
-	select {
-	case <-localSessionCloseObserved:
-		t.Fatal("client close preceded the accepted correlated tool result")
-	case <-time.After(250 * time.Millisecond):
-	}
-
-	close(executor.release)
-	waitSessionToolBargeInSignal(t, session.resultAccepted, "correlated tool result acceptance")
-	waitSessionToolBargeInSignal(t, localSessionCloseObserved, "client close after accepted tool result")
+	waitSessionToolBargeInSignal(t, localSessionCloseObserved, "client close after accepted tool continuation")
 
 	select {
 	case err := <-runErr:
