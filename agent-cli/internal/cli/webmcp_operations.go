@@ -47,11 +47,6 @@ The tools --watch form uses this same observation and output contract. Target
 transport or bounded-delivery loss is reported as a failed session_closed event
 instead of a normal complete stream.`
 
-// ErrWebMCPOperationsRequiresLaneBOrD identifies the production discovery
-// and browser protocol seams that are intentionally not guessed by the CLI
-// composition root. Direct commands surface it as an unavailable operation.
-var ErrWebMCPOperationsRequiresLaneBOrD = ErrWebMCPDoctorRequiresLaneBOrD
-
 // WebMCPDirectBrowser is the safe browser listing shape. Endpoint addresses
 // are redacted before they are copied into this result.
 type WebMCPDirectBrowser struct {

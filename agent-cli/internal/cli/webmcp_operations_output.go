@@ -266,16 +266,6 @@ func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.Tool
 	return webmcp.NewClassifiedError(code, "the WebMCP invocation could not be completed", details)
 }
 
-func runDirectWatch(ctx context.Context, broker webmcp.Broker, once bool) (WebMCPDirectWatchData, error) {
-	if broker == nil {
-		return WebMCPDirectWatchData{}, webmcpRuntimeUnavailableError("watch")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return runDirectWatchStream(ctx, broker.Watch(ctx), once)
-}
-
 func runDirectWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WebMCPDirectWatchData, error) {
 	if ctx == nil {
 		ctx = context.Background()

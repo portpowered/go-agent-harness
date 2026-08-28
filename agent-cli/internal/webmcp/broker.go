@@ -126,7 +126,6 @@ type brokerSession struct {
 	// DevTools clients, so a watch command can report external invocation
 	// lifecycle events without claiming ownership of their result.
 	observedInvocations map[InvocationID]observedInvocation
-	catalogObserved     bool
 	catalogSignal       chan struct{}
 }
 
