@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 
@@ -45,13 +46,12 @@ func TestReadImageTool_ReturnsExactlyOneRichImagePart(t *testing.T) {
 	if result.SHA256 != hex.EncodeToString(digest[:]) {
 		t.Fatalf("result sha256 = %q, want %q", result.SHA256, hex.EncodeToString(digest[:]))
 	}
-	wantDataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(wantBytes)
-	if result.DataURL != wantDataURL {
-		t.Fatalf("result data URL = %q, want exact data URL", result.DataURL)
+	if result.TypedProjection != ReadImageResultTypedProjectionInputImage {
+		t.Fatalf("result typed projection = %q, want %q", result.TypedProjection, ReadImageResultTypedProjectionInputImage)
 	}
-	encodedBytes, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(result.DataURL, "data:image/png;base64,"))
-	if err != nil || !bytes.Equal(encodedBytes, wantBytes) {
-		t.Fatalf("result data URL does not decode to original bytes: err=%v bytes=%d", err, len(encodedBytes))
+	encoded := msgs[0].TextContent()
+	if len(encoded) > 1024 || strings.Contains(strings.ToLower(encoded), "data:") || strings.Contains(strings.ToLower(encoded), "base64") {
+		t.Fatalf("result envelope is not compact or contains encoded image data: bytes=%d envelope=%q", len(encoded), encoded)
 	}
 	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
 	if !ok {
@@ -59,6 +59,53 @@ func TestReadImageTool_ReturnsExactlyOneRichImagePart(t *testing.T) {
 	}
 	if part.MediaType != "image/png" || !bytes.Equal(part.Bytes, wantBytes) {
 		t.Fatalf("image part = %#v, want image/png and original bytes", part)
+	}
+}
+
+func TestReadImageTool_SuccessEnvelopeSizeIsIndependentOfImageSize(t *testing.T) {
+	small := minimalPNG()
+	large := multiMegabytePNG(t)
+	if len(large) <= 1<<20 {
+		t.Fatalf("large fixture = %d bytes, want more than one MiB", len(large))
+	}
+
+	for name, imageBytes := range map[string][]byte{"small": small, "multi-megabyte": large} {
+		t.Run(name, func(t *testing.T) {
+			tool := NewReadImageTool(func([]string) ([]messages.ImagePart, error) {
+				return []messages.ImagePart{{Bytes: imageBytes, MediaType: "image/png"}}, nil
+			})
+			got, err := tool.Execute(context.Background(), map[string]any{"path": name + ".png"})
+			if err != nil {
+				t.Fatalf("Execute returned error: %v", err)
+			}
+			if len(got) != 1 || len(got[0].ContentParts) != 2 {
+				t.Fatalf("messages = %#v, want one envelope and one image part", got)
+			}
+			envelope := got[0].TextContent()
+			if len(envelope) == 0 || len(envelope) > 1024 {
+				t.Fatalf("envelope size = %d, want 1..1024 bytes", len(envelope))
+			}
+			lower := strings.ToLower(envelope)
+			if strings.Contains(lower, "data_url") || strings.Contains(lower, "data:") || strings.Contains(lower, "base64") {
+				t.Fatalf("envelope contains an image-bearing field: %s", envelope)
+			}
+
+			var result ReadImageResult
+			if err := json.Unmarshal([]byte(envelope), &result); err != nil {
+				t.Fatalf("decode result envelope: %v", err)
+			}
+			digest := sha256.Sum256(imageBytes)
+			if result.Version != ReadImageResultVersion || result.Status != ReadImageResultStatusSuccess ||
+				result.MIMEType != "image/png" || result.ByteLength != len(imageBytes) ||
+				result.SHA256 != hex.EncodeToString(digest[:]) ||
+				result.TypedProjection != ReadImageResultTypedProjectionInputImage {
+				t.Fatalf("result = %#v, want metadata for %d bytes", result, len(imageBytes))
+			}
+			part, ok := got[0].ContentParts[1].(messages.ImagePart)
+			if !ok || part.MediaType != result.MIMEType || !bytes.Equal(part.Bytes, imageBytes) {
+				t.Fatalf("rich image part = %#v, want the exact prepared snapshot", got[0].ContentParts[1])
+			}
+		})
 	}
 }
 
@@ -105,7 +152,7 @@ func TestReadImageTool_RejectsInvalidPreparerContentWithVersionedError(t *testin
 				t.Fatalf("Execute returned Go error: %v", err)
 			}
 			result := assertReadImageErrorEnvelope(t, msgs[0].TextContent(), ErrReadImageInvalidResult.Error())
-			if result.DataURL != "" || result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" {
+			if result.TypedProjection != "" || result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" {
 				t.Fatalf("invalid result unexpectedly carried image metadata: %#v", result)
 			}
 		})
@@ -124,10 +171,31 @@ func assertReadImageErrorEnvelope(t *testing.T, encoded, wantError string) ReadI
 	if result.Error == "" || (wantError != "" && !strings.Contains(result.Error, wantError)) {
 		t.Fatalf("error envelope message = %q, want %q", result.Error, wantError)
 	}
-	if strings.Contains(encoded, "data_url") || strings.Contains(encoded, "byte_length") || strings.Contains(encoded, "sha256") {
+	if strings.Contains(encoded, "data_url") || strings.Contains(encoded, "byte_length") || strings.Contains(encoded, "sha256") || strings.Contains(encoded, "typed_projection") {
 		t.Fatalf("error envelope contains success image fields: %s", encoded)
 	}
 	return result
+}
+
+func multiMegabytePNG(t *testing.T) []byte {
+	t.Helper()
+	const size = 1024
+	img := image.NewNRGBA(image.Rect(0, 0, size, size))
+	state := uint32(0x6d2b79f5)
+	for i := range img.Pix {
+		state ^= state << 13
+		state ^= state >> 17
+		state ^= state << 5
+		img.Pix[i] = uint8(state >> 24)
+	}
+	for i := 3; i < len(img.Pix); i += 4 {
+		img.Pix[i] = 0xff
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, img); err != nil {
+		t.Fatalf("encode large PNG: %v", err)
+	}
+	return encoded.Bytes()
 }
 
 func TestReadImageTool_SchemaHasRequiredStringPath(t *testing.T) {

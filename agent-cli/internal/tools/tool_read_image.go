@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -22,23 +21,27 @@ import (
 const ReadImageToolID = "read_image"
 
 const (
-	ReadImageResultVersion       = 1
-	ReadImageResultStatusSuccess = "success"
-	ReadImageResultStatusError   = "error"
+	// Version 2 is the compact envelope contract. Version 1 included a data
+	// URL, so changing its meaning would let an older consumer silently retain
+	// the unbounded representation this contract is meant to remove.
+	ReadImageResultVersion                   = 2
+	ReadImageResultStatusSuccess             = "success"
+	ReadImageResultStatusError               = "error"
+	ReadImageResultTypedProjectionInputImage = "input_image"
 )
 
 // ReadImageResult is the provider-neutral, versioned text representation of a
-// read_image result. A successful result carries the exact bytes that are also
-// exposed through the rich ImagePart. Error results intentionally omit all
-// image fields.
+// read_image result. A successful result carries metadata and a fixed marker
+// for the correlated typed ImagePart; the exact bytes are exposed only through
+// that rich part. Error results intentionally omit all success-only fields.
 type ReadImageResult struct {
-	Version    int    `json:"version"`
-	Status     string `json:"status"`
-	MIMEType   string `json:"mime_type,omitempty"`
-	ByteLength int    `json:"byte_length,omitempty"`
-	SHA256     string `json:"sha256,omitempty"`
-	DataURL    string `json:"data_url,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Version         int    `json:"version"`
+	Status          string `json:"status"`
+	MIMEType        string `json:"mime_type,omitempty"`
+	ByteLength      int    `json:"byte_length,omitempty"`
+	SHA256          string `json:"sha256,omitempty"`
+	TypedProjection string `json:"typed_projection,omitempty"`
+	Error           string `json:"error,omitempty"`
 }
 
 var (
@@ -125,12 +128,12 @@ func (t *ReadImageTool) Execute(_ context.Context, args map[string]any) ([]messa
 
 	digest := sha256.Sum256(imageBytes)
 	result := ReadImageResult{
-		Version:    ReadImageResultVersion,
-		Status:     ReadImageResultStatusSuccess,
-		MIMEType:   mediaType,
-		ByteLength: len(imageBytes),
-		SHA256:     hex.EncodeToString(digest[:]),
-		DataURL:    "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(imageBytes),
+		Version:         ReadImageResultVersion,
+		Status:          ReadImageResultStatusSuccess,
+		MIMEType:        mediaType,
+		ByteLength:      len(imageBytes),
+		SHA256:          hex.EncodeToString(digest[:]),
+		TypedProjection: ReadImageResultTypedProjectionInputImage,
 	}
 	encoded, _ := json.Marshal(result)
 

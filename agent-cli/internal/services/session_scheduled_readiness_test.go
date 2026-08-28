@@ -184,9 +184,14 @@ func TestSessionProgressObserverLifecycleWakeReleasesNextScheduledAudio(t *testi
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("follow-on answer"),
+	})
+	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
 	})
 	observer.scheduleAudioInputs([]ScheduledAudioInput{
 		{AfterCompletedTurns: 0, PCM: []byte{3, 4}, EndOfTurn: true},

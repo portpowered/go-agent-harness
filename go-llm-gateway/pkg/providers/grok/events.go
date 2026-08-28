@@ -179,7 +179,7 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 
 	case models.SessionEventResponseDone:
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			{Type: messages.StreamTypeMessageEnd, Value: grokResponseDoneMessageEnd(event.Data)},
 		}
 
 	case models.SessionEventInputAudioBufferSpeechStarted:
@@ -214,6 +214,56 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		// Unknown or informational events (session.updated, etc.) are silently dropped.
 		return nil
 	}
+}
+
+// grokResponseDoneMessageEnd preserves the response terminal status for the
+// shared session lifecycle observer. Grok follows the OpenAI Realtime event
+// shape, but older fixtures may omit status and therefore retain the legacy
+// zero-value MESSAGE.END behavior.
+func grokResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndValue {
+	status := strings.ToLower(strings.TrimSpace(firstGrokStringField(data, "response.status", "status")))
+	value := messages.NewMessageEndValue(messages.TokenUsage{})
+	value.Status = status
+	value.StatusDetails = grokResponseDoneStatusDetails(data)
+	if status == "" {
+		return value
+	}
+
+	value.TerminalProvenance = messages.TerminalProvenanceProvider
+	value.TerminalSource = messages.TerminalSourceProvider
+	switch status {
+	case "completed":
+		value.TerminalReason = messages.TerminalReasonProviderAuthoredCompletion
+		value.OutputState = messages.TerminalOutputComplete
+	case "cancelled", "canceled":
+		value.TerminalReason = messages.TerminalReasonCancellation
+		value.OutputState = messages.TerminalOutputNone
+	default:
+		value.TerminalReason = messages.TerminalReasonTerminalFailure
+		value.OutputState = messages.TerminalOutputNone
+	}
+	return value
+}
+
+func grokResponseDoneStatusDetails(data json.RawMessage) string {
+	parts := make([]string, 0, 4)
+	appendField := func(label string, paths ...string) {
+		value := strings.TrimSpace(firstGrokStringField(data, paths...))
+		if value == "" {
+			return
+		}
+		for _, existing := range parts {
+			if existing == label+"="+value {
+				return
+			}
+		}
+		parts = append(parts, label+"="+value)
+	}
+	appendField("reason", "response.status_details.reason", "status_details.reason")
+	appendField("type", "response.status_details.type", "status_details.type")
+	appendField("code", "response.status_details.code", "status_details.code", "response.status_details.error.code", "status_details.error.code")
+	appendField("message", "response.status_details.message", "status_details.message", "response.status_details.error.message", "status_details.error.message")
+	return strings.Join(parts, ", ")
 }
 
 // translateOutbound converts an agent loop StreamMessage into a SessionEvent
@@ -325,6 +375,21 @@ func extractStringField(data json.RawMessage, field string) string {
 		return ""
 	}
 	return s
+}
+
+func firstGrokStringField(data json.RawMessage, paths ...string) string {
+	for _, path := range paths {
+		if strings.Contains(path, ".") {
+			if value := extractDottedStringField(data, path); value != "" {
+				return value
+			}
+			continue
+		}
+		if value := extractStringField(data, path); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // sessionErrorClassification refines the public classification for a Grok
