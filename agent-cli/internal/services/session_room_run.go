@@ -52,6 +52,14 @@ func runRoomParticipant(
 	}
 	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
 	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+	observer.turnAdmission = func(msg messages.StreamMessage) bool {
+		value, ok := msg.Value.(*messages.MessageEndValue)
+		if !ok || value == nil || value.TerminalReason == "" {
+			return true
+		}
+		return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
+			value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
+	}
 	observer.streamObserver = func(msg messages.StreamMessage) {
 		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
 	}
@@ -111,6 +119,9 @@ func observeRoomParticipantStream(
 	msg messages.StreamMessage,
 ) {
 	plan := runtime.plan
+	if opts.onParticipantStream != nil {
+		opts.onParticipantStream(plan.manifest.ID, msg)
+	}
 	if opts.Stream != nil {
 		participantStream.ObserveStream(msg)
 	}
@@ -148,6 +159,8 @@ func observeRoomParticipantStream(
 		}
 		if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
+		} else if opts.onParticipantAudioFanned != nil {
+			opts.onParticipantAudioFanned(plan.manifest.ID, target.plan.manifest.ID, append([]byte(nil), pcm...))
 		}
 	}
 }

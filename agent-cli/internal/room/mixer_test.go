@@ -120,6 +120,113 @@ func TestPCM16MixerCancellationUnblocksReadFrame(t *testing.T) {
 	}
 }
 
+func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
+	format := PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
+	cadence := newDeterministicPCM16Cadence()
+	factoryCalls := make(chan time.Duration, 1)
+	mixer, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{
+		Format:            format,
+		InputQueueFrames:  4,
+		OutputQueueFrames: 4,
+		CadenceFactory: func(interval time.Duration) PCM16Cadence {
+			factoryCalls <- interval
+			return cadence
+		},
+	})
+	if err != nil {
+		t.Fatalf("new mixer: %v", err)
+	}
+	t.Cleanup(func() { _ = mixer.Close() })
+
+	for _, id := range []string{"alpha", "beta"} {
+		if err := mixer.AddInput(id); err != nil {
+			t.Fatalf("add %s: %v", id, err)
+		}
+	}
+	if err := mixer.Write("alpha", pcm16(100, 200, 300)); err != nil {
+		t.Fatalf("write alpha: %v", err)
+	}
+	if err := mixer.Write("beta", pcm16(10, 20, 30)); err != nil {
+		t.Fatalf("write beta: %v", err)
+	}
+
+	cadence.Advance()
+	got := readMixerFrameWithContext(t, mixer)
+	want := pcm16(110, 220)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("first deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+	}
+	select {
+	case interval := <-factoryCalls:
+		if interval != format.FrameDuration {
+			t.Fatalf("cadence interval = %s, want %s", interval, format.FrameDuration)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("mixer did not create its cadence source")
+	}
+
+	cadence.Advance()
+	got = readMixerFrameWithContext(t, mixer)
+	want = pcm16(330, 0)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("second deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+	}
+
+	cadence.Advance()
+	got = readMixerFrameWithContext(t, mixer)
+	want = pcm16(0, 0)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("silence deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+	}
+	if got := len(mixer.Frames()); got != 0 {
+		t.Fatalf("queued frames after one output per cadence = %d, want 0", got)
+	}
+}
+
+func TestPCM16MixerCancellationStopsDeterministicCadence(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cadence := newDeterministicPCM16Cadence()
+	factoryReady := make(chan struct{}, 1)
+	mixer, err := NewPCM16MixerWithConfig(ctx, PCM16MixerConfig{
+		Format:            PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: time.Second},
+		InputQueueFrames:  1,
+		OutputQueueFrames: 1,
+		CadenceFactory: func(time.Duration) PCM16Cadence {
+			factoryReady <- struct{}{}
+			return cadence
+		},
+	})
+	if err != nil {
+		cancel()
+		t.Fatalf("new mixer: %v", err)
+	}
+	t.Cleanup(func() {
+		cancel()
+		_ = mixer.Close()
+	})
+
+	select {
+	case <-factoryReady:
+	case <-time.After(time.Second):
+		t.Fatal("mixer did not start its deterministic cadence")
+	}
+	cancel()
+
+	select {
+	case <-cadence.stopped:
+	case <-time.After(time.Second):
+		t.Fatal("cancellation did not stop the deterministic cadence")
+	}
+	select {
+	case _, ok := <-mixer.Frames():
+		if ok {
+			t.Fatal("mixer emitted a frame after cadence cancellation")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("mixer output remained open after cadence cancellation")
+	}
+}
+
 func TestPCM16MixerWriteContextCancellationPreservesQueuedPCM(t *testing.T) {
 	mixer, frameBytes := newFullInputMixer(t)
 	defer mixer.Close()
@@ -521,6 +628,45 @@ func readMixerFrame(t *testing.T, mixer *PCM16Mixer, want []byte) []byte {
 			return frame
 		}
 	}
+}
+
+func readMixerFrameWithContext(t *testing.T, mixer *PCM16Mixer) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	frame, err := mixer.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read deterministic mixer frame: %v", err)
+	}
+	if got, want := len(frame), mixer.FrameBytes(); got != want {
+		t.Fatalf("deterministic mixer frame bytes = %d, want %d", got, want)
+	}
+	return frame
+}
+
+type deterministicPCM16Cadence struct {
+	ticks    chan time.Time
+	stopped  chan struct{}
+	stopOnce sync.Once
+}
+
+func newDeterministicPCM16Cadence() *deterministicPCM16Cadence {
+	return &deterministicPCM16Cadence{
+		ticks:   make(chan time.Time, 8),
+		stopped: make(chan struct{}),
+	}
+}
+
+func (c *deterministicPCM16Cadence) C() <-chan time.Time {
+	return c.ticks
+}
+
+func (c *deterministicPCM16Cadence) Stop() {
+	c.stopOnce.Do(func() { close(c.stopped) })
+}
+
+func (c *deterministicPCM16Cadence) Advance() {
+	c.ticks <- time.Time{}
 }
 
 func pcm16(samples ...int16) []byte {

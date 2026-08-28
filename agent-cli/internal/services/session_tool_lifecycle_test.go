@@ -289,6 +289,11 @@ func TestShouldStopSessionLoopWaitsForReadImageResultAndContinuation(t *testing.
 	observer.noteToolResultAccepted(callID)
 	observer.noteToolContinuationRequested()
 	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewTextDeltaValue("read image answer"),
