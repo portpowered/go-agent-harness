@@ -176,8 +176,11 @@ type Mesh struct {
 	participants map[string]struct{}
 	pairs        map[PairSpec]*meshPair
 	pending      []*pendingPair
-	closed       bool
-	done         chan struct{}
+	// closing retains pair owners detached by Remove until their Close returns,
+	// so shutdown cannot publish Done while a removal is still releasing one.
+	closing []*meshPair
+	closed  bool
+	done    chan struct{}
 
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -410,10 +413,13 @@ func (m *Mesh) Remove(participantID string) error {
 		incident = append(incident, pair)
 		delete(m.pairs, spec)
 	}
+	m.closing = append(m.closing, incident...)
 	m.mu.Unlock()
 	if err := closeMeshPairs(incident); err != nil {
+		m.removeClosingPairs(incident)
 		return &MeshError{Operation: "remove", ParticipantID: normalizedID, Cause: err}
 	}
+	m.removeClosingPairs(incident)
 	return nil
 }
 
@@ -547,8 +553,8 @@ func (m *Mesh) Close() error {
 	m.closeOnce.Do(func() {
 		m.mu.Lock()
 		m.closed = true
-		all := make([]*meshPair, 0, len(m.pairs)+len(m.pending))
-		seen := make(map[*meshPair]struct{}, len(m.pairs)+len(m.pending))
+		all := make([]*meshPair, 0, len(m.pairs)+len(m.pending)+len(m.closing))
+		seen := make(map[*meshPair]struct{}, len(m.pairs)+len(m.pending)+len(m.closing))
 		for _, pair := range m.pairs {
 			if _, exists := seen[pair]; !exists {
 				seen[pair] = struct{}{}
@@ -564,9 +570,19 @@ func (m *Mesh) Close() error {
 				all = append(all, pending.pair)
 			}
 		}
+		for _, pair := range m.closing {
+			if pair == nil {
+				continue
+			}
+			if _, exists := seen[pair]; !exists {
+				seen[pair] = struct{}{}
+				all = append(all, pair)
+			}
+		}
 		m.participants = make(map[string]struct{})
 		m.pairs = make(map[PairSpec]*meshPair)
 		m.pending = nil
+		m.closing = nil
 		stopParent := m.stopParent
 		cancel := m.cancel
 		m.mu.Unlock()
@@ -663,6 +679,38 @@ func (m *Mesh) removePendingPairsLocked(pairs []*meshPair) {
 		original[index] = nil
 	}
 	m.pending = kept
+}
+
+func (m *Mesh) removeClosingPairs(pairs []*meshPair) {
+	if len(pairs) == 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	wanted := make(map[*meshPair]struct{}, len(pairs))
+	for _, pair := range pairs {
+		if pair != nil {
+			wanted[pair] = struct{}{}
+		}
+	}
+	if len(wanted) == 0 {
+		return
+	}
+	original := m.closing
+	kept := original[:0]
+	for _, pair := range original {
+		if pair == nil {
+			continue
+		}
+		if _, exists := wanted[pair]; exists {
+			continue
+		}
+		kept = append(kept, pair)
+	}
+	for index := len(kept); index < len(original); index++ {
+		original[index] = nil
+	}
+	m.closing = kept
 }
 
 func closeMeshPairs(pairs []*meshPair) error {
