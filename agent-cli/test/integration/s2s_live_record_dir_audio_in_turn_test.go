@@ -481,11 +481,6 @@ func closeChannelOnce(channel chan struct{}, once *sync.Once) {
 	once.Do(func() { close(channel) })
 }
 
-func scheduledServerVADEnabled(session json.RawMessage) bool {
-	enabled, _ := scheduledServerVADSetting(session)
-	return enabled
-}
-
 func scheduledServerVADSetting(session json.RawMessage) (bool, bool) {
 	var update struct {
 		Audio struct {

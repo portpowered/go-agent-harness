@@ -200,6 +200,10 @@ func runSessionWithImagesAndRecordingDirectory(
 		plan.loop.CloseAfterOpen = false
 		plan.loop.AudioIn = audioSource
 		plan.loop.MaxDuration = opts.MaxDuration
+		// A finite image-plus-audio source can produce an intermediate provider
+		// response containing a tool call. Keep the session open through the
+		// tool result and the follow-up assistant response.
+		plan.loop.RequireAssistantResponse = true
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
 	if plan.inferencer != nil {

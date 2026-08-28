@@ -183,6 +183,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	plan.loop.CloseAfterOpen = false
 	plan.loop.AudioIn = audioSource
 	plan.loop.MaxDuration = opts.MaxDuration
+	plan.loop.RequireAssistantResponse = true
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
