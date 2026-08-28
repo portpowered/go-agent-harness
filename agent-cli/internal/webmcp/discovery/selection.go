@@ -104,6 +104,10 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 		s.mu.Unlock()
 		return Selection{}, failure
 	}
+	if disconnected := s.browserDisconnectedFailureLocked(browser.ID, request.TargetID, "selection"); disconnected != nil {
+		s.mu.Unlock()
+		return Selection{}, disconnected
+	}
 
 	listOptions := TargetListOptions{
 		BrowserID:            browser.ID,
@@ -113,6 +117,7 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	}
 	allTargets, failure := s.refreshTargetsLocked(ctx, browser, listOptions)
 	if failure != nil {
+		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, listOptions.TargetID, "selection")
 		s.mu.Unlock()
 		return Selection{}, failure
 	}
@@ -139,8 +144,10 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	if s.targetAttacher != nil {
 		detacher, attachErr := s.targetAttacher.Attach(ctx, browser, target)
 		if attachErr != nil {
+			failure := classifySelectionOperationError(attachErr, browser.ID, target.ID, "attach", "attach_failed")
+			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "attach")
 			s.mu.Unlock()
-			return Selection{}, newTargetAttachFailed(browser.ID, target.ID, "attach", "attach_failed", attachErr)
+			return Selection{}, failure
 		}
 		handle = NewDetachOnlyTargetHandle(detacher)
 	}
@@ -149,8 +156,10 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 			if handle != nil {
 				_ = handle.Close()
 			}
+			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
+			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
 			s.mu.Unlock()
-			return Selection{}, newTargetAttachFailed(browser.ID, target.ID, "activate", "activation_failed", activateErr)
+			return Selection{}, failure
 		}
 	}
 
@@ -317,10 +326,14 @@ func (s *Service) resolveSelectionBrowserLocked(request TargetSelectionRequest) 
 func (s *Service) refreshTargetsLocked(ctx context.Context, browser BrowserCandidate, options TargetListOptions) ([]Target, *DiscoveryError) {
 	descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 	if failure != nil {
+		failure = enrichBrowserDisconnected(failure, browser.ID, options.TargetID, "targets")
+		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, options.TargetID, "targets")
 		return nil, failure
 	}
 	targets, failure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 	if failure != nil {
+		failure = enrichBrowserDisconnected(failure, browser.ID, options.TargetID, "targets")
+		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, options.TargetID, "targets")
 		return nil, failure
 	}
 	snapshot := makeTargetSnapshot(browser, targets, resolvedTargetListOptions(options))

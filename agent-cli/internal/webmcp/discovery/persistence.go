@@ -111,6 +111,11 @@ type ReconnectOptions struct {
 	// reconciliation check. Normal C0 behavior leaves it false: an explicit
 	// selection wins and atomically replaces the persisted locator.
 	RejectPersistedConflict bool
+
+	// ContinuityMarker is an internal exact-reconnect constraint used when a
+	// live disconnected selection is restored. It is never persisted or exposed
+	// as a model-facing selector.
+	ContinuityMarker string `json:"-"`
 }
 
 // SelectionReconnectOptions is a descriptive alias for ReconnectOptions.
@@ -555,6 +560,10 @@ func (s *Service) Reconnect(ctx context.Context, inputs ConnectionInputs, option
 
 	if reconnectOptions.hasExplicitSelection() {
 		if strings.TrimSpace(reconnectOptions.TargetID) == "" {
+			if browserID, _, phase, disconnected := s.disconnectedBrowser(); disconnected &&
+				(strings.TrimSpace(reconnectOptions.BrowserID) == "" || strings.TrimSpace(reconnectOptions.BrowserID) == browserID) {
+				return Selection{}, newBrowserDisconnected(browserID, "", phase, nil)
+			}
 			if reconnectOptions.resolvedAutoSelect() == AutoSelectSingle {
 				return s.reconnectSingle(ctx, inputs, reconnectOptions)
 			}
@@ -594,12 +603,94 @@ func (s *Service) Reconnect(ctx context.Context, inputs ConnectionInputs, option
 			EligibleOnly: Bool(true),
 		}, 0)
 	case AutoSelectSingle:
+		if browserID, targetID, phase, disconnected := s.disconnectedBrowser(); disconnected {
+			if current, hasSelection := s.disconnectedSelection(); hasSelection && current.BrowserID == browserID {
+				return s.reconnectCurrentSelection(ctx, inputs, current, reconnectOptions)
+			}
+			if targetID == "" {
+				return Selection{}, newBrowserDisconnected(browserID, "", phase, nil)
+			}
+			reconnectOptions.BrowserID = browserID
+			reconnectOptions.TargetID = targetID
+			return s.reconnectExactDisconnectedTarget(ctx, inputs, reconnectOptions)
+		}
 		return s.reconnectSingle(ctx, inputs, reconnectOptions)
 	case AutoSelectPersisted:
 		return s.reconnectPersisted(ctx, inputs, reconnectOptions)
 	default:
 		return Selection{}, newSelectionStateError("auto_select_invalid", nil)
 	}
+}
+
+func (s *Service) disconnectedSelection() (Selection, bool) {
+	if s == nil {
+		return Selection{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.selection == nil || s.selection.connected {
+		return Selection{}, false
+	}
+	return *s.selection, true
+}
+
+func (s *Service) disconnectedBrowser() (browserID, targetID, phase string, ok bool) {
+	if s == nil {
+		return "", "", "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.selection != nil && !s.selection.connected {
+		if state, exists := s.disconnected[s.selection.BrowserID]; exists {
+			return s.selection.BrowserID, state.TargetID, state.Phase, true
+		}
+	}
+	ids := make([]string, 0, len(s.disconnected))
+	for browserID := range s.disconnected {
+		ids = append(ids, browserID)
+	}
+	if len(ids) == 0 {
+		return "", "", "", false
+	}
+	sort.Strings(ids)
+	state := s.disconnected[ids[0]]
+	return ids[0], state.TargetID, state.Phase, true
+}
+
+func (s *Service) reconnectExactDisconnectedTarget(ctx context.Context, inputs ConnectionInputs, options ReconnectOptions) (Selection, error) {
+	candidates, err := s.DiscoverAll(ctx, inputs)
+	if err != nil {
+		return Selection{}, err
+	}
+	browser, failure := reconnectBrowser(candidates, options.BrowserID)
+	if failure != nil {
+		return Selection{}, newBrowserDisconnected(options.BrowserID, options.TargetID, "reconnect", nil)
+	}
+	return s.reconnectExact(ctx, browser, options)
+}
+
+func (s *Service) reconnectCurrentSelection(ctx context.Context, inputs ConnectionInputs, current Selection, options ReconnectOptions) (Selection, error) {
+	candidates, err := s.DiscoverAll(ctx, inputs)
+	if err != nil {
+		return Selection{}, err
+	}
+	browser, failure := reconnectBrowser(candidates, current.BrowserID)
+	if failure != nil {
+		return Selection{}, newStaleSelection(current.BrowserID, current.TargetID, current.Generation, "browser_missing_after_reconnect")
+	}
+	options.BrowserID = current.BrowserID
+	options.TargetID = current.TargetID
+	options.Origin = current.Origin
+	options.ContinuityMarker = current.Target.ContinuityMarker
+	selected, err := s.reconnectExact(ctx, browser, options)
+	if err == nil {
+		return selected, nil
+	}
+	var discoveryErr *DiscoveryError
+	if errors.As(err, &discoveryErr) && discoveryErr.Code == CodeNoEligibleTab {
+		return Selection{}, newStaleSelection(current.BrowserID, current.TargetID, current.Generation, "target_missing_after_reconnect")
+	}
+	return Selection{}, err
 }
 
 // RestoreSelection is a descriptive alias for Reconnect.
@@ -702,8 +793,31 @@ func (s *Service) reconnectExact(ctx context.Context, browser BrowserCandidate, 
 	}
 	target, failure := exactReconnectTarget(browser.ID, targets, targetID, options.Origin)
 	if failure != nil {
+		if options.ContinuityMarker != "" {
+			if state, exists := s.targets[browser.ID][targetID]; exists && state.target.ID == targetID {
+				reason := ""
+				switch {
+				case options.Origin != "" && state.target.Origin != options.Origin:
+					reason = "origin_changed"
+				case state.target.ContinuityMarker != options.ContinuityMarker:
+					reason = "continuity_changed"
+				}
+				if reason != "" {
+					selectedGeneration := state.generation
+					if s.selection != nil && s.selection.BrowserID == browser.ID && s.selection.TargetID == targetID {
+						selectedGeneration = s.selection.Generation
+					}
+					s.mu.Unlock()
+					return Selection{}, newStaleSelection(browser.ID, targetID, selectedGeneration, reason)
+				}
+			}
+		}
 		s.mu.Unlock()
 		return Selection{}, failure
+	}
+	if generationFailure := s.advanceDisconnectedSelectionGenerationLocked(browser.ID, target.ID, &target); generationFailure != nil {
+		s.mu.Unlock()
+		return Selection{}, generationFailure
 	}
 	selected, previousHandle, selectionFailure := s.commitReconnectSelectionLocked(ctx, browser, target, options, time.Time{})
 	s.mu.Unlock()
@@ -901,7 +1015,9 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 	if s.targetAttacher != nil {
 		detacher, attachErr := s.targetAttacher.Attach(ctx, browser, target)
 		if attachErr != nil {
-			return Selection{}, nil, newTargetAttachFailed(browser.ID, target.ID, "attach", "attach_failed", attachErr)
+			failure := classifySelectionOperationError(attachErr, browser.ID, target.ID, "attach", "attach_failed")
+			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "attach")
+			return Selection{}, nil, failure
 		}
 		handle = NewDetachOnlyTargetHandle(detacher)
 	}
@@ -910,7 +1026,9 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 			if handle != nil {
 				_ = handle.Close()
 			}
-			return Selection{}, nil, newTargetAttachFailed(browser.ID, target.ID, "activate", "activation_failed", activateErr)
+			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
+			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
+			return Selection{}, nil, failure
 		}
 	}
 	if selectedAt.IsZero() {
@@ -954,6 +1072,7 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 		}
 	}
 	s.selection = &selected
+	s.clearBrowserDisconnectedLocked(browser.ID)
 	s.emitTarget(EventTargetSelected, browser.ID, target.ID, target.Generation, map[string]any{
 		"generation": target.Generation,
 		"reason":     reason,

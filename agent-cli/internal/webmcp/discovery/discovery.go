@@ -94,6 +94,7 @@ type Service struct {
 	targets            map[string]map[string]targetState
 	browsers           map[string]BrowserCandidate
 	selection          *Selection
+	disconnected       map[string]browserDisconnectState
 	lifecycleSeen      map[string]struct{}
 	selectionStore     selectionStoreAdapter
 	persistenceError   error
@@ -188,6 +189,7 @@ func New(options Options) *Service {
 		targets:            make(map[string]map[string]targetState),
 		browsers:           make(map[string]BrowserCandidate),
 		lifecycleSeen:      make(map[string]struct{}),
+		disconnected:       make(map[string]browserDisconnectState),
 		selectionStore:     selectionStore,
 		persistenceError:   persistenceError,
 		persistenceEnabled: persistenceEnabled,
@@ -252,6 +254,15 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 			})
 			return candidate, nil
 		}
+		if failure != nil && failure.Code == CodeBrowserDisconnected {
+			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "discovery")
+			s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+				"candidate_count": 0,
+				"success":         false,
+				"code":            string(failure.Code),
+			})
+			return BrowserCandidate{}, failure
+		}
 		attempted = attempted || failure != nil
 		best = preferFailure(best, failure)
 	}
@@ -263,6 +274,16 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 		if inputs.AllowProcessScan && s.processEnumerator != nil {
 			infos, err := s.processEnumerator.List(ctx)
 			if err != nil {
+				if isBrowserDisconnected(err) {
+					failure := newBrowserDisconnectedFromError(err, "", "", "process")
+					s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
+					s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+						"candidate_count": 0,
+						"success":         false,
+						"code":            string(failure.Code),
+					})
+					return BrowserCandidate{}, failure
+				}
 				best = preferFailure(best, newEndpointUnreachable(EndpointKindProcess, "non_loopback", "process", err))
 			} else {
 				for _, info := range infos {
@@ -276,7 +297,17 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 							endpoint, readErr = endpointFromActivePort(active)
 						}
 						if readErr != nil {
-							best = preferFailure(best, classifyActivePortError(readErr, SourceProcess))
+							failure := classifyActivePortError(readErr, SourceProcess)
+							if failure.Code == CodeBrowserDisconnected {
+								s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
+								s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+									"candidate_count": 0,
+									"success":         false,
+									"code":            string(failure.Code),
+								})
+								return BrowserCandidate{}, failure
+							}
+							best = preferFailure(best, failure)
 							continue
 						}
 					}
@@ -296,6 +327,15 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 							"success":         true,
 						})
 						return candidate, nil
+					}
+					if failure != nil && failure.Code == CodeBrowserDisconnected {
+						s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
+						s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+							"candidate_count": 0,
+							"success":         false,
+							"code":            string(failure.Code),
+						})
+						return BrowserCandidate{}, failure
 					}
 					best = preferFailure(best, failure)
 				}
@@ -374,6 +414,9 @@ func (s *Service) explicitAttempts(inputs ConnectionInputs) []endpointAttempt {
 func (s *Service) tryAttempt(ctx context.Context, attempt endpointAttempt, allowRemote bool) (BrowserCandidate, *DiscoveryError) {
 	endpoint, err := attempt.resolve(ctx)
 	if err != nil {
+		if isBrowserDisconnected(err) {
+			return BrowserCandidate{}, newBrowserDisconnectedFromError(err, "", "", "resolve")
+		}
 		if attempt.kind == EndpointKindActivePort {
 			return BrowserCandidate{}, classifyActivePortError(err, attempt.source)
 		}
@@ -410,6 +453,9 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 	}
 	response, responseErr := s.httpClient.Do(request)
 	if responseErr != nil {
+		if isBrowserDisconnected(responseErr) {
+			return BrowserCandidate{}, newBrowserDisconnectedFromError(responseErr, s.browserIDForEndpoint(Endpoint{CDPURL: rawURL}), "", "version")
+		}
 		return BrowserCandidate{}, newEndpointUnreachable(kind, addressClass(loopback), "version", responseErr)
 	}
 	if response == nil {
@@ -429,6 +475,9 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 	}
 	body, bodyErr := io.ReadAll(io.LimitReader(response.Body, s.maxVersionBytes+1))
 	if bodyErr != nil {
+		if isBrowserDisconnected(bodyErr) {
+			return BrowserCandidate{}, newBrowserDisconnectedFromError(bodyErr, s.browserIDForEndpoint(Endpoint{CDPURL: rawURL}), "", "version")
+		}
 		return BrowserCandidate{}, newEndpointUnreachable(kind, addressClass(loopback), "version", bodyErr)
 	}
 	if int64(len(body)) > s.maxVersionBytes {
@@ -459,6 +508,9 @@ func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source
 	defer cancel()
 	version, probeErr := s.webSocketProbe.Probe(probeCtx, normalized.url.String())
 	if probeErr != nil {
+		if isBrowserDisconnected(probeErr) {
+			return BrowserCandidate{}, newBrowserDisconnectedFromError(probeErr, s.browserIDForEndpoint(Endpoint{BrowserWSEndpoint: rawURL}), "", "connect")
+		}
 		return BrowserCandidate{}, newEndpointUnreachable(kind, addressClass(normalized.loopback), "connect", probeErr)
 	}
 	if strings.TrimSpace(version.WebSocketDebuggerURL) == "" {
@@ -691,6 +743,9 @@ func boundedLabel(value string, max int) string {
 }
 
 func classifyActivePortError(err error, source Source) *DiscoveryError {
+	if isBrowserDisconnected(err) {
+		return newBrowserDisconnectedFromError(err, "", "", "active_port")
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return newEndpointNotFound(EndpointKindActivePort, source)
 	}
@@ -712,6 +767,8 @@ func preferFailure(current, next *DiscoveryError) *DiscoveryError {
 
 func failureRank(code Code) int {
 	switch code {
+	case CodeBrowserDisconnected:
+		return 5
 	case CodeRemoteEndpointDenied:
 		return 4
 	case CodeBrowserProtocolInvalid:

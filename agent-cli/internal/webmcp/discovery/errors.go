@@ -21,6 +21,7 @@ const (
 	CodeStaleSelection         Code = "stale_selection"
 	CodeTargetAttachFailed     Code = "target_attach_failed"
 	CodeTargetDetached         Code = "target_detached"
+	CodeBrowserDisconnected    Code = "browser_disconnected"
 )
 
 // DiscoveryError is safe for model/user display. Details are constrained to
@@ -77,6 +78,7 @@ var (
 	ErrStaleSelection         error = &classifiedCode{code: CodeStaleSelection}
 	ErrTargetAttachFailed     error = &classifiedCode{code: CodeTargetAttachFailed}
 	ErrTargetDetached         error = &classifiedCode{code: CodeTargetDetached}
+	ErrBrowserDisconnected    error = &classifiedCode{code: CodeBrowserDisconnected}
 )
 
 func newEndpointNotFound(kind EndpointKind, source Source) *DiscoveryError {
@@ -256,9 +258,39 @@ func newTargetAttachFailed(browserID, targetID, phase, reason string, cause erro
 	}
 }
 
+func newBrowserDisconnected(browserID, targetID, phase string, cause error) *DiscoveryError {
+	if !publicIDPattern.MatchString(strings.TrimSpace(browserID)) {
+		browserID = "unknown"
+	} else {
+		browserID = strings.TrimSpace(browserID)
+	}
+	phase = boundedLabel(phase, 32)
+	if phase == "" {
+		phase = "disconnect"
+	}
+	details := map[string]any{
+		"browser_id":         browserID,
+		"phase":              phase,
+		"reconnect_required": true,
+	}
+	if targetID = strings.TrimSpace(targetID); publicIDPattern.MatchString(targetID) {
+		details["target_id"] = targetID
+	}
+	return &DiscoveryError{
+		Code:      CodeBrowserDisconnected,
+		Message:   "browser connection ended; an exact reconnect is required",
+		Retryable: false,
+		Cause:     cause,
+		Details:   details,
+	}
+}
+
 func classifiedFrom(err error, kind EndpointKind, source Source) *DiscoveryError {
 	if err == nil {
 		return newEndpointNotFound(kind, source)
+	}
+	if isBrowserDisconnected(err) {
+		return newBrowserDisconnectedFromError(err, "", "", "resolve")
 	}
 	var discoveryErr *DiscoveryError
 	if errors.As(err, &discoveryErr) {

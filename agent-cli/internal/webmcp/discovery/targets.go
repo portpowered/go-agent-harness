@@ -84,10 +84,14 @@ func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandida
 
 	descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 	if failure != nil {
+		failure = enrichBrowserDisconnected(failure, browser.ID, listOptions.TargetID, "targets")
+		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, listOptions.TargetID, "targets")
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, failure
 	}
 	allTargets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 	if normalizeFailure != nil {
+		normalizeFailure = enrichBrowserDisconnected(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
+		s.noteBrowserDisconnectedFailureLocked(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, normalizeFailure
 	}
 
@@ -184,6 +188,15 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 			})
 			return []BrowserCandidate{candidate}, nil
 		}
+		if failure != nil && failure.Code == CodeBrowserDisconnected {
+			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "discovery")
+			s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+				"candidate_count": 0,
+				"success":         false,
+				"code":            string(failure.Code),
+			})
+			return nil, failure
+		}
 		best = preferFailure(best, failure)
 	}
 
@@ -195,6 +208,15 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 				candidates = append(candidates, candidate)
 			}
 			continue
+		}
+		if failure != nil && failure.Code == CodeBrowserDisconnected {
+			s.noteBrowserDisconnectedFailureLocked(failure, "", "", "discovery")
+			s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+				"candidate_count": 0,
+				"success":         false,
+				"code":            string(failure.Code),
+			})
+			return nil, failure
 		}
 		best = preferFailure(best, failure)
 	}
@@ -210,6 +232,16 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 	if inputs.AllowProcessScan && s.processEnumerator != nil {
 		infos, enumerateErr := s.processEnumerator.List(ctx)
 		if enumerateErr != nil {
+			if isBrowserDisconnected(enumerateErr) {
+				failure := newBrowserDisconnectedFromError(enumerateErr, "", "", "process")
+				s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
+				s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+					"candidate_count": 0,
+					"success":         false,
+					"code":            string(failure.Code),
+				})
+				return nil, failure
+			}
 			best = preferFailure(best, newEndpointUnreachable(EndpointKindProcess, "non_loopback", "process", enumerateErr))
 		} else {
 			for _, info := range infos {
@@ -220,12 +252,27 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 				if strings.TrimSpace(endpoint.CDPURL) == "" && strings.TrimSpace(endpoint.BrowserWSEndpoint) == "" && info.UserDataDir != "" {
 					active, readErr := s.activePortReader.Read(ctx, info.UserDataDir)
 					if readErr != nil {
-						best = preferFailure(best, classifyActivePortError(readErr, SourceProcess))
+						failure := classifyActivePortError(readErr, SourceProcess)
+						if failure.Code == CodeBrowserDisconnected {
+							s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
+							s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+								"candidate_count": 0,
+								"success":         false,
+								"code":            string(failure.Code),
+							})
+							return nil, failure
+						}
+						best = preferFailure(best, failure)
 						continue
 					}
 					endpoint, readErr = endpointFromActivePort(active)
 					if readErr != nil {
-						best = preferFailure(best, classifyActivePortError(readErr, SourceProcess))
+						failure := classifyActivePortError(readErr, SourceProcess)
+						if failure.Code == CodeBrowserDisconnected {
+							s.noteBrowserDisconnectedFailureLocked(failure, "", "", "active_port")
+							return nil, failure
+						}
+						best = preferFailure(best, failure)
 						continue
 					}
 				}
@@ -242,6 +289,15 @@ func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]B
 						candidates = append(candidates, candidate)
 					}
 					continue
+				}
+				if failure != nil && failure.Code == CodeBrowserDisconnected {
+					s.noteBrowserDisconnectedFailureLocked(failure, "", "", "process")
+					s.emit(EventDiscoveryCompleted, detailString(failure.Details, "browser_id"), map[string]any{
+						"candidate_count": 0,
+						"success":         false,
+						"code":            string(failure.Code),
+					})
+					return nil, failure
 				}
 				best = preferFailure(best, failure)
 			}
@@ -322,6 +378,9 @@ func (s *Service) listTargetDescriptorsLocked(ctx context.Context, browser Brows
 	}
 	response, responseErr := s.httpClient.Do(request)
 	if responseErr != nil {
+		if isBrowserDisconnected(responseErr) {
+			return nil, newBrowserDisconnectedFromError(responseErr, browser.ID, "", "targets")
+		}
 		return nil, newEndpointUnreachable(EndpointKindCDPHTTP, addressClass(browser.Loopback), "targets", responseErr)
 	}
 	if response == nil {
@@ -341,6 +400,9 @@ func (s *Service) listTargetDescriptorsLocked(ctx context.Context, browser Brows
 	}
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, s.maxTargetBytes+1))
 	if readErr != nil {
+		if isBrowserDisconnected(readErr) {
+			return nil, newBrowserDisconnectedFromError(readErr, browser.ID, "", "targets")
+		}
 		return nil, newEndpointUnreachable(EndpointKindCDPHTTP, addressClass(browser.Loopback), "targets", readErr)
 	}
 	if int64(len(body)) > s.maxTargetBytes {
@@ -354,6 +416,9 @@ func (s *Service) listTargetDescriptorsLocked(ctx context.Context, browser Brows
 }
 
 func classifyTargetListError(err error, browser BrowserCandidate) *DiscoveryError {
+	if isBrowserDisconnected(err) {
+		return newBrowserDisconnectedFromError(err, browser.ID, "", "targets")
+	}
 	var discoveryErr *DiscoveryError
 	if errors.As(err, &discoveryErr) {
 		return discoveryErr
