@@ -343,6 +343,7 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 	imageItemCount := 0
 	imageItemIndex := -1
 	toolArgumentCount := 0
+	encodedImageOccurrences := 0
 	continuationResponseCreates := make([]int, 0, 2)
 	for index, record := range capture.Records {
 		payload := record.Payload
@@ -391,6 +392,7 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 		if record.Direction != gwtesting.DirectionClientToServer {
 			continue
 		}
+		encodedImageOccurrences += strings.Count(string(payload), base64.StdEncoding.EncodeToString(expectedBytes))
 		switch record.Type {
 		case "conversation.item.create":
 			var event struct {
@@ -458,6 +460,9 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 	}
 	if imageItemCount != 1 {
 		t.Fatalf("correlated input_image count = %d, want exactly one", imageItemCount)
+	}
+	if encodedImageOccurrences != 1 {
+		t.Fatalf("encoded image payload occurs %d times across client provider frames, want exactly once", encodedImageOccurrences)
 	}
 	if len(continuationResponseCreates) != 2 {
 		t.Fatalf("response.create count = %d, want initial request plus exactly one continuation", len(continuationResponseCreates))
