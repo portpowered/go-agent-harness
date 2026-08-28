@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/cdp"
 	cdpTarget "github.com/chromedp/cdproto/target"
@@ -252,10 +253,10 @@ func (s *targetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID
 		return err
 	}))
 	if err != nil {
-		return "", classifySessionError(s, webmcp.ErrorInvocationFailed, "invoke", err)
+		return "", classifyInvocationError(s, invocationID, "invoke", err)
 	}
 	if invocationID == "" {
-		return "", classifySessionError(s, webmcp.ErrorInvocationFailed, "invoke", errors.New("browser returned an empty invocation ID"))
+		return "", classifyInvocationError(s, invocationID, "invoke", errors.New("browser returned an empty invocation ID"))
 	}
 	return webmcp.InvocationID(invocationID), nil
 }
@@ -270,7 +271,7 @@ func (s *targetSession) CancelWebMCP(ctx context.Context, invocationID webmcp.In
 		return cdpWebMCP.CancelInvocation(string(invocationID)).Do(ctx)
 	}))
 	if err != nil {
-		return classifySessionError(s, webmcp.ErrorInvocationCanceled, "cancel", err)
+		return classifyCancellationError(s, string(invocationID), err)
 	}
 	return nil
 }
@@ -286,8 +287,8 @@ func (s *targetSession) Err() error {
 }
 
 func (s *targetSession) run(ctx context.Context, action chromedp.Action) error {
-	if ctx == nil {
-		return context.Canceled
+	if err := contextError(ctx); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	if s.closed {
@@ -297,6 +298,9 @@ func (s *targetSession) run(ctx context.Context, action chromedp.Action) error {
 	targetContext := s.targetContext
 	timeout := s.handle.commandTimeout
 	s.mu.Unlock()
+	if targetContext == nil {
+		return errors.New("target context is unavailable")
+	}
 
 	commandContext, cancelCommand := context.WithCancel(targetContext)
 	if timeout > 0 {
@@ -326,8 +330,22 @@ func validateObjectInput(input json.RawMessage) error {
 	if len(bytes.TrimSpace(input)) == 0 {
 		return invalidInputError("empty")
 	}
+	if len(input) > webmcp.DefaultMaxInputBytes {
+		err := invalidInputError("too_large")
+		if classified, ok := err.(*webmcp.ClassifiedError); ok {
+			classified.Details["observed_bytes"] = len(input)
+			classified.Details["max_bytes"] = webmcp.DefaultMaxInputBytes
+		}
+		return err
+	}
+	if !utf8.Valid(input) {
+		return invalidInputError("invalid_utf8")
+	}
 	trimmed := bytes.TrimSpace(input)
-	if trimmed[0] != '{' || !json.Valid(input) {
+	if !json.Valid(input) {
+		return invalidInputError("malformed")
+	}
+	if trimmed[0] != '{' {
 		return invalidInputError("object_required")
 	}
 	return nil

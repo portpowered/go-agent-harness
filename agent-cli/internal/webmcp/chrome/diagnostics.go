@@ -67,6 +67,9 @@ func classifySessionError(session *targetSession, fallback webmcp.ErrorCode, pha
 	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
 		return classified
 	}
+	if classified := sessionLifecycleError(session); classified != nil {
+		return classified
+	}
 	page := session.Context()
 	code := fallback
 	if errors.Is(cause, context.Canceled) {
@@ -85,6 +88,96 @@ func classifySessionError(session *targetSession, fallback webmcp.ErrorCode, pha
 			"reason_code": safeReason(cause),
 		},
 		Cause: cause,
+	}
+}
+
+// classifyInvocationError retains the uncertainty that remains when a CDP
+// invoke command fails. The protocol executor does not expose whether the
+// command reached Chrome before returning an error, so callers must not retry
+// the operation transparently.
+func classifyInvocationError(session *targetSession, invocationID, phase string, cause error) error {
+	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+		return classified
+	}
+	if classified := sessionLifecycleError(session); classified != nil {
+		return classified
+	}
+
+	page := session.Context()
+	code := webmcp.ErrorInvocationFailed
+	details := map[string]any{
+		"browser_id":          string(page.Key.BrowserID),
+		"target_id":           string(page.Key.TargetID),
+		"phase":               phase,
+		"reason_code":         safeReason(cause),
+		"side_effect_unknown": true,
+	}
+	if invocationID != "" {
+		details["invocation_id"] = invocationID
+	}
+	if errors.Is(cause, context.Canceled) {
+		code = webmcp.ErrorInvocationCanceled
+		details["cancel_source"] = "caller"
+	} else if errors.Is(cause, context.DeadlineExceeded) {
+		code = webmcp.ErrorInvocationTimedOut
+		details["timeout_ms"] = session.handle.timeout().Milliseconds()
+	}
+	return &webmcp.ClassifiedError{
+		Code:      code,
+		Message:   webmcp.DefaultErrorMessage(code),
+		Retryable: false,
+		Details:   details,
+		Cause:     cause,
+	}
+}
+
+// classifyCancellationError describes the explicit cancel operation without
+// pretending that cancellation rolls back a page-side effect. A failed or
+// interrupted cancel command is deliberately non-retryable and retains the
+// possibility that the invocation is still running or has already completed.
+func classifyCancellationError(session *targetSession, invocationID string, cause error) error {
+	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+		return classified
+	}
+	if classified := sessionLifecycleError(session); classified != nil {
+		return classified
+	}
+
+	page := session.Context()
+	cancelSource := "explicit"
+	if errors.Is(cause, context.Canceled) {
+		cancelSource = "caller"
+	}
+	return &webmcp.ClassifiedError{
+		Code:      webmcp.ErrorInvocationCanceled,
+		Message:   webmcp.DefaultErrorMessage(webmcp.ErrorInvocationCanceled),
+		Retryable: false,
+		Details: map[string]any{
+			"browser_id":          string(page.Key.BrowserID),
+			"target_id":           string(page.Key.TargetID),
+			"invocation_id":       invocationID,
+			"cancel_source":       cancelSource,
+			"phase":               "cancel",
+			"reason_code":         safeReason(cause),
+			"side_effect_unknown": true,
+		},
+		Cause: cause,
+	}
+}
+
+func sessionLifecycleError(session *targetSession) *webmcp.ClassifiedError {
+	if session == nil {
+		return nil
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(session.Err(), &classified) {
+		return nil
+	}
+	switch classified.Code {
+	case webmcp.ErrorTargetDetached, webmcp.ErrorBrowserDisconnected:
+		return classified
+	default:
+		return nil
 	}
 }
 

@@ -115,9 +115,20 @@ func (s *targetSession) convertToolResponded(value *cdpWebMCP.EventToolResponded
 		Output:       cloneBytes([]byte(value.Output)),
 	}
 	if value.Exception != nil {
-		event.ErrorCode = "page_exception"
+		event.ErrorCode = string(webmcp.ErrorInvocationFailed)
+		event.Reason = "page_exception"
 	} else if strings.TrimSpace(value.ErrorText) != "" {
-		event.ErrorCode = "page_error"
+		event.ErrorCode = string(webmcp.ErrorInvocationFailed)
+		event.Reason = "page_error"
+	} else {
+		switch strings.ToLower(event.Status) {
+		case "canceled", "cancelled":
+			event.ErrorCode = string(webmcp.ErrorInvocationCanceled)
+			event.Reason = "browser_canceled"
+		case "error", "failed":
+			event.ErrorCode = string(webmcp.ErrorInvocationFailed)
+			event.Reason = "page_error"
+		}
 	}
 	return event
 }
