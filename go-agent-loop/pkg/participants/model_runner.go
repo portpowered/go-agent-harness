@@ -461,7 +461,27 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		responseInFlight = true
 	case messages.StreamTypeMessageEnd:
 		responseInFlight = false
-		responseCompleted = true
+		if responseCancelSent {
+			// Realtime providers normally acknowledge RESPONSE.CANCEL with a
+			// response.done event. Preserve that wire boundary so the next
+			// input can proceed, but mark it as interrupted rather than a
+			// normally completed assistant turn.
+			if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
+				outputState := messages.TerminalOutputNone
+				if hasOutput {
+					outputState = messages.TerminalOutputPartial
+				}
+				msg.Value = messages.NewMessageEndValueWithTerminal(
+					value.Usage,
+					messages.TerminalReasonPartialOutput,
+					messages.TerminalProvenanceLoop,
+					outputState,
+				)
+			}
+			responseCompleted = false
+		} else {
+			responseCompleted = true
+		}
 	case messages.StreamTypeSessionClose:
 		sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)

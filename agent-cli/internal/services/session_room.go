@@ -174,6 +174,15 @@ type RoomRunOptions struct {
 	// by package tests to release transport controls only after admission has
 	// actually observed SESSION.OPEN.
 	onParticipantSessionOpen func(string)
+	// onParticipantAudioFanned is an internal observational seam used by
+	// deterministic room tests to release a cadence only after source PCM has
+	// been accepted by the target mixer. It is called after the real mixer write
+	// and never changes the audio path.
+	onParticipantAudioFanned func(sourceID, targetID string, pcm []byte)
+	// onParticipantStream is an internal observational seam used by package
+	// tests to gate the next deterministic input on a specific normalized
+	// provider event. It does not replace the real stream observer.
+	onParticipantStream func(participantID string, msg messages.StreamMessage)
 	// Stream optionally receives the room's diagnostic, transcript, and
 	// lifecycle projections. The broker is observational and never carries raw
 	// audio. Callers that expose it over HTTP own the listener lifecycle.
