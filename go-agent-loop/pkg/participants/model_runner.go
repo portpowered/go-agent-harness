@@ -121,8 +121,9 @@ func (r *ModelRunner) Run(ctx context.Context) error {
 // immediately after SESSION.CREATED is received (before forwarding it to DeltaOutbox).
 //
 // When UserAudioInbox is set, this method also selects on it. If audio arrives
-// while the model is streaming an audio response (between AUDIO.START and AUDIO.END),
-// RESPONSE.CANCEL is sent to the session first (barge-in), then the audio is forwarded.
+// while the model has a non-terminal response (from MESSAGE.START through
+// MESSAGE.END), RESPONSE.CANCEL is sent to the session first (barge-in), then
+// the audio is forwarded.
 func (r *ModelRunner) runSession(ctx context.Context) error {
 	session, err := r.sessionInferencer.ConnectSession(ctx)
 	if err != nil {
@@ -130,7 +131,8 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 	}
 	defer func() { _ = session.Close() }()
 
-	audioStreaming := false // true between AUDIO.START and AUDIO.END from the model
+	responseInFlight := false // true after MESSAGE.START until MESSAGE.END from the model
+	responseCancelSent := false
 	sessionClosed := false
 	hasOutput := false
 	responseCompleted := false
@@ -144,7 +146,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 		// deterministic transport turn before accepting the next inbound
 		// provider event, so a scheduled audio turn cannot be interleaved
 		// ahead of its own commit/response.create boundary.
-		handled, closed := r.forwardPendingSessionInputs(ctx, session, &audioStreaming, &pendingSendErrors, &awaitingToolContinuationResponse, &suppressNextToolContinuation)
+		handled, closed := r.forwardPendingSessionInputs(ctx, session, &responseInFlight, &responseCancelSent, &pendingSendErrors, &awaitingToolContinuationResponse, &suppressNextToolContinuation)
 		if closed {
 			r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 			return nil
@@ -162,7 +164,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				if !ok {
 					break
 				}
-				audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
+				responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted)
 				if msg.Type == messages.StreamTypeMessageEnd && awaitingToolContinuationResponse {
 					r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 					pendingSendErrors = nil
@@ -198,7 +200,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				return nil
 			}
-			r.forwardSessionAudio(ctx, session, pcm, &audioStreaming)
+			r.forwardSessionAudio(ctx, session, pcm, &responseInFlight, &responseCancelSent)
 		case evt, ok := <-r.UserEventInbox:
 			if !ok {
 				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
@@ -215,7 +217,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				pendingSendErrors = nil
 				continue
 			}
-			r.drainSessionAudio(ctx, session, &audioStreaming)
+			r.drainSessionAudio(ctx, session, &responseInFlight, &responseCancelSent)
 			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred {
 				pendingSendErrors = append(pendingSendErrors, failure)
 				if evt.Type == messages.StreamTypeToolCallEnd {
@@ -251,7 +253,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				awaitingToolContinuationResponse = false
 				r.sessionToolContinuation = sessionToolContinuationNone
 			}
-			audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
+			responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted)
 			if msg.Type == messages.StreamTypeMessageEnd && awaitingToolContinuationResponse {
 				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				pendingSendErrors = nil
@@ -264,14 +266,14 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 // forwardPendingSessionInputs gives queued user audio/control messages
 // priority over the provider receive path. It returns whether it forwarded
 // anything and whether either user inbox was closed.
-func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, audioStreaming *bool, pendingSendErrors *[]messages.StreamMessage, awaitingToolContinuationResponse *bool, suppressNextToolContinuation *bool) (handled, closed bool) {
+func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool, pendingSendErrors *[]messages.StreamMessage, awaitingToolContinuationResponse *bool, suppressNextToolContinuation *bool) (handled, closed bool) {
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				return true, true
 			}
-			r.forwardSessionAudio(ctx, session, pcm, audioStreaming)
+			r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent)
 			handled = true
 		case evt, ok := <-r.UserEventInbox:
 			if !ok {
@@ -289,7 +291,7 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 				handled = true
 				continue
 			}
-			r.drainSessionAudio(ctx, session, audioStreaming)
+			r.drainSessionAudio(ctx, session, responseInFlight, responseCancelSent)
 			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred && pendingSendErrors != nil {
 				*pendingSendErrors = append(*pendingSendErrors, failure)
 				if evt.Type == messages.StreamTypeToolCallEnd && suppressNextToolContinuation != nil {
@@ -315,28 +317,35 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 	}
 }
 
-func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, audioStreaming *bool) {
+func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) {
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				return
 			}
-			r.forwardSessionAudio(ctx, session, pcm, audioStreaming)
+			r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent)
 		default:
 			return
 		}
 	}
 }
 
-func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, audioStreaming *bool) {
-	// Barge-in: new user audio while model is streaming an audio response.
-	if *audioStreaming {
+func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) {
+	// Barge-in: new user audio while the current model response is still
+	// non-terminal. The response-created-before-first-audio state is
+	// intentionally included: provider response creation and its first output
+	// delta are separate ordered events, and speech in that interval must not
+	// be mistaken for an idle session.
+	if *responseInFlight && !*responseCancelSent {
 		session.Send(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
 		})
-		*audioStreaming = false
+		// Keep the response in flight until its terminal MESSAGE.END arrives,
+		// but never send a second cancel for more audio belonging to the same
+		// response.
+		*responseCancelSent = true
 	}
 	// Forward the user audio to the inference provider.
 	session.Send(ctx, messages.StreamMessage{
@@ -396,8 +405,10 @@ func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failure
 	}
 }
 
-func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, audioStreaming bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool) {
-	// Track model audio streaming state for barge-in detection.
+func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, responseInFlight bool, responseCancelSent bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool, bool) {
+	// Track the provider response lifecycle for barge-in detection. A response
+	// is live from MESSAGE.START through MESSAGE.END; audio start/end alone do
+	// not define its terminal boundary.
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		// hasOutput and responseCompleted describe the current response, not
@@ -405,13 +416,19 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		// boundary so a later disconnect is classified from the latest turn.
 		hasOutput = false
 		responseCompleted = false
+		responseInFlight = true
+		responseCancelSent = false
 	case messages.StreamTypeAudioStart:
-		audioStreaming = true
-	case messages.StreamTypeAudioEnd, messages.StreamTypeMessageEnd:
-		audioStreaming = false
-		if msg.Type == messages.StreamTypeMessageEnd {
-			responseCompleted = true
+		// Some compatible sessions omit MESSAGE.START around an audio stream;
+		// AUDIO.START is still enough to establish a live response for the
+		// existing session contract.
+		if !responseInFlight {
+			responseCancelSent = false
 		}
+		responseInFlight = true
+	case messages.StreamTypeMessageEnd:
+		responseInFlight = false
+		responseCompleted = true
 	case messages.StreamTypeSessionClose:
 		sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)
@@ -428,7 +445,7 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		})
 	}
 	r.DeltaOutbox.Write(ctx, msg)
-	return audioStreaming, sessionClosed, hasOutput, responseCompleted
+	return responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted
 }
 
 func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMessage {

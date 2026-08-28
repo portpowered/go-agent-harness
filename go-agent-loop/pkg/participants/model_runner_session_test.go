@@ -285,6 +285,66 @@ func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) 
 	}
 }
 
+func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFirstAudio(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+
+	runner.UserAudioInbox <- []byte{4, 5, 6}
+	first := waitForSentMessage(t, ctx, session)
+	second := waitForSentMessage(t, ctx, session)
+	if first.Type != messages.StreamTypeResponseCancel {
+		t.Fatalf("first outbound type = %s, want %s", first.Type, messages.StreamTypeResponseCancel)
+	}
+	if second.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
+	}
+}
+
+func TestSessionModelRunner_CompletedResponseDoesNotCancelNextAudio(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageEnd)
+
+	runner.UserAudioInbox <- []byte{7, 8, 9}
+	sent := waitForSentMessage(t, ctx, session)
+	if sent.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
+	}
+	if got := len(session.sentMessages()); got != 1 {
+		t.Fatalf("sent %d messages, want 1 (no RESPONSE.CANCEL after completion)", got)
+	}
+}
+
 func TestSessionModelRunner_AudioWithoutActiveResponseForwardsDirectly(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
@@ -495,8 +555,9 @@ func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
 	runner.UserAudioInbox <- []byte{4, 5, 6}
 
-	audioStreaming := false
-	runner.drainSessionAudio(context.Background(), session, &audioStreaming)
+	responseInFlight := false
+	responseCancelSent := false
+	runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent)
 
 	sent := session.sentMessages()
 	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
@@ -508,7 +569,7 @@ func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
 	}
 
 	close(runner.UserAudioInbox)
-	runner.drainSessionAudio(context.Background(), session, &audioStreaming)
+	runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent)
 }
 
 func TestModelRunner_SendLatestUserTextPicksNewestUserText(t *testing.T) {
@@ -805,5 +866,16 @@ func waitForDelta(t *testing.T, ctx context.Context, runner *ModelRunner, want m
 		if delta.Type == want {
 			return delta
 		}
+	}
+}
+
+func waitForSentMessage(t *testing.T, ctx context.Context, session *recordingSession) messages.StreamMessage {
+	t.Helper()
+	select {
+	case sent := <-session.sendCh:
+		return sent
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for outbound session message")
+		return messages.StreamMessage{}
 	}
 }
