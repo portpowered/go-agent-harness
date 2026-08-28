@@ -212,6 +212,12 @@ func (l *roomLifecycleLedger) observerPending(participantID string) {
 	l.mu.Unlock()
 }
 
+func (l *roomLifecycleLedger) sessionOpened(participantID string) {
+	l.mu.Lock()
+	l.eventLocked(participantID, "session.opened")
+	l.mu.Unlock()
+}
+
 func (l *roomLifecycleLedger) markReturned() {
 	l.mu.Lock()
 	l.Returned = true
@@ -311,13 +317,14 @@ func (i *roomLifecycleInferencer) sessionSnapshot() *roomLifecycleSessionRuntime
 }
 
 type roomLifecycleSessionRuntime struct {
-	id      string
-	ledger  *roomLifecycleLedger
-	receive *messages.TypedBuffer[messages.StreamMessage]
-	done    chan struct{}
-	once    sync.Once
-	mu      sync.Mutex
-	closed  int
+	id          string
+	ledger      *roomLifecycleLedger
+	receive     *messages.TypedBuffer[messages.StreamMessage]
+	done        chan struct{}
+	once        sync.Once
+	mu          sync.Mutex
+	closed      int
+	err         error
 }
 
 func newRoomLifecycleSessionRuntime(id string, ledger *roomLifecycleLedger) *roomLifecycleSessionRuntime {
@@ -347,6 +354,12 @@ func (s *roomLifecycleSessionRuntime) Done() <-chan struct{} {
 	return s.done
 }
 
+func (s *roomLifecycleSessionRuntime) TerminalError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err
+}
+
 func (s *roomLifecycleSessionRuntime) Close() error {
 	s.mu.Lock()
 	s.closed++
@@ -368,6 +381,13 @@ func (s *roomLifecycleSessionRuntime) end() {
 	s.once.Do(func() { close(s.done) })
 }
 
+func (s *roomLifecycleSessionRuntime) fail(err error) {
+	s.mu.Lock()
+	s.err = err
+	s.mu.Unlock()
+	s.end()
+}
+
 func (s *roomLifecycleSessionRuntime) closeCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -378,7 +398,8 @@ type roomLifecycleRun struct {
 	ids         []string
 	ledger      *roomLifecycleLedger
 	inferencers map[string]*roomLifecycleInferencer
-	terminal    chan RoomParticipantResult
+	opened      map[string]chan struct{}
+	terminal    map[string]chan RoomParticipantResult
 	results     chan roomTestRunOutcome
 	cancel      context.CancelFunc
 	ctx         context.Context
@@ -400,19 +421,35 @@ func newRoomLifecycleRun(t *testing.T, ids []string) *roomLifecycleRun {
 		}
 		return inferencer, nil
 	}
-	terminal := make(chan RoomParticipantResult, len(ids))
+	opened := make(map[string]chan struct{}, len(ids))
+	terminal := make(map[string]chan RoomParticipantResult, len(ids))
+	for _, id := range ids {
+		opened[id] = make(chan struct{}, 1)
+		terminal[id] = make(chan RoomParticipantResult, 1)
+	}
+	base.onParticipantSessionOpen = func(id string) {
+		ledger.sessionOpened(id)
+		if signal, ok := opened[id]; ok {
+			select {
+			case signal <- struct{}{}:
+			default:
+			}
+		}
+	}
 	base.OnParticipantTerminated = func(result RoomParticipantResult) {
 		ledger.participantTerminated(result)
-		select {
-		case terminal <- result:
-		default:
+		if signal, ok := terminal[result.ParticipantID]; ok {
+			select {
+			case signal <- result:
+			default:
+			}
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), roomLifecycleScenarioTimeout)
 	run := &roomLifecycleRun{
 		ids: ids, ledger: ledger, inferencers: inferencers,
-		terminal: terminal,
-		results:  make(chan roomTestRunOutcome, 1), cancel: cancel, ctx: ctx,
+		opened: opened, terminal: terminal,
+		results: make(chan roomTestRunOutcome, 1), cancel: cancel, ctx: ctx,
 	}
 	go func() {
 		result, err := RunRoomWithResult(ctx, io.Discard, base)
@@ -420,6 +457,19 @@ func newRoomLifecycleRun(t *testing.T, ids []string) *roomLifecycleRun {
 		run.results <- roomTestRunOutcome{result: result, err: err}
 	}()
 	return run
+}
+
+func (r *roomLifecycleRun) waitSessionOpen(t *testing.T, id string) {
+	t.Helper()
+	signal, ok := r.opened[id]
+	if !ok {
+		t.Fatalf("participant %q has no session-open signal", id)
+	}
+	select {
+	case <-signal:
+	case <-time.After(roomLifecycleScenarioTimeout):
+		t.Fatalf("participant %q SESSION.OPEN observation unresolved", id)
+	}
 }
 
 func (r *roomLifecycleRun) waitConnectStarts(t *testing.T) {
@@ -451,10 +501,27 @@ func (r *roomLifecycleRun) waitOutcome(t *testing.T, id string) error {
 
 func (r *roomLifecycleRun) waitTerminal(t *testing.T, wantID string) RoomParticipantResult {
 	t.Helper()
+	signal, ok := r.terminal[wantID]
+	if !ok {
+		t.Fatalf("participant %q has no terminal signal", wantID)
+	}
 	select {
-	case result := <-r.terminal:
+	case result := <-signal:
 		if result.ParticipantID != wantID {
-			t.Fatalf("first terminal callback = %+v, want participant %q", result, wantID)
+			t.Fatalf("terminal callback for %q carried participant %q", wantID, result.ParticipantID)
+		}
+		observation := r.ledger.snapshot()
+		targetSequence := 0
+		for _, event := range observation.Events {
+			if event.ParticipantID == wantID && event.Phase == "participant.terminal" {
+				targetSequence = event.Sequence
+				break
+			}
+		}
+		for _, event := range observation.Events {
+			if event.Phase == "participant.terminal" && event.ParticipantID != wantID && event.Sequence < targetSequence {
+				t.Fatalf("unexpected sibling %q terminated before target %q: %+v", event.ParticipantID, wantID, observation.Terminals)
+			}
 		}
 		return result
 	case <-time.After(roomLifecycleScenarioTimeout):
@@ -486,6 +553,20 @@ func (r *roomLifecycleRun) session(t *testing.T, id string) *roomLifecycleSessio
 func (r *roomLifecycleRun) stop() {
 	if r.cancel != nil {
 		r.cancel()
+	}
+}
+
+func (r *roomLifecycleRun) admitAll(t *testing.T) {
+	t.Helper()
+	r.waitConnectStarts(t)
+	for _, id := range r.ids {
+		r.decide(t, id, roomLifecycleConnectDecision{})
+		if err := r.waitOutcome(t, id); err != nil {
+			t.Fatalf("participant %q connection: %v", id, err)
+		}
+	}
+	for _, id := range r.ids {
+		r.waitSessionOpen(t, id)
 	}
 }
 
@@ -563,6 +644,9 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 				t.Fatalf("participant %q connection: %v", id, err)
 			}
 		}
+		for _, id := range ids {
+			run.waitSessionOpen(t, id)
+		}
 		run.session(t, "target").end()
 		terminal := run.waitTerminal(t, "target")
 		if terminal.Reason != ParticipantTerminationDisconnected {
@@ -587,6 +671,9 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 			if err := run.waitOutcome(t, id); err != nil {
 				t.Fatalf("participant %q connection: %v", id, err)
 			}
+		}
+		for _, id := range ids {
+			run.waitSessionOpen(t, id)
 		}
 		sibling := run.session(t, "sibling")
 		target := run.session(t, "target")
@@ -623,6 +710,9 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 				t.Fatalf("participant %q connection: %v", id, err)
 			}
 		}
+		for _, id := range ids {
+			run.waitSessionOpen(t, id)
+		}
 		target := run.session(t, "target")
 		// The transport end is forced first; explicit room cancellation follows
 		// only after the identity-correlated target callback is visible.
@@ -635,6 +725,114 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 		outcome := run.waitResult(t)
 		if outcome.err != nil {
 			t.Fatalf("room cancellation after transport end: %v", outcome.err)
+		}
+		if err := run.ledger.snapshot().validate(); err != nil {
+			t.Fatalf("identity-aware observation: %v", err)
+		}
+	})
+}
+
+func TestRunRoomLifecycleTerminalCausePrecedence(t *testing.T) {
+	ids := []string{"target", "sibling", "observer"}
+
+	t.Run("genuine participant error survives coordinator cancellation", func(t *testing.T) {
+		run := newRoomLifecycleRun(t, ids)
+		defer run.stop()
+		run.admitAll(t)
+		target := run.session(t, "target")
+		target.fail(errors.New("forced participant failure"))
+		terminal := run.waitTerminal(t, "target")
+		if terminal.Reason != ParticipantTerminationError || !strings.Contains(terminal.Error, "forced participant failure") {
+			t.Fatalf("genuine participant failure terminal = %+v, want error with causal detail", terminal)
+		}
+		run.stop()
+		outcome := run.waitResult(t)
+		if outcome.err != nil {
+			t.Fatalf("room cancellation after participant failure: %v", outcome.err)
+		}
+		if err := run.ledger.snapshot().validate(); err != nil {
+			t.Fatalf("identity-aware observation: %v", err)
+		}
+	})
+
+	t.Run("typed provider close survives coordinator cancellation", func(t *testing.T) {
+		run := newRoomLifecycleRun(t, ids)
+		defer run.stop()
+		run.admitAll(t)
+		target := run.session(t, "target")
+		target.publish(messages.StreamMessage{
+			Type: messages.StreamTypeSessionClose,
+			Value: messages.NewSessionCloseValueWithTerminal(
+				"target",
+				"provider_closed",
+				"transport",
+				messages.TerminalReasonProviderClose,
+				messages.TerminalProvenanceProvider,
+				messages.TerminalOutputNone,
+			),
+		})
+		terminal := run.waitTerminal(t, "target")
+		if terminal.Reason != ParticipantTerminationDisconnected {
+			t.Fatalf("typed provider close terminal = %+v, want disconnected", terminal)
+		}
+		run.stop()
+		outcome := run.waitResult(t)
+		if outcome.err != nil {
+			t.Fatalf("room cancellation after typed provider close: %v", outcome.err)
+		}
+		observation := run.ledger.snapshot()
+		if err := observation.validate(); err != nil {
+			t.Fatalf("identity-aware observation: %v", err)
+		}
+		if session := observation.Sessions["target"]; session.CloseCalls != 1 || !session.Closed {
+			t.Fatalf("typed provider session ownership = %+v, want exactly one close", session)
+		}
+	})
+
+	t.Run("typed session close survives later transport end", func(t *testing.T) {
+		run := newRoomLifecycleRun(t, ids)
+		defer run.stop()
+		run.admitAll(t)
+		target := run.session(t, "target")
+		target.publish(messages.StreamMessage{
+			Type:  messages.StreamTypeSessionClose,
+			Value: messages.NewSessionCloseValue("target", "client_close"),
+		})
+		terminal := run.waitTerminal(t, "target")
+		if terminal.Reason != ParticipantTerminationEnded {
+			t.Fatalf("typed session close terminal = %+v, want ended", terminal)
+		}
+		// The runner closes the session after consuming the typed close. A
+		// repeated transport end must not replace that observed session cause.
+		target.end()
+		run.stop()
+		outcome := run.waitResult(t)
+		if outcome.err != nil {
+			t.Fatalf("room cancellation after typed session close: %v", outcome.err)
+		}
+		if err := run.ledger.snapshot().validate(); err != nil {
+			t.Fatalf("identity-aware observation: %v", err)
+		}
+	})
+
+	t.Run("transport end wins over a later typed close", func(t *testing.T) {
+		run := newRoomLifecycleRun(t, ids)
+		defer run.stop()
+		run.admitAll(t)
+		target := run.session(t, "target")
+		target.end()
+		terminal := run.waitTerminal(t, "target")
+		target.publish(messages.StreamMessage{
+			Type:  messages.StreamTypeSessionClose,
+			Value: messages.NewSessionCloseValue("target", "client_close"),
+		})
+		if terminal.Reason != ParticipantTerminationDisconnected {
+			t.Fatalf("transport-first terminal = %+v, want disconnected", terminal)
+		}
+		run.stop()
+		outcome := run.waitResult(t)
+		if outcome.err != nil {
+			t.Fatalf("room cancellation after transport-first close: %v", outcome.err)
 		}
 		if err := run.ledger.snapshot().validate(); err != nil {
 			t.Fatalf("identity-aware observation: %v", err)

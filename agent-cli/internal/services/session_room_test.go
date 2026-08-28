@@ -285,14 +285,27 @@ func TestRunRoom_FailsWhenEveryParticipantTerminates(t *testing.T) {
 func TestRunRoom_ClassifiesTransportEndAsParticipantDisconnect(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	inferencers := map[string]*roomTestInferencer{
-		"a": {events: []messages.StreamMessage{roomTestSessionOpen("a")}, disconnect: true},
+		"a": {events: []messages.StreamMessage{roomTestSessionOpen("a")}},
 		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b")}},
 		"c": {events: []messages.StreamMessage{roomTestSessionOpen("c")}},
 	}
-	participantEvents := make(chan RoomParticipantResult, len(ids))
+	participantEvents := make(map[string]chan RoomParticipantResult, len(ids))
+	for _, id := range ids {
+		participantEvents[id] = make(chan RoomParticipantResult, 1)
+	}
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
+	sessionOpened := make(map[string]chan struct{}, len(ids))
+	for _, id := range ids {
+		sessionOpened[id] = make(chan struct{}, 1)
+	}
+	opts.onParticipantSessionOpen = func(id string) {
+		select {
+		case sessionOpened[id] <- struct{}{}:
+		default:
+		}
+	}
 	opts.OnParticipantTerminated = func(result RoomParticipantResult) {
-		participantEvents <- result
+		participantEvents[result.ParticipantID] <- result
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -303,7 +316,24 @@ func TestRunRoom_ClassifiesTransportEndAsParticipantDisconnect(t *testing.T) {
 	}()
 
 	select {
-	case event := <-participantEvents:
+	case <-sessionOpened["a"]:
+	case <-time.After(2 * time.Second):
+		t.Fatal("target session did not reach observed admission")
+	}
+	for _, id := range []string{"b", "c"} {
+		select {
+		case <-sessionOpened[id]:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("participant %q did not reach observed admission", id)
+		}
+	}
+	sessions := inferencers["a"].sessionsSnapshot()
+	if len(sessions) != 1 {
+		t.Fatalf("target sessions = %d, want 1", len(sessions))
+	}
+	sessions[0].end()
+	select {
+	case event := <-participantEvents["a"]:
 		if event.ParticipantID != "a" || event.Reason != ParticipantTerminationDisconnected {
 			t.Fatalf("transport-ended event = %+v, want a/disconnected", event)
 		}
@@ -321,6 +351,16 @@ func TestRunRoom_ClassifiesTransportEndAsParticipantDisconnect(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("room did not terminate after cancellation")
+	}
+	for _, id := range []string{"b", "c"} {
+		select {
+		case event := <-participantEvents[id]:
+			if event.ParticipantID != id || event.Reason != ParticipantTerminationEnded {
+				t.Fatalf("sibling %q terminal event = %+v, want identity-preserving ended", id, event)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("sibling %q terminal callback unresolved", id)
+		}
 	}
 }
 

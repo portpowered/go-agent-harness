@@ -162,6 +162,10 @@ type RoomRunOptions struct {
 	OnDiagnostic            RoomParticipantDiagnosticObserver
 	OnParticipantTerminated RoomParticipantObserver
 	OnRoomTerminated        RoomObserver
+	// onParticipantSessionOpen is an internal deterministic lifecycle seam used
+	// by package tests to release transport controls only after admission has
+	// actually observed SESSION.OPEN.
+	onParticipantSessionOpen func(string)
 	// Stream optionally receives the room's diagnostic, transcript, and
 	// lifecycle projections. The broker is observational and never carries raw
 	// audio. Callers that expose it over HTTP own the listener lifecycle.
@@ -190,17 +194,21 @@ type roomParticipantRuntime struct {
 }
 
 type roomParticipantLifecycle struct {
-	mu             sync.Mutex
-	connected      bool
-	connectErr     error
-	sessionOpened  bool
-	sessionClosed  bool
-	transportEnded bool
-	transportDone  <-chan struct{}
-	runDone        bool
-	closeReason    string
-	terminalReason messages.TerminalReason
-	turns          int
+	mu                   sync.Mutex
+	connected            bool
+	connectErr           error
+	sessionOpened        bool
+	sessionClosed        bool
+	transportEnded       bool
+	transportDone        <-chan struct{}
+	roomStopping         bool
+	runDone              bool
+	closeReason          string
+	terminalReason       messages.TerminalReason
+	terminalKind         ParticipantTerminationReason
+	terminalErr          error
+	transportTerminalErr func() error
+	turns                int
 }
 
 func (l *roomParticipantLifecycle) markConnected(err error) {
@@ -210,6 +218,25 @@ func (l *roomParticipantLifecycle) markConnected(err error) {
 	l.mu.Lock()
 	l.connected = err == nil
 	l.connectErr = err
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) markTerminalLocked(reason ParticipantTerminationReason, err error) {
+	if l.terminalKind != "" || reason == "" {
+		return
+	}
+	l.terminalKind = reason
+	l.terminalErr = err
+}
+
+func (l *roomParticipantLifecycle) markParticipantError(err error) {
+	if l == nil || err == nil || roomCancellationOnly(err) {
+		return
+	}
+	l.mu.Lock()
+	if !l.roomStopping {
+		l.markTerminalLocked(ParticipantTerminationError, err)
+	}
 	l.mu.Unlock()
 }
 
@@ -229,27 +256,60 @@ func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
 		if value, ok := msg.Value.(*messages.SessionCloseValue); ok && value != nil {
 			l.closeReason = value.Reason
 			l.terminalReason = value.TerminalReason
+			if l.terminalReason == "" && value.Reason == "provider_closed" {
+				l.terminalReason = messages.TerminalReasonProviderClose
+			}
+		}
+		if !l.roomStopping {
+			terminalErr := error(nil)
+			if l.transportTerminalErr != nil {
+				terminalErr = l.transportTerminalErr()
+			}
+			if terminalErr != nil && !roomCancellationOnly(terminalErr) {
+				l.markTerminalLocked(ParticipantTerminationError, terminalErr)
+			} else {
+				l.markTerminalLocked(classifyRoomSessionClose(l.closeReason, l.terminalReason), nil)
+			}
 		}
 	}
 	return l.turns
 }
 
-func (l *roomParticipantLifecycle) markTransportEnded() {
+func (l *roomParticipantLifecycle) markTransportEndedWithError(terminalErr error) {
 	if l == nil {
 		return
 	}
 	l.mu.Lock()
 	l.transportEnded = true
+	if !l.roomStopping {
+		if terminalErr != nil && !roomCancellationOnly(terminalErr) {
+			l.markTerminalLocked(ParticipantTerminationError, terminalErr)
+		} else {
+			l.markTerminalLocked(ParticipantTerminationDisconnected, nil)
+		}
+	}
 	l.mu.Unlock()
 }
 
-func (l *roomParticipantLifecycle) setTransportDone(done <-chan struct{}) {
+func (l *roomParticipantLifecycle) markTransportEnded() {
+	l.markTransportEndedWithError(nil)
+}
+
+func (l *roomParticipantLifecycle) setTransportDone(done <-chan struct{}, terminalError func() error) {
 	if l == nil {
 		return
 	}
 	l.mu.Lock()
 	l.transportDone = done
+	l.transportTerminalErr = terminalError
 	l.mu.Unlock()
+	if roomChannelClosed(done) {
+		var terminalErr error
+		if terminalError != nil {
+			terminalErr = terminalError()
+		}
+		l.markTransportEndedWithError(terminalErr)
+	}
 }
 
 func (l *roomParticipantLifecycle) transportHasEnded() bool {
@@ -259,24 +319,56 @@ func (l *roomParticipantLifecycle) transportHasEnded() bool {
 	l.mu.Lock()
 	ended := l.transportEnded
 	done := l.transportDone
+	terminalError := l.transportTerminalErr
 	l.mu.Unlock()
 	if ended || done == nil {
 		return ended
 	}
-	select {
-	case <-done:
+	if roomChannelClosed(done) {
+		var terminalErr error
+		if terminalError != nil {
+			terminalErr = terminalError()
+		}
+		l.markTransportEndedWithError(terminalErr)
 		return true
-	default:
-		return false
 	}
+	return false
 }
 
-func (l *roomParticipantLifecycle) markRunDone() {
+// markCoordinatorStopping records intentional room teardown before the
+// coordinator cancels participant contexts. A transport that is already done
+// at this boundary is causal; one that closes afterwards belongs to the
+// coordinator's teardown and must not be reported as a provider disconnect.
+func (l *roomParticipantLifecycle) markCoordinatorStopping() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if roomChannelClosed(l.transportDone) {
+		l.transportEnded = true
+		var terminalErr error
+		if l.transportTerminalErr != nil {
+			terminalErr = l.transportTerminalErr()
+		}
+		if terminalErr != nil && !roomCancellationOnly(terminalErr) {
+			l.markTerminalLocked(ParticipantTerminationError, terminalErr)
+		} else {
+			l.markTerminalLocked(ParticipantTerminationDisconnected, nil)
+		}
+	}
+	l.roomStopping = true
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) markRunDone(runErr error) {
 	if l == nil {
 		return
 	}
 	l.mu.Lock()
 	l.runDone = true
+	if runErr != nil && !roomCancellationOnly(runErr) {
+		l.markTerminalLocked(ParticipantTerminationError, runErr)
+	}
 	l.mu.Unlock()
 }
 
@@ -296,6 +388,15 @@ func (l *roomParticipantLifecycle) snapshot() (connected bool, sessionOpened boo
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.connected, l.sessionOpened, l.sessionClosed, l.closeReason, l.terminalReason, l.turns, l.connectErr
+}
+
+func (l *roomParticipantLifecycle) terminal() (ParticipantTerminationReason, error, bool) {
+	if l == nil {
+		return "", nil, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.terminalKind, l.terminalErr, l.terminalKind != ""
 }
 
 // roomConnectTrackingInferencer preserves the existing SessionInferencer
@@ -367,12 +468,19 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 	}
 	i.publish(err)
 	if err == nil && session != nil && i.lifecycle != nil {
-		i.lifecycle.setTransportDone(session.Done())
+		terminalError := func() error { return terminalSessionError(session) }
+		i.lifecycle.setTransportDone(session.Done(), terminalError)
+		recordSessionEnd := func() {
+			i.lifecycle.markTransportEndedWithError(terminalError())
+		}
 		go func() {
 			select {
 			case <-session.Done():
-				i.lifecycle.markTransportEnded()
+				recordSessionEnd()
 			case <-ctx.Done():
+				if roomChannelClosed(session.Done()) {
+					recordSessionEnd()
+				}
 			}
 		}()
 	}
@@ -420,6 +528,11 @@ func (c *roomCoordinator) stop(reason RoomTerminationReason, err error) {
 	}
 	c.reason = reason
 	c.err = err
+	for _, runtime := range c.active {
+		if runtime != nil && runtime.lifecycle != nil {
+			runtime.lifecycle.markCoordinatorStopping()
+		}
+	}
 	c.mu.Unlock()
 	close(c.done)
 	if c.cancel != nil {
@@ -463,6 +576,26 @@ func (c *roomCoordinator) roomError() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.err
+}
+
+func (c *roomCoordinator) participantRunError(participantID string, err error) error {
+	if err == nil || c == nil || !c.isStopping() {
+		return err
+	}
+	roomErr := c.roomError()
+	failedID := c.failedParticipantID()
+	if failedID != "" && failedID != participantID {
+		if roomErr != nil && errors.Is(err, roomErr) {
+			return nil
+		}
+		if roomCancellationOnly(err) {
+			return nil
+		}
+	}
+	if roomErr == nil && roomCancellationOnly(err) {
+		return nil
+	}
+	return err
 }
 
 func (c *roomCoordinator) addParticipant(runtime *roomParticipantRuntime) {
@@ -556,14 +689,18 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	// A room-level failure is returned by every session loop through DoneErr.
 	// Keep it on the participant that caused the failure, but do not turn the
 	// coordinator's cancellation into an error for surviving participants.
-	if err != nil && c.isStopping() {
-		if roomErr := c.roomError(); roomErr != nil {
-			if failedID := c.failedParticipantID(); failedID != "" && failedID != id && errors.Is(err, roomErr) {
-				err = nil
-			}
+	err = c.participantRunError(id, err)
+	if terminalKind, terminalErr, terminalObserved := runtime.lifecycle.terminal(); terminalObserved {
+		// Lifecycle observations are authoritative once latched. In particular,
+		// coordinator cancellation must not replace a transport or typed session
+		// close that was observed first.
+		reason = terminalKind
+		if terminalErr != nil {
+			err = terminalErr
+		} else if terminalKind != ParticipantTerminationError {
+			err = nil
 		}
-	}
-	if reason == "" {
+	} else if reason == "" {
 		reason = classifyRoomParticipantTermination(c.isStopping(), err, connected, transportEnded, sessionClosed, closeReason, terminalReason)
 	}
 	result := RoomParticipantResult{
@@ -636,7 +773,7 @@ func (c *roomCoordinator) snapshot() (RoomTerminationReason, map[string]RoomPart
 }
 
 func classifyRoomParticipantTermination(roomStopping bool, runErr error, connected bool, transportEnded bool, sessionClosed bool, closeReason string, terminalReason messages.TerminalReason) ParticipantTerminationReason {
-	if runErr != nil && !errors.Is(runErr, context.Canceled) && !errors.Is(runErr, context.DeadlineExceeded) {
+	if runErr != nil && !roomCancellationOnly(runErr) {
 		return ParticipantTerminationError
 	}
 	if closeReason == "provider_closed" || terminalReason == messages.TerminalReasonProviderClose {
@@ -651,6 +788,50 @@ func classifyRoomParticipantTermination(roomStopping bool, runErr error, connect
 	// A caller/bound/coordinator stop is an intentional clean participant
 	// teardown. It must not be mistaken for a provider disconnect.
 	return ParticipantTerminationEnded
+}
+
+func roomCancellationOnly(err error) bool {
+	if err == nil {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		children := joined.Unwrap()
+		if len(children) == 0 {
+			return false
+		}
+		for _, child := range children {
+			if !roomCancellationOnly(child) {
+				return false
+			}
+		}
+		return true
+	}
+	if cause := errors.Unwrap(err); cause != nil {
+		return roomCancellationOnly(cause)
+	}
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func classifyRoomSessionClose(closeReason string, terminalReason messages.TerminalReason) ParticipantTerminationReason {
+	if closeReason == "provider_closed" || terminalReason == messages.TerminalReasonProviderClose {
+		return ParticipantTerminationDisconnected
+	}
+	if terminalReason == messages.TerminalReasonTerminalFailure {
+		return ParticipantTerminationError
+	}
+	return ParticipantTerminationEnded
+}
+
+func roomChannelClosed(ch <-chan struct{}) bool {
+	if ch == nil {
+		return false
+	}
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
 }
 
 func defaultRoomSessionFactory(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
@@ -759,7 +940,10 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		return finalizeEvidence(result, err)
 	}
 
-	roomCtx, roomCancel := context.WithCancel(ctx)
+	// Keep caller cancellation out of participant contexts until the coordinator
+	// has recorded the intentional room stop. Otherwise siblings can close their
+	// transports first and be misclassified as provider disconnects.
+	roomCtx, roomCancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer roomCancel()
 	mesh := room.NewParticipantMesh(roomCtx, opts.PairFactory)
 	defer func() { _ = mesh.Close() }()
@@ -828,7 +1012,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		coordinator.addParticipant(runtime)
 	}
 
-	// The room context inherits caller cancellation, but cancellation is
+	// The room context is independent of caller cancellation; cancellation is
 	// translated into the room's explicit stopped taxonomy before participant
 	// loops observe it.
 	go func() {
@@ -859,7 +1043,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		defer timer.Stop()
 	}
 
-	startupErr := awaitRoomParticipantConnections(roomCtx, coordinator, plans, timer, secrets, connectionOutcomes)
+	startupErr := awaitRoomParticipantConnections(ctx, coordinator, plans, timer, secrets, connectionOutcomes)
 	if startupErr != nil {
 		coordinator.fail(startupErr)
 	}

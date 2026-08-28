@@ -17,6 +17,23 @@ The product contract used for classification is:
   its own manifest ID; and
 - a clean return has no unresolved owned work.
 
+## Terminal-cause correction
+
+The room service now latches the first observed participant terminal cause.
+Transport completion is classified as disconnected, typed provider close is
+classified as disconnected, typed client/session close is classified as ended,
+and a non-cancellation participant error is classified as error. The
+coordinator marks intentional stopping before cancelling participant contexts,
+so sibling cancellation cannot replace the causal participant's result or
+turn a later teardown into a provider disconnect. The room context is isolated
+from caller cancellation until that coordinator transition is recorded.
+
+`TestRunRoomLifecycleTerminalCausePrecedence` covers typed provider close,
+typed session close followed by transport completion, and transport completion
+followed by a later typed close. Each subtest waits for the target callback by
+participant ID, validates the full identity-aware ledger, and verifies owned
+session closure exactly once.
+
 ## Forced-ordering matrix
 
 | Controlled ordering | Identity-correlated observation | Classification |

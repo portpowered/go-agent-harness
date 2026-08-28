@@ -48,7 +48,7 @@ func runRoomParticipant(
 		observer:        observer,
 		loopReady:       runtime.loopReady,
 	})
-	runtime.lifecycle.markRunDone()
+	runtime.lifecycle.markRunDone(coordinator.participantRunError(runtime.plan.manifest.ID, runErr))
 	connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 	if trackedErr, ready := runtime.plan.tracker.outcome(); ready {
 		connectErr = trackedErr
@@ -99,6 +99,9 @@ func observeRoomParticipantStream(
 		}
 	}
 	turns := runtime.lifecycle.observe(msg)
+	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
+		opts.onParticipantSessionOpen(plan.manifest.ID)
+	}
 	if msg.Type == messages.StreamTypeMessageEnd {
 		coordinator.noteTurn(plan.manifest.ID, turns)
 	}
