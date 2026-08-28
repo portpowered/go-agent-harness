@@ -490,6 +490,10 @@ func writeGateConfig(configDir, cdpURL, origin string) error {
 }
 
 func startGateCommand(parent context.Context, binaryPath, configDir string, args ...string) (*gateCLIProcess, error) {
+	return startGateCommandWithEnvironment(parent, binaryPath, configDir, nil, args...)
+}
+
+func startGateCommandWithEnvironment(parent context.Context, binaryPath, configDir string, extraEnvironment []string, args ...string) (*gateCLIProcess, error) {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -498,6 +502,20 @@ func startGateCommand(parent context.Context, binaryPath, configDir string, args
 	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
 	command.Dir, _ = repositoryRoot()
 	command.Env = gateChildEnvironment()
+	for _, extra := range extraEnvironment {
+		key, _, ok := strings.Cut(extra, "=")
+		if !ok || key == "" {
+			continue
+		}
+		filtered := command.Env[:0]
+		for _, value := range command.Env {
+			if strings.HasPrefix(value, key+"=") {
+				continue
+			}
+			filtered = append(filtered, value)
+		}
+		command.Env = append(filtered, extra)
+	}
 	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
 	command.Stdout = &process.stdout
 	command.Stderr = &process.stderr
