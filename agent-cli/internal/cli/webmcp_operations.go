@@ -690,13 +690,18 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return c.executeDirectWithContext(cmd, values, "watch", webmcp.ErrorEndpointUnreachable, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
 				watchCtx := ctx
+				var cancelWatch context.CancelFunc
 				if values.timeout > 0 {
-					var cancel context.CancelFunc
-					watchCtx, cancel = context.WithTimeout(ctx, values.timeout)
-					defer cancel()
+					watchCtx, cancelWatch = context.WithTimeout(ctx, values.timeout)
+					defer cancelWatch()
 				}
 				stream := broker.Watch(watchCtx)
-				if _, err := c.ensureDirectSelection(watchCtx, cmd, values, broker, browser); err != nil {
+				// The target session must outlive the bounded watch stream. Passing
+				// watchCtx to selection would make it the chromedp target-context
+				// parent; when the watch deadline fires, the target would detach
+				// before broker cleanup could issue its explicit detach. Selection
+				// uses the command lifetime, while only event consumption is timed.
+				if _, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser); err != nil {
 					return nil, err
 				}
 				return runDirectWatchStream(watchCtx, stream, values.once)

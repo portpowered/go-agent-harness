@@ -17,6 +17,7 @@ import (
 const (
 	defaultBrokerWatchBuffer = 64
 	maxToolRefMintAttempts   = 64
+	initialCatalogWait       = time.Second
 )
 
 // BrokerOptions supplies the browser-neutral seams used by StatefulBroker.
@@ -123,6 +124,13 @@ type brokerSession struct {
 	queueWorkerDone chan struct{}
 	current         *brokerInvocation
 	queueClosed     bool
+	// observedInvocations tracks page invocations initiated by another
+	// command-scoped broker. The browser event stream is shared by attached
+	// DevTools clients, so a watch command can report external invocation
+	// lifecycle events without claiming ownership of their result.
+	observedInvocations map[InvocationID]ToolRef
+	catalogObserved     bool
+	catalogSignal       chan struct{}
 }
 
 type catalogKey struct {
@@ -406,17 +414,19 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		page.SelectedAt = b.clock.Now()
 	}
 	newSession := &brokerSession{
-		handle:          handle,
-		session:         session,
-		target:          cloneTarget(target),
-		context:         page,
-		active:          true,
-		catalog:         make(map[catalogKey]ToolDescriptor),
-		flush:           make(chan chan struct{}),
-		loopDone:        make(chan struct{}),
-		queueWake:       make(chan struct{}, 1),
-		queueStop:       make(chan struct{}),
-		queueWorkerDone: make(chan struct{}),
+		handle:              handle,
+		session:             session,
+		target:              cloneTarget(target),
+		context:             page,
+		active:              true,
+		catalog:             make(map[catalogKey]ToolDescriptor),
+		flush:               make(chan chan struct{}),
+		loopDone:            make(chan struct{}),
+		queueWake:           make(chan struct{}, 1),
+		queueStop:           make(chan struct{}),
+		queueWorkerDone:     make(chan struct{}),
+		observedInvocations: make(map[InvocationID]ToolRef),
+		catalogSignal:       make(chan struct{}),
 	}
 
 	b.mu.Lock()
@@ -445,6 +455,12 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		return PageContext{}, targetAttachError(selector, "enable_webmcp", err)
 	}
 	b.flushSession(newSession)
+	if err := b.waitForInitialCatalog(ctx, newSession); err != nil {
+		b.invalidateSession(newSession, "catalog_wait_canceled")
+		_ = session.Close()
+		return PageContext{}, targetAttachError(selector, "catalog", err)
+	}
+	b.flushSession(newSession)
 	b.mu.Lock()
 	if b.selected == newSession && newSession.active {
 		newSession.context.Ready = true
@@ -452,6 +468,40 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
 	return page, nil
+}
+
+// waitForInitialCatalog gives the browser a bounded opportunity to deliver
+// the toolsAdded event triggered by WebMCP.enable. Chrome returns from the
+// enable command before that event is necessarily queued, and a fresh CLI
+// process otherwise can observe a ready but empty catalog. A timeout is
+// intentionally non-fatal because a valid page may expose zero tools.
+func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *brokerSession) error {
+	if selected == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.mu.Lock()
+	if selected.catalogObserved {
+		b.mu.Unlock()
+		return nil
+	}
+	signal := selected.catalogSignal
+	loopDone := selected.loopDone
+	b.mu.Unlock()
+	timer := time.NewTimer(initialCatalogWait)
+	defer timer.Stop()
+	select {
+	case <-signal:
+		return nil
+	case <-loopDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // Selected returns the current selection after reconciling any already
@@ -837,7 +887,12 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 		b.applyToolsAddedLocked(selected, event)
 	case EventToolsRemoved:
 		b.applyToolsRemovedLocked(selected, event)
+	case EventToolInvoked:
+		b.observeBrowserInvocationLocked(selected, event)
 	case EventToolResponded:
+		if b.reconcileObservedBrowserResponseLocked(selected, event) {
+			return
+		}
 		b.reconcileBrowserResponseLocked(selected, event)
 	case EventPageNavigated, EventFrameNavigated:
 		b.applyGenerationChangeLocked(selected, event, string(event.Type))
@@ -850,7 +905,104 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	}
 }
 
+// observeBrowserInvocationLocked turns a protocol invocation initiated by a
+// different command-scoped broker into a safe lifecycle observation. Direct
+// CLI commands intentionally create a fresh broker for every process, while
+// Chrome broadcasts target events to every attached DevTools session. The
+// invoking broker already owns its ID and is therefore ignored here; a watch
+// broker records only the opaque invocation ID and the catalog-bound ref.
+func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession, event BrowserEvent) {
+	if selected == nil || event.InvocationID == "" {
+		return
+	}
+	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+		return
+	}
+	if _, observed := selected.observedInvocations[event.InvocationID]; observed {
+		return
+	}
+	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
+		return
+	}
+
+	var ref ToolRef
+	if descriptor, ok := observedToolDescriptorLocked(selected, event); ok {
+		ref = descriptor.Ref
+	}
+	selected.observedInvocations[event.InvocationID] = ref
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationCreated,
+		BrowserID:    selected.context.Key.BrowserID,
+		TargetID:     selected.context.Key.TargetID,
+		Generation:   selected.context.Generation,
+		InvocationID: event.InvocationID,
+		ToolRef:      ref,
+		State:        InvocationDispatched,
+		Reason:       "browser_observed",
+	})
+}
+
+func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *brokerSession, event BrowserEvent) bool {
+	if selected == nil || event.InvocationID == "" {
+		return false
+	}
+	if _, owned := b.browserInvocations[event.InvocationID]; owned {
+		return false
+	}
+	ref, observed := selected.observedInvocations[event.InvocationID]
+	if !observed {
+		return false
+	}
+	delete(selected.observedInvocations, event.InvocationID)
+	state, _ := terminalState(event.Status)
+	reason := event.ErrorCode
+	if reason == "" {
+		reason = event.Reason
+	}
+	if reason == "" {
+		reason = strings.ToLower(strings.TrimSpace(event.Status))
+	}
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationTerminal,
+		At:           event.At,
+		BrowserID:    selected.context.Key.BrowserID,
+		TargetID:     selected.context.Key.TargetID,
+		Generation:   selected.context.Generation,
+		InvocationID: event.InvocationID,
+		ToolRef:      ref,
+		State:        state,
+		Reason:       reason,
+	})
+	return true
+}
+
+func observedToolDescriptorLocked(selected *brokerSession, event BrowserEvent) (ToolDescriptor, bool) {
+	if selected == nil {
+		return ToolDescriptor{}, false
+	}
+	if event.FrameID != "" {
+		if descriptor, ok := selected.catalog[catalogKey{frame: event.FrameID, name: event.ToolName}]; ok {
+			return descriptor, true
+		}
+	}
+	var match ToolDescriptor
+	for key, descriptor := range selected.catalog {
+		if key.name != event.ToolName {
+			continue
+		}
+		if match.Ref != "" {
+			return ToolDescriptor{}, false
+		}
+		match = descriptor
+	}
+	return match, match.Ref != ""
+}
+
 func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event BrowserEvent) {
+	if !selected.catalogObserved {
+		selected.catalogObserved = true
+		close(selected.catalogSignal)
+	}
 	if event.Generation > selected.context.Generation {
 		b.advanceGenerationLocked(selected, event.Generation, "catalog_generation")
 	}
@@ -896,6 +1048,10 @@ func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event Br
 }
 
 func (b *StatefulBroker) applyToolsRemovedLocked(selected *brokerSession, event BrowserEvent) {
+	if !selected.catalogObserved {
+		selected.catalogObserved = true
+		close(selected.catalogSignal)
+	}
 	if event.Generation > selected.context.Generation {
 		b.advanceGenerationLocked(selected, event.Generation, "catalog_generation")
 	}
