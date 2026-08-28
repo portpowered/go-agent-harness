@@ -41,10 +41,6 @@ type sessionToolBargeInSession struct {
 	secondAudioSent       chan struct{}
 }
 
-func newSessionToolBargeInSession() *sessionToolBargeInSession {
-	return newSessionToolBargeInSessionWithMode(false)
-}
-
 func newSessionToolBargeInSessionWithMode(bargeIn bool) *sessionToolBargeInSession {
 	return &sessionToolBargeInSession{
 		recv:            messages.NewTypedBuffer[messages.StreamMessage](64),
