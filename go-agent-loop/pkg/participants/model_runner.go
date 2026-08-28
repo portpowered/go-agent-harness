@@ -48,9 +48,23 @@ type ModelRunner struct {
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
 	currentPassID int    // LoopPassID from the current InferenceRequest
 
+	// sessionToolContinuation records the result of the session-loop's explicit
+	// tool-result boundary. It lets the request-driven compatibility helper
+	// distinguish a continuation already queued by ToolResultForwarder from an
+	// isolated caller that still needs to request one.
+	sessionToolContinuation sessionToolContinuationState
+
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
+
+type sessionToolContinuationState uint8
+
+const (
+	sessionToolContinuationNone sessionToolContinuationState = iota
+	sessionToolContinuationAccepted
+	sessionToolContinuationSuppressed
+)
 
 func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRunner {
 	return &ModelRunner{
@@ -196,6 +210,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				// the accepted sibling remains pending and the deferred result error
 				// names the rejected call when the session reaches a terminal path.
 				suppressNextToolContinuation = false
+				r.sessionToolContinuation = sessionToolContinuationSuppressed
 				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				pendingSendErrors = nil
 				continue
@@ -205,12 +220,19 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				pendingSendErrors = append(pendingSendErrors, failure)
 				if evt.Type == messages.StreamTypeToolCallEnd {
 					suppressNextToolContinuation = true
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
 				}
 				if responseAccepted {
 					awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
 				}
-			} else if responseAccepted {
-				awaitingToolContinuationResponse = true
+			} else {
+				if responseAccepted {
+					awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
+				} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate {
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
+				}
 			}
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
@@ -227,6 +249,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				pendingSendErrors = nil
 				awaitingToolContinuationResponse = false
+				r.sessionToolContinuation = sessionToolContinuationNone
 			}
 			audioStreaming, sessionClosed, hasOutput, responseCompleted = r.forwardSessionMessage(ctx, session, msg, audioStreaming, sessionClosed, hasOutput, responseCompleted)
 			if msg.Type == messages.StreamTypeMessageEnd && awaitingToolContinuationResponse {
@@ -258,6 +281,7 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 				// See the main session-event branch: one rejected result makes the
 				// batch continuation invalid, even when another result was accepted.
 				*suppressNextToolContinuation = false
+				r.sessionToolContinuation = sessionToolContinuationSuppressed
 				if pendingSendErrors != nil {
 					r.flushPendingSessionSendErrors(ctx, *pendingSendErrors)
 					*pendingSendErrors = nil
@@ -270,12 +294,19 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 				*pendingSendErrors = append(*pendingSendErrors, failure)
 				if evt.Type == messages.StreamTypeToolCallEnd && suppressNextToolContinuation != nil {
 					*suppressNextToolContinuation = true
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
 				}
 				if responseAccepted && awaitingToolContinuationResponse != nil {
 					*awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
 				}
-			} else if responseAccepted && awaitingToolContinuationResponse != nil {
-				*awaitingToolContinuationResponse = true
+			} else {
+				if responseAccepted && awaitingToolContinuationResponse != nil {
+					*awaitingToolContinuationResponse = true
+					r.sessionToolContinuation = sessionToolContinuationAccepted
+				} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate {
+					r.sessionToolContinuation = sessionToolContinuationSuppressed
+				}
 			}
 			handled = true
 		default:
@@ -447,8 +478,16 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		return
 	case sessionToolResultsAlreadyForwarded:
 		// Text-only results are delivered by ToolResultForwarder before this
-		// result-driven inference request reaches the session runner. The
-		// forwarder owns the single response boundary for that batch.
+		// result-driven inference request reaches the session runner. Consume
+		// that boundary when the session loop recorded it; an isolated caller
+		// still needs the explicit request below.
+		if r.sessionToolContinuation != sessionToolContinuationNone {
+			r.sessionToolContinuation = sessionToolContinuationNone
+			return
+		}
+		if !r.sendLatestUserTextOnly(ctx, session, req.Messages) {
+			r.requestSessionResponse(ctx, session)
+		}
 		return
 	case sessionToolResultsFailed:
 		// A complete-message send may have partially reached the provider. Do
