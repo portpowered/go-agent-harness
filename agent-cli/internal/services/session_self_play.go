@@ -375,11 +375,6 @@ func (s *selfPlayStopState) recordTurn(side int, target int) bool {
 	return true
 }
 
-func (s *selfPlayStopState) result() SelfPlayResult {
-	result, _ := s.snapshot()
-	return result
-}
-
 func (s *selfPlayStopState) snapshot() (SelfPlayResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -515,9 +510,8 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		sideEvidence := evidence.side(side)
 		sideEvidence.diagnosticErr = func(err error) {
 			wrapped := fmt.Errorf("%s diagnostic evidence: %w", name, err)
-			if stop.fail(wrapped) {
-				evidence.fail(wrapped)
-			}
+			evidence.fail(wrapped)
+			stop.fail(wrapped)
 		}
 		observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
 		observer.runtime = sideEvidence.runtimeRecord
@@ -527,9 +521,8 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		observer.streamObserver = func(msg messages.StreamMessage) {
 			if err := sideEvidence.observeStreamDelta(msg); err != nil {
 				wrapped := fmt.Errorf("%s stream delta evidence: %w", name, err)
-				if stop.fail(wrapped) {
-					evidence.fail(wrapped)
-				}
+				evidence.fail(wrapped)
+				stop.fail(wrapped)
 			}
 			if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
 				value, ok := msg.Value.(*messages.AudioDeltaValue)
@@ -542,9 +535,8 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 				}
 				if err := sideEvidence.observeAudio(value.Content); err != nil {
 					wrapped := fmt.Errorf("%s WAV evidence: %w", name, err)
-					if stop.fail(wrapped) {
-						evidence.fail(wrapped)
-					}
+					evidence.fail(wrapped)
+					stop.fail(wrapped)
 				}
 				if sideEvidence.runtimeRecord != nil {
 					sideEvidence.runtimeRecord.audioOutput(value.Content)
@@ -604,6 +596,9 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	if result.StopReason == "" {
 		stop.fail(errors.New("self-play ended without a stop reason"))
 		result, runErr = stop.snapshot()
+	}
+	if evidenceErr := evidence.err(); evidenceErr != nil {
+		runErr = errors.Join(runErr, evidenceErr)
 	}
 	finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
 	return result, errors.Join(runErr, finalizeErr)

@@ -149,8 +149,14 @@ func TestSelfPlayStopState_RejectsExtraTurnAtBoundBeforePeerFinal(t *testing.T) 
 	const target = 2
 	published := make(chan struct{}, 1)
 	stop := newSelfPlayStopState(func() { published <- struct{}{} })
-	if !stop.recordTurn(0, target) || !stop.recordTurn(0, target) || !stop.recordTurn(1, target) {
-		t.Fatal("collision setup did not reach customer bound with assistant one turn behind")
+	if !stop.recordTurn(0, target) {
+		t.Fatal("first customer turn was not admitted")
+	}
+	if !stop.recordTurn(0, target) {
+		t.Fatal("second customer turn was not admitted")
+	}
+	if !stop.recordTurn(1, target) {
+		t.Fatal("assistant turn was not admitted")
 	}
 
 	start := make(chan struct{})
@@ -253,7 +259,13 @@ func TestSelfPlayStopState_TerminalPrecedenceWithBarriers(t *testing.T) {
 			const target = 2
 			published := make(chan struct{}, 1)
 			stop := newSelfPlayStopState(func() { published <- struct{}{} })
-			if !stop.recordTurn(0, target) || !stop.recordTurn(0, target) || !stop.recordTurn(1, target-1) {
+			if !stop.recordTurn(0, target) {
+				t.Fatal("first customer turn was not admitted")
+			}
+			if !stop.recordTurn(0, target) {
+				t.Fatal("second customer turn was not admitted")
+			}
+			if !stop.recordTurn(1, target-1) {
 				t.Fatal("failed to establish the final-turn barrier")
 			}
 

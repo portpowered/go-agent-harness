@@ -205,7 +205,13 @@ func TestSelfPlayEvidence_FinalizeUsesOneTerminalSnapshot(t *testing.T) {
 
 	published := make(chan struct{}, 1)
 	stop := newSelfPlayStopState(func() { published <- struct{}{} })
-	if !stop.recordTurn(0, target) || !stop.recordTurn(0, target) || !stop.recordTurn(1, target-1) {
+	if !stop.recordTurn(0, target) {
+		t.Fatal("first customer turn was not admitted")
+	}
+	if !stop.recordTurn(0, target) {
+		t.Fatal("second customer turn was not admitted")
+	}
+	if !stop.recordTurn(1, target-1) {
 		t.Fatal("failed to establish pre-target state")
 	}
 
@@ -276,6 +282,69 @@ func TestSelfPlayEvidence_FinalizeUsesOneTerminalSnapshot(t *testing.T) {
 		if manifest.Agents[id].CompletedTurns != target {
 			t.Fatalf("finalized manifest %s turns = %d, want %d", id, manifest.Agents[id].CompletedTurns, target)
 		}
+	}
+}
+
+func TestSelfPlayEvidence_FailureAfterTerminalPublicationIsReturnedAndManifested(t *testing.T) {
+	const target = 2
+	outputDir := filepath.Join(t.TempDir(), "run")
+	if err := os.MkdirAll(outputDir, 0o700); err != nil {
+		t.Fatalf("create evidence directory: %v", err)
+	}
+	evidence, err := newSelfPlayEvidence(outputDir, SelfPlayRunOptions{
+		Provider:    SelfPlayDefaultProvider,
+		Model:       SelfPlayDefaultModel,
+		MaxDuration: time.Second,
+		MaxTurns:    target,
+		OutputDir:   outputDir,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("new self-play evidence: %v", err)
+	}
+
+	stop := newSelfPlayStopState(nil)
+	if !stop.recordTurn(0, target) {
+		t.Fatal("first customer turn was not admitted")
+	}
+	if !stop.recordTurn(0, target) {
+		t.Fatal("second customer turn was not admitted")
+	}
+	if !stop.recordTurn(1, target) {
+		t.Fatal("first assistant turn was not admitted")
+	}
+	if !stop.recordTurn(1, target) {
+		t.Fatal("final assistant turn was not admitted")
+	}
+	result, runErr := stop.snapshot()
+	if result.StopReason != SelfPlayStopTurnTarget || runErr != nil {
+		t.Fatalf("terminal snapshot = %+v/%v, want clean target", result, runErr)
+	}
+
+	// Simulate a sink failure delivered after the target owner has already
+	// published its immutable snapshot. The run must still return the evidence
+	// failure, while the failed stop contender cannot rewrite that snapshot.
+	evidenceErr := errors.New("post-terminal evidence write failed")
+	evidence.fail(evidenceErr)
+	if stop.fail(evidenceErr) {
+		t.Fatal("post-terminal evidence failure replaced the target snapshot")
+	}
+	runErr = errors.Join(runErr, evidence.err())
+	finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
+	returnedErr := errors.Join(runErr, finalizeErr)
+	if !errors.Is(returnedErr, evidenceErr) {
+		t.Fatalf("returned error = %v, want post-terminal evidence failure", returnedErr)
+	}
+
+	manifestBytes := readSelfPlayArtifact(t, filepath.Join(outputDir, SelfPlayManifestPath))
+	var manifest selfPlayManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode evidence manifest: %v", err)
+	}
+	if manifest.StopReason != SelfPlayStopTurnTarget || !strings.Contains(manifest.Error, evidenceErr.Error()) {
+		t.Fatalf("manifest outcome = %+v, want target plus evidence failure", manifest)
+	}
+	if manifest.Agents["agent-a"].CompletedTurns != target || manifest.Agents["agent-b"].CompletedTurns != target {
+		t.Fatalf("manifest completed turns = %d/%d, want %d/%d", manifest.Agents["agent-a"].CompletedTurns, manifest.Agents["agent-b"].CompletedTurns, target, target)
 	}
 }
 
