@@ -67,7 +67,11 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 			CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
 			WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
 			CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-			AdvertiseToolDefinitions: true,
+			// The provider-backed constructor receives the stable definitions in
+			// its initial Realtime session configuration. Do not send a second
+			// generic SESSION.UPDATE for the same surface after SESSION.CREATED;
+			// page-catalog changes remain result data and never re-advertise it.
+			AdvertiseToolDefinitions: false,
 			RequireSessionUpdated:    len(opts.AudioInputs) > 0 && provider == sessionProviderOpenAI,
 		},
 	}, nil

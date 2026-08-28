@@ -218,8 +218,9 @@ func toolsToParams(tools []models.ToolDefinition) []chatTool {
 func buildParameters(tool models.ToolDefinition) map[string]interface{} {
 	if len(tool.Parameters) == 0 {
 		return map[string]interface{}{
-			"type":       "object",
-			"properties": map[string]interface{}{},
+			"type":                 "object",
+			"properties":           map[string]interface{}{},
+			"additionalProperties": false,
 		}
 	}
 
@@ -235,9 +236,10 @@ func buildParameters(tool models.ToolDefinition) map[string]interface{} {
 		}
 	}
 	return map[string]interface{}{
-		"type":       "object",
-		"required":   required,
-		"properties": properties,
+		"type":                 "object",
+		"required":             required,
+		"properties":           properties,
+		"additionalProperties": false,
 	}
 }
 

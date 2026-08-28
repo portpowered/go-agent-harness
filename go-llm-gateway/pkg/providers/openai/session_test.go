@@ -336,6 +336,9 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	if !ok {
 		t.Fatalf("tool parameters missing or wrong type: %T", tool["parameters"])
 	}
+	if additionalProperties, ok := parameters["additionalProperties"].(bool); !ok || additionalProperties {
+		t.Fatalf("tool parameter additionalProperties = %#v, want false", parameters["additionalProperties"])
+	}
 	required, ok := parameters["required"].([]any)
 	if !ok || len(required) != 1 || required[0] != "city" {
 		t.Fatalf("tool required parameters: got %#v, want [city]", parameters["required"])
