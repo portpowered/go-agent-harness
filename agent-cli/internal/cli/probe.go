@@ -63,6 +63,10 @@ type ProbeRunCommand struct {
 	OutPath     string
 	SummaryPath string
 	JSONOut     bool
+	// RecordingRoot is the parent directory for v2 evidence bundles. An empty
+	// value creates a run-scoped temporary parent and exposes its path in each
+	// result for inspection.
+	RecordingRoot string
 
 	deviceRegistry      audio.DeviceRegistry
 	deviceProbeExec     DeviceProbeExecFunc
@@ -127,6 +131,8 @@ func (c *ProbeRunCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.OutPath, "out", "", "Path for per-scenario JSONL result lines (default stdout)")
 	cmd.Flags().StringVar(&c.SummaryPath, "summary", "", "Path for the summary artifact (default stderr)")
 	cmd.Flags().BoolVar(&c.JSONOut, "json", false, "Emit pure machine-readable output without human-readable decoration")
+	cmd.Flags().StringVar(&c.RecordingRoot, "recording-root", "", "Parent directory for finalized v2 evidence bundles")
+	cmd.Flags().StringVar(&c.RecordingRoot, "evidence-root", "", "Alias for --recording-root")
 	return cmd
 }
 

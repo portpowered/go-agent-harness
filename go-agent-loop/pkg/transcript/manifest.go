@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -133,6 +134,16 @@ type ArtifactHash struct {
 	SHA256 string `json:"sha256"`
 }
 
+// RecordingArtifact is an additional file emitted into a recording bundle.
+// It is an input-side extension point: the public manifest remains the same
+// and records the path and digest in Artifacts. Data is copied and generic
+// recording credentials are redacted before it is written.
+type RecordingArtifact struct {
+	Path   string
+	Data   []byte
+	SHA256 string
+}
+
 // RecordingTerminalSummary is the optional normalized terminal outcome for a
 // recording bundle. The summary describes the lifecycle authority that ended
 // the session; it is not a provider wire event and is therefore kept outside
@@ -234,6 +245,12 @@ type RecordingConfig struct {
 	// It is staged and hashed with the provider artifacts before manifest.json
 	// is emitted.
 	BrowserArtifact *BrowserArtifact
+
+	// AdditionalArtifacts are run-scoped artifacts that use the existing
+	// top-level manifest artifact list. Paths must be relative, unique, and
+	// must not collide with the built-in transcript, audio, browser, or
+	// manifest paths.
+	AdditionalArtifacts []RecordingArtifact
 
 	// WriteFile is optional. It is called with the private staging path, so a
 	// failed write cannot expose a partial bundle at Destination.
@@ -365,6 +382,11 @@ func WriteRecordingBundle(config RecordingConfig) error {
 			return err
 		}
 	}
+	for _, artifact := range normalized.additional {
+		if err := write(artifact.path, artifact.data); err != nil {
+			return err
+		}
+	}
 
 	artifacts, err := hashArtifacts(staging, normalized.artifactPaths)
 	if err != nil {
@@ -409,6 +431,13 @@ type normalizedRecording struct {
 	writeFile        RecordingWriteFile
 	manifestVersion  int
 	browser          *normalizedBrowserArtifact
+	additional       []normalizedRecordingArtifact
+}
+
+type normalizedRecordingArtifact struct {
+	path   string
+	data   []byte
+	sha256 string
 }
 
 type credentialRedactor struct {
@@ -483,6 +512,15 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 			return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate browser artifact path", destination, err, redactor)
 		}
 	}
+	additional, err := normalizeAdditionalRecordingArtifacts(config.AdditionalArtifacts, artifactPaths, expectedPaths, redactor, destination)
+	if err != nil {
+		return normalizedRecording{}, redactor, err
+	}
+	for _, artifact := range additional {
+		artifactPaths = append(artifactPaths, artifact.path)
+		appendRecordingArtifactParents(&expectedPaths, artifact.path)
+		expectedPaths = append(expectedPaths, artifact.path)
+	}
 	expectedPaths = append(expectedPaths, "manifest.json")
 	return normalizedRecording{
 		destination:      destination,
@@ -499,7 +537,71 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		writeFile:        writeFile,
 		manifestVersion:  manifestVersion,
 		browser:          browser,
+		additional:       additional,
 	}, redactor, nil
+}
+
+func normalizeAdditionalRecordingArtifacts(
+	artifacts []RecordingArtifact,
+	artifactPaths []string,
+	expectedPaths []string,
+	redactor credentialRedactor,
+	destination string,
+) ([]normalizedRecordingArtifact, error) {
+	if len(artifacts) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]struct{}, len(artifacts))
+	for _, path := range artifactPaths {
+		seen[path] = struct{}{}
+	}
+	for _, path := range expectedPaths {
+		seen[path] = struct{}{}
+	}
+	normalized := make([]normalizedRecordingArtifact, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if err := validateRecordingArtifactPath(artifact.Path); err != nil {
+			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q: %w", artifact.Path, err), redactor)
+		}
+		if artifact.Path == "audio" || strings.HasPrefix(artifact.Path, "audio/") {
+			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q: audio paths are reserved", artifact.Path), redactor)
+		}
+		if _, exists := seen[artifact.Path]; exists {
+			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q duplicates another recording path", artifact.Path), redactor)
+		}
+		seen[artifact.Path] = struct{}{}
+		if len(artifact.Data) == 0 {
+			return nil, recordingError(ErrInvalidRecording, "validate additional artifact", destination, fmt.Errorf("%q: data must be non-empty", artifact.Path), redactor)
+		}
+		data := redactor.apply(artifact.Data)
+		digest := sha256.Sum256(data)
+		wantDigest := hex.EncodeToString(digest[:])
+		if artifact.SHA256 != "" {
+			if !isLowerSHA256(artifact.SHA256) || artifact.SHA256 != wantDigest {
+				return nil, recordingError(ErrInvalidRecording, "validate additional artifact", destination, fmt.Errorf("%q: sha256 does not match data", artifact.Path), redactor)
+			}
+		}
+		normalized = append(normalized, normalizedRecordingArtifact{
+			path:   artifact.Path,
+			data:   append([]byte(nil), data...),
+			sha256: wantDigest,
+		})
+	}
+	sort.Slice(normalized, func(i, j int) bool { return normalized[i].path < normalized[j].path })
+	for index := 1; index < len(normalized); index++ {
+		if strings.HasPrefix(normalized[index].path, normalized[index-1].path+"/") {
+			return nil, recordingError(ErrInvalidRecording, "validate additional artifact path", destination, fmt.Errorf("%q is a parent of another recording path", normalized[index-1].path), redactor)
+		}
+	}
+	return normalized, nil
+}
+
+func appendRecordingArtifactParents(expectedPaths *[]string, artifactPath string) {
+	for parent := path.Dir(artifactPath); parent != "."; parent = path.Dir(parent) {
+		if !containsRecordingPath(*expectedPaths, parent) {
+			*expectedPaths = append(*expectedPaths, parent)
+		}
+	}
 }
 
 func readTranscriptInput(data []byte, path, side, destination string, redactor credentialRedactor) ([]byte, error) {

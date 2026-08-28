@@ -18,9 +18,8 @@ import (
 )
 
 // probeScenarioV2Result is intentionally compatible with the legacy result
-// vocabulary while retaining the stable v2 scenario identity and typed
-// browser execution evidence. The richer acceptance evidence is finalized by
-// the later v2 evidence story; this result is the command's execution verdict.
+// vocabulary while retaining the stable v2 scenario identity and the paths to
+// the independently finalized evidence bundle.
 type probeScenarioV2Result struct {
 	ID                 string                             `json:"id"`
 	Name               string                             `json:"name"`
@@ -40,6 +39,8 @@ type probeScenarioV2Result struct {
 	Error              string                             `json:"error,omitempty"`
 	InputDropCount     uint64                             `json:"input_drop_count"`
 	OutputDropCount    uint64                             `json:"output_drop_count"`
+	ObjectiveEvidence  probe.ObjectiveEvidence            `json:"objective_evidence"`
+	Evidence           *probeScenarioV2EvidenceSummary    `json:"evidence,omitempty"`
 }
 
 type probeScenarioV2ExpectationResult struct {
@@ -156,8 +157,13 @@ func (c *ProbeRunCommand) runScenarioV2(cmd interface {
 	defer closeOutputs()
 
 	summary := probe.RunSummary{Total: len(entries)}
-	for _, entry := range entries {
-		result := executeProbeScenarioV2(cmd.Context(), entry)
+	recordingRoot, err := c.prepareProbeScenarioV2RecordingRoot(len(entries))
+	if err != nil {
+		return err
+	}
+	for index, entry := range entries {
+		recordingDirectory := probeScenarioV2RecordingDirectory(recordingRoot, index, entry)
+		result := executeProbeScenarioV2(cmd.Context(), entry, recordingDirectory)
 		encoded, encodeErr := json.Marshal(result)
 		if encodeErr != nil {
 			return fmt.Errorf("encode result for scenario %q: %w", result.Name, encodeErr)
@@ -232,7 +238,7 @@ func (c *ProbeRunCommand) openProbeOutputs(cmd interface {
 	return resultsOut, summaryOut, closeOutputs, nil
 }
 
-func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selection) (result probeScenarioV2Result) {
+func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selection, recordingDirectory string) (result probeScenarioV2Result) {
 	result = probeScenarioV2Result{
 		ID:            entry.Scenario.ID,
 		Name:          entry.Scenario.Name,
@@ -275,6 +281,21 @@ func executeProbeScenarioV2(parent context.Context, entry probeScenarioV2Selecti
 		return result
 	}
 	result = executor.populateResult(result)
+	if recordingDirectory != "" {
+		if evidence, objective, finalizeErr := executor.finalizeEvidence(recordingDirectory); finalizeErr != nil {
+			result.Error = finalizeErr.Error()
+			result.Pass = false
+		} else {
+			result.Evidence = &evidence
+			result.ObjectiveEvidence = objective
+			if !objective.Verified {
+				result.Pass = false
+				if result.Error == "" {
+					result.Error = "objective evidence did not verify the declared browser objectives"
+				}
+			}
+		}
+	}
 	return result
 }
 
@@ -331,6 +352,7 @@ func newProbeScenarioV2Executor(scenario probe.ScenarioV2) (*probeScenarioV2Exec
 	executor.recorder, err = testkit.NewRecorder(&executor.eventOutput,
 		testkit.WithClock(executor.clock),
 		testkit.WithIDSource(executor.ids),
+		testkit.WithRedaction(testkit.RedactionPolicy{URLQuery: true, URLFragment: true}),
 	)
 	if err != nil {
 		return executor, fmt.Errorf("create browser evidence recorder: %w", err)
@@ -361,10 +383,14 @@ func (e *probeScenarioV2Executor) execute(ctx context.Context) error {
 		return errors.New("provider session steps require provider_fixture")
 	}
 	if e.broker != nil {
-		if err := e.broker.Close(); err != nil {
-			return fmt.Errorf("close browser broker: %w", err)
-		}
+		closeErr := e.broker.Close()
 		e.closed = true
+		if recordErr := e.recordCleanupEvidence(); recordErr != nil {
+			return recordErr
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close browser broker: %w", closeErr)
+		}
 	}
 	if e.runtime != nil {
 		if err := e.runtime.Complete(); err != nil {
@@ -395,12 +421,15 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		if e.broker == nil {
 			return errors.New("browser fixture is not configured")
 		}
+		if err := e.recordDiscoveryStarted(); err != nil {
+			return err
+		}
 		candidates, err := e.broker.Discover(ctx, webmcp.DiscoverOptions{BrowserID: webmcp.BrowserID(step.BrowserID), ExplicitOnly: true})
 		if err != nil {
 			return err
 		}
 		e.discovered = candidates
-		return nil
+		return e.recordDiscoveryEvidence(ctx)
 	case probe.ScenarioV2StepBrowserSelect:
 		if e.broker == nil {
 			return errors.New("browser fixture is not configured")
@@ -414,7 +443,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 			return err
 		}
 		e.selected = page
-		return nil
+		return e.recordSelectionEvidence(page, "selected")
 	case probe.ScenarioV2StepBrowserActivate:
 		if e.broker == nil {
 			return errors.New("browser fixture is not configured")
@@ -432,7 +461,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 			return err
 		}
 		e.selected = page
-		return nil
+		return e.recordSelectionEvidence(page, "activated")
 	case probe.ScenarioV2StepWebMCPWaitReady:
 		if e.broker == nil {
 			return errors.New("browser fixture is not configured")
@@ -458,7 +487,7 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		}
 		e.catalog = catalog
 		e.hasCatalog = true
-		return nil
+		return e.recordCatalogEvidence(catalog)
 	case probe.ScenarioV2StepWebMCPInvoke:
 		if e.broker == nil {
 			return errors.New("browser fixture is not configured")
@@ -470,6 +499,9 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 			invocation.Name = descriptor.Name
 		}
 		e.invocations = append(e.invocations, invocation)
+		if recordErr := e.recordInvocationAdmission(invocation); recordErr != nil {
+			return recordErr
+		}
 		if invocation.Err != nil {
 			if e.scenarioExpects(probe.ScenarioV2ExpectationStaleToolRejected) && isStaleToolError(invocation.Err) {
 				return nil
@@ -481,7 +513,10 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 		if e.broker == nil {
 			return errors.New("browser fixture is not configured")
 		}
-		return e.broker.Cancel(ctx, webmcp.CancelRequest{InvocationID: webmcp.InvocationID(step.InvocationID), Reason: step.Reason})
+		if err := e.broker.Cancel(ctx, webmcp.CancelRequest{InvocationID: webmcp.InvocationID(step.InvocationID), Reason: step.Reason}); err != nil {
+			return err
+		}
+		return e.recordInvocationCancel(step)
 	case probe.ScenarioV2StepBrowserNavigateFixture:
 		if e.adapter == nil {
 			return errors.New("browser fixture is not configured")
@@ -497,7 +532,19 @@ func (e *probeScenarioV2Executor) dispatchStep(ctx context.Context, step probe.S
 			}
 			targetURL = script.Endpoint.Targets[0].URL
 		}
-		return e.adapter.Navigate(ctx, targetURL)
+		if err := e.adapter.Navigate(ctx, targetURL); err != nil {
+			return err
+		}
+		if e.broker != nil {
+			page, err := e.broker.Selected(ctx)
+			if err != nil {
+				return err
+			}
+			previous := e.selected.Generation
+			e.selected = page
+			return e.recordGenerationChange(previous, page.Generation)
+		}
+		return nil
 	case probe.ScenarioV2StepBrowserDisconnect, probe.ScenarioV2StepCloseTab:
 		if e.adapter == nil {
 			return errors.New("browser fixture is not configured")
@@ -546,6 +593,11 @@ func (e *probeScenarioV2Executor) resolveInvocations(ctx context.Context) error 
 			continue
 		}
 		invocation.Result = result
+	}
+	for _, invocation := range e.invocations {
+		if err := e.recordInvocationTerminal(invocation); err != nil {
+			return err
+		}
 	}
 	for _, invocation := range e.invocations {
 		if invocation.Err != nil {
