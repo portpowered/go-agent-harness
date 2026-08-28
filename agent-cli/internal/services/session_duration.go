@@ -650,38 +650,25 @@ func runSessionDurationPlan(ctx context.Context, out io.Writer, plan sessionRunt
 
 func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, plan sessionRuntimePlan, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) (runErr error) {
 	artifacts := sessionDurationArtifactsFromContext(ctx)
-	if plan.rtcRuntime != nil {
-		defer func() {
-			if err := plan.rtcRuntime.Close(); err != nil {
-				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC runtime", err))
-			}
-		}()
-	}
-	if plan.closeSession != nil {
-		defer func() {
-			if err := plan.closeSession(); err != nil {
-				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
-			}
-		}()
-	}
-	if plan.capabilityCoordinator != nil {
-		defer func() {
-			closeSessionCapabilityForPlan(plan.capabilityCoordinator, &runErr)
-		}()
-	}
+	finalizer := newSessionRuntimeFinalizer(plan)
+	defer func() {
+		// The common finalizer must complete browser/provider/capture teardown
+		// before the duration sidecar is flushed and closed as the final bundle
+		// stage. This keeps duration, image, and recording runs on one C0 order.
+		runErr = finalizer.finish(ctx, out, runErr)
+		runErr = errors.Join(runErr, finalizeSessionDurationArtifacts(artifacts))
+	}()
 	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
 	if err != nil {
-		return errors.Join(err, finalizeSessionDurationArtifacts(artifacts))
+		return err
 	}
 	if deviceBinding != nil {
 		plan.loop.rtcDeviceBinding = deviceBinding
-		defer func() {
-			runErr = errors.Join(runErr, deviceBinding.Close())
-		}()
+		finalizer.setDeviceBinding(deviceBinding)
 	}
 	if plan.announce != "" {
 		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
-			return wrapSessionRuntimeError(plan, errors.Join(err, finalizeSessionDurationArtifacts(artifacts)))
+			return wrapSessionRuntimeError(plan, err)
 		}
 	}
 
@@ -694,32 +681,10 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		runErr = runAgentLoopSessionWithDurationAdmissionClock(ctx, loopOut, plan.inferencer, plan.loop, maxDuration, durationClock, admittedInferencer)
 	}
 
-	artifactErr := finalizeSessionDurationArtifacts(artifacts)
 	if runErr != nil {
-		runErrs := []error{wrapSessionPhaseError("run session loop", runErr)}
-		if artifactErr != nil {
-			runErrs = append(runErrs, artifactErr)
-		}
-		if plan.flushCapture != nil {
-			runErrs = append(runErrs, wrapSessionPhaseError("flush capture", plan.flushCapture()))
-		}
-		return wrapSessionRuntimeError(plan, errors.Join(runErrs...))
+		runErr = wrapSessionRuntimeError(plan, wrapSessionPhaseError("run session loop", runErr))
 	}
-	if artifactErr != nil {
-		return wrapSessionRuntimeError(plan, artifactErr)
-	}
-
-	if plan.flushCapture != nil {
-		if err := plan.flushCapture(); err != nil {
-			return wrapSessionRuntimeError(plan, wrapSessionPhaseError("flush capture", err))
-		}
-	}
-	if plan.finalize != nil {
-		if err := plan.finalize(ctx, out); err != nil {
-			return wrapSessionRuntimeError(plan, err)
-		}
-	}
-	return nil
+	return runErr
 }
 
 func finalizeSessionDurationArtifacts(artifacts SessionDurationArtifactLifecycle) error {
@@ -727,8 +692,8 @@ func finalizeSessionDurationArtifacts(artifacts SessionDurationArtifactLifecycle
 		return nil
 	}
 	return errors.Join(
-		wrapSessionPhaseError("flush duration artifacts", artifacts.Flush()),
-		wrapSessionPhaseError("close duration artifacts", artifacts.Close()),
+		wrapSessionPhaseError("flush duration artifacts", invokeSessionFinalizer(artifacts.Flush)),
+		wrapSessionPhaseError("close duration artifacts", invokeSessionFinalizer(artifacts.Close)),
 	)
 }
 

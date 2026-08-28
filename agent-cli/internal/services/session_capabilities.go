@@ -47,18 +47,22 @@ func (c *SessionCapabilityCoordinator) Close() error {
 		return nil
 	}
 	c.once.Do(func() {
-		c.mu.Lock()
-		c.closed = true
-		c.mu.Unlock()
-
 		var closeErrs []error
 		for _, cleanup := range c.cleanups {
 			if err := invokeSessionCapabilityCleanup(cleanup); err != nil {
 				closeErrs = append(closeErrs, err)
 			}
 		}
+		c.mu.Lock()
 		c.closeErr = errors.Join(closeErrs...)
+		// Mark the coordinator closed only after every cleanup hook has been
+		// attempted. An outer command guard that races this call must wait for
+		// the sync.Once and observe the complete recorded result.
+		c.closed = true
+		c.mu.Unlock()
 	})
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.closeErr
 }
 
@@ -102,15 +106,6 @@ func prepareSessionCapabilityCoordinator(opts SessionRunOptions) (SessionRunOpti
 
 func closeSessionCapabilityIfNeeded(coordinator *SessionCapabilityCoordinator, runErr *error) {
 	if coordinator == nil || coordinator.isClosed() {
-		return
-	}
-	if closeErr := coordinator.Close(); closeErr != nil {
-		*runErr = errors.Join(*runErr, wrapSessionPhaseError("close session capabilities", closeErr))
-	}
-}
-
-func closeSessionCapabilityForPlan(coordinator *SessionCapabilityCoordinator, runErr *error) {
-	if coordinator == nil {
 		return
 	}
 	if closeErr := coordinator.Close(); closeErr != nil {

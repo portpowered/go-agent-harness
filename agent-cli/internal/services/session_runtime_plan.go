@@ -3,7 +3,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -130,40 +129,18 @@ type sessionRuntimePlan struct {
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
-	if p.rtcRuntime != nil {
-		defer func() {
-			if err := p.rtcRuntime.Close(); err != nil {
-				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC runtime", err))
-			}
-		}()
-	}
-	if p.closeSession != nil {
-		// Close the provider session before the runtime owner releases its
-		// data-plane resources. The loop may return immediately after cancelling
-		// its background engine, while the model participant's deferred close is
-		// still pending.
-		defer func() {
-			if err := p.closeSession(); err != nil {
-				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
-			}
-		}()
-	}
-	if p.capabilityCoordinator != nil {
-		// Browser capability cleanup runs before provider/runtime teardown. The
-		// coordinator itself owns the hook and makes this safe for outer guards.
-		defer func() {
-			closeSessionCapabilityForPlan(p.capabilityCoordinator, &runErr)
-		}()
-	}
+	finalizer := newSessionRuntimeFinalizer(p)
+	defer func() {
+		runErr = finalizer.finish(ctx, out, runErr)
+	}()
+
 	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
 	if err != nil {
 		return err
 	}
 	if deviceBinding != nil {
 		p.loop.rtcDeviceBinding = deviceBinding
-		defer func() {
-			runErr = errors.Join(runErr, deviceBinding.Close())
-		}()
+		finalizer.setDeviceBinding(deviceBinding)
 	}
 	if p.announce != "" {
 		if _, err := fmt.Fprintln(out, p.announce); err != nil {
@@ -178,26 +155,7 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	p.configureLoopObserver(&loop)
 	if p.inferencer != nil {
 		if err := runAgentLoopSession(ctx, loopOut, p.inferencer, loop); err != nil {
-			if p.flushCapture != nil {
-				flushErr := p.flushCapture()
-				return wrapSessionRuntimeError(p, errors.Join(
-					wrapSessionPhaseError("run session loop", err),
-					wrapSessionPhaseError("flush capture", flushErr),
-				))
-			}
-			return wrapSessionRuntimeError(p, err)
-		}
-	}
-
-	if p.flushCapture != nil {
-		if err := p.flushCapture(); err != nil {
-			return wrapSessionRuntimeError(p, wrapSessionPhaseError("flush capture", err))
-		}
-	}
-
-	if p.finalize != nil {
-		if err := p.finalize(ctx, out); err != nil {
-			return wrapSessionRuntimeError(p, err)
+			return wrapSessionRuntimeError(p, wrapSessionPhaseError("run session loop", err))
 		}
 	}
 	return nil
