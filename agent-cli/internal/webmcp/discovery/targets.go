@@ -526,11 +526,10 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 }
 
 // targetContinuityMarker turns adapter-provided continuity metadata into a
-// stable opaque value. When an adapter has no document marker, the
-// query/fragment-free page URL, normalized page websocket path, and raw target
-// identity provide a useful best-effort continuity claim; neither raw value
-// crosses the persistence boundary. Including the safe page URL means a
-// normal navigation cannot silently reuse a selection for the old document.
+// stable opaque value. When an adapter has no document marker, it hashes the
+// complete raw page URL before falling back to safe display metadata. The raw
+// URL never crosses the persistence boundary, while query/fragment-only
+// navigation still changes the continuity claim.
 func targetContinuityMarker(browserID, rawID, origin, pageURL, pageWebSocket string, descriptor TargetDescriptor) string {
 	marker := strings.TrimSpace(descriptor.ContinuityMarker)
 	if marker == "" {
@@ -538,6 +537,13 @@ func targetContinuityMarker(browserID, rawID, origin, pageURL, pageWebSocket str
 	}
 	if marker == "" {
 		marker = strings.TrimSpace(descriptor.DocumentID)
+	}
+	if marker == "" {
+		rawPageURL := strings.TrimSpace(descriptor.URL)
+		if rawPageURL != "" {
+			digest := sha256.Sum256([]byte(rawPageURL))
+			marker = "url-" + hex.EncodeToString(digest[:])
+		}
 	}
 	if marker == "" {
 		marker = pageURL
