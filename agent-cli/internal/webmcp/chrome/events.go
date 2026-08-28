@@ -57,11 +57,11 @@ func (s *targetSession) convertProtocolEvent(event any) (webmcp.BrowserEvent, bo
 }
 
 func (s *targetSession) convertToolsAdded(value *cdpWebMCP.EventToolsAdded) webmcp.BrowserEvent {
-	event := webmcp.BrowserEvent{Type: webmcp.EventToolsAdded}
+	page := s.Context()
+	event := webmcp.BrowserEvent{Type: webmcp.EventToolsAdded, Generation: page.Generation}
 	if value == nil {
 		return event
 	}
-	page := s.Context()
 	event.Tools = make([]webmcp.ToolDescriptor, 0, len(value.Tools))
 	for _, tool := range value.Tools {
 		if converted, ok := s.convertToolAt(tool, page); ok {
@@ -75,7 +75,8 @@ func (s *targetSession) convertToolsAdded(value *cdpWebMCP.EventToolsAdded) webm
 }
 
 func (s *targetSession) convertToolsRemoved(value *cdpWebMCP.EventToolsRemoved) webmcp.BrowserEvent {
-	event := webmcp.BrowserEvent{Type: webmcp.EventToolsRemoved}
+	page := s.Context()
+	event := webmcp.BrowserEvent{Type: webmcp.EventToolsRemoved, Generation: page.Generation}
 	if value == nil {
 		return event
 	}
@@ -93,10 +94,12 @@ func (s *targetSession) convertToolsRemoved(value *cdpWebMCP.EventToolsRemoved) 
 
 func (s *targetSession) convertToolInvoked(value *cdpWebMCP.EventToolInvoked) webmcp.BrowserEvent {
 	if value == nil {
-		return webmcp.BrowserEvent{Type: webmcp.EventToolInvoked}
+		return webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, Generation: s.Context().Generation}
 	}
+	page := s.Context()
 	return webmcp.BrowserEvent{
 		Type:         webmcp.EventToolInvoked,
+		Generation:   page.Generation,
 		FrameID:      webmcp.FrameID(value.FrameID),
 		ToolName:     value.ToolName,
 		InvocationID: webmcp.InvocationID(value.InvocationID),
@@ -106,10 +109,12 @@ func (s *targetSession) convertToolInvoked(value *cdpWebMCP.EventToolInvoked) we
 
 func (s *targetSession) convertToolResponded(value *cdpWebMCP.EventToolResponded) webmcp.BrowserEvent {
 	if value == nil {
-		return webmcp.BrowserEvent{Type: webmcp.EventToolResponded}
+		return webmcp.BrowserEvent{Type: webmcp.EventToolResponded, Generation: s.Context().Generation}
 	}
+	page := s.Context()
 	event := webmcp.BrowserEvent{
 		Type:         webmcp.EventToolResponded,
+		Generation:   page.Generation,
 		InvocationID: webmcp.InvocationID(value.InvocationID),
 		Status:       value.Status.String(),
 		Output:       cloneBytes([]byte(value.Output)),

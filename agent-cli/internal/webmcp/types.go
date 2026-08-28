@@ -238,6 +238,15 @@ const (
 	BrokerEventSessionClosed      BrokerEventType = "session_closed"
 )
 
+// Stream termination reasons are bounded, machine-readable values carried by
+// the existing Reason field. They let a caller distinguish an incomplete
+// stream from an ordinary clean close without adding fields to the watch wire
+// shape.
+const (
+	BrokerWatchBufferFullReason  = "watch_buffer_full"
+	BrowserEventBufferFullReason = "event_buffer_full"
+)
+
 type BrokerEvent struct {
 	Version      string
 	Type         BrokerEventType

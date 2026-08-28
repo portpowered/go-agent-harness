@@ -162,6 +162,79 @@ func TestScriptedRuntimeModelsTargetsCatalogInvocationsAndOwnership(t *testing.T
 	}
 }
 
+func TestScriptedRuntimeBroadcastsEventsAcrossIndependentClients(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
+	runtime := NewScriptedBrowserRuntime(BrowserConfig{
+		Candidate: candidate,
+		Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page"})},
+	})
+	defer func() {
+		if err := runtime.Close(); err != nil {
+			t.Fatalf("close runtime: %v", err)
+		}
+	}()
+
+	firstHandle, err := runtime.Open(context.Background(), candidate)
+	if err != nil {
+		t.Fatalf("open first client: %v", err)
+	}
+	firstValue, err := firstHandle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	if err != nil {
+		t.Fatalf("attach first client: %v", err)
+	}
+	first := firstValue.(*ScriptedTargetSession)
+	if event := nextEvent(t, first.Events()); event.Type != webmcp.EventTargetAttached {
+		t.Fatalf("first attach event = %#v, want target_attached", event)
+	}
+
+	secondHandle, err := runtime.Open(context.Background(), candidate)
+	if err != nil {
+		t.Fatalf("open second client: %v", err)
+	}
+	secondValue, err := secondHandle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	if err != nil {
+		t.Fatalf("attach second client: %v", err)
+	}
+	second := secondValue.(*ScriptedTargetSession)
+	if first == second {
+		t.Fatal("independent clients returned the same target session")
+	}
+	if event := nextEvent(t, second.Events()); event.Type != webmcp.EventTargetAttached {
+		t.Fatalf("second attach event = %#v, want target_attached", event)
+	}
+
+	tool := webmcp.ToolDescriptor{Name: "read_state", FrameID: "frame-1", InputSchema: []byte(`{"type":"object"}`)}
+	if err := second.EmitToolsAdded(tool); err != nil {
+		t.Fatalf("emit shared catalog event: %v", err)
+	}
+	for name, session := range map[string]*ScriptedTargetSession{"first": first, "second": second} {
+		event := nextEvent(t, session.Events())
+		if event.Type != webmcp.EventToolsAdded || event.Generation != 1 || len(event.Tools) != 1 || event.Tools[0].Name != tool.Name {
+			t.Fatalf("%s catalog event = %#v, want generation-one tools_added", name, event)
+		}
+	}
+
+	id, err := second.InvokeWebMCP(context.Background(), tool.FrameID, tool.Name, []byte(`{"value":1}`))
+	if err != nil {
+		t.Fatalf("invoke from second client: %v", err)
+	}
+	for name, session := range map[string]*ScriptedTargetSession{"first": first, "second": second} {
+		event := nextEvent(t, session.Events())
+		if event.Type != webmcp.EventToolInvoked || event.InvocationID != id {
+			t.Fatalf("%s invocation event = %#v, want correlated tool_invoked", name, event)
+		}
+	}
+	if err := second.EmitToolResponse(id, "Completed", []byte(`{"ok":true}`)); err != nil {
+		t.Fatalf("respond from second client: %v", err)
+	}
+	for name, session := range map[string]*ScriptedTargetSession{"first": first, "second": second} {
+		event := nextEvent(t, session.Events())
+		if event.Type != webmcp.EventToolResponded || event.InvocationID != id || string(event.Output) != `{"ok":true}` {
+			t.Fatalf("%s response event = %#v, want correlated tool_responded", name, event)
+		}
+	}
+}
+
 func TestScriptedSessionCloseOrphansBlockedWorkAndWakesWaiters(t *testing.T) {
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: webmcp.BrowserCandidate{ID: "browser-a"},

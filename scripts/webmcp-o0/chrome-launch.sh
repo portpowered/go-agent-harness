@@ -52,8 +52,8 @@ fail() {
 
 mode=${1:-chrome}
 case "$mode" in
-	chrome|webmcp|detach|hermetic) ;;
-	*) fail "usage: ./chrome-launch.sh [webmcp|detach|hermetic]" ;;
+	chrome|webmcp|watch|detach|hermetic) ;;
+	*) fail "usage: ./chrome-launch.sh [webmcp|watch|detach|hermetic]" ;;
 esac
 
 for required_command in curl jq unzip shasum awk tail go; do
@@ -97,28 +97,38 @@ stderr_log=$tmp_root/chrome.stderr
 
 probe_binary=
 fixture_url=
-if [ "$mode" = "detach" ]; then
+agent_binary=
+if [ "$mode" = "detach" ] || [ "$mode" = "watch" ]; then
 	probe_binary=$tmp_root/webmcp-o0-probe
 	GOWORK=off go build -o "$probe_binary" . || fail "could not build the isolated probe binary"
-	fixture_log=$tmp_root/detach-fixture.log
-	"$probe_binary" serve-detach-fixture >"$fixture_log" 2>&1 &
-	fixture_pid=$!
-	fixture_url=
-	attempt=0
-	while [ "$attempt" -lt 80 ]; do
-		if ! kill -0 "$fixture_pid" 2>/dev/null; then
-			echo "Detach fixture server exited; log follows:" >&2
-			sed -n '1,80p' "$fixture_log" >&2 || true
-			fail "detach fixture server failed to start"
-		fi
-		fixture_url=$(sed -n 's/^fixtureURL=//p' "$fixture_log" | tail -n 1 || true)
-		if [ -n "$fixture_url" ]; then
-			break
-		fi
-		attempt=$((attempt + 1))
-		sleep 0.25
-	done
-	[ -n "$fixture_url" ] || fail "detach fixture server startup timed out"
+	if [ "$mode" = "watch" ]; then
+		agent_binary=$tmp_root/agent
+		(
+			cd "$probe_dir/../.."
+			GOWORK="$probe_dir/../../go.work" CGO_ENABLED=0 go build -o "$agent_binary" ./agent-cli/cmd/agent
+		) || fail "could not build the agent CLI binary for the live watch probe"
+	fi
+	if [ "$mode" = "detach" ]; then
+		fixture_log=$tmp_root/detach-fixture.log
+		"$probe_binary" serve-detach-fixture >"$fixture_log" 2>&1 &
+		fixture_pid=$!
+		fixture_url=
+		attempt=0
+		while [ "$attempt" -lt 80 ]; do
+			if ! kill -0 "$fixture_pid" 2>/dev/null; then
+				echo "Detach fixture server exited; log follows:" >&2
+				sed -n '1,80p' "$fixture_log" >&2 || true
+				fail "detach fixture server failed to start"
+			fi
+			fixture_url=$(sed -n 's/^fixtureURL=//p' "$fixture_log" | tail -n 1 || true)
+			if [ -n "$fixture_url" ]; then
+				break
+			fi
+			attempt=$((attempt + 1))
+			sleep 0.25
+		done
+		[ -n "$fixture_url" ] || fail "detach fixture server startup timed out"
+	fi
 fi
 
 curl -fsSL --retry 2 --max-time 60 "$manifest_url" -o "$manifest_file" || fail "could not download release manifest: $manifest_url"
@@ -155,8 +165,14 @@ esac
 # command-line equivalents of the local WebMCP testing flag and DevTools
 # WebMCP domain enablement.
 webmcp_features=
-if [ "$mode" = "webmcp" ]; then
+webmcp_blink_features=
+webmcp_experimental_features=
+if [ "$mode" = "webmcp" ] || [ "$mode" = "watch" ]; then
 	webmcp_features=--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport
+fi
+if [ "$mode" = "watch" ]; then
+	webmcp_blink_features=--enable-blink-features=DeclarativeWebmcp
+	webmcp_experimental_features=--enable-experimental-web-platform-features
 fi
 
 display_args=
@@ -177,6 +193,8 @@ fi
 	--remote-debugging-address=127.0.0.1 \
 	--remote-debugging-port=0 \
 	${webmcp_features} \
+	${webmcp_blink_features} \
+	${webmcp_experimental_features} \
 	--user-data-dir="$profile_dir" \
 	"$chrome_start_url" >"$stdout_log" 2>"$stderr_log" &
 chrome_pid=$!
@@ -446,6 +464,100 @@ if [ "$mode" = "webmcp" ]; then
   fixtureOrigin: $matrix.fixtureOrigin,
   matrix: $matrix,
   verdict: $matrix.verdict
+}'
+	exit 0
+fi
+
+if [ "$mode" = "watch" ]; then
+	[ -n "$probe_binary" ] || fail "watch probe binary was not built"
+	[ -n "$agent_binary" ] || fail "agent CLI binary was not built"
+	cross_process_report=$(GOWORK=off "$probe_binary" watch-cross-process "$browser_websocket" "$agent_binary") || fail "cross-process watch probe failed"
+	printf '%s' "$cross_process_report" | jq -e '
+		(.verdict == "PASS") and
+		(.watchStatus == "canceled") and
+		([.watchEvents[].type] == ["selected", "catalog_changed", "catalog_changed", "invocation_created", "invocation_terminal", "catalog_changed"]) and
+		([.watchEvents[].sequence] as $sequences | all(range(1; ($sequences | length)); $sequences[.] > $sequences[.-1])) and
+		(.afterInvocationOracle.value == "invoked:cross-process") and
+		(.afterInvocationOracle.visibleText == "invoked:cross-process") and
+		(.afterInvocationCDP.value == "invoked:cross-process") and
+		(.targetChecks | all(.present == true and .targetID != ""))' >/dev/null || fail "cross-process watch report did not prove the ordered transcript and independent oracle"
+	jq -n \
+		--arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		--arg channel "$channel" \
+		--arg manifestChannel "$manifest_channel" \
+		--arg manifestURL "$manifest_url" \
+		--arg manifestRetrievedAt "$manifest_retrieved_at" \
+		--arg platform "$platform" \
+		--arg version "$expected_version" \
+		--arg revision "$expected_revision" \
+		--arg archiveSHA256 "$actual_archive_sha" \
+		--arg executableVersion "$extracted_version" \
+		--arg websocketURL "$browser_websocket" \
+		--arg httpBrowser "$http_browser" \
+		--arg httpProtocolVersion "$http_protocol_version" \
+		--argjson launchCDP "$cdp_report" \
+		--argjson crossProcess "$cross_process_report" \
+'
+{
+  observedAt: $observedAt,
+  channel: $channel,
+  manifestChannel: $manifestChannel,
+  manifestURL: $manifestURL,
+  manifestRetrievedAt: $manifestRetrievedAt,
+  platform: $platform,
+  version: $version,
+  revision: $revision,
+  archiveSHA256: $archiveSHA256,
+  executableVersion: $executableVersion,
+  flags: [
+    "--headless=new",
+    "--disable-gpu",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-extensions",
+    "--disable-sync",
+    "--no-default-browser-check",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=0",
+    "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+    "--enable-blink-features=DeclarativeWebmcp",
+    "--enable-experimental-web-platform-features",
+    "--user-data-dir=<temporary profile>"
+  ],
+  remoteDebuggingAddress: "127.0.0.1",
+  websocketURL: $websocketURL,
+  httpVersionEndpoint: {
+    Browser: $httpBrowser,
+    ProtocolVersion: $httpProtocolVersion
+  },
+  cdpBrowserGetVersion: $launchCDP,
+  fixture: {
+    origin: ($crossProcess.fixtureURL | sub("/$"; "")),
+    url: $crossProcess.fixtureURL,
+    server: "probe-owned loopback server"
+  },
+  target: {
+    id: $crossProcess.targetID,
+    rawID: $crossProcess.rawTargetID,
+    browserID: $crossProcess.browserID,
+    retainedAfterCLI: ($crossProcess.targetChecks | all(.present == true))
+  },
+  watcher: {
+    status: $crossProcess.watchStatus,
+    events: $crossProcess.watchEvents,
+    invocationID: $crossProcess.invocationID
+  },
+  pageOracle: {
+    initial: $crossProcess.initialOracle,
+    afterInvocationHTTP: $crossProcess.afterInvocationOracle,
+    afterInvocationCDP: $crossProcess.afterInvocationCDP,
+    final: $crossProcess.finalOracle
+  },
+  cdpEvents: $crossProcess.cdpEvents,
+  targetChecks: $crossProcess.targetChecks,
+  cleanup: $crossProcess.cleanup,
+  verdict: $crossProcess.verdict
 }'
 	exit 0
 fi

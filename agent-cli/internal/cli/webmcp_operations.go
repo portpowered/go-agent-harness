@@ -26,7 +26,26 @@ const (
 	webmcpDirectWatchStatusEnded    = "ended"
 	webmcpDirectWatchStatusCanceled = "canceled"
 	webmcpDirectWatchStatusOnce     = "one_event"
+	webmcpDirectWatchStatusFailed   = "failed"
 )
+
+const webmcpWatchHelp = `Watch the selected target's semantic WebMCP stream.
+
+The following activity is target-observable and is emitted when it is caused by
+another CLI process or CDP client attached to the same target:
+
+  toolsAdded/toolsRemoved -> catalog_changed
+  toolInvoked             -> invocation_created
+  toolResponded           -> invocation_terminal
+
+The watcher also reports generation_changed when the target navigation boundary
+changes. selected and session_closed are watcher-local lifecycle events, and
+broker admission, approval, and cancellation-request history remains
+process-local; no cross-process visibility is promised for those classes.
+
+The tools --watch form uses this same observation and output contract. Target
+transport or bounded-delivery loss is reported as a failed session_closed event
+instead of a normal complete stream.`
 
 // WebMCPDirectBrowser is the safe browser listing shape. Endpoint addresses
 // are redacted before they are copied into this result.
@@ -395,21 +414,25 @@ func (c *WebMCPOperationsCommand) toolsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "tools",
 		Short:        "List tools exposed by the selected WebMCP page",
+		Long:         "List tools exposed by the selected WebMCP page. With --watch, observe the target-scoped semantic stream across independent CLI or CDP clients.\n\n" + webmcpWatchHelp,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if values.watch {
 				return c.executeDirect(cmd, values, "watch", webmcp.ErrorStaleSelection, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
-					if _, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser); err != nil {
-						return nil, err
-					}
 					watchCtx := ctx
 					if values.timeout > 0 {
 						var cancel context.CancelFunc
 						watchCtx, cancel = context.WithTimeout(ctx, values.timeout)
 						defer cancel()
 					}
-					return runDirectWatch(watchCtx, broker, values.once)
+					// Subscribe before selection so tools --watch observes the same
+					// selected and initial catalog events as webmcp watch.
+					stream := broker.Watch(watchCtx)
+					if _, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser); err != nil {
+						return nil, err
+					}
+					return runDirectWatchStream(watchCtx, stream, values.once)
 				})
 			}
 			return c.executeDirect(cmd, values, "tools", webmcp.ErrorStaleSelection, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
@@ -539,6 +562,7 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "watch",
 		Short:        "Watch WebMCP broker events",
+		Long:         webmcpWatchHelp,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

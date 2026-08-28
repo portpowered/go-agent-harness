@@ -69,6 +69,8 @@ type terminalObservation struct {
 	outputBytes   int
 	outputPresent bool
 	errorCode     string
+	reason        string
+	generation    uint64
 	at            time.Time
 }
 
@@ -527,7 +529,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 
 	if invocation.terminalized {
 		b.recordBrowserTerminalIDLocked(id)
-		b.takeEarlyTerminalLocked(id)
+		b.takeEarlyTerminalLocked(id, 0)
 		b.rebindTerminalInvocationLocked(invocation)
 		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
 		b.mu.Unlock()
@@ -537,7 +539,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	invocation.invocation.DispatchedAt = b.clock.Now()
 	b.browserInvocations[id] = invocation
 	result := InvokeResult{InvocationID: invocation.invocation.ID, State: InvocationDispatched}
-	if early, ok := b.takeEarlyTerminalLocked(id); ok {
+	if early, ok := b.takeEarlyTerminalLocked(id, invocation.invocation.Tool.Generation); ok {
 		b.applyTerminalObservationLocked(invocation, early)
 		result = cloneInvokeResult(invocation.finalResult)
 	}
@@ -733,6 +735,8 @@ func terminalObservationFromEvent(event BrowserEvent, maxResultBytes int) termin
 		outputBytes:   len(output),
 		outputPresent: true,
 		errorCode:     event.ErrorCode,
+		reason:        event.Reason,
+		generation:    event.Generation,
 		at:            event.At,
 	}
 	if len(output) <= maxResultBytes {
@@ -761,9 +765,14 @@ func (b *StatefulBroker) evictOldestEarlyTerminalLocked() {
 	}
 }
 
-func (b *StatefulBroker) takeEarlyTerminalLocked(id InvocationID) (terminalObservation, bool) {
+func (b *StatefulBroker) takeEarlyTerminalLocked(id InvocationID, generation uint64) (terminalObservation, bool) {
 	observation, ok := b.earlyTerminals[id]
 	if !ok {
+		return terminalObservation{}, false
+	}
+	if observation.generation != 0 && generation != 0 && observation.generation != generation {
+		delete(b.earlyTerminals, id)
+		b.removeEarlyTerminalOrderIDLocked(id)
 		return terminalObservation{}, false
 	}
 	delete(b.earlyTerminals, id)
@@ -1274,14 +1283,4 @@ func (b *StatefulBroker) WaitInvocation(ctx context.Context, id InvocationID) (I
 	delete(b.terminalResults, id)
 	b.removeTerminalOrderIDLocked(id)
 	return cloneInvokeResult(terminal.result), nil
-}
-
-func (b *StatefulBroker) removeTerminalOrderIDLocked(id InvocationID) {
-	for i, candidate := range b.terminalOrder {
-		if candidate != id {
-			continue
-		}
-		b.terminalOrder = append(b.terminalOrder[:i], b.terminalOrder[i+1:]...)
-		return
-	}
 }

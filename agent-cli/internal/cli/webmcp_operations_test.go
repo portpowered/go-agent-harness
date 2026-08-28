@@ -41,6 +41,42 @@ func TestWebMCPDirectCommandTreeIsFrozen(t *testing.T) {
 	}
 }
 
+func TestWebMCPWatchHelpDocumentsCrossProcessObservationBoundary(t *testing.T) {
+	command := NewWebMCPCommand(flags.NewGlobalFlags()).Generate()
+	watch, _, err := command.Find([]string{"watch"})
+	if err != nil {
+		t.Fatalf("find webmcp watch command: %v", err)
+	}
+	tools, _, err := command.Find([]string{"tools"})
+	if err != nil {
+		t.Fatalf("find webmcp tools command: %v", err)
+	}
+
+	for _, test := range []struct {
+		name string
+		text string
+	}{
+		{name: "watch", text: watch.Long},
+		{name: "tools --watch", text: tools.Long},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, want := range []string{
+				"toolsAdded/toolsRemoved -> catalog_changed",
+				"toolInvoked             -> invocation_created",
+				"toolResponded           -> invocation_terminal",
+				"selected and session_closed are watcher-local lifecycle events",
+				"broker admission, approval, and cancellation-request history remains",
+				"process-local; no cross-process visibility",
+				"failed session_closed event",
+			} {
+				if !strings.Contains(test.text, want) {
+					t.Errorf("help text does not contain %q:\n%s", want, test.text)
+				}
+			}
+		})
+	}
+}
+
 func TestWebMCPDirectSelectionPersistsRedactedOpaqueIDs(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
@@ -336,6 +372,65 @@ func TestWebMCPDirectDefaultRuntimeReturnsClassifiedDiscoveryError(t *testing.T)
 	}
 }
 
+func TestWebMCPDirectWatchReportsBoundedFailure(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, candidate, _ := directFixture()
+	stream := make(chan webmcp.BrokerEvent, 1)
+	stream <- webmcp.BrokerEvent{
+		Version:   webmcp.BrowserEventsVersion,
+		Type:      webmcp.BrokerEventSessionClosed,
+		Sequence:  2,
+		BrowserID: candidate.ID,
+		TargetID:  target.ID,
+		Reason:    webmcp.BrokerWatchBufferFullReason,
+	}
+	close(stream)
+	broker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		watch:      stream,
+	}
+
+	result := executeDirectCommand(t, configDir, store, directFactory(broker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
+	if result.err != nil {
+		t.Fatalf("bounded watch failure: %v", result.err)
+	}
+	envelope := requireDirectSuccess(t, result)
+	var data WebMCPDirectWatchData
+	decodeDirectData(t, envelope.Data, &data)
+	if data.Status != webmcpDirectWatchStatusFailed || len(data.Events) != 1 || data.Events[0].Type != string(webmcp.BrokerEventSessionClosed) || data.Events[0].Reason != webmcp.BrokerWatchBufferFullReason {
+		t.Fatalf("bounded watch result = %+v, want explicit failed status", data)
+	}
+}
+
+func TestWebMCPDirectToolsWatchSubscribesBeforeSelection(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, candidate, _ := directFixture()
+	stream := make(chan webmcp.BrokerEvent, 2)
+	broker := &selectionOrderingWatchBroker{
+		directCommandBroker: &directCommandBroker{
+			candidates: []webmcp.BrowserCandidate{candidate},
+			targets:    []webmcp.Target{target},
+			selected:   page,
+		},
+		stream: stream,
+	}
+
+	result := executeDirectCommand(t, configDir, store, directFactory(broker), "tools", "--browser", string(candidate.ID), "--tab", string(target.ID), "--watch", "--json")
+	if result.err != nil {
+		t.Fatalf("tools --watch: %v\nstdout=%s", result.err, result.stdout)
+	}
+	envelope := requireDirectSuccess(t, result)
+	var data WebMCPDirectWatchData
+	decodeDirectData(t, envelope.Data, &data)
+	if data.Status != webmcpDirectWatchStatusEnded || len(data.Events) != 2 || data.Events[0].Type != string(webmcp.BrokerEventSelected) || data.Events[1].Type != string(webmcp.BrokerEventCatalogChanged) {
+		t.Fatalf("tools --watch result = %+v, want selection and initial catalog events", data)
+	}
+}
+
 func TestWebMCPDirectPreservesExternallyOwnedTarget(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
@@ -566,6 +661,35 @@ type directCommandBroker struct {
 	invokeRequest webmcp.InvokeRequest
 	cancelRequest webmcp.CancelRequest
 	closeCalls    int
+}
+
+type selectionOrderingWatchBroker struct {
+	*directCommandBroker
+	stream     chan webmcp.BrokerEvent
+	subscribed bool
+}
+
+func (b *selectionOrderingWatchBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
+	b.subscribed = true
+	return b.stream
+}
+
+func (b *selectionOrderingWatchBroker) Select(ctx context.Context, selector webmcp.TargetSelector) (webmcp.PageContext, error) {
+	return b.SelectWithOptions(ctx, selector, webmcp.SelectOptions{})
+}
+
+func (b *selectionOrderingWatchBroker) SelectWithOptions(_ context.Context, selector webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
+	if !b.subscribed {
+		return webmcp.PageContext{}, errors.New("watch subscription must precede selection")
+	}
+	page, err := b.directCommandBroker.SelectWithOptions(context.Background(), selector, options)
+	if err != nil {
+		return webmcp.PageContext{}, err
+	}
+	b.stream <- webmcp.BrokerEvent{Version: webmcp.BrowserEventsVersion, Type: webmcp.BrokerEventSelected, Sequence: 1, BrowserID: selector.BrowserID, TargetID: selector.TargetID, Generation: page.Generation}
+	b.stream <- webmcp.BrokerEvent{Version: webmcp.BrowserEventsVersion, Type: webmcp.BrokerEventCatalogChanged, Sequence: 2, BrowserID: selector.BrowserID, TargetID: selector.TargetID, Generation: page.Generation, Reason: "tools_added"}
+	close(b.stream)
+	return page, nil
 }
 
 func (b *directCommandBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
