@@ -56,3 +56,39 @@ tools:
           enabled: true
         - id: sleep
           enabled: true
+browser:
+    tools:
+        enabled: false
+        backend: webmcp
+    connection:
+        cdp_url: ""
+        ws_endpoint: ""
+        user_data_dir: ""
+        allow_process_scan: false
+        allow_remote_cdp: false
+    selection:
+        browser: ""
+        tab: ""
+        origin: ""
+        auto_select: "off"
+        activate_tab: false
+        persist: true
+    policy:
+        allowed_origins: []
+        denied_origins: []
+        approval: writes
+        cancel_on_interrupt: read-only
+    limits:
+        invocation_timeout: 30s
+        max_input_bytes: 262144
+        max_result_bytes: 262144
+        serialize_per_target: true
+    recording:
+        enabled: false
+        include_arguments: true
+        include_results: true
+        redact_url_query: true
+        redact_url_fragment: true
+    replay:
+        path: ""
+        strict: true
