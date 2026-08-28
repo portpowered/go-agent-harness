@@ -130,6 +130,11 @@ type brokerSession struct {
 	observedInvocations map[InvocationID]ToolRef
 	catalogObserved     bool
 	catalogSignal       chan struct{}
+	// lastBrowserEventSequence is the producer sequence most recently
+	// reconciled for this target session. Browser events are delivered through
+	// one target-local stream, so an older or duplicated sequence is a late
+	// observation and must not mutate current catalog or lifecycle state.
+	lastBrowserEventSequence uint64
 }
 
 type catalogKey struct {
@@ -903,6 +908,12 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	if event.TargetID != "" && event.TargetID != selected.context.Key.TargetID {
 		return
 	}
+	if event.Sequence != 0 {
+		if event.Sequence <= selected.lastBrowserEventSequence {
+			return
+		}
+		selected.lastBrowserEventSequence = event.Sequence
+	}
 	switch event.Type {
 	case EventTargetAttached:
 		selected.context.Connected = true
@@ -1093,42 +1104,6 @@ func (b *StatefulBroker) applyToolsRemovedLocked(selected *brokerSession, event 
 	if changed {
 		b.emitLocked(BrokerEvent{Type: BrokerEventCatalogChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: "tools_removed"})
 	}
-}
-
-func (b *StatefulBroker) applyGenerationChangeLocked(selected *brokerSession, event BrowserEvent, reason string) {
-	next := event.Generation
-	if next <= selected.context.Generation {
-		next = selected.context.Generation + 1
-		if next == 0 {
-			next = selected.context.Generation
-		}
-	}
-	b.advanceGenerationLocked(selected, next, reason)
-	contextValue := selected.session.Context()
-	if contextValue.Key.BrowserID == "" {
-		contextValue.Key.BrowserID = selected.context.Key.BrowserID
-	}
-	if contextValue.Key.TargetID == "" {
-		contextValue.Key.TargetID = selected.context.Key.TargetID
-	}
-	contextValue.Generation = selected.context.Generation
-	contextValue.Connected = true
-	contextValue.Ready = false
-	if contextValue.SelectedAt.IsZero() {
-		contextValue.SelectedAt = selected.context.SelectedAt
-	}
-	selected.context = contextValue
-}
-
-func (b *StatefulBroker) advanceGenerationLocked(selected *brokerSession, generation uint64, reason string) {
-	if generation <= selected.context.Generation {
-		return
-	}
-	selected.context.Generation = generation
-	b.terminalizeSessionInvocationsLocked(selected, ErrorPageNavigated, reason)
-	b.retireCatalogLocked(selected)
-	selected.context.Ready = false
-	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: generation, Reason: reason})
 }
 
 func (b *StatefulBroker) invalidateSession(selected *brokerSession, reason string) {

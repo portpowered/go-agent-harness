@@ -170,13 +170,15 @@ func (s *targetSession) convertFrameNavigated(value *page.EventFrameNavigated) w
 	topLevel := value.Frame.ParentID == ""
 	s.mu.Lock()
 	previous := s.page.Generation
-	if topLevel {
-		s.page.Generation++
-		s.page.URL = value.Frame.URL
-		s.page.Origin = targetOrigin(value.Frame.URL)
+	current, advanced := nextPageGeneration(previous)
+	if advanced {
+		s.page.Generation = current
 		s.page.Ready = false
 	}
-	current := s.page.Generation
+	if topLevel && advanced {
+		s.page.URL = value.Frame.URL
+		s.page.Origin = targetOrigin(value.Frame.URL)
+	}
 	s.mu.Unlock()
 	event := webmcp.BrowserEvent{
 		Type:               webmcp.EventFrameNavigated,
@@ -187,22 +189,38 @@ func (s *targetSession) convertFrameNavigated(value *page.EventFrameNavigated) w
 	if topLevel {
 		event.Type = webmcp.EventPageNavigated
 	}
+	if !advanced {
+		event.Reason = "generation_exhausted"
+	}
 	return event
 }
 
 func (s *targetSession) convertExecutionContextsCleared() webmcp.BrowserEvent {
 	s.mu.Lock()
 	previous := s.page.Generation
-	s.page.Generation++
-	s.page.Ready = false
-	current := s.page.Generation
+	current, advanced := nextPageGeneration(previous)
+	if advanced {
+		s.page.Generation = current
+		s.page.Ready = false
+	}
 	s.mu.Unlock()
-	return webmcp.BrowserEvent{
+	event := webmcp.BrowserEvent{
 		Type:               webmcp.EventPageNavigated,
 		PreviousGeneration: previous,
 		Generation:         current,
 		Reason:             "execution_contexts_cleared",
 	}
+	if !advanced {
+		event.Reason = "generation_exhausted"
+	}
+	return event
+}
+
+func nextPageGeneration(previous uint64) (uint64, bool) {
+	if previous == ^uint64(0) {
+		return previous, false
+	}
+	return previous + 1, true
 }
 
 func (s *targetSession) convertDetached(value *cdpTarget.EventDetachedFromTarget) webmcp.BrowserEvent {

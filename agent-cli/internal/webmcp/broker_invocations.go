@@ -1010,7 +1010,7 @@ func (b *StatefulBroker) trimTerminalResultsLocked() {
 	}
 }
 
-func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvocation, state InvocationState, code ErrorCode, reason string) {
+func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvocation, state InvocationState, code ErrorCode, reason string, previousGeneration uint64) {
 	var details map[string]any
 	switch code {
 	case ErrorTargetDetached:
@@ -1025,9 +1025,11 @@ func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvoc
 		}
 	case ErrorPageNavigated:
 		currentGeneration := invocation.selected.context.Generation
-		previousGeneration := invocation.invocation.Tool.Generation
-		if previousGeneration >= currentGeneration && currentGeneration > 0 {
-			previousGeneration = currentGeneration - 1
+		if previousGeneration == 0 {
+			previousGeneration = invocation.invocation.Tool.Generation
+			if previousGeneration >= currentGeneration && currentGeneration > 0 {
+				previousGeneration = currentGeneration - 1
+			}
 		}
 		details = map[string]any{
 			"browser_id":          string(invocation.invocation.Tool.BrowserID),
@@ -1060,25 +1062,29 @@ func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvoc
 	b.finishInvocationLocked(invocation, invocationFailureResult(invocation, state, code, details))
 }
 
-func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSession, code ErrorCode, reason string) {
+func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSession, code ErrorCode, reason string, transitionPrevious ...uint64) {
 	state := InvocationError
 	if code == ErrorInvocationOrphaned {
 		state = InvocationOrphaned
 	}
+	previousGeneration := uint64(0)
+	if len(transitionPrevious) > 0 {
+		previousGeneration = transitionPrevious[0]
+	}
 	if selected.current != nil && !selected.current.terminalized {
-		b.finishLifecycleInvocationLocked(selected.current, state, code, reason)
+		b.finishLifecycleInvocationLocked(selected.current, state, code, reason, previousGeneration)
 	}
 	for _, invocation := range selected.queue {
 		if invocation == nil || invocation.terminalized {
 			continue
 		}
-		b.finishLifecycleInvocationLocked(invocation, state, code, reason)
+		b.finishLifecycleInvocationLocked(invocation, state, code, reason, previousGeneration)
 	}
 	for _, invocation := range b.invocations {
 		if invocation.selected != selected || invocation.terminalized {
 			continue
 		}
-		b.finishLifecycleInvocationLocked(invocation, state, code, reason)
+		b.finishLifecycleInvocationLocked(invocation, state, code, reason, previousGeneration)
 	}
 	signalInvocationQueueLocked(selected)
 }
