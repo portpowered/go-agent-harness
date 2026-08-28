@@ -199,16 +199,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 	signalInvocationQueueLocked(selected)
 	b.mu.Unlock()
 
-	select {
-	case outcome := <-invocation.dispatchDone:
-		return cloneInvokeResult(outcome.result), outcome.err
-	case <-ctx.Done():
-		b.cancelAdmission(invocation)
-		return InvokeResult{}, ctx.Err()
-	case <-b.closedCh:
-		b.cancelAdmission(invocation)
-		return InvokeResult{}, ErrClosed
-	}
+	return b.waitForAdmissionDispatch(ctx, invocation)
 }
 
 func (b *StatefulBroker) mintInvocationIDLocked() (InvocationID, error) {
@@ -548,20 +539,6 @@ func (b *StatefulBroker) reportDispatchLocked(invocation *brokerInvocation, resu
 	}
 	invocation.reported = true
 	invocation.dispatchDone <- invocationDispatch{result: cloneInvokeResult(result), err: err}
-}
-
-func (b *StatefulBroker) cancelAdmission(invocation *brokerInvocation) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if invocation.terminalized || invocation.invocation.State != InvocationQueued {
-		return
-	}
-	removeQueuedInvocationLocked(invocation.selected, invocation)
-	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
-		"invocation_id": string(invocation.invocation.ID),
-		"cancel_source": "context",
-	})
-	b.finishInvocationLocked(invocation, result)
 }
 
 func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {

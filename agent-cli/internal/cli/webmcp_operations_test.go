@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +12,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -89,12 +89,16 @@ func TestWebMCPDirectInvokeAndCancelHelpDocumentHandoff(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			operations := NewWebMCPOperationsCommand(flags.NewGlobalFlags())
-			var description string
-			if test.name == "invoke" {
-				description = operations.invokeCommand().Long
-			} else {
-				description = operations.cancelCommand().Long
+			root := &cobra.Command{Use: "webmcp", SilenceErrors: true, SilenceUsage: true}
+			operations.AddCommands(root)
+			var stdout, stderr bytes.Buffer
+			root.SetOut(&stdout)
+			root.SetErr(&stderr)
+			root.SetArgs([]string{test.name, "--help"})
+			if err := root.Execute(); err != nil {
+				t.Fatalf("execute %s help: %v", test.name, err)
 			}
+			description := stdout.String() + stderr.String()
 			for _, want := range test.want {
 				if !strings.Contains(description, want) {
 					t.Fatalf("help omitted %q:\n%s", want, description)
@@ -456,14 +460,10 @@ func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
 
 	command := exec.Command(os.Args[0], "-test.run=^TestWebMCPDirectInvokeSIGINTChildProcess$", "-test.v=false")
 	command.Env = append(os.Environ(), "WEBMCP_DIRECT_SIGINT_CHILD=1")
-	stdout, err := command.StdoutPipe()
-	if err != nil {
-		t.Fatalf("child stdout pipe: %v", err)
-	}
-	stderr, err := command.StderrPipe()
-	if err != nil {
-		t.Fatalf("child stderr pipe: %v", err)
-	}
+	stdout := &childProcessOutputBuffer{}
+	stderr := newChildProcessStderrBuffer()
+	command.Stdout = stdout
+	command.Stderr = stderr
 	if err := command.Start(); err != nil {
 		t.Fatalf("start SIGINT child: %v", err)
 	}
@@ -474,49 +474,15 @@ func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
 		}
 	}()
 
-	type pipeResult struct {
-		first string
-		rest  string
-		err   error
-	}
-	type firstLineResult struct {
-		value string
-		err   error
-	}
-	firstLine := make(chan firstLineResult, 1)
-	stderrResult := make(chan pipeResult, 1)
-	go func() {
-		reader := bufio.NewReader(stderr)
-		first, firstErr := reader.ReadString('\n')
-		firstLine <- firstLineResult{value: first, err: firstErr}
-		rest, restErr := io.ReadAll(reader)
-		if firstErr == nil {
-			firstErr = restErr
-		}
-		stderrResult <- pipeResult{first: first, rest: string(rest), err: firstErr}
-	}()
-	stdoutResult := make(chan string, 1)
-	go func() {
-		value, readErr := io.ReadAll(stdout)
-		if readErr != nil {
-			stdoutResult <- "read error: " + readErr.Error()
-			return
-		}
-		stdoutResult <- string(value)
-	}()
-
-	var firstValue firstLineResult
+	var firstValue string
 	select {
-	case firstValue = <-firstLine:
+	case firstValue = <-stderr.firstLine:
 	case <-time.After(5 * time.Second):
 		t.Fatal("SIGINT child did not emit a dispatch receipt")
 	}
-	if firstValue.err != nil && !errors.Is(firstValue.err, io.EOF) {
-		t.Fatalf("read child dispatch receipt: %v", firstValue.err)
-	}
 	var receipt WebMCPDirectInvocationReceipt
-	if err := json.Unmarshal([]byte(firstValue.value), &receipt); err != nil {
-		t.Fatalf("decode child dispatch receipt: %v; stderr=%q", err, firstValue.value)
+	if err := json.Unmarshal([]byte(firstValue), &receipt); err != nil {
+		t.Fatalf("decode child dispatch receipt: %v; stderr=%q", err, firstValue)
 	}
 	if receipt.InvocationID != "browser-child-1" || receipt.State != string(webmcp.InvocationDispatched) {
 		t.Fatalf("child dispatch receipt = %+v", receipt)
@@ -535,8 +501,8 @@ func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
 		t.Fatalf("SIGINT child completion took %s, want <= %s", elapsed, webmcpDirectInterruptReconciliationTimeout+time.Second)
 	}
 
-	stderrValue := <-stderrResult
-	stdoutValue := <-stdoutResult
+	stderrValue := stderr.String()
+	stdoutValue := stdout.String()
 	envelope := decodeDirectEnvelope(t, stdoutValue)
 	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvocationCanceled) || envelope.Error.Retryable {
 		t.Fatalf("SIGINT child envelope = %+v", envelope)
@@ -547,9 +513,52 @@ func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
 	if strings.Contains(stdoutValue, "input_secret") || strings.Contains(stdoutValue, "page_output") || strings.Contains(stdoutValue, "credential") {
 		t.Fatalf("SIGINT child output leaked sensitive data: %q", stdoutValue)
 	}
-	if strings.TrimSpace(stderrValue.rest) != "" {
-		t.Fatalf("SIGINT child wrote unexpected stderr after receipt: %q", stderrValue.rest)
+	if strings.TrimSpace(strings.TrimPrefix(stderrValue, firstValue)) != "" {
+		t.Fatalf("SIGINT child wrote unexpected stderr after receipt: %q", stderrValue)
 	}
+}
+
+type childProcessOutputBuffer struct {
+	mu   sync.Mutex
+	data bytes.Buffer
+}
+
+func (b *childProcessOutputBuffer) Write(value []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.data.Write(value)
+}
+
+func (b *childProcessOutputBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.data.String()
+}
+
+type childProcessStderrBuffer struct {
+	childProcessOutputBuffer
+	firstLine chan string
+	notified  bool
+}
+
+func newChildProcessStderrBuffer() *childProcessStderrBuffer {
+	return &childProcessStderrBuffer{firstLine: make(chan string, 1)}
+}
+
+func (b *childProcessStderrBuffer) Write(value []byte) (int, error) {
+	b.mu.Lock()
+	written, err := b.data.Write(value)
+	if !b.notified {
+		if newline := bytes.IndexByte(b.data.Bytes(), '\n'); newline >= 0 {
+			b.notified = true
+			line := append([]byte(nil), b.data.Bytes()[:newline+1]...)
+			b.mu.Unlock()
+			b.firstLine <- string(line)
+			return written, err
+		}
+	}
+	b.mu.Unlock()
+	return written, err
 }
 
 func runWebMCPDirectInvokeSIGINTChild(t *testing.T) {
