@@ -282,7 +282,15 @@ func TestProbeRunScenarioV2ReportsSafeFirstObjectiveDivergenceAndCleansUp(t *tes
 		},
 		Operations: []testkit.BrowserScriptOperation{
 			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableLifecycle}, Result: json.RawMessage(`{}`)},
-			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableWebMCP}, Result: json.RawMessage(`{}`)},
+			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableWebMCP}, Result: json.RawMessage(`{}`), Emit: []testkit.EmittedEvent{{
+				Type: testkit.EmittedToolsAdded,
+				Tools: []testkit.ToolDescriptor{{
+					Name:        "diagnostic_state",
+					Description: "Diagnostic state tool",
+					FrameID:     "frame-1",
+					InputSchema: json.RawMessage(`{}`),
+				}},
+			}}},
 		},
 	}
 	browserData, err := json.Marshal(script)
