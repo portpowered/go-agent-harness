@@ -599,10 +599,7 @@ func sendSessionToolResultsAsStream(ctx context.Context, session messages.Sessio
 			return false
 		}
 	}
-	if !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
-		return false
-	}
-	return true
+	return session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 }
 
 func sessionToolResultName(history []messages.Message, result messages.Message) string {
