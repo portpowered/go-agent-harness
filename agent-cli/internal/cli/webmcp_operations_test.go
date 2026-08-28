@@ -508,6 +508,67 @@ func TestWebMCPDirectClassifiesPersistedBrowserLossAsDisconnected(t *testing.T) 
 	}
 }
 
+func TestWebMCPDirectMalformedInputReturnsSelectedSchema(t *testing.T) {
+	schema := `{"type":"object","properties":{"profile":{"type":"object","properties":{"count":{"type":"integer","minimum":1},"mode":{"enum":["fast","safe"]}},"required":["count"],"additionalProperties":false},"tags":{"type":"array","items":{"type":"string"}}},"required":["profile","tags"],"additionalProperties":false}`
+	const toolRef = webmcp.ToolRef("webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA")
+	wantGolden, err := os.ReadFile(filepath.Join("testdata", "webmcp-invoke-invalid-input.golden.json"))
+	if err != nil {
+		t.Fatalf("read malformed-input golden: %v", err)
+	}
+
+	for _, testCase := range []struct {
+		name       string
+		positional bool
+	}{
+		{name: "exact ref"},
+		{name: "unique positional name", positional: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			configDir := writeDirectConfig(t, "")
+			store := NewFileWebMCPSelectionStore(configDir)
+			_, target, candidate, tool := directFixture()
+			tool.InputSchema = json.RawMessage(schema)
+			runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
+				testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool)),
+			))
+			broker := webmcp.NewBroker(webmcp.BrokerOptions{
+				Runtime:    runtime,
+				Discoverer: directDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}},
+				ToolRefFactory: func(webmcp.ToolDescriptor) (webmcp.ToolRef, error) {
+					return toolRef, nil
+				},
+			})
+
+			args := []string{"invoke", "--browser", string(candidate.ID), "--tab", string(target.ID)}
+			if testCase.positional {
+				args = append(args, "read_state")
+			} else {
+				args = append(args, "--tool-ref", string(toolRef))
+			}
+			args = append(args, "--input-json", `{"profile":{"mode":"fast","secret":"do-not-echo"}`, "--json")
+
+			result := executeDirectCommand(t, configDir, store, directFactory(broker), args...)
+			if result.err == nil {
+				t.Fatal("malformed invocation unexpectedly succeeded")
+			}
+			if got := strings.TrimSpace(result.stdout); got != strings.TrimSpace(string(wantGolden)) {
+				t.Fatalf("malformed-input envelope = %s, want golden %s", got, strings.TrimSpace(string(wantGolden)))
+			}
+			if strings.Contains(result.stdout, "do-not-echo") {
+				t.Fatalf("malformed input leaked into result: %s", result.stdout)
+			}
+			envelope := decodeDirectEnvelope(t, result.stdout)
+			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvalidToolInput) || !envelope.Error.Retryable {
+				t.Fatalf("malformed-input envelope = %+v", envelope)
+			}
+			operations := runtime.Operations()
+			if hasTestkitOperation(operations, testkit.OperationInvoke) {
+				t.Fatalf("malformed input was dispatched: %+v", operations)
+			}
+		})
+	}
+}
+
 type directCommandResult struct {
 	stdout string
 	stderr string

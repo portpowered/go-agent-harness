@@ -148,12 +148,11 @@ func resolveDirectInvocation(args []string, values *webmcpDirectFlags, broker we
 	if len(bytes.TrimSpace(input)) == 0 {
 		input = json.RawMessage(`{}`)
 	}
-	if !json.Valid(input) {
-		return "", nil, webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "--input-json must contain one valid JSON value", map[string]any{
-			"tool_ref": values.toolRef,
-			"issues":   []webmcp.ToolResultIssue{{Path: "/input-json", Code: "invalid_json"}},
-		})
-	}
+	// Keep malformed input opaque until the broker has resolved the exact
+	// descriptor. The broker owns page-schema validation and can therefore
+	// include the selected tool's complete schema in its retryable error.
+	// Performing json.Valid here would lose that descriptor context and would
+	// also make positional tool names behave differently from --tool-ref.
 	if values.toolRef != "" {
 		return webmcp.ToolRef(values.toolRef), append(json.RawMessage(nil), input...), nil
 	}
