@@ -13,9 +13,34 @@ hardware/provider acceptance work have predictable boundaries.
 | T2 device | `agent probe run <scenario> --devices real` | An acceptance host with the required real audio device | Per-vertical acceptance; never PR CI |
 | T3 fleet + fault | `agent probe fleet` | An operator-controlled fleet environment | On demand |
 
-The combined T0 unit, T0 functional, T0 hermetic, and T1 probe-replay work has
-a 60-second budget for every PR. T2 live/device checks and T3 fleet/fault
-checks are deliberately outside that PR budget.
+T0 unit, T0 functional, T0 hermetic, and T1 probe-replay checks are
+pull-request gates with the package and target budgets documented below. T2
+live/device checks and T3 fleet/fault checks are deliberately outside those
+pull-request gates.
+
+## Credential-free agent-cli integration budget
+
+`agent-cli/test/integration` is a complete package-level integration suite. Its
+`TestMain` builds one shipped `agent` binary and the tests then exercise that
+binary, replay fixtures, and test-owned child processes. The package therefore
+needs its own finite budget rather than inheriting the general package timeout.
+
+The selected default for the root-target contract is **180 seconds**. The
+budget is based on the package's Go test elapsed time, which is the scope owned
+by `go test -timeout` and includes the shared `TestMain` setup. The fresh-main
+baseline at `66c3ff8` reached a maximum successful cold CI-shaped package
+duration of 110.788 seconds; the required safety calculation is
+`110.788 × 1.5 = 166.182 seconds`, rounded up to 180 seconds. The outer shell
+wall time includes compilation; it is measured separately when collecting
+evidence and does not change the package-level calculation.
+
+This 180-second package budget is distinct from the GitHub job's 45-minute
+outer limit and must remain finite. It does not replace command-level
+deadlines inside the integration tests, and the general `GO_TEST_TIMEOUT`
+continues to govern unrelated packages until a root target explicitly opts
+into the integration-specific setting. Full repetition logs, JSON inventories,
+and CI status belong in review conversation/run artifacts, not in the
+repository.
 
 ## Microphone build configurations
 
