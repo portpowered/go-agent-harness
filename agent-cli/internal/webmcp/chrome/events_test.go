@@ -235,7 +235,7 @@ func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
 	// event storage.
 	attached := nextBrowserEvent(t, session.Events())
 	initialAdded := nextBrowserEvent(t, session.Events())
-	if attached.Type != webmcp.EventTargetAttached || initialAdded.Type != webmcp.EventToolsAdded || initialAdded.FrameID != frameID {
+	if attached.Type != webmcp.EventTargetAttached || initialAdded.Type != webmcp.EventToolsAdded || initialAdded.FrameID != frameID || initialAdded.Generation != 1 {
 		t.Fatalf("initial event order = %s, %s; want target_attached, tools_added", attached.Type, initialAdded.Type)
 	}
 	assertIncreasingSequence(t, attached, initialAdded)
@@ -274,13 +274,13 @@ func TestWebMCPEventsListenBeforeEnableAndPreserveOrder(t *testing.T) {
 	if repeatedAdded.Type != webmcp.EventToolsAdded || string(repeatedAdded.Tools[0].InputSchema) != schema || *repeatedAdded.Tools[0].Annotations.ReadOnly {
 		t.Fatalf("repeated toolsAdded = %+v, want an unchanged defensive copy", repeatedAdded)
 	}
-	if removedEvent.Type != webmcp.EventToolsRemoved || removedEvent.FrameID != frameID || len(removedEvent.RemovedToolNames) != 1 || removedEvent.RemovedToolNames[0] != toolName {
+	if removedEvent.Type != webmcp.EventToolsRemoved || removedEvent.FrameID != frameID || removedEvent.Generation != 1 || len(removedEvent.RemovedToolNames) != 1 || removedEvent.RemovedToolNames[0] != toolName {
 		t.Fatalf("toolsRemoved event = %+v, want frame and tool name", removedEvent)
 	}
-	if invokedEvent.Type != webmcp.EventToolInvoked || invokedEvent.FrameID != frameID || invokedEvent.ToolName != toolName || invokedEvent.InvocationID != "invocation-events" || string(invokedEvent.Input) != inputJSON {
+	if invokedEvent.Type != webmcp.EventToolInvoked || invokedEvent.Generation != 1 || invokedEvent.FrameID != frameID || invokedEvent.ToolName != toolName || invokedEvent.InvocationID != "invocation-events" || string(invokedEvent.Input) != inputJSON {
 		t.Fatalf("toolInvoked event = %+v, want correlated copied input", invokedEvent)
 	}
-	if respondedEvent.Type != webmcp.EventToolResponded || respondedEvent.InvocationID != "invocation-events" || respondedEvent.Status != string(cdpWebMCP.InvocationStatusCompleted) || string(respondedEvent.Output) != output || respondedEvent.ErrorCode != "" {
+	if respondedEvent.Type != webmcp.EventToolResponded || respondedEvent.Generation != 1 || respondedEvent.InvocationID != "invocation-events" || respondedEvent.Status != string(cdpWebMCP.InvocationStatusCompleted) || string(respondedEvent.Output) != output || respondedEvent.ErrorCode != "" {
 		t.Fatalf("toolResponded event = %+v, want completed copied output", respondedEvent)
 	}
 	respondedEvent.Output[0] = 'X'

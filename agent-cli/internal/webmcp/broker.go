@@ -125,7 +125,8 @@ type brokerSession struct {
 	// command-scoped broker. The browser event stream is shared by attached
 	// DevTools clients, so a watch command can report external invocation
 	// lifecycle events without claiming ownership of their result.
-	observedInvocations map[InvocationID]ToolRef
+	observedInvocations map[InvocationID]observedInvocation
+	catalogObserved     bool
 	catalogSignal       chan struct{}
 }
 
@@ -138,6 +139,16 @@ type refRecord struct {
 	binding    ToolRefBinding
 	descriptor ToolDescriptor
 	key        catalogKey
+}
+
+// observedInvocation is the target-owned lifecycle identity retained by a
+// watcher. It has no local admission record; the target event stream is the
+// only source of truth for its protocol ID and terminal state.
+type observedInvocation struct {
+	browserID  BrowserID
+	targetID   TargetID
+	generation uint64
+	toolRef    ToolRef
 }
 
 // ToolRefBinding is the complete semantic identity protected by a session-
@@ -465,7 +476,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		queueWake:           make(chan struct{}, 1),
 		queueStop:           make(chan struct{}),
 		queueWorkerDone:     make(chan struct{}),
-		observedInvocations: make(map[InvocationID]ToolRef),
+		observedInvocations: make(map[InvocationID]observedInvocation),
 		catalogSignal:       make(chan struct{}),
 	}
 	if page.CatalogReady {
@@ -864,21 +875,39 @@ func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession,
 		return
 	}
 
-	var ref ToolRef
-	if descriptor, ok := observedToolDescriptorLocked(selected, event); ok {
-		ref = descriptor.Ref
+	generation := event.Generation
+	if generation == 0 {
+		generation = selected.context.Generation
 	}
-	selected.observedInvocations[event.InvocationID] = ref
+	if generation > selected.context.Generation {
+		b.advanceGenerationLocked(selected, generation, "invocation_generation")
+	}
+	if generation != selected.context.Generation {
+		return
+	}
+	observed := observedInvocation{
+		browserID:  selected.context.Key.BrowserID,
+		targetID:   selected.context.Key.TargetID,
+		generation: generation,
+	}
+	if descriptor, ok := observedToolDescriptorLocked(selected, event, generation); ok {
+		observed.toolRef = descriptor.Ref
+	}
+	selected.observedInvocations[event.InvocationID] = observed
 	b.emitLocked(BrokerEvent{
 		Type:         BrokerEventInvocationCreated,
-		BrowserID:    selected.context.Key.BrowserID,
-		TargetID:     selected.context.Key.TargetID,
-		Generation:   selected.context.Generation,
+		BrowserID:    observed.browserID,
+		TargetID:     observed.targetID,
+		Generation:   observed.generation,
 		InvocationID: event.InvocationID,
-		ToolRef:      ref,
+		ToolRef:      observed.toolRef,
 		State:        InvocationDispatched,
 		Reason:       "browser_observed",
 	})
+	if terminal, ok := b.takeEarlyTerminalLocked(event.InvocationID, observed.generation); ok {
+		b.recordBrowserTerminalIDLocked(event.InvocationID)
+		b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, terminal.status, terminal.errorCode, terminal.reason, terminal.at)
+	}
 }
 
 func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *brokerSession, event BrowserEvent) bool {
@@ -888,45 +917,71 @@ func (b *StatefulBroker) reconcileObservedBrowserResponseLocked(selected *broker
 	if _, owned := b.browserInvocations[event.InvocationID]; owned {
 		return false
 	}
-	ref, observed := selected.observedInvocations[event.InvocationID]
-	if !observed {
+	if !b.acceptBrowserEventGenerationLocked(selected, event) {
+		return true
+	}
+	if _, terminal := b.browserTerminalSeen[event.InvocationID]; terminal {
+		return true
+	}
+	observed, ok := selected.observedInvocations[event.InvocationID]
+	if !ok {
 		return false
 	}
 	delete(selected.observedInvocations, event.InvocationID)
-	state, _ := terminalState(event.Status)
-	reason := event.ErrorCode
-	if reason == "" {
-		reason = event.Reason
-	}
-	if reason == "" {
-		reason = strings.ToLower(strings.TrimSpace(event.Status))
-	}
-	b.emitLocked(BrokerEvent{
-		Type:         BrokerEventInvocationTerminal,
-		At:           event.At,
-		BrowserID:    selected.context.Key.BrowserID,
-		TargetID:     selected.context.Key.TargetID,
-		Generation:   selected.context.Generation,
-		InvocationID: event.InvocationID,
-		ToolRef:      ref,
-		State:        state,
-		Reason:       reason,
-	})
+	b.recordBrowserTerminalIDLocked(event.InvocationID)
+	b.emitObservedBrowserTerminalLocked(observed, event.InvocationID, event.Status, event.ErrorCode, event.Reason, event.At)
 	return true
 }
 
-func observedToolDescriptorLocked(selected *brokerSession, event BrowserEvent) (ToolDescriptor, bool) {
+func (b *StatefulBroker) emitObservedBrowserTerminalLocked(observed observedInvocation, id InvocationID, status, errorCode, reason string, at time.Time) {
+	state, _ := terminalState(status)
+	if errorCode != "" {
+		reason = errorCode
+	}
+	if reason == "" {
+		reason = strings.ToLower(strings.TrimSpace(status))
+	}
+	b.emitLocked(BrokerEvent{
+		Type:         BrokerEventInvocationTerminal,
+		At:           at,
+		BrowserID:    observed.browserID,
+		TargetID:     observed.targetID,
+		Generation:   observed.generation,
+		InvocationID: id,
+		ToolRef:      observed.toolRef,
+		State:        state,
+		Reason:       reason,
+	})
+}
+
+func (b *StatefulBroker) acceptBrowserEventGenerationLocked(selected *brokerSession, event BrowserEvent) bool {
+	if selected == nil || event.Generation == 0 {
+		return selected != nil
+	}
+	if event.Generation > selected.context.Generation {
+		b.advanceGenerationLocked(selected, event.Generation, "event_generation")
+	}
+	return event.Generation == selected.context.Generation
+}
+
+func observedToolDescriptorLocked(selected *brokerSession, event BrowserEvent, generation uint64) (ToolDescriptor, bool) {
 	if selected == nil {
 		return ToolDescriptor{}, false
 	}
 	if event.FrameID != "" {
 		if descriptor, ok := selected.catalog[catalogKey{frame: event.FrameID, name: event.ToolName}]; ok {
-			return descriptor, true
+			if descriptor.Generation == generation {
+				return descriptor, true
+			}
+			return ToolDescriptor{}, false
 		}
 	}
 	var match ToolDescriptor
 	for key, descriptor := range selected.catalog {
-		if key.name != event.ToolName {
+		if key.name != event.ToolName || descriptor.Generation != generation {
+			continue
+		}
+		if event.FrameID != "" && key.frame != event.FrameID {
 			continue
 		}
 		if match.Ref != "" {
@@ -996,8 +1051,22 @@ func (b *StatefulBroker) applyToolsRemovedLocked(selected *brokerSession, event 
 	}
 	changed := false
 	for _, name := range event.RemovedToolNames {
-		key := catalogKey{frame: event.FrameID, name: name}
-		if current, ok := selected.catalog[key]; ok {
+		if event.FrameID != "" {
+			key := catalogKey{frame: event.FrameID, name: name}
+			if current, ok := selected.catalog[key]; ok {
+				b.retireRefLocked(current.Ref)
+				delete(selected.catalog, key)
+				changed = true
+			}
+			continue
+		}
+		// A neutral producer may omit the frame when the protocol event does
+		// not carry one. Remove every current descriptor with that name rather
+		// than retaining a stale reference or guessing a frame.
+		for key, current := range selected.catalog {
+			if key.name != name {
+				continue
+			}
 			b.retireRefLocked(current.Ref)
 			delete(selected.catalog, key)
 			changed = true
