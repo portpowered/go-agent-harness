@@ -606,3 +606,470 @@ its own request is therefore superseded. The current repository has a separate
 ordinary textual result path and rich-result path, and the accepted decision
 requires the broker to remain on the former while the loop coordinator owns the
 exactly-once continuation.
+
+## 7. Semantic browser recording and replay
+
+Browser evidence is a semantic JSONL stream, not a copy of dependency-private
+CDP frames. It is paired with the existing provider and transcript evidence by
+the recording manifest in §8. This preserves readable deterministic replay while
+leaving the concrete Chrome adapter free to change its transport details. The
+choice follows [Architecture Decision §3](architecture-decision.md#3-testability-and-production-site-ramps)
+and the repository's separate provider-capture and transcript foundations in
+[Understanding §2, Recording and replay](understanding.md#2-verified-mapping-to-current-machinery).
+
+### 7.1 `webmcp.browser-events.v1`
+
+The canonical browser artifact is UTF-8 JSONL. Each line is exactly one event
+object with these top-level fields:
+
+| Field | Type | Required | Contract |
+| --- | --- | --- | --- |
+| `version` | string | yes | Exactly `webmcp.browser-events.v1`. |
+| `sequence` | non-negative integer | yes | Starts at 1 and increases by exactly one within the artifact. |
+| `monotonic_ms` | non-negative integer | yes | Offset from the recorder's monotonic origin; it never decreases. |
+| `type` | string | yes | One event name in the table below; unknown names fail replay validation. |
+| `browser_id` | string | conditional | Required when the event is associated with a discovered browser. |
+| `target_id` | string | conditional | Required when the event is associated with a target. |
+| `generation` | non-negative integer | conditional | Required for catalog or invocation events associated with a page generation. |
+| `payload` | JSON value | exactly one | Redacted semantic payload. It may be `{}` or `null`. |
+| `payload_sha256` | lowercase 64-hex string | exactly one | Digest in place of `payload` when policy stores only a digest. |
+| `redaction` | object | yes | The applied redaction metadata, described below. |
+
+`payload` and `payload_sha256` are mutually exclusive. The event object has no
+other fields. IDs are the same normalized opaque IDs used by the broker and
+must not contain credentials or raw endpoint URLs. Event payloads may contain
+untrusted page input/output values; those values are data and are never
+instructions to the model.
+
+The stable event vocabulary is:
+
+| Event | Required context | Semantic payload |
+| --- | --- | --- |
+| `browser.discovery.started` | none | Discovery source and attempt metadata. |
+| `browser.discovery.completed` | `browser_id` when a candidate was selected | Candidate count and normalized candidate summary. |
+| `browser.endpoint.version` | `browser_id` | Product/protocol version facts, with endpoint secrets removed. |
+| `browser.targets.snapshot` | `browser_id` | Normalized target snapshot. |
+| `browser.target.selected` | `browser_id`, `target_id` | Selection generation and selection reason. |
+| `browser.chrome.target_attached` | `browser_id`, `target_id` | Attach phase and ownership mode. |
+| `browser.webmcp.enabled` | `browser_id`, `target_id`, `generation` | Enablement result. |
+| `browser.catalog.tool_added` | `browser_id`, `target_id`, `generation` | One or more normalized page tool descriptors. |
+| `browser.catalog.tool_removed` | `browser_id`, `target_id`, `generation` | Removed tool references. |
+| `browser.catalog.ready` | `browser_id`, `target_id`, `generation` | Catalog count and schema digest. |
+| `browser.invocation.created` | `browser_id`, `target_id`, `generation` | Invocation ID and tool reference. |
+| `browser.invocation.approval` | `browser_id`, `target_id`, `generation` | Invocation ID and approval decision. |
+| `browser.invocation.dispatched` | `browser_id`, `target_id`, `generation` | Invocation ID, tool reference, and input digest. |
+| `browser.invocation.completed` | `browser_id`, `target_id`, `generation` | Invocation ID, status, and redacted output or digest. |
+| `browser.invocation.error` | `browser_id`, `target_id`, `generation` | Invocation ID and stable broker error code. |
+| `browser.invocation.cancel_requested` | `browser_id`, `target_id`, `generation` | Invocation ID and cancellation source. |
+| `browser.invocation.canceled` | `browser_id`, `target_id`, `generation` | Invocation ID and terminal cancellation source. |
+| `browser.page.generation_changed` | `browser_id`, `target_id` | Previous and current generation. |
+| `browser.target.detached` | `browser_id`, `target_id` | Detach reason and ownership mode. |
+| `browser.chrome.target_closed` | `browser_id`, `target_id` | Close reason; it never implies permission to close an externally owned browser. |
+
+The event-specific payload is strict for control fields. Page-owned `input`,
+`output`, and schema values remain arbitrary JSON so recording cannot corrupt a
+valid page value merely because it has an application-specific property. A
+decoder MUST reject an unknown top-level field, an unknown event name, a
+missing required context field, a non-contiguous sequence, a decreasing clock,
+or an event payload control field that is not defined for that event. It MUST
+reject an unknown `version` rather than treating the line as a compatible
+older event.
+
+`redaction` has only `mode` and optional `rules`. `mode` is one of `none`,
+`redacted`, or `digest`; `rules` contains only the fixed names
+`url_query`, `url_fragment`, `tool_arguments`, `result_json_pointers`, and
+`raw_cdp_disabled`. Redaction is applied before JSONL serialization and before
+the artifact hash is calculated. A raw CDP frame is never a canonical v1 event.
+
+Representative valid event:
+
+```json
+{
+  "version": "webmcp.browser-events.v1",
+  "sequence": 12,
+  "monotonic_ms": 314,
+  "type": "browser.invocation.completed",
+  "browser_id": "chrome-local-1",
+  "target_id": "tab-1",
+  "generation": 7,
+  "payload": {
+    "invocation_id": "inv-1",
+    "status": "completed",
+    "output": { "value": 42 }
+  },
+  "redaction": { "mode": "none" }
+}
+```
+
+### 7.2 `webmcp.browser-script.v1`
+
+The deterministic browser-runtime fixture is a separate UTF-8 JSON document.
+Its root has exactly `version`, `endpoint`, and `operations`. `version` is
+exactly `webmcp.browser-script.v1`. `endpoint` has exactly `version` and
+`targets`; its version object has exactly `Browser`, `Protocol-Version`, and
+`webSocketDebuggerUrl`. Each target has exactly `id`, `type`, `title`, `url`,
+and `webSocketDebuggerUrl`. Each operation has a required `expect` object and
+optional `result` and `emit` values. Unknown fields at any fixture-control
+level, unknown operation types, and unknown emitted event types MUST fail
+before the fixture runs. Page-owned values inside `input`, `output`, and
+`result` are not field inventories and remain arbitrary JSON.
+
+The v1 operation vocabulary is `enable_lifecycle`, `enable_webmcp`,
+`invoke_tool`, `cancel_tool`, `navigate`, `close_target`, and `detach_target`.
+`invoke_tool` requires `frame_id`, `tool_name`, and object-valued `input`;
+`cancel_tool` requires `invocation_id`. An emitted `tools_added` event carries
+tool descriptors, and an emitted `tool_responded` event carries an
+`invocation_id`, a terminal status, and either an output or a stable error.
+The fixture converts these operations into neutral target-session events; it
+does not make a network connection.
+
+Representative valid script:
+
+```json
+{
+  "version": "webmcp.browser-script.v1",
+  "endpoint": {
+    "version": {
+      "Browser": "Chrome/Test",
+      "Protocol-Version": "1.3",
+      "webSocketDebuggerUrl": "ws://fixture/browser"
+    },
+    "targets": [
+      {
+        "id": "tab-1",
+        "type": "page",
+        "title": "Fixture",
+        "url": "https://fixture.test/",
+        "webSocketDebuggerUrl": "ws://fixture/page/tab-1"
+      }
+    ]
+  },
+  "operations": [
+    {
+      "expect": { "type": "enable_lifecycle" },
+      "result": {}
+    },
+    {
+      "expect": { "type": "enable_webmcp" },
+      "result": {},
+      "emit": [
+        {
+          "type": "tools_added",
+          "tools": [
+            {
+              "name": "read_state",
+              "description": "Read fixture state",
+              "frame_id": "frame-1",
+              "input_schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": { "read_only": true }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "expect": {
+        "type": "invoke_tool",
+        "frame_id": "frame-1",
+        "tool_name": "read_state",
+        "input": {}
+      },
+      "result": { "invocation_id": "inv-1" },
+      "emit": [
+        {
+          "type": "tool_responded",
+          "invocation_id": "inv-1",
+          "status": "Completed",
+          "output": { "value": 42 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+The same script data feeds two tests: a broker replay that exercises neutral
+selection/catalog/invocation state, and an adapter conformance fixture that
+converts operations into generated event structs while capturing generated
+commands. Strict mode requires every expected operation to be consumed in
+order, forbids unexpected commands/events, preserves object structure and
+integer tokens, and ends with no pending invocation or fixture goroutine.
+Diagnostic mode may permit extra read-only discovery/list operations but still
+requires mutating calls, arguments, terminal outcomes, and cleanup to match.
+These rules implement the fixture boundary described in [Understanding §2,
+Probe machinery](understanding.md#2-verified-mapping-to-current-machinery) and
+the hermetic-first decision in
+[Architecture Decision §3](architecture-decision.md#3-testability-and-production-site-ramps).
+
+## 8. Recording manifest and redaction
+
+The existing `go-agent-loop/pkg/transcript` bundle remains the only recording
+bundle and the only owner of `manifest.json`. Its current `format_version: 1`
+manifest and fields (`input_device`, `output_device`, `transport`, `model`,
+`clock_base`, optional `media_source`, `configuration`, `corpus`, `terminal`,
+and `artifacts`) remain readable without a browser object. This is grounded in
+[Understanding §2, Recording and replay](understanding.md#2-verified-mapping-to-current-machinery)
+and the manifest implementation's versioned, self-hash-excluding layout.
+
+When browser evidence is present, the manifest is written as
+`format_version: 2` with exactly one additive optional top-level `browser`
+object. All v1 fields retain their meaning. The browser object has exactly:
+
+| Field | Type | Contract |
+| --- | --- | --- |
+| `format` | string | Exactly `webmcp.browser-events.v1`. |
+| `artifact` | `{path, sha256}` | The semantic browser JSONL artifact and its SHA-256. |
+| `redaction` | object | The effective browser redaction policy. |
+
+The browser artifact MUST also occur once, byte-for-byte, in the existing
+top-level `artifacts` list. Its `sha256` is the lowercase SHA-256 of the final
+redacted UTF-8 `browser.events.jsonl` bytes; the manifest is not included in
+its own hash. A v2 manifest without a `browser` object is valid for a
+provider-only run. A v2 manifest with a browser object MUST have the matching
+artifact and no duplicate path. A v1 reader MUST accept the existing manifest
+without `browser`, expose no browser evidence, and reject a browser object
+under `format_version: 1`; unknown manifest versions fail rather than being
+guessed.
+
+The redaction object has only these keys: `url_query`, `url_fragment`,
+`tool_arguments`, `result_json_pointers`, `digest_tools`, and `raw_cdp`. The
+first two are booleans; `tool_arguments`, `result_json_pointers`, and
+`digest_tools` are arrays of normalized tool names or JSON Pointers; and
+`raw_cdp` is a boolean. The effective policy MUST:
+
+* replace configured credentials and sensitive URL query/fragment data before
+  writing any browser artifact or manifest metadata;
+* redact configured argument tools and result JSON Pointers, or store only a
+  digest for configured tools;
+* use the existing `REDACTED` marker and reject an artifact if a configured
+  credential survives; and
+* leave `raw_cdp` false for the canonical semantic artifact. Optional raw CDP
+  diagnostics are separate, explicitly enabled, redacted artifacts and are
+  never consumed by strict semantic replay.
+
+There MUST NOT be `browser/manifest.json`, `browser-manifest.json`, or another
+parent/child manifest. Browser and provider artifacts are finalized by the
+session coordinator into the one existing recording directory, then the one
+`manifest.json` is written after both artifact streams are durable. This
+extends the existing recording contract rather than creating the parallel
+bundle proposed by the superseded source-plan sketch.
+
+Representative valid v2 manifest (the hash is illustrative):
+
+```json
+{
+  "format_version": 2,
+  "input_device": {},
+  "output_device": {},
+  "transport": "replay",
+  "model": "fixture-model",
+  "clock_base": "fake:0",
+  "artifacts": [
+    { "path": "client.transcript.jsonl", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+    { "path": "agent.transcript.jsonl", "sha256": "2222222222222222222222222222222222222222222222222222222222222222" },
+    { "path": "browser.events.jsonl", "sha256": "3333333333333333333333333333333333333333333333333333333333333333" }
+  ],
+  "browser": {
+    "format": "webmcp.browser-events.v1",
+    "artifact": {
+      "path": "browser.events.jsonl",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "redaction": {
+      "url_query": true,
+      "url_fragment": true,
+      "tool_arguments": ["write_secret"],
+      "result_json_pointers": ["/token"],
+      "digest_tools": [],
+      "raw_cdp": false
+    }
+  }
+}
+```
+
+## 9. Probe scenario v2
+
+The current probe loader is intentionally strict and its existing
+`send_audio` step identifies a committed corpus by `corpus_id`; it does not
+take a file path. C0 therefore adds a versioned extension rather than making
+the current unversioned grammar silently accept browser fields. This follows
+[Understanding §2, Probe machinery](understanding.md#2-verified-mapping-to-current-machinery)
+and the accepted requirement to correct, not reuse, the source-plan example.
+
+`probe.scenario.v2` is a JSON object with exactly these root fields:
+
+| Field | Type | Required | Contract |
+| --- | --- | --- | --- |
+| `schema_version` | string | yes | Exactly `probe.scenario.v2`. |
+| `id` | non-empty string | yes | Stable scenario identifier. |
+| `name` | string | no | Human-readable name. |
+| `description` | string | no | Human-readable purpose. |
+| `browser_fixture` | relative path string | no | Browser script path resolved relative to the scenario file. |
+| `provider_fixture` | relative path string | no | Provider replay path resolved relative to the scenario file. |
+| `steps` | array | yes | Ordered v2 step objects. |
+| `expectations` | array | yes | Ordered v2 expectation objects; the singular `expect` is not accepted. |
+
+The v2 step types are `browser_connect`, `browser_discover`,
+`browser_select`, `browser_activate`, `browser_disconnect`,
+`browser_navigate_fixture`, `webmcp_wait_ready`, `webmcp_list_tools`,
+`webmcp_invoke`, `webmcp_cancel`, `send_text`, `send_audio`, `interrupt`,
+`close_tab`, `open_tab`, `switch_browser`, `sleep_fake`, and `close`. Each
+step's fields are type-specific and unknown fields fail validation. In
+particular, `send_audio` requires `corpus_id` (and may carry authored `text`
+for a manual-device utterance); `path` is never a substitute for
+`corpus_id`. `webmcp_invoke` uses the broker's scalar `tool_ref`, `input_json`,
+and `reason` fields.
+
+The v2 expectation vocabulary is
+`browser_count_equals`, `eligible_tab_count_equals`, `selected_tab_equals`,
+`selected_origin_equals`, `catalog_generation_equals`,
+`tool_catalog_contains`, `tool_catalog_not_contains`, `tool_schema_equals`,
+`tool_invocation_count`, `tool_input_json_equals`,
+`tool_result_jsonpath_equals`, `tool_status_equals`,
+`chrome_operation_order`, `no_unexpected_chrome_operations`,
+`generated_cdp_method_order`, `no_unexpected_generated_cdp_methods`,
+`no_pending_invocations`, `page_state_equals`, `response_canceled`,
+`assistant_audio_started`, `assistant_audio_stopped`, `transcript_contains`,
+`approval_requested`, `approval_not_requested`, `stale_tool_rejected`, and
+`browser_connection_closed`. Each expectation has a fixed field set; unknown
+expectation fields, aliases, and kinds fail before execution. A JSONPath value
+and a page-state value are compared as data, not interpolated as code.
+
+Fixture paths are not relative to the process working directory. Given the
+scenario file path, the loader uses its canonical containing directory as the
+root, joins and cleans the declared relative path, and rejects absolute paths,
+URLs, volume names, an escaping `..`, and a symlink whose resolved target lies
+outside that root. It performs no shell, environment, or home-directory
+expansion. The same containment check is applied before opening the resolved
+fixture, so a syntactically safe path cannot escape through a symlink.
+
+Corrected representative scenario:
+
+```json
+{
+  "schema_version": "probe.scenario.v2",
+  "id": "webmcp-object-output-and-voice",
+  "name": "WebMCP object output and voice",
+  "browser_fixture": "testdata/webmcp/object-output.cdp.json",
+  "provider_fixture": "testdata/session/webmcp-object-output.replay.jsonl",
+  "steps": [
+    { "type": "browser_connect" },
+    { "type": "browser_select", "target_id": "tab-1" },
+    { "type": "webmcp_wait_ready" },
+    { "type": "send_audio", "corpus_id": "read-state", "text": "Read the current state." },
+    { "type": "interrupt", "after_event": "assistant_audio_started" },
+    { "type": "send_text", "text": "Continue, but do not change anything." },
+    { "type": "close" }
+  ],
+  "expectations": [
+    { "type": "tool_catalog_contains", "name": "read_state" },
+    { "type": "tool_invocation_count", "name": "read_state", "equals": 1 },
+    { "type": "tool_result_jsonpath_equals", "path": "$.data.output.value", "value": 42 },
+    { "type": "response_canceled" },
+    { "type": "no_pending_invocations" }
+  ]
+}
+```
+
+The scenario decoder MUST reject a missing or unknown `schema_version`, an
+unknown root/step/expectation field, an unknown variant, an invalid corpus ID,
+or any fixture path that fails containment. The v2 decoder does not silently
+accept the current loader's compatibility aliases (`expected`, `expected_behavior`,
+or `expect`) because doing so would make a typo look like a passing contract.
+The provider and browser traces produced by a probe are recorded under the
+manifest rules in §8.
+
+## 10. Raw-schema dialect and benign annotations
+
+The broker's page schema is result data and is not projected into the flat
+provider definitions. This section applies to the separate provider-neutral
+raw `InputSchema` capability and its provider/mode dialect validators, as
+chosen in [Architecture Decision §1](architecture-decision.md#1-tool-schema-contract)
+and bounded by the flattening/cross-provider facts in
+[Understanding §2, JSON Schema and provider encoding](understanding.md#2-verified-mapping-to-current-machinery).
+
+The following JSON Schema keywords are the complete C0 benign-annotation
+allowlist. Their values are validated only for the listed JSON type, they do
+not change input validation, defaults, authorization, or execution, and an
+encoder may omit them only when it is using the legacy projection:
+
+| Keyword | Required JSON type | C0 meaning |
+| --- | --- | --- |
+| `title` | string | Display metadata only. |
+| `description` | string | Display metadata only. |
+| `$comment` | string | Non-executable maintainer metadata. |
+| `examples` | array | Display/example metadata; never an implicit input. |
+| `default` | any JSON value | Metadata only; the broker MUST NOT inject it. |
+| `deprecated` | boolean | Display metadata only; it does not disable a tool. |
+| `readOnly` | boolean | Metadata only; it does not grant or deny broker policy. |
+| `writeOnly` | boolean | Metadata only; it does not hide or redact a value by itself. |
+| `$schema` | string | Identifier metadata; never fetched or dereferenced. |
+| `$id` | string | Identifier metadata; never fetched, dereferenced, or used as a tool identity. |
+
+These annotations may be retained in lossless raw schemas. A legacy projection
+may discard them, but it MUST preserve every assertion that its provider
+dialect claims to support. Any assertion keyword or annotation outside this
+allowlist that the selected provider/mode cannot preserve or interpret MUST
+cause a fail-loud validation error before provider dial. The error identifies
+the provider, mode, tool, keyword, and JSON location without including secrets.
+It MUST NOT silently drop `enum`, nested `properties`/`required`, arrays,
+unions (`oneOf`/`anyOf`/`allOf`), numeric/string bounds, formats, or an unknown
+keyword. A provider may accept additional assertion keywords only when its
+own versioned dialect validator and wire tests explicitly claim them; that is
+an additive provider capability, not an implicit C0 permission.
+
+For example, this schema is safe metadata plus ordinary assertions when the
+selected dialect supports the assertions:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fixture.test/schemas/read-state",
+  "title": "Read state",
+  "description": "Returns the fixture state.",
+  "$comment": "Contract fixture; no network dereference.",
+  "examples": [{ "value": 42 }],
+  "default": {},
+  "deprecated": false,
+  "readOnly": true,
+  "writeOnly": false,
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}
+```
+
+If a legacy provider cannot represent the object or any other assertion
+without loss, it fails before dialing that provider. In broker mode the whole
+schema remains under `data.tools[].input_schema` and is returned as data; the
+provider annotation gate does not rewrite or weaken it.
+
+## 11. Unblocked lanes
+
+The following are the exact C0 inputs that B, C, F, and G may implement
+against. They may add implementation details behind these seams, but a new
+shared name, field, error, event, fixture operation, schema keyword, manifest
+field/version, cleanup owner, or continuation rule requires an additive
+amendment from the C0 integration owner. This boundary applies the CLI-owned
+topology in [Architecture Decision §4](architecture-decision.md#4-overall-topology)
+and the per-lane readiness recorded in
+[Understanding §5](understanding.md#5-per-lane-readiness).
+
+| Lane | May implement against this frozen contract | Must preserve |
+| --- | --- | --- |
+| **B — discovery and selection** | The exact browser flag/YAML/environment mapping in §4; deterministic discovery precedence; `webmcp_get_context`, `webmcp_list_tabs`, and `webmcp_select_tab`; normalized browser/target IDs; selection generations; `endpoint_*`, `ambiguous_*`, `no_eligible_tab`, `stale_selection`, `unsupported_webmcp`, and `browser_disconnected` errors. | Explicit activation, exact selection (no silent fallback), detach-only handling for externally owned targets, and the §7 event names for discovery/targets/selection. |
+| **C — broker/catalog/invocation** | The six flat scalar tools and `additionalProperties: false` from §1; `webmcp.tool-result.v1`; page schemas under `data.tools[].input_schema`; opaque generation-bound `tool_ref`; all §2 errors; bounded input/result policy; §5 cleanup and §6 exactly-once continuation ownership. | Textual `Content` results, raw page output as one JSON value, per-target policy/correlation, no provider `response.create`, no transparent retry after an unknown side effect, and semantic events from §7. |
+| **F — deterministic testkit/fixture/replay** | `webmcp.browser-events.v1`, `webmcp.browser-script.v1`, strict/diagnostic replay in §7, fake time and deterministic IDs, the redaction rules and paired `RecordingManifest` v2 in §8, and the v2 probe fixture references in §9. | Semantic evidence rather than private CDP frames, exact operation/event consumption, no leaked credentials, no second manifest, zero pending invocations, and an out-of-band objective oracle. |
+| **G — CLI/config/composition** | The direct `agent webmcp` command family from §4; session `--browser-tools=webmcp` admission; nested `browser` YAML and `AGENT_BROWSER__...` overrides; machine-readable textual envelopes; collision/preflight behavior; conceptual `SessionToolCapabilities.Close`; and the coordinator-owned lifecycle/continuation rules. | Browser configuration alone does not activate a session, disabled mode performs no browser dial, cleanup is transferred exactly once, externally owned browsers survive, and browser results stay on the ordinary textual tool path. |
+
+All four lanes can use neutral fakes and the versioned semantic fixtures without
+waiting for a Chrome dependency or provider raw-schema migration. Real Chrome,
+provider-specific schema support, and later projected/dynamic tools remain
+downstream work. Their additions must preserve this document or arrive as a
+reviewed additive contract amendment; the accepted source-plan examples that
+use nested broker input, singular `expect`, path-based `send_audio`, a second
+manifest, or broker-owned continuation are superseded here.
