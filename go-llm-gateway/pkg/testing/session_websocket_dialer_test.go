@@ -330,6 +330,39 @@ func TestRecordingWebSocketDialer_RecordsInboundAndOutboundWireMessages(t *testi
 	}
 }
 
+func TestRecordingWebSocketDialerPreservesCausalOutboundOrder(t *testing.T) {
+	liveConn := &testWebSocketConn{}
+	liveConn.onWrite = func() {
+		// The wrapped provider synchronously makes an acknowledgement available
+		// while handling the client write. The recorder must still place the
+		// accepted outbound event first in the logical capture.
+		liveConn.inbound = append(liveConn.inbound, []byte(`{"type":"conversation.item.created"}`))
+	}
+	dialer := NewRecordingWebSocketDialer(&testWebSocketDialer{conn: liveConn}, "openai", "gpt-realtime")
+
+	conn, err := dialer.Dial("wss://live.example.invalid", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"input_audio_buffer.commit"}`)); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	records := dialer.Capture().Records
+	if len(records) != 2 {
+		t.Fatalf("captured records = %d, want 2", len(records))
+	}
+	if records[0].Direction != DirectionClientToServer || records[0].Type != "input_audio_buffer.commit" {
+		t.Fatalf("first capture record = %+v, want accepted client commit", records[0])
+	}
+	if records[1].Direction != DirectionServerToClient || records[1].Type != "conversation.item.created" {
+		t.Fatalf("second capture record = %+v, want provider acknowledgement", records[1])
+	}
+}
+
 func writeWebSocketCapture(t *testing.T, path string, records []CapturedSessionEvent) {
 	t.Helper()
 	data, err := json.MarshalIndent(SessionCapture{
@@ -378,6 +411,7 @@ func (d *testWebSocketDialer) Dial(string, map[string]string) (transport.Conn, e
 type testWebSocketConn struct {
 	inbound [][]byte
 	writes  [][]byte
+	onWrite func()
 }
 
 func (c *testWebSocketConn) ReadMessage() (int, []byte, error) {
@@ -391,6 +425,9 @@ func (c *testWebSocketConn) ReadMessage() (int, []byte, error) {
 
 func (c *testWebSocketConn) WriteMessage(_ int, payload []byte) error {
 	c.writes = append(c.writes, append([]byte(nil), payload...))
+	if c.onWrite != nil {
+		c.onWrite()
+	}
 	return nil
 }
 

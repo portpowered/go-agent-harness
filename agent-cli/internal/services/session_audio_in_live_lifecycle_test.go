@@ -363,9 +363,17 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 		Tools        []struct {
 			Name string `json:"name"`
 		} `json:"tools"`
+		Audio map[string]json.RawMessage `json:"audio"`
 	}
 	if err := json.Unmarshal(server.sessionUpdateSnapshot(), &sessionUpdate); err != nil {
 		t.Fatalf("decode streamed-audio session.update: %v", err)
+	}
+	var audioInput map[string]json.RawMessage
+	if err := json.Unmarshal(sessionUpdate.Audio["input"], &audioInput); err != nil {
+		t.Fatalf("decode streamed-audio audio.input: %v", err)
+	}
+	if got := string(audioInput["turn_detection"]); got != "null" {
+		t.Fatalf("streamed-audio turn detection = %s, want explicit null", got)
 	}
 	if strings.Count(sessionUpdate.Instructions, "Tool-grounding requirements:") != 1 {
 		t.Fatalf("streamed-audio grounding policy count = %d, want 1; instructions=%q", strings.Count(sessionUpdate.Instructions, "Tool-grounding requirements:"), sessionUpdate.Instructions)

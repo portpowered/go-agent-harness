@@ -152,6 +152,24 @@ func (*rejectingStreamSession) Send(context.Context, messages.StreamMessage) boo
 	return false
 }
 
+// outcomeRecordingSession exercises the typed provider-boundary result used by
+// live sessions. Rejected messages are intentionally not recorded as sent.
+type outcomeRecordingSession struct {
+	*recordingSession
+	outcomes map[messages.StreamMessageType]messages.SessionSendOutcome
+}
+
+func (s *outcomeRecordingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	outcome := messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	if configured, ok := s.outcomes[msg.Type]; ok {
+		outcome = configured
+	}
+	if outcome.OK() {
+		s.recordingSession.Send(ctx, msg)
+	}
+	return outcome
+}
+
 type failingConnectInferencer struct{ err error }
 
 func (f *failingConnectInferencer) ConnectSession(context.Context) (messages.Session, error) {
@@ -282,6 +300,266 @@ func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) 
 		case <-ctx.Done():
 			t.Fatal("timed out waiting for barge-in messages")
 		}
+	}
+}
+
+func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFirstAudio(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+
+	runner.UserAudioInbox <- []byte{4, 5, 6}
+	first := waitForSentMessage(t, ctx, session)
+	second := waitForSentMessage(t, ctx, session)
+	if first.Type != messages.StreamTypeResponseCancel {
+		t.Fatalf("first outbound type = %s, want %s", first.Type, messages.StreamTypeResponseCancel)
+	}
+	if second.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
+	}
+}
+
+func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T) {
+	tests := []struct {
+		name             string
+		responseInFlight bool
+		outcomes         map[messages.StreamMessageType]messages.SessionSendOutcome
+		wantSent         int
+		wantCancelSent   bool
+		wantError        string
+	}{
+		{
+			name:             "cancel buffer full",
+			responseInFlight: true,
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendBufferFull},
+			},
+			wantError: "response cancel",
+		},
+		{
+			name:             "cancel closed",
+			responseInFlight: true,
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendClosed},
+			},
+			wantError: "response cancel",
+		},
+		{
+			name: "audio buffer full",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeAudioDelta: {Status: messages.SessionSendBufferFull},
+			},
+			wantError: "audio",
+		},
+		{
+			name: "audio closed",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeAudioDelta: {Status: messages.SessionSendClosed},
+			},
+			wantError: "audio",
+		},
+		{
+			name:             "audio rejected after accepted cancel",
+			responseInFlight: true,
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendSucceeded},
+				messages.StreamTypeAudioDelta:     {Status: messages.SessionSendClosed},
+			},
+			wantSent:       1,
+			wantCancelSent: true,
+			wantError:      "audio",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			session := &outcomeRecordingSession{
+				recordingSession: newRecordingSession(),
+				outcomes:         test.outcomes,
+			}
+			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+			responseInFlight := test.responseInFlight
+			responseCancelSent := false
+
+			err := runner.forwardSessionAudio(context.Background(), session, []byte{1, 2, 3}, &responseInFlight, &responseCancelSent)
+			if err == nil || !contains(err.Error(), test.wantError) {
+				t.Fatalf("forwardSessionAudio error = %v, want %q failure", err, test.wantError)
+			}
+			if !contains(err.Error(), "buffer_full") && !contains(err.Error(), "closed") {
+				t.Fatalf("forwardSessionAudio error = %v, want typed send status", err)
+			}
+			if responseCancelSent != test.wantCancelSent {
+				t.Fatalf("responseCancelSent = %t, want %t", responseCancelSent, test.wantCancelSent)
+			}
+			if sent := session.sentMessages(); len(sent) != test.wantSent {
+				t.Fatalf("sent messages = %d, want %d (%#v)", len(sent), test.wantSent, sent)
+			}
+			if test.wantSent == 0 && responseCancelSent {
+				t.Fatal("rejected audio path claimed a cancellation without an accepted audio frame")
+			}
+		})
+	}
+}
+
+func TestSessionModelRunner_BargeInSendFailurePropagatesFromRun(t *testing.T) {
+	tests := []struct {
+		name     string
+		outcomes map[messages.StreamMessageType]messages.SessionSendOutcome
+		want     []string
+	}{
+		{
+			name: "cancel buffer full",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendBufferFull},
+			},
+			want: []string{"response cancel", "buffer_full"},
+		},
+		{
+			name: "audio closed after accepted cancel",
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeResponseCancel: {Status: messages.SessionSendSucceeded},
+				messages.StreamTypeAudioDelta:     {Status: messages.SessionSendClosed},
+			},
+			want: []string{"audio", "closed"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			session := &outcomeRecordingSession{
+				recordingSession: newRecordingSession(),
+				outcomes:         test.outcomes,
+			}
+			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			errCh := make(chan error, 1)
+			go func() { errCh <- runner.Run(ctx) }()
+			session.recv.Write(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeMessageStart,
+				Value: messages.NewMessageStartValue(),
+			})
+			waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+			runner.UserAudioInbox <- []byte{7, 8, 9}
+
+			select {
+			case err := <-errCh:
+				if err == nil || !contains(err.Error(), "session") || !contains(err.Error(), "send failed") {
+					t.Fatalf("Run error = %v, want propagated session send failure", err)
+				}
+				for _, fragment := range test.want {
+					if !contains(err.Error(), fragment) {
+						t.Fatalf("Run error = %v, want detail %q", err, fragment)
+					}
+				}
+			case <-ctx.Done():
+				t.Fatal("Run did not return after barge-in send failure")
+			}
+		})
+	}
+}
+
+func TestSessionModelRunner_DropsProviderOutputAfterBargeInCancel(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+	runner.UserAudioInbox <- []byte{1, 2, 3}
+	if sent := waitForSentMessage(t, ctx, session); sent.Type != messages.StreamTypeResponseCancel {
+		t.Fatalf("first outbound type = %s, want %s", sent.Type, messages.StreamTypeResponseCancel)
+	}
+	if sent := waitForSentMessage(t, ctx, session); sent.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("second outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
+	}
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{9, 8, 7}),
+	})
+	noDeltaCtx, noDeltaCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	_, ok := runner.DeltaOutbox.ReadBlocking(noDeltaCtx.Done())
+	noDeltaCancel()
+	if ok {
+		t.Fatal("provider output after cancellation crossed the session boundary")
+	}
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageEnd)
+
+	// The next response opens a fresh cancellation window and its output must
+	// remain deliverable, proving that suppression does not poison continuation.
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{4, 5, 6}),
+	})
+	if got := waitForDelta(t, ctx, runner, messages.StreamTypeAudioDelta); len(got.Value.(*messages.AudioDeltaValue).Content) != 3 {
+		t.Fatalf("continuation output was not delivered after cancellation window")
+	}
+}
+
+func TestSessionModelRunner_CompletedResponseDoesNotCancelNextAudio(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageEnd)
+
+	runner.UserAudioInbox <- []byte{7, 8, 9}
+	sent := waitForSentMessage(t, ctx, session)
+	if sent.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
+	}
+	if got := len(session.sentMessages()); got != 1 {
+		t.Fatalf("sent %d messages, want 1 (no RESPONSE.CANCEL after completion)", got)
 	}
 }
 
@@ -495,8 +773,9 @@ func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
 	runner.UserAudioInbox <- []byte{4, 5, 6}
 
-	audioStreaming := false
-	runner.drainSessionAudio(context.Background(), session, &audioStreaming)
+	responseInFlight := false
+	responseCancelSent := false
+	runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent)
 
 	sent := session.sentMessages()
 	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
@@ -508,7 +787,7 @@ func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {
 	}
 
 	close(runner.UserAudioInbox)
-	runner.drainSessionAudio(context.Background(), session, &audioStreaming)
+	runner.drainSessionAudio(context.Background(), session, &responseInFlight, &responseCancelSent)
 }
 
 func TestModelRunner_SendLatestUserTextPicksNewestUserText(t *testing.T) {
@@ -805,5 +1084,16 @@ func waitForDelta(t *testing.T, ctx context.Context, runner *ModelRunner, want m
 		if delta.Type == want {
 			return delta
 		}
+	}
+}
+
+func waitForSentMessage(t *testing.T, ctx context.Context, session *recordingSession) messages.StreamMessage {
+	t.Helper()
+	select {
+	case sent := <-session.sendCh:
+		return sent
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for outbound session message")
+		return messages.StreamMessage{}
 	}
 }
