@@ -19,6 +19,7 @@ and forces `GOWORK=off` for every Go command.
 ./probe.sh smoke
 ./probe.sh chrome
 ./probe.sh webmcp
+./probe.sh detach
 ./probe.sh go1.24.2
 ```
 
@@ -53,3 +54,16 @@ Origin-Trial token is supplied: this is the documented local-development flag
 path. The JSON report records the page-visible `document.modelContext` /
 `navigator.modelContextTesting` surfaces separately from the advertised CDP
 `WebMCP` domain and the generated binding calls.
+
+`detach` builds the probe once, starts its fixture server on `127.0.0.1`, and
+launches the pinned Chrome for Testing binary headful with a temporary profile
+and loopback-only debugging. It discovers the fixture page through
+`GET /json/list` before the Go client starts, passes only the browser websocket
+and explicit target ID to `detach-probe`, and never uses an allocator that
+starts or owns the browser process. The client observes the initial sentinel, changes
+it to `attached`, calls the typed `Target.detachFromTarget`, clears the
+chromedp target reference before canceling client contexts, and exits without
+`Target.closeTarget` or `Browser.close`. The shell independently checks the
+same target in `/json/list`, starts a fresh client to reattach and change the
+sentinel to `reattached`, and checks the target again. The launcher terminates
+only the Chrome and fixture-server PIDs it started.

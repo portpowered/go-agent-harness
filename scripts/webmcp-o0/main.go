@@ -178,8 +178,30 @@ func main() {
 			}
 			printJSON(report)
 			return
+		case "detach-probe":
+			if len(os.Args) != 5 {
+				fmt.Fprintln(os.Stderr, "usage: go run . detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach>")
+				os.Exit(2)
+			}
+			report, err := runDetachProbe(os.Args[2], os.Args[3], os.Args[4])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "detach-probe: %v\n", err)
+				os.Exit(1)
+			}
+			printJSON(report)
+			return
+		case "serve-detach-fixture":
+			if len(os.Args) != 2 {
+				fmt.Fprintln(os.Stderr, "usage: go run . serve-detach-fixture")
+				os.Exit(2)
+			}
+			if err := serveDetachFixture(); err != nil {
+				fmt.Fprintf(os.Stderr, "serve-detach-fixture: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		default:
-			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint>]")
+			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture]")
 			os.Exit(2)
 		}
 	}

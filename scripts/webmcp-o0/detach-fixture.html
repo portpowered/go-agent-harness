@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP O0 external target fixture</title>
+</head>
+<body>
+  <main>
+    <h1>WebMCP O0 external target fixture</h1>
+    <p id="ready">ready</p>
+    <p>Sentinel: <strong id="sentinel">initial</strong></p>
+  </main>
+  <script>
+    (() => {
+      const state = {
+        ready: true,
+        sentinel: "initial",
+        transitions: []
+      };
+      window.__webmcpO0Detach = state;
+      window.__webmcpO0Detach.setSentinel = (value) => {
+        const next = String(value);
+        state.sentinel = next;
+        state.transitions.push(next);
+        document.querySelector("#sentinel").textContent = next;
+        return next;
+      };
+    })();
+  </script>
+</body>
+</html>

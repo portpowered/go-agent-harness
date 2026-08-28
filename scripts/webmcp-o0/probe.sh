@@ -11,7 +11,7 @@ export GOWORK=off
 
 usage() {
 	cat >&2 <<'EOF'
-usage: ./probe.sh <metadata|test|typecheck|smoke|chrome|webmcp|go1.24.2>
+usage: ./probe.sh <metadata|test|typecheck|smoke|chrome|webmcp|detach|go1.24.2>
 
   metadata   print toolchain, module graph, and checksum verification
   test       run the isolated probe tests
@@ -19,6 +19,7 @@ usage: ./probe.sh <metadata|test|typecheck|smoke|chrome|webmcp|go1.24.2>
   smoke      execute the generated-binding smoke report
   chrome     download, verify, launch, and query pinned Chrome for Testing
   webmcp     launch pinned Chrome with WebMCP flags and run the native matrix
+  detach     launch headful Chrome with an external fixture tab and prove detach-only ownership
   go1.24.2   run the exact baseline toolchain and require its version error
 EOF
 }
@@ -45,6 +46,9 @@ chrome)
 	;;
 webmcp)
 	./chrome-launch.sh webmcp
+	;;
+detach)
+	./chrome-launch.sh detach
 	;;
 go1.24.2)
 	GOTOOLCHAIN=go1.24.2 go version

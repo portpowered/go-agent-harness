@@ -6,6 +6,7 @@ lock_file=${WEBMCP_O0_CHROME_LOCK:-$probe_dir/chrome-for-testing.json}
 export GOWORK=off
 tmp_root=
 chrome_pid=
+fixture_pid=
 
 cleanup() {
 	status=$?
@@ -23,6 +24,19 @@ cleanup() {
 		wait "$chrome_pid" 2>/dev/null || true
 	fi
 
+	if [ -n "$fixture_pid" ] && kill -0 "$fixture_pid" 2>/dev/null; then
+		kill -TERM "$fixture_pid" 2>/dev/null || true
+		attempt=0
+		while kill -0 "$fixture_pid" 2>/dev/null && [ "$attempt" -lt 40 ]; do
+			attempt=$((attempt + 1))
+			sleep 0.25
+		done
+		if kill -0 "$fixture_pid" 2>/dev/null; then
+			kill -KILL "$fixture_pid" 2>/dev/null || true
+		fi
+		wait "$fixture_pid" 2>/dev/null || true
+	fi
+
 	if [ -n "$tmp_root" ] && [ -d "$tmp_root" ]; then
 		rm -rf -- "$tmp_root"
 	fi
@@ -38,8 +52,8 @@ fail() {
 
 mode=${1:-chrome}
 case "$mode" in
-	chrome|webmcp) ;;
-	*) fail "usage: ./chrome-launch.sh [webmcp]" ;;
+	chrome|webmcp|detach) ;;
+	*) fail "usage: ./chrome-launch.sh [webmcp|detach]" ;;
 esac
 
 for required_command in curl jq unzip shasum awk tail go; do
@@ -81,6 +95,32 @@ profile_dir=$(mktemp -d "$tmp_root/profile.XXXXXX")
 stdout_log=$tmp_root/chrome.stdout
 stderr_log=$tmp_root/chrome.stderr
 
+probe_binary=
+fixture_url=
+if [ "$mode" = "detach" ]; then
+	probe_binary=$tmp_root/webmcp-o0-probe
+	GOWORK=off go build -o "$probe_binary" . || fail "could not build the isolated probe binary"
+	fixture_log=$tmp_root/detach-fixture.log
+	"$probe_binary" serve-detach-fixture >"$fixture_log" 2>&1 &
+	fixture_pid=$!
+	fixture_url=
+	attempt=0
+	while [ "$attempt" -lt 80 ]; do
+		if ! kill -0 "$fixture_pid" 2>/dev/null; then
+			echo "Detach fixture server exited; log follows:" >&2
+			sed -n '1,80p' "$fixture_log" >&2 || true
+			fail "detach fixture server failed to start"
+		fi
+		fixture_url=$(sed -n 's/^fixtureURL=//p' "$fixture_log" | tail -n 1 || true)
+		if [ -n "$fixture_url" ]; then
+			break
+		fi
+		attempt=$((attempt + 1))
+		sleep 0.25
+	done
+	[ -n "$fixture_url" ] || fail "detach fixture server startup timed out"
+fi
+
 curl -fsSL --retry 2 --max-time 60 "$manifest_url" -o "$manifest_file" || fail "could not download release manifest: $manifest_url"
 
 manifest_channel=$(jq -er --arg channel "$channel" '.channels[$channel].channel' "$manifest_file") || fail "release manifest has no channel named $channel"
@@ -118,9 +158,16 @@ webmcp_features=
 if [ "$mode" = "webmcp" ]; then
 	webmcp_features=--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport
 fi
+
+display_args=
+chrome_start_url=about:blank
+if [ "$mode" = "detach" ]; then
+	chrome_start_url=$fixture_url
+else
+	display_args="--headless=new --disable-gpu"
+fi
 "$chrome_binary" \
-	--headless=new \
-	--disable-gpu \
+	${display_args} \
 	--disable-background-networking \
 	--disable-component-update \
 	--disable-extensions \
@@ -131,7 +178,7 @@ fi
 	--remote-debugging-port=0 \
 	${webmcp_features} \
 	--user-data-dir="$profile_dir" \
-	about:blank >"$stdout_log" 2>"$stderr_log" &
+	"$chrome_start_url" >"$stdout_log" 2>"$stderr_log" &
 chrome_pid=$!
 
 browser_websocket=
@@ -171,6 +218,27 @@ case "$http_browser" in
 esac
 [ "$http_websocket" = "$browser_websocket" ] || fail "discovered websocket differs from /json/version"
 
+if [ "$mode" = "detach" ]; then
+	target_list_before=
+	target_before=
+	target_id=
+	attempt=0
+	while [ "$attempt" -lt 80 ]; do
+		if target_list_before=$(curl -fsS --max-time 2 "http://127.0.0.1:$debug_port/json/list"); then
+			target_id=$(printf '%s' "$target_list_before" | jq -er --arg url "$fixture_url" '
+				[.[] | select(.type == "page" and .url == $url)]
+				| if length == 1 then .[0].id else empty end' 2>/dev/null || true)
+			if [ -n "$target_id" ]; then
+				target_before=$(printf '%s' "$target_list_before" | jq -cer --arg id "$target_id" '.[] | select(.id == $id)') || fail "could not capture the pre-attach target"
+				break
+			fi
+		fi
+		attempt=$((attempt + 1))
+		sleep 0.25
+	done
+	[ -n "$target_id" ] || fail "could not identify the externally-created fixture target before client attach"
+fi
+
 cdp_report=$(GOWORK=off go run . cdp-version "$browser_websocket") || fail "CDP Browser.getVersion check failed"
 cdp_product=$(printf '%s' "$cdp_report" | jq -er '.product') || fail "CDP report omitted product"
 cdp_protocol_version=$(printf '%s' "$cdp_report" | jq -er '.protocolVersion') || fail "CDP report omitted protocolVersion"
@@ -178,6 +246,146 @@ case "$cdp_product" in
 	*"$expected_version"*) ;;
 	*) fail "CDP browser version mismatch: got $cdp_product, want $expected_version" ;;
 esac
+
+if [ "$mode" = "detach" ]; then
+	[ -n "$probe_binary" ] || fail "detach probe binary was not built"
+
+	detach_report=$(GOWORK=off "$probe_binary" detach-probe "$browser_websocket" "$target_id" initial) || fail "initial external-target detach probe failed"
+	printf '%s' "$detach_report" | jq -e '
+		.verdict == "PASS" and
+		.phase == "initial" and
+		.before.sentinel == "initial" and
+		.after.sentinel == "attached" and
+		.after.visibleText == "attached" and
+		.lifecycle.api == "Target.detachFromTarget" and
+		.lifecycle.targetCloseIssued == false and
+		.lifecycle.browserCloseIssued == false' >/dev/null || fail "initial detach report did not prove detach-only cleanup"
+
+	target_list_after_detach=
+	target_after_detach=
+	attempt=0
+	while [ "$attempt" -lt 80 ]; do
+		if target_list_after_detach=$(curl -fsS --max-time 2 "http://127.0.0.1:$debug_port/json/list"); then
+			target_after_detach=$(printf '%s' "$target_list_after_detach" | jq -cer --arg id "$target_id" --arg url "$fixture_url" '
+				[.[] | select(.type == "page" and .id == $id and .url == $url)]
+				| if length == 1 then .[0] else empty end' 2>/dev/null || true)
+			if [ -n "$target_after_detach" ]; then
+				break
+			fi
+		fi
+		attempt=$((attempt + 1))
+		sleep 0.25
+	done
+	[ -n "$target_after_detach" ] || fail "external target disappeared after client detach"
+
+	reattach_report=$(GOWORK=off "$probe_binary" detach-probe "$browser_websocket" "$target_id" reattach) || fail "reattach external-target probe failed"
+	printf '%s' "$reattach_report" | jq -e '
+		.verdict == "PASS" and
+		.phase == "reattach" and
+		.before.sentinel == "attached" and
+		.after.sentinel == "reattached" and
+		.after.visibleText == "reattached" and
+		.lifecycle.api == "Target.detachFromTarget" and
+		.lifecycle.targetCloseIssued == false and
+		.lifecycle.browserCloseIssued == false' >/dev/null || fail "reattach report did not prove preserved state and detach-only cleanup"
+
+	target_list_after_reattach=
+	target_after_reattach=
+	attempt=0
+	while [ "$attempt" -lt 80 ]; do
+		if target_list_after_reattach=$(curl -fsS --max-time 2 "http://127.0.0.1:$debug_port/json/list"); then
+			target_after_reattach=$(printf '%s' "$target_list_after_reattach" | jq -cer --arg id "$target_id" --arg url "$fixture_url" '
+				[.[] | select(.type == "page" and .id == $id and .url == $url)]
+				| if length == 1 then .[0] else empty end' 2>/dev/null || true)
+			if [ -n "$target_after_reattach" ]; then
+				break
+			fi
+		fi
+		attempt=$((attempt + 1))
+		sleep 0.25
+	done
+	[ -n "$target_after_reattach" ] || fail "external target disappeared after reattach client detached"
+
+	jq -n \
+		--arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		--arg channel "$channel" \
+		--arg manifestURL "$manifest_url" \
+		--arg manifestRetrievedAt "$manifest_retrieved_at" \
+		--arg platform "$platform" \
+		--arg version "$expected_version" \
+		--arg revision "$expected_revision" \
+		--arg archiveSHA256 "$actual_archive_sha" \
+		--arg executableVersion "$extracted_version" \
+		--arg fixtureURL "$fixture_url" \
+		--arg targetID "$target_id" \
+		--arg websocketURL "$browser_websocket" \
+		--arg httpBrowser "$http_browser" \
+		--arg httpProtocolVersion "$http_protocol_version" \
+		--argjson cdpBrowserGetVersion "$cdp_report" \
+		--argjson targetBefore "$target_before" \
+		--argjson targetAfterDetach "$target_after_detach" \
+		--argjson targetAfterReattach "$target_after_reattach" \
+		--argjson initialClient "$detach_report" \
+		--argjson reattachClient "$reattach_report" \
+'
+{
+  observedAt: $observedAt,
+  channel: $channel,
+  manifestURL: $manifestURL,
+  manifestRetrievedAt: $manifestRetrievedAt,
+  platform: $platform,
+  version: $version,
+  revision: $revision,
+  archiveSHA256: $archiveSHA256,
+  executableVersion: $executableVersion,
+  headful: true,
+  flags: [
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-extensions",
+    "--disable-sync",
+    "--no-default-browser-check",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=0",
+    "--user-data-dir=<temporary profile>",
+    "<fixture-url>"
+  ],
+  remoteDebuggingAddress: "127.0.0.1",
+  websocketURL: $websocketURL,
+  httpVersionEndpoint: {
+    Browser: $httpBrowser,
+    ProtocolVersion: $httpProtocolVersion
+  },
+  cdpBrowserGetVersion: $cdpBrowserGetVersion,
+  fixture: {
+    origin: $fixtureURL,
+    url: $fixtureURL,
+    server: "probe-owned loopback server"
+  },
+  target: {
+    id: $targetID,
+    discoveredBeforeClientAttach: $targetBefore,
+    afterDetach: $targetAfterDetach,
+    afterReattach: $targetAfterReattach,
+    sameTargetID: ($targetBefore.id == $targetID and
+      $targetAfterDetach.id == $targetID and
+      $targetAfterReattach.id == $targetID)
+  },
+  client: {
+    initial: $initialClient,
+    reattach: $reattachClient
+  },
+  independentObservation: {
+    method: "GET /json/list",
+    afterDetachTargetPresent: true,
+    afterReattachTargetPresent: true,
+    retainedTargetID: $targetID
+  },
+  verdict: "PASS"
+}'
+	exit 0
+fi
 
 if [ "$mode" = "webmcp" ]; then
 	matrix_report=$(GOWORK=off go run . webmcp-matrix "$browser_websocket") || fail "WebMCP capability matrix failed"

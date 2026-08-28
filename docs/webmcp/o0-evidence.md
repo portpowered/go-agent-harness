@@ -1,8 +1,8 @@
 # WebMCP O0 evidence
 
 Status: stories `webmcp-o0-toolchain-gate-001` through
-`webmcp-o0-toolchain-gate-003` complete; external-target ownership and the
-hermetic fixture trial remain pending.
+`webmcp-o0-toolchain-gate-004` complete; the hermetic fixture trial and final
+consequence consolidation remain pending.
 
 ## Run context
 
@@ -328,6 +328,98 @@ No fallback is claimed or needed for this tested native row; a future pinned
 build that loses the row must reopen the gate rather than silently labeling a
 shim native.
 
+## Story 004: Prove detach preserves an external visible tab
+
+### Reproduction command and ownership boundary
+
+From `scripts/webmcp-o0/`:
+
+```sh
+./probe.sh detach
+```
+
+The launcher built the isolated module with `GOWORK=off`, started the embedded
+fixture server on `127.0.0.1`, launched the locked Chrome for Testing build
+headful (there was no `--headless` flag), and discovered the fixture page with
+`GET /json/list` before starting either Go client probe. The Go probe received
+the browser websocket endpoint, the explicit page target ID, and a phase
+(`initial` or `reattach`); it did not receive a Chrome executable, profile,
+browser PID, or target selected by chromedp.
+
+The Chrome row was the same verified Stable `152.0.7977.64` / revision
+`1669021` / `mac-arm64` artifact from story 002, with archive SHA-256
+`10033804338bd0a5aa098149a8dd64f3f2e0e8b201bf3d400d7c17d067ff696f`. The
+headful launch flags were:
+
+```text
+--disable-background-networking
+--disable-component-update
+--disable-extensions
+--disable-sync
+--no-default-browser-check
+--no-first-run
+--remote-debugging-address=127.0.0.1
+--remote-debugging-port=0
+--user-data-dir=<temporary profile>
+<fixture-url>
+```
+
+The observed run completed at `2026-08-28T08:57:02Z` with fixture
+`http://127.0.0.1:57259/`, browser websocket
+`ws://127.0.0.1:57271/devtools/browser/ed661df7-84c1-42b6-b5c3-4fb875d6a2e6`,
+and target ID `71FE8876A15FC47D206447F69DEC1D0B`. The target was a page with
+title `WebMCP O0 external target fixture` and the same URL at every independent
+`/json/list` observation.
+
+### Lifecycle API and observed result
+
+The client used `chromedp.NewRemoteAllocator(endpoint, chromedp.NoModifyURL)`
+and `chromedp.NewContext(..., chromedp.WithTargetID(targetID))`, then used
+`chromedp.Run`/`chromedp.Evaluate` only against that existing target. The
+detach path is deliberately not `chromedp.Cancel`: in the selected
+`chromedp v0.16.0`, ordinary target-context cancellation also issues
+`Target.closeTarget`. The probe instead:
+
+1. reads the visible `initial` sentinel and changes it to `attached`;
+2. calls typed `target.DetachFromTarget().WithSessionID(sessionID)` through the
+   browser executor;
+3. clears the client target reference before calling `cancelTarget`, then calls
+   `cancelAllocator` to close only the client-side remote connection; and
+4. leaves `Target.closeTarget` and `Browser.close` unissued.
+
+The shell then independently queried `/json/list` and found the same target ID
+and URL. A fresh Go client reattached with the same explicit target ID, observed
+the retained `attached` sentinel, changed it to `reattached`, and detached by
+the same path. A final independent `/json/list` query still found the same
+target. The concise probe evidence was:
+
+```text
+initial client:  initial sentinel -> attached visible sentinel
+after detach:   /json/list target present, same ID 71FE8876A15FC47D206447F69DEC1D0B
+reattach client: attached sentinel -> reattached visible sentinel
+after reattach: /json/list target present, same ID 71FE8876A15FC47D206447F69DEC1D0B
+initial lifecycle:  Target.detachFromTarget; targetCloseIssued=false; browserCloseIssued=false
+reattach lifecycle: Target.detachFromTarget; targetCloseIssued=false; browserCloseIssued=false
+```
+
+The experiment's JSON report records both CDP sessions, the target-list
+snapshots, the exact loopback fixture, and `verdict: "PASS"`. The launcher
+terminates only the Chrome PID and fixture-server PID it created and removes
+only their temporary root after the independent checks finish.
+
+### Verdict and downstream consequence
+
+**PASS for detach-only preservation of an external visible tab.** A client may
+attach to a caller-supplied target ID, change state, detach, and reconnect
+without destroying the page or its state. Lane D must accept an explicit
+remote endpoint and target ID, use a remote allocator, and implement the
+detach-first/target-reference-clearing rule; it must never use a context
+cancellation path that can close an externally owned target. Lane I1 can use
+the same lifecycle assertion and must keep browser-process/profile cleanup
+outside the client session. The result proves ownership-safe generic CDP
+attachment; it does not by itself add a production session API or change the
+Go-version finding from story 001.
+
 ## Remaining O0 assumptions
 
 The remaining rows will be filled by the later stories using the same dated
@@ -337,5 +429,5 @@ observed-versus-researched distinction:
 | --- | --- | --- |
 | Pinned Chrome for Testing launch | PASS | `webmcp-o0-toolchain-gate-002` |
 | Native WebMCP page/CDP surface and binding coverage | PASS | `webmcp-o0-toolchain-gate-003` |
-| Detach-only preservation of an external visible tab | Pending | `webmcp-o0-toolchain-gate-004` |
+| Detach-only preservation of an external visible tab | PASS | `webmcp-o0-toolchain-gate-004` |
 | Hermetic loopback fixture control | Pending | `webmcp-o0-toolchain-gate-005` |
