@@ -20,6 +20,7 @@ and forces `GOWORK=off` for every Go command.
 ./probe.sh chrome
 ./probe.sh webmcp
 ./probe.sh detach
+./probe.sh hermetic
 ./probe.sh go1.24.2
 ```
 
@@ -67,3 +68,13 @@ chromedp target reference before canceling client contexts, and exits without
 same target in `/json/list`, starts a fresh client to reattach and change the
 sentinel to `reattached`, and checks the target again. The launcher terminates
 only the Chrome and fixture-server PIDs it started.
+
+`hermetic` launches the same pinned browser with an isolated temporary profile,
+starts an embedded fixture server on `127.0.0.1` from the Go probe, navigates a
+temporary chromedp target to it, waits for the fixture's `#ready` signal, and
+performs a visible `initial` -> `transitioned` state change. A separate CDP
+evaluation reads the final state and the shell validates the expected JSON
+report. The Go probe closes its own fixture server and temporary client target;
+the launcher owns only the browser process and profile. This row proves generic
+CDP fixture control and deliberately does not relabel that path as native or
+shim WebMCP.

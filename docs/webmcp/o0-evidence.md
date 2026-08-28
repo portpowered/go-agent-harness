@@ -1,8 +1,8 @@
 # WebMCP O0 evidence
 
 Status: stories `webmcp-o0-toolchain-gate-001` through
-`webmcp-o0-toolchain-gate-004` complete; the hermetic fixture trial and final
-consequence consolidation remain pending.
+`webmcp-o0-toolchain-gate-005` complete; final consequence consolidation
+remains pending.
 
 ## Run context
 
@@ -420,6 +420,75 @@ outside the client session. The result proves ownership-safe generic CDP
 attachment; it does not by itself add a production session API or change the
 Go-version finding from story 001.
 
+## Story 005: Drive a hermetic local fixture end to end
+
+### Reproduction command and isolation boundary
+
+From `scripts/webmcp-o0/`:
+
+```sh
+./probe.sh hermetic
+```
+
+The launcher revalidated the locked Stable `152.0.7977.64` / revision
+`1669021` / `mac-arm64` artifact and its archive SHA-256
+`10033804338bd0a5aa098149a8dd64f3f2e0e8b201bf3d400d7c17d067ff696f`. It used
+the ordinary pinned-browser launch flags, including `--headless=new`,
+`--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=0`, and an
+isolated temporary profile. The hermetic row intentionally did not enable
+WebMCP feature flags: it tests the generic CDP control path independently of
+the native WebMCP row in story 003.
+
+The Go probe started an embedded, inline fixture server with
+`httptest.NewServer`, validated its URL was an HTTP `127.0.0.1` root, and
+closed that server with a deferred cleanup in the same process that started
+it. The fixture has no external resources, account state, or network route;
+the browser and fixture server are the only processes involved. The remote
+allocator connects to the launcher-owned browser, while the probe owns and
+cleans up only its temporary target.
+
+### Observed control transcript
+
+The observed run completed at `2026-08-28T09:06:17Z` with browser websocket
+`ws://127.0.0.1:57936/devtools/browser/acae12e3-91f6-429a-bf15-b48c0169ad66`
+and fixture `http://127.0.0.1:57948/`. The launcher independently reported
+`/json/version` browser `Chrome/152.0.7977.64` and CDP `Browser.getVersion`
+product `Chrome/152.0.7977.64`.
+
+The Go sequence was `chromedp.Navigate` plus `chromedp.WaitReady("#ready")`,
+an explicit `#ready` text check, an initial state evaluation, one separate
+transition evaluation, and a second independent state evaluation. The
+concise JSON result was:
+
+```text
+readySignal: #ready text = ready
+initial:    ready=true, value=initial, visibleText=initial, transitions=[]
+action:     attempted=true, outcome=success, returned=transitioned/transitioned
+final:      ready=true, value=transitioned, visibleText=transitioned, transitions=[transitioned]
+expected:   transitioned
+stateMatch: true
+controlPath: chromedp.Navigate + WaitReady + Evaluate over pinned CDP
+webmcpPath: not exercised; this row proves generic CDP fixture control only
+verdict:    PASS
+```
+
+Navigation/readiness, action evaluation, independent state reads, and final
+state mismatches return phase-specific errors and a non-zero probe status. The
+shell validates the JSON `PASS`, loopback origin, readiness, action result, and
+final state before emitting the versioned report. Its cleanup trap terminates
+only the Chrome PID and temporary profile it created.
+
+### Verdict and downstream consequence
+
+**PASS for hermetic loopback fixture control.** The pinned browser accepted a
+local navigation and a deterministic visible state transition through the
+selected Go CDP bindings, with the expected result confirmed by an independent
+evaluation. This proves generic chromedp/CDP control only; it does not prove a
+native or shim WebMCP invocation. Lane I1 may use this fixture as the baseline
+for browser-control plumbing, but its native-versus-shim assertion must remain
+separate and must use the story-003 WebMCP-enabled fixture when testing native
+support. Lane D can use the same loopback cleanup boundary for adapter tests.
+
 ## Remaining O0 assumptions
 
 The remaining rows will be filled by the later stories using the same dated
@@ -430,4 +499,4 @@ observed-versus-researched distinction:
 | Pinned Chrome for Testing launch | PASS | `webmcp-o0-toolchain-gate-002` |
 | Native WebMCP page/CDP surface and binding coverage | PASS | `webmcp-o0-toolchain-gate-003` |
 | Detach-only preservation of an external visible tab | PASS | `webmcp-o0-toolchain-gate-004` |
-| Hermetic loopback fixture control | Pending | `webmcp-o0-toolchain-gate-005` |
+| Hermetic loopback fixture control | PASS | `webmcp-o0-toolchain-gate-005` |

@@ -200,8 +200,20 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "hermetic":
+			if len(os.Args) != 3 {
+				fmt.Fprintln(os.Stderr, "usage: go run . hermetic <browser-websocket-endpoint>")
+				os.Exit(2)
+			}
+			report, err := runHermeticProbe(os.Args[2])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "hermetic: %v\n", err)
+				os.Exit(1)
+			}
+			printJSON(report)
+			return
 		default:
-			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture]")
+			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture | hermetic <browser-websocket-endpoint>]")
 			os.Exit(2)
 		}
 	}

@@ -52,8 +52,8 @@ fail() {
 
 mode=${1:-chrome}
 case "$mode" in
-	chrome|webmcp|detach) ;;
-	*) fail "usage: ./chrome-launch.sh [webmcp|detach]" ;;
+	chrome|webmcp|detach|hermetic) ;;
+	*) fail "usage: ./chrome-launch.sh [webmcp|detach|hermetic]" ;;
 esac
 
 for required_command in curl jq unzip shasum awk tail go; do
@@ -446,6 +446,73 @@ if [ "$mode" = "webmcp" ]; then
   fixtureOrigin: $matrix.fixtureOrigin,
   matrix: $matrix,
   verdict: $matrix.verdict
+}'
+	exit 0
+fi
+
+if [ "$mode" = "hermetic" ]; then
+	hermetic_report=$(GOWORK=off go run . hermetic "$browser_websocket") || fail "hermetic fixture probe failed"
+	printf '%s' "$hermetic_report" | jq -e '
+		(.verdict == "PASS") and
+		(.fixtureOrigin | startswith("http://127.0.0.1:")) and
+		(.initial.ready == true) and
+		(.initial.value == "initial") and
+		(.action.attempted == true) and
+		(.action.outcome == "success") and
+		(.action.returned.value == "transitioned") and
+		(.final.value == "transitioned") and
+		(.final.visibleText == "transitioned") and
+		(.stateMatch == true)' >/dev/null || fail "hermetic report did not prove the expected state transition"
+	jq -n \
+		--arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		--arg channel "$channel" \
+		--arg manifestChannel "$manifest_channel" \
+		--arg manifestURL "$manifest_url" \
+		--arg manifestRetrievedAt "$manifest_retrieved_at" \
+		--arg platform "$platform" \
+		--arg version "$expected_version" \
+		--arg revision "$expected_revision" \
+		--arg archiveSHA256 "$actual_archive_sha" \
+		--arg executableVersion "$extracted_version" \
+		--arg websocketURL "$browser_websocket" \
+		--arg httpBrowser "$http_browser" \
+		--arg httpProtocolVersion "$http_protocol_version" \
+		--argjson launchCDP "$cdp_report" \
+		--argjson hermetic "$hermetic_report" \
+'
+{
+  observedAt: $observedAt,
+  channel: $channel,
+  manifestChannel: $manifestChannel,
+  manifestURL: $manifestURL,
+  manifestRetrievedAt: $manifestRetrievedAt,
+  platform: $platform,
+  version: $version,
+  revision: $revision,
+  archiveSHA256: $archiveSHA256,
+  executableVersion: $executableVersion,
+  flags: [
+    "--headless=new",
+    "--disable-gpu",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-extensions",
+    "--disable-sync",
+    "--no-default-browser-check",
+    "--no-first-run",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=0",
+    "--user-data-dir=<temporary profile>"
+  ],
+  remoteDebuggingAddress: "127.0.0.1",
+  websocketURL: $websocketURL,
+  httpVersionEndpoint: {
+    Browser: $httpBrowser,
+    ProtocolVersion: $httpProtocolVersion
+  },
+  cdpBrowserGetVersion: $launchCDP,
+  fixture: $hermetic,
+  verdict: $hermetic.verdict
 }'
 	exit 0
 fi
