@@ -162,7 +162,7 @@
         "item": {
           "type": "message",
           "role": "user",
-          "id": "item_tool_result_S_H3OP2bM3-kv_ufWJW7iQkANsO4h5JqN5QPZFnS_MM",
+          "id": "item_tool_result_S_H3OP2bM3-kv_s",
           "content": [
             {
               "type": "input_image",

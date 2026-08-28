@@ -40,7 +40,7 @@ const (
 
 func readImageToolImageItemID(callID string) string {
 	digest := sha256.Sum256([]byte(callID))
-	return "item_tool_result_" + base64.RawURLEncoding.EncodeToString(digest[:])
+	return "item_tool_result_" + base64.RawURLEncoding.EncodeToString(digest[:11])
 }
 
 var readImageGroundedMarkers = []string{
