@@ -126,6 +126,27 @@ func TestWriteRecordingBundleAllowsProviderOnlyV2Manifest(t *testing.T) {
 	}
 }
 
+func TestRecordingManifestV1GoldenRemainsReadableWithoutBrowserEvidence(t *testing.T) {
+	golden, err := os.ReadFile("testdata/recording-manifest-v1.golden.json")
+	if err != nil {
+		t.Fatalf("read v1 manifest golden: %v", err)
+	}
+	var manifest RecordingManifest
+	if err := json.Unmarshal(golden, &manifest); err != nil {
+		t.Fatalf("decode v1 manifest golden: %v", err)
+	}
+	if manifest.FormatVersion != RecordingManifestV1Version || manifest.Browser != nil {
+		t.Fatalf("decoded v1 manifest = %+v, want v1 without browser evidence", manifest)
+	}
+	reencoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("re-encode v1 manifest golden: %v", err)
+	}
+	if !bytes.Equal(reencoded, bytes.TrimSpace(golden)) {
+		t.Fatalf("v1 manifest bytes changed after decode/re-encode:\n got: %s\nwant: %s", reencoded, bytes.TrimSpace(golden))
+	}
+}
+
 func TestRecordingManifestRejectsUnsupportedOrInconsistentBrowserMetadata(t *testing.T) {
 	valid := validBrowserManifest()
 	tests := []struct {
