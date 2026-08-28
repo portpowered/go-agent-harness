@@ -200,7 +200,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 		return sessionRuntimePlan{}, err
 	}
 	if instructions != "" && plan.inferencer != nil && !useInitialProviderInstructions {
-		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions)
+		plan.inferencer = newSessionInstructionsInferencer(plan.inferencer, instructions, opts.ToolDefinitions)
 	}
 	return plan, nil
 }
@@ -344,12 +344,29 @@ func composeSessionInstructions(opts SessionRunOptions, instructions string) str
 type sessionInstructionsInferencer struct {
 	inner        messages.SessionInferencer
 	instructions string
+	tools        []messages.ToolDefinition
 }
 
 var _ messages.SessionInferencer = (*sessionInstructionsInferencer)(nil)
 
-func newSessionInstructionsInferencer(inner messages.SessionInferencer, instructions string) messages.SessionInferencer {
-	return &sessionInstructionsInferencer{inner: inner, instructions: instructions}
+func newSessionInstructionsInferencer(inner messages.SessionInferencer, instructions string, toolDefinitions []messages.ToolDefinition) messages.SessionInferencer {
+	return &sessionInstructionsInferencer{
+		inner:        inner,
+		instructions: instructions,
+		tools:        cloneSessionToolDefinitions(toolDefinitions),
+	}
+}
+
+func cloneSessionToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
+	if len(definitions) == 0 {
+		return nil
+	}
+	cloned := make([]messages.ToolDefinition, len(definitions))
+	for index, definition := range definitions {
+		cloned[index] = definition
+		cloned[index].Parameters = append([]messages.ToolParameter(nil), definition.Parameters...)
+	}
+	return cloned
 }
 
 func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -357,12 +374,13 @@ func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (mes
 	if err != nil {
 		return nil, err
 	}
-	return newSessionInstructionsSession(inner, ctx, i.instructions), nil
+	return newSessionInstructionsSession(inner, ctx, i.instructions, i.tools), nil
 }
 
 type sessionInstructionsSession struct {
 	inner         messages.Session
 	instructions  string
+	tools         []messages.ToolDefinition
 	receive       *messages.TypedBuffer[messages.StreamMessage]
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -372,11 +390,12 @@ type sessionInstructionsSession struct {
 var _ messages.Session = (*sessionInstructionsSession)(nil)
 var _ messages.SessionSendOutcomeSender = (*sessionInstructionsSession)(nil)
 
-func newSessionInstructionsSession(inner messages.Session, parent context.Context, instructions string) messages.Session {
+func newSessionInstructionsSession(inner messages.Session, parent context.Context, instructions string, toolDefinitions []messages.ToolDefinition) messages.Session {
 	ctx, cancel := context.WithCancel(parent)
 	session := &sessionInstructionsSession{
 		inner:        inner,
 		instructions: instructions,
+		tools:        cloneSessionToolDefinitions(toolDefinitions),
 		receive:      messages.NewTypedBuffer[messages.StreamMessage](inner.Receive().Cap()),
 		ctx:          ctx,
 		cancel:       cancel,
@@ -417,6 +436,7 @@ func (s *sessionInstructionsSession) forward(msg messages.StreamMessage) bool {
 				Type: messages.StreamTypeSessionUpdate,
 				Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
 					Instructions: s.instructions,
+					Tools:        s.tools,
 				}),
 			})
 			if !outcome.OK() {
