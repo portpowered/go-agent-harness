@@ -206,6 +206,7 @@ type liveVoiceGroundingObservation struct {
 	SpokenReply              string
 	TerminalStatus           string
 	AudioBytes               int
+	AudioBytesAfterTool      int
 	SessionUpdateIndex       int
 	FirstInputIndex          int
 	ToolCallIndex            int
@@ -243,6 +244,11 @@ type liveVoiceGroundingTranscript struct {
 	text  string
 }
 
+type liveVoiceGroundingAudio struct {
+	index int
+	bytes int
+}
+
 type liveVoiceGroundingResponseDone struct {
 	index  int
 	status string
@@ -267,6 +273,7 @@ func observeLiveVoiceGroundingCapture(capture gwtesting.SessionCapture, probe li
 	var outputs []liveVoiceGroundingOutput
 	var inputTranscripts []string
 	var spoken []liveVoiceGroundingTranscript
+	var audio []liveVoiceGroundingAudio
 	var responseDone []liveVoiceGroundingResponseDone
 	var responseCreateIndices []int
 
@@ -395,6 +402,7 @@ func observeLiveVoiceGroundingCapture(capture gwtesting.SessionCapture, probe li
 					return observation, fmt.Errorf("decode output audio delta: %w", err)
 				}
 				observation.AudioBytes += len(decoded)
+				audio = append(audio, liveVoiceGroundingAudio{index: index, bytes: len(decoded)})
 			}
 		case "response.done":
 			var event struct {
@@ -478,6 +486,13 @@ func observeLiveVoiceGroundingCapture(capture gwtesting.SessionCapture, probe li
 		}
 		break
 	}
+	if observation.TerminalIndex >= 0 {
+		for _, delta := range audio {
+			if delta.index > observation.FunctionOutputIndex && delta.index < observation.TerminalIndex {
+				observation.AudioBytesAfterTool += delta.bytes
+			}
+		}
+	}
 	return observation, nil
 }
 
@@ -512,8 +527,8 @@ func validateLiveVoiceGroundingObservation(observation liveVoiceGroundingObserva
 	if observation.TerminalStatus == "cancelled" || observation.TerminalStatus == "failed" || observation.TerminalStatus == "incomplete" {
 		return fmt.Errorf("terminal response status=%q", observation.TerminalStatus)
 	}
-	if observation.AudioBytes == 0 {
-		return fmt.Errorf("spoken reply has zero output audio bytes")
+	if observation.AudioBytesAfterTool == 0 {
+		return fmt.Errorf("spoken reply has zero output audio bytes after the correlated tool output")
 	}
 	if strings.TrimSpace(observation.FunctionCallOutput) == "" {
 		return fmt.Errorf("function_call_output is empty")
@@ -747,7 +762,7 @@ func liveVoiceGroundingEvidenceFromObservation(observation liveVoiceGroundingObs
 		FunctionCallOutput:   observation.FunctionCallOutput,
 		SpokenReply:          observation.SpokenReply,
 		TerminalStatus:       observation.TerminalStatus,
-		OutputAudioBytes:     observation.AudioBytes,
+		OutputAudioBytes:     observation.AudioBytesAfterTool,
 		CapturePath:          observation.CapturePath,
 		RecordDir:            observation.RecordDir,
 		AudioPath:            observation.AudioPath,
@@ -768,6 +783,7 @@ func TestValidateLiveVoiceGroundingObservationRejectsUnprovenEvidence(t *testing
 		SpokenReply:              "I could not read the file because it does not exist.",
 		TerminalStatus:           "completed",
 		AudioBytes:               1,
+		AudioBytesAfterTool:      1,
 		SessionUpdateIndex:       0,
 		FirstInputIndex:          1,
 		ToolCallIndex:            2,
