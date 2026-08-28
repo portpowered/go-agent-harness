@@ -276,6 +276,198 @@ func (c *scheduledAudioLifecycleConn) Close() error {
 	return nil
 }
 
+// scheduledEmptyToolLifecycleServer is the exact three-turn live-shaped
+// fixture for the empty-tool-result regression. The second scheduled response
+// requests a directory listing, returns no assistant audio, and only permits
+// the third scheduled response after the tool result's explicit continuation
+// reaches a terminal response.done.
+type scheduledEmptyToolLifecycleServer struct {
+	mu             sync.Mutex
+	writes         []string
+	clientMessages [][]byte
+	sessionUpdates []json.RawMessage
+	responses      chan int
+	events         chan string
+	closed         chan struct{}
+	shutdownOnce   sync.Once
+	startOnce      sync.Once
+	nextResponse   int
+}
+
+func newScheduledEmptyToolLifecycleServer() *scheduledEmptyToolLifecycleServer {
+	return &scheduledEmptyToolLifecycleServer{
+		responses: make(chan int, 8),
+		events:    make(chan string, 64),
+		closed:    make(chan struct{}),
+	}
+}
+
+func (s *scheduledEmptyToolLifecycleServer) writesSnapshot() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.writes...)
+}
+
+func (s *scheduledEmptyToolLifecycleServer) clientMessagesSnapshot() [][]byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	messages := make([][]byte, len(s.clientMessages))
+	for index, payload := range s.clientMessages {
+		messages[index] = append([]byte(nil), payload...)
+	}
+	return messages
+}
+
+func (s *scheduledEmptyToolLifecycleServer) shutdown() {
+	s.shutdownOnce.Do(func() { close(s.closed) })
+}
+
+func (s *scheduledEmptyToolLifecycleServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
+	s.startOnce.Do(func() {
+		go s.serve()
+	})
+	return &scheduledEmptyToolLifecycleConn{server: s}, nil
+}
+
+func (s *scheduledEmptyToolLifecycleServer) serve() {
+	if !s.sendEvent(`{"type":"session.created","session":{"id":"sess_empty_tool","model":"gpt-realtime"}}`) {
+		return
+	}
+	if !s.sendEvent(`{"type":"session.updated","session":{"id":"sess_empty_tool","model":"gpt-realtime"}}`) {
+		return
+	}
+	for {
+		select {
+		case responseNumber := <-s.responses:
+			if responseNumber == 2 {
+				if !s.sendEvent(`{"type":"input_audio_buffer.speech_started"}`) ||
+					!s.sendEvent(`{"type":"input_audio_buffer.speech_stopped"}`) ||
+					!s.sendEvent(`{"type":"response.created","response":{"id":"resp_tool"}}`) ||
+					!s.sendEvent(`{"type":"response.output_item.added","item":{"type":"function_call","id":"item_empty_directory","call_id":"call_empty_directory","name":"list_directory","arguments":""}}`) ||
+					!s.sendEvent(`{"type":"response.function_call_arguments.done","call_id":"call_empty_directory","name":"list_directory","arguments":"{}"}`) ||
+					!s.sendEvent(`{"type":"response.done","response":{"status":"completed"}}`) {
+					return
+				}
+				continue
+			}
+			if !s.sendEvent(`{"type":"input_audio_buffer.speech_started"}`) ||
+				!s.sendEvent(`{"type":"input_audio_buffer.speech_stopped"}`) ||
+				!s.sendEvent(`{"type":"response.created","response":{"id":"resp_`+string(rune('0'+responseNumber))+`"}}`) ||
+				!s.sendEvent(`{"type":"response.output_audio.delta","delta":"`+base64AudioForTurn(responseNumber)+`","format":"pcm16"}`) ||
+				!s.sendEvent(`{"type":"response.output_audio.done"}`) ||
+				!s.sendEvent(`{"type":"response.done","response":{"status":"completed"}}`) {
+				return
+			}
+		case <-s.closed:
+			return
+		}
+	}
+}
+
+func (s *scheduledEmptyToolLifecycleServer) sendEvent(event string) bool {
+	select {
+	case s.events <- event:
+		return true
+	case <-s.closed:
+		return false
+	}
+}
+
+type scheduledEmptyToolLifecycleConn struct {
+	server *scheduledEmptyToolLifecycleServer
+}
+
+func (c *scheduledEmptyToolLifecycleConn) ReadMessage() (int, []byte, error) {
+	select {
+	case event := <-c.server.events:
+		var envelope struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal([]byte(event), &envelope); err == nil {
+			c.server.mu.Lock()
+			c.server.writes = append(c.server.writes, "IN:"+envelope.Type)
+			c.server.mu.Unlock()
+		}
+		return 1, []byte(event), nil
+	case <-c.server.closed:
+		return 0, nil, errors.New("connection closed")
+	}
+}
+
+func (c *scheduledEmptyToolLifecycleConn) WriteMessage(_ int, payload []byte) error {
+	var envelope struct {
+		Type    string          `json:"type"`
+		Session json.RawMessage `json:"session"`
+		Item    struct {
+			Type   string `json:"type"`
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return err
+	}
+	c.server.mu.Lock()
+	c.server.writes = append(c.server.writes, envelope.Type)
+	c.server.clientMessages = append(c.server.clientMessages, append([]byte(nil), payload...))
+	if envelope.Type == "session.update" && len(envelope.Session) > 0 {
+		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
+	}
+	if envelope.Type == "response.create" {
+		c.server.nextResponse++
+		responseNumber := c.server.nextResponse
+		c.server.mu.Unlock()
+		select {
+		case c.server.responses <- responseNumber:
+			return nil
+		case <-c.server.closed:
+			return errors.New("connection closed")
+		}
+	}
+	c.server.mu.Unlock()
+	return nil
+}
+
+func (c *scheduledEmptyToolLifecycleConn) Close() error {
+	c.server.shutdown()
+	return nil
+}
+
+type emptyDirectoryToolExecutor struct {
+	mu    sync.Mutex
+	calls []messages.ToolCall
+}
+
+func (e *emptyDirectoryToolExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	e.mu.Lock()
+	e.calls = append(e.calls, call)
+	e.mu.Unlock()
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, nil
+}
+
+func (e *emptyDirectoryToolExecutor) callsSnapshot() []messages.ToolCall {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]messages.ToolCall(nil), e.calls...)
+}
+
+type scheduledTurnDiagnosticSink struct {
+	mu      sync.Mutex
+	records []services.SessionDiagnosticRecord
+}
+
+func (s *scheduledTurnDiagnosticSink) RecordSessionDiagnostic(record services.SessionDiagnosticRecord) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records = append(s.records, record)
+}
+
+func (s *scheduledTurnDiagnosticSink) recordsSnapshot() []services.SessionDiagnosticRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]services.SessionDiagnosticRecord(nil), s.records...)
+}
+
 func liveAudioInRunOptions(t *testing.T, dialer *audioInLifecycleServer, recordPath string) services.SessionRunOptions {
 	t.Helper()
 	return services.SessionRunOptions{
@@ -534,6 +726,147 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	}
 }
 
+// TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult drives
+// the real live session composition through three scheduled spoken turns. The
+// middle response requests list_directory, whose successful result is empty;
+// the third input is allowed onto the wire only after the tool continuation
+// has received its terminal response.done.
+func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *testing.T) {
+	server := newScheduledEmptyToolLifecycleServer()
+	defer server.shutdown()
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+	executor := &emptyDirectoryToolExecutor{}
+	diagnostics := &scheduledTurnDiagnosticSink{}
+	toolDefinitions := []messages.ToolDefinition{{
+		Name:        "list_directory",
+		Description: "List directory entries.",
+	}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			ctx,
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:      recordPath,
+				Provider:        "openai",
+				Model:           "gpt-realtime",
+				APIKey:          "test-key",
+				ConfigDir:       t.TempDir(),
+				WebSocketDialer: server,
+				ToolExecutor:    executor,
+				ToolDefinitions: toolDefinitions,
+				Diagnostics:     diagnostics,
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath, audioPath, audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("three-turn empty-tool scheduled session error = %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("three-turn empty-tool scheduled session did not complete: %v", ctx.Err())
+	}
+
+	writes := server.writesSnapshot()
+	appends := wireEventIndexes(writes, "input_audio_buffer.append")
+	commits := wireEventIndexes(writes, "input_audio_buffer.commit")
+	responseCreates := wireEventIndexes(writes, "response.create")
+	responseDones := wireEventIndexes(writes, "IN:response.done")
+	conversationItems := wireEventIndexes(writes, "conversation.item.create")
+	if len(appends) != 3 || len(commits) != 3 || len(responseCreates) != 4 || len(responseDones) != 4 || len(conversationItems) != 1 {
+		t.Fatalf("three-turn empty-tool wire counts = appends:%d commits:%d response.create:%d response.done:%d conversation.item.create:%d; events=%v", len(appends), len(commits), len(responseCreates), len(responseDones), len(conversationItems), writes)
+	}
+	if !(appends[0] < commits[0] && commits[0] < responseCreates[0] && responseCreates[0] < responseDones[0] &&
+		responseDones[0] < appends[1] && appends[1] < commits[1] && commits[1] < responseCreates[1] && responseCreates[1] < responseDones[1] &&
+		responseDones[1] < conversationItems[0] && conversationItems[0] < responseCreates[2] && responseCreates[2] < responseDones[2] &&
+		responseDones[2] < appends[2] && appends[2] < commits[2] && commits[2] < responseCreates[3] && responseCreates[3] < responseDones[3]) {
+		t.Fatalf("three-turn empty-tool wire order = %v, want turn 3 after the middle continuation", writes)
+	}
+
+	var emptyOutputs []struct {
+		CallID string
+		Output string
+	}
+	for _, payload := range server.clientMessagesSnapshot() {
+		var frame struct {
+			Type string `json:"type"`
+			Item struct {
+				Type   string `json:"type"`
+				CallID string `json:"call_id"`
+				Output string `json:"output"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal(payload, &frame); err != nil {
+			t.Fatalf("decode client wire frame %q: %v", payload, err)
+		}
+		if frame.Type == "conversation.item.create" && frame.Item.Type == "function_call_output" {
+			emptyOutputs = append(emptyOutputs, struct {
+				CallID string
+				Output string
+			}{CallID: frame.Item.CallID, Output: frame.Item.Output})
+		}
+	}
+	if len(emptyOutputs) != 1 || emptyOutputs[0].CallID != "call_empty_directory" || emptyOutputs[0].Output != "" {
+		t.Fatalf("empty directory tool outputs = %#v, want one correlated empty result", emptyOutputs)
+	}
+	if calls := executor.callsSnapshot(); len(calls) != 1 || calls[0].ID != "call_empty_directory" || calls[0].Name != "list_directory" || calls[0].Arguments != "{}" {
+		t.Fatalf("executed directory calls = %#v, want one call with the provider correlation", calls)
+	}
+
+	var turnRecords []services.SessionDiagnosticRecord
+	for _, record := range diagnostics.recordsSnapshot() {
+		if record.Event == services.SessionDiagnosticEventTurn {
+			turnRecords = append(turnRecords, record)
+		}
+	}
+	if len(turnRecords) != 3 {
+		t.Fatalf("completed turn diagnostics = %#v, want exactly three terminal assistant turns", turnRecords)
+	}
+	for index, record := range turnRecords {
+		if got := record.Fields["turn_index"]; got != []string{"1", "2", "3"}[index] {
+			t.Fatalf("completed turn diagnostic %d = %#v, want turn_index %d", index, record.Fields, index+1)
+		}
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read finalized three-turn recording manifest: %v", err)
+	}
+	var manifest struct {
+		Artifacts []struct {
+			Path string `json:"path"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode finalized three-turn recording manifest: %v", err)
+	}
+	inputArtifacts, outputArtifacts := 0, 0
+	for _, artifact := range manifest.Artifacts {
+		switch {
+		case strings.HasPrefix(artifact.Path, "audio/in-"):
+			inputArtifacts++
+		case strings.HasPrefix(artifact.Path, "audio/out-"):
+			outputArtifacts++
+		}
+	}
+	if inputArtifacts != 3 || outputArtifacts != 3 {
+		t.Fatalf("finalized three-turn audio artifacts = input:%d output:%d, want 3 each", inputArtifacts, outputArtifacts)
+	}
+}
+
 func TestLiveRecordRuntimeScheduledAudioWaitsForSessionUpdated(t *testing.T) {
 	server := newDelayedScheduledAudioLifecycleServer()
 	destination := filepath.Join(t.TempDir(), "recording")
@@ -678,6 +1011,16 @@ func countWireEvent(writes []string, want string) int {
 		}
 	}
 	return count
+}
+
+func wireEventIndexes(writes []string, want string) []int {
+	indexes := make([]int, 0)
+	for index, writeType := range writes {
+		if writeType == want {
+			indexes = append(indexes, index)
+		}
+	}
+	return indexes
 }
 
 // TestLiveRecordRuntimeAudioInCancellationDuringAwaitSurfacesError proves a

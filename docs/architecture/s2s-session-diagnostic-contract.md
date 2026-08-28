@@ -113,6 +113,16 @@ included in any field.
 | `failing_event` | Stream-event identity that authored the failure. | `ERROR`, `SESSION.CLOSE`, `SESSION.CONNECT` (dial-phase), `SESSION.RUN` (run/drain phase without a captured stream event) |
 | `provider_error_type` | Provider error type when the provider supplied one. Absent otherwise. | `invalid_api_key` |
 | `provider_error_code` | Provider error code when present. Absent otherwise. | `invalid_api_key` |
+| `scheduled_input_count` | Total configured scheduled audio inputs for an incomplete scheduled run. | `3` |
+| `dispatched_input_count` | Scheduled inputs accepted by the session input boundary before termination. | `2` |
+| `completed_turn_count` | Scheduled inputs whose assistant response reached `MESSAGE.END` before termination. | `2` |
+
+An incomplete scheduled run also returns the typed
+`services.SessionScheduledAudioIncompleteError`, which unwraps to
+`services.ErrSessionScheduledAudioIncomplete`. Its deterministic error text
+and exported `Completed`, `Dispatched`, and `Scheduled` fields preserve the
+same three counts even when a provider, timeout, cancellation, drain, or
+finalization error is joined with the schedule failure.
 
 ### `session_turn_completed` fields
 

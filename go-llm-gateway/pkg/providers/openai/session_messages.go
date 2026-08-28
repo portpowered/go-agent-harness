@@ -43,11 +43,14 @@ func (s *realtimeSession) SendMessageWithoutResponse(ctx context.Context, msg me
 }
 
 func realtimeCompleteMessageEvents(msg messages.Message, requestResponse bool) ([]models.SessionEvent, bool) {
-	if msg.Role == "" || len(msg.ContentParts) == 0 {
+	if msg.Role == "" {
 		return nil, false
 	}
 	if msg.Role == messages.RoleTool {
 		return realtimeToolResultEvents(msg, requestResponse)
+	}
+	if len(msg.ContentParts) == 0 {
+		return nil, false
 	}
 	content := make([]map[string]any, 0, len(msg.ContentParts))
 	for _, part := range msg.ContentParts {
@@ -105,15 +108,13 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 			return nil, false
 		}
 	}
-	// Keep older image-producing tools usable while making an empty output
-	// impossible: when a rich result has no text, derive the same documented
-	// envelope from its one owned image snapshot. read_image normally supplies
-	// this envelope itself, which also retains any tool-specific error detail.
+	// Keep older image-producing tools usable: when a rich result has no text,
+	// derive the same documented envelope from its one owned image snapshot.
+	// read_image normally supplies this envelope itself, which also retains any
+	// tool-specific error detail. A result with no text or image remains valid;
+	// the empty output is still correlated by call_id.
 	if text == "" && len(imageParts) == 1 {
 		text = fallbackRealtimeImageResult(imageParts[0])
-	}
-	if strings.TrimSpace(text) == "" {
-		return nil, false
 	}
 	outputData, err := json.Marshal(map[string]any{
 		"item": map[string]any{
@@ -148,8 +149,6 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 			return nil, false
 		}
 		events = append(events, models.SessionEvent{Type: conversationItemCreateEvent, Data: imageData})
-	} else if len(msg.ContentParts) == 0 {
-		return nil, false
 	}
 
 	if requestResponse {

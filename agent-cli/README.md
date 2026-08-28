@@ -174,7 +174,8 @@ with `go-agent-loop` and `go-llm-gateway` in the active workspace.
 - Its supported surface is the `agent` command and the user documentation under
   `docs/`, not the internal package layout under `internal/`.
 - System prompt resolution is CLI-owned composition. `--system-prompt` reads an
-  existing file path or treats a non-existent path as literal prompt text; the
+  existing file path or treats a value that does not resolve to an existing
+  entry as literal prompt text; the
   default path creates `AGENTS.md` when missing, reads it from the workspace,
   prepends runtime system information unless `--no-system-information` is set,
   and appends discovered skill metadata from workspace/config `skills/`

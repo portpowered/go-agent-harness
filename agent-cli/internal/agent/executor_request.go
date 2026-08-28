@@ -199,11 +199,13 @@ func (e *Executor) loadSystemPrompt(cfg *Config, workspaceDir string, toolDefs [
 				return "", fmt.Errorf("read system prompt %s: %w", cfg.SystemPrompt, err)
 			}
 			systemPrompt = string(data)
-		} else if os.IsNotExist(err) {
+		} else {
+			// Stat is only an existence probe. A value that cannot be probed as
+			// a path (for example, long prose or a path containing invalid
+			// syntax) is still valid literal prompt text. Once Stat succeeds,
+			// ReadFile above owns errors for the selected existing entry.
 			details.addSource(PromptSourceKindLiteralPrompt, "")
 			systemPrompt = cfg.SystemPrompt
-		} else {
-			return "", fmt.Errorf("system prompt path %s: %w", cfg.SystemPrompt, err)
 		}
 	} else {
 		// Default: use AGENTS.md from workspace

@@ -371,6 +371,34 @@ func TestSessionCommand_SystemPromptFlagForwardsLiteralAndPrecedesUserTurn(t *te
 	assertSessionInstructionEvents(t, inferencer, rawInstructionsMarker, 1)
 }
 
+func TestSessionCommand_SystemPromptFlagForwardsLongLiteralUnchanged(t *testing.T) {
+	workspaceDir := t.TempDir()
+	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
+	longPrompt := longLiteralSystemPrompt()
+	if len(longPrompt) < 1024 || len(longPrompt) > 2048 {
+		t.Fatalf("long prompt length = %d, want 1-2 KB", len(longPrompt))
+	}
+	inferencer := newSessionInstructionsTestInferencer()
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = workspaceDir
+	askFlags := flags.NewAskFlags()
+	cmd := cli.NewSessionCommand(askFlags, globalFlags, nil, inferencer).Generate()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{
+		"--replay", filepath.Join(workspaceDir, "session.json"),
+		"--system-prompt", longPrompt,
+		userTurnMarker,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("session command with long --system-prompt: %v", err)
+	}
+	assertSessionInstructionEvents(t, inferencer, longPrompt, 1)
+}
+
 func TestRunSessionWithInstructionsAndOptions_PreservesExplicitSeed(t *testing.T) {
 	workspaceDir := t.TempDir()
 	writeFile(t, filepath.Join(workspaceDir, workspace.AgentsMDFileName), agentsInstructionsMarker)
@@ -651,6 +679,10 @@ func formatSessionEvents(events []messages.StreamMessage) string {
 		parts = append(parts, string(event.Type))
 	}
 	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
+}
+
+func longLiteralSystemPrompt() string {
+	return strings.Repeat("Preserve this literal: spaces, punctuation !?; path-like fragments /tmp/not-a-file.md and ./missing-prompt.txt.\n", 16)
 }
 
 type recordingRealtimeTestDialer struct {
