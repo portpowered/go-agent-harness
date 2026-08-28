@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 )
@@ -49,6 +50,72 @@ func contextError(ctx context.Context) error {
 	default:
 		return nil
 	}
+}
+
+// lifecycleClassifiedError preserves the two transport/lifecycle outcomes
+// whose meaning would be lost if an adapter error were wrapped as a generic
+// selection or invocation failure.
+func lifecycleClassifiedError(err error) (*ClassifiedError, bool) {
+	var classified *ClassifiedError
+	if !errors.As(err, &classified) || classified == nil {
+		return nil, false
+	}
+	switch classified.Code {
+	case ErrorBrowserDisconnected, ErrorTargetDetached:
+		return classified, true
+	default:
+		return nil, false
+	}
+}
+
+func sessionLifecycleFailure(selected *brokerSession) error {
+	if selected == nil || selected.session == nil {
+		return nil
+	}
+	if selected.lifecycleFailure != nil {
+		return selected.lifecycleFailure
+	}
+	if failure, ok := lifecycleClassifiedError(selected.session.Err()); ok {
+		return failure
+	}
+	return nil
+}
+
+func targetSessionLifecycleFailure(selected *brokerSession) error {
+	if selected == nil || selected.session == nil {
+		return nil
+	}
+	if failure, ok := lifecycleClassifiedError(selected.session.Err()); ok {
+		return failure
+	}
+	return nil
+}
+
+func rememberLifecycleFailureLocked(selected *brokerSession, code ErrorCode, reason string) {
+	if selected == nil || selected.lifecycleFailure != nil {
+		return
+	}
+	if failure := targetSessionLifecycleFailure(selected); failure != nil {
+		selected.lifecycleFailure = failure
+		return
+	}
+	switch code {
+	case ErrorBrowserDisconnected:
+		selected.lifecycleFailure = classified(ErrorBrowserDisconnected, DefaultErrorMessage(ErrorBrowserDisconnected), map[string]any{
+			"browser_id":         string(selected.context.Key.BrowserID),
+			"target_id":          string(selected.context.Key.TargetID),
+			"phase":              "lifecycle",
+			"reconnect_required": true,
+		}, nil)
+	}
+}
+
+func classifiedDetails(err error) map[string]any {
+	var classified *ClassifiedError
+	if !errors.As(err, &classified) || classified == nil {
+		return nil
+	}
+	return cloneDetails(classified.Details)
 }
 
 func cloneJSON(raw json.RawMessage) json.RawMessage {

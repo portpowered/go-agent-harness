@@ -97,6 +97,7 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 		eventBuffer:     r.options.EventBuffer,
 		sessions:        make(map[*targetSession]struct{}),
 		done:            make(chan struct{}),
+		disconnectDone:  make(chan struct{}),
 	}
 	go handle.watchBrowserConnection()
 	return handle, nil
@@ -117,13 +118,24 @@ func (r *Runtime) Version(ctx context.Context, candidate webmcp.BrowserCandidate
 	if !ok {
 		return webmcp.BrowserVersion{}, classifiedOpenError(candidate, errors.New("browser handle has an unsupported implementation"))
 	}
+	commandContext, releaseContext := handle.operationContext(ctx)
+	defer releaseContext()
 	executor := handle.executor()
 	if executor == nil {
+		if handle.isDisconnected() {
+			return webmcp.BrowserVersion{}, handle.disconnectError("", "version", nil)
+		}
 		return webmcp.BrowserVersion{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "version", errors.New("browser connection is unavailable"))
 	}
-	protocolVersion, product, _, _, _, err := browser.GetVersion().Do(cdp.WithExecutor(ctx, executor))
+	protocolVersion, product, _, _, _, err := browser.GetVersion().Do(cdp.WithExecutor(commandContext, executor))
 	if err != nil {
+		if handle.isDisconnected() {
+			return webmcp.BrowserVersion{}, handle.disconnectError("", "version", err)
+		}
 		return webmcp.BrowserVersion{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "version", err)
+	}
+	if handle.isDisconnected() {
+		return webmcp.BrowserVersion{}, handle.disconnectError("", "version", nil)
 	}
 	return webmcp.BrowserVersion{
 		Browser:              product,

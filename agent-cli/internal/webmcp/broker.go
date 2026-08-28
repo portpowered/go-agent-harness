@@ -104,6 +104,10 @@ type brokerSession struct {
 	active       bool
 	catalog      map[catalogKey]ToolDescriptor
 	catalogError error
+	// lifecycleFailure is retained from the first terminal lifecycle signal so
+	// selection-dependent calls keep the event's C0 classification even when a
+	// neutral TargetSession does not expose the same error through Err().
+	lifecycleFailure error
 
 	// dispatchMu establishes a linearization point between the final ref
 	// check and a page command. Lifecycle/catalog events wait for it before
@@ -317,6 +321,9 @@ func (b *StatefulBroker) ListTargets(ctx context.Context, selector BrowserSelect
 	}
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
+		if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+			return nil, err
+		}
 		return nil, classified(ErrorStaleSelection, "the selected browser target is no longer current", map[string]any{
 			"browser_id":          string(candidate.ID),
 			"target_id":           "",
@@ -368,6 +375,9 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		b.mu.Unlock()
 		if options.Activate {
 			if err := handle.Activate(ctx, selector.TargetID); err != nil {
+				if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+					return PageContext{}, err
+				}
 				return PageContext{}, staleSelectionError(selector.BrowserID, selector.TargetID, contextValue.Generation, "activation_failed")
 			}
 		}
@@ -457,9 +467,16 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	b.flushSession(newSession)
 	b.mu.Lock()
-	if b.selected == newSession && newSession.active {
-		newSession.context.Ready = true
+	if b.selected != newSession || !newSession.active || !newSession.context.Connected {
+		failure := sessionLifecycleFailure(newSession)
+		if failure == nil {
+			failure = staleSelectionForSession(newSession, "selection_not_connected")
+		}
+		b.mu.Unlock()
+		_ = session.Close()
+		return PageContext{}, failure
 	}
+	newSession.context.Ready = true
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
 	return page, nil
@@ -491,6 +508,9 @@ func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *br
 	case <-signal:
 		return nil
 	case <-loopDone:
+		if failure := sessionLifecycleFailure(selected); failure != nil {
+			return failure
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -768,6 +788,9 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 	}
 	handle, err := runtime.Open(ctx, candidate)
 	if err != nil {
+		if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+			return nil, err
+		}
 		return nil, classified(ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
 			"endpoint_kind": "runtime",
 			"address_class": addressClass(candidate),
@@ -1114,13 +1137,20 @@ func (b *StatefulBroker) invalidateSession(selected *brokerSession, reason strin
 }
 
 func (b *StatefulBroker) invalidateSessionLocked(selected *brokerSession, reason string) {
-	b.invalidateSessionWithCodeLocked(selected, lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned), reason)
+	code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
+	if failure := sessionLifecycleFailure(selected); failure != nil {
+		if classified, ok := lifecycleClassifiedError(failure); ok {
+			code = classified.Code
+		}
+	}
+	b.invalidateSessionWithCodeLocked(selected, code, reason)
 }
 
 func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession, code ErrorCode, reason string) {
 	if !selected.active {
 		return
 	}
+	rememberLifecycleFailureLocked(selected, code, reason)
 	b.terminalizeSessionInvocationsLocked(selected, code, reason)
 	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)
@@ -1139,6 +1169,12 @@ func (b *StatefulBroker) markSessionEnded(selected *brokerSession, reason string
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected == selected && selected.active {
+		if failure := sessionLifecycleFailure(selected); failure != nil {
+			if classified, ok := lifecycleClassifiedError(failure); ok {
+				b.invalidateSessionWithCodeLocked(selected, classified.Code, reason)
+				return
+			}
+		}
 		b.invalidateSessionLocked(selected, reason)
 	}
 }
@@ -1227,22 +1263,6 @@ func staleSelectionError(browserID BrowserID, targetID TargetID, generation uint
 		"selected_generation": generation,
 		"reason":              reason,
 	}, ErrStaleSelection)
-}
-
-func staleSelectionForSession(selected *brokerSession, reason string) error {
-	if selected == nil {
-		return staleSelectionError("", "", 0, reason)
-	}
-	return staleSelectionError(selected.context.Key.BrowserID, selected.context.Key.TargetID, selected.context.Generation, reason)
-}
-
-func targetAttachError(selector TargetSelector, phase string, cause error) error {
-	return classified(ErrorTargetAttachFailed, "the selected browser target could not be initialized", map[string]any{
-		"browser_id":  string(selector.BrowserID),
-		"target_id":   string(selector.TargetID),
-		"phase":       phase,
-		"reason_code": "attach_failed",
-	}, cause)
 }
 
 func classified(code ErrorCode, message string, details map[string]any, cause error) error {

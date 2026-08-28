@@ -395,9 +395,9 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
 		err := staleSelectionForSession(selected, "selection_changed_before_dispatch")
-		result := invocationFailureResult(invocation, InvocationError, errorCodeFor(err, ErrorStaleSelection), nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -405,8 +405,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	if !ok || !refCurrentLocked(selected, record) {
 		err := staleToolRefError(invocation.invocation.Tool.Ref, selected.context.Generation)
 		result := invocationFailureResult(invocation, InvocationError, ErrorStaleToolRef, nil)
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -420,11 +420,14 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	// target disappearing while an earlier invocation occupied the lane.
 	targets, err := handle.ListTargets(ctx)
 	if err != nil || !targetPresent(targets, descriptor.TargetID) {
-		failure := staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
+		failure := err
+		if failure == nil {
+			failure = staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
+		}
 		b.mu.Lock()
-		result := invocationFailureResult(invocation, InvocationError, ErrorStaleSelection, nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, failure, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, failure)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -437,9 +440,9 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
 		err = staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "selection_changed_before_dispatch")
-		result := invocationFailureResult(invocation, InvocationError, ErrorStaleSelection, nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -447,8 +450,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	if !ok || !refCurrentLocked(selected, record) {
 		err = staleToolRefError(invocation.invocation.Tool.Ref, selected.context.Generation)
 		result := invocationFailureResult(invocation, InvocationError, ErrorStaleToolRef, nil)
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -458,18 +461,9 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 
 	b.mu.Lock()
 	if id == "" {
-		code := ErrorInvocationFailed
-		state := InvocationError
-		if errors.Is(invokeErr, context.Canceled) {
-			code = ErrorInvocationCanceled
-			state = InvocationCanceled
-		} else if errors.Is(invokeErr, context.DeadlineExceeded) {
-			code = ErrorInvocationTimedOut
-			state = InvocationTimedOut
-		}
-		result := invocationFailureResult(invocation, state, code, nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
 		b.reportDispatchLocked(invocation, result, invokeErr)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -481,8 +475,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 			"phase":               "correlation",
 			"side_effect_unknown": true,
 		})
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -493,8 +487,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 			"phase":               "correlation",
 			"side_effect_unknown": true,
 		})
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -516,15 +510,16 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		b.applyTerminalObservationLocked(invocation, early)
 		result = cloneInvokeResult(invocation.finalResult)
 	}
+	var dispatchErr error
 	if invokeErr != nil && !invocation.terminalized {
-		result = invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
-			"invocation_id":       string(invocation.invocation.ID),
-			"phase":               "invoke",
-			"side_effect_unknown": true,
-		})
+		result = invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
+		dispatchErr = invokeErr
+		b.reportDispatchLocked(invocation, result, dispatchErr)
 		b.finishInvocationLocked(invocation, result)
+		b.mu.Unlock()
+		return
 	}
-	b.reportDispatchLocked(invocation, result, nil)
+	b.reportDispatchLocked(invocation, result, dispatchErr)
 	b.mu.Unlock()
 }
 
@@ -1143,14 +1138,6 @@ func lifecycleInvocationErrorCode(reason string, fallback ErrorCode) ErrorCode {
 	default:
 		return fallback
 	}
-}
-
-func errorCodeFor(err error, fallback ErrorCode) ErrorCode {
-	var classifiedError *ClassifiedError
-	if errors.As(err, &classifiedError) && classifiedError != nil && IsKnownErrorCode(classifiedError.Code) {
-		return classifiedError.Code
-	}
-	return fallback
 }
 
 func safePageErrorCode(code string) string {
