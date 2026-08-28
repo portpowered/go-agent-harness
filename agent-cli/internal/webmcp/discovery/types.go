@@ -13,6 +13,11 @@ const (
 	// decoded. A discovery response is small by contract; the bound also
 	// prevents an endpoint from turning discovery into an unbounded read.
 	DefaultMaxVersionBytes int64 = 64 << 10
+
+	// DefaultMaxTargetBytes bounds one /json/list response before it is
+	// decoded. Target metadata is untrusted page/browser input and must not
+	// turn a refresh into an unbounded read.
+	DefaultMaxTargetBytes int64 = 256 << 10
 )
 
 // Source identifies the source selected for a browser candidate. The values
@@ -110,6 +115,146 @@ type BrowserCandidate struct {
 	Loopback bool   `json:"loopback"`
 }
 
+// TargetDescriptor is the small, browser-neutral shape of one /json/list
+// record. The ID and websocket URL are transport values used only at the
+// discovery seam; normalized Target values never expose either raw value.
+// Optional capability fields are accepted for hermetic fakes and forward
+// compatible endpoints. Real browser adapters may instead provide a
+// TargetCapabilityProbe.
+type TargetDescriptor struct {
+	ID                   string `json:"id"`
+	Type                 string `json:"type"`
+	Title                string `json:"title"`
+	URL                  string `json:"url"`
+	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+	WebMCPSupported      *bool  `json:"webmcpSupported,omitempty"`
+	WebMCP               *bool  `json:"webmcp,omitempty"`
+	ToolCount            *int   `json:"toolCount,omitempty"`
+	Tools                []any  `json:"tools,omitempty"`
+}
+
+// DevToolsTarget and RawTarget are descriptive aliases for callers that
+// already use those terms for the injected /json/list seam.
+type DevToolsTarget = TargetDescriptor
+type RawTarget = TargetDescriptor
+
+// Target is a normalized, safe browser target record. ID is the authoritative
+// selector; the Chrome target ID and page websocket URL are deliberately not
+// part of this public value. URL is query/fragment-free and Origin is a
+// canonical origin, so neither field can carry transport credentials.
+type Target struct {
+	BrowserID         string `json:"browser_id"`
+	ID                string `json:"id"`
+	Type              string `json:"type"`
+	Title             string `json:"title"`
+	URL               string `json:"url"`
+	Origin            string `json:"origin"`
+	WebSocketPresent  bool   `json:"websocket_present"`
+	WebMCP            bool   `json:"webmcp"`
+	WebMCPKnown       bool   `json:"webmcp_known"`
+	ToolCount         int    `json:"tool_count"`
+	ToolCountKnown    bool   `json:"tool_count_known"`
+	Eligible          bool   `json:"eligible"`
+	EligibilityReason string `json:"eligibility_reason,omitempty"`
+}
+
+// TargetCapabilities is returned by an injected target-runtime seam. A
+// capability probe can establish WebMCP support and the current tool count
+// without importing a browser protocol package into discovery.
+type TargetCapabilities struct {
+	WebMCP         bool
+	ToolCount      int
+	ToolCountKnown bool
+}
+
+// TargetCapabilityProbe verifies the capability that /json/list cannot
+// describe. It is called only after the target has a valid external page URL,
+// page websocket, and an admitted origin.
+type TargetCapabilityProbe interface {
+	Probe(context.Context, BrowserCandidate, Target) (TargetCapabilities, error)
+}
+
+// TargetCapabilityProbeFunc adapts a function to TargetCapabilityProbe.
+type TargetCapabilityProbeFunc func(context.Context, BrowserCandidate, Target) (TargetCapabilities, error)
+
+// Probe implements TargetCapabilityProbe.
+func (f TargetCapabilityProbeFunc) Probe(ctx context.Context, browser BrowserCandidate, target Target) (TargetCapabilities, error) {
+	if f == nil {
+		return TargetCapabilities{}, nil
+	}
+	return f(ctx, browser, target)
+}
+
+// TargetLister is an optional runtime seam for browser websocket-only
+// discovery. HTTP endpoints use the standard /json/list request automatically;
+// a target lister lets a neutral fake or a later adapter supply the same
+// records without exposing protocol types here.
+type TargetLister interface {
+	List(context.Context, BrowserCandidate) ([]TargetDescriptor, error)
+}
+
+// TargetListerFunc adapts a function to TargetLister.
+type TargetListerFunc func(context.Context, BrowserCandidate) ([]TargetDescriptor, error)
+
+// List implements TargetLister.
+func (f TargetListerFunc) List(ctx context.Context, browser BrowserCandidate) ([]TargetDescriptor, error) {
+	if f == nil {
+		return nil, nil
+	}
+	return f(ctx, browser)
+}
+
+// OriginPolicy admits or rejects canonical page origins before target
+// eligibility is computed. Policy receives no query, fragment, credentials,
+// or raw transport URL.
+type OriginPolicy interface {
+	Allows(string) bool
+}
+
+// OriginPolicyFunc adapts a function to OriginPolicy.
+type OriginPolicyFunc func(string) bool
+
+// Allows implements OriginPolicy.
+func (f OriginPolicyFunc) Allows(origin string) bool {
+	return f == nil || f(origin)
+}
+
+// TargetListOptions are the model-facing list filters. EligibleOnly is a
+// pointer because C0 distinguishes an omitted value (default true) from an
+// explicit false. IncludeZeroToolPages defaults to false.
+type TargetListOptions struct {
+	BrowserID            string `json:"browser_id,omitempty"`
+	TargetID             string `json:"target_id,omitempty"`
+	OriginContains       string `json:"origin_contains,omitempty"`
+	EligibleOnly         *bool  `json:"eligible_only,omitempty"`
+	IncludeZeroToolPages bool   `json:"include_zero_tool_pages,omitempty"`
+}
+
+// TargetFilters is a descriptive alias for callers that name these values as
+// filters rather than list options.
+type TargetFilters = TargetListOptions
+
+// Bool returns a pointer suitable for optional boolean list fields.
+func Bool(value bool) *bool { return &value }
+
+// WithEligibleOnly makes the C0 default explicit for callers constructing
+// options programmatically.
+func WithEligibleOnly(value bool) TargetListOptions {
+	return TargetListOptions{EligibleOnly: Bool(value)}
+}
+
+// TargetSnapshot is the deterministic result of one target refresh.
+type TargetSnapshot struct {
+	Browsers       []BrowserCandidate `json:"browsers"`
+	Targets        []Target           `json:"targets"`
+	CandidateCount int                `json:"candidate_count"`
+	EligibleCount  int                `json:"eligible_count"`
+	Filters        TargetListOptions  `json:"filters"`
+}
+
+// TargetListResult is a descriptive alias for TargetSnapshot.
+type TargetListResult = TargetSnapshot
+
 // DiscoveryResult is provided for callers that prefer a named result object
 // while Discover continues to return the candidate directly.
 type DiscoveryResult struct {
@@ -149,6 +294,21 @@ type IDMapper interface {
 	BrowserID(BrowserIdentity) string
 }
 
+// TargetIDMapper converts a browser plus raw target identity into an opaque
+// public target ID. RawID is accepted only at the injected seam and never
+// appears in normalized records, errors, or events.
+type TargetIDMapper interface {
+	TargetID(TargetIdentity) string
+}
+
+// TargetIdentity is the private-to-the-boundary identity input for a target
+// ID mapper. BrowserID scopes target IDs so identical browser target IDs on
+// different endpoints cannot collide.
+type TargetIdentity struct {
+	BrowserID string
+	RawID     string
+}
+
 // BrowserIdentity is the safe input to an IDMapper. It contains no userinfo,
 // query, or fragment. Host and path are used only to derive an opaque ID and
 // never appear in the public event payload.
@@ -166,6 +326,7 @@ const (
 	EventDiscoveryStarted   EventType = "browser.discovery.started"
 	EventDiscoveryCompleted EventType = "browser.discovery.completed"
 	EventEndpointVersion    EventType = "browser.endpoint.version"
+	EventTargetsSnapshot    EventType = "browser.targets.snapshot"
 )
 
 // Redaction describes the safe representation of a semantic event. Discovery

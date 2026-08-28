@@ -14,10 +14,14 @@ const (
 	CodeEndpointUnreachable    Code = "endpoint_unreachable"
 	CodeRemoteEndpointDenied   Code = "remote_endpoint_denied"
 	CodeBrowserProtocolInvalid Code = "browser_protocol_invalid"
+	CodeUnsupportedWebMCP      Code = "unsupported_webmcp"
+	CodeNoEligibleTab          Code = "no_eligible_tab"
+	CodeAmbiguousBrowser       Code = "ambiguous_browser"
+	CodeAmbiguousTab           Code = "ambiguous_tab"
 )
 
 // DiscoveryError is safe for model/user display. Details are constrained to
-// the C0 shape for the four endpoint-discovery classifications and never
+// the C0 shape for endpoint and target-discovery classifications and never
 // include raw endpoint strings or underlying network error text.
 type DiscoveryError struct {
 	Code      Code           `json:"code"`
@@ -63,6 +67,10 @@ var (
 	ErrEndpointUnreachable    error = &classifiedCode{code: CodeEndpointUnreachable}
 	ErrRemoteEndpointDenied   error = &classifiedCode{code: CodeRemoteEndpointDenied}
 	ErrBrowserProtocolInvalid error = &classifiedCode{code: CodeBrowserProtocolInvalid}
+	ErrUnsupportedWebMCP      error = &classifiedCode{code: CodeUnsupportedWebMCP}
+	ErrNoEligibleTab          error = &classifiedCode{code: CodeNoEligibleTab}
+	ErrAmbiguousBrowser       error = &classifiedCode{code: CodeAmbiguousBrowser}
+	ErrAmbiguousTab           error = &classifiedCode{code: CodeAmbiguousTab}
 )
 
 func newEndpointNotFound(kind EndpointKind, source Source) *DiscoveryError {
@@ -137,6 +145,66 @@ func newProtocolInvalidAt(phase, protocol, reason string, cause error) *Discover
 	err := newProtocolInvalid(protocol, reason, cause)
 	err.Details["phase"] = boundedLabel(phase, 32)
 	return err
+}
+
+func newUnsupportedWebMCP(browserID, targetID string) *DiscoveryError {
+	return &DiscoveryError{
+		Code:      CodeUnsupportedWebMCP,
+		Message:   "target does not provide WebMCP",
+		Retryable: false,
+		Details: map[string]any{
+			"browser_id":          boundedLabel(browserID, 64),
+			"target_id":           boundedLabel(targetID, 64),
+			"required_capability": "webmcp",
+		},
+	}
+}
+
+func newNoEligibleTab(browserID string, options TargetListOptions, candidateCount int) *DiscoveryError {
+	details := map[string]any{
+		"filters": map[string]any{
+			"eligible_only":           options.resolvedEligibleOnly(),
+			"include_zero_tool_pages": options.IncludeZeroToolPages,
+		},
+		"candidate_count": candidateCount,
+	}
+	if browserID != "" {
+		details["browser_id"] = boundedLabel(browserID, 64)
+	}
+	if options.OriginContains != "" {
+		details["filters"].(map[string]any)["origin_contains"] = boundedLabel(options.OriginContains, 128)
+	}
+	return &DiscoveryError{
+		Code:      CodeNoEligibleTab,
+		Message:   "no eligible browser tab matched the requested filters",
+		Retryable: true,
+		Details:   details,
+	}
+}
+
+func newAmbiguousBrowser(candidateIDs []string) *DiscoveryError {
+	ids := append([]string(nil), candidateIDs...)
+	return &DiscoveryError{
+		Code:      CodeAmbiguousBrowser,
+		Message:   "multiple browsers matched; an exact browser ID is required",
+		Retryable: true,
+		Details: map[string]any{
+			"candidate_browser_ids": ids,
+		},
+	}
+}
+
+func newAmbiguousTab(browserID string, candidateIDs []string) *DiscoveryError {
+	ids := append([]string(nil), candidateIDs...)
+	return &DiscoveryError{
+		Code:      CodeAmbiguousTab,
+		Message:   "multiple browser tabs matched; an exact target ID is required",
+		Retryable: true,
+		Details: map[string]any{
+			"browser_id":           boundedLabel(browserID, 64),
+			"candidate_target_ids": ids,
+		},
+	}
 }
 
 func classifiedFrom(err error, kind EndpointKind, source Source) *DiscoveryError {

@@ -34,9 +34,17 @@ type Options struct {
 	ActivePortReader  ActivePortReader
 	ProcessEnumerator ProcessEnumerator
 	WebSocketProbe    WebSocketProbe
+	TargetLister      TargetLister
+	TargetProbe       TargetCapabilityProbe
+	CapabilityProbe   TargetCapabilityProbe
+	OriginPolicy      OriginPolicy
+	AllowedOrigins    []string
+	DeniedOrigins     []string
 	IDMapper          IDMapper
+	TargetIDMapper    TargetIDMapper
 	EventSink         EventSink
 	MaxVersionBytes   int64
+	MaxTargetBytes    int64
 	ProbeTimeout      time.Duration
 }
 
@@ -49,11 +57,18 @@ type Service struct {
 	activePortReader  ActivePortReader
 	processEnumerator ProcessEnumerator
 	webSocketProbe    WebSocketProbe
+	targetLister      TargetLister
+	targetProbe       TargetCapabilityProbe
+	originPolicy      OriginPolicy
 	idMapper          IDMapper
+	targetIDMapper    TargetIDMapper
 	eventSink         EventSink
 	maxVersionBytes   int64
+	maxTargetBytes    int64
 	probeTimeout      time.Duration
 	eventSequence     uint64
+	endpoints         map[string]targetEndpoint
+	targets           map[string]map[string]targetState
 }
 
 // New constructs a discovery service with standard-library defaults for the
@@ -71,9 +86,17 @@ func New(options Options) *Service {
 	if webSocketProbe == nil {
 		webSocketProbe = validatingWebSocketProbe{}
 	}
+	targetProbe := options.TargetProbe
+	if targetProbe == nil {
+		targetProbe = options.CapabilityProbe
+	}
 	idMapper := options.IDMapper
 	if idMapper == nil {
 		idMapper = HashIDMapper{}
+	}
+	targetIDMapper := options.TargetIDMapper
+	if targetIDMapper == nil {
+		targetIDMapper = HashTargetIDMapper{}
 	}
 	eventSink := options.EventSink
 	if eventSink == nil {
@@ -82,6 +105,10 @@ func New(options Options) *Service {
 	maxVersionBytes := options.MaxVersionBytes
 	if maxVersionBytes <= 0 {
 		maxVersionBytes = DefaultMaxVersionBytes
+	}
+	maxTargetBytes := options.MaxTargetBytes
+	if maxTargetBytes <= 0 {
+		maxTargetBytes = DefaultMaxTargetBytes
 	}
 	probeTimeout := options.ProbeTimeout
 	if probeTimeout <= 0 {
@@ -92,10 +119,17 @@ func New(options Options) *Service {
 		activePortReader:  activePortReader,
 		processEnumerator: options.ProcessEnumerator,
 		webSocketProbe:    webSocketProbe,
+		targetLister:      options.TargetLister,
+		targetProbe:       targetProbe,
+		originPolicy:      newOriginPolicy(options.OriginPolicy, options.AllowedOrigins, options.DeniedOrigins),
 		idMapper:          idMapper,
+		targetIDMapper:    targetIDMapper,
 		eventSink:         eventSink,
 		maxVersionBytes:   maxVersionBytes,
+		maxTargetBytes:    maxTargetBytes,
 		probeTimeout:      probeTimeout,
+		endpoints:         make(map[string]targetEndpoint),
+		targets:           make(map[string]map[string]targetState),
 	}
 }
 
@@ -343,7 +377,13 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 	if err := json.Unmarshal(body, &version); err != nil {
 		return BrowserCandidate{}, newProtocolInvalidAt("version", "unknown", "malformed_json", nil)
 	}
-	return s.candidateFromVersion(version, source, kind, parsed, allowRemote, true)
+	candidate, failure := s.candidateFromVersion(version, source, kind, parsed, allowRemote, true)
+	if candidate.ID != "" {
+		s.rememberEndpoint(candidate.ID, targetEndpoint{
+			httpURL: targetListBaseURL(parsed),
+		})
+	}
+	return candidate, failure
 }
 
 func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source, kind EndpointKind, allowRemote bool) (BrowserCandidate, *DiscoveryError) {
@@ -363,7 +403,13 @@ func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source
 	if strings.TrimSpace(version.WebSocketDebuggerURL) == "" {
 		version.WebSocketDebuggerURL = normalized.url.String()
 	}
-	return s.candidateFromVersion(version, source, kind, normalized.url, allowRemote, false)
+	candidate, failure := s.candidateFromVersion(version, source, kind, normalized.url, allowRemote, false)
+	if candidate.ID != "" {
+		s.rememberEndpoint(candidate.ID, targetEndpoint{
+			browserWS: normalized.url.String(),
+		})
+	}
+	return candidate, failure
 }
 
 func (s *Service) candidateFromVersion(version BrowserVersion, source Source, kind EndpointKind, fallbackURL *url.URL, allowRemote, requireMetadata bool) (BrowserCandidate, *DiscoveryError) {
