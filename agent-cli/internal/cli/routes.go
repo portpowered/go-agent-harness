@@ -38,6 +38,7 @@ type Router struct {
 
 	ConfigCommand         *ConfigCommand
 	ConfigAddLocalCommand *ConfigAddLocalCommand
+	WebMCPCommand         *WebMCPCommand
 }
 
 // NewRouter constructs a Router with the given dependencies.
@@ -96,6 +97,7 @@ func NewRouter(
 		RoomRunCommand:           NewRoomRunCommand(flags),
 		ConfigCommand:            configCommand,
 		ConfigAddLocalCommand:    configAddLocalCommand,
+		WebMCPCommand:            NewWebMCPCommand(flags),
 	}
 }
 
@@ -142,6 +144,12 @@ func (r *Router) BuildRoot() *cobra.Command {
 	configGroup := NewPath("config", r.ConfigCommand.Generate())
 	configGroup.AddCommand(NewPath("add-local", r.ConfigAddLocalCommand.Generate()))
 	root.AddCommand(configGroup)
+
+	webmcpCommand := r.WebMCPCommand
+	if webmcpCommand == nil {
+		webmcpCommand = NewWebMCPCommand(r.Flags)
+	}
+	root.AddCommand(NewPath("webmcp", webmcpCommand.Generate()))
 
 	devicesGroup := NewPath("devices", NewDevicesCommand().Generate())
 	registry := r.deviceRegistry

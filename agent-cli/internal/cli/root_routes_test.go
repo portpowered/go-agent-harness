@@ -31,7 +31,8 @@ const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurabl
 	"  probe       Run deterministic offline probes\n" +
 	"  room        Run manifest-defined participant rooms\n" +
 	"  session     Run or manage agent sessions\n" +
-	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
+	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n" +
+	"  webmcp      Inspect WebMCP browser readiness\n\n" +
 	"Flags:\n" +
 	"  -C, --config-dir string   Directory for agent CLI config (default: ~/.agent-cli)\n" +
 	"  -h, --help                help for agent\n" +
@@ -52,7 +53,8 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  probe       Run deterministic offline probes\n" +
 	"  room        Run manifest-defined participant rooms\n" +
 	"  session     Run or manage agent sessions\n" +
-	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
+	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n" +
+	"  webmcp      Inspect WebMCP browser readiness\n\n" +
 	"Flags:\n" +
 	"  -C, --config-dir string   Directory for agent CLI config (default: ~/.agent-cli)\n" +
 	"  -h, --help                help for agent\n" +
@@ -194,6 +196,8 @@ func TestRouteHelpExecutionContracts(t *testing.T) {
 		{name: "session delete", args: []string{"session", "delete", "--help"}, usage: "agent session delete <session-id>", description: "Remove the session file."},
 		{name: "config", args: []string{"config", "--help"}, usage: "agent config", description: "Commands to manage agent CLI configuration."},
 		{name: "config add-local", args: []string{"config", "add-local", "--help"}, usage: "agent config add-local", description: "Add a local inference provider entry"},
+		{name: "webmcp", args: []string{"webmcp", "--help"}, usage: "agent webmcp", description: "Inspect WebMCP browser readiness"},
+		{name: "webmcp doctor", args: []string{"webmcp", "doctor", "--help"}, usage: "agent webmcp doctor", description: "Diagnose WebMCP browser readiness"},
 	}
 
 	for _, tt := range tests {
