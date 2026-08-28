@@ -40,6 +40,69 @@ func TestDisconnectDuringDiscoveryReturnsSafeClassifiedFailure(t *testing.T) {
 	}
 }
 
+func TestDisconnectAliasesAndMarkersRemainSafe(t *testing.T) {
+	service := New(Options{})
+	checks := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "browser alias",
+			call: func() error {
+				_, err := service.HandleBrowserDisconnect(context.Background(), DisconnectEvent{BrowserID: "browser-alias", Phase: "transport"})
+				return err
+			},
+		},
+		{
+			name: "concise alias",
+			call: func() error {
+				_, err := service.Disconnect(context.Background(), "browser-alias", "", "transport")
+				return err
+			},
+		},
+		{
+			name: "event alias",
+			call: func() error {
+				_, err := service.OnDisconnect(context.Background(), DisconnectEvent{BrowserID: "browser-alias", Phase: "transport"})
+				return err
+			},
+		},
+		{
+			name: "marker alias",
+			call: func() error {
+				_, err := service.MarkBrowserDisconnected(context.Background(), "browser-alias", "", "transport")
+				return err
+			},
+		},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			assertDiscoveryError(t, check.call(), CodeBrowserDisconnected)
+		})
+	}
+
+	cause := errors.New("transport cause")
+	marker := NewBrowserDisconnectError("browser-alias", "target-alias", "version", cause)
+	if marker.Error() != "browser connection disconnected" || !errors.Is(marker, cause) || !errors.Is(marker, ErrBrowserDisconnected) || !IsBrowserDisconnected(marker) {
+		t.Fatalf("disconnect marker = %v, want safe cause and classified matching", marker)
+	}
+	var nilMarker *BrowserDisconnectedError
+	if nilMarker.Error() != "browser connection disconnected" || nilMarker.Unwrap() != nil || nilMarker.Is(ErrBrowserDisconnected) {
+		t.Fatal("nil disconnect marker did not remain safe")
+	}
+	if IsBrowserDisconnected(nil) || !IsBrowserDisconnected(errors.New("connection closed")) {
+		t.Fatal("disconnect classifier did not handle nil/closed cases")
+	}
+	var nilDiscoveryErr *DiscoveryError
+	if nilDiscoveryErr.Error() != "<nil>" || nilDiscoveryErr.Unwrap() != nil {
+		t.Fatal("nil discovery error did not remain safe")
+	}
+	normalDiscoveryErr := &DiscoveryError{Message: "classified", Cause: cause}
+	if normalDiscoveryErr.Error() != "classified" || !errors.Is(normalDiscoveryErr, cause) {
+		t.Fatal("discovery error did not preserve its classified cause")
+	}
+}
+
 func TestDisconnectDuringRefreshInvalidatesSelectionAndBlocksReuse(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-disconnect-refresh", Source: SourceConfigured, Loopback: true}
 	descriptor := targetDescriptor("raw-page", "Page", "https://disconnect.test", 1)

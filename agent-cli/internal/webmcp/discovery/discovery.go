@@ -199,6 +199,19 @@ func New(options Options) *Service {
 // NewService is a descriptive constructor alias.
 func NewService(options Options) *Service { return New(options) }
 
+// Browser returns the normalized browser candidate currently known for an
+// exact public browser ID. It is a read-only lookup for model-facing adapters;
+// the returned value contains no endpoint credentials or transport URLs.
+func (s *Service) Browser(browserID string) (BrowserCandidate, bool) {
+	if s == nil {
+		return BrowserCandidate{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	candidate, ok := s.browsers[strings.TrimSpace(browserID)]
+	return candidate, ok
+}
+
 // HashIDMapper is the default deterministic opaque browser ID implementation.
 // It hashes only normalized endpoint identity and emits no URL-shaped text.
 type HashIDMapper struct{}

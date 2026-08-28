@@ -134,6 +134,23 @@ func TestDiscoverHTTPVersionNormalizesAndRedacts(t *testing.T) {
 	}
 }
 
+func TestBrowserCatalogLookupIsExactAndSorted(t *testing.T) {
+	service := &Service{browsers: map[string]BrowserCandidate{
+		"browser-b": {ID: "browser-b", Product: "Beta"},
+		"browser-a": {ID: "browser-a", Product: "Alpha"},
+	}}
+	candidate, ok := service.Browser(" browser-b ")
+	if !ok || candidate.Product != "Beta" {
+		t.Fatalf("Browser lookup = (%#v, %t), want browser-b candidate", candidate, ok)
+	}
+	if _, ok := service.Browser("missing"); ok {
+		t.Fatal("Browser lookup unexpectedly matched an unknown ID")
+	}
+	if _, ok := (*Service)(nil).Browser("browser-a"); ok {
+		t.Fatal("nil service unexpectedly returned a browser")
+	}
+}
+
 func TestDiscoverStopsAfterHigherPrioritySuccess(t *testing.T) {
 	httpClient := &fakeHTTPClient{response: versionResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/high"), http.StatusOK)}
 	webSocket := &fakeWebSocketProbe{version: BrowserVersion{Browser: "Chrome/ignored", ProtocolVersion: "1.3", WebSocketDebuggerURL: "ws://127.0.0.1:9223/devtools/browser/lower"}}
