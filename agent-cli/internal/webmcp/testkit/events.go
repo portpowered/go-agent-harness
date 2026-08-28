@@ -623,6 +623,8 @@ type Recorder struct {
 	writer        io.Writer
 	clock         Clock
 	ids           IDSource
+	redactor      *Redactor
+	redactionErr  error
 	nextSequence  uint64
 	lastMonotonic uint64
 	hasEvents     bool
@@ -644,6 +646,9 @@ func NewRecorder(writer io.Writer, options ...RecorderOption) (*Recorder, error)
 		if option != nil {
 			option(recorder)
 		}
+	}
+	if recorder.redactionErr != nil {
+		return nil, recorder.redactionErr
 	}
 	return recorder, nil
 }
@@ -715,6 +720,16 @@ func (r *Recorder) Write(event Event) error {
 }
 
 func (r *Recorder) writeLocked(event Event) error {
+	if r.redactionErr != nil {
+		return r.redactionErr
+	}
+	if r.redactor != nil {
+		redacted, err := r.redactor.RedactEvent(event)
+		if err != nil {
+			return err
+		}
+		event = redacted
+	}
 	if event.Sequence != r.nextSequence {
 		return newEventValidationError(int(r.nextSequence), "sequence", "want %d, got %d", r.nextSequence, event.Sequence)
 	}
