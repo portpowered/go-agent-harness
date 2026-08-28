@@ -856,9 +856,9 @@ func (s *ScriptedTargetSession) EmitToolResponse(id webmcp.InvocationID, status 
 		s.mu.Unlock()
 		return fmt.Errorf("%w: %s", webmcp.ErrInvocationNotFound, id)
 	}
+	record.Status = status
 	if !record.Terminal || status == "Completed" {
 		record.Output = cloneBytes(output)
-		record.Status = status
 		if status == "Completed" {
 			record.State = webmcp.InvocationCompleted
 		} else if status == "Canceled" || status == "Cancelled" {
