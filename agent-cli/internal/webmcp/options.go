@@ -13,9 +13,15 @@ const DefaultMaxInputBytes = 262144
 // envelope produced for a completed page invocation.
 const DefaultMaxResultBytes = 262144
 
-// DefaultInvocationTimeout is recorded on every admitted invocation. The
-// session coordinator may apply a tighter context deadline for one call.
+// DefaultInvocationTimeout bounds every admitted invocation. The session
+// coordinator may apply a tighter context deadline for one call.
 const DefaultInvocationTimeout = 30 * time.Second
+
+const (
+	CancelOnInterruptNever    = "never"
+	CancelOnInterruptReadOnly = "read-only"
+	CancelOnInterruptAlways   = "always"
+)
 
 type DiscoverOptions struct {
 	BrowserID        BrowserID

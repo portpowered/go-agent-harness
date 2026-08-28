@@ -23,20 +23,27 @@ const (
 // needs a browser protocol dependency. A nil Discoverer is useful for tests
 // whose runtime already knows the candidate by ID.
 type BrokerOptions struct {
-	Runtime     BrowserRuntime
-	Discoverer  BrowserDiscoverer
-	IDs         IDSource
-	Clock       Clock
-	Ownership   TargetOwnership
-	WatchBuffer int
+	Runtime    BrowserRuntime
+	Discoverer BrowserDiscoverer
+	IDs        IDSource
+	Clock      Clock
+	// Timers drives invocation deadlines. When omitted, a Clock that also
+	// implements TimerFactory is used; production falls back to wall time.
+	Timers TimerFactory
+	// CancelOnInterrupt controls target cancellation caused by an invocation
+	// context ending. The explicit Broker.Cancel operation always honors the
+	// caller's direct cancellation request. Empty uses the C0 read-only policy.
+	CancelOnInterrupt string
+	Ownership         TargetOwnership
+	WatchBuffer       int
 	// MaxInputBytes bounds the serialized UTF-8 input_json sent to a page
 	// tool. Zero uses DefaultMaxInputBytes.
 	MaxInputBytes int
 	// MaxResultBytes bounds the serialized textual result envelope returned
 	// for a completed page invocation. Zero uses DefaultMaxResultBytes.
 	MaxResultBytes int
-	// InvocationTimeout is recorded as the default deadline for admitted
-	// invocations. Zero uses DefaultInvocationTimeout.
+	// InvocationTimeout is the default deadline for admitted invocations. Zero
+	// uses DefaultInvocationTimeout.
 	InvocationTimeout time.Duration
 }
 
@@ -49,6 +56,8 @@ type StatefulBroker struct {
 	discoverer        BrowserDiscoverer
 	ids               IDSource
 	clock             Clock
+	timers            TimerFactory
+	cancelOnInterrupt string
 	ownership         TargetOwnership
 	watchBuffer       int
 	maxInputBytes     int
@@ -144,6 +153,18 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	if clock == nil {
 		clock = wallClock{}
 	}
+	timers := options.Timers
+	if timers == nil {
+		if clockTimers, ok := clock.(TimerFactory); ok {
+			timers = clockTimers
+		} else {
+			timers = wallTimerFactory{}
+		}
+	}
+	cancelOnInterrupt := options.CancelOnInterrupt
+	if cancelOnInterrupt == "" {
+		cancelOnInterrupt = CancelOnInterruptReadOnly
+	}
 	ownership := options.Ownership
 	if ownership == "" {
 		ownership = TargetOwnershipExternal
@@ -169,6 +190,8 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		discoverer:          options.Discoverer,
 		ids:                 ids,
 		clock:               clock,
+		timers:              timers,
+		cancelOnInterrupt:   cancelOnInterrupt,
 		ownership:           ownership,
 		watchBuffer:         watchBuffer,
 		maxInputBytes:       maxInputBytes,
@@ -813,9 +836,9 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	case EventPageNavigated, EventFrameNavigated:
 		b.applyGenerationChangeLocked(selected, event, string(event.Type))
 	case EventTargetDetached:
-		b.invalidateSessionLocked(selected, event.Reason)
+		b.invalidateSessionWithCodeLocked(selected, ErrorTargetDetached, event.Reason)
 	case EventBrowserDisconnected:
-		b.invalidateSessionLocked(selected, event.Reason)
+		b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, event.Reason)
 	case EventSessionClosed:
 		b.invalidateSessionLocked(selected, event.Reason)
 	}
@@ -916,9 +939,9 @@ func (b *StatefulBroker) advanceGenerationLocked(selected *brokerSession, genera
 	if generation <= selected.context.Generation {
 		return
 	}
+	selected.context.Generation = generation
 	b.terminalizeSessionInvocationsLocked(selected, ErrorPageNavigated, reason)
 	b.retireCatalogLocked(selected)
-	selected.context.Generation = generation
 	selected.context.Ready = false
 	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: generation, Reason: reason})
 }
@@ -934,11 +957,15 @@ func (b *StatefulBroker) invalidateSession(selected *brokerSession, reason strin
 }
 
 func (b *StatefulBroker) invalidateSessionLocked(selected *brokerSession, reason string) {
+	b.invalidateSessionWithCodeLocked(selected, lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned), reason)
+}
+
+func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession, code ErrorCode, reason string) {
 	if !selected.active {
 		return
 	}
-	code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
 	b.terminalizeSessionInvocationsLocked(selected, code, reason)
+	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)
 	selected.active = false
 	selected.context.Connected = false

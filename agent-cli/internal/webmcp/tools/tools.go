@@ -593,10 +593,16 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 	}
 	switch code {
 	case webmcp.ErrorInvocationCanceled:
-		details = map[string]any{"invocation_id": string(result.InvocationID), "cancel_source": "broker"}
+		if result.ErrorDetails == nil {
+			details = map[string]any{"invocation_id": string(result.InvocationID), "cancel_source": "broker"}
+		}
 	case webmcp.ErrorInvocationTimedOut:
-		details["timeout_ms"] = 0
-		details["side_effect_unknown"] = true
+		if _, ok := details["timeout_ms"]; !ok {
+			details["timeout_ms"] = 0
+		}
+		if _, ok := details["side_effect_unknown"]; !ok {
+			details["side_effect_unknown"] = true
+		}
 	case webmcp.ErrorInvocationOrphaned:
 		if result.ErrorDetails == nil {
 			details["target_id"] = ""
@@ -609,8 +615,12 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 			details["observed_bytes"] = 0
 		}
 	case webmcp.ErrorInvocationFailed:
-		details["page_error_code"] = result.ErrorCode
-		details["side_effect_unknown"] = true
+		if _, ok := details["page_error_code"]; !ok {
+			details["page_error_code"] = result.ErrorCode
+		}
+		if _, ok := details["side_effect_unknown"]; !ok {
+			details["side_effect_unknown"] = true
+		}
 	}
 	resultError := webmcp.ToolResultError{
 		Code:      string(code),
@@ -623,6 +633,12 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 
 func invocationMessage(code webmcp.ErrorCode) string {
 	switch code {
+	case webmcp.ErrorTargetDetached:
+		return "The selected browser target detached before the invocation completed."
+	case webmcp.ErrorPageNavigated:
+		return "The page navigated before the invocation completed."
+	case webmcp.ErrorBrowserDisconnected:
+		return "The browser connection ended before the invocation completed."
 	case webmcp.ErrorInvocationCanceled:
 		return "The browser invocation was canceled."
 	case webmcp.ErrorInvocationTimedOut:

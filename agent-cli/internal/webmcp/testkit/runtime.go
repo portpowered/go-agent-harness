@@ -1087,8 +1087,6 @@ func (s *ScriptedTargetSession) terminate(eventType webmcp.BrowserEventType, rea
 		record.Terminal = true
 	}
 	s.notifyLocked()
-	close(s.done)
-	close(s.change)
 	if eventType == webmcp.EventTargetDetached {
 		if s.ownership == webmcp.TargetOwnershipHarnessOwned {
 			s.runtime.record(Operation{Kind: OperationCloseTarget, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Ownership: s.ownership})
@@ -1099,6 +1097,7 @@ func (s *ScriptedTargetSession) terminate(eventType webmcp.BrowserEventType, rea
 	eventErr := s.emitLocked(webmcp.BrowserEvent{Type: eventType, Reason: reason})
 	s.closeResult = eventErr
 	close(s.events)
+	close(s.done)
 	s.mu.Unlock()
 	s.handle.sessionClosed(s)
 	if eventErr != nil {

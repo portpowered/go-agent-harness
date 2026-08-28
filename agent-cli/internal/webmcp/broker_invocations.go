@@ -30,7 +30,11 @@ type brokerInvocation struct {
 	// browserID is the protocol invocation ID returned by the target session.
 	// It is kept separately so browser events can be reconciled without exposing
 	// a provider-owned identifier as the broker's public invocation ID.
-	browserID InvocationID
+	browserID     InvocationID
+	timer         Timer
+	cancelSent    bool
+	cancelDone    chan struct{}
+	cancelPending bool
 
 	dispatchDone chan invocationDispatch
 	terminal     chan struct{}
@@ -48,6 +52,12 @@ type invocationDispatch struct {
 type terminalInvocation struct {
 	invocation Invocation
 	result     InvokeResult
+}
+
+type targetCancellation struct {
+	session TargetSession
+	id      InvocationID
+	done    chan struct{}
 }
 
 // terminalObservation is deliberately smaller than BrowserEvent. In
@@ -169,6 +179,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 	}
 	b.invocations[id] = invocation
 	selected.queue = append(selected.queue, invocation)
+	b.startInvocationTimerLocked(invocation)
 	b.emitLocked(BrokerEvent{
 		Type:         BrokerEventInvocationCreated,
 		BrowserID:    descriptor.BrowserID,
@@ -223,6 +234,102 @@ func (b *StatefulBroker) mintInvocationIDLocked() (InvocationID, error) {
 	return "", errors.New("webmcp: invocation ID source did not produce a unique non-empty ID")
 }
 
+func (b *StatefulBroker) startInvocationTimerLocked(invocation *brokerInvocation) {
+	if invocation == nil || b.timers == nil || b.invocationTimeout <= 0 {
+		return
+	}
+	timer := b.timers.NewTimer(b.invocationTimeout)
+	if timer == nil {
+		return
+	}
+	invocation.timer = timer
+	b.wg.Add(1)
+	go b.watchInvocationDeadline(invocation, timer)
+}
+
+func (b *StatefulBroker) watchInvocationDeadline(invocation *brokerInvocation, timer Timer) {
+	defer b.wg.Done()
+	select {
+	case <-timer.C():
+		b.timeoutInvocation(invocation)
+	case <-invocation.terminal:
+	case <-b.closedCh:
+	}
+}
+
+func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
+	if invocation == nil {
+		return
+	}
+	b.mu.Lock()
+	if invocation.terminalized {
+		b.mu.Unlock()
+		return
+	}
+	if invocation.invocation.State != InvocationQueued {
+		invocation.invocation.CancelRequested = true
+		invocation.cancelPending = true
+	} else {
+		removeQueuedInvocationLocked(invocation.selected, invocation)
+	}
+	action := b.claimTargetCancellationLocked(invocation)
+	wait := b.cancellationWaitLocked(invocation, action)
+	phase := "queue"
+	if invocation.invocation.State == InvocationDispatching {
+		phase = "dispatch"
+	} else if invocation.invocation.State == InvocationDispatched {
+		phase = "result"
+	}
+	timeoutMilliseconds := b.invocationTimeout.Milliseconds()
+	result := invocationFailureResult(invocation, InvocationTimedOut, ErrorInvocationTimedOut, map[string]any{
+		"invocation_id":       string(invocation.invocation.ID),
+		"timeout_ms":          timeoutMilliseconds,
+		"phase":               phase,
+		"side_effect_unknown": true,
+	})
+	if action != nil || wait != nil {
+		b.mu.Unlock()
+		if action != nil {
+			performTargetCancellation(action)
+		} else {
+			<-wait
+		}
+		b.mu.Lock()
+	}
+	b.finishInvocationLocked(invocation, result)
+	b.mu.Unlock()
+}
+
+func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation) *targetCancellation {
+	if invocation == nil || invocation.cancelSent || !invocation.invocation.CancelRequested || invocation.browserID == "" {
+		return nil
+	}
+	invocation.cancelSent = true
+	invocation.cancelDone = make(chan struct{})
+	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, done: invocation.cancelDone}
+}
+
+func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, action *targetCancellation) <-chan struct{} {
+	if action != nil || invocation == nil || !invocation.cancelSent {
+		return nil
+	}
+	return invocation.cancelDone
+}
+
+func performTargetCancellation(action *targetCancellation) {
+	if action == nil {
+		return
+	}
+	defer close(action.done)
+	if action.session == nil || action.id == "" {
+		return
+	}
+	// Cancellation is best effort after the broker has claimed the request.
+	// A target that has already detached or replied is still
+	// reconciled by the broker's bounded browser-terminal cache.
+	_ = action.session.CancelWebMCP(context.Background(), action.id)
+}
+
 // runInvocationQueue owns one target-local FIFO. It intentionally waits for
 // terminal reconciliation before taking the next item, which makes the
 // default policy safe for both mutating tools and descriptors without a
@@ -270,7 +377,11 @@ func (b *StatefulBroker) dispatchQueuedInvocation(invocation *brokerInvocation) 
 	selected := invocation.selected
 	selected.dispatchMu.Lock()
 	b.dispatchQueuedInvocationWithLock(invocation)
+	b.mu.Lock()
+	action := b.claimTargetCancellationLocked(invocation)
+	b.mu.Unlock()
 	selected.dispatchMu.Unlock()
+	performTargetCancellation(action)
 	b.waitForInvocationLane(invocation)
 }
 
@@ -391,6 +502,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 
 	if invocation.terminalized {
 		b.recordBrowserTerminalIDLocked(id)
+		b.takeEarlyTerminalLocked(id)
 		b.rebindTerminalInvocationLocked(invocation)
 		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
 		b.mu.Unlock()
@@ -447,14 +559,7 @@ func (b *StatefulBroker) cancelAdmission(invocation *brokerInvocation) {
 	if invocation.terminalized || invocation.invocation.State != InvocationQueued {
 		return
 	}
-	selected := invocation.selected
-	for i, queued := range selected.queue {
-		if queued != invocation {
-			continue
-		}
-		selected.queue = append(selected.queue[:i], selected.queue[i+1:]...)
-		break
-	}
+	removeQueuedInvocationLocked(invocation.selected, invocation)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(invocation.invocation.ID),
 		"cancel_source": "context",
@@ -464,15 +569,38 @@ func (b *StatefulBroker) cancelAdmission(invocation *brokerInvocation) {
 
 func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if invocation.terminalized {
+		b.mu.Unlock()
 		return
 	}
+	if !b.cancelOnInterruptAllowsLocked(invocation) {
+		done := invocation.terminal
+		b.mu.Unlock()
+		<-done
+		return
+	}
+	if invocation.invocation.State == InvocationQueued {
+		removeQueuedInvocationLocked(invocation.selected, invocation)
+	}
+	invocation.invocation.CancelRequested = true
+	invocation.cancelPending = true
+	action := b.claimTargetCancellationLocked(invocation)
+	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(invocation.invocation.ID),
 		"cancel_source": "context",
 	})
+	if action != nil || wait != nil {
+		b.mu.Unlock()
+		if action != nil {
+			performTargetCancellation(action)
+		} else {
+			<-wait
+		}
+		b.mu.Lock()
+	}
 	b.finishInvocationLocked(invocation, result)
+	b.mu.Unlock()
 }
 
 func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelRequest) error {
@@ -509,13 +637,7 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 		return nil
 	}
 	if invocation.invocation.State == InvocationQueued {
-		for i, queued := range invocation.selected.queue {
-			if queued != invocation {
-				continue
-			}
-			invocation.selected.queue = append(invocation.selected.queue[:i], invocation.selected.queue[i+1:]...)
-			break
-		}
+		removeQueuedInvocationLocked(invocation.selected, invocation)
 		result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 			"invocation_id": string(request.InvocationID),
 			"cancel_source": "broker",
@@ -525,24 +647,38 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 		return nil
 	}
 	invocation.invocation.CancelRequested = true
-	session := invocation.selected.session
-	browserID := invocation.browserID
+	invocation.cancelPending = true
+	action := b.claimTargetCancellationLocked(invocation)
+	wait := b.cancellationWaitLocked(invocation, action)
+	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
+		"invocation_id": string(request.InvocationID),
+		"cancel_source": "broker",
+	})
+	if action != nil || wait != nil {
+		b.mu.Unlock()
+		if action != nil {
+			performTargetCancellation(action)
+		} else {
+			<-wait
+		}
+		b.mu.Lock()
+	}
+	b.finishInvocationLocked(invocation, result)
 	b.mu.Unlock()
-
-	if err := session.CancelWebMCP(ctx, browserID); err != nil {
-		return err
-	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if !invocation.terminalized {
-		result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
-			"invocation_id": string(request.InvocationID),
-			"cancel_source": "broker",
-		})
-		b.finishInvocationLocked(invocation, result)
-	}
 	return nil
+}
+
+func (b *StatefulBroker) cancelOnInterruptAllowsLocked(invocation *brokerInvocation) bool {
+	switch b.cancelOnInterrupt {
+	case CancelOnInterruptNever:
+		return false
+	case CancelOnInterruptAlways:
+		return true
+	case CancelOnInterruptReadOnly:
+		return invocation.invocation.Operation == OperationReadOnly
+	default:
+		return invocation.invocation.Operation == OperationReadOnly
+	}
 }
 
 func (b *StatefulBroker) reconcileBrowserResponseLocked(selected *brokerSession, event BrowserEvent) {
@@ -621,7 +757,7 @@ func (b *StatefulBroker) removeEarlyTerminalOrderIDLocked(id InvocationID) {
 }
 
 func (b *StatefulBroker) applyTerminalObservationLocked(invocation *brokerInvocation, observation terminalObservation) {
-	if invocation.terminalized {
+	if invocation.terminalized || invocation.cancelPending {
 		return
 	}
 	state, success := terminalState(observation.status)
@@ -772,7 +908,6 @@ func (b *StatefulBroker) finishInvocationLocked(invocation *brokerInvocation, re
 	if invocation.terminalized {
 		return
 	}
-	wasQueued := invocation.invocation.State == InvocationQueued
 	result.InvocationID = invocation.invocation.ID
 	if result.State == "" {
 		result.State = InvocationError
@@ -784,6 +919,10 @@ func (b *StatefulBroker) finishInvocationLocked(invocation *brokerInvocation, re
 	invocation.invocation.Result = cloneJSON(result.Output)
 	invocation.invocation.ErrorCode = result.ErrorCode
 	invocation.invocation.TerminalDelivered = false
+	if invocation.timer != nil {
+		invocation.timer.Stop()
+		invocation.timer = nil
+	}
 	if invocation.invocation.ID != "" {
 		b.recordTerminalIDLocked(invocation.invocation.ID)
 		delete(b.invocations, invocation.invocation.ID)
@@ -798,7 +937,7 @@ func (b *StatefulBroker) finishInvocationLocked(invocation *brokerInvocation, re
 		delete(b.browserInvocations, invocation.browserID)
 		b.recordBrowserTerminalIDLocked(invocation.browserID)
 	}
-	if wasQueued {
+	if !invocation.reported {
 		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
 	}
 	close(invocation.terminal)
@@ -877,19 +1016,50 @@ func (b *StatefulBroker) trimTerminalResultsLocked() {
 }
 
 func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvocation, state InvocationState, code ErrorCode, reason string) {
-	details := map[string]any{
-		"browser_id": string(invocation.invocation.Tool.BrowserID),
-		"target_id":  string(invocation.invocation.Tool.TargetID),
-		"generation": invocation.invocation.Tool.Generation,
-		"phase":      "lifecycle",
-		"reason":     reason,
-	}
-	if code == ErrorInvocationOrphaned {
+	var details map[string]any
+	switch code {
+	case ErrorTargetDetached:
+		if reason == "" {
+			reason = "target_detached"
+		}
+		details = map[string]any{
+			"browser_id": string(invocation.invocation.Tool.BrowserID),
+			"target_id":  string(invocation.invocation.Tool.TargetID),
+			"generation": invocation.invocation.Tool.Generation,
+			"reason":     reason,
+		}
+	case ErrorPageNavigated:
+		currentGeneration := invocation.selected.context.Generation
+		previousGeneration := invocation.invocation.Tool.Generation
+		if previousGeneration >= currentGeneration && currentGeneration > 0 {
+			previousGeneration = currentGeneration - 1
+		}
+		details = map[string]any{
+			"browser_id":          string(invocation.invocation.Tool.BrowserID),
+			"target_id":           string(invocation.invocation.Tool.TargetID),
+			"previous_generation": previousGeneration,
+			"current_generation":  currentGeneration,
+		}
+	case ErrorBrowserDisconnected:
+		details = map[string]any{
+			"browser_id":         string(invocation.invocation.Tool.BrowserID),
+			"target_id":          string(invocation.invocation.Tool.TargetID),
+			"phase":              "lifecycle",
+			"reconnect_required": true,
+		}
+	case ErrorInvocationOrphaned:
 		details = map[string]any{
 			"invocation_id":     string(invocation.invocation.ID),
 			"target_id":         string(invocation.invocation.Tool.TargetID),
 			"generation":        invocation.invocation.Tool.Generation,
 			"terminal_observed": false,
+		}
+	default:
+		details = map[string]any{
+			"browser_id": string(invocation.invocation.Tool.BrowserID),
+			"target_id":  string(invocation.invocation.Tool.TargetID),
+			"generation": invocation.invocation.Tool.Generation,
+			"reason":     reason,
 		}
 	}
 	b.finishInvocationLocked(invocation, invocationFailureResult(invocation, state, code, details))
@@ -917,14 +1087,31 @@ func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSes
 	}
 	signalInvocationQueueLocked(selected)
 }
-
 func closeInvocationQueueLocked(selected *brokerSession) {
 	if selected == nil || selected.queueClosed {
 		return
 	}
 	selected.queueClosed = true
+	selected.queue = nil // queued entries were terminalized before lane close.
 	close(selected.queueStop)
 	signalInvocationQueueLocked(selected)
+}
+
+func removeQueuedInvocationLocked(selected *brokerSession, target *brokerInvocation) bool {
+	if selected == nil || target == nil {
+		return false
+	}
+	for i, invocation := range selected.queue {
+		if invocation != target {
+			continue
+		}
+		copy(selected.queue[i:], selected.queue[i+1:])
+		selected.queue[len(selected.queue)-1] = nil
+		selected.queue = selected.queue[:len(selected.queue)-1]
+		signalInvocationQueueLocked(selected)
+		return true
+	}
+	return false
 }
 
 func signalInvocationQueueLocked(selected *brokerSession) {
@@ -1117,10 +1304,4 @@ func (b *StatefulBroker) removeTerminalOrderIDLocked(id InvocationID) {
 		b.terminalOrder = append(b.terminalOrder[:i], b.terminalOrder[i+1:]...)
 		return
 	}
-}
-
-func (b *StatefulBroker) pendingInvocationCount() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return len(b.invocations)
 }
