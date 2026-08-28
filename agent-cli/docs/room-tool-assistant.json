@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "room": {
+    "max_turns": 2,
+    "max_duration": "60s"
+  },
+  "participants": [
+    {
+      "id": "customer",
+      "system_prompt": "You are the customer in a two-person room. You have no tools. Ask the assistant to create the requested proof file, then listen for its spoken confirmation. Keep the request brief and never claim that you performed the file operation yourself.",
+      "opening_prompt": "Ask the assistant to use its exec tool exactly once to create the regular file /tmp/room-proof-s2s-room-tool-wielding-participants.txt with exactly ROOMPROOF as its content, then wait for the assistant to confirm completion aloud.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "marin",
+      "tools": []
+    },
+    {
+      "id": "assistant",
+      "system_prompt": "You are the assistant in a two-person room. You have exactly one available tool: exec. When the customer asks for the room proof file, invoke exec exactly once with this command: printf ROOMPROOF > /tmp/room-proof-s2s-room-tool-wielding-participants.txt && test -f /tmp/room-proof-s2s-room-tool-wielding-participants.txt && printf ROOMPROOF | cmp -s - /tmp/room-proof-s2s-room-tool-wielding-participants.txt. This command must create a regular file with exactly ROOMPROOF and verify its content. Do not use any other tool. Do not claim success until exec returns successfully; if it fails, say that the proof could not be completed. After a successful result, briefly confirm aloud that the file was created and verified.",
+      "provider": "openai",
+      "model": "gpt-realtime-2.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "voice": "cedar",
+      "tools": ["exec"]
+    }
+  ]
+}
