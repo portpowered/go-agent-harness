@@ -115,9 +115,10 @@ type PCM16Cadence interface {
 	Stop()
 }
 
-// PCM16CadenceFactory creates the cadence source for one mixer. The factory
-// receives the configured frame duration and must return a non-nil cadence.
-// A cadence is stopped when the mixer exits, including cancellation.
+// PCM16CadenceFactory creates the cadence source for one mixer during mixer
+// construction. The factory receives the configured frame duration and must
+// return a non-nil cadence. A cadence is stopped when the mixer exits,
+// including cancellation.
 type PCM16CadenceFactory func(time.Duration) PCM16Cadence
 
 type realPCM16Cadence struct {
@@ -194,7 +195,7 @@ type PCM16Mixer struct {
 	format       PCM16Format
 	frameBytes   int
 	maxInputSize int
-	cadence      PCM16CadenceFactory
+	cadence      PCM16Cadence
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -240,11 +241,12 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 		ctx = context.Background()
 	}
 	mixerCtx, cancel := context.WithCancel(ctx)
+	cadence := config.CadenceFactory(config.Format.FrameDuration)
 	mixer := &PCM16Mixer{
 		format:       config.Format,
 		frameBytes:   frameBytes,
 		maxInputSize: config.InputQueueFrames * frameBytes,
-		cadence:      config.CadenceFactory,
+		cadence:      cadence,
 		ctx:          mixerCtx,
 		cancel:       cancel,
 		out:          make(chan []byte, config.OutputQueueFrames),
@@ -547,7 +549,7 @@ func (m *PCM16Mixer) Close() error {
 func (m *PCM16Mixer) run() {
 	defer close(m.done)
 	defer close(m.out)
-	cadence := m.cadence(m.format.FrameDuration)
+	cadence := m.cadence
 	if cadence == nil {
 		m.setError(fmt.Errorf("%w: cadence factory returned nil", ErrMixerInvalidFormat))
 		return
