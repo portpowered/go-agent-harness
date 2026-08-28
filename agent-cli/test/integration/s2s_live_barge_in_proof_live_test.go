@@ -442,6 +442,9 @@ type liveBargeInCaptureAdapter struct {
 	inputOrdinal       int
 	currentInput       string
 	lastCommittedInput string
+	committedInputs    []string
+	userTurnInputs     map[string]string
+	userItemIDs        map[string]struct{}
 	responseOrdinal    int
 	providerResponses  map[string]liveBargeInResponseIdentity
 	responseByProvider map[string]string
@@ -453,23 +456,25 @@ type liveBargeInWireResponse struct {
 	Created    int
 	FirstAudio int
 	FirstText  int
+	AudioBytes int
 	Cancel     int
 	Done       int
 	Terminal   bool
 }
 
 type liveBargeInCaptureFacts struct {
-	SessionCreated int
-	SessionUpdated int
-	SessionClosed  int
-	Appends        int
-	Commits        int
-	UserItems      int
-	Cancels        int
-	ProviderErrors int
-	ProviderCodes  []string
-	InputStarts    []int
-	Responses      []liveBargeInWireResponse
+	SessionCreated     int
+	SessionUpdated     int
+	SessionClosed      int
+	Appends            int
+	Commits            int
+	UserItems          int
+	Cancels            int
+	ProviderErrors     int
+	ProviderCodes      []string
+	ProviderLateOutput int
+	InputStarts        []int
+	Responses          []liveBargeInWireResponse
 }
 
 func normalizeLiveBargeInCapture(capture gwtesting.SessionCapture) (*probe.BargeInLedger, liveBargeInCaptureFacts, error) {
@@ -477,6 +482,8 @@ func normalizeLiveBargeInCapture(capture gwtesting.SessionCapture) (*probe.Barge
 		ledger:             probe.NewBargeInLedger(),
 		providerResponses:  make(map[string]liveBargeInResponseIdentity),
 		responseByProvider: make(map[string]string),
+		userTurnInputs:     make(map[string]string),
+		userItemIDs:        make(map[string]struct{}),
 	}
 	lastCaptureSequence := 0
 	for index, record := range capture.Records {
@@ -570,21 +577,32 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			TurnID:   liveBargeInTurnID(a.currentInput),
 		})
 		a.lastCommittedInput = a.currentInput
+		if a.currentInput != "" {
+			a.committedInputs = append(a.committedInputs, a.currentInput)
+		}
 		a.currentInput = ""
 	case "conversation.item.created":
 		if !server || liveBargeInJSONField(payload, "item.role") != "user" {
 			return
 		}
-		if liveBargeInJSONField(payload, "item.id") == "" {
-			a.issues = append(a.issues, "user conversation item had no identity")
+		a.observeUserTurn(liveBargeInJSONField(payload, "item.id"))
+	case "input_audio_buffer.committed":
+		if !server {
+			return
 		}
-		a.facts.UserItems++
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence: a.nextEventSequence(),
-			Kind:     probe.BargeInEventUserTurn,
-			InputID:  a.lastCommittedInput,
-			TurnID:   liveBargeInTurnID(a.lastCommittedInput),
-		})
+		// Realtime also exposes the committed user item on this acknowledgement.
+		// Treat it as the same logical user-turn signal and deduplicate it if a
+		// later conversation.item.created event carries the same item ID.
+		a.observeUserTurn(liveBargeInJSONField(payload, "item_id", "item.id"))
+	case "conversation.item.input_audio_transcription.completed":
+		if !server {
+			return
+		}
+		// Current OpenAI Realtime sessions identify the user item on the
+		// transcription completion event; older captures may expose the same
+		// identity through conversation.item.created above. Both are one logical
+		// user-turn representation and are deduplicated by item ID.
+		a.observeUserTurn(liveBargeInJSONField(payload, "item_id", "item.id"))
 	case "response.created":
 		if !server {
 			return
@@ -630,12 +648,18 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		}
 		providerID := liveBargeInJSONField(payload, "response_id", "response.id")
 		stableID := a.responseByProvider[providerID]
+		if a.providerOutputWasDiscarded(providerID, record.Sequence) {
+			return
+		}
 		decoded, err := base64.StdEncoding.DecodeString(liveBargeInJSONField(payload, "delta"))
 		if err != nil || len(decoded) == 0 {
 			a.issues = append(a.issues, "response audio output was not non-empty base64 audio")
 		}
 		if response := a.wireResponse(providerID); response != nil && len(decoded) > 0 && response.FirstAudio == 0 {
 			response.FirstAudio = record.Sequence
+		}
+		if response := a.wireResponse(providerID); response != nil {
+			response.AudioBytes += len(decoded)
 		}
 		if stableID == "" {
 			a.issues = append(a.issues, "response audio output referenced unknown provider identity")
@@ -653,6 +677,9 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		}
 		providerID := liveBargeInJSONField(payload, "response_id", "response.id")
 		stableID := a.responseByProvider[providerID]
+		if a.providerOutputWasDiscarded(providerID, record.Sequence) {
+			return
+		}
 		text := liveBargeInJSONField(payload, "delta", "transcript")
 		if response := a.wireResponse(providerID); response != nil && text != "" && response.FirstText == 0 {
 			response.FirstText = record.Sequence
@@ -721,6 +748,45 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		identity.terminal = true
 		a.providerResponses[providerID] = identity
 	}
+}
+
+func (a *liveBargeInCaptureAdapter) providerOutputWasDiscarded(providerID string, sequence int) bool {
+	identity, ok := a.providerResponses[providerID]
+	if !ok || identity.cancelSeq == 0 || sequence <= identity.cancelSeq {
+		return false
+	}
+	a.facts.ProviderLateOutput++
+	return true
+}
+
+func (a *liveBargeInCaptureAdapter) observeUserTurn(itemID string) {
+	if itemID == "" {
+		a.issues = append(a.issues, "user turn had no identity")
+		return
+	}
+	if _, exists := a.userItemIDs[itemID]; exists {
+		return
+	}
+	inputID := ""
+	for _, candidate := range a.committedInputs {
+		if _, represented := a.userTurnInputs[candidate]; !represented {
+			inputID = candidate
+			break
+		}
+	}
+	if inputID == "" {
+		a.issues = append(a.issues, "user turn had no unrepresented committed input")
+		return
+	}
+	a.userItemIDs[itemID] = struct{}{}
+	a.userTurnInputs[inputID] = itemID
+	a.facts.UserItems++
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence: a.nextEventSequence(),
+		Kind:     probe.BargeInEventUserTurn,
+		InputID:  inputID,
+		TurnID:   liveBargeInTurnID(inputID),
+	})
 }
 
 func (a *liveBargeInCaptureAdapter) nextEventSequence() int {
@@ -896,27 +962,20 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 	if first.FirstAudio == 0 {
 		return &liveBargeInInconclusiveError{Reason: "active assistant audio was not observed"}
 	}
-	activeBefore, activeAfter, activeOK := liveBargeInTraceBoundary(trace, 1, 2, true)
-	if !activeOK || activeBefore == 0 || activeAfter != 0 {
-		if activeOK && activeAfter > 0 {
-			return fmt.Errorf("response 1 emitted output after active-speech input began")
-		}
+	activeBefore, _, activeOK := liveBargeInTraceBoundary(trace, 1, 2, true)
+	if !activeOK || activeBefore == 0 {
 		return &liveBargeInInconclusiveError{Reason: "active assistant audio did not precede input 2 before response 1 terminality"}
 	}
-	if first.Done == 0 || facts.InputStarts[1] >= first.Done || first.Cancel == 0 || first.Cancel >= first.Done {
+	if first.FirstAudio >= facts.InputStarts[1] || first.Done == 0 || facts.InputStarts[1] >= first.Done || first.Cancel == 0 || first.Cancel >= first.Done {
 		return &liveBargeInInconclusiveError{Reason: "active-speech input was not observed while response 1 was non-terminal"}
 	}
 
 	createdBefore, _, createdOK := liveBargeInTraceBoundary(trace, 2, 3, false)
-	outputBefore, outputAfter, outputOK := liveBargeInTraceBoundary(trace, 2, 3, true)
 	if !createdOK || createdBefore == 0 || facts.InputStarts[2] <= second.Created || second.Created == 0 {
 		return &liveBargeInInconclusiveError{Reason: "response 2 creation did not precede input 3"}
 	}
-	if !outputOK || outputBefore != 0 {
-		return &liveBargeInInconclusiveError{Reason: "response 2 output was not withheld before input 3"}
-	}
-	if outputAfter > 0 {
-		return fmt.Errorf("response 2 emitted output after its turn-start interruption began")
+	if second.firstOutput() != 0 && second.firstOutput() < facts.InputStarts[2] {
+		return &liveBargeInInconclusiveError{Reason: "response 2 emitted first output before the turn-start input boundary"}
 	}
 	if second.Done == 0 || second.Cancel == 0 || second.Cancel >= second.Done {
 		return &liveBargeInInconclusiveError{Reason: "turn-start input was not observed while response 2 was non-terminal"}
@@ -927,20 +986,28 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 	if fourth.Done == 0 {
 		return &liveBargeInInconclusiveError{Reason: "completed same-session continuation response was not observed"}
 	}
-	for response, turn := range map[int]int{1: 2, 2: 3} {
-		audioBytes, textBytes, ok := liveBargeInOutputAfterInputStart(trace, response, turn)
-		if !ok {
-			return &liveBargeInInconclusiveError{Reason: "input release boundary was not recorded"}
-		}
-		if audioBytes != 0 || textBytes != 0 {
-			return fmt.Errorf("response %d produced output after input %d began", response, turn)
+	if err := validateLiveBargeInDeliveredAudio(facts, trace); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateLiveBargeInDeliveredAudio(facts liveBargeInCaptureFacts, trace *liveBargeInTrace) error {
+	events, _ := trace.snapshot()
+	observed := make(map[int]int)
+	for _, event := range events {
+		observed[event.ResponseOrdinal] += event.AudioBytes
+	}
+	for ordinal, response := range facts.Responses {
+		if observed[ordinal+1] != response.AudioBytes {
+			return fmt.Errorf("response %d delivered audio bytes=%d but accepted provider output was %d", ordinal+1, observed[ordinal+1], response.AudioBytes)
 		}
 	}
 	return nil
 }
 
 func liveBargeInCaptureSummary(facts liveBargeInCaptureFacts, recordCount int) string {
-	return fmt.Sprintf("records=%d,session_created=%d,session_updated=%d,session_closed=%d,appends=%d,commits=%d,user_items=%d,responses=%d,cancels=%d,provider_errors=%d,provider_codes=%v",
+	return fmt.Sprintf("records=%d,session_created=%d,session_updated=%d,session_closed=%d,appends=%d,commits=%d,user_items=%d,responses=%d,cancels=%d,provider_errors=%d,provider_codes=%v,provider_late_output_discarded=%d",
 		recordCount,
 		facts.SessionCreated,
 		facts.SessionUpdated,
@@ -952,6 +1019,7 @@ func liveBargeInCaptureSummary(facts liveBargeInCaptureFacts, recordCount int) s
 		facts.Cancels,
 		facts.ProviderErrors,
 		facts.ProviderCodes,
+		facts.ProviderLateOutput,
 	)
 }
 
@@ -1054,8 +1122,8 @@ func liveBargeInSanitizedLedger(facts liveBargeInCaptureFacts, trace *liveBargeI
 		parts = append(parts, fmt.Sprintf("T%d{append_group=1,commit=1,user_turn=1} R%d{%s,audio_bytes=%d,text_bytes=%d}",
 			ordinal, ordinal, status, audioByResponse[ordinal], textByResponse[ordinal]))
 	}
-	return fmt.Sprintf("%s terminal={clean=true,unresolved=0} counts={appends=%d,commits=%d,user_turns=%d,responses=%d,cancels=%d}",
-		strings.Join(parts, "; "), facts.Appends, facts.Commits, facts.UserItems, len(facts.Responses), facts.Cancels)
+	return fmt.Sprintf("%s terminal={clean=true,unresolved=0} counts={appends=%d,commits=%d,user_turns=%d,responses=%d,cancels=%d,provider_late_output_discarded=%d}",
+		strings.Join(parts, "; "), facts.Appends, facts.Commits, facts.UserItems, len(facts.Responses), facts.Cancels, facts.ProviderLateOutput)
 }
 
 // TestLiveSessionS2SBargeInProofV3 is the only billed test in this story. It

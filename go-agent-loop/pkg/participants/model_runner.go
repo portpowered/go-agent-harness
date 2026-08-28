@@ -433,6 +433,14 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)
 	}
+	// A provider may have already queued output when RESPONSE.CANCEL reaches
+	// it. The wire adapter cannot retract those frames, but they must not cross
+	// the customer-facing session boundary after the local cancellation. Keep
+	// MESSAGE.END so the cancelled response can still close and the next turn
+	// can be admitted.
+	if responseCancelSent && isCustomerOutputDelta(msg) {
+		return responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted
+	}
 	if isOutputDelta(msg) {
 		hasOutput = true
 	}
@@ -959,6 +967,25 @@ func isOutputDelta(msg messages.StreamMessage) bool {
 		messages.StreamTypeRefusal:
 		return true
 	default:
+		return false
+	}
+}
+
+func isCustomerOutputDelta(msg messages.StreamMessage) bool {
+	switch msg.Type {
+	case messages.StreamTypeTextDelta,
+		messages.StreamTypeReasoningDelta,
+		messages.StreamTypeAudioDelta,
+		messages.StreamTypeImageDelta,
+		messages.StreamTypeVideoDelta,
+		messages.StreamTypeFileDelta,
+		messages.StreamTypeEmbeddingDelta,
+		messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeRefusal:
+		return true
+	default:
+		// Tool-call deltas remain visible after a speech cancellation so the
+		// tool lifecycle can resolve or reject the outstanding call explicitly.
 		return false
 	}
 }

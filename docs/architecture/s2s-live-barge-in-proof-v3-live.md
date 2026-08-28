@@ -84,3 +84,14 @@ terminal={clean=true,unresolved=0}
 
 The actual successful sanitized ledger and the exact command above are copied
 verbatim into the pull-request description after the bounded live run.
+
+## Successful bounded run
+
+The successful run on 2026-08-28 completed in 9.07 seconds. The provider sent
+four late wire-output frames after cancellation; the shipped runtime discarded
+them before they reached the customer-facing stream, and the accepted-provider
+audio byte totals matched delivered stream audio exactly:
+
+```text
+OpenAI live barge-in proof (gpt-realtime): T1{append_group=1,commit=1,user_turn=1} R1{cancelled,audio_bytes=4800,text_bytes=9}; T2{append_group=1,commit=1,user_turn=1} R2{cancelled,audio_bytes=0,text_bytes=0}; T3{append_group=1,commit=1,user_turn=1} R3{completed,audio_bytes=492000,text_bytes=147}; T4{append_group=1,commit=1,user_turn=1} R4{completed,audio_bytes=636000,text_bytes=195} terminal={clean=true,unresolved=0} counts={appends=96,commits=4,user_turns=4,responses=4,cancels=2,provider_late_output_discarded=4}
+```

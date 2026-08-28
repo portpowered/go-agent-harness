@@ -313,6 +313,65 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	}
 }
 
+func TestSessionModelRunner_DropsProviderOutputAfterBargeInCancel(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+	runner.UserAudioInbox <- []byte{1, 2, 3}
+	if sent := waitForSentMessage(t, ctx, session); sent.Type != messages.StreamTypeResponseCancel {
+		t.Fatalf("first outbound type = %s, want %s", sent.Type, messages.StreamTypeResponseCancel)
+	}
+	if sent := waitForSentMessage(t, ctx, session); sent.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("second outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
+	}
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{9, 8, 7}),
+	})
+	noDeltaCtx, noDeltaCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	_, ok := runner.DeltaOutbox.ReadBlocking(noDeltaCtx.Done())
+	noDeltaCancel()
+	if ok {
+		t.Fatal("provider output after cancellation crossed the session boundary")
+	}
+
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageEnd)
+
+	// The next response opens a fresh cancellation window and its output must
+	// remain deliverable, proving that suppression does not poison continuation.
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{4, 5, 6}),
+	})
+	if got := waitForDelta(t, ctx, runner, messages.StreamTypeAudioDelta); len(got.Value.(*messages.AudioDeltaValue).Content) != 3 {
+		t.Fatalf("continuation output was not delivered after cancellation window")
+	}
+}
+
 func TestSessionModelRunner_CompletedResponseDoesNotCancelNextAudio(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
