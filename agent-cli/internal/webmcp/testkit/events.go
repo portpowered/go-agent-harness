@@ -297,9 +297,13 @@ func (e Event) MarshalJSON() ([]byte, error) {
 	if err := validateEvent(e); err != nil {
 		return nil, err
 	}
-	payload, err := normalizeJSON(e.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("payload: %w", err)
+	var payload json.RawMessage
+	if e.Payload != nil {
+		var err error
+		payload, err = normalizeJSON(e.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("payload: %w", err)
+		}
 	}
 	var generation *uint64
 	if definitionFor(e.Type).requiresGeneration {

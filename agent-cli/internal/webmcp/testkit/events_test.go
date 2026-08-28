@@ -80,6 +80,46 @@ func TestRecorderInjectedClockAndIDsAreByteStable(t *testing.T) {
 	}
 }
 
+func TestDigestOnlyEventRoundTripsThroughRecorderAndRedactor(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	input := EventInput{
+		Type:          EventBrowserDiscoveryStarted,
+		PayloadSHA256: digest,
+	}
+
+	var recorded bytes.Buffer
+	recorder, err := NewRecorder(&recorded, WithRedaction(RedactionPolicy{}))
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	if _, err := recorder.Record(input); err != nil {
+		t.Fatalf("Record digest-only event: %v", err)
+	}
+	if !bytes.Contains(recorded.Bytes(), []byte(`"payload_sha256":"`+digest+`"`)) {
+		t.Fatalf("recorded digest-only event omitted digest: %s", recorded.Bytes())
+	}
+
+	loaded, err := ValidateEventStream(recorded.Bytes())
+	if err != nil {
+		t.Fatalf("ValidateEventStream recorded digest-only event: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Payload != nil || loaded[0].PayloadSHA256 != digest {
+		t.Fatalf("loaded digest-only event = %#v", loaded)
+	}
+
+	redactor, err := NewRedactor(RedactionPolicy{})
+	if err != nil {
+		t.Fatalf("NewRedactor: %v", err)
+	}
+	redacted, err := redactor.MarshalEvents(loaded)
+	if err != nil {
+		t.Fatalf("MarshalEvents digest-only event: %v", err)
+	}
+	if !bytes.Equal(recorded.Bytes(), redacted) {
+		t.Fatalf("redactor changed digest-only event:\nrecorded: %s\nredacted: %s", recorded.Bytes(), redacted)
+	}
+}
+
 func TestRecorderDoesNotAdvanceAfterValidationOrClockFailure(t *testing.T) {
 	var output bytes.Buffer
 	clock := NewFakeClock(10)
