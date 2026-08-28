@@ -94,6 +94,9 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	audioPaths []string,
 	systemPrompt string,
 ) (runErr error) {
+	if err := ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(audioPaths)); err != nil {
+		return err
+	}
 	var coordinator *SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() {

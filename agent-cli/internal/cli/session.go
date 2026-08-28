@@ -366,6 +366,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var waitForClose bool
 	var audioIn string
 	var audioInTurns []string
+	var audioInTurnBarge bool
 	var audioInDevice audio.DeviceID
 	var audioOutDevice audio.DeviceID
 	browserFlags := flags.NewBrowserFlags()
@@ -375,7 +376,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Short: "Run or manage agent sessions",
 		Long: "Run a bidirectional session inference capture or replay a session capture file.\n" +
 			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
-			"Use repeatable audio-in-turn paths with record-dir to replay multiple finite spoken turns through one persistent session.\n\n" +
+			"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
 			"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
@@ -383,6 +384,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			return services.ValidateOpenAIRealtimeVoice(voice)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := services.ValidateSessionAudioInTurnBarge(audioInTurnBarge, len(audioInTurns)); err != nil {
+				return err
+			}
 			if err := validateBrowserToolsBackend(browserFlags.Tools, browserToolsAdmission(cmd)); err != nil {
 				return err
 			}
@@ -509,6 +513,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				StreamObserver:      c.streamObserver,
 				Clock:               c.clockSource,
 				RuntimeObserver:     c.runtimeObserver,
+				AudioInTurnBarge:    audioInTurnBarge,
 				RTCDeviceBinding: services.RTCDeviceBindingRequest{
 					Registry:      c.deviceRegistry,
 					InputDevice:   audioInDevice,
@@ -601,6 +606,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
 	cmd.Flags().StringArrayVar(&audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
+	cmd.Flags().BoolVar(&audioInTurnBarge, "audio-in-turn-barge", false, "Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated")
 	cmd.Flags().StringVar(&audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
 	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")

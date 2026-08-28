@@ -147,6 +147,11 @@ type sessionLoopOptions struct {
 	// authoritative.
 	CloseAfterScheduledAudio bool
 
+	// ScheduledAudioDispatch is the explicit policy selected for repeated
+	// scheduled audio. Runtime planning always supplies a non-zero value;
+	// direct loop callers treat the zero value as completion-gated.
+	ScheduledAudioDispatch ScheduledAudioDispatchPolicy
+
 	// RequireSessionUpdated makes scheduled audio wait for the current
 	// connection's initial SESSION.UPDATED acknowledgement before dispatch.
 	// It is enabled for live OpenAI scheduled sessions; replay paths and other
