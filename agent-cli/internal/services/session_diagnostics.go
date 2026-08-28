@@ -591,7 +591,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallEndValue:
 		o.observeProviderToolCall(v)
-		o.emitToolCallRecord(v)
+		if !o.toolResultsEnabledForObservation() {
+			o.emitToolCallRecord(v)
+		}
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
 		o.toolCallInTurn = true
@@ -612,6 +614,15 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
 	}
+}
+
+func (o *sessionProgressObserver) toolResultsEnabledForObservation() bool {
+	if o == nil {
+		return false
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	return o.toolResultsEnabled
 }
 
 // observeProviderMessageEnd advances the provider response state. The first
@@ -877,8 +888,8 @@ func (o *sessionProgressObserver) imageContinuationFailureFacts(failingEvent str
 }
 
 // emitToolCallRecord reports a provider tool-call event that cannot be
-// executed. The session runtime has no tool execution path, so every provider
-// tool call is unexecutable by construction and must not pass silently.
+// executed because this session has no tool executor. Tool-enabled sessions
+// resolve the call through their participant-local executor instead.
 func (o *sessionProgressObserver) emitToolCallRecord(v *messages.ToolCallEndValue) {
 	if o.sink == nil || v == nil {
 		return

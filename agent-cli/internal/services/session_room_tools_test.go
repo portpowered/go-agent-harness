@@ -4,14 +4,185 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 )
+
+func TestBuildRoomParticipantPlans_LoadedManifestWiresExactParticipantToolContracts(t *testing.T) {
+	lookupCredential := func(name string) (string, bool) {
+		if name == "ROOM_OPENAI_KEY" {
+			return "room-test-key", true
+		}
+		return "", false
+	}
+	manifestPath := filepath.Join(t.TempDir(), "room.json")
+	manifestData := []byte(fmt.Sprintf(`{
+  "schema_version": 1,
+  "room": {"max_turns": 2},
+  "participants": [
+    {
+      "id": "customer",
+      "system_prompt": "Ask the assistant to perform the room proof.",
+      "provider": "openai",
+      "model": %q,
+      "api_key_env": "ROOM_OPENAI_KEY",
+      "voice": "marin",
+      "tools": []
+    },
+    {
+      "id": "assistant",
+      "system_prompt": "Use exec for the requested room proof, then confirm it aloud.",
+      "provider": "openai",
+      "model": %q,
+      "api_key_env": "ROOM_OPENAI_KEY",
+      "voice": "cedar",
+      "tools": ["exec"]
+    }
+  ]
+}`, openAIRealtimeDefaultModel, openAIRealtimeDefaultModel))
+	if err := os.WriteFile(manifestPath, manifestData, 0o600); err != nil {
+		t.Fatalf("write room manifest: %v", err)
+	}
+	manifest, err := room.ReadManifest(manifestPath, room.ValidationOptions{LookupCredential: lookupCredential})
+	if err != nil {
+		t.Fatalf("read room manifest: %v", err)
+	}
+
+	requests := make(map[string]inference.SessionRequest, len(manifest.Participants))
+	configDir := t.TempDir()
+	opts := RoomRunOptions{
+		Manifest:         manifest,
+		CredentialLookup: lookupCredential,
+		ConfigDir:        configDir,
+		BaseURL:          "ws://room.test/realtime",
+		SessionFactory: func(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
+			inferencer, _, factoryErr := NewLiveSessionInferencer(options, participant.SystemPrompt)
+			if factoryErr != nil {
+				return nil, factoryErr
+			}
+			requester, ok := inferencer.(interface {
+				Request() inference.SessionRequest
+			})
+			if !ok {
+				return nil, fmt.Errorf("participant %q inferencer %T does not expose its request", participant.ID, inferencer)
+			}
+			requests[participant.ID] = requester.Request()
+			return inferencer, nil
+		},
+	}
+
+	plans, _, err := buildRoomParticipantPlans(opts, room.ValidationOptions{LookupCredential: lookupCredential})
+	if err != nil {
+		t.Fatalf("buildRoomParticipantPlans: %v", err)
+	}
+	if len(plans) != 2 || len(requests) != 2 {
+		t.Fatalf("plans/requests = %d/%d, want two independently composed participants", len(plans), len(requests))
+	}
+
+	customer := plans[0]
+	if customer.manifest.ID != "customer" {
+		t.Fatalf("first participant = %q, want customer", customer.manifest.ID)
+	}
+	if customer.options.ToolExecutor != nil || len(customer.options.ToolDefinitions) != 0 {
+		t.Fatalf("customer capabilities = executor %T definitions %#v, want no usable executor or definitions", customer.options.ToolExecutor, customer.options.ToolDefinitions)
+	}
+	customerRequest := requests["customer"]
+	if customerRequest.Config.Voice != "marin" || len(customerRequest.Config.Tools) != 0 {
+		t.Fatalf("customer provider request = voice %q tools %#v, want marin and zero tools", customerRequest.Config.Voice, customerRequest.Config.Tools)
+	}
+
+	assistant := plans[1]
+	if assistant.manifest.ID != "assistant" {
+		t.Fatalf("second participant = %q, want assistant", assistant.manifest.ID)
+	}
+	if assistant.options.ToolExecutor == nil {
+		t.Fatal("assistant has no participant-local executor")
+	}
+	if len(assistant.options.ToolDefinitions) != 1 {
+		t.Fatalf("assistant definitions = %#v, want exactly one definition", assistant.options.ToolDefinitions)
+	}
+	assertCompleteExecDefinition(t, assistant.options.ToolDefinitions[0])
+	assistantRequest := requests["assistant"]
+	if assistantRequest.Config.Voice != "cedar" || len(assistantRequest.Config.Tools) != 1 {
+		t.Fatalf("assistant provider request = voice %q tools %#v, want cedar and exactly one tool", assistantRequest.Config.Voice, assistantRequest.Config.Tools)
+	}
+	assertCompleteExecDefinition(t, assistantRequest.Config.Tools[0])
+
+	response, executeErr := assistant.options.ToolExecutor.Execute(context.Background(), messages.ToolCall{
+		ID:        "room-proof-call",
+		Name:      "exec",
+		Arguments: `{"command":"printf ROOMPROOF"}`,
+	})
+	if executeErr != nil {
+		t.Fatalf("assistant exec call: %v", executeErr)
+	}
+	if response.ToolCallID != "room-proof-call" || response.Content != "ROOMPROOF" {
+		t.Fatalf("assistant exec response = %#v, want correlated ROOMPROOF result", response)
+	}
+	if _, executeErr := assistant.options.ToolExecutor.Execute(context.Background(), messages.ToolCall{
+		ID:   "ungranted-call",
+		Name: "read_file",
+	}); !errors.Is(executeErr, tools.ErrToolNotFound) {
+		t.Fatalf("assistant ungranted tool error = %v, want tools.ErrToolNotFound", executeErr)
+	}
+
+	if assistantRequest.Config.Tools[0].Name != assistant.options.ToolDefinitions[0].Name {
+		t.Fatalf("assistant provider tool name = %q, plan tool name = %q", assistantRequest.Config.Tools[0].Name, assistant.options.ToolDefinitions[0].Name)
+	}
+	assistantRequest.Config.Tools[0].Parameters[0].Name = "mutated-request-copy"
+	if assistant.options.ToolDefinitions[0].Parameters[0].Name == "mutated-request-copy" {
+		t.Fatal("assistant provider request shares mutable parameter state with plan definitions")
+	}
+}
+
+func assertCompleteExecDefinition(t *testing.T, definition messages.ToolDefinition) {
+	t.Helper()
+	if definition.Name != "exec" {
+		t.Fatalf("tool name = %q, want exec", definition.Name)
+	}
+	if definition.Description != "Execute a shell command and return its output. Use with caution." {
+		t.Fatalf("exec description = %q, want complete exec description", definition.Description)
+	}
+	if len(definition.Parameters) != 2 {
+		t.Fatalf("exec parameters = %#v, want command and working_dir", definition.Parameters)
+	}
+	parameters := make(map[string]messages.ToolParameter, len(definition.Parameters))
+	for _, parameter := range definition.Parameters {
+		if _, exists := parameters[parameter.Name]; exists {
+			t.Fatalf("exec definition repeats parameter %q", parameter.Name)
+		}
+		parameters[parameter.Name] = parameter
+	}
+	want := map[string]messages.ToolParameter{
+		"command": {
+			Name:        "command",
+			Type:        "string",
+			Description: "The shell command to execute",
+			Required:    true,
+		},
+		"working_dir": {
+			Name:        "working_dir",
+			Type:        "string",
+			Description: "Optional working directory for the command",
+		},
+	}
+	if len(parameters) != len(want) {
+		t.Fatalf("exec parameters = %#v, want exactly %#v", parameters, want)
+	}
+	for name, wantParameter := range want {
+		if got, ok := parameters[name]; !ok || got != wantParameter {
+			t.Fatalf("exec parameter %q = %#v, want %#v", name, got, wantParameter)
+		}
+	}
+}
 
 func TestBuildRoomParticipantPlans_UsesIsolatedRequestedCapabilities(t *testing.T) {
 	ids := []string{"alpha", "beta"}

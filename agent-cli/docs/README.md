@@ -9,6 +9,8 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [Blind acceptance probes](acceptance-probe.md) explains the artifact-backed verdict contract and live/replay transport seam.
 - [Room live visualizer](room-visualizer.html) is a zero-build browser page for the room's transcript, diagnostic, and lifecycle SSE events.
 - [Three-participant room fixture](room-three-participant.json) is a credential-free manifest with one opening seed and distinct Realtime voices.
+- [Tool-assistant room fixture](room-tool-assistant.json) is a bounded two-participant manifest with a tool-less customer and an exec-only assistant.
+- [Tool-assistant room live acceptance](room-tool-assistant-live-acceptance.md) documents the credential-safe billed run, sanitized evidence checks, and exact proof-file verification.
 - [Room Phase 1 live acceptance](room-live-acceptance.md) documents the billed/non-CI three-participant smoke procedure, artifact inspection, C1 wedge rule, and honest scenario ledger.
 - [Files TODO](FILES.md) describes planned provider file-upload behavior and the proposed `agent files` commands for managing uploaded files.
 
