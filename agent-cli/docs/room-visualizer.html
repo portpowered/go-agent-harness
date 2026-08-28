@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A zero-build live visualizer for agent room transcript and diagnostic SSE events."
+    />
+    <link rel="icon" href="data:," />
+    <title>Agent room live visualizer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --background: #0b1020;
+        --surface: #131b2f;
+        --surface-raised: #18233b;
+        --surface-muted: #0f172a;
+        --border: #2d3b5d;
+        --text: #edf2ff;
+        --muted: #aeb9d4;
+        --faint: #73809e;
+        --accent: #7dd3fc;
+        --accent-strong: #38bdf8;
+        --success: #86efac;
+        --warning: #fcd34d;
+        --danger: #fca5a5;
+        --focus: #f0abfc;
+        --radius: 0.9rem;
+        --shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.2);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 18rem;
+        background: var(--background);
+      }
+
+      body {
+        margin: 0;
+        min-width: 18rem;
+        min-height: 100vh;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 32rem),
+          var(--background);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        min-height: 2.75rem;
+        padding: 0.65rem 1rem;
+        color: var(--background);
+        font-weight: 700;
+        background: var(--accent);
+        border: 1px solid transparent;
+        border-radius: 0.55rem;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: var(--accent-strong);
+      }
+
+      button.secondary {
+        color: var(--text);
+        background: transparent;
+        border-color: var(--border);
+      }
+
+      button.secondary:hover {
+        background: var(--surface-raised);
+        border-color: var(--accent);
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      [tabindex="0"]:focus-visible {
+        outline: 0.2rem solid var(--focus);
+        outline-offset: 0.15rem;
+      }
+
+      input {
+        width: 100%;
+        min-height: 2.75rem;
+        padding: 0.65rem 0.75rem;
+        color: var(--text);
+        background: var(--surface-muted);
+        border: 1px solid var(--border);
+        border-radius: 0.55rem;
+      }
+
+      input::placeholder {
+        color: var(--faint);
+      }
+
+      code,
+      pre,
+      .eyebrow,
+      .status,
+      .stream-mode,
+      .timestamp,
+      .diagnostic-event,
+      .diagnostic-fields,
+      .participant-state {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      .shell {
+        width: min(100% - 2rem, 92rem);
+        margin: 0 auto;
+        padding: 3rem 0 4rem;
+      }
+
+      .hero {
+        max-width: 52rem;
+        margin-bottom: 2rem;
+      }
+
+      .eyebrow {
+        margin: 0 0 0.6rem;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 0.75rem;
+        font-size: clamp(2rem, 5vw, 3.65rem);
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+      }
+
+      h2 {
+        margin-bottom: 0.45rem;
+        font-size: 1.05rem;
+      }
+
+      h3 {
+        margin-bottom: 0;
+        font-size: 0.98rem;
+      }
+
+      .hero p,
+      .panel-description,
+      .field-help,
+      .footer-note {
+        color: var(--muted);
+      }
+
+      .hero p {
+        max-width: 48rem;
+        margin-bottom: 0;
+        font-size: 1.05rem;
+      }
+
+      .card {
+        background: rgba(19, 27, 47, 0.9);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      .connection-card {
+        margin-bottom: 1rem;
+        padding: 1.25rem;
+      }
+
+      .connection-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(14rem, 1fr) auto;
+        gap: 1rem;
+        align-items: end;
+      }
+
+      .field {
+        min-width: 0;
+      }
+
+      .field label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-weight: 700;
+      }
+
+      .optional {
+        color: var(--faint);
+        font-size: 0.8rem;
+        font-weight: 400;
+      }
+
+      .field-help {
+        margin: 0.4rem 0 0;
+        font-size: 0.8rem;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+      }
+
+      .status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .status {
+        display: inline-flex;
+        gap: 0.5rem;
+        align-items: center;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 0.65rem;
+        height: 0.65rem;
+        background: var(--faint);
+        border-radius: 50%;
+        box-shadow: 0 0 0 0.2rem rgba(115, 128, 158, 0.15);
+      }
+
+      #connection-status[data-state="connecting"] .status-indicator {
+        background: var(--warning);
+        box-shadow: 0 0 0 0.2rem rgba(252, 211, 77, 0.16);
+      }
+
+      #connection-status[data-state="connected"] .status-indicator {
+        background: var(--success);
+        box-shadow: 0 0 0 0.2rem rgba(134, 239, 172, 0.16);
+      }
+
+      #connection-status[data-state="error"] .status-indicator,
+      #connection-status[data-state="disconnected"] .status-indicator {
+        background: var(--danger);
+        box-shadow: 0 0 0 0.2rem rgba(252, 165, 165, 0.16);
+      }
+
+      .stream-mode {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .room-card {
+        margin-bottom: 1rem;
+        padding: 1.25rem;
+      }
+
+      .room-card-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+
+      .room-card-header p {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .events-list,
+      .diagnostics-list {
+        display: grid;
+        gap: 0.6rem;
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .room-event,
+      .diagnostic-event-row {
+        padding: 0.8rem;
+        background: var(--surface-muted);
+        border: 1px solid var(--border);
+        border-radius: 0.65rem;
+      }
+
+      .room-event {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0.8rem;
+        align-items: baseline;
+      }
+
+      .room-event strong {
+        color: var(--accent);
+      }
+
+      .room-event .reason {
+        color: var(--warning);
+      }
+
+      .timestamp {
+        color: var(--faint);
+        font-size: 0.75rem;
+      }
+
+      .empty-state {
+        margin: 1rem 0 0;
+        padding: 1.2rem;
+        color: var(--muted);
+        text-align: center;
+        background: var(--surface-muted);
+        border: 1px dashed var(--border);
+        border-radius: 0.65rem;
+      }
+
+      .panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 1rem;
+        align-items: start;
+      }
+
+      .panel {
+        min-width: 0;
+        padding: 1.25rem;
+      }
+
+      .panel-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem 1rem;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+
+      .panel-description {
+        margin-bottom: 0;
+        font-size: 0.84rem;
+      }
+
+      .transcript-list {
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      .transcript-row {
+        padding: 1rem;
+        background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), var(--surface-muted));
+        border: 1px solid var(--border);
+        border-radius: 0.7rem;
+      }
+
+      .transcript-row-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.8rem;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+
+      .participant-state {
+        color: var(--accent);
+        font-size: 0.72rem;
+      }
+
+      .transcript-copy {
+        min-height: 2.4rem;
+        margin: 0.8rem 0 0;
+        color: var(--text);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .transcript-turns {
+        display: grid;
+        gap: 0.65rem;
+        margin-top: 0.8rem;
+      }
+
+      .transcript-turn {
+        padding: 0.7rem;
+        border-left: 0.2rem solid var(--accent-strong);
+        border-radius: 0 0.45rem 0.45rem 0;
+        background: rgba(24, 35, 59, 0.72);
+      }
+
+      .transcript-turn[data-state="complete"] {
+        border-left-color: var(--success);
+      }
+
+      .transcript-turn .transcript-copy {
+        margin: 0;
+      }
+
+      .turn-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 0.75rem;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 0.35rem;
+        color: var(--faint);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .diagnostic-event-row {
+        display: grid;
+        gap: 0.7rem;
+      }
+
+      .diagnostic-event-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.3rem 0.75rem;
+        align-items: baseline;
+      }
+
+      .diagnostic-participant {
+        color: var(--accent);
+        font-weight: 700;
+        overflow-wrap: anywhere;
+      }
+
+      .diagnostic-event {
+        color: var(--warning);
+        font-size: 0.8rem;
+        overflow-wrap: anywhere;
+      }
+
+      .diagnostic-fields {
+        margin: 0;
+        padding: 0.7rem;
+        color: var(--muted);
+        font-size: 0.74rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: rgba(11, 16, 32, 0.72);
+        border-radius: 0.45rem;
+      }
+
+      .footer-note {
+        margin: 1rem 0 0;
+        font-size: 0.8rem;
+        text-align: center;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @media (max-width: 60rem) {
+        .connection-grid {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        }
+
+        .actions {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 44rem) {
+        .shell {
+          width: min(100% - 1rem, 92rem);
+          padding-top: 1.5rem;
+        }
+
+        .connection-grid,
+        .panels {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .actions {
+          grid-column: auto;
+        }
+
+        .actions button {
+          flex: 1;
+        }
+
+        .panel,
+        .connection-card,
+        .room-card {
+          padding: 1rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <p class="eyebrow">Agent room / live monitor</p>
+        <h1>Room event visualizer</h1>
+        <p>
+          Watch participant transcripts and execution diagnostics as they arrive from the room's
+          forward-only Server-Sent Events stream. This page is one self-contained HTML file: no
+          framework, package install, build step, or audio playback is required.
+        </p>
+      </header>
+
+      <section class="card connection-card" aria-labelledby="connection-heading">
+        <h2 id="connection-heading">Connection</h2>
+        <form id="connection-form" novalidate>
+          <div class="connection-grid">
+            <div class="field">
+              <label for="events-url">Events URL</label>
+              <input
+                id="events-url"
+                name="events-url"
+                type="text"
+                inputmode="url"
+                autocomplete="url"
+                spellcheck="false"
+                value="/events"
+                aria-describedby="events-url-help"
+              />
+              <p class="field-help" id="events-url-help">
+                Use <code>/events</code> when hosted beside the room server, or enter an absolute URL
+                when this file is served elsewhere.
+              </p>
+            </div>
+
+            <div class="field">
+              <label for="participant-filter">
+                Participant filter <span class="optional">(optional)</span>
+              </label>
+              <input
+                id="participant-filter"
+                name="participant-filter"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="blank = combined stream"
+                aria-describedby="participant-filter-help"
+              />
+              <p class="field-help" id="participant-filter-help">
+                Leave blank for all participants, or request <code>?participant=&lt;id&gt;</code>.
+              </p>
+            </div>
+
+            <div class="actions">
+              <button id="connect-button" type="submit">Connect</button>
+              <button id="disconnect-button" class="secondary" type="button" disabled>Disconnect</button>
+            </div>
+          </div>
+        </form>
+
+        <div
+          id="connection-status"
+          class="status-row"
+          data-state="disconnected"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <span class="status" id="status-text">
+            <span class="status-indicator" aria-hidden="true"></span>
+            Not connected
+          </span>
+          <p class="stream-mode" id="stream-mode">Showing the combined room stream.</p>
+        </div>
+      </section>
+
+      <section class="card room-card" aria-labelledby="room-heading">
+        <div class="room-card-header">
+          <div>
+            <h2 id="room-heading">Room lifecycle</h2>
+            <p>Connection status and room-owned events stay separate from participant panels.</p>
+          </div>
+          <p id="room-count" aria-live="polite">0 room events</p>
+        </div>
+        <p class="empty-state" id="room-empty">No room lifecycle events yet.</p>
+        <ol
+          class="events-list"
+          id="room-events"
+          tabindex="0"
+          aria-live="polite"
+          aria-label="Room lifecycle events"
+        ></ol>
+      </section>
+
+      <div class="panels">
+        <section class="card panel" aria-labelledby="transcript-heading">
+          <div class="panel-header">
+            <div>
+              <h2 id="transcript-heading">Live transcript</h2>
+              <p class="panel-description">One live row per participant, built only from transcript events.</p>
+            </div>
+            <p class="stream-mode" id="transcript-count" aria-live="polite">0 participants</p>
+          </div>
+          <p class="empty-state" id="transcript-empty">No transcript events yet.</p>
+          <div
+            class="transcript-list"
+            id="transcripts"
+            tabindex="0"
+            role="list"
+            aria-live="polite"
+            aria-label="Live participant transcripts"
+          ></div>
+        </section>
+
+        <section class="card panel" aria-labelledby="diagnostic-heading">
+          <div class="panel-header">
+            <div>
+              <h2 id="diagnostic-heading">Diagnostics</h2>
+              <p class="panel-description">Execution records with participant, event, timestamp, and fields.</p>
+            </div>
+            <p class="stream-mode" id="diagnostic-count" aria-live="polite">0 events</p>
+          </div>
+          <p class="empty-state" id="diagnostic-empty">No diagnostic events yet.</p>
+          <ol
+            class="diagnostics-list"
+            id="diagnostics"
+            tabindex="0"
+            aria-live="polite"
+            aria-label="Participant diagnostic events"
+          ></ol>
+        </section>
+      </div>
+
+      <p class="footer-note">
+        The visualizer consumes JSON event metadata only. It never requests, buffers, or plays live audio.
+      </p>
+    </main>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const EVENT_DIAGNOSTIC = "diagnostic";
+        const EVENT_TRANSCRIPT_DELTA = "transcript_delta";
+        const EVENT_TRANSCRIPT_END = "transcript_end";
+        const EVENT_ROOM = "room";
+
+        const pageParams = new URLSearchParams(window.location.search);
+        const eventsURL = document.getElementById("events-url");
+        const participantFilter = document.getElementById("participant-filter");
+        const connectionForm = document.getElementById("connection-form");
+        const connectButton = document.getElementById("connect-button");
+        const disconnectButton = document.getElementById("disconnect-button");
+        const connectionStatus = document.getElementById("connection-status");
+        const statusText = document.getElementById("status-text");
+        const streamMode = document.getElementById("stream-mode");
+        const roomEmpty = document.getElementById("room-empty");
+        const roomEvents = document.getElementById("room-events");
+        const roomCount = document.getElementById("room-count");
+        const transcriptEmpty = document.getElementById("transcript-empty");
+        const transcripts = document.getElementById("transcripts");
+        const transcriptCount = document.getElementById("transcript-count");
+        const diagnosticEmpty = document.getElementById("diagnostic-empty");
+        const diagnostics = document.getElementById("diagnostics");
+        const diagnosticCount = document.getElementById("diagnostic-count");
+
+        const transcriptRows = new Map();
+        let eventSource = null;
+        let manuallyDisconnected = false;
+        let observedEventCount = 0;
+        let observedRoomCount = 0;
+        let observedDiagnosticCount = 0;
+
+        const configuredURL = pageParams.get("events") || pageParams.get("events_url") || pageParams.get("url");
+        if (configuredURL) {
+          eventsURL.value = configuredURL;
+        }
+        const configuredParticipant = pageParams.get("participant");
+        if (configuredParticipant) {
+          participantFilter.value = configuredParticipant;
+        }
+
+        function text(value, fallback = "") {
+          return typeof value === "string" ? value : fallback;
+        }
+
+        function setStatus(state, message) {
+          connectionStatus.dataset.state = state;
+          statusText.replaceChildren();
+          const indicator = document.createElement("span");
+          indicator.className = "status-indicator";
+          indicator.setAttribute("aria-hidden", "true");
+          statusText.append(indicator, document.createTextNode(message));
+        }
+
+        function setStreamMode() {
+          const filter = participantFilter.value.trim();
+          if (filter) {
+            streamMode.textContent =
+              `Showing participant “${filter}” only. Room-owned lifecycle events are not included in a participant filter.`;
+            return;
+          }
+          streamMode.textContent = "Showing the combined room stream for all participants.";
+        }
+
+        function setEmptyState(element, visible) {
+          element.hidden = !visible;
+        }
+
+        function formatTimestamp(timestamp) {
+          const value = text(timestamp);
+          return value || "timestamp unavailable";
+        }
+
+        function timestampElement(timestamp) {
+          const time = document.createElement("time");
+          const value = text(timestamp);
+          time.className = "timestamp";
+          if (value) {
+            time.dateTime = value;
+          }
+          time.textContent = formatTimestamp(value);
+          return time;
+        }
+
+        function participantName(participantID) {
+          return text(participantID, "unknown participant");
+        }
+
+        function updateCounts() {
+          roomCount.textContent = `${observedRoomCount} room event${observedRoomCount === 1 ? "" : "s"}`;
+          transcriptCount.textContent = `${transcriptRows.size} participant${transcriptRows.size === 1 ? "" : "s"}`;
+          diagnosticCount.textContent = `${observedDiagnosticCount} diagnostic event${observedDiagnosticCount === 1 ? "" : "s"}`;
+        }
+
+        function resetView() {
+          observedEventCount = 0;
+          observedRoomCount = 0;
+          observedDiagnosticCount = 0;
+          transcriptRows.clear();
+          roomEvents.replaceChildren();
+          transcripts.replaceChildren();
+          diagnostics.replaceChildren();
+          setEmptyState(roomEmpty, true);
+          setEmptyState(transcriptEmpty, true);
+          setEmptyState(diagnosticEmpty, true);
+          updateCounts();
+        }
+
+        function updateConnectedStatus() {
+          const count = observedEventCount;
+          if (count === 0) {
+            setStatus("connected", "Connected — no events yet");
+          } else {
+            setStatus("connected", `Connected — received ${count} event${count === 1 ? "" : "s"}`);
+          }
+        }
+
+        function transcriptRow(participantID) {
+          const key = participantName(participantID);
+          const existing = transcriptRows.get(key);
+          if (existing) {
+            return existing;
+          }
+
+          const row = document.createElement("article");
+          row.className = "transcript-row";
+          row.setAttribute("role", "listitem");
+          row.dataset.participantID = key;
+
+          const header = document.createElement("div");
+          header.className = "transcript-row-header";
+          const heading = document.createElement("h3");
+          heading.textContent = key;
+          const state = document.createElement("span");
+          state.className = "participant-state";
+          state.textContent = "waiting for transcript";
+          header.append(heading, state);
+
+          const turns = document.createElement("div");
+          turns.className = "transcript-turns";
+          turns.setAttribute("aria-live", "polite");
+
+          row.append(header, turns);
+          transcripts.append(row);
+          const participantRow = { row, state, turns, current: null };
+          transcriptRows.set(key, participantRow);
+          setEmptyState(transcriptEmpty, false);
+          updateCounts();
+          return participantRow;
+        }
+
+        function transcriptTurn(row) {
+          if (row.current && !row.current.ended) {
+            return row.current;
+          }
+
+          const turn = document.createElement("div");
+          turn.className = "transcript-turn";
+          turn.dataset.state = "streaming";
+
+          const metadata = document.createElement("div");
+          metadata.className = "turn-meta";
+          const state = document.createElement("span");
+          state.textContent = "streaming";
+          const timestamp = document.createElement("time");
+          timestamp.className = "timestamp";
+          timestamp.textContent = "";
+          metadata.append(state, timestamp);
+
+          const copy = document.createElement("p");
+          copy.className = "transcript-copy";
+          copy.textContent = "";
+          turn.append(metadata, copy);
+          row.turns.append(turn);
+          row.current = { turn, state, timestamp, copy, ended: false };
+          return row.current;
+        }
+
+        function renderTranscriptDelta(event) {
+          const row = transcriptRow(event.participant_id);
+          const turn = transcriptTurn(row);
+          turn.copy.textContent += text(event.text);
+          turn.state.textContent = "streaming";
+          turn.timestamp.textContent = formatTimestamp(event.ts);
+          if (text(event.ts)) {
+            turn.timestamp.dateTime = text(event.ts);
+          }
+          row.state.textContent = `streaming · ${formatTimestamp(event.ts)}`;
+        }
+
+        function renderTranscriptEnd(event) {
+          const row = transcriptRow(event.participant_id);
+          const turn = transcriptTurn(row);
+          if (typeof event.full_text === "string") {
+            turn.copy.textContent = event.full_text;
+          }
+          turn.copy.textContent = turn.copy.textContent || "(empty transcript)";
+          turn.turn.dataset.state = "complete";
+          turn.state.textContent = "complete";
+          turn.timestamp.textContent = formatTimestamp(event.ts);
+          if (text(event.ts)) {
+            turn.timestamp.dateTime = text(event.ts);
+          }
+          turn.ended = true;
+          row.state.textContent = `complete · ${formatTimestamp(event.ts)}`;
+        }
+
+        function renderDiagnostic(event) {
+          const item = document.createElement("li");
+          item.className = "diagnostic-event-row";
+
+          const header = document.createElement("div");
+          header.className = "diagnostic-event-header";
+          const identity = document.createElement("div");
+          const participant = document.createElement("span");
+          participant.className = "diagnostic-participant";
+          participant.textContent = participantName(event.participant_id);
+          const separator = document.createTextNode(" · ");
+          const eventName = document.createElement("span");
+          eventName.className = "diagnostic-event";
+          eventName.textContent = text(event.event, "unknown event");
+          identity.append(participant, separator, eventName);
+          header.append(identity, timestampElement(event.ts));
+
+          const fields = document.createElement("pre");
+          fields.className = "diagnostic-fields";
+          const fieldValues = event.fields && typeof event.fields === "object" ? event.fields : {};
+          fields.textContent = JSON.stringify(fieldValues, null, 2);
+
+          item.append(header, fields);
+          diagnostics.append(item);
+          setEmptyState(diagnosticEmpty, false);
+          observedDiagnosticCount += 1;
+          updateCounts();
+        }
+
+        function renderRoomEvent(event) {
+          const item = document.createElement("li");
+          item.className = "room-event";
+
+          const eventName = document.createElement("strong");
+          eventName.textContent = text(event.event, "unknown room event");
+          const participant = document.createElement("span");
+          participant.textContent = `participant: ${participantName(event.participant_id)}`;
+          item.append(eventName, participant, timestampElement(event.ts));
+
+          const reason = text(event.reason);
+          if (reason) {
+            const reasonElement = document.createElement("span");
+            reasonElement.className = "reason";
+            reasonElement.textContent = `reason: ${reason}`;
+            item.append(reasonElement);
+          }
+
+          roomEvents.append(item);
+          setEmptyState(roomEmpty, false);
+          observedRoomCount += 1;
+          updateCounts();
+        }
+
+        function renderEvent(event) {
+          if (!event || typeof event !== "object") {
+            throw new Error("event payload must be a JSON object");
+          }
+
+          switch (event.type) {
+            case EVENT_DIAGNOSTIC:
+              renderDiagnostic(event);
+              return;
+            case EVENT_TRANSCRIPT_DELTA:
+              renderTranscriptDelta(event);
+              return;
+            case EVENT_TRANSCRIPT_END:
+              renderTranscriptEnd(event);
+              return;
+            case EVENT_ROOM:
+              renderRoomEvent(event);
+              return;
+            default:
+              throw new Error(`unsupported room event type “${text(event.type, "missing type") }”`);
+          }
+        }
+
+        function connectionURL() {
+          const rawURL = eventsURL.value.trim();
+          if (!rawURL) {
+            throw new Error("Enter an events URL before connecting.");
+          }
+
+          let url;
+          try {
+            url = new URL(rawURL, document.baseURI);
+          } catch (error) {
+            throw new Error(`Invalid events URL: ${error.message}`);
+          }
+          if (url.protocol !== "http:" && url.protocol !== "https:") {
+            throw new Error("Events URL must use http or https.");
+          }
+
+          const filter = participantFilter.value.trim();
+          if (filter) {
+            url.searchParams.set("participant", filter);
+          } else {
+            url.searchParams.delete("participant");
+          }
+          return url.toString();
+        }
+
+        function closeEventSource() {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+        }
+
+        function connect() {
+          let url;
+          try {
+            url = connectionURL();
+          } catch (error) {
+            closeEventSource();
+            connectButton.disabled = false;
+            disconnectButton.disabled = true;
+            setStatus("error", `Error — ${error.message}`);
+            setStreamMode();
+            return;
+          }
+
+          manuallyDisconnected = false;
+          closeEventSource();
+          resetView();
+          setStreamMode();
+          setStatus("connecting", `Connecting to ${url}`);
+          connectButton.disabled = true;
+          disconnectButton.disabled = false;
+
+          try {
+            const source = new EventSource(url);
+            eventSource = source;
+            source.onopen = () => {
+              if (eventSource !== source) {
+                return;
+              }
+              updateConnectedStatus();
+            };
+
+            source.onmessage = (message) => {
+              if (eventSource !== source) {
+                return;
+              }
+              try {
+                const event = JSON.parse(message.data);
+                renderEvent(event);
+                observedEventCount += 1;
+                updateConnectedStatus();
+              } catch (error) {
+                setStatus("error", `Error — ignored malformed stream event: ${error.message}`);
+              }
+            };
+
+            source.onerror = () => {
+              if (eventSource !== source || manuallyDisconnected) {
+                return;
+              }
+              if (source.readyState === EventSource.CLOSED) {
+                setStatus("disconnected", "Disconnected — the event stream closed");
+                return;
+              }
+              setStatus("error", "Connection error — EventSource will retry");
+            };
+          } catch (error) {
+            eventSource = null;
+            connectButton.disabled = false;
+            disconnectButton.disabled = true;
+            setStatus("error", `Error — could not open EventSource: ${error.message}`);
+          }
+        }
+
+        function disconnect() {
+          manuallyDisconnected = true;
+          closeEventSource();
+          connectButton.disabled = false;
+          disconnectButton.disabled = true;
+          setStatus("disconnected", "Disconnected by operator");
+        }
+
+        connectionForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          connect();
+        });
+        disconnectButton.addEventListener("click", disconnect);
+
+        setStreamMode();
+        updateCounts();
+        connect();
+      })();
+    </script>
+  </body>
+</html>

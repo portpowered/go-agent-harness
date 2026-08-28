@@ -29,6 +29,7 @@ const expectedRootHelp = "A CLI that runs Port OS agentic loops with configurabl
 	"  interaction Inspect provider-neutral gateway interactions\n" +
 	"  media       Inspect external media sources\n" +
 	"  probe       Run deterministic offline probes\n" +
+	"  room        Run manifest-defined participant rooms\n" +
 	"  session     Run or manage agent sessions\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
 	"Flags:\n" +
@@ -49,6 +50,7 @@ const expectedRootUsage = "Usage:\n  agent [command]\n\n" +
 	"  interaction Inspect provider-neutral gateway interactions\n" +
 	"  media       Inspect external media sources\n" +
 	"  probe       Run deterministic offline probes\n" +
+	"  room        Run manifest-defined participant rooms\n" +
 	"  session     Run or manage agent sessions\n" +
 	"  tool        Invoke a tool directly by name and key=value args (for debugging)\n\n" +
 	"Flags:\n" +
@@ -184,6 +186,8 @@ func TestRouteHelpExecutionContracts(t *testing.T) {
 		{name: "media probe", args: []string{"media", "probe", "--help"}, usage: "agent media probe <url>", description: "Probe an external go2rtc or RTSP media source"},
 		{name: "media look", args: []string{"media", "look", "--help"}, usage: "agent media look <url>", description: "Observe one visual frame from an external media source"},
 		{name: "probe report", args: []string{"probe", "report", "--help"}, usage: "agent probe report --out <result.jsonl>...", description: "Aggregate probe result artifacts into a friction report"},
+		{name: "room", args: []string{"room", "--help"}, usage: "agent room", description: "Run manifest-defined participant rooms"},
+		{name: "room run", args: []string{"room", "run", "--help"}, usage: "agent room run --manifest <file> [--out <dir>] [--stream <addr>]", description: "Run an N-participant room from a manifest"},
 		{name: "session", args: []string{"session", "--help"}, usage: "agent session", description: "Run a bidirectional session inference capture"},
 		{name: "session show", args: []string{"session", "show", "--help"}, usage: "agent session show <session-id>", description: "Load and print the conversation history"},
 		{name: "session list", args: []string{"session", "list", "--help"}, usage: "agent session list", description: "List session IDs with last modified time"},
