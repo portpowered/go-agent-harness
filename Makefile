@@ -5,6 +5,8 @@ MODULES := agent-cli go-agent-loop go-llm-gateway
 BUILD_CGO_ENABLED ?= 0
 AGENT_CLI_OUTPUT ?= agent-cli/bin/agent
 GO_TEST_TIMEOUT ?= 120s
+AGENT_CLI_INTEGRATION_TIMEOUT ?= 180s
+AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
@@ -28,7 +30,7 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -38,6 +40,7 @@ help: ## Show available targets.
 	@printf "\nOpt-in test env vars:\n"
 	@printf "  %-18s %s\n" "RUN_CUSTOMER_SESSIONS=1" "Acknowledge local-only private session sweep targets."
 	@printf "  %-18s %s\n" "CUSTOMER_SESSION_DIR=..." "Override the private session directory checked by test-customer-sessions."
+	@printf "  %-18s %s\n" "AGENT_CLI_INTEGRATION_TIMEOUT=..." "Override the finite timeout for agent-cli/test/integration root-target invocations."
 	@printf "\nRelease env vars:\n"
 	@printf "  %-18s %s\n" "RELEASE_VERSION=v0.0.1" "Version used by release targets."
 	@printf "  %-18s %s\n" "SKIP_RELEASE_CI=1" "Skip the CI pipeline inside make release."
@@ -116,8 +119,18 @@ staticcheck: ## Run staticcheck across all workspace modules.
 test: ## Run deterministic Go tests across all workspace modules.
 	@set -euo pipefail; \
 	for module in $(MODULES); do \
-		echo "==> test $$module"; \
-		(cd "$$module" && $(GO) test ./... -timeout $(GO_TEST_TIMEOUT)); \
+		effective_timeout="$(GO_TEST_TIMEOUT)"; \
+		timeout_scope="general package timeout"; \
+		if [ "$$module" = "agent-cli" ]; then \
+			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
+			timeout_scope="target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE)"; \
+		fi; \
+		echo "==> test $$module ($$timeout_scope: $$effective_timeout)"; \
+		if [ "$$module" = "agent-cli" ]; then \
+			(cd "$$module" && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" -- $(GO) test ./... -timeout "$$effective_timeout"); \
+		else \
+			(cd "$$module" && $(GO) test ./... -timeout "$$effective_timeout"); \
+		fi; \
 	done
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
@@ -162,17 +175,17 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \
-	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE))"; \
-	(cd agent-cli && $(GO) test $(AGENT_CLI_INTEGRATION_PACKAGE) -timeout $(GO_TEST_TIMEOUT)); \
-	echo "==> test-integration go-agent-loop ($(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE))"; \
-	(cd go-agent-loop && $(GO) test $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE) -timeout $(GO_TEST_TIMEOUT))
+	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
+	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test $(AGENT_CLI_INTEGRATION_PACKAGE) -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)"); \
+	echo "==> test-integration go-agent-loop ($(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE), timeout $(GO_TEST_TIMEOUT))"; \
+	(cd go-agent-loop && $(GO) test $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE) -timeout "$(GO_TEST_TIMEOUT)")
 
 test-regressions: ## Run committed replay and fixture regression tests suitable for CI.
 	@set -euo pipefail; \
-	echo "==> test-regressions agent-cli replay fixtures"; \
-	(cd agent-cli && $(GO) test $(AGENT_CLI_INTEGRATION_PACKAGE) -run '$(AGENT_CLI_REGRESSION_TESTS)' -timeout $(GO_TEST_TIMEOUT)); \
-	echo "==> test-regressions go-llm-gateway replay fixtures"; \
-	(cd go-llm-gateway && $(GO) test $(GO_LLM_GATEWAY_REGRESSION_PACKAGES) -timeout $(GO_TEST_TIMEOUT))
+	echo "==> test-regressions agent-cli replay fixtures ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
+	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test $(AGENT_CLI_INTEGRATION_PACKAGE) -run '$(AGENT_CLI_REGRESSION_TESTS)' -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)"); \
+	echo "==> test-regressions go-llm-gateway replay fixtures (timeout $(GO_TEST_TIMEOUT))"; \
+	(cd go-llm-gateway && $(GO) test $(GO_LLM_GATEWAY_REGRESSION_PACKAGES) -timeout "$(GO_TEST_TIMEOUT)")
 
 test-customer-sessions: ## Inspect private session data only when explicitly opted in; otherwise skip with guidance.
 	@set -euo pipefail; \
@@ -206,8 +219,18 @@ coverage: ## Write per-module coverage profiles under coverage/.
 	@set -euo pipefail; \
 	mkdir -p "$(COVERAGE_DIR)"; \
 	for module in $(MODULES); do \
-		echo "==> coverage $$module"; \
-		(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout $(GO_TEST_TIMEOUT) -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+		effective_timeout="$(GO_TEST_TIMEOUT)"; \
+		timeout_scope="general package timeout"; \
+		if [ "$$module" = "agent-cli" ]; then \
+			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
+			timeout_scope="target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE)"; \
+		fi; \
+		echo "==> coverage $$module ($$timeout_scope: $$effective_timeout)"; \
+		if [ "$$module" = "agent-cli" ]; then \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+		else \
+			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout" -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
+		fi; \
 	done; \
 	echo "==> coverage gate"; \
 	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest ../../coverage-manifest.json ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
@@ -286,17 +309,26 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 	run_budget_test() { \
 		module="$$1"; \
 		shift; \
-		echo "==> test-budget $$module $$*"; \
+		effective_timeout="$(GO_TEST_TIMEOUT)"; \
+		if [ "$$module" = "agent-cli" ] && [ "$${1:-}" = "$(AGENT_CLI_INTEGRATION_PACKAGE)" ]; then \
+			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
+		fi; \
+		echo "==> test-budget $$module $$* (timeout $$effective_timeout)"; \
 		run_budget_output="$$(mktemp)"; \
-		if (cd "$$module" && CGO_ENABLED=0 $(GO) test "$$@" -json -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)") >"$$run_budget_output" 2>&1; then \
-			cat "$$run_budget_output" >> "$$timingate_input"; \
-			rm -f "$$run_budget_output"; \
+		status=0; \
+		if [ "$$module" = "agent-cli" ]; then \
+			(cd "$$module" && CGO_ENABLED=0 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" -- $(GO) test "$$@" -json -count=1 -tags=nomicrophone -timeout "$$effective_timeout") >"$$run_budget_output" 2>&1 || status=$$?; \
 		else \
-			status=$$?; \
+			(cd "$$module" && CGO_ENABLED=0 $(GO) test "$$@" -json -count=1 -tags=nomicrophone -timeout "$$effective_timeout") >"$$run_budget_output" 2>&1 || status=$$?; \
+		fi; \
+		if [ "$$status" -eq 0 ]; then \
+			cat "$$run_budget_output" >> "$$timingate_input"; \
+		else \
 			cat "$$run_budget_output"; \
 			rm -f "$$run_budget_output"; \
 			return $$status; \
 		fi; \
+		rm -f "$$run_budget_output"; \
 	}; \
 	run_budget_unit() { \
 		module="$$1"; \
@@ -316,6 +348,16 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 test-hermetic: ## Run all Go tests with CGO disabled and the microphone stub.
 	@set -euo pipefail; \
 	for module in $(MODULES); do \
-		echo "==> test-hermetic $$module (CGO_ENABLED=0, tags=nomicrophone)"; \
-		(cd "$$module" && CGO_ENABLED=0 $(GO) test ./... -tags=nomicrophone -timeout $(GO_TEST_TIMEOUT)); \
+		effective_timeout="$(GO_TEST_TIMEOUT)"; \
+		timeout_scope="general package timeout"; \
+		if [ "$$module" = "agent-cli" ]; then \
+			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
+			timeout_scope="target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE)"; \
+		fi; \
+		echo "==> test-hermetic $$module (CGO_ENABLED=0, tags=nomicrophone, $$timeout_scope: $$effective_timeout)"; \
+		if [ "$$module" = "agent-cli" ]; then \
+			(cd "$$module" && CGO_ENABLED=0 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$$effective_timeout" -- $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout"); \
+		else \
+			(cd "$$module" && CGO_ENABLED=0 $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout"); \
+		fi; \
 	done

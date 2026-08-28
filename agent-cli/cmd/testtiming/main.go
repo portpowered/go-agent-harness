@@ -3,14 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testtimeout"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming"
 )
 
@@ -30,10 +29,14 @@ func run(stdout, stderr io.Writer, args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	timeoutDuration, err := time.ParseDuration(*timeout)
+	if err != nil || timeoutDuration <= 0 {
+		return fmt.Errorf("invalid positive test timeout %q", *timeout)
+	}
 
 	ctx := context.Background()
 	preflightStarted := time.Now()
-	preflightResult := runCommand(ctx, *goCommand, "test", "./...", "-run", "^$", "-count=1", "-timeout", *timeout)
+	preflightResult := runCommand(ctx, timeoutDuration, *goCommand, "test", "./...", "-run", "^$", "-count=1", "-timeout", *timeout)
 	preflightDuration := time.Since(preflightStarted)
 	if preflightResult.err != nil {
 		_, _ = stderr.Write(preflightResult.combined)
@@ -41,7 +44,7 @@ func run(stdout, stderr io.Writer, args []string) error {
 	}
 
 	suiteStarted := time.Now()
-	suiteResult := runCommand(ctx, *goCommand, "test", "./...", "-json", "-v", "-count=1", "-timeout", *timeout)
+	suiteResult := runCommand(ctx, timeoutDuration, *goCommand, "test", "./...", "-json", "-v", "-count=1", "-timeout", *timeout)
 	suiteDuration := time.Since(suiteStarted)
 
 	summary, err := testtiming.Parse(bytes.NewReader(suiteResult.combined))
@@ -64,23 +67,15 @@ type commandResult struct {
 	err      error
 }
 
-func runCommand(ctx context.Context, name string, args ...string) commandResult {
-	cmd := exec.CommandContext(ctx, name, args...)
-	output, err := cmd.CombinedOutput()
-	result := commandResult{
-		combined: output,
-		exitCode: 0,
+func runCommand(ctx context.Context, timeout time.Duration, name string, args ...string) commandResult {
+	runnerResult, err := testtimeout.Run(ctx, testtimeout.Config{
+		Command: name,
+		Args:    args,
+		Timeout: timeout,
+	})
+	return commandResult{
+		combined: []byte(runnerResult.Output),
+		exitCode: runnerResult.ExitCode,
 		err:      err,
 	}
-	if err == nil {
-		return result
-	}
-
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		result.exitCode = exitErr.ExitCode()
-		return result
-	}
-	result.exitCode = -1
-	return result
 }
