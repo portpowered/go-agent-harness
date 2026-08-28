@@ -288,13 +288,18 @@ func (s *selfPlayStopState) stop(reason SelfPlayStopReason, err error) {
 		reason = SelfPlayStopFailure
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.reason != "" {
-		s.mu.Unlock()
 		return
 	}
 	s.reason = reason
 	s.err = err
-	s.mu.Unlock()
+	s.publishLocked()
+}
+
+// publishLocked closes the shared stop boundary after the terminal reason,
+// error, and accepted turn counts have been committed. Callers must hold mu.
+func (s *selfPlayStopState) publishLocked() {
 	s.once.Do(func() {
 		close(s.done)
 		if s.bridgeCancel != nil {
@@ -322,28 +327,44 @@ func (s *selfPlayStopState) stopped() bool {
 	return s.reason != ""
 }
 
-func (s *selfPlayStopState) recordTurn(side int, target int) {
+// recordTurn admits one completed turn at the same synchronized boundary as
+// terminal publication. A false result means the event was already terminal
+// or that side had reached its bound, so no downstream completed-turn
+// observation should be emitted for it.
+func (s *selfPlayStopState) recordTurn(side int, target int) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if side < 0 || side >= len(s.turns) || target <= 0 {
+		return false
+	}
 	if s.reason != "" {
-		s.mu.Unlock()
-		return
+		return false
+	}
+	if s.turns[side] >= target {
+		return false
 	}
 	s.turns[side]++
-	reached := s.turns[0] >= target && s.turns[1] >= target
-	s.mu.Unlock()
-	if reached {
-		s.stop(SelfPlayStopTurnTarget, nil)
+	if s.turns[0] == target && s.turns[1] == target {
+		s.reason = SelfPlayStopTurnTarget
+		s.err = nil
+		s.publishLocked()
 	}
+	return true
 }
 
 func (s *selfPlayStopState) result() SelfPlayResult {
+	result, _ := s.snapshot()
+	return result
+}
+
+func (s *selfPlayStopState) snapshot() (SelfPlayResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return SelfPlayResult{
 		StopReason:     s.reason,
 		CustomerTurns:  s.turns[0],
 		AssistantTurns: s.turns[1],
-	}
+	}, s.err
 }
 
 type selfPlayPCMBridge struct {
@@ -470,6 +491,9 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 		}
 		observer := newSessionProgressObserver(sideEvidence, nil, opts.Provider, opts.Model)
 		observer.runtime = sideEvidence.runtimeRecord
+		observer.turnAdmission = func(messages.StreamMessage) bool {
+			return stop.recordTurn(side, opts.MaxTurns)
+		}
 		observer.streamObserver = func(msg messages.StreamMessage) {
 			if err := sideEvidence.observeStreamDelta(msg); err != nil {
 				evidence.fail(fmt.Errorf("%s stream delta evidence: %w", name, err))
@@ -491,9 +515,6 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 				if sideEvidence.runtimeRecord != nil {
 					sideEvidence.runtimeRecord.audioOutput(value.Content)
 				}
-			}
-			if msg.Type == messages.StreamTypeMessageEnd {
-				stop.recordTurn(side, opts.MaxTurns)
 			}
 		}
 
@@ -545,12 +566,11 @@ func runSelfPlayConversation(ctx context.Context, opts SelfPlayRunOptions, custo
 	assistantToCustomer.close()
 	bridgeWG.Wait()
 
-	result := stop.result()
+	result, runErr := stop.snapshot()
 	if result.StopReason == "" {
 		stop.fail(errors.New("self-play ended without a stop reason"))
-		result = stop.result()
+		result, runErr = stop.snapshot()
 	}
-	runErr := stop.doneErr()
 	if evidenceErr := evidence.err(); evidenceErr != nil {
 		runErr = errors.Join(runErr, evidenceErr)
 	}

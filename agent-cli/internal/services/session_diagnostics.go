@@ -181,6 +181,10 @@ type sessionProgressObserver struct {
 	recorder       metrics.Recorder
 	productionSink *metrics.InMemorySink
 	streamObserver SessionStreamObserver
+	// turnAdmission is an optional owner-controlled admission boundary for
+	// MESSAGE.END. Returning false keeps the raw stream event observable but
+	// prevents it from advancing completed-turn state or evidence.
+	turnAdmission  func(messages.StreamMessage) bool
 	runtime        *sessionRuntimeObservationRecorder
 	provider       string
 	model          string
@@ -535,8 +539,15 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
 	}
+	turnAdmitted := true
+	if msg.Type == messages.StreamTypeMessageEnd && o.turnAdmission != nil {
+		turnAdmitted = o.turnAdmission(msg)
+	}
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
+	}
+	if msg.Type == messages.StreamTypeMessageEnd && !turnAdmitted {
+		return
 	}
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen:
