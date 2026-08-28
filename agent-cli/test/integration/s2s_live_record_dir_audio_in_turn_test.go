@@ -35,18 +35,19 @@ import (
 // session.closed: the live scheduled-input lifecycle must close locally after
 // the final response.done.
 type cliLiveRecordDirServer struct {
-	mu            sync.Mutex
-	timeline      []string
-	outbound      []cliLiveOutbound
-	responses     chan int
-	events        chan []byte
-	closed        chan struct{}
-	closeOnce     sync.Once
-	dialOnce      sync.Once
-	dialCount     int
-	nextTurn      int
-	providerError bool
-	readErr       error
+	mu             sync.Mutex
+	timeline       []string
+	outbound       []cliLiveOutbound
+	responses      chan int
+	events         chan []byte
+	closed         chan struct{}
+	closeOnce      sync.Once
+	dialOnce       sync.Once
+	dialCount      int
+	nextTurn       int
+	providerError  bool
+	readErr        error
+	closeAfterTurn int
 }
 
 type cliLiveOutbound struct {
@@ -66,6 +67,12 @@ func newCLILiveRecordDirServer(providerError bool) *cliLiveRecordDirServer {
 func newCLILiveRecordDirReadErrorServer(readErr error) *cliLiveRecordDirServer {
 	server := newCLILiveRecordDirServer(false)
 	server.readErr = readErr
+	return server
+}
+
+func newCLILiveRecordDirCloseAfterTurnServer(turn int) *cliLiveRecordDirServer {
+	server := newCLILiveRecordDirServer(false)
+	server.closeAfterTurn = turn
 	return server
 }
 
@@ -95,6 +102,15 @@ func (s *cliLiveRecordDirServer) serve() {
 			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
 			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
 			s.sendEvent(`{"type":"response.output_audio.done"}`)
+			if s.closeAfterTurn > 0 && turn == s.closeAfterTurn {
+				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
+				// Put the terminal provider event ahead of the final response
+				// boundary. The loop drains the queued response.done during
+				// shutdown, proving that turn 2 completed without allowing its
+				// terminal event to release the undispatched turn 3.
+				s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+				return
+			}
 			s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
 		case <-s.closed:
 			return
@@ -1105,6 +1121,75 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	assertCLILiveRecordingBundle(t, recordDir, 2)
 }
 
+func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
+	server := newCLILiveRecordDirCloseAfterTurnServer(2)
+	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
+		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
+		oaiprovider.WithWebSocketDialer(server),
+	)
+	if err != nil {
+		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
+	}
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+		sessionInferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	recordDir := filepath.Join(t.TempDir(), "incomplete-scheduled-recording")
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record-dir", recordDir,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--system-prompt", "none",
+		"--max-duration", "5s",
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = rootCmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("clean provider close after turn 2 reported success with an undispatched third turn")
+	}
+	if !errors.Is(err, services.ErrSessionScheduledAudioIncomplete) {
+		t.Fatalf("incomplete scheduled session error = %v, want ErrSessionScheduledAudioIncomplete", err)
+	}
+	var incomplete *services.SessionScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("incomplete scheduled session error = %v, want typed counts", err)
+	}
+	if incomplete.Completed != 2 || incomplete.Dispatched != 2 || incomplete.Scheduled != 3 {
+		t.Fatalf("incomplete scheduled counts = %+v, want completed=2 dispatched=2 scheduled=3", incomplete)
+	}
+
+	timeline, outbound, dialCount := server.snapshots()
+	if dialCount != 1 {
+		t.Fatalf("incomplete scheduled provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 ||
+		countTimeline(timeline, "out:input_audio_buffer.commit") != 2 ||
+		countTimeline(timeline, "out:response.create") != 2 ||
+		countTimeline(timeline, "in:response.done") != 2 ||
+		countTimeline(timeline, "in:session.closed") != 1 {
+		t.Fatalf("incomplete scheduled wire counts = %v; outbound=%v", timeline, audioLengthsFromOutbound(outbound))
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") >= 3 {
+		t.Fatalf("undispatched third turn crossed the provider boundary: %v", timeline)
+	}
+}
+
 func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingValidation(t *testing.T) {
 	server := newCLILiveRecordDirServer(true)
 	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -1194,8 +1279,12 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 	if !strings.Contains(err.Error(), "Incorrect API key") {
 		t.Fatalf("unexpected provider close error: %v", err)
 	}
-	if strings.Contains(err.Error(), "scheduled audio session ended before all turns completed") || strings.Contains(err.Error(), "at least one segment is required") {
-		t.Fatalf("provider close was masked by a secondary recording error: %v", err)
+	if !errors.Is(err, services.ErrSessionScheduledAudioIncomplete) {
+		t.Fatalf("provider close did not retain the incomplete schedule signal: %v", err)
+	}
+	var incomplete *services.SessionScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) || incomplete.Completed != 0 || incomplete.Dispatched != 0 || incomplete.Scheduled != 1 {
+		t.Fatalf("provider close incomplete schedule counts = %+v, want completed=0 dispatched=0 scheduled=1; error=%v", incomplete, err)
 	}
 }
 

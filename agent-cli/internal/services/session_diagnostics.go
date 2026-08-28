@@ -79,6 +79,11 @@ const (
 	// continuation did not reach a terminal response.
 	SessionDiagnosticFieldPendingToolContinuationCount = "pending_tool_continuation_count"
 	SessionDiagnosticFieldPendingToolContinuationIDs   = "pending_tool_continuation_call_ids"
+	// These fields identify a scheduled-audio session that terminated before
+	// every configured input completed its assistant turn.
+	SessionDiagnosticFieldScheduledInputCount  = "scheduled_input_count"
+	SessionDiagnosticFieldDispatchedInputCount = "dispatched_input_count"
+	SessionDiagnosticFieldCompletedTurnCount   = "completed_turn_count"
 )
 
 const (
@@ -207,6 +212,10 @@ type sessionProgressObserver struct {
 	requireSessionUpdated bool
 	turnsCompleted        int
 	scheduledInputs       int
+	dispatchedInputs      int
+	completedScheduled    int
+	scheduledTurnBase     int
+	scheduledTurnBaseSet  bool
 	counters              audioTurnCounters
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
@@ -923,6 +932,11 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
 			}
 		}
+		if !o.scheduledTurnBaseSet {
+			o.scheduledTurnBase = o.turnsCompleted
+			o.scheduledTurnBaseSet = true
+		}
+		o.dispatchedInputs++
 		o.pendingInputs = o.pendingInputs[1:]
 		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	}
@@ -946,7 +960,22 @@ func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
 // owns the decision to close after the schedule, while replay follows its
 // captured lifecycle.
 func (o *sessionProgressObserver) scheduledAudioComplete() bool {
-	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.turnsCompleted >= o.scheduledInputs && !o.hasToolLifecycleObligation()
+	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.completedScheduled >= o.scheduledInputs && !o.hasToolLifecycleObligation()
+}
+
+func (o *sessionProgressObserver) scheduledAudioIncomplete() bool {
+	return o != nil && o.scheduledInputs > 0 && !o.scheduledAudioComplete()
+}
+
+// scheduledAudioCounts returns the terminal schedule counters in a stable
+// order. Completed is the number of scheduled inputs whose assistant response
+// reached MESSAGE.END; it is distinct from the total session turn count when
+// a prompt or seed turn precedes scheduled audio.
+func (o *sessionProgressObserver) scheduledAudioCounts() (completed, dispatched, scheduled int) {
+	if o == nil {
+		return 0, 0, 0
+	}
+	return o.completedScheduled, o.dispatchedInputs, o.scheduledInputs
 }
 
 // noteProviderUsage accumulates the provider-reported token usage delivered on
@@ -972,6 +1001,16 @@ func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
 // completeTurn closes the current turn boundary and emits the per-turn record.
 func (o *sessionProgressObserver) completeTurn() {
 	o.turnsCompleted++
+	if o.scheduledTurnBaseSet && o.turnsCompleted > o.scheduledTurnBase {
+		completed := o.turnsCompleted - o.scheduledTurnBase
+		if completed > o.dispatchedInputs {
+			completed = o.dispatchedInputs
+		}
+		if completed > o.scheduledInputs {
+			completed = o.scheduledInputs
+		}
+		o.completedScheduled = completed
+	}
 	if o.runtime != nil {
 		o.runtime.turnCompleted(o.turnsCompleted)
 	}
@@ -1089,6 +1128,16 @@ func (o *sessionProgressObserver) imageContinuationFailureFacts(failingEvent str
 func (o *sessionProgressObserver) toolContinuationFailureFacts(failingEvent string) *failureFacts {
 	return &failureFacts{
 		classification: SessionToolContinuationClassification,
+		terminalReason: string(messages.TerminalReasonTerminalFailure),
+		provenance:     string(messages.TerminalProvenanceSession),
+		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
+		failingEvent:   failingEvent,
+	}
+}
+
+func (o *sessionProgressObserver) scheduledAudioFailureFacts(failingEvent string) *failureFacts {
+	return &failureFacts{
+		classification: SessionScheduledAudioClassification,
 		terminalReason: string(messages.TerminalReasonTerminalFailure),
 		provenance:     string(messages.TerminalProvenanceSession),
 		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),

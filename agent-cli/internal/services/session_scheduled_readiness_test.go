@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,80 @@ import (
 type scheduledInputDispatchProbe struct {
 	audio  [][]byte
 	events []messages.StreamMessage
+}
+
+func TestScheduledAudioCompletionErrorJoinsPrimaryAndReportsCounts(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0},
+		{AfterCompletedTurns: 1},
+		{AfterCompletedTurns: 2},
+	})
+	observer.dispatchedInputs = 2
+	observer.completedScheduled = 2
+	observer.turnsCompleted = 2
+
+	primary := errors.New("provider closed cleanly")
+	opts := sessionLoopOptions{CloseAfterScheduledAudio: true, observer: observer}
+	err := scheduledAudioCompletionError(primary, opts)
+	if !errors.Is(err, primary) {
+		t.Fatalf("scheduled completion error lost primary cause: %v", err)
+	}
+	if !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+		t.Fatalf("scheduled completion error = %v, want incomplete sentinel", err)
+	}
+	var incomplete *SessionScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("scheduled completion error = %v, want typed incomplete error", err)
+	}
+	if incomplete.Completed != 2 || incomplete.Dispatched != 2 || incomplete.Scheduled != 3 {
+		t.Fatalf("scheduled completion counts = %+v, want completed=2 dispatched=2 scheduled=3", incomplete)
+	}
+
+	second := scheduledAudioCompletionError(err, opts)
+	if second != err {
+		t.Fatalf("scheduled completion error was wrapped more than once: first=%v second=%v", err, second)
+	}
+}
+
+func TestSessionProgressObserverScheduledIncompleteFailureIncludesCountsOnce(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	observer.sawSessionOpen = true
+	observer.turnsCompleted = 2
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0},
+		{AfterCompletedTurns: 1},
+		{AfterCompletedTurns: 2},
+	})
+	observer.dispatchedInputs = 2
+	observer.completedScheduled = 2
+
+	err := scheduledAudioCompletionError(nil, sessionLoopOptions{
+		CloseAfterScheduledAudio: true,
+		observer:                 observer,
+	})
+	err = observer.finish(err)
+	_ = observer.finish(err)
+
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("scheduled incomplete failure records = %d, want exactly one", len(failures))
+	}
+	fields := failures[0].Fields
+	if fields[fieldClassification] != SessionScheduledAudioClassification {
+		t.Fatalf("scheduled incomplete classification = %q, want %q", fields[fieldClassification], SessionScheduledAudioClassification)
+	}
+	want := map[string]string{
+		SessionDiagnosticFieldCompletedTurnCount:   "2",
+		SessionDiagnosticFieldDispatchedInputCount: "2",
+		SessionDiagnosticFieldScheduledInputCount:  "3",
+	}
+	for key, wantValue := range want {
+		if got := fields[key]; got != wantValue {
+			t.Fatalf("scheduled incomplete field %q = %q, want %q; fields=%v", key, got, wantValue, fields)
+		}
+	}
 }
 
 func (p *scheduledInputDispatchProbe) SendAudioInput(_ context.Context, pcm []byte) error {

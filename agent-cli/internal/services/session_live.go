@@ -20,6 +20,28 @@ const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 // that ended before every queued input received an assistant response.
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 
+// SessionScheduledAudioIncompleteError carries the deterministic schedule
+// counts observed at a terminal boundary. It unwraps to
+// ErrSessionScheduledAudioIncomplete so callers can use errors.Is while still
+// retaining any provider, timeout, cancellation, or cleanup cause joined with
+// it.
+type SessionScheduledAudioIncompleteError struct {
+	Completed  int
+	Dispatched int
+	Scheduled  int
+}
+
+func (e *SessionScheduledAudioIncompleteError) Error() string {
+	if e == nil {
+		return ErrSessionScheduledAudioIncomplete.Error()
+	}
+	return fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrSessionScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+}
+
+func (e *SessionScheduledAudioIncompleteError) Unwrap() error {
+	return ErrSessionScheduledAudioIncomplete
+}
+
 // ErrSessionAudioResponseIncomplete identifies an audio-input run that ended
 // after a provider tool-call turn but before a final assistant response. A
 // provider close or a duration cutoff is not a successful conversation when
@@ -209,10 +231,22 @@ func sessionRunTerminationError(ctx context.Context, err error) error {
 
 func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
 	err = withUnresolvedToolResults(err, opts.observer)
-	if err != nil || !opts.CloseAfterScheduledAudio || opts.observer == nil || opts.observer.scheduledAudioComplete() {
+	if !opts.CloseAfterScheduledAudio || opts.observer == nil || !opts.observer.scheduledAudioIncomplete() {
 		return err
 	}
-	return fmt.Errorf("%w: completed %d of %d", ErrSessionScheduledAudioIncomplete, opts.observer.turnsCompleted, opts.observer.scheduledInputs)
+	if errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+		return err
+	}
+	completed, dispatched, scheduled := opts.observer.scheduledAudioCounts()
+	incomplete := &SessionScheduledAudioIncompleteError{
+		Completed:  completed,
+		Dispatched: dispatched,
+		Scheduled:  scheduled,
+	}
+	if err == nil {
+		return incomplete
+	}
+	return errors.Join(err, incomplete)
 }
 
 func sessionScheduledAudioConfigTimeoutError(opts sessionLoopOptions) error {

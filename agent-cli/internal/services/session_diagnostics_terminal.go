@@ -19,12 +19,14 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		return
 	}
 	o.emitOnce.Do(func() {
+		completedScheduled, dispatchedInputs, scheduledInputs := o.scheduledAudioCounts()
+		scheduleIncomplete := o.scheduledAudioIncomplete()
 		unresolvedIDs := o.unresolvedToolCallIDs()
 		pendingContinuationIDs := o.pendingToolContinuationCallIDs()
 		pendingToolContinuationIDs := o.pendingNonImageToolContinuationCallIDs()
 		pendingImageContinuationIDs := o.pendingImageContinuationCallIDs()
 		f := o.failure
-		if f == nil && len(unresolvedIDs) == 0 && len(pendingContinuationIDs) == 0 {
+		if f == nil && len(unresolvedIDs) == 0 && len(pendingContinuationIDs) == 0 && !scheduleIncomplete {
 			if runErr == nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 				return
 			}
@@ -37,6 +39,9 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		}
 		if f == nil && len(pendingToolContinuationIDs) > 0 && errors.Is(runErr, ErrSessionToolContinuationIncomplete) {
 			f = o.toolContinuationFailureFacts(failingEventRun)
+		}
+		if f == nil && scheduleIncomplete && errors.Is(runErr, ErrSessionScheduledAudioIncomplete) {
+			f = o.scheduledAudioFailureFacts(failingEventRun)
 		}
 		if f == nil && runErr != nil {
 			var deltaErr *engine.StreamDeltaError
@@ -99,6 +104,11 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		if len(pendingImageContinuationIDs) > 0 {
 			fields[SessionDiagnosticFieldPendingImageContinuationCount] = strconv.Itoa(len(pendingImageContinuationIDs))
 			fields[SessionDiagnosticFieldPendingImageContinuationIDs] = strings.Join(pendingImageContinuationIDs, ", ")
+		}
+		if scheduledInputs > 0 {
+			fields[SessionDiagnosticFieldScheduledInputCount] = strconv.Itoa(scheduledInputs)
+			fields[SessionDiagnosticFieldDispatchedInputCount] = strconv.Itoa(dispatchedInputs)
+			fields[SessionDiagnosticFieldCompletedTurnCount] = strconv.Itoa(completedScheduled)
 		}
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event:  SessionDiagnosticEventFailure,
