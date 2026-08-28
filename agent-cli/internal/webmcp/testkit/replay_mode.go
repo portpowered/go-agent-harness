@@ -11,7 +11,6 @@ import (
 const (
 	OperationDiscover           OperationType = "discover"
 	OperationList               OperationType = "list"
-	OperationListTargets        OperationType = "list_targets"
 	OperationListTools          OperationType = "list_tools"
 	OperationBrowserDiscover    OperationType = "browser_discover"
 	OperationBrowserListTargets OperationType = "browser_list_targets"

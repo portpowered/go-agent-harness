@@ -62,14 +62,14 @@ func TestScriptedBrowserRuntimeConsumesOperationsAndEmitsNeutralEvents(t *testin
 		t.Fatalf("LoadBrowserScript: %v", err)
 	}
 	clock := NewFakeClock(100)
-	runtime, err := NewScriptedBrowserRuntime(script,
+	runtime, err := NewScriptedFixtureRuntime(script,
 		WithFixtureClock(clock),
 		WithFixtureIDSource(NewDeterministicIDSource("run")),
 		WithFixtureBrowserID("browser-fixture"),
 		WithFixtureState(map[string]any{"value": 0}),
 	)
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime: %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime: %v", err)
 	}
 	if got := runtime.Outcome().Status; got != BrowserScriptOpen {
 		t.Fatalf("initial outcome = %q, want open", got)
@@ -152,9 +152,9 @@ func TestScriptedBrowserRuntimeUsesInjectedIDsForUnspecifiedInvocation(t *testin
 				Emit: []EmittedEvent{{Type: EmittedToolResponded, InvocationID: "run-invocation-001", Status: "Completed", Output: json.RawMessage(`{"ok":true}`)}}},
 		},
 	}
-	runtime, err := NewScriptedBrowserRuntime(script, WithFixtureIDSource(NewDeterministicIDSource("run")))
+	runtime, err := NewScriptedFixtureRuntime(script, WithFixtureIDSource(NewDeterministicIDSource("run")))
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime: %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime: %v", err)
 	}
 	id, err := runtime.InvokeTool(context.Background(), "frame-1", "read_state", nil)
 	if err != nil {
@@ -178,9 +178,9 @@ func TestScriptedBrowserRuntimeNavigationAndFailureAreDeterministic(t *testing.T
 	// The replacement above removes the response operation as well; construct a
 	// minimal navigation-only script so the test asserts the navigation seam.
 	script.Operations = []BrowserScriptOperation{{Expect: OperationExpectation{Type: OperationNavigate, URL: "https://fixture.test/next"}}}
-	runtime, err := NewScriptedBrowserRuntime(script)
+	runtime, err := NewScriptedFixtureRuntime(script)
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime: %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime: %v", err)
 	}
 	if err := runtime.Navigate(context.Background(), "https://fixture.test/next"); err != nil {
 		t.Fatalf("Navigate: %v", err)
@@ -191,9 +191,9 @@ func TestScriptedBrowserRuntimeNavigationAndFailureAreDeterministic(t *testing.T
 
 	badScript := script
 	badScript.Operations = []BrowserScriptOperation{{Expect: OperationExpectation{Type: OperationEnableLifecycle}}}
-	runtime, err = NewScriptedBrowserRuntime(badScript)
+	runtime, err = NewScriptedFixtureRuntime(badScript)
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime(badScript): %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime(badScript): %v", err)
 	}
 	_, err = runtime.Execute(context.Background(), OperationRequest{Type: OperationEnableWebMCP})
 	if !errors.Is(err, ErrFixtureOperationMismatch) {
@@ -220,9 +220,9 @@ func TestScriptedBrowserRuntimeSupportsCancellationAndCleanupOperations(t *testi
 			{Expect: OperationExpectation{Type: OperationCloseTarget}},
 		},
 	}
-	runtime, err := NewScriptedBrowserRuntime(script, WithFixtureClockFunc(func() uint64 { return 50 }))
+	runtime, err := NewScriptedFixtureRuntime(script, WithFixtureClockFunc(func() uint64 { return 50 }))
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime: %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime: %v", err)
 	}
 	if err := runtime.EnableLifecycle(context.Background()); err != nil {
 		t.Fatalf("EnableLifecycle: %v", err)
@@ -251,9 +251,9 @@ func TestScriptedBrowserRuntimeSupportsCancellationAndCleanupOperations(t *testi
 
 	detachScript := script
 	detachScript.Operations = []BrowserScriptOperation{{Expect: OperationExpectation{Type: OperationDetachTarget}}}
-	detached, err := NewScriptedBrowserRuntime(detachScript)
+	detached, err := NewScriptedFixtureRuntime(detachScript)
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime(detach): %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime(detach): %v", err)
 	}
 	if err := detached.DetachTarget(context.Background()); err != nil {
 		t.Fatalf("DetachTarget: %v", err)
@@ -272,9 +272,9 @@ func TestScriptedBrowserRuntimeReportsIncompleteCancellationAndClockErrors(t *te
 		},
 		Operations: []BrowserScriptOperation{{Expect: OperationExpectation{Type: OperationEnableLifecycle}}},
 	}
-	runtime, err := NewScriptedBrowserRuntime(script)
+	runtime, err := NewScriptedFixtureRuntime(script)
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime: %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime: %v", err)
 	}
 	if err := runtime.Close(); !errors.Is(err, ErrFixtureIncomplete) {
 		t.Fatalf("Close error = %v, want incomplete", err)
@@ -283,9 +283,9 @@ func TestScriptedBrowserRuntimeReportsIncompleteCancellationAndClockErrors(t *te
 		t.Fatalf("close outcome = %+v", runtime.Outcome())
 	}
 
-	canceled, err := NewScriptedBrowserRuntime(script)
+	canceled, err := NewScriptedFixtureRuntime(script)
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime(canceled): %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime(canceled): %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -298,9 +298,9 @@ func TestScriptedBrowserRuntimeReportsIncompleteCancellationAndClockErrors(t *te
 
 	clock := NewFakeClock(10)
 	clockScript := BrowserScript{Version: BrowserScriptVersion, Endpoint: script.Endpoint, Operations: []BrowserScriptOperation{{Expect: OperationExpectation{Type: OperationEnableLifecycle}}, {Expect: OperationExpectation{Type: OperationEnableWebMCP}}}}
-	clockRuntime, err := NewScriptedBrowserRuntime(clockScript, WithFixtureClock(clock))
+	clockRuntime, err := NewScriptedFixtureRuntime(clockScript, WithFixtureClock(clock))
 	if err != nil {
-		t.Fatalf("NewScriptedBrowserRuntime(clock): %v", err)
+		t.Fatalf("NewScriptedFixtureRuntime(clock): %v", err)
 	}
 	if err := clockRuntime.EnableLifecycle(context.Background()); err != nil {
 		t.Fatalf("clock lifecycle: %v", err)
@@ -357,19 +357,19 @@ func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
 		t.Fatal("unmarshalable state unexpectedly accepted")
 	}
 
-	options := []RuntimeOption{
+	options := []FixtureRuntimeOption{
 		WithRuntimeClock(NewFakeClock(3)),
 		WithRuntimeIDSource(NewDeterministicIDSource("alias")),
 		WithFixtureIDFunc(func(string) string { return "alias-id" }),
 		WithFixtureTargetID("tab-1"),
 		WithStateOracle(oracle),
 	}
-	for name, constructor := range map[string]func() (*ScriptedBrowserRuntime, error){
-		"browser": func() (*ScriptedBrowserRuntime, error) { return NewBrowserScriptRuntime(loaded, options...) },
-		"fixture": func() (*ScriptedBrowserRuntime, error) { return NewFixtureRuntime(loaded, options...) },
-		"script":  func() (*ScriptedBrowserRuntime, error) { return NewScriptRuntime(loaded, options...) },
-		"value":   func() (*ScriptedBrowserRuntime, error) { return NewRuntime(loaded, options...) },
-		"pointer": func() (*ScriptedBrowserRuntime, error) { return NewRuntime(&loaded, options...) },
+	for name, constructor := range map[string]func() (*BrowserScriptRuntime, error){
+		"browser": func() (*BrowserScriptRuntime, error) { return NewBrowserScriptRuntime(loaded, options...) },
+		"fixture": func() (*BrowserScriptRuntime, error) { return NewFixtureRuntime(loaded, options...) },
+		"script":  func() (*BrowserScriptRuntime, error) { return NewScriptRuntime(loaded, options...) },
+		"value":   func() (*BrowserScriptRuntime, error) { return NewRuntime(loaded, options...) },
+		"pointer": func() (*BrowserScriptRuntime, error) { return NewRuntime(&loaded, options...) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			runtime, err := constructor()
@@ -392,7 +392,7 @@ func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
 	}
 
 	empty := BrowserScript{Version: BrowserScriptVersion, Endpoint: loaded.Endpoint}
-	completed, err := NewScriptedBrowserRuntime(empty)
+	completed, err := NewScriptedFixtureRuntime(empty)
 	if err != nil {
 		t.Fatalf("empty runtime: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestFixtureValidationAndJSONComparisonBranches(t *testing.T) {
 		t.Fatal("null invocation input unexpectedly accepted")
 	}
 
-	var nilRuntime *ScriptedBrowserRuntime
+	var nilRuntime *BrowserScriptRuntime
 	if !errors.Is(nilRuntime.Err(), ErrFixtureClosed) || nilRuntime.StateOracle() != nil || nilRuntime.PageState() != nil || nilRuntime.BrowserID() != "" || nilRuntime.Generation() != 0 || nilRuntime.Target().ID != "" {
 		t.Fatal("nil runtime accessors did not remain safe")
 	}

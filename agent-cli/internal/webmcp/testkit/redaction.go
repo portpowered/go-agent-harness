@@ -609,20 +609,20 @@ func BuildRedactedBrowserArtifact(events []Event, config RedactionConfig) (Redac
 // each event is written. Invalid policy/credential configuration is returned
 // by NewRecorder after options are applied.
 func WithRedaction(policy RedactionPolicy, credentials ...[]string) RecorderOption {
-	return func(recorder *Recorder) {
+	return recorderOptionFunc(func(recorder *Recorder) {
 		redactor, err := NewRedactor(policy, credentials...)
 		recorder.redactor = redactor
 		recorder.redactionErr = err
-	}
+	})
 }
 
 // WithRedactionConfig is the config-shaped Recorder option.
 func WithRedactionConfig(config RedactionConfig) RecorderOption {
-	return func(recorder *Recorder) {
+	return recorderOptionFunc(func(recorder *Recorder) {
 		redactor, err := NewBrowserRedactor(config)
 		recorder.redactor = redactor
 		recorder.redactionErr = err
-	}
+	})
 }
 
 func (r *Redactor) redactEvent(event Event, tool string) (Event, error) {

@@ -211,8 +211,6 @@ type BrowserScriptOperation struct {
 	emitSet   bool
 }
 
-// Operation is an alias for BrowserScriptOperation.
-type Operation = BrowserScriptOperation
 type ScriptOperation = BrowserScriptOperation
 
 // OperationExpectation is the controlled request shape inside an operation's
@@ -1192,4 +1190,4 @@ func LoadBrowserScriptReader(reader io.Reader) (BrowserScript, error) {
 	return LoadBrowserScript(data)
 }
 
-// RuntimeOption configures a ScriptedBrowserRuntime.
+// FixtureRuntimeOption configures a BrowserScriptRuntime.

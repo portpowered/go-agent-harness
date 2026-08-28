@@ -1,6 +1,7 @@
 package testkit
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"regexp"
@@ -233,6 +234,78 @@ func TestFakeClockAdvancesTimersWithoutHostSleeps(t *testing.T) {
 	clock.Advance(2 * time.Second)
 	if got := <-first.C(); !got.Equal(base.Add(7 * time.Second)) {
 		t.Fatalf("reset timer timestamp = %s", got)
+	}
+}
+
+func TestSharedClockOptionConfiguresRecorderAndTargetSession(t *testing.T) {
+	clock := NewFakeClock(123)
+	config := NewTargetConfig(webmcp.Target{ID: "tab-1"}, WithClock(clock))
+	if config.Session.Clock == nil || !config.Session.Clock.Now().Equal(clock.Now()) {
+		t.Fatalf("shared clock option = %#v, want injected clock", config.Session.Clock)
+	}
+
+	explicit := NewTargetConfig(webmcp.Target{ID: "tab-2"}, WithSessionClock(clock))
+	if explicit.Session.Clock == nil || !explicit.Session.Clock.Now().Equal(clock.Now()) {
+		t.Fatalf("explicit session clock option = %#v, want injected clock", explicit.Session.Clock)
+	}
+
+	var output bytes.Buffer
+	recorder, err := NewRecorder(&output, WithClock(clock))
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	if _, err := recorder.Record(EventInput{
+		Type:    EventBrowserDiscoveryStarted,
+		Payload: MustJSONValue(map[string]any{"source": "shared-clock"}),
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if !bytes.Contains(output.Bytes(), []byte(`"monotonic_ms":123`)) {
+		t.Fatalf("recorded event = %s, want shared clock timestamp", output.Bytes())
+	}
+}
+
+func TestTargetSessionOptionsPreserveConfiguredRuntimeSeams(t *testing.T) {
+	clock := NewFakeClock(1)
+	ids := NewDeterministicIDs()
+	enableErr := errors.New("enable failed")
+	invokeErr := errors.New("invoke failed")
+	cancelErr := errors.New("cancel failed")
+	page := webmcp.PageContext{Title: "fixture page"}
+	tool := webmcp.ToolDescriptor{Name: "read_state"}
+	config := NewTargetConfig(
+		webmcp.Target{ID: "tab-1"},
+		WithEventBuffer(3),
+		WithContext(page),
+		WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded}),
+		WithInitialCatalog(tool),
+		WithAutoResponseStatus("Queued", []byte(`{"ok":true}`)),
+		WithEnableError(enableErr),
+		WithInvokeError(invokeErr),
+		WithCancelError(cancelErr),
+		WithCancellationAcknowledgement(false),
+		WithCancellationResponse(false),
+		WithIDs(ids),
+		WithClock(clock),
+	)
+	options := config.Session
+	if options.EventBuffer != 3 || options.Context.Title != page.Title || len(options.EnableEvents) != 1 {
+		t.Fatalf("basic session options = %+v", options)
+	}
+	if len(options.InitialCatalog) != 1 || options.InitialCatalog[0].Name != tool.Name {
+		t.Fatalf("catalog option = %+v", options.InitialCatalog)
+	}
+	if options.AutoResponseStatus != "Queued" || string(options.AutoResponseOutput) != `{"ok":true}` {
+		t.Fatalf("response options = %+v", options)
+	}
+	if options.EnableError != enableErr || options.InvokeError != invokeErr || options.CancelError != cancelErr {
+		t.Fatalf("failure options = %+v", options)
+	}
+	if options.AcknowledgeCancellation == nil || *options.AcknowledgeCancellation || options.EmitCancellationResponse == nil || *options.EmitCancellationResponse {
+		t.Fatalf("cancellation options = %+v", options)
+	}
+	if options.IDs != ids || options.Clock != clock {
+		t.Fatalf("injected seams = ids:%v clock:%v", options.IDs, options.Clock)
 	}
 }
 

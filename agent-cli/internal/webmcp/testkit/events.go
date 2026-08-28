@@ -490,53 +490,6 @@ func (f ClockFunc) MonotonicMillis() uint64 {
 	return f()
 }
 
-// FakeClock is a deterministic, concurrency-safe clock for fixtures and
-// recorders. It never sleeps or consults wall time.
-type FakeClock struct {
-	mu      sync.Mutex
-	current uint64
-}
-
-// NewFakeClock returns a fake clock starting at start milliseconds.
-func NewFakeClock(start uint64) *FakeClock {
-	return &FakeClock{current: start}
-}
-
-func (c *FakeClock) MonotonicMillis() uint64 {
-	if c == nil {
-		return 0
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.current
-}
-
-// Set moves the fake clock to an exact value. Recorder validation reports a
-// stable error if a set value is lower than the previous event.
-func (c *FakeClock) Set(value uint64) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	c.current = value
-	c.mu.Unlock()
-}
-
-// Advance increases the fake clock without sleeping. Overflow saturates at
-// the largest representable millisecond value.
-func (c *FakeClock) Advance(delta uint64) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	if ^uint64(0)-c.current < delta {
-		c.current = ^uint64(0)
-	} else {
-		c.current += delta
-	}
-	c.mu.Unlock()
-}
-
 // IDSource supplies deterministic opaque IDs.
 type IDSource interface {
 	NextID(kind string) string
@@ -552,54 +505,6 @@ func (f IDSourceFunc) NextID(kind string) string {
 	return f(kind)
 }
 
-// DeterministicIDSource produces stable IDs for an equivalent sequence of
-// fixture operations.
-type DeterministicIDSource struct {
-	mu     sync.Mutex
-	prefix string
-	next   uint64
-}
-
-// NewDeterministicIDSource returns IDs such as fixture-invocation-001.
-func NewDeterministicIDSource(prefix string) *DeterministicIDSource {
-	prefix = normalizeIDPart(prefix)
-	if prefix == "" {
-		prefix = "fixture"
-	}
-	return &DeterministicIDSource{prefix: prefix}
-}
-
-// NewFakeIDs is a descriptive alias for NewDeterministicIDSource.
-func NewFakeIDs(prefix string) *DeterministicIDSource {
-	return NewDeterministicIDSource(prefix)
-}
-
-func (s *DeterministicIDSource) NextID(kind string) string {
-	if s == nil {
-		return ""
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.next++
-	kind = normalizeIDPart(kind)
-	if kind == "" {
-		kind = "id"
-	}
-	return fmt.Sprintf("%s-%s-%03d", s.prefix, kind, s.next)
-}
-
-// RecorderOption configures a Recorder.
-type RecorderOption func(*Recorder)
-
-// WithClock injects a monotonic clock. A nil clock is ignored.
-func WithClock(clock Clock) RecorderOption {
-	return func(recorder *Recorder) {
-		if clock != nil {
-			recorder.clock = clock
-		}
-	}
-}
-
 // WithClockFunc injects a function-backed monotonic clock.
 func WithClockFunc(clock func() uint64) RecorderOption {
 	return WithClock(ClockFunc(clock))
@@ -607,11 +512,11 @@ func WithClockFunc(clock func() uint64) RecorderOption {
 
 // WithIDSource injects deterministic ID allocation. A nil source is ignored.
 func WithIDSource(source IDSource) RecorderOption {
-	return func(recorder *Recorder) {
+	return recorderOptionFunc(func(recorder *Recorder) {
 		if source != nil {
 			recorder.ids = source
 		}
-	}
+	})
 }
 
 // WithIDFunc injects a function-backed deterministic ID source.
@@ -648,7 +553,7 @@ func NewRecorder(writer io.Writer, options ...RecorderOption) (*Recorder, error)
 	}
 	for _, option := range options {
 		if option != nil {
-			option(recorder)
+			option.applyRecorder(recorder)
 		}
 	}
 	if recorder.redactionErr != nil {

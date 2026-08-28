@@ -12,11 +12,11 @@ import (
 	"sync"
 )
 
-type RuntimeOption func(*ScriptedBrowserRuntime)
+type FixtureRuntimeOption func(*BrowserScriptRuntime)
 
 // WithFixtureClock injects a monotonic clock for neutral observations.
-func WithFixtureClock(clock Clock) RuntimeOption {
-	return func(runtime *ScriptedBrowserRuntime) {
+func WithFixtureClock(clock Clock) FixtureRuntimeOption {
+	return func(runtime *BrowserScriptRuntime) {
 		if clock != nil {
 			runtime.clock = clock
 		}
@@ -24,16 +24,16 @@ func WithFixtureClock(clock Clock) RuntimeOption {
 }
 
 // WithRuntimeClock is a descriptive alias for WithFixtureClock.
-func WithRuntimeClock(clock Clock) RuntimeOption { return WithFixtureClock(clock) }
+func WithRuntimeClock(clock Clock) FixtureRuntimeOption { return WithFixtureClock(clock) }
 
 // WithFixtureClockFunc injects a function-backed monotonic clock.
-func WithFixtureClockFunc(clock func() uint64) RuntimeOption {
+func WithFixtureClockFunc(clock func() uint64) FixtureRuntimeOption {
 	return WithFixtureClock(ClockFunc(clock))
 }
 
 // WithFixtureIDSource injects deterministic invocation IDs.
-func WithFixtureIDSource(source IDSource) RuntimeOption {
-	return func(runtime *ScriptedBrowserRuntime) {
+func WithFixtureIDSource(source IDSource) FixtureRuntimeOption {
+	return func(runtime *BrowserScriptRuntime) {
 		if source != nil {
 			runtime.ids = source
 		}
@@ -41,16 +41,16 @@ func WithFixtureIDSource(source IDSource) RuntimeOption {
 }
 
 // WithRuntimeIDSource is a descriptive alias for WithFixtureIDSource.
-func WithRuntimeIDSource(source IDSource) RuntimeOption { return WithFixtureIDSource(source) }
+func WithRuntimeIDSource(source IDSource) FixtureRuntimeOption { return WithFixtureIDSource(source) }
 
 // WithFixtureIDFunc injects a function-backed deterministic ID source.
-func WithFixtureIDFunc(source func(string) string) RuntimeOption {
+func WithFixtureIDFunc(source func(string) string) FixtureRuntimeOption {
 	return WithFixtureIDSource(IDSourceFunc(source))
 }
 
 // WithFixtureBrowserID sets the opaque browser ID used in neutral events.
-func WithFixtureBrowserID(browserID string) RuntimeOption {
-	return func(runtime *ScriptedBrowserRuntime) {
+func WithFixtureBrowserID(browserID string) FixtureRuntimeOption {
+	return func(runtime *BrowserScriptRuntime) {
 		if strings.TrimSpace(browserID) != "" {
 			runtime.browserID = browserID
 		}
@@ -59,8 +59,8 @@ func WithFixtureBrowserID(browserID string) RuntimeOption {
 
 // WithFixtureTargetID selects a target by ID. Without this option the first
 // endpoint target is selected.
-func WithFixtureTargetID(targetID string) RuntimeOption {
-	return func(runtime *ScriptedBrowserRuntime) {
+func WithFixtureTargetID(targetID string) FixtureRuntimeOption {
+	return func(runtime *BrowserScriptRuntime) {
 		if strings.TrimSpace(targetID) != "" {
 			runtime.targetID = targetID
 		}
@@ -69,8 +69,8 @@ func WithFixtureTargetID(targetID string) RuntimeOption {
 
 // WithStateOracle supplies the out-of-band page state store. Scripted
 // responses never update this store implicitly.
-func WithStateOracle(oracle *FixtureStateOracle) RuntimeOption {
-	return func(runtime *ScriptedBrowserRuntime) {
+func WithStateOracle(oracle *FixtureStateOracle) FixtureRuntimeOption {
+	return func(runtime *BrowserScriptRuntime) {
 		if oracle != nil {
 			runtime.state = oracle
 		}
@@ -78,8 +78,8 @@ func WithStateOracle(oracle *FixtureStateOracle) RuntimeOption {
 }
 
 // WithFixtureState creates an out-of-band state oracle from a JSON value.
-func WithFixtureState(value any) RuntimeOption {
-	return func(runtime *ScriptedBrowserRuntime) {
+func WithFixtureState(value any) FixtureRuntimeOption {
+	return func(runtime *BrowserScriptRuntime) {
 		oracle, err := NewFixtureStateOracle(value)
 		if err == nil {
 			runtime.state = oracle
@@ -89,10 +89,10 @@ func WithFixtureState(value any) RuntimeOption {
 	}
 }
 
-// ScriptedBrowserRuntime is a synchronous, browser-independent fixture
+// BrowserScriptRuntime is a synchronous, browser-independent fixture
 // runtime. It intentionally has no goroutines, sockets, sleeps, or implicit
 // state mutation.
-type ScriptedBrowserRuntime struct {
+type BrowserScriptRuntime struct {
 	mu sync.Mutex
 
 	script    BrowserScript
@@ -123,20 +123,19 @@ type ScriptedBrowserRuntime struct {
 	targetClosed     bool
 }
 
-// Runtime, FixtureRuntime, and BrowserRuntime are aliases for the scripted
-// runtime implementation.
-type Runtime = ScriptedBrowserRuntime
-type FixtureRuntime = ScriptedBrowserRuntime
-type BrowserRuntime = ScriptedBrowserRuntime
-type ScriptedRuntime = ScriptedBrowserRuntime
+// BrowserScriptFixtureRuntime and ScriptedFixtureRuntime are descriptive
+// aliases for the browser-script runtime. The shorter Runtime aliases belong
+// to the low-level browser runtime in runtime.go.
+type BrowserScriptFixtureRuntime = BrowserScriptRuntime
+type ScriptedFixtureRuntime = BrowserScriptRuntime
 
-// NewScriptedBrowserRuntime validates a script and constructs a synchronous
+// NewScriptedFixtureRuntime validates a script and constructs a synchronous
 // runtime. No operation is executed during construction.
-func NewScriptedBrowserRuntime(script BrowserScript, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
+func NewScriptedFixtureRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
 	if err := script.Validate(); err != nil {
 		return nil, err
 	}
-	runtime := &ScriptedBrowserRuntime{
+	runtime := &BrowserScriptRuntime{
 		script:     script,
 		clock:      ClockFunc(func() uint64 { return 0 }),
 		ids:        NewDeterministicIDSource("fixture"),
@@ -179,42 +178,42 @@ func NewScriptedBrowserRuntime(script BrowserScript, options ...RuntimeOption) (
 	return runtime, nil
 }
 
-// NewBrowserScriptRuntime is an alias for NewScriptedBrowserRuntime.
-func NewBrowserScriptRuntime(script BrowserScript, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
-	return NewScriptedBrowserRuntime(script, options...)
+// NewBrowserScriptRuntime is an alias for NewScriptedFixtureRuntime.
+func NewBrowserScriptRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
+	return NewScriptedFixtureRuntime(script, options...)
 }
 
-// NewFixtureRuntime is an alias for NewScriptedBrowserRuntime.
-func NewFixtureRuntime(script BrowserScript, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
-	return NewScriptedBrowserRuntime(script, options...)
+// NewFixtureRuntime is an alias for NewScriptedFixtureRuntime.
+func NewFixtureRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
+	return NewScriptedFixtureRuntime(script, options...)
 }
 
-// NewScriptRuntime is an alias for NewScriptedBrowserRuntime.
-func NewScriptRuntime(script BrowserScript, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
-	return NewScriptedBrowserRuntime(script, options...)
+// NewScriptRuntime is an alias for NewScriptedFixtureRuntime.
+func NewScriptRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
+	return NewScriptedFixtureRuntime(script, options...)
 }
 
-// NewScriptedRuntime is an alias for NewScriptedBrowserRuntime.
-func NewScriptedRuntime(script BrowserScript, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
-	return NewScriptedBrowserRuntime(script, options...)
+// NewScriptedRuntime is an alias for NewScriptedFixtureRuntime.
+func NewScriptedRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
+	return NewScriptedFixtureRuntime(script, options...)
 }
 
-// NewBrowserRuntime is an alias for NewScriptedBrowserRuntime.
-func NewBrowserRuntime(script BrowserScript, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
-	return NewScriptedBrowserRuntime(script, options...)
+// NewBrowserRuntime is an alias for NewScriptedFixtureRuntime.
+func NewBrowserRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
+	return NewScriptedFixtureRuntime(script, options...)
 }
 
 // NewRuntime accepts either a BrowserScript value or pointer for convenient
 // use by callers that load a script through a pointer-oriented helper.
-func NewRuntime(value any, options ...RuntimeOption) (*ScriptedBrowserRuntime, error) {
+func NewRuntime(value any, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
 	switch script := value.(type) {
 	case BrowserScript:
-		return NewScriptedBrowserRuntime(script, options...)
+		return NewScriptedFixtureRuntime(script, options...)
 	case *BrowserScript:
 		if script == nil {
 			return nil, newScriptError("script", "is nil")
 		}
-		return NewScriptedBrowserRuntime(*script, options...)
+		return NewScriptedFixtureRuntime(*script, options...)
 	default:
 		return nil, newScriptError("script", "must be a BrowserScript")
 	}
@@ -239,7 +238,7 @@ func mustNewDefaultStateOracle() *FixtureStateOracle {
 // Execute consumes exactly the next expected operation and returns its
 // scripted result plus neutral observations. A mismatch permanently diverges
 // the runtime before the next operation can be attempted.
-func (r *ScriptedBrowserRuntime) Execute(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
+func (r *BrowserScriptRuntime) Execute(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
 	if r == nil {
 		return RuntimeExecution{}, ErrFixtureClosed
 	}
@@ -355,17 +354,17 @@ func (r *ScriptedBrowserRuntime) Execute(ctx context.Context, request OperationR
 }
 
 // ExecuteOperation is an alias for Execute.
-func (r *ScriptedBrowserRuntime) ExecuteOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
+func (r *BrowserScriptRuntime) ExecuteOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
 	return r.Execute(ctx, request)
 }
 
 // Run executes one operation. It is a descriptive alias for Execute.
-func (r *ScriptedBrowserRuntime) Run(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
+func (r *BrowserScriptRuntime) Run(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
 	return r.Execute(ctx, request)
 }
 
 // RunOperation is an alias for Run.
-func (r *ScriptedBrowserRuntime) RunOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
+func (r *BrowserScriptRuntime) RunOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
 	return r.Execute(ctx, request)
 }
 
@@ -503,7 +502,7 @@ func semanticValueEqual(left, right any) bool {
 	}
 }
 
-func (r *ScriptedBrowserRuntime) invocationIDForResult(result json.RawMessage) (string, error) {
+func (r *BrowserScriptRuntime) invocationIDForResult(result json.RawMessage) (string, error) {
 	if len(result) > 0 {
 		fields, err := decodeJSONObject(result)
 		if err != nil {
@@ -527,7 +526,7 @@ func (r *ScriptedBrowserRuntime) invocationIDForResult(result json.RawMessage) (
 	return id, nil
 }
 
-func (r *ScriptedBrowserRuntime) observeLocked(emitted EmittedEvent, now uint64) (FixtureEvent, error) {
+func (r *BrowserScriptRuntime) observeLocked(emitted EmittedEvent, now uint64) (FixtureEvent, error) {
 	event := FixtureEvent{
 		Type:         emitted.Type,
 		MonotonicMS:  now,
@@ -560,13 +559,13 @@ func (r *ScriptedBrowserRuntime) observeLocked(emitted EmittedEvent, now uint64)
 	return event, nil
 }
 
-func (r *ScriptedBrowserRuntime) maybeCompleteLocked() {
+func (r *BrowserScriptRuntime) maybeCompleteLocked() {
 	if r.position == len(r.script.Operations) && len(r.pending) == 0 && !r.closed {
 		r.completeLocked()
 	}
 }
 
-func (r *ScriptedBrowserRuntime) completeLocked() {
+func (r *BrowserScriptRuntime) completeLocked() {
 	if r.closed {
 		return
 	}
@@ -576,7 +575,7 @@ func (r *ScriptedBrowserRuntime) completeLocked() {
 	close(r.done)
 }
 
-func (r *ScriptedBrowserRuntime) failLocked(status BrowserScriptStatus, err error) error {
+func (r *BrowserScriptRuntime) failLocked(status BrowserScriptStatus, err error) error {
 	if r.closed {
 		if r.outcome.Err != nil {
 			return r.outcome.Err
@@ -590,7 +589,7 @@ func (r *ScriptedBrowserRuntime) failLocked(status BrowserScriptStatus, err erro
 	return err
 }
 
-func (r *ScriptedBrowserRuntime) cancel(err error) (RuntimeExecution, error) {
+func (r *BrowserScriptRuntime) cancel(err error) (RuntimeExecution, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
@@ -604,7 +603,7 @@ func (r *ScriptedBrowserRuntime) cancel(err error) (RuntimeExecution, error) {
 
 // Complete closes a runtime successfully only when all operations and
 // invocation responses have been consumed.
-func (r *ScriptedBrowserRuntime) Complete() error {
+func (r *BrowserScriptRuntime) Complete() error {
 	if r == nil {
 		return ErrFixtureClosed
 	}
@@ -625,11 +624,11 @@ func (r *ScriptedBrowserRuntime) Complete() error {
 }
 
 // Finish is an alias for Complete.
-func (r *ScriptedBrowserRuntime) Finish() error { return r.Complete() }
+func (r *BrowserScriptRuntime) Finish() error { return r.Complete() }
 
 // Close terminates a runtime. An unfinished runtime reports an incomplete
 // error; a completed runtime is safe to close repeatedly.
-func (r *ScriptedBrowserRuntime) Close() error {
+func (r *BrowserScriptRuntime) Close() error {
 	if r == nil {
 		return ErrFixtureClosed
 	}
@@ -646,7 +645,7 @@ func (r *ScriptedBrowserRuntime) Close() error {
 }
 
 // Done closes once the runtime has either completed or failed.
-func (r *ScriptedBrowserRuntime) Done() <-chan struct{} {
+func (r *BrowserScriptRuntime) Done() <-chan struct{} {
 	if r == nil {
 		closed := make(chan struct{})
 		close(closed)
@@ -658,7 +657,7 @@ func (r *ScriptedBrowserRuntime) Done() <-chan struct{} {
 // Events returns a finite, buffered stream of neutral observations. It is
 // closed at runtime completion or failure and never requires a goroutine to
 // deliver events.
-func (r *ScriptedBrowserRuntime) Events() <-chan FixtureEvent {
+func (r *BrowserScriptRuntime) Events() <-chan FixtureEvent {
 	if r == nil {
 		closed := make(chan FixtureEvent)
 		close(closed)
@@ -668,7 +667,7 @@ func (r *ScriptedBrowserRuntime) Events() <-chan FixtureEvent {
 }
 
 // Observations returns all emitted observations seen so far.
-func (r *ScriptedBrowserRuntime) Observations() []FixtureEvent {
+func (r *BrowserScriptRuntime) Observations() []FixtureEvent {
 	if r == nil {
 		return nil
 	}
@@ -682,7 +681,7 @@ func (r *ScriptedBrowserRuntime) Observations() []FixtureEvent {
 }
 
 // LastExecution returns a copy of the most recent successful operation.
-func (r *ScriptedBrowserRuntime) LastExecution() RuntimeExecution {
+func (r *BrowserScriptRuntime) LastExecution() RuntimeExecution {
 	if r == nil {
 		return RuntimeExecution{}
 	}
@@ -692,7 +691,7 @@ func (r *ScriptedBrowserRuntime) LastExecution() RuntimeExecution {
 }
 
 // Outcome returns the current runtime lifecycle snapshot.
-func (r *ScriptedBrowserRuntime) Outcome() BrowserScriptOutcome {
+func (r *BrowserScriptRuntime) Outcome() BrowserScriptOutcome {
 	if r == nil {
 		return BrowserScriptOutcome{Status: BrowserScriptIncomplete, Err: ErrFixtureClosed}
 	}
@@ -702,12 +701,12 @@ func (r *ScriptedBrowserRuntime) Outcome() BrowserScriptOutcome {
 }
 
 // Err returns the terminal runtime error, if any.
-func (r *ScriptedBrowserRuntime) Err() error {
+func (r *BrowserScriptRuntime) Err() error {
 	return r.Outcome().Err
 }
 
 // PendingInvocationIDs returns stable pending invocation IDs.
-func (r *ScriptedBrowserRuntime) PendingInvocationIDs() []string {
+func (r *BrowserScriptRuntime) PendingInvocationIDs() []string {
 	if r == nil {
 		return nil
 	}
@@ -717,10 +716,10 @@ func (r *ScriptedBrowserRuntime) PendingInvocationIDs() []string {
 }
 
 // PendingInvocations is a descriptive alias for PendingInvocationIDs.
-func (r *ScriptedBrowserRuntime) PendingInvocations() []string { return r.PendingInvocationIDs() }
+func (r *BrowserScriptRuntime) PendingInvocations() []string { return r.PendingInvocationIDs() }
 
 // Tools returns the latest tools_added catalog as raw-schema-preserving data.
-func (r *ScriptedBrowserRuntime) Tools() []ToolDescriptor {
+func (r *BrowserScriptRuntime) Tools() []ToolDescriptor {
 	if r == nil {
 		return nil
 	}
@@ -730,7 +729,7 @@ func (r *ScriptedBrowserRuntime) Tools() []ToolDescriptor {
 }
 
 // StateOracle returns the independent page-state oracle.
-func (r *ScriptedBrowserRuntime) StateOracle() *FixtureStateOracle {
+func (r *BrowserScriptRuntime) StateOracle() *FixtureStateOracle {
 	if r == nil {
 		return nil
 	}
@@ -738,7 +737,7 @@ func (r *ScriptedBrowserRuntime) StateOracle() *FixtureStateOracle {
 }
 
 // PageState is a convenience snapshot of the independent state oracle.
-func (r *ScriptedBrowserRuntime) PageState() json.RawMessage {
+func (r *BrowserScriptRuntime) PageState() json.RawMessage {
 	if r == nil || r.state == nil {
 		return nil
 	}
@@ -746,7 +745,7 @@ func (r *ScriptedBrowserRuntime) PageState() json.RawMessage {
 }
 
 // BrowserID returns the stable fixture browser identifier.
-func (r *ScriptedBrowserRuntime) BrowserID() string {
+func (r *BrowserScriptRuntime) BrowserID() string {
 	if r == nil {
 		return ""
 	}
@@ -755,7 +754,7 @@ func (r *ScriptedBrowserRuntime) BrowserID() string {
 
 // Target returns the current target metadata, including a navigation-updated
 // URL.
-func (r *ScriptedBrowserRuntime) Target() BrowserTarget {
+func (r *BrowserScriptRuntime) Target() BrowserTarget {
 	if r == nil {
 		return BrowserTarget{}
 	}
@@ -765,7 +764,7 @@ func (r *ScriptedBrowserRuntime) Target() BrowserTarget {
 }
 
 // Generation returns the current page generation.
-func (r *ScriptedBrowserRuntime) Generation() uint64 {
+func (r *BrowserScriptRuntime) Generation() uint64 {
 	if r == nil {
 		return 0
 	}
@@ -775,20 +774,20 @@ func (r *ScriptedBrowserRuntime) Generation() uint64 {
 }
 
 // EnableLifecycle consumes the next lifecycle operation.
-func (r *ScriptedBrowserRuntime) EnableLifecycle(ctx context.Context) error {
+func (r *BrowserScriptRuntime) EnableLifecycle(ctx context.Context) error {
 	_, err := r.Execute(ctx, OperationRequest{Type: OperationEnableLifecycle})
 	return err
 }
 
 // EnableWebMCP consumes the next WebMCP-enable operation.
-func (r *ScriptedBrowserRuntime) EnableWebMCP(ctx context.Context) error {
+func (r *BrowserScriptRuntime) EnableWebMCP(ctx context.Context) error {
 	_, err := r.Execute(ctx, OperationRequest{Type: OperationEnableWebMCP})
 	return err
 }
 
 // InvokeTool consumes the next invoke_tool operation and returns its
 // invocation identity. A nil input means the empty JSON object.
-func (r *ScriptedBrowserRuntime) InvokeTool(ctx context.Context, frameID, toolName string, input json.RawMessage) (string, error) {
+func (r *BrowserScriptRuntime) InvokeTool(ctx context.Context, frameID, toolName string, input json.RawMessage) (string, error) {
 	execution, err := r.Execute(ctx, OperationRequest{Type: OperationInvokeTool, FrameID: frameID, ToolName: toolName, Input: cloneRaw(input)})
 	if err != nil {
 		return "", err
@@ -798,7 +797,7 @@ func (r *ScriptedBrowserRuntime) InvokeTool(ctx context.Context, frameID, toolNa
 
 // InvokeToolValue marshals an invocation input without converting page-owned
 // JSON through a floating-point map.
-func (r *ScriptedBrowserRuntime) InvokeToolValue(ctx context.Context, frameID, toolName string, input any) (string, error) {
+func (r *BrowserScriptRuntime) InvokeToolValue(ctx context.Context, frameID, toolName string, input any) (string, error) {
 	raw, err := JSONValue(input)
 	if err != nil {
 		return "", err
@@ -807,7 +806,7 @@ func (r *ScriptedBrowserRuntime) InvokeToolValue(ctx context.Context, frameID, t
 }
 
 // CancelTool consumes the next cancel_tool operation.
-func (r *ScriptedBrowserRuntime) CancelTool(ctx context.Context, invocationID string) error {
+func (r *BrowserScriptRuntime) CancelTool(ctx context.Context, invocationID string) error {
 	if r == nil {
 		return ErrFixtureClosed
 	}
@@ -822,19 +821,19 @@ func (r *ScriptedBrowserRuntime) CancelTool(ctx context.Context, invocationID st
 }
 
 // Navigate consumes the next navigate operation.
-func (r *ScriptedBrowserRuntime) Navigate(ctx context.Context, url string) error {
+func (r *BrowserScriptRuntime) Navigate(ctx context.Context, url string) error {
 	_, err := r.Execute(ctx, OperationRequest{Type: OperationNavigate, URL: url})
 	return err
 }
 
 // CloseTarget consumes the next close_target operation.
-func (r *ScriptedBrowserRuntime) CloseTarget(ctx context.Context) error {
+func (r *BrowserScriptRuntime) CloseTarget(ctx context.Context) error {
 	_, err := r.Execute(ctx, OperationRequest{Type: OperationCloseTarget})
 	return err
 }
 
 // DetachTarget consumes the next detach_target operation.
-func (r *ScriptedBrowserRuntime) DetachTarget(ctx context.Context) error {
+func (r *BrowserScriptRuntime) DetachTarget(ctx context.Context) error {
 	_, err := r.Execute(ctx, OperationRequest{Type: OperationDetachTarget})
 	return err
 }
