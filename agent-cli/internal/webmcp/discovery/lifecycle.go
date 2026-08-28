@@ -427,8 +427,21 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 		return
 	}
 	if event.Capabilities != nil {
-		target.WebMCP = event.Capabilities.WebMCP
-		target.WebMCPKnown = true
+		capabilities := event.Capabilities
+		if capabilities.DomainKnown {
+			target.WebMCP = capabilities.DomainSupported
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.DomainSupported
+			target.WebMCPDomainKnown = true
+		} else {
+			target.WebMCP = capabilities.WebMCP
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.WebMCP
+			target.WebMCPDomainKnown = true
+		}
+		target.PageToolsReady = capabilities.PageToolsReady
+		target.PageToolsKnown = capabilities.PageToolsKnown
+		target.PageToolsEvidence = capabilities.PageToolsEvidence
 		if event.Capabilities.ToolCount >= 0 {
 			target.ToolCount = event.Capabilities.ToolCount
 			target.ToolCountKnown = event.Capabilities.ToolCountKnown || event.Capabilities.ToolCount >= 0
@@ -437,6 +450,8 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 	if event.WebMCP != nil {
 		target.WebMCP = *event.WebMCP
 		target.WebMCPKnown = true
+		target.WebMCPDomainSupported = *event.WebMCP
+		target.WebMCPDomainKnown = true
 	}
 	if event.ToolCount != nil && *event.ToolCount >= 0 {
 		target.ToolCount = *event.ToolCount
@@ -526,8 +541,20 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 			s.noteBrowserDisconnectedFailureLocked(failure, selection.BrowserID, selection.TargetID, "capability")
 			return selection, failure
 		}
-		target.WebMCP = capabilities.WebMCP
-		target.WebMCPKnown = true
+		if capabilities.DomainKnown {
+			target.WebMCP = capabilities.DomainSupported
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.DomainSupported
+			target.WebMCPDomainKnown = true
+		} else {
+			target.WebMCP = capabilities.WebMCP
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.WebMCP
+			target.WebMCPDomainKnown = true
+		}
+		target.PageToolsReady = capabilities.PageToolsReady
+		target.PageToolsKnown = capabilities.PageToolsKnown
+		target.PageToolsEvidence = capabilities.PageToolsEvidence
 		if capabilities.ToolCount >= 0 {
 			target.ToolCount = capabilities.ToolCount
 			target.ToolCountKnown = capabilities.ToolCountKnown || capabilities.ToolCount >= 0

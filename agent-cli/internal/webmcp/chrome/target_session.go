@@ -171,6 +171,7 @@ func (s *targetSession) publishLocked(event webmcp.BrowserEvent, terminal bool) 
 	if event.At.IsZero() {
 		event.At = time.Now()
 	}
+	s.updatePageReadinessLocked(event)
 	s.sequence++
 	event.Sequence = s.sequence
 	s.mu.Unlock()
@@ -220,16 +221,75 @@ func (s *targetSession) Ownership() webmcp.TargetOwnership {
 }
 
 func (s *targetSession) EnableWebMCP(ctx context.Context) error {
+	var (
+		probe    pageToolCatalogProbe
+		probeErr error
+	)
 	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return cdpWebMCP.Enable().Do(ctx)
+		if err := cdpWebMCP.Enable().Do(ctx); err != nil {
+			return err
+		}
+		// A probe failure is intentionally non-fatal. The broker must distinguish
+		// successful domain enablement from missing page-tool evidence and apply
+		// its bounded diagnostic deadline to the latter.
+		probe, probeErr = evaluatePageToolCatalog(ctx)
+		return nil
 	}))
 	if err != nil {
 		return classifySessionError(s, webmcp.ErrorUnsupportedWebMCP, "enable", err)
 	}
 	s.mu.Lock()
-	s.page.Ready = true
+	s.page.WebMCPDomainSupported = true
+	s.page.Ready = s.page.Connected && s.page.CatalogReady
 	s.mu.Unlock()
+	// WebMCP.enable proves that the browser-side domain is available, but it
+	// does not prove that this document has a page-tool producer. The probe is
+	// deliberately best-effort; the broker applies its bounded evidence
+	// deadline when no affirmative catalog event is published.
+	if probeErr == nil && probe.CatalogReady && probe.ToolCount == 0 {
+		s.mu.Lock()
+		s.page.CatalogReady = true
+		s.page.CatalogEvidence = "page_producer"
+		s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported
+		s.mu.Unlock()
+		s.publish(webmcp.BrowserEvent{
+			Type:           webmcp.EventCatalogReady,
+			CatalogReady:   true,
+			ToolCount:      0,
+			ToolCountKnown: true,
+		})
+	}
 	return nil
+}
+
+func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
+	switch event.Type {
+	case webmcp.EventToolsAdded:
+		if len(event.Tools) > 0 {
+			s.page.CatalogReady = true
+			if s.page.CatalogEvidence == "" {
+				s.page.CatalogEvidence = "tools_added"
+			}
+		}
+	case webmcp.EventToolsRemoved:
+		if len(event.RemovedToolNames) > 0 {
+			s.page.CatalogReady = true
+			if s.page.CatalogEvidence == "" {
+				s.page.CatalogEvidence = "tools_removed"
+			}
+		}
+	case webmcp.EventCatalogReady:
+		s.page.CatalogReady = true
+		if s.page.CatalogEvidence == "" {
+			s.page.CatalogEvidence = "page_producer"
+		}
+	case webmcp.EventPageNavigated, webmcp.EventFrameNavigated:
+		s.page.CatalogReady = false
+		s.page.CatalogEvidence = ""
+	case webmcp.EventTargetDetached, webmcp.EventBrowserDisconnected, webmcp.EventSessionClosed:
+		s.page.Connected = false
+	}
+	s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported && s.page.CatalogReady
 }
 
 func (s *targetSession) Events() <-chan webmcp.BrowserEvent {

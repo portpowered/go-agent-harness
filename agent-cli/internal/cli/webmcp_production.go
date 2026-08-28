@@ -487,19 +487,60 @@ func (p *productionWebMCPComposition) probeTarget(ctx context.Context, lane disc
 		return discovery.TargetCapabilities{}, err
 	}
 	enableErr := session.EnableWebMCP(ctx)
+	capabilities := discovery.TargetCapabilities{
+		WebMCP:          true,
+		DomainSupported: true,
+		DomainKnown:     true,
+		ToolCount:       -1,
+	}
+	if enableErr == nil {
+		page := session.Context()
+		capabilities.PageToolsReady = page.CatalogReady
+		capabilities.PageToolsKnown = page.CatalogReady
+		capabilities.PageToolsEvidence = page.CatalogEvidence
+		for {
+			select {
+			case event, ok := <-session.Events():
+				if !ok {
+					goto drained
+				}
+				switch event.Type {
+				case webmcp.EventCatalogReady:
+					capabilities.PageToolsReady = true
+					capabilities.PageToolsKnown = event.ToolCountKnown
+					capabilities.PageToolsEvidence = "page_producer"
+					if event.ToolCountKnown {
+						capabilities.ToolCount = event.ToolCount
+						capabilities.ToolCountKnown = true
+					}
+				case webmcp.EventToolsAdded:
+					if len(event.Tools) > 0 {
+						capabilities.PageToolsReady = true
+						capabilities.PageToolsKnown = true
+						capabilities.PageToolsEvidence = "tools_added"
+						capabilities.ToolCount = len(event.Tools)
+						capabilities.ToolCountKnown = true
+					}
+				}
+			default:
+				goto drained
+			}
+		}
+	}
+drained:
 	sessionCloseErr := session.Close()
 	handleCloseErr := handle.Close()
 	cleanupErr := errors.Join(sessionCloseErr, handleCloseErr)
 	if enableErr != nil {
 		if isUnsupportedWebMCPError(enableErr) {
-			return discovery.TargetCapabilities{ToolCount: -1}, cleanupErr
+			return discovery.TargetCapabilities{ToolCount: -1, DomainKnown: true}, cleanupErr
 		}
 		return discovery.TargetCapabilities{}, errors.Join(enableErr, cleanupErr)
 	}
 	if cleanupErr != nil {
 		return discovery.TargetCapabilities{}, cleanupErr
 	}
-	return discovery.TargetCapabilities{WebMCP: true, ToolCount: -1}, nil
+	return capabilities, nil
 }
 
 func (p *productionWebMCPComposition) rawTargetForPublicID(ctx context.Context, handle webmcp.BrowserHandle, browserID string, publicID webmcp.TargetID) (webmcp.Target, error) {
@@ -889,16 +930,20 @@ func (s *productionTargetSession) forwardEvent(event webmcp.BrowserEvent) bool {
 
 func productionNeutralTarget(browserID webmcp.BrowserID, target discovery.Target) webmcp.Target {
 	return webmcp.Target{
-		BrowserID:         browserID,
-		ID:                webmcp.TargetID(target.ID),
-		Type:              target.Type,
-		Title:             target.Title,
-		URL:               productionSafePageURL(target.URL),
-		Origin:            productionSafeOrigin(target.Origin),
-		ContinuityMarker:  target.ContinuityMarker,
-		Generation:        target.Generation,
-		Eligible:          target.Eligible,
-		EligibilityReason: target.EligibilityReason,
+		BrowserID:             browserID,
+		ID:                    webmcp.TargetID(target.ID),
+		Type:                  target.Type,
+		Title:                 target.Title,
+		URL:                   productionSafePageURL(target.URL),
+		Origin:                productionSafeOrigin(target.Origin),
+		ContinuityMarker:      target.ContinuityMarker,
+		Generation:            target.Generation,
+		Eligible:              target.Eligible,
+		EligibilityReason:     target.EligibilityReason,
+		WebMCPDomainSupported: target.WebMCPDomainSupported,
+		PageToolsReady:        target.PageToolsReady,
+		PageToolsKnown:        target.PageToolsKnown,
+		PageToolsEvidence:     target.PageToolsEvidence,
 	}
 }
 

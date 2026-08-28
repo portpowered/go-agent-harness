@@ -131,13 +131,16 @@ type TargetDescriptor struct {
 	// ContinuityMarker and DocumentID are optional neutral-fake metadata. A
 	// browser adapter may use either value to prove that a target is still the
 	// same page across a process restart; neither value is exposed directly.
-	ContinuityMarker string `json:"continuityMarker,omitempty"`
-	Continuity       string `json:"continuity,omitempty"`
-	DocumentID       string `json:"documentId,omitempty"`
-	WebMCPSupported  *bool  `json:"webmcpSupported,omitempty"`
-	WebMCP           *bool  `json:"webmcp,omitempty"`
-	ToolCount        *int   `json:"toolCount,omitempty"`
-	Tools            []any  `json:"tools,omitempty"`
+	ContinuityMarker  string `json:"continuityMarker,omitempty"`
+	Continuity        string `json:"continuity,omitempty"`
+	DocumentID        string `json:"documentId,omitempty"`
+	WebMCPSupported   *bool  `json:"webmcpSupported,omitempty"`
+	WebMCP            *bool  `json:"webmcp,omitempty"`
+	PageToolsReady    *bool  `json:"pageToolsReady,omitempty"`
+	PageToolsKnown    *bool  `json:"pageToolsKnown,omitempty"`
+	PageToolsEvidence string `json:"pageToolsEvidence,omitempty"`
+	ToolCount         *int   `json:"toolCount,omitempty"`
+	Tools             []any  `json:"tools,omitempty"`
 }
 
 // DevToolsTarget and RawTarget are descriptive aliases for callers that
@@ -158,15 +161,20 @@ type Target struct {
 	Origin    string `json:"origin"`
 	// ContinuityMarker is an opaque digest of adapter-provided continuity
 	// metadata. It is safe to retain in selection state and persistence.
-	ContinuityMarker  string `json:"continuity_marker,omitempty"`
-	Generation        uint64 `json:"generation,omitempty"`
-	WebSocketPresent  bool   `json:"websocket_present"`
-	WebMCP            bool   `json:"webmcp"`
-	WebMCPKnown       bool   `json:"webmcp_known"`
-	ToolCount         int    `json:"tool_count"`
-	ToolCountKnown    bool   `json:"tool_count_known"`
-	Eligible          bool   `json:"eligible"`
-	EligibilityReason string `json:"eligibility_reason,omitempty"`
+	ContinuityMarker      string `json:"continuity_marker,omitempty"`
+	Generation            uint64 `json:"generation,omitempty"`
+	WebSocketPresent      bool   `json:"websocket_present"`
+	WebMCP                bool   `json:"webmcp"`
+	WebMCPKnown           bool   `json:"webmcp_known"`
+	WebMCPDomainSupported bool   `json:"webmcp_domain_supported"`
+	WebMCPDomainKnown     bool   `json:"webmcp_domain_known"`
+	PageToolsReady        bool   `json:"page_tools_ready"`
+	PageToolsKnown        bool   `json:"page_tools_known"`
+	PageToolsEvidence     string `json:"page_tools_evidence,omitempty"`
+	ToolCount             int    `json:"tool_count"`
+	ToolCountKnown        bool   `json:"tool_count_known"`
+	Eligible              bool   `json:"eligible"`
+	EligibilityReason     string `json:"eligibility_reason,omitempty"`
 }
 
 // TargetCapabilities is returned by an injected target-runtime seam. A
@@ -176,6 +184,13 @@ type TargetCapabilities struct {
 	WebMCP         bool
 	ToolCount      int
 	ToolCountKnown bool
+	// DomainSupported/DomainKnown are the explicit form of WebMCP. The
+	// legacy WebMCP field remains accepted for existing probes.
+	DomainSupported   bool
+	DomainKnown       bool
+	PageToolsReady    bool
+	PageToolsKnown    bool
+	PageToolsEvidence string
 }
 
 // TargetCapabilityProbe verifies the capability that /json/list cannot
@@ -395,30 +410,38 @@ func (s Selection) Context() PageContext {
 		ready = s.ready
 	}
 	return PageContext{
-		BrowserID:  s.BrowserID,
-		TargetID:   s.TargetID,
-		Title:      s.Title,
-		URL:        s.URL,
-		Origin:     s.Origin,
-		Generation: s.Generation,
-		SelectedAt: s.SelectedAt,
-		Connected:  connected,
-		Ready:      ready,
+		BrowserID:             s.BrowserID,
+		TargetID:              s.TargetID,
+		Title:                 s.Title,
+		URL:                   s.URL,
+		Origin:                s.Origin,
+		Generation:            s.Generation,
+		SelectedAt:            s.SelectedAt,
+		Connected:             connected,
+		WebMCPDomainSupported: s.Target.WebMCPDomainSupported || s.Target.WebMCP,
+		PageToolsReady:        s.Target.PageToolsReady,
+		PageToolsKnown:        s.Target.PageToolsKnown,
+		PageToolsEvidence:     s.Target.PageToolsEvidence,
+		Ready:                 ready,
 	}
 }
 
 // PageContext is the safe context returned by Selection.Context. It contains
 // no endpoint or target websocket values.
 type PageContext struct {
-	BrowserID  string    `json:"browser_id"`
-	TargetID   string    `json:"target_id"`
-	Title      string    `json:"title"`
-	URL        string    `json:"url"`
-	Origin     string    `json:"origin"`
-	Generation uint64    `json:"generation"`
-	Connected  bool      `json:"connected"`
-	Ready      bool      `json:"ready"`
-	SelectedAt time.Time `json:"selected_at"`
+	BrowserID             string    `json:"browser_id"`
+	TargetID              string    `json:"target_id"`
+	Title                 string    `json:"title"`
+	URL                   string    `json:"url"`
+	Origin                string    `json:"origin"`
+	Generation            uint64    `json:"generation"`
+	Connected             bool      `json:"connected"`
+	WebMCPDomainSupported bool      `json:"webmcp_domain_supported"`
+	PageToolsReady        bool      `json:"page_tools_ready"`
+	PageToolsKnown        bool      `json:"page_tools_known"`
+	PageToolsEvidence     string    `json:"page_tools_evidence,omitempty"`
+	Ready                 bool      `json:"ready"`
+	SelectedAt            time.Time `json:"selected_at"`
 }
 
 // SelectionValidationRequest identifies the exact selection generation an
