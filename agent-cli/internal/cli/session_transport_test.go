@@ -142,6 +142,37 @@ func TestSessionCommandAcceptsWebRTCWithSignaling(t *testing.T) {
 	}
 }
 
+func TestSessionCommandWebRTCNilRuntimeFailsWithoutWebSocketFallback(t *testing.T) {
+	inferencer := newCLITestSessionInferencer()
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inferencer).Generate()
+	var out, errOut bytes.Buffer
+	command.SetOut(&out)
+	command.SetErr(&errOut)
+	command.SilenceUsage = true
+	command.SetArgs([]string{
+		"--provider", "grok",
+		"--record", filepath.Join(t.TempDir(), "nil-runtime.session.json"),
+		"--transport", "webrtc",
+		"--signaling", "loopback://nil-runtime",
+		"--media-source", "go2rtc://fixture.invalid/api/ws?src=nil-runtime",
+		"must not use a fallback",
+	})
+
+	err := command.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("WebRTC command with a nil runtime unexpectedly succeeded")
+	}
+	if !errors.Is(err, services.ErrSessionRTCRuntimeUnavailable) {
+		t.Fatalf("nil WebRTC runtime error = %v, want ErrSessionRTCRuntimeUnavailable", err)
+	}
+	if strings.Contains(out.String(), "rtc CLI completed turn") || strings.Contains(errOut.String(), "rtc CLI completed turn") {
+		t.Fatalf("nil WebRTC runtime emitted fallback output: stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+	if strings.Contains(strings.ToLower(out.String()), "usage:") || strings.Contains(strings.ToLower(errOut.String()), "usage:") {
+		t.Fatalf("nil WebRTC runtime returned help instead of a typed setup error: stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+}
+
 func TestSessionCommandMediaSourceWithoutWebRTCIsRejectedBeforeSessionSetup(t *testing.T) {
 	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
 	command.SetArgs([]string{"--media-source", "rtsp://fixture/camera"})

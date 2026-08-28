@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -93,6 +95,7 @@ func TestGeneratedRootCLI_WebRTCTraversesProductionRTCComposition(t *testing.T) 
 	root := app.Generate()
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
+	root.SilenceUsage = true
 	root.SetArgs([]string{
 		"--config-dir", t.TempDir(),
 		"session",
@@ -119,8 +122,8 @@ func TestGeneratedRootCLI_WebRTCTraversesProductionRTCComposition(t *testing.T) 
 	if sourceSnapshot.path != "/api/ws" || sourceSnapshot.source != "production-cli-fixture" {
 		t.Fatalf("media source request = path %q source %q, want /api/ws and production-cli-fixture", sourceSnapshot.path, sourceSnapshot.source)
 	}
-	if sourceSnapshot.frames == 0 {
-		t.Fatal("media fixture sent zero non-zero PCM source frames")
+	if sourceSnapshot.frames == 0 || sourceSnapshot.nonZeroFrames == 0 {
+		t.Fatalf("media fixture non-zero frames = %d of %d, want at least one", sourceSnapshot.nonZeroFrames, sourceSnapshot.frames)
 	}
 
 	evidenceSnapshot := evidence.snapshot()
@@ -193,6 +196,199 @@ func TestGeneratedRootCLI_WebRTCTraversesProductionRTCComposition(t *testing.T) 
 	if terminal == nil || !terminal.Clean || terminal.TurnsCompleted != 1 || terminal.FinalAccounting == nil {
 		t.Fatalf("runtime terminal observation = %#v, want clean terminal accounting after one turn", terminal)
 	}
+}
+
+func TestGeneratedRootCLI_WebRTCPreservesTypedStartupFailures(t *testing.T) {
+	const secret = "root-cli-media-password"
+
+	closedServer := httptest.NewServer(http.NotFoundHandler())
+	closedURL, err := url.Parse(closedServer.URL)
+	if err != nil {
+		t.Fatalf("parse closed media fixture URL: %v", err)
+	}
+	closedServer.Close()
+	unreachableMedia := "go2rtc://" + closedURL.Host + "/api/ws?src=unreachable-root-cli"
+
+	tests := []struct {
+		name          string
+		signaling     string
+		media         string
+		wantCause     error
+		wantPhase     string
+		wantMediaErr  bool
+		forbiddenText string
+	}{
+		{
+			name:      "unreachable signaling",
+			signaling: "https://signal.invalid/root-cli",
+			media:     "go2rtc://media.invalid/api/ws?src=must-not-open",
+			wantCause: rtc.ErrSignalingUnreachable,
+			wantPhase: "resolve signaling",
+		},
+		{
+			name:          "malformed media source",
+			signaling:     "loopback://root-cli/malformed-media",
+			media:         "rtsp://camera:" + secret + "@",
+			wantCause:     rtc.ErrMalformedSource,
+			wantPhase:     "open media source",
+			wantMediaErr:  true,
+			forbiddenText: secret,
+		},
+		{
+			name:         "unreachable media source",
+			signaling:    "loopback://root-cli/unreachable-media",
+			media:        unreachableMedia,
+			wantCause:    rtc.ErrSourceUnreachable,
+			wantPhase:    "open media source",
+			wantMediaErr: true,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			provider := &recordingSessionInferencer{}
+			result := executeGeneratedRootCLIWebRTCFailure(t, provider, nil, testCase.signaling, testCase.media, 5*time.Second)
+			if result.err == nil {
+				t.Fatal("invalid WebRTC startup unexpectedly completed successfully")
+			}
+			if !errors.Is(result.err, testCase.wantCause) {
+				t.Fatalf("root CLI error = %v, want errors.Is(..., %v)", result.err, testCase.wantCause)
+			}
+			var phaseErr *services.SessionRTCRuntimeError
+			if !errors.As(result.err, &phaseErr) {
+				t.Fatalf("root CLI error type = %T, want *services.SessionRTCRuntimeError: %v", result.err, result.err)
+			}
+			if phaseErr.Phase != testCase.wantPhase {
+				t.Fatalf("root CLI failure phase = %q, want %q", phaseErr.Phase, testCase.wantPhase)
+			}
+			if provider.connects != 0 {
+				t.Fatalf("provider ConnectSession calls = %d, want zero before RTC startup failure", provider.connects)
+			}
+			if testCase.wantMediaErr {
+				var sourceErr *rtc.MediaSourceError
+				if !errors.As(result.err, &sourceErr) {
+					t.Fatalf("root CLI media error type = %T, want *rtc.MediaSourceError: %v", result.err, result.err)
+				}
+			}
+			if testCase.forbiddenText != "" && strings.Contains(result.err.Error(), testCase.forbiddenText) {
+				t.Fatalf("root CLI error leaked source credentials: %v", result.err)
+			}
+			combinedOutput := strings.ToLower(result.stdout + result.stderr)
+			if strings.Contains(combinedOutput, "usage:") || strings.Contains(combinedOutput, "run or manage agent sessions") {
+				t.Fatalf("startup failure emitted help instead of a lifecycle error: stdout=%q stderr=%q", result.stdout, result.stderr)
+			}
+			if strings.Contains(result.stdout, productionRootCLITranscript) {
+				t.Fatalf("startup failure emitted a synthetic transcript: %q", result.stdout)
+			}
+		})
+	}
+}
+
+func TestGeneratedRootCLI_WebRTCZeroMediaCannotCompleteSyntheticTurn(t *testing.T) {
+	production := newProductionRTCComposition()
+	base := production.components()
+	var dataPlaneMu sync.Mutex
+	var dataPlane *productionRTCDataPlane
+	components := services.SessionRTCComponents{
+		ResolveSignaling: base.ResolveSignaling,
+		NewDataPlane: func(ctx context.Context, signaling rtc.Signaling) (services.SessionRTCDataPlane, error) {
+			plane, err := base.NewDataPlane(ctx, signaling)
+			if err == nil {
+				concrete, ok := plane.(*productionRTCDataPlane)
+				if !ok {
+					return nil, fmt.Errorf("production data-plane type = %T, want *productionRTCDataPlane", plane)
+				}
+				dataPlaneMu.Lock()
+				dataPlane = concrete
+				dataPlaneMu.Unlock()
+			}
+			return plane, err
+		},
+		OpenMediaSource: func(context.Context, string) (rtc.InboundMedia, error) {
+			return &zeroProductionCLIMedia{}, nil
+		},
+	}
+	provider := &productionRootCLIInferencer{
+		dataPlane: func() *productionRTCDataPlane {
+			dataPlaneMu.Lock()
+			defer dataPlaneMu.Unlock()
+			return dataPlane
+		},
+	}
+	result := executeGeneratedRootCLIWebRTCFailure(t, provider, &components, "loopback://root-cli/zero-media", "fixture://root-cli/zero-media", 2*time.Second)
+	if result.err == nil {
+		t.Fatal("zero-frame WebRTC source unexpectedly completed successfully")
+	}
+	if !errors.Is(result.err, context.DeadlineExceeded) {
+		t.Fatalf("zero-frame root CLI error = %v, want bounded context deadline", result.err)
+	}
+	dataPlaneMu.Lock()
+	concrete := dataPlane
+	dataPlaneMu.Unlock()
+	if concrete == nil {
+		t.Fatal("zero-frame control did not construct the production data plane")
+	}
+	if concrete.mediaFrames.Load() != 0 || concrete.mediaPackets.Load() != 0 {
+		t.Fatalf("zero-frame RTC activity = outbound frames %d, received packets %d; want zero", concrete.mediaFrames.Load(), concrete.mediaPackets.Load())
+	}
+	if strings.Contains(result.stdout, productionRootCLITranscript) {
+		t.Fatalf("zero-frame control emitted a synthetic transcript: %q", result.stdout)
+	}
+	if strings.Contains(strings.ToLower(result.stdout+result.stderr), "usage:") {
+		t.Fatalf("zero-frame control emitted help: stdout=%q stderr=%q", result.stdout, result.stderr)
+	}
+}
+
+type productionRootCLIRunResult struct {
+	err            error
+	stdout, stderr string
+}
+
+func executeGeneratedRootCLIWebRTCFailure(t *testing.T, provider messages.SessionInferencer, components *services.SessionRTCComponents, signaling, media string, timeout time.Duration) productionRootCLIRunResult {
+	t.Helper()
+	transportDialer := &recordingDialer{}
+	options := []CompositionOption{WithSessionInferencer(provider)}
+	if components != nil {
+		options = append(options, WithSessionRTCComponents(*components))
+	}
+	app, err := ComposeAgentCLI(
+		&recordingToolExecutor{},
+		transportDialer,
+		&recordingDeviceRegistry{},
+		&recordingAudioSource{},
+		&recordingAudioSink{},
+		&recordingClock{now: time.Unix(123, 0)},
+		options...,
+	)
+	if err != nil {
+		t.Fatalf("compose generated root CLI: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	root := app.Generate()
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SilenceUsage = true
+	sessionCommand, _, findErr := root.Find([]string{"session"})
+	if findErr != nil {
+		t.Fatalf("find generated session command: %v", findErr)
+	}
+	sessionCommand.SilenceUsage = true
+	root.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record", filepath.Join(t.TempDir(), "failure-control.session.json"),
+		"--provider", "grok",
+		"--model", "grok-failure-control",
+		"--api-key", "test-provider-key",
+		"--transport", "webrtc",
+		"--signaling", signaling,
+		"--media-source", media,
+		"must not emit a synthetic response",
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return productionRootCLIRunResult{err: root.ExecuteContext(ctx), stdout: stdout.String(), stderr: stderr.String()}
 }
 
 const productionRootCLITranscript = "production RTC data turn complete"
@@ -396,18 +592,20 @@ type productionCLIMediaFixture struct {
 	framesSent  chan struct{}
 	framesOnce  sync.Once
 
-	mu          sync.Mutex
-	path        string
-	source      string
-	frames      int
-	err         error
-	cleanupOnce sync.Once
+	mu            sync.Mutex
+	path          string
+	source        string
+	frames        int
+	nonZeroFrames int
+	err           error
+	cleanupOnce   sync.Once
 }
 
 type productionCLIMediaFixtureSnapshot struct {
-	path, source string
-	frames       int
-	err          string
+	path, source  string
+	frames        int
+	nonZeroFrames int
+	err           string
 }
 
 func startProductionCLIMediaFixture(t *testing.T) *productionCLIMediaFixture {
@@ -544,7 +742,7 @@ func startProductionCLIMediaFixture(t *testing.T) *productionCLIMediaFixture {
 			return
 		}
 		for index := 0; index < 6; index++ {
-			payload := bytes.Repeat([]byte{0x00}, 160)
+			payload := bytes.Repeat([]byte{0x01}, 160)
 			if err := audio.WriteRTP(&rtp.Packet{
 				Header: rtp.Header{
 					Version:        2,
@@ -559,6 +757,9 @@ func startProductionCLIMediaFixture(t *testing.T) *productionCLIMediaFixture {
 			}
 			fixture.mu.Lock()
 			fixture.frames++
+			if hasNonZeroBytes(payload) {
+				fixture.nonZeroFrames++
+			}
 			fixture.mu.Unlock()
 		}
 		fixture.framesOnce.Do(func() { close(fixture.framesSent) })
@@ -601,12 +802,30 @@ func (f *productionCLIMediaFixture) snapshot() productionCLIMediaFixtureSnapshot
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return productionCLIMediaFixtureSnapshot{
-		path:   f.path,
-		source: f.source,
-		frames: f.frames,
-		err:    errorString(f.err),
+		path:          f.path,
+		source:        f.source,
+		frames:        f.frames,
+		nonZeroFrames: f.nonZeroFrames,
+		err:           errorString(f.err),
 	}
 }
+
+func hasNonZeroBytes(value []byte) bool {
+	for _, item := range value {
+		if item != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+type zeroProductionCLIMedia struct{}
+
+func (*zeroProductionCLIMedia) ReadFrame(context.Context) (rtc.PCMFrame, error) {
+	return rtc.PCMFrame{}, io.EOF
+}
+
+func (*zeroProductionCLIMedia) Close() error { return nil }
 
 func (f *productionCLIMediaFixture) close() {
 	f.cleanupOnce.Do(func() {
