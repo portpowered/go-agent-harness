@@ -1,8 +1,7 @@
 # WebMCP O0 evidence
 
 Status: stories `webmcp-o0-toolchain-gate-001` through
-`webmcp-o0-toolchain-gate-005` complete; final consequence consolidation
-remains pending.
+`webmcp-o0-toolchain-gate-006` complete; gate ready for review.
 
 ## Run context
 
@@ -489,14 +488,69 @@ for browser-control plumbing, but its native-versus-shim assertion must remain
 separate and must use the story-003 WebMCP-enabled fixture when testing native
 support. Lane D can use the same loopback cleanup boundary for adapter tests.
 
-## Remaining O0 assumptions
+## Final gate verdict
 
-The remaining rows will be filled by the later stories using the same dated
-observed-versus-researched distinction:
+The five external assumptions are closed by the dated commands below. The
+Go row deliberately has two dimensions: the existing Go 1.24.2 workspace
+baseline fails, while the selected binding pair passes its smoke path under
+the automatically selected Go 1.26.0 toolchain. The other four assumptions
+pass on the locked Stable Chrome row.
 
-| Assumption | Verdict | Story |
+| Assumption | Verdict | Reproduction command and observed evidence | Decision boundary |
+| --- | --- | --- | --- |
+| Go 1.24.2 and selected `chromedp`/`cdproto` bindings | **FAIL** for Go 1.24.2; **PASS** for the selected pair under Go 1.26.0 | `./probe.sh go1.24.2` emitted `go.mod requires go >= 1.26`; `./probe.sh smoke` constructed four WebMCP commands and four event types; `./probe.sh metadata` reported `go mod verify: all modules verified` | Lane A must upgrade to one Go 1.26 patch release or re-prove older pins; this gate does not change the workspace baseline. |
+| Pinned Chrome for Testing launch | **PASS** | `./probe.sh chrome` matched the Stable manifest pin, archive SHA-256, executable version, loopback endpoint, `/json/version`, and CDP `Browser.getVersion` | Lane A/D/I1 may use Stable `152.0.7977.64` on `mac-arm64` with the recorded flags and archive lock. |
+| Native WebMCP availability and typed binding coverage | **PASS** | `./probe.sh webmcp` observed `document.modelContext`, registered and invoked a page tool, read `/json/protocol`, and completed typed `WebMCP.enable`/`invokeTool` with lifecycle events | Lane D targets generated `cdproto/webmcp` on the feature-flagged, origin-isolated, `tools`-permitted fixture; the page serialized-input quirk remains an observed compatibility detail. |
+| Detach-only preservation of an external visible tab | **PASS** | `./probe.sh detach` changed `initial` → `attached`, called typed `Target.detachFromTarget`, found the same target in independent `/json/list` checks, reattached, and changed it to `reattached` without `Target.closeTarget` or `Browser.close` | Lane D/I1 must accept a caller-owned endpoint and target ID, detach before client cancellation, and leave browser/process/profile ownership outside the client. |
+| Hermetic loopback fixture control | **PASS** | `./probe.sh hermetic` reported `#ready`, `initial`, a separate successful transition evaluation, `transitioned`, `stateMatch: true`, and `webmcpPath: not exercised` | Lane I1 gets a generic-CDP baseline; native WebMCP and any versioned shim/polyfill remain separate assertions. |
+
+The exact dependency pins and checksums used by every command are recorded in
+the Story 001 table and [scripts/webmcp-o0/go.sum](../../scripts/webmcp-o0/go.sum).
+The browser lock used by `chrome`, `webmcp`, `detach`, and `hermetic` is
+[scripts/webmcp-o0/chrome-for-testing.json](../../scripts/webmcp-o0/chrome-for-testing.json):
+Stable `152.0.7977.64`, revision `1669021`, mac-arm64 archive SHA-256
+`10033804338bd0a5aa098149a8dd64f3f2e0e8b201bf3d400d7c17d067ff696f`.
+
+## Consequences for lanes A, D, and I1
+
+| Lane | Unblocked by this gate | Constraint that must be carried forward |
 | --- | --- | --- |
-| Pinned Chrome for Testing launch | PASS | `webmcp-o0-toolchain-gate-002` |
-| Native WebMCP page/CDP surface and binding coverage | PASS | `webmcp-o0-toolchain-gate-003` |
-| Detach-only preservation of an external visible tab | PASS | `webmcp-o0-toolchain-gate-004` |
-| Hermetic loopback fixture control | PASS | `webmcp-o0-toolchain-gate-005` |
+| A — dependency/toolchain | A reproducible `chromedp v0.16.0` + `cdproto v0.0.0-20260714215040-dc233986426f` pair and a verified Stable Chrome for Testing artifact are available for evaluation. | The current Go 1.24.2 baseline is not compatible: both selected modules declare `go 1.26`. Lane A owns the Go upgrade or an older-pin requalification; this work item changes no production module. |
+| D — browser/WebMCP adapter | The native page producer and CDP `WebMCP` domain are both reachable through generated bindings on Stable `152.0.7977.64`; generic CDP control, a loopback fixture, and a detach-safe external target path are reproducible. | Launch with `WebMCP,WebMCPTesting,DevToolsWebMCPSupport`, `Origin-Agent-Cluster: ?1`, and `Permissions-Policy: tools=(self)` for native tests. Accept an explicit endpoint/target ID and use typed detach-first cleanup; do not treat a future missing native row as native support—reopen the gate and version any shim/polyfill separately. |
+| I1 — integration gate | The pinned browser, generic hermetic fixture, native WebMCP fixture, and external-target lifecycle checks provide independent integration fixtures. | Keep the native/shim boundary explicit: `./probe.sh hermetic` proves only generic CDP, while `./probe.sh webmcp` proves native WebMCP on the tested row. Do not let client cancellation close an externally owned target, browser, or profile. |
+
+## Clean-checkout reproduction and scope
+
+From a clean checkout on the recorded `darwin/arm64` host:
+
+```sh
+cd scripts/webmcp-o0
+./probe.sh metadata
+./probe.sh test
+./probe.sh typecheck
+./probe.sh smoke
+./probe.sh chrome
+./probe.sh webmcp
+./probe.sh detach
+./probe.sh hermetic
+./probe.sh go1.24.2
+```
+
+`probe.sh` changes into its own directory and exports `GOWORK=off` before
+every Go command. The first four commands validate the isolated module and
+its checksums; `chrome` revalidates the authoritative channel manifest,
+archive hash, executable, and CDP version; `go1.24.2` plus the four browser
+rows produce the five assumption results above. A moved Stable channel stops
+at the locked manifest mismatch, and a corrupted or unavailable archive stops before
+extraction with an integrity or prerequisite error. Browser rows use only a
+fresh temporary profile, loopback remote debugging, the committed local
+fixtures, and processes started by the probe; no ambient website, account, or
+production module is needed.
+
+The researched WebMCP requirements are the linked Chrome documentation,
+origin-trial announcement, WebMCP draft, and CDP protocol reference in Story
+003. Everything in the verdict table is instead a machine-local observation
+from the named command and its concise report. The final diff is limited to
+this evidence record and the isolated assets under `scripts/webmcp-o0/`; it
+does not alter `go.work`, any existing `go.mod`/`go.sum`, production browser
+or session code, or unrelated documentation.
