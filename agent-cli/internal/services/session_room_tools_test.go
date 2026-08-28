@@ -9,9 +9,61 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 )
+
+func TestNewDefaultRoomParticipantToolCapabilitiesFactorySelectsOnlyGrantedTools(t *testing.T) {
+	factory, err := newDefaultRoomParticipantToolCapabilitiesFactory(t.TempDir())
+	if err != nil {
+		t.Fatalf("newDefaultRoomParticipantToolCapabilitiesFactory: %v", err)
+	}
+
+	capabilities, err := factory(room.Participant{ID: "alpha", Tools: []string{"exec"}})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	if capabilities.Executor == nil {
+		t.Fatal("factory returned a nil executor")
+	}
+	if len(capabilities.Definitions) != 1 || capabilities.Definitions[0].Name != "exec" {
+		t.Fatalf("definitions = %#v, want exactly exec", capabilities.Definitions)
+	}
+
+	response, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "exec-call",
+		Name:      "exec",
+		Arguments: `{"command":"printf room-tool-selection"}`,
+	})
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if response.Content != "room-tool-selection" {
+		t.Fatalf("exec output = %q, want room-tool-selection", response.Content)
+	}
+
+	_, err = capabilities.Executor.Execute(context.Background(), messages.ToolCall{
+		ID:   "ungranted-call",
+		Name: "read_file",
+	})
+	if !errors.Is(err, tools.ErrToolNotFound) {
+		t.Fatalf("ungranted read_file error = %v, want tools.ErrToolNotFound", err)
+	}
+}
+
+func TestNewEmptyToolRegistryStartsEmptyAndAcceptsFirstTool(t *testing.T) {
+	registry := tools.NewEmptyToolRegistry()
+	if got := registry.Count(); got != 0 {
+		t.Fatalf("empty registry count = %d, want 0", got)
+	}
+	if err := registry.Register(tools.NewExecTool("", false)); err != nil {
+		t.Fatalf("register first tool: %v", err)
+	}
+	if got := registry.Count(); got != 1 {
+		t.Fatalf("registry count after first registration = %d, want 1", got)
+	}
+}
 
 func TestBuildRoomParticipantPlans_UsesIsolatedRequestedCapabilities(t *testing.T) {
 	ids := []string{"alpha", "beta"}
