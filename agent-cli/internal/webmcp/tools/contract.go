@@ -180,9 +180,6 @@ func StableToolSchemas() []map[string]any {
 // ToolSchemas is a descriptive alias for StableToolSchemas.
 func ToolSchemas() []map[string]any { return StableToolSchemas() }
 
-// BrokerToolDefinitions is a compatibility alias for composition callers.
-func BrokerToolDefinitions() []ToolDefinition { return StableToolDefinitions() }
-
 // BrokerToolSchemas is a compatibility alias for StableToolSchemas.
 func BrokerToolSchemas() []map[string]any { return StableToolSchemas() }
 
