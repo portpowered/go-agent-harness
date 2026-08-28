@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
@@ -87,9 +88,11 @@ func NewSessionToolCapabilitiesFactory(
 		if err != nil {
 			return closeFailedBroker(broker, fmt.Errorf("compose session tools: %w", err))
 		}
+		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
 		return SessionToolCapabilities{
 			Executor:    surface.Executor,
 			Definitions: surface.Definitions,
+			Close:       capabilityCoordinator.Close,
 		}, nil
 	}
 }
@@ -116,7 +119,7 @@ func closeFailedBroker(broker webmcp.Broker, primary error) (SessionToolCapabili
 	if broker == nil {
 		return SessionToolCapabilities{}, primary
 	}
-	if closeErr := broker.Close(); closeErr != nil {
+	if closeErr := services.NewSessionCapabilityCoordinator(broker.Close).Close(); closeErr != nil {
 		return SessionToolCapabilities{}, errors.Join(primary, fmt.Errorf("close WebMCP broker: %w", closeErr))
 	}
 	return SessionToolCapabilities{}, primary

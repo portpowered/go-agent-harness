@@ -34,6 +34,12 @@ func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunO
 // with assistant audio output. An empty path preserves the normal session
 // output behavior, including the --prompt presence contract.
 func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, seed SessionTextSeed) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if path == "" {
 		if seed.Present {
 			return RunSessionWithTextSeed(ctx, out, opts, seed)
@@ -98,6 +104,12 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 // inside the duration admission plan so accepted deltas are written before
 // the sink is finalized, including clean duration cutoffs.
 func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if path == "" {
 		return RunSessionWithTextSeedAndMaxDuration(ctx, out, opts, maxDuration, seed)
 	}

@@ -104,6 +104,12 @@ func completeMessageCapabilities(session messages.Session) (complete, withoutRes
 }
 
 func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageRunOptions) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	paths := append([]string(nil), opts.ImagePaths...)
 	if len(paths) == 0 {
 		return RunSession(ctx, out, opts.SessionRunOptions)
@@ -138,6 +144,12 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 // without a response request; the finite audio source owns the single
 // end-of-turn commit and response boundary.
 func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts SessionImageRunOptions, input SessionAudioInput) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts.SessionRunOptions, coordinator = prepareSessionCapabilityCoordinator(opts.SessionRunOptions)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if !sessionAudioInputSelected(input) {
 		return RunSessionWithImages(ctx, out, opts)
 	}

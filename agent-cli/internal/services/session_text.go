@@ -21,7 +21,13 @@ type SessionTextSeed struct {
 
 // RunSessionWithTextSeed runs a session using the explicit text seed when it
 // is present, otherwise preserving the existing positional Prompt behavior.
-func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunOptions, seed SessionTextSeed) error {
+func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunOptions, seed SessionTextSeed) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if !seed.Present {
 		return RunSession(ctx, out, opts)
 	}

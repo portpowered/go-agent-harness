@@ -26,6 +26,9 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// Close transfers ownership of any capability resources to the session
+	// coordinator. Nil means this capability has no closeable resources.
+	Close func() error
 }
 
 // SessionToolCapabilitiesFactory builds the session tool surface from the
@@ -436,8 +439,33 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					})
 				}
 			}
+			seed := services.SessionTextSeed{
+				Value:   prompt,
+				Present: cmd.Flags().Changed("prompt"),
+			}
+			audioInput := services.SessionAudioInput{
+				Path:          audioIn,
+				Stdin:         cmd.InOrStdin(),
+				Present:       cmd.Flags().Changed("audio-in"),
+				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+			}
+			// Validate command-only combinations before constructing the browser
+			// capability. Once construction succeeds, ownership transfers to the
+			// service coordinator and every remaining error is finalized there.
+			if len(audioInTurns) > 0 {
+				if audioInput.Present || audioInput.DevicePresent {
+					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
+				}
+				if recordDirPath == "" {
+					return fmt.Errorf("--audio-in-turn requires --record-dir")
+				}
+				if len(c.imagePaths) > 0 {
+					return fmt.Errorf("--audio-in-turn cannot be combined with --image")
+				}
+			}
 			toolExecutor := c.toolExecutorOverride
 			var toolDefinitions []messages.ToolDefinition
+			var capabilityClose func() error
 			if c.sessionToolCapabilities != nil {
 				if loadedConfig == nil {
 					loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
@@ -451,6 +479,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				}
 				toolExecutor = capabilities.Executor
 				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+				if capabilities.Close != nil {
+					capabilityCoordinator := services.NewSessionCapabilityCoordinator(capabilities.Close)
+					capabilityClose = capabilityCoordinator.Close
+				}
 			}
 			sessionOptions := services.SessionRunOptions{
 				RecordPath:          c.askFlags.RecordCapturePath,
@@ -470,6 +502,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				SessionInferencer:   c.sessionInferencerOverride,
 				ToolExecutor:        toolExecutor,
 				ToolDefinitions:     toolDefinitions,
+				CapabilityClose:     capabilityClose,
 				LoadedConfig:        loadedConfig,
 				BrowserToolsEnabled: browserConfigEnablesTools(loadedConfig),
 				WaitForClose:        waitForClose,
@@ -484,26 +517,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
 				},
 			}
-			seed := services.SessionTextSeed{
-				Value:   prompt,
-				Present: cmd.Flags().Changed("prompt"),
-			}
-			audioInput := services.SessionAudioInput{
-				Path:          audioIn,
-				Stdin:         cmd.InOrStdin(),
-				Present:       cmd.Flags().Changed("audio-in"),
-				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-			}
 			if len(audioInTurns) > 0 {
-				if audioInput.Present || audioInput.DevicePresent {
-					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
-				}
-				if recordDirPath == "" {
-					return fmt.Errorf("--audio-in-turn requires --record-dir")
-				}
-				if len(c.imagePaths) > 0 {
-					return fmt.Errorf("--audio-in-turn cannot be combined with --image")
-				}
 				return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 					sessionContext,
 					cmd.OutOrStdout(),

@@ -6,7 +6,13 @@ import (
 )
 
 // RunSession validates and runs the session inference command surface.
-func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) error {
+func RunSession(ctx context.Context, out io.Writer, opts SessionRunOptions) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}

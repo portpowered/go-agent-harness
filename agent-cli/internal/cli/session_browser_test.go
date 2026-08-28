@@ -241,6 +241,7 @@ browser:
 	inferencer := newBrowserAdmissionInferencer()
 	defer inferencer.Close()
 	toolCapabilityCalls := 0
+	capabilityCloseCalls := 0
 	var resolvedBrowser config.BrowserConfig
 	owner := NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
 		flags.NewAskFlags(),
@@ -252,7 +253,12 @@ browser:
 		func(cfg *config.Config) (SessionToolCapabilities, error) {
 			toolCapabilityCalls++
 			resolvedBrowser = cfg.Browser
-			return SessionToolCapabilities{}, nil
+			return SessionToolCapabilities{
+				Close: func() error {
+					capabilityCloseCalls++
+					return nil
+				},
+			}, nil
 		},
 		nil,
 	)
@@ -272,8 +278,42 @@ browser:
 	if inferencer.connects != 1 {
 		t.Fatalf("live session connections = %d, want 1", inferencer.connects)
 	}
+	if capabilityCloseCalls != 1 {
+		t.Fatalf("transferred capability close calls = %d, want one", capabilityCloseCalls)
+	}
 	if strings.Contains(out.String(), "Usage:") || strings.Contains(out.String(), "requires --record") {
 		t.Fatalf("explicit browser activation fell back to help/record validation:\n%s", out.String())
+	}
+}
+
+func TestSessionBrowserToolsClosesTransferredCapabilityOnPlanningFailure(t *testing.T) {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	closeCalls := 0
+	owner := NewSessionCommandWithRuntimeAndDeviceRegistryAndToolCapabilities(
+		flags.NewAskFlags(),
+		globalFlags,
+		nil,
+		nil,
+		nil,
+		nil,
+		func(*config.Config) (SessionToolCapabilities, error) {
+			return SessionToolCapabilities{Close: func() error {
+				closeCalls++
+				return nil
+			}}, nil
+		},
+		nil,
+	)
+	command := owner.Generate()
+	command.SetArgs([]string{"--browser-tools=webmcp", "--provider=unsupported-provider"})
+
+	err := command.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "require provider") {
+		t.Fatalf("planning error = %v, want unsupported browser live provider error", err)
+	}
+	if closeCalls != 1 {
+		t.Fatalf("planning-failure capability close calls = %d, want one", closeCalls)
 	}
 }
 

@@ -103,29 +103,30 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 }
 
 type sessionRuntimePlan struct {
-	mode              sessionRuntimeMode
-	provider          string
-	model             string
-	capturePath       string
-	loopOut           io.Writer
-	inferencer        messages.SessionInferencer
-	loop              sessionLoopOptions
-	announce          string
-	flushCapture      func() error
-	finalize          func(context.Context, io.Writer) error
-	diagnostics       SessionDiagnosticSink
-	metricsRecorder   metrics.Recorder
-	streamObserver    SessionStreamObserver
-	audioInputs       []ScheduledAudioInput
-	clockSource       platformclock.Source
-	runtime           *sessionRuntimeObservationRecorder
-	rtcRuntime        SessionRTCRuntime
-	closeSession      func() error
-	selection         SessionRuntimeSelection
-	transport         string
-	signalingEndpoint string
-	mediaSource       string
-	rtcDeviceRequest  RTCDeviceBindingRequest
+	mode                  sessionRuntimeMode
+	provider              string
+	model                 string
+	capturePath           string
+	loopOut               io.Writer
+	inferencer            messages.SessionInferencer
+	loop                  sessionLoopOptions
+	announce              string
+	flushCapture          func() error
+	finalize              func(context.Context, io.Writer) error
+	diagnostics           SessionDiagnosticSink
+	metricsRecorder       metrics.Recorder
+	streamObserver        SessionStreamObserver
+	audioInputs           []ScheduledAudioInput
+	clockSource           platformclock.Source
+	runtime               *sessionRuntimeObservationRecorder
+	rtcRuntime            SessionRTCRuntime
+	closeSession          func() error
+	selection             SessionRuntimeSelection
+	transport             string
+	signalingEndpoint     string
+	mediaSource           string
+	rtcDeviceRequest      RTCDeviceBindingRequest
+	capabilityCoordinator *SessionCapabilityCoordinator
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
@@ -145,6 +146,13 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 			if err := p.closeSession(); err != nil {
 				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
 			}
+		}()
+	}
+	if p.capabilityCoordinator != nil {
+		// Browser capability cleanup runs before provider/runtime teardown. The
+		// coordinator itself owns the hook and makes this safe for outer guards.
+		defer func() {
+			closeSessionCapabilityForPlan(p.capabilityCoordinator, &runErr)
 		}()
 	}
 	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)
@@ -214,12 +222,19 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 	return planSessionRuntimeWithFactory(opts, defaultSessionRuntimeFactory)
 }
 
-func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
+	var capabilityCoordinator *SessionCapabilityCoordinator
+	opts, capabilityCoordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		if planErr != nil {
+			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
+		}
+	}()
+
 	selection, err := resolveSessionRuntimeSelection(opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	var plan sessionRuntimePlan
 	if selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
 		plan, err = planWebRTCSessionRuntime(opts, selection, factory)
 	} else {
@@ -253,6 +268,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	if plan.rtcRuntime == nil && selection.Transport == SessionTransportWebRTC && opts.ReplayPath == "" {
 		return sessionRuntimePlan{}, wrapSessionRTCRuntimeError("create runtime", ErrSessionRTCRuntimeUnavailable)
 	}
+	plan.capabilityCoordinator = capabilityCoordinator
 	return plan, nil
 }
 

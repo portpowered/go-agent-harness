@@ -157,6 +157,13 @@ type SessionRunOptions struct {
 	// second time during runtime planning.
 	LoadedConfig *config.Config
 
+	// CapabilityClose is the optional cleanup hook transferred from the CLI
+	// session capability factory. The service wraps it in one shared
+	// SessionCapabilityCoordinator so planning, runtime, and nested wrappers
+	// cannot close the same capability more than once.
+	CapabilityClose       func() error
+	capabilityCoordinator *SessionCapabilityCoordinator
+
 	// ToolExecutionTimeout overrides the per-invocation session tool adapter
 	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
 	// production plans never set it, so live behavior is unchanged.

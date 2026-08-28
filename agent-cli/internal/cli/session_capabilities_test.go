@@ -103,6 +103,30 @@ func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testi
 	}
 }
 
+func TestSessionToolCapabilitiesFactoryTransfersIdempotentCloseHook(t *testing.T) {
+	broker := &capabilityBroker{}
+	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
+		return broker, nil
+	})
+
+	capabilities, err := factory(browserCapabilityConfig(true))
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	if capabilities.Close == nil {
+		t.Fatal("enabled capabilities did not transfer a close hook")
+	}
+	if err := capabilities.Close(); err != nil {
+		t.Fatalf("first capability close: %v", err)
+	}
+	if err := capabilities.Close(); err != nil {
+		t.Fatalf("second capability close: %v", err)
+	}
+	if broker.closeCalls != 1 {
+		t.Fatalf("broker close calls = %d, want one after repeated capability closes", broker.closeCalls)
+	}
+}
+
 func browserCapabilityConfig(enabled bool) *config.Config {
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = enabled

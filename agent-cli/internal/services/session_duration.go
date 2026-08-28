@@ -548,7 +548,13 @@ func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionR
 
 // RunSessionWithMaxDurationClock is the deterministic-clock seam for the
 // duration path. Production callers should use RunSessionWithMaxDuration.
-func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock SessionDurationClock) error {
+func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, durationClock SessionDurationClock) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}
@@ -579,7 +585,13 @@ func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts Ses
 // behavior while applying the duration admission boundary before the seed
 // wrapper's audio sink. A zero duration delegates to the existing text-seed
 // path so omitted-duration behavior remains unchanged.
-func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed) error {
+func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
+	var coordinator *SessionCapabilityCoordinator
+	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
+	defer func() {
+		closeSessionCapabilityIfNeeded(coordinator, &runErr)
+	}()
+
 	if err := ValidateSessionMaxDuration(maxDuration); err != nil {
 		return err
 	}
@@ -650,6 +662,11 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 			if err := plan.closeSession(); err != nil {
 				runErr = errors.Join(runErr, wrapSessionPhaseError("close WebRTC provider session", err))
 			}
+		}()
+	}
+	if plan.capabilityCoordinator != nil {
+		defer func() {
+			closeSessionCapabilityForPlan(plan.capabilityCoordinator, &runErr)
 		}()
 	}
 	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
