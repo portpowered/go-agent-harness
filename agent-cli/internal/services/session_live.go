@@ -195,6 +195,18 @@ func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 	return errors.Join(err, incomplete)
 }
 
+// sessionRunTerminationError preserves a caller cancellation observed after
+// the loop has already reported its terminal result. The session loop's
+// select can receive both signals at once; cleanup intentionally filters the
+// loop's expected context cancellation, but must not erase the caller's
+// cancellation when the clean loop result wins that race.
+func sessionRunTerminationError(ctx context.Context, err error) error {
+	if ctx == nil {
+		return err
+	}
+	return errors.Join(err, ctx.Err())
+}
+
 func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
 	err = withUnresolvedToolResults(err, opts.observer)
 	if err != nil || !opts.CloseAfterScheduledAudio || opts.observer == nil || opts.observer.scheduledAudioComplete() {
@@ -490,7 +502,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			runErr = err
 			runDone = true
 			cancel()
-			return stopAndDrain()
+			return sessionRunTerminationError(ctx, stopAndDrain())
 		case msg := <-loop.Deltas().Chan():
 			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, state, awaitingResponse, startAudio, stopAndDrain)
 			state = nextState
