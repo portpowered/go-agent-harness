@@ -122,6 +122,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 	responseCompleted := false
 	var pendingSendErrors []messages.StreamMessage
 	awaitingToolContinuationResponse := false
+	suppressNextToolContinuation := false
 
 	for {
 		// User audio and control events are queued by the session loop after
@@ -129,7 +130,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 		// deterministic transport turn before accepting the next inbound
 		// provider event, so a scheduled audio turn cannot be interleaved
 		// ahead of its own commit/response.create boundary.
-		handled, closed := r.forwardPendingSessionInputs(ctx, session, &audioStreaming, &pendingSendErrors, &awaitingToolContinuationResponse)
+		handled, closed := r.forwardPendingSessionInputs(ctx, session, &audioStreaming, &pendingSendErrors, &awaitingToolContinuationResponse, &suppressNextToolContinuation)
 		if closed {
 			r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 			return nil
@@ -189,9 +190,22 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
 				return nil
 			}
+			if evt.Type == messages.StreamTypeResponseCreate && suppressNextToolContinuation {
+				// A result in this batch was rejected at the provider boundary. Do
+				// not ask the provider to continue from a partially delivered batch;
+				// the accepted sibling remains pending and the deferred result error
+				// names the rejected call when the session reaches a terminal path.
+				suppressNextToolContinuation = false
+				r.flushPendingSessionSendErrors(ctx, pendingSendErrors)
+				pendingSendErrors = nil
+				continue
+			}
 			r.drainSessionAudio(ctx, session, &audioStreaming)
 			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred {
 				pendingSendErrors = append(pendingSendErrors, failure)
+				if evt.Type == messages.StreamTypeToolCallEnd {
+					suppressNextToolContinuation = true
+				}
 				if responseAccepted {
 					awaitingToolContinuationResponse = true
 				}
@@ -227,7 +241,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 // forwardPendingSessionInputs gives queued user audio/control messages
 // priority over the provider receive path. It returns whether it forwarded
 // anything and whether either user inbox was closed.
-func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, audioStreaming *bool, pendingSendErrors *[]messages.StreamMessage, awaitingToolContinuationResponse *bool) (handled, closed bool) {
+func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, audioStreaming *bool, pendingSendErrors *[]messages.StreamMessage, awaitingToolContinuationResponse *bool, suppressNextToolContinuation *bool) (handled, closed bool) {
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
@@ -240,9 +254,23 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 			if !ok {
 				return true, true
 			}
+			if evt.Type == messages.StreamTypeResponseCreate && suppressNextToolContinuation != nil && *suppressNextToolContinuation {
+				// See the main session-event branch: one rejected result makes the
+				// batch continuation invalid, even when another result was accepted.
+				*suppressNextToolContinuation = false
+				if pendingSendErrors != nil {
+					r.flushPendingSessionSendErrors(ctx, *pendingSendErrors)
+					*pendingSendErrors = nil
+				}
+				handled = true
+				continue
+			}
 			r.drainSessionAudio(ctx, session, audioStreaming)
 			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred && pendingSendErrors != nil {
 				*pendingSendErrors = append(*pendingSendErrors, failure)
+				if evt.Type == messages.StreamTypeToolCallEnd && suppressNextToolContinuation != nil {
+					*suppressNextToolContinuation = true
+				}
 				if responseAccepted && awaitingToolContinuationResponse != nil {
 					*awaitingToolContinuationResponse = true
 				}
@@ -321,10 +349,10 @@ func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.
 		Value: value,
 	}
 	if msg.Type == messages.StreamTypeToolCallEnd {
-		// A batch may contain another result that was accepted and whose
-		// provider continuation is already in flight. Keep this failure behind
-		// the current provider response boundary so the accepted sibling can
-		// complete before the terminal error is consumed by the loop.
+		// A batch may contain another result that was accepted. Keep this
+		// failure until the batch's continuation boundary so the caller can
+		// suppress that invalid continuation and then report every remaining
+		// per-call obligation together.
 		return failure, true, false
 	}
 	r.DeltaOutbox.Write(ctx, failure)

@@ -305,12 +305,12 @@ func (o *sessionProgressObserver) ensureToolStateLocked() {
 	}
 }
 
-// observeProviderToolCall records the creation of a provider tool obligation.
-// The completed call event is the first point at which the full provider call
-// identity is known. Empty IDs are deliberately ignored because they cannot be
-// correlated with a later result.
-func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEndValue) {
-	if o == nil || v == nil || strings.TrimSpace(v.ToolCallID) == "" {
+// observeProviderToolCallStart records a provider tool call as soon as its
+// correlated ID is available. A provider can terminate between TOOLCALL.START
+// and TOOLCALL.END; retaining that partial request prevents cancellation or
+// transport close from looking like a clean session.
+func (o *sessionProgressObserver) observeProviderToolCallStart(callID, name string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
 		return
 	}
 	o.toolStateMu.Lock()
@@ -319,19 +319,39 @@ func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEn
 	if !o.toolResultsEnabled {
 		return
 	}
-	_, accepted := o.acceptedToolCalls[v.ToolCallID]
-	state := o.toolContinuations[v.ToolCallID]
+	_, accepted := o.acceptedToolCalls[callID]
+	state := o.toolContinuations[callID]
 	if state == nil {
 		state = &toolContinuationState{}
-		o.toolContinuations[v.ToolCallID] = state
+		o.toolContinuations[callID] = state
 	}
-	state.toolName = v.Name
+	if strings.TrimSpace(name) != "" {
+		state.toolName = name
+	}
 	state.providerCallObserved = true
 	state.resultAccepted = accepted
+	o.providerToolCallSeen = true
 	if accepted {
 		return
 	}
-	o.unresolvedToolCalls[v.ToolCallID] = struct{}{}
+	o.unresolvedToolCalls[callID] = struct{}{}
+}
+
+// observeProviderToolCall records the completed provider tool-call obligation.
+// Empty IDs are deliberately ignored because they cannot be correlated with a
+// later result.
+func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEndValue) {
+	if o == nil || v == nil {
+		return
+	}
+	o.observeProviderToolCallWithID(v.ToolCallID, v.Name)
+}
+
+func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name string) {
+	if o == nil || strings.TrimSpace(callID) == "" {
+		return
+	}
+	o.observeProviderToolCallStart(callID, name)
 }
 
 // noteToolResultAccepted resolves exactly one provider call after the
@@ -448,6 +468,43 @@ func (o *sessionProgressObserver) toolLifecycleEvents() <-chan struct{} {
 	ch := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
 	return ch
+}
+
+// observeBufferedProviderToolLifecycle recovers provider tool identity that
+// the engine has already committed to conversation history but that could not
+// reach the consumer-facing delta buffer before a terminal shutdown. It only
+// observes model/assistant tool events; tool-runner result deltas are not
+// provider requests and must not create a second obligation.
+func (o *sessionProgressObserver) observeBufferedProviderToolLifecycle(deltas []messages.StreamMessage) {
+	if o == nil {
+		return
+	}
+	for _, msg := range deltas {
+		if msg.Role != messages.RoleAssistant && msg.ActorID != messages.Model {
+			continue
+		}
+		switch v := msg.Value.(type) {
+		case *messages.ToolCallStartValue:
+			if v != nil {
+				o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+			}
+		case *messages.ToolCallDeltaValue:
+			if v != nil {
+				o.observeProviderToolCallStart(strings.TrimSpace(msg.ToolCallId), "")
+			}
+		case *messages.ToolCallEndValue:
+			if v != nil {
+				o.observeProviderToolCallWithID(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+			}
+		}
+	}
+}
+
+func firstNonBlankToolCallID(primary, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return fallback
 }
 
 // noteToolResultRejected remembers a failed provider-facing result send
@@ -729,12 +786,14 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallStartValue:
+		o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
 		o.toolDeltaSeen = false
 		o.toolStateMu.Lock()
 		o.assistantResponseDone = false
 		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallDeltaValue:
+		o.observeProviderToolCallStart(strings.TrimSpace(msg.ToolCallId), "")
 		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
 		o.toolDeltaSeen = true
 		o.toolStateMu.Lock()
@@ -742,7 +801,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallEndValue:
-		o.observeProviderToolCall(v)
+		o.observeProviderToolCallWithID(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
 		if !o.toolResultsEnabledForObservation() {
 			o.emitToolCallRecord(v)
 		}

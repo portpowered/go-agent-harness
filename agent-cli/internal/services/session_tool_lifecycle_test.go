@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -41,6 +42,64 @@ func TestSessionProgressObserver_RejectedResultRegistersBeforeCallObservation(t 
 	}
 	if statuses := observer.unresolvedToolResultSendStatuses(); statuses[callID] != "" {
 		t.Fatalf("accepted call retained rejection status %q", statuses[callID])
+	}
+}
+
+func TestSessionProgressObserver_InterruptedProviderCallFailsWithCallID(t *testing.T) {
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	observer.setToolResultsEnabled(true)
+	const callID = "call-interrupted-before-end"
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallStart,
+		Role:       messages.RoleAssistant,
+		ToolCallId: callID,
+		Value:      messages.NewToolCallStartValue(callID, "lookup"),
+	})
+	if !observer.providerToolCallObserved() {
+		t.Fatal("interrupted provider tool call was not recorded at TOOLCALL.START")
+	}
+	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("interrupted provider tool IDs = %v, want [%s]", got, callID)
+	}
+
+	err := observer.finish(context.Canceled)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("interrupted provider call error = %v, want context.Canceled preserved", err)
+	}
+	if !errors.Is(err, ErrSessionUnresolvedToolResults) {
+		t.Fatalf("interrupted provider call error = %v, want unresolved-result sentinel", err)
+	}
+	var unresolved *SessionUnresolvedToolResultsError
+	if !errors.As(err, &unresolved) {
+		t.Fatalf("interrupted provider call error = %v, want SessionUnresolvedToolResultsError", err)
+	}
+	if got := unresolved.UnresolvedCallIDs(); len(got) != 1 || got[0] != callID {
+		t.Fatalf("interrupted provider unresolved IDs = %v, want [%s]", got, callID)
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("interrupted provider failure records = %d, want exactly one", len(failures))
+	}
+	if got := failures[0].Fields[SessionDiagnosticFieldUnresolvedToolCallIDs]; got != callID {
+		t.Fatalf("interrupted provider diagnostic IDs = %q, want %s", got, callID)
+	}
+
+	// A terminal shutdown can recover a call committed to engine history even
+	// when the consumer-facing delta was never drained.
+	recovered := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	recovered.setToolResultsEnabled(true)
+	recovered.observeBufferedProviderToolLifecycle([]messages.StreamMessage{
+		{
+			Type:       messages.StreamTypeToolCallStart,
+			Role:       messages.RoleAssistant,
+			ToolCallId: "call-recovered-from-history",
+			Value:      messages.NewToolCallStartValue("call-recovered-from-history", "lookup"),
+		},
+	})
+	if got := recovered.unresolvedToolCallIDs(); len(got) != 1 || got[0] != "call-recovered-from-history" {
+		t.Fatalf("recovered provider unresolved IDs = %v, want [call-recovered-from-history]", got)
 	}
 }
 

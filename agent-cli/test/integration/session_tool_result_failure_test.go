@@ -38,6 +38,18 @@ func (s *unresolvedToolDiagnosticSink) failureRecords() []services.SessionDiagno
 	return records
 }
 
+func (s *unresolvedToolDiagnosticSink) recordsFor(event string) []services.SessionDiagnosticRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var records []services.SessionDiagnosticRecord
+	for _, record := range s.records {
+		if record.Event == event {
+			records = append(records, record)
+		}
+	}
+	return records
+}
+
 // unresolvedFailureSession emits one real provider tool call and then either
 // rejects its result send or waits for the test to inject a terminal close.
 // It is deliberately a session-level double so the test reaches the shipped
@@ -140,17 +152,31 @@ func (e *unresolvedFailureToolExecutor) Execute(ctx context.Context, call messag
 
 func runUnresolvedFailureSession(t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor, sink *unresolvedToolDiagnosticSink) error {
 	t.Helper()
-	var out bytes.Buffer
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
+	return runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
+		session:  session,
+		executor: executor,
+		sink:     sink,
+	})
+}
+
+type sessionRunInputs struct {
+	session  *unresolvedFailureSession
+	executor *unresolvedFailureToolExecutor
+	sink     *unresolvedToolDiagnosticSink
+}
+
+func runUnresolvedFailureSessionWithContext(ctx context.Context, inputs *sessionRunInputs) error {
+	var out bytes.Buffer
 	return services.RunSession(ctx, &out, services.SessionRunOptions{
 		RecordPath:        "unresolved-tool-result.session.json",
 		Provider:          "grok",
 		Model:             "grok-realtime",
 		APIKey:            "test-key",
-		SessionInferencer: &fixedUnresolvedFailureInferencer{session: session},
-		ToolExecutor:      executor,
-		Diagnostics:       sink,
+		SessionInferencer: &fixedUnresolvedFailureInferencer{session: inputs.session},
+		ToolExecutor:      inputs.executor,
+		Diagnostics:       inputs.sink,
 		AudioInputs: []services.ScheduledAudioInput{{
 			AfterCompletedTurns: 0,
 			PCM:                 []byte{1, 2, 3, 4},
@@ -198,6 +224,9 @@ func assertUnresolvedFailure(t *testing.T, err error, sink *unresolvedToolDiagno
 	if len(failures) != 1 {
 		t.Fatalf("failure diagnostic count = %d, want exactly one", len(failures))
 	}
+	if turns := sink.recordsFor(services.SessionDiagnosticEventTurn); len(turns) != 0 {
+		t.Fatalf("unresolved terminal path emitted %d completed-turn records: %#v", len(turns), turns)
+	}
 	fields := failures[0].Fields
 	if fields[services.SessionDiagnosticFieldUnresolvedToolResultCount] != "1" {
 		t.Fatalf("unresolved count field = %q, want 1", fields[services.SessionDiagnosticFieldUnresolvedToolResultCount])
@@ -230,6 +259,87 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		sink := &unresolvedToolDiagnosticSink{}
 		runErr := runUnresolvedFailureSession(t, session, executor, sink)
 		assertUnresolvedFailure(t, runErr, sink, messages.SessionSendBufferFull)
+	})
+
+	t.Run("caller cancellation", func(t *testing.T) {
+		session := newUnresolvedFailureSession("", nil)
+		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
+		sink := &unresolvedToolDiagnosticSink{}
+		ctx, cancel := context.WithCancel(context.Background())
+		runErr := make(chan error, 1)
+		go func() {
+			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
+				session:  session,
+				executor: executor,
+				sink:     sink,
+			})
+		}()
+		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before cancellation")
+		cancel()
+
+		select {
+		case err := <-runErr:
+			assertUnresolvedFailure(t, err, sink, "")
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancelled unresolved session error = %v, want context.Canceled preserved", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("caller cancellation did not terminate the unresolved session")
+		}
+	})
+
+	t.Run("caller deadline", func(t *testing.T) {
+		session := newUnresolvedFailureSession("", nil)
+		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
+		sink := &unresolvedToolDiagnosticSink{}
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		runErr := make(chan error, 1)
+		go func() {
+			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
+				session:  session,
+				executor: executor,
+				sink:     sink,
+			})
+		}()
+		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before deadline")
+
+		select {
+		case err := <-runErr:
+			assertUnresolvedFailure(t, err, sink, "")
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("deadline unresolved session error = %v, want context.DeadlineExceeded preserved", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("caller deadline did not terminate the unresolved session")
+		}
+	})
+
+	t.Run("explicit client close", func(t *testing.T) {
+		session := newUnresolvedFailureSession("", nil)
+		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
+		sink := &unresolvedToolDiagnosticSink{}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		runErr := make(chan error, 1)
+		go func() {
+			runErr <- runUnresolvedFailureSessionWithContext(ctx, &sessionRunInputs{
+				session:  session,
+				executor: executor,
+				sink:     sink,
+			})
+		}()
+		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before client close")
+		if err := session.Close(); err != nil {
+			t.Fatalf("close unresolved session: %v", err)
+		}
+
+		select {
+		case err := <-runErr:
+			assertUnresolvedFailure(t, err, sink, "")
+		case <-time.After(2 * time.Second):
+			t.Fatal("explicit client close did not terminate the unresolved session")
+		}
 	})
 }
 
