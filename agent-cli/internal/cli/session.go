@@ -46,6 +46,26 @@ const (
 // CLI does not understand.
 var ErrInvalidSessionTransport = errors.New("invalid session transport")
 
+// ErrSessionWebRTCUnavailable identifies the deliberately deferred customer
+// WebRTC path. The CLI still accepts and validates the transport flags so
+// their specific errors remain useful, but it must not start a session until
+// customer-reachable signaling and spoken-audio input are both wired.
+var ErrSessionWebRTCUnavailable = errors.New("WebRTC session customer path is unavailable")
+
+// SessionWebRTCUnavailableError explains why an otherwise valid WebRTC CLI
+// selection cannot be started yet. It unwraps to a stable sentinel so callers
+// can classify the capability failure without matching customer-facing text.
+type SessionWebRTCUnavailableError struct{}
+
+func (e *SessionWebRTCUnavailableError) Error() string {
+	if e == nil {
+		return ErrSessionWebRTCUnavailable.Error()
+	}
+	return "WebRTC CLI path is not yet customer-usable: no customer-reachable network signaling implementation and no supported spoken-audio input path are wired; use --transport ws with --audio-in or --audio-in-device"
+}
+
+func (*SessionWebRTCUnavailableError) Unwrap() error { return ErrSessionWebRTCUnavailable }
+
 // SessionTransportError describes an invalid --transport value before any
 // session provider or transport is initialized.
 type SessionTransportError struct {
@@ -352,6 +372,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 		Long: "Run a bidirectional session inference capture or replay a session capture file.\n" +
 			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
 			"Use repeatable audio-in-turn paths with record-dir to replay multiple finite spoken turns through one persistent session.\n\n" +
+			"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
 			"Session history management remains available through the show, list, and delete subcommands.",
 		Args: cobra.ArbitraryArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
@@ -378,6 +399,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			}
 			if err := services.ValidateSessionMaxDuration(maxDuration); err != nil {
 				return err
+			}
+			if selectedTransport == SessionTransportWebRTC {
+				return &SessionWebRTCUnavailableError{}
 			}
 			if c.askFlags.RecordCapturePath == "" && c.askFlags.ReplayCapturePath == "" && recordDirPath == "" && len(audioInTurns) == 0 {
 				return cmd.Help()
@@ -554,9 +578,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Session provider base URL override")
 	cmd.Flags().StringArrayVar(&c.imagePaths, "image", nil, "Attach a local image to the realtime user turn (repeatable; order is preserved)")
-	cmd.Flags().StringVar(&mediaSource, "media-source", "", "External media source URL; requires --transport webrtc and cannot be combined with --audio-in")
-	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default) or webrtc")
-	cmd.Flags().StringVar(&signaling, "signaling", "", "WebRTC signaling endpoint; requires --transport webrtc, and --transport webrtc requires this flag")
+	cmd.Flags().StringVar(&mediaSource, "media-source", "", "Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in")
+	cmd.Flags().StringVar(&transport, "transport", SessionTransportWebSocket, "Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path)")
+	cmd.Flags().StringVar(&signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
 	return cmd
 }

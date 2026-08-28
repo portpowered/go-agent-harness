@@ -224,7 +224,7 @@ func TestComposeAgentCLI_ValidDependenciesReturnRoot(t *testing.T) {
 	}
 }
 
-func TestComposeAgentCLI_InstallsSessionRTCRuntimeFactoryInGeneratedGraph(t *testing.T) {
+func TestComposeAgentCLI_RejectsWebRTCBeforeRuntimeFactoryInGeneratedGraph(t *testing.T) {
 	resolverErr := errors.New("resolver edge reached")
 	components := services.SessionRTCComponents{
 		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
@@ -258,13 +258,13 @@ func TestComposeAgentCLI_InstallsSessionRTCRuntimeFactoryInGeneratedGraph(t *tes
 	})
 	err = command.ExecuteContext(context.Background())
 	if err == nil {
-		t.Fatal("WebRTC command unexpectedly completed without invoking the injected runtime factory")
+		t.Fatal("WebRTC command unexpectedly succeeded")
 	}
-	if !errors.Is(err, resolverErr) {
-		t.Fatalf("WebRTC command error = %v, want resolver edge identity", err)
+	if !errors.Is(err, cli.ErrSessionWebRTCUnavailable) {
+		t.Fatalf("WebRTC command error = %v, want customer capability error", err)
 	}
-	if errors.Is(err, services.ErrSessionRTCRuntimeUnavailable) {
-		t.Fatalf("WebRTC command reported missing runtime despite generated factory injection: %v", err)
+	if errors.Is(err, resolverErr) {
+		t.Fatalf("WebRTC command reached the signaling resolver before capability rejection: %v", err)
 	}
 }
 
