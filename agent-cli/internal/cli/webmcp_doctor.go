@@ -369,42 +369,46 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 		return report, nil
 	}
 
+	primary = diagnoseWebMCPDoctorRuntime(ctx, loaded.Browser, factoryRuntime, &report)
+	return report, nil
+}
+
+func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConfig, runtime WebMCPDoctorRuntime, report *WebMCPDoctorReport) error {
 	discoverOptions := webmcp.DiscoverOptions{
-		BrowserID:        webmcp.BrowserID(loaded.Browser.Selection.Browser),
-		ExplicitOnly:     loaded.Browser.Connection.CDPURL != "" || loaded.Browser.Connection.WSEndpoint != "",
-		AllowProcessScan: loaded.Browser.Connection.AllowProcessScan,
-		AllowRemoteCDP:   loaded.Browser.Connection.AllowRemoteCDP,
+		BrowserID:        webmcp.BrowserID(browser.Selection.Browser),
+		ExplicitOnly:     browser.Connection.CDPURL != "" || browser.Connection.WSEndpoint != "",
+		AllowProcessScan: browser.Connection.AllowProcessScan,
+		AllowRemoteCDP:   browser.Connection.AllowRemoteCDP,
 	}
-	candidates, discoverErr := factoryRuntime.Broker.Discover(ctx, discoverOptions)
+	candidates, discoverErr := runtime.Broker.Discover(ctx, discoverOptions)
 	if discoverErr != nil {
-		primary = discoverErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(discoverErr, webmcp.ErrorEndpointNotFound, map[string]any{"phase": "discovery"})
 		report.setCheck("discovery", doctorCheckFail, "Browser endpoint discovery failed.", map[string]any{"phase": "discovery"})
-		return report, nil
+		return discoverErr
 	}
 	if len(candidates) == 0 {
-		primary = webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
-			"endpoint_kind": endpointKindFor(loaded.Browser),
+		primary := webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
+			"endpoint_kind": endpointKindFor(browser),
 			"source":        report.Endpoint.Source,
 		})
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorEndpointNotFound, nil)
 		report.setCheck("discovery", doctorCheckFail, "No browser endpoint was discovered.", map[string]any{"candidate_count": 0})
-		return report, nil
+		return primary
 	}
 	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	for _, candidate := range candidates {
-		if !doctorCandidateIsLoopback(candidate) && !loaded.Browser.Connection.AllowRemoteCDP {
-			primary = webmcp.NewClassifiedError(webmcp.ErrorRemoteEndpointDenied, "remote browser endpoints require explicit permission", map[string]any{
-				"endpoint_kind": endpointKindFor(loaded.Browser),
+		if !doctorCandidateIsLoopback(candidate) && !browser.Connection.AllowRemoteCDP {
+			primary := webmcp.NewClassifiedError(webmcp.ErrorRemoteEndpointDenied, "remote browser endpoints require explicit permission", map[string]any{
+				"endpoint_kind": endpointKindFor(browser),
 				"network_class": "non_loopback",
 				"required_flag": "browser-allow-remote-cdp",
 			})
 			report.Status = doctorStatusNotReady
 			report.Error = doctorErrorDataFor(primary, webmcp.ErrorRemoteEndpointDenied, nil)
 			report.setCheck("discovery", doctorCheckFail, "Discovery returned a non-loopback browser while remote CDP is disabled.", map[string]any{"required_flag": "browser-allow-remote-cdp"})
-			return report, nil
+			return primary
 		}
 		report.Browsers = append(report.Browsers, doctorBrowserFromCandidate(candidate))
 	}
@@ -413,25 +417,23 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 	}
 	report.setCheck("discovery", doctorCheckPass, "Browser endpoint discovered.", map[string]any{"candidate_count": len(candidates)})
 
-	candidate, candidateErr := chooseDoctorCandidate(candidates, loaded.Browser.Selection.Browser)
+	candidate, candidateErr := chooseDoctorCandidate(candidates, browser.Selection.Browser)
 	if candidateErr != nil {
-		primary = candidateErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(candidateErr, webmcp.ErrorAmbiguousBrowser, map[string]any{"phase": "browser_selection"})
 		report.setCheck("selection", doctorCheckFail, "Browser selection is ambiguous or stale.", map[string]any{"phase": "browser_selection"})
-		return report, nil
+		return candidateErr
 	}
-	setBrowserVersion(&report, candidate)
-	version, versionErr, versionAvailable := doctorVersion(ctx, factoryRuntime, candidate)
+	setBrowserVersion(report, candidate)
+	version, versionErr, versionAvailable := doctorVersion(ctx, runtime, candidate)
 	if versionErr != nil {
-		primary = versionErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(versionErr, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "version"})
 		report.setCheck("version", doctorCheckFail, "The browser protocol version check failed.", map[string]any{"phase": "version"})
-		return report, nil
+		return versionErr
 	}
 	if !versionAvailable {
-		primary = ErrWebMCPDoctorRequiresLaneBOrD
+		primary := ErrWebMCPDoctorRequiresLaneBOrD
 		report.Status = doctorStatusUnavailable
 		report.Error = &WebMCPDoctorErrorData{
 			Code:      doctorErrorRequiresLaneBOrD,
@@ -440,7 +442,7 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 			Details:   map[string]any{"requires": "Lane D", "phase": "version"},
 		}
 		report.setCheck("version", doctorCheckUnavailable, "Browser protocol version access is unavailable; requires Lane D.", map[string]any{"requires": "Lane D"})
-		return report, nil
+		return primary
 	}
 	if version.Browser != "" || version.ProtocolVersion != "" {
 		for index := range report.Browsers {
@@ -464,13 +466,12 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 	}
 	report.setCheck("version", doctorCheckPass, "Browser and DevTools protocol metadata are available.", map[string]any{"browser": versionBrowser, "protocol": versionProtocol})
 
-	targets, targetErr := factoryRuntime.Broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
+	targets, targetErr := runtime.Broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
 	if targetErr != nil {
-		primary = targetErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(targetErr, webmcp.ErrorEndpointUnreachable, map[string]any{"phase": "targets"})
 		report.setCheck("targets", doctorCheckFail, "Browser target discovery failed.", map[string]any{"phase": "targets"})
-		return report, nil
+		return targetErr
 	}
 	report.Targets, report.PageTargets = doctorTargetsFrom(targets, candidate.ID)
 	for index := range targets {
@@ -481,23 +482,21 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 	report.EligiblePages = countEligibleDoctorPages(targets)
 	report.setCheck("targets", doctorCheckPass, "Browser targets are available.", map[string]any{"page_targets": report.PageTargets, "eligible_pages": report.EligiblePages})
 
-	selectionTargets, policyErr := doctorSelectionTargets(targets, loaded.Browser)
+	selectionTargets, policyErr := doctorSelectionTargets(targets, browser)
 	if policyErr != nil {
-		primary = policyErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(policyErr, webmcp.ErrorOriginDenied, map[string]any{"phase": "policy"})
 		report.setCheck("policy", doctorCheckFail, "The selected origin is denied by browser policy.", map[string]any{"phase": "policy"})
-		return report, nil
+		return policyErr
 	}
 	report.setCheck("policy", doctorCheckPass, "Origin policy permits the eligible target set.", map[string]any{"eligible_pages": len(selectionTargets)})
 
-	selectedTarget, selectErr, warning := chooseDoctorTarget(selectionTargets, loaded.Browser.Selection)
+	selectedTarget, selectErr, warning := chooseDoctorTarget(selectionTargets, browser.Selection)
 	if selectErr != nil {
-		primary = selectErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(selectErr, webmcp.ErrorNoEligibleTab, map[string]any{"phase": "target_selection"})
 		report.setCheck("selection", doctorCheckFail, "No valid WebMCP target selection is available.", map[string]any{"phase": "target_selection"})
-		return report, nil
+		return selectErr
 	}
 	if warning != "" {
 		report.addWarning(warning)
@@ -505,23 +504,22 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 		report.setCheck("webmcp", doctorCheckSkipped, "Select an eligible target to probe WebMCP.enable.", nil)
 		report.setCheck("catalog", doctorCheckSkipped, "Select an eligible target to probe catalog readiness.", nil)
 		report.Status = doctorStatusReady
-		return report, nil
+		return nil
 	}
 	if selectedTarget == nil {
-		primary = webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{
+		primary := webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{
 			"browser_id":      string(candidate.ID),
-			"filters":         map[string]any{"origin": loaded.Browser.Selection.Origin},
+			"filters":         map[string]any{"origin": browser.Selection.Origin},
 			"candidate_count": len(selectionTargets),
 		})
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorNoEligibleTab, nil)
 		report.setCheck("selection", doctorCheckFail, "No eligible WebMCP target was found.", map[string]any{"candidate_count": len(selectionTargets)})
-		return report, nil
+		return primary
 	}
 
-	selectedContext, selectionErr := selectDoctorTarget(ctx, factoryRuntime.Broker, selectedTarget, loaded.Browser.Selection.ActivateTab)
+	selectedContext, selectionErr := selectDoctorTarget(ctx, runtime.Broker, selectedTarget, browser.Selection.ActivateTab)
 	if selectionErr != nil {
-		primary = selectionErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(selectionErr, webmcp.ErrorTargetAttachFailed, map[string]any{
 			"browser_id": string(selectedTarget.BrowserID),
@@ -530,7 +528,7 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 		})
 		report.setCheck("selection", doctorCheckFail, "The selected target could not be attached.", map[string]any{"phase": "select"})
 		report.setCheck("webmcp", doctorCheckFail, "WebMCP enablement failed for the selected target.", map[string]any{"phase": "enable"})
-		return report, nil
+		return selectionErr
 	}
 	selectedPage := doctorTargetFromTarget(*selectedTarget)
 	selectedPage.Selected = true
@@ -564,7 +562,7 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 		report.WebMCP = "supported"
 		report.setCheck("webmcp", doctorCheckPass, "The selected target supports WebMCP.", map[string]any{"supported": true})
 	} else {
-		primary = webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "the selected target does not provide WebMCP", map[string]any{
+		primary := webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "the selected target does not provide WebMCP", map[string]any{
 			"browser_id":          string(selectedContext.Key.BrowserID),
 			"target_id":           string(selectedContext.Key.TargetID),
 			"required_capability": "webmcp",
@@ -573,28 +571,27 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorUnsupportedWebMCP, nil)
 		report.WebMCP = "unsupported"
 		report.setCheck("webmcp", doctorCheckFail, "The selected target does not support WebMCP.", map[string]any{"supported": false})
-		return report, nil
+		return primary
 	}
 
-	catalog, catalogErr := factoryRuntime.Broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+	catalog, catalogErr := runtime.Broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if catalogErr != nil {
-		primary = catalogErr
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(catalogErr, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "catalog"})
 		report.setCheck("catalog", doctorCheckFail, "The WebMCP catalog could not be synchronized.", map[string]any{"phase": "catalog"})
-		return report, nil
+		return catalogErr
 	}
 	report.Catalog = WebMCPDoctorCatalog{Ready: catalog.Context.Ready && catalog.Context.Connected, Generation: catalog.Generation, ToolCount: len(catalog.Tools)}
 	if !report.Catalog.Ready {
-		primary = webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP catalog is not ready", map[string]any{"phase": "catalog"})
+		primary := webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP catalog is not ready", map[string]any{"phase": "catalog"})
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
 		report.setCheck("catalog", doctorCheckFail, "The WebMCP catalog is not ready.", map[string]any{"generation": catalog.Generation})
-		return report, nil
+		return primary
 	}
 	report.setCheck("catalog", doctorCheckPass, "The WebMCP catalog is ready.", map[string]any{"generation": catalog.Generation, "tool_count": len(catalog.Tools)})
 	report.Status = doctorStatusReady
-	return report, nil
+	return nil
 }
 
 func newWebMCPDoctorReport() WebMCPDoctorReport {

@@ -254,7 +254,7 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 			},
 		}, nil
 	}
-	if opts.BrowserToolsEnabled {
+	if opts.BrowserToolsEnabled && opts.RecordPath == "" {
 		return planBrowserLiveSessionRuntime(opts, factory)
 	}
 	return planRecordSessionRuntime(opts, factory)
