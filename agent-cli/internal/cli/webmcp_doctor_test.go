@@ -187,21 +187,21 @@ browser:
 	}
 }
 
-func TestWebMCPDoctorDefaultRuntimeReportsLaneDependencies(t *testing.T) {
+func TestWebMCPDoctorDefaultRuntimeReportsClassifiedDiscoveryFailure(t *testing.T) {
 	root, stdout, _ := executeDoctorCommand(t, t.TempDir(), nil, "--json")
 	err := root.ExecuteContext(context.Background())
-	if err == nil || !strings.Contains(err.Error(), doctorErrorRequiresLaneBOrD) {
-		t.Fatalf("doctor error = %v, want requires Lane B or Lane D", err)
+	if err == nil || !strings.Contains(err.Error(), string(webmcp.ErrorEndpointNotFound)) {
+		t.Fatalf("doctor error = %v, want classified endpoint-not-found failure", err)
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusUnavailable || report.Error == nil || report.Error.Code != doctorErrorRequiresLaneBOrD {
-		t.Fatalf("default runtime report = %+v, want unavailable requires_lane_b_or_d", report)
+	if report.Status != doctorStatusNotReady || report.Error == nil || report.Error.Code != string(webmcp.ErrorEndpointNotFound) {
+		t.Fatalf("default runtime report = %+v, want not-ready endpoint_not_found", report)
 	}
-	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckUnavailable || !strings.Contains(discovery.Message, "Lane B") {
-		t.Fatalf("discovery check = %+v, want Lane B unavailable", discovery)
+	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckFail {
+		t.Fatalf("discovery check = %+v, want discovery failure", discovery)
 	}
-	if version := doctorCheckByName(report, "version"); version.Status != doctorCheckUnavailable || !strings.Contains(version.Message, "Lane D") {
-		t.Fatalf("version check = %+v, want Lane D unavailable", version)
+	if strings.Contains(stdout.String(), "Lane B") || strings.Contains(stdout.String(), "Lane D") {
+		t.Fatalf("default runtime output exposed internal implementation names: %s", stdout.String())
 	}
 }
 

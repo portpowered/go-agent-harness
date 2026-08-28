@@ -320,31 +320,19 @@ func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 	}
 }
 
-func TestWebMCPDirectUnavailableOperationsFailWithActionableEnvelope(t *testing.T) {
-	configDir := writeDirectConfig(t, "")
+func TestWebMCPDirectDefaultRuntimeReturnsClassifiedDiscoveryError(t *testing.T) {
+	configDir := t.TempDir()
 	store := NewFileWebMCPSelectionStore(configDir)
-	commands := [][]string{
-		{"browsers", "--json"},
-		{"tabs", "--browser", "browser-a", "--json"},
-		{"select", "--browser", "browser-a", "--tab", "tab-a", "--json"},
-		{"activate", "--browser", "browser-a", "--tab", "tab-a", "--json"},
-		{"context", "--browser", "browser-a", "--tab", "tab-a", "--json"},
-		{"tools", "--browser", "browser-a", "--tab", "tab-a", "--json"},
-		{"invoke", "--browser", "browser-a", "--tab", "tab-a", "--tool-ref", "webmcp.tool-ref.v1:fixture", "--input-json", `{}`, "--json"},
-		{"cancel", "inv-23", "--json"},
-		{"watch", "--json"},
+	result := executeDirectCommand(t, configDir, store, nil, "browsers", "--json")
+	if result.err == nil {
+		t.Fatal("default operation unexpectedly succeeded without a browser endpoint")
 	}
-	for _, args := range commands {
-		t.Run(args[0], func(t *testing.T) {
-			result := executeDirectCommand(t, configDir, store, nil, args...)
-			if result.err == nil {
-				t.Fatal("unavailable operation unexpectedly succeeded")
-			}
-			envelope := decodeDirectEnvelope(t, result.stdout)
-			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorEndpointUnreachable) || !strings.Contains(envelope.Error.Message, "Lane B") || !strings.Contains(envelope.Error.Message, "Lane D") {
-				t.Fatalf("unavailable envelope = %+v", envelope)
-			}
-		})
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorEndpointNotFound) {
+		t.Fatalf("default envelope = %+v, want endpoint_not_found", envelope)
+	}
+	if strings.Contains(result.stdout, "Lane B") || strings.Contains(result.stdout, "Lane D") {
+		t.Fatalf("default operation output exposed internal implementation names: %s", result.stdout)
 	}
 }
 

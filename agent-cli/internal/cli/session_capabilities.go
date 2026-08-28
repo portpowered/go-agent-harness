@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
@@ -97,22 +98,42 @@ func NewSessionToolCapabilitiesFactory(
 	}
 }
 
-// NewSessionBrowserBroker creates the browser-neutral real StatefulBroker.
-// Discovery and protocol adapters are intentionally not guessed here; Lane B
-// and Lane D can be supplied through SessionBrowserBrokerFactory when those
-// production seams are available. The broker itself remains useful for
-// deterministic composition and reports classified operation failures until
-// an adapter is installed.
+// NewSessionBrowserBroker creates the production browser broker used by
+// browser-enabled sessions. The runtime is request-scoped so session cleanup
+// can retire both broker state and discovery resources through one idempotent
+// close hook.
 func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error) {
-	if err := browser.Validate(); err != nil {
+	runtime, err := NewProductionWebMCPDoctorFactory()(browser)
+	if err != nil {
 		return nil, err
 	}
-	return webmcp.NewBroker(webmcp.BrokerOptions{
-		CancelOnInterrupt: browser.Policy.CancelOnInterrupt,
-		MaxInputBytes:     browser.Limits.MaxInputBytes,
-		MaxResultBytes:    browser.Limits.MaxResultBytes,
-		InvocationTimeout: browser.Limits.InvocationTimeout,
-	}), nil
+	if runtime.Broker == nil {
+		if closeErr := closeWebMCPDoctorRuntime(runtime); closeErr != nil {
+			return nil, errors.Join(webmcpRuntimeUnavailableError("session_runtime"), closeErr)
+		}
+		return nil, webmcpRuntimeUnavailableError("session_runtime")
+	}
+	return &sessionBrowserBroker{Broker: runtime.Broker, closeRuntime: runtime.Close}, nil
+}
+
+type sessionBrowserBroker struct {
+	webmcp.Broker
+	closeRuntime func() error
+	closeOnce    sync.Once
+	closeErr     error
+}
+
+func (b *sessionBrowserBroker) Close() error {
+	if b == nil {
+		return nil
+	}
+	b.closeOnce.Do(func() {
+		b.closeErr = b.Broker.Close()
+		if b.closeRuntime != nil {
+			b.closeErr = errors.Join(b.closeErr, b.closeRuntime())
+		}
+	})
+	return b.closeErr
 }
 
 func closeFailedBroker(broker webmcp.Broker, primary error) (SessionToolCapabilities, error) {

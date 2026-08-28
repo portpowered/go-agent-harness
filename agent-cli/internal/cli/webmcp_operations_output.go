@@ -268,7 +268,7 @@ func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.Tool
 
 func runDirectWatch(ctx context.Context, broker webmcp.Broker, once bool) (WebMCPDirectWatchData, error) {
 	if broker == nil {
-		return WebMCPDirectWatchData{}, directRequiresLaneError("broker watch")
+		return WebMCPDirectWatchData{}, webmcpRuntimeUnavailableError("watch")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -440,14 +440,6 @@ func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr e
 }
 
 func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResultError {
-	if errors.Is(err, ErrWebMCPOperationsRequiresLaneBOrD) {
-		return webmcp.ToolResultError{
-			Code:      string(webmcp.ErrorEndpointUnreachable),
-			Message:   "This WebMCP operation is unavailable: it requires Lane B or requires Lane D for production browser discovery and protocol support.",
-			Retryable: false,
-			Details:   map[string]any{"requires": []string{"Lane B", "Lane D"}},
-		}
-	}
 	result := webmcp.ResultErrorFor(err, fallback, nil)
 	return result
 }
