@@ -41,6 +41,19 @@ You are an autonomous coding agent working on a software project.
   appear in your PR diff. Never `git add -f` them. If your branch already
   tracks them from an old base, `git rm` them during your next rebase.
 - Read the Codebase Patterns section in progress.txt before starting
+- PRE-PUSH LOCAL GATE (measured 2026-08-28: nearly every lane burned 1-3 full
+  CI round-trips — ~15+ minutes each — on the SAME five locally-catchable
+  failures). Before your FIRST push, and after any substantive change, run
+  locally and fix everything they report:
+  `make staticcheck && make lint && make vet && make typecheck && make test`
+  (or the closest Makefile equivalents), plus these two checks that dominated
+  wasted cycles: (1) every NEW Go package must be registered in
+  coverage-manifest.json or the coverage gate fails; (2) if you added
+  significant untested code to an existing package, check its coverage floor
+  in coverage-manifest.json — CI enforces per-package minimums and a 2-4%
+  drop fails the build; write the tests before pushing, not after CI tells
+  you. A first push that fails CI on staticcheck/lint/coverage-manifest is a
+  process defect, not a discovery.
 - When adding or revising tests, prefer observable runtime, API, CLI, UI, or
   emitted-event assertions.
 - Do not add meta tests that scan source files, validate docs link topology, inspect asset bundle internals, or enforce
