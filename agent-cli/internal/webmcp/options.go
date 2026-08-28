@@ -1,10 +1,21 @@
 package webmcp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // DefaultMaxInputBytes is the C0 bound for the UTF-8 input_json payload sent
 // to a page tool before validation or dispatch.
 const DefaultMaxInputBytes = 262144
+
+// DefaultMaxResultBytes is the C0 bound for the compact textual result
+// envelope produced for a completed page invocation.
+const DefaultMaxResultBytes = 262144
+
+// DefaultInvocationTimeout is recorded on every admitted invocation. The
+// session coordinator may apply a tighter context deadline for one call.
+const DefaultInvocationTimeout = 30 * time.Second
 
 type DiscoverOptions struct {
 	BrowserID        BrowserID
@@ -56,6 +67,7 @@ type InvokeResult struct {
 	State        InvocationState
 	Output       json.RawMessage
 	ErrorCode    string
+	ErrorDetails map[string]any
 }
 
 type CancelRequest struct {

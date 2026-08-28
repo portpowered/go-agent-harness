@@ -588,6 +588,9 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 		"tool_ref":      string(toolRef),
 		"phase":         "invoke",
 	}
+	if result.ErrorDetails != nil {
+		details = cloneMap(result.ErrorDetails)
+	}
 	switch code {
 	case webmcp.ErrorInvocationCanceled:
 		details = map[string]any{"invocation_id": string(result.InvocationID), "cancel_source": "broker"}
@@ -595,9 +598,16 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 		details["timeout_ms"] = 0
 		details["side_effect_unknown"] = true
 	case webmcp.ErrorInvocationOrphaned:
-		details["target_id"] = ""
-		details["generation"] = uint64(0)
-		details["terminal_observed"] = false
+		if result.ErrorDetails == nil {
+			details["target_id"] = ""
+			details["generation"] = uint64(0)
+			details["terminal_observed"] = false
+		}
+	case webmcp.ErrorResultTooLarge:
+		if result.ErrorDetails == nil {
+			details["limit_bytes"] = 0
+			details["observed_bytes"] = 0
+		}
 	case webmcp.ErrorInvocationFailed:
 		details["page_error_code"] = result.ErrorCode
 		details["side_effect_unknown"] = true

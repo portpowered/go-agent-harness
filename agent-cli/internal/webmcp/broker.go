@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -31,25 +32,44 @@ type BrokerOptions struct {
 	// MaxInputBytes bounds the serialized UTF-8 input_json sent to a page
 	// tool. Zero uses DefaultMaxInputBytes.
 	MaxInputBytes int
+	// MaxResultBytes bounds the serialized textual result envelope returned
+	// for a completed page invocation. Zero uses DefaultMaxResultBytes.
+	MaxResultBytes int
+	// InvocationTimeout is recorded as the default deadline for admitted
+	// invocations. Zero uses DefaultInvocationTimeout.
+	InvocationTimeout time.Duration
 }
 
 // StatefulBroker owns selection, page catalog, generation, and session-local
 // ToolRef state. Browser calls happen outside the broker mutex; all catalog
 // and reference transitions are reconciled back through that mutex.
 type StatefulBroker struct {
-	mu            sync.Mutex
-	runtime       BrowserRuntime
-	discoverer    BrowserDiscoverer
-	ids           IDSource
-	clock         Clock
-	ownership     TargetOwnership
-	watchBuffer   int
-	maxInputBytes int
+	mu                sync.Mutex
+	runtime           BrowserRuntime
+	discoverer        BrowserDiscoverer
+	ids               IDSource
+	clock             Clock
+	ownership         TargetOwnership
+	watchBuffer       int
+	maxInputBytes     int
+	maxResultBytes    int
+	invocationTimeout time.Duration
 
 	browsers map[BrowserID]*browserState
 	selected *brokerSession
 	refs     map[ToolRef]refRecord
 	retired  map[ToolRef]struct{}
+
+	invocations          map[InvocationID]*brokerInvocation
+	terminalResults      map[InvocationID]terminalInvocation
+	terminalOrder        []InvocationID
+	terminalSeen         map[InvocationID]struct{}
+	terminalSeenOrder    []InvocationID
+	browserInvocations   map[InvocationID]*brokerInvocation
+	browserTerminalSeen  map[InvocationID]struct{}
+	browserTerminalOrder []InvocationID
+	earlyTerminals       map[InvocationID]terminalObservation
+	earlyTerminalOrder   []InvocationID
 
 	eventSequence uint64
 	watchers      map[chan BrokerEvent]struct{}
@@ -82,6 +102,13 @@ type brokerSession struct {
 	dispatchMu sync.Mutex
 	flush      chan chan struct{}
 	loopDone   chan struct{}
+
+	queue           []*brokerInvocation
+	queueWake       chan struct{}
+	queueStop       chan struct{}
+	queueWorkerDone chan struct{}
+	current         *brokerInvocation
+	queueClosed     bool
 }
 
 type catalogKey struct {
@@ -129,20 +156,36 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	if maxInputBytes <= 0 {
 		maxInputBytes = DefaultMaxInputBytes
 	}
+	maxResultBytes := options.MaxResultBytes
+	if maxResultBytes <= 0 {
+		maxResultBytes = DefaultMaxResultBytes
+	}
+	invocationTimeout := options.InvocationTimeout
+	if invocationTimeout <= 0 {
+		invocationTimeout = DefaultInvocationTimeout
+	}
 	return &StatefulBroker{
-		runtime:       options.Runtime,
-		discoverer:    options.Discoverer,
-		ids:           ids,
-		clock:         clock,
-		ownership:     ownership,
-		watchBuffer:   watchBuffer,
-		maxInputBytes: maxInputBytes,
-		browsers:      make(map[BrowserID]*browserState),
-		refs:          make(map[ToolRef]refRecord),
-		retired:       make(map[ToolRef]struct{}),
-		watchers:      make(map[chan BrokerEvent]struct{}),
-		closedCh:      make(chan struct{}),
-		closeDone:     make(chan struct{}),
+		runtime:             options.Runtime,
+		discoverer:          options.Discoverer,
+		ids:                 ids,
+		clock:               clock,
+		ownership:           ownership,
+		watchBuffer:         watchBuffer,
+		maxInputBytes:       maxInputBytes,
+		maxResultBytes:      maxResultBytes,
+		invocationTimeout:   invocationTimeout,
+		browsers:            make(map[BrowserID]*browserState),
+		refs:                make(map[ToolRef]refRecord),
+		retired:             make(map[ToolRef]struct{}),
+		invocations:         make(map[InvocationID]*brokerInvocation),
+		terminalResults:     make(map[InvocationID]terminalInvocation),
+		terminalSeen:        make(map[InvocationID]struct{}),
+		browserInvocations:  make(map[InvocationID]*brokerInvocation),
+		browserTerminalSeen: make(map[InvocationID]struct{}),
+		earlyTerminals:      make(map[InvocationID]terminalObservation),
+		watchers:            make(map[chan BrokerEvent]struct{}),
+		closedCh:            make(chan struct{}),
+		closeDone:           make(chan struct{}),
 	}
 }
 
@@ -334,14 +377,17 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		page.SelectedAt = b.clock.Now()
 	}
 	newSession := &brokerSession{
-		handle:   handle,
-		session:  session,
-		target:   cloneTarget(target),
-		context:  page,
-		active:   true,
-		catalog:  make(map[catalogKey]ToolDescriptor),
-		flush:    make(chan chan struct{}),
-		loopDone: make(chan struct{}),
+		handle:          handle,
+		session:         session,
+		target:          cloneTarget(target),
+		context:         page,
+		active:          true,
+		catalog:         make(map[catalogKey]ToolDescriptor),
+		flush:           make(chan chan struct{}),
+		loopDone:        make(chan struct{}),
+		queueWake:       make(chan struct{}, 1),
+		queueStop:       make(chan struct{}),
+		queueWorkerDone: make(chan struct{}),
 	}
 
 	b.mu.Lock()
@@ -356,8 +402,9 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	b.selected = newSession
 	b.emitLocked(BrokerEvent{Type: BrokerEventSelected, BrowserID: page.Key.BrowserID, TargetID: page.Key.TargetID, Generation: page.Generation, Reason: "selected"})
-	b.wg.Add(1)
+	b.wg.Add(2)
 	go b.runSession(newSession)
+	go b.runInvocationQueue(newSession)
 	b.mu.Unlock()
 
 	if old != nil {
@@ -474,100 +521,18 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 	return ToolCatalogSnapshot{Context: clonePageContext(selected.context), Generation: selected.context.Generation, Tools: tools}, nil
 }
 
-// Invoke performs the generation/ref/selection checks and validates page input
-// immediately before a page command. Full admission, queueing, and terminal
-// reconciliation are layered on this dispatch seam in the following broker
-// stories.
+// Invoke admits one validated page call into the selected target's FIFO. The
+// call returns once the page command has received its invocation ID; terminal
+// browser results are reconciled asynchronously by the session event loop.
 func (b *StatefulBroker) Invoke(ctx context.Context, request InvokeRequest) (InvokeResult, error) {
-	if err := contextError(ctx); err != nil {
-		return InvokeResult{}, err
-	}
-	if b == nil {
-		return InvokeResult{}, ErrClosed
-	}
-	if err := validateToolRefSyntax(request.ToolRef); err != nil {
-		return InvokeResult{}, invalidToolRefError(request.ToolRef, err)
-	}
-	b.flushSelected()
-	b.mu.Lock()
-	selected := b.selected
-	b.mu.Unlock()
-	if selected == nil || !selected.active || !selected.context.Connected {
-		return InvokeResult{}, staleSelectionForSession(selected, "selection_not_connected")
-	}
-
-	// No lifecycle/catalog transition can invalidate the selection between
-	// the final state check and the target command while this lock is held.
-	selected.dispatchMu.Lock()
-	defer selected.dispatchMu.Unlock()
-
-	b.mu.Lock()
-	record, ok := b.refs[request.ToolRef]
-	valid := ok && b.selected == selected && selected.active && selected.context.Connected && refCurrentLocked(selected, record)
-	if !valid {
-		currentGeneration := selected.context.Generation
-		b.mu.Unlock()
-		return InvokeResult{}, staleToolRefError(request.ToolRef, currentGeneration)
-	}
-	handle := selected.handle
-	session := selected.session
-	descriptor := cloneToolDescriptor(record.descriptor)
-	b.mu.Unlock()
-
-	if issues := validatePageToolInput(request.Input, descriptor.InputSchema, b.maxInputBytes); len(issues) > 0 {
-		return InvokeResult{}, invalidPageInputError(request.ToolRef, descriptor, issues)
-	}
-
-	// Verify the selected target itself immediately before the page command.
-	targets, err := handle.ListTargets(ctx)
-	if err != nil || !targetPresent(targets, descriptor.TargetID) {
-		return InvokeResult{}, staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
-	}
-
-	b.mu.Lock()
-	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
-		b.mu.Unlock()
-		return InvokeResult{}, staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "selection_changed_before_dispatch")
-	}
-	record, ok = b.refs[request.ToolRef]
-	if !ok || !refCurrentLocked(selected, record) {
-		currentGeneration := selected.context.Generation
-		b.mu.Unlock()
-		return InvokeResult{}, staleToolRefError(request.ToolRef, currentGeneration)
-	}
-	b.mu.Unlock()
-
-	id, err := session.InvokeWebMCP(ctx, descriptor.FrameID, descriptor.Name, cloneJSON(request.Input))
-	if err != nil {
-		return InvokeResult{}, err
-	}
-	return InvokeResult{InvocationID: id, State: InvocationDispatched}, nil
+	return b.admitInvocation(ctx, request)
 }
 
-// Cancel is intentionally a narrow placeholder until the invocation registry
-// story adds bounded terminal state. It still never guesses a page target.
+// Cancel requests cancellation of a registered invocation. The invocation
+// registry, rather than the caller's selected target, determines where the
+// browser cancellation is sent.
 func (b *StatefulBroker) Cancel(ctx context.Context, request CancelRequest) error {
-	if err := contextError(ctx); err != nil {
-		return err
-	}
-	if b == nil {
-		return ErrClosed
-	}
-	b.flushSelected()
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return ErrClosed
-	}
-	selected := b.selected
-	b.mu.Unlock()
-	if selected == nil || !selected.active {
-		return ErrInvocationNotFound
-	}
-	return classified(ErrorInvocationFailed, "the invocation is not registered", map[string]any{
-		"invocation_id": string(request.InvocationID),
-		"phase":         "cancel",
-	}, ErrInvocationNotFound)
+	return b.cancelInvocation(ctx, request)
 }
 
 // Watch subscribes to bounded broker lifecycle observations. Dropped
@@ -843,6 +808,8 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 		b.applyToolsAddedLocked(selected, event)
 	case EventToolsRemoved:
 		b.applyToolsRemovedLocked(selected, event)
+	case EventToolResponded:
+		b.reconcileBrowserResponseLocked(selected, event)
 	case EventPageNavigated, EventFrameNavigated:
 		b.applyGenerationChangeLocked(selected, event, string(event.Type))
 	case EventTargetDetached:
@@ -949,6 +916,7 @@ func (b *StatefulBroker) advanceGenerationLocked(selected *brokerSession, genera
 	if generation <= selected.context.Generation {
 		return
 	}
+	b.terminalizeSessionInvocationsLocked(selected, ErrorPageNavigated, reason)
 	b.retireCatalogLocked(selected)
 	selected.context.Generation = generation
 	selected.context.Ready = false
@@ -969,6 +937,8 @@ func (b *StatefulBroker) invalidateSessionLocked(selected *brokerSession, reason
 	if !selected.active {
 		return
 	}
+	code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
+	b.terminalizeSessionInvocationsLocked(selected, code, reason)
 	b.retireCatalogLocked(selected)
 	selected.active = false
 	selected.context.Connected = false
@@ -993,6 +963,8 @@ func (b *StatefulBroker) retireSessionLocked(selected *brokerSession, reason str
 	if selected == nil {
 		return
 	}
+	b.terminalizeSessionInvocationsLocked(selected, ErrorInvocationOrphaned, reason)
+	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)
 	selected.active = false
 	selected.context.Connected = false

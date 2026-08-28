@@ -694,6 +694,30 @@ func (s *ScriptedTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp
 		return "", err
 	}
 	s.mu.Lock()
+	id, err := s.options.IDs.NewInvocationID()
+	s.mu.Unlock()
+	if err != nil {
+		return "", err
+	}
+	return s.invokeWebMCPWithID(ctx, id, frameID, toolName, input)
+}
+
+// InvokeWebMCPWithID is an optional deterministic-session seam used by the
+// broker tests. Real adapters can continue to allocate their protocol IDs in
+// InvokeWebMCP; the fake accepts the broker's public ID so records prove the
+// two correlation surfaces agree.
+func (s *ScriptedTargetSession) InvokeWebMCPWithID(ctx context.Context, id webmcp.InvocationID, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {
+	return s.invokeWebMCPWithID(ctx, id, frameID, toolName, input)
+}
+
+func (s *ScriptedTargetSession) invokeWebMCPWithID(ctx context.Context, id webmcp.InvocationID, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {
+	if err := contextError(ctx); err != nil {
+		return "", err
+	}
+	if id == "" {
+		return "", errors.New("webmcp testkit: invocation ID is empty")
+	}
+	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
 		return "", webmcp.ErrClosed
@@ -703,10 +727,9 @@ func (s *ScriptedTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp
 		s.mu.Unlock()
 		return "", err
 	}
-	id, err := s.options.IDs.NewInvocationID()
-	if err != nil {
+	if _, exists := s.invokes[id]; exists {
 		s.mu.Unlock()
-		return "", err
+		return "", fmt.Errorf("webmcp testkit: invocation %q already exists", id)
 	}
 	record := &InvocationRecord{
 		ID:        id,
