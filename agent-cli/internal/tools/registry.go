@@ -88,6 +88,13 @@ func NewToolRegistry() *ToolRegistry {
 	return NewToolRegistryFromConfig(nil)
 }
 
+// NewEmptyToolRegistry creates a registry with no tools. Callers that compose
+// a participant- or session-specific allowlist can register only the selected
+// tools without accidentally inheriting the default registry.
+func NewEmptyToolRegistry() *ToolRegistry {
+	return &ToolRegistry{tools: make(map[string]Tool)}
+}
+
 // NewToolRegistryFromConfig creates a registry with only tools that are enabled in config.
 // If cfg is nil or tools.list is empty, all tools are enabled. Use tools.list with enabled: false to disable tools.
 func NewToolRegistryFromConfig(cfg *config.Config) *ToolRegistry {

@@ -58,7 +58,7 @@ func newDefaultRoomParticipantToolCapabilitiesFactory(configDir string) (RoomPar
 
 	return func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
 		available := tools.NewToolRegistryFromConfig(cfg)
-		selected := tools.NewToolRegistry()
+		selected := tools.NewEmptyToolRegistry()
 		for _, name := range participant.Tools {
 			tool, ok := available.Get(name)
 			if !ok {
