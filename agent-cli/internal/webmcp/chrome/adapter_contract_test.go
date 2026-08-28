@@ -15,6 +15,8 @@ import (
 	neutral "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+var _ neutral.BrowserRuntime = (*Runtime)(nil)
+
 func TestPinnedBindingsContainRequiredWebMCPSurface(t *testing.T) {
 	_ = cdpWebMCP.Enable
 	_ = cdpWebMCP.Disable
@@ -27,8 +29,7 @@ func TestPinnedBindingsContainRequiredWebMCPSurface(t *testing.T) {
 }
 
 func TestRuntimeSatisfiesNeutralBrowserRuntime(t *testing.T) {
-	var runtimeValue neutral.BrowserRuntime = NewRuntime()
-	if runtimeValue == nil {
+	if NewRuntime() == nil {
 		t.Fatal("NewRuntime returned a nil neutral runtime")
 	}
 }

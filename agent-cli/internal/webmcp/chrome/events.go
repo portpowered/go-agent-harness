@@ -133,10 +133,6 @@ func (s *targetSession) convertToolResponded(value *cdpWebMCP.EventToolResponded
 	return event
 }
 
-func (s *targetSession) convertTool(value *cdpWebMCP.Tool) (webmcp.ToolDescriptor, bool) {
-	return s.convertToolAt(value, s.Context())
-}
-
 func (s *targetSession) convertToolAt(value *cdpWebMCP.Tool, page webmcp.PageContext) (webmcp.ToolDescriptor, bool) {
 	if value == nil || value.Name == "" || value.FrameID == "" {
 		return webmcp.ToolDescriptor{}, false
