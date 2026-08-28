@@ -323,8 +323,8 @@ func (m *Mesh) Join(ctx context.Context, participantID string) error {
 			return m.joinFailure(normalizedID, "connect pair", err, created)
 		}
 		if connectErr := resource.Connect(joinContext); connectErr != nil {
-			m.removePending(pending)
 			_ = pair.close()
+			m.removePending(pending)
 			return m.joinFailure(normalizedID, "connect pair", &MeshError{
 				Operation:     "connect pair",
 				ParticipantID: normalizedID,
@@ -332,7 +332,6 @@ func (m *Mesh) Join(ctx context.Context, participantID string) error {
 				Cause:         connectErr,
 			}, created)
 		}
-		m.removePending(pending)
 		created = append(created, pair)
 	}
 	if err := joinContext.Err(); err != nil {
@@ -353,12 +352,14 @@ func (m *Mesh) Join(ctx context.Context, participantID string) error {
 		spec, _ := NewPairSpec(normalizedID, existingID)
 		m.pairs[spec] = created[index]
 	}
+	m.removePendingPairsLocked(created)
 	m.mu.Unlock()
 	return nil
 }
 
 func (m *Mesh) joinFailure(participantID, operation string, cause error, created []*meshPair) error {
 	cleanupErr := closeMeshPairs(created)
+	m.removePendingPairs(created)
 	if cleanupErr != nil {
 		if meshErr, ok := cause.(*MeshError); ok {
 			copyOf := *meshErr
@@ -607,6 +608,13 @@ func (m *Mesh) addPending(pending *pendingPair) error {
 func (m *Mesh) removePending(want *pendingPair) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed || m.ctx.Err() != nil {
+		return
+	}
+	m.removePendingLocked(want)
+}
+
+func (m *Mesh) removePendingLocked(want *pendingPair) {
 	for index, pending := range m.pending {
 		if pending != want {
 			continue
@@ -616,6 +624,45 @@ func (m *Mesh) removePending(want *pendingPair) {
 		m.pending = m.pending[:len(m.pending)-1]
 		return
 	}
+}
+
+func (m *Mesh) removePendingPairs(pairs []*meshPair) {
+	if len(pairs) == 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.ctx.Err() != nil {
+		return
+	}
+	m.removePendingPairsLocked(pairs)
+}
+
+func (m *Mesh) removePendingPairsLocked(pairs []*meshPair) {
+	wanted := make(map[*meshPair]struct{}, len(pairs))
+	for _, pair := range pairs {
+		if pair != nil {
+			wanted[pair] = struct{}{}
+		}
+	}
+	if len(wanted) == 0 {
+		return
+	}
+	original := m.pending
+	kept := original[:0]
+	for _, pending := range original {
+		if pending == nil || pending.pair == nil {
+			continue
+		}
+		if _, exists := wanted[pending.pair]; exists {
+			continue
+		}
+		kept = append(kept, pending)
+	}
+	for index := len(kept); index < len(original); index++ {
+		original[index] = nil
+	}
+	m.pending = kept
 }
 
 func closeMeshPairs(pairs []*meshPair) error {

@@ -313,6 +313,168 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	}
 }
 
+func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing.T) {
+	parentContext, cancelParent := context.WithCancel(context.Background())
+	mesh, connected, pending, joinResult := newConnectedAndPendingMesh(
+		t,
+		parentContext,
+		errors.New("connected pair close failed"),
+		errors.New("pending pair close failed"),
+	)
+	t.Cleanup(cancelParent)
+
+	doneWaiterStarted := make(chan struct{})
+	doneWaiterPassed := make(chan struct{})
+	go func() {
+		close(doneWaiterStarted)
+		<-mesh.Done()
+		close(doneWaiterPassed)
+	}()
+	awaitClosed(t, doneWaiterStarted)
+
+	cancelParent()
+	awaitClosed(t, mesh.Context().Done())
+	awaitClosed(t, pending.connectCanceled)
+
+	firstClosed := awaitFirstCloseStarted(t, connected, pending)
+	select {
+	case <-doneWaiterPassed:
+		t.Fatal("Done waiter passed while a captured pair close was gated")
+	default:
+	}
+	firstClosed.releaseClose()
+	secondClosed := connected
+	if firstClosed == connected {
+		secondClosed = pending
+	}
+	awaitClosed(t, secondClosed.closeStarted)
+	select {
+	case <-doneWaiterPassed:
+		t.Fatal("Done waiter passed while the second captured pair close was gated")
+	default:
+	}
+	secondClosed.releaseClose()
+
+	awaitClosed(t, mesh.Done())
+	awaitClosed(t, doneWaiterPassed)
+	select {
+	case err := <-joinResult:
+		if err == nil || !errors.Is(err, context.Canceled) {
+			t.Fatalf("pending Join error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pending Join did not finish after captured pair closure")
+	}
+	if got := connected.closeCount.Load(); got != 1 {
+		t.Fatalf("connected pair close count at Done boundary = %d, want 1", got)
+	}
+	if got := pending.closeCount.Load(); got != 1 {
+		t.Fatalf("pending pair close count at Done boundary = %d, want 1", got)
+	}
+	if got := mesh.Participants(); len(got) != 0 {
+		t.Fatalf("membership after parent cancellation = %#v, want empty", got)
+	}
+	if got := mesh.Pairs(); len(got) != 0 {
+		t.Fatalf("pairs after parent cancellation = %#v, want empty", got)
+	}
+
+	closeResult := mesh.Close()
+	assertJoinedMeshCloseResult(t, closeResult, connected.closeErr, pending.closeErr)
+	if repeated := mesh.Close(); repeated != closeResult {
+		t.Fatalf("repeated Close result = %v, want same published result %v", repeated, closeResult)
+	}
+}
+
+func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		explicitFirst bool
+	}{
+		{name: "explicit close first", explicitFirst: true},
+		{name: "parent cancellation first", explicitFirst: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parentContext, cancelParent := context.WithCancel(context.Background())
+			mesh, connected, pending, joinResult := newConnectedAndPendingMesh(
+				t,
+				parentContext,
+				errors.New("connected race close failed"),
+				errors.New("pending race close failed"),
+			)
+			t.Cleanup(cancelParent)
+
+			closeResults := make(chan error, 2)
+			startExplicitClose := func() {
+				go func() { closeResults <- mesh.Close() }()
+			}
+
+			if test.explicitFirst {
+				startExplicitClose()
+				firstClosed := awaitFirstCloseStarted(t, connected, pending)
+				cancelParent()
+				startExplicitClose()
+				awaitClosed(t, pending.connectCanceled)
+				firstClosed.releaseClose()
+				secondClosed := connected
+				if firstClosed == connected {
+					secondClosed = pending
+				}
+				awaitClosed(t, secondClosed.closeStarted)
+				secondClosed.releaseClose()
+			} else {
+				cancelParent()
+				firstClosed := awaitFirstCloseStarted(t, connected, pending)
+				startExplicitClose()
+				startExplicitClose()
+				awaitClosed(t, pending.connectCanceled)
+				firstClosed.releaseClose()
+				secondClosed := connected
+				if firstClosed == connected {
+					secondClosed = pending
+				}
+				awaitClosed(t, secondClosed.closeStarted)
+				secondClosed.releaseClose()
+			}
+
+			awaitClosed(t, mesh.Done())
+			var firstResult error
+			for index := 0; index < 2; index++ {
+				select {
+				case err := <-closeResults:
+					assertJoinedMeshCloseResult(t, err, connected.closeErr, pending.closeErr)
+					if firstResult == nil {
+						firstResult = err
+					} else if err != firstResult {
+						t.Fatalf("explicit Close result %d = %v, want same published result %v", index, err, firstResult)
+					}
+				case <-time.After(time.Second):
+					t.Fatalf("explicit Close caller %d did not complete", index)
+				}
+			}
+			if got := connected.closeCount.Load(); got != 1 {
+				t.Fatalf("connected pair close count at Done boundary = %d, want 1", got)
+			}
+			if got := pending.closeCount.Load(); got != 1 {
+				t.Fatalf("pending pair close count at Done boundary = %d, want 1", got)
+			}
+			select {
+			case err := <-joinResult:
+				if err == nil || !errors.Is(err, context.Canceled) {
+					t.Fatalf("pending Join error = %v, want context.Canceled", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("pending Join did not finish after shutdown")
+			}
+			if got := mesh.Participants(); len(got) != 0 {
+				t.Fatalf("membership after shutdown = %#v, want empty", got)
+			}
+			if repeated := mesh.Close(); repeated != firstResult {
+				t.Fatalf("repeated Close result = %v, want same published result %v", repeated, firstResult)
+			}
+		})
+	}
+}
+
 func TestMeshCancellationUnblocksAnInFlightJoinAndClosesPendingPair(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	pending := &blockingPair{started: make(chan struct{})}
@@ -379,27 +541,102 @@ func (p *blockingPair) Close() error {
 }
 
 type gatedClosePair struct {
-	closeStarted chan struct{}
-	release      chan struct{}
-	closeErr     error
-	closeCount   atomic.Int32
-	startOnce    sync.Once
-	releaseOnce  sync.Once
+	connectStarted    chan struct{}
+	connectCanceled   chan struct{}
+	closeStarted      chan struct{}
+	release           chan struct{}
+	closeErr          error
+	closeCount        atomic.Int32
+	connectStartOnce  sync.Once
+	connectCancelOnce sync.Once
+	closeStartOnce    sync.Once
+	releaseOnce       sync.Once
 }
 
-func (p *gatedClosePair) Connect(context.Context) error {
-	return nil
+func (p *gatedClosePair) Connect(ctx context.Context) error {
+	if p.connectStarted == nil {
+		return nil
+	}
+	p.connectStartOnce.Do(func() { close(p.connectStarted) })
+	select {
+	case <-ctx.Done():
+		p.connectCancelOnce.Do(func() { close(p.connectCanceled) })
+		return ctx.Err()
+	}
 }
 
 func (p *gatedClosePair) Close() error {
 	p.closeCount.Add(1)
-	p.startOnce.Do(func() { close(p.closeStarted) })
+	p.closeStartOnce.Do(func() { close(p.closeStarted) })
 	<-p.release
 	return p.closeErr
 }
 
 func (p *gatedClosePair) releaseClose() {
 	p.releaseOnce.Do(func() { close(p.release) })
+}
+
+func newConnectedAndPendingMesh(t *testing.T, parent context.Context, connectedErr, pendingErr error) (*Mesh, *gatedClosePair, *gatedClosePair, <-chan error) {
+	t.Helper()
+	connected := &gatedClosePair{
+		closeStarted: make(chan struct{}),
+		release:      make(chan struct{}),
+		closeErr:     connectedErr,
+	}
+	pending := &gatedClosePair{
+		connectStarted:  make(chan struct{}),
+		connectCanceled: make(chan struct{}),
+		closeStarted:    make(chan struct{}),
+		release:         make(chan struct{}),
+		closeErr:        pendingErr,
+	}
+	factory := func(_ context.Context, spec PairSpec) (PairResource, error) {
+		switch spec {
+		case PairSpec{FirstID: "a", SecondID: "b"}:
+			return connected, nil
+		case PairSpec{FirstID: "a", SecondID: "c"}:
+			return pending, nil
+		default:
+			return nil, errors.New("unexpected pair factory spec")
+		}
+	}
+	mesh := NewMesh(MeshConfig{Context: parent, PairFactory: factory})
+	t.Cleanup(func() { _ = mesh.Close() })
+	t.Cleanup(pending.releaseClose)
+	t.Cleanup(connected.releaseClose)
+	if err := mesh.Join(context.Background(), "a"); err != nil {
+		t.Fatalf("first Join: %v", err)
+	}
+	if err := mesh.Join(context.Background(), "b"); err != nil {
+		t.Fatalf("second Join: %v", err)
+	}
+	joinResult := make(chan error, 1)
+	go func() { joinResult <- mesh.Join(context.Background(), "c") }()
+	awaitClosed(t, pending.connectStarted)
+	return mesh, connected, pending, joinResult
+}
+
+func awaitFirstCloseStarted(t *testing.T, connected, pending *gatedClosePair) *gatedClosePair {
+	t.Helper()
+	select {
+	case <-connected.closeStarted:
+		return connected
+	case <-pending.closeStarted:
+		return pending
+	case <-time.After(time.Second):
+		t.Fatal("captured pair Close did not start")
+		return nil
+	}
+}
+
+func assertJoinedMeshCloseResult(t *testing.T, err, connectedErr, pendingErr error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("Mesh.Close returned nil, want joined pair close errors")
+	}
+	if !errors.Is(err, connectedErr) || !errors.Is(err, pendingErr) {
+		t.Fatalf("Mesh.Close error = %v, want connected and pending close errors", err)
+	}
 }
 
 func equalStrings(got, want []string) bool {
