@@ -227,6 +227,14 @@ type RecordingConfig struct {
 	Corpus      []CorpusHash
 	Credentials []string
 
+	// ManifestVersion optionally selects the version written by the finalizer.
+	// Zero retains the legacy v1 default; browser evidence always requires v2.
+	ManifestVersion int
+	// BrowserArtifact is redacted semantic webmcp.browser-events.v1 JSONL.
+	// It is staged and hashed with the provider artifacts before manifest.json
+	// is emitted.
+	BrowserArtifact *BrowserArtifact
+
 	// WriteFile is optional. It is called with the private staging path, so a
 	// failed write cannot expose a partial bundle at Destination.
 	WriteFile RecordingWriteFile
@@ -248,6 +256,7 @@ type RecordingManifest struct {
 	Corpus        []CorpusHash              `json:"corpus,omitempty"`
 	Terminal      *RecordingTerminalSummary `json:"terminal,omitempty"`
 	Artifacts     []ArtifactHash            `json:"artifacts"`
+	Browser       *BrowserManifest          `json:"browser,omitempty"`
 }
 
 // RecordingWriter is a reusable finalizer for one RecordingConfig. It does
@@ -315,6 +324,9 @@ func WriteRecordingBundle(config RecordingConfig) error {
 			)
 		}
 		path := filepath.Join(staging, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return recordingError(ErrRecordingDestination, "prepare artifact directory", filepath.Join(destination, filepath.FromSlash(relative)), err, redactor)
+		}
 		n, writeErr := writeFile(path, data, 0o644)
 		if writeErr == nil && n != len(data) {
 			writeErr = io.ErrShortWrite
@@ -345,6 +357,11 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	for index, segment := range normalized.outputSegments {
 		path := fmt.Sprintf("audio/out-%03d.pcm", index)
 		if err := write(path, segment); err != nil {
+			return err
+		}
+	}
+	if normalized.browser != nil {
+		if err := write(normalized.browser.path, normalized.browser.data); err != nil {
 			return err
 		}
 	}
@@ -390,6 +407,8 @@ type normalizedRecording struct {
 	artifactPaths    []string
 	expectedPaths    []string
 	writeFile        RecordingWriteFile
+	manifestVersion  int
+	browser          *normalizedBrowserArtifact
 }
 
 type credentialRedactor struct {
@@ -434,6 +453,14 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 	if writeFile == nil {
 		writeFile = defaultRecordingWriteFile
 	}
+	manifestVersion, err := normalizeRecordingManifestVersion(config.ManifestVersion, config.BrowserArtifact != nil)
+	if err != nil {
+		return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate manifest version", destination, err, redactor)
+	}
+	browser, err := normalizeBrowserArtifactForRecording(config.BrowserArtifact, destination, redactor)
+	if err != nil {
+		return normalizedRecording{}, redactor, err
+	}
 	artifactPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl"}
 	expectedPaths := []string{"client.transcript.jsonl", "agent.transcript.jsonl"}
 	if len(config.SessionLog) > 0 {
@@ -451,6 +478,11 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		artifactPaths = append(artifactPaths, path)
 		expectedPaths = append(expectedPaths, path)
 	}
+	if browser != nil {
+		if err := appendBrowserArtifactPath(&artifactPaths, &expectedPaths, browser.path); err != nil {
+			return normalizedRecording{}, redactor, recordingError(ErrInvalidRecording, "validate browser artifact path", destination, err, redactor)
+		}
+	}
 	expectedPaths = append(expectedPaths, "manifest.json")
 	return normalizedRecording{
 		destination:      destination,
@@ -465,6 +497,8 @@ func normalizeRecordingConfig(config RecordingConfig) (normalizedRecording, cred
 		artifactPaths:    artifactPaths,
 		expectedPaths:    expectedPaths,
 		writeFile:        writeFile,
+		manifestVersion:  manifestVersion,
+		browser:          browser,
 	}, redactor, nil
 }
 
@@ -552,8 +586,8 @@ func buildManifest(recording normalizedRecording, redactor credentialRedactor, a
 	configuration := mergeConfiguration(metadata.Configuration, redactor)
 	mediaSource := redactMediaSource(metadata.MediaSource, metadata.MediaSourceURL, redactor)
 	corpus := normalizeCorpus(recording.corpus, redactor)
-	return RecordingManifest{
-		FormatVersion: RecordingManifestVersion,
+	manifest := RecordingManifest{
+		FormatVersion: recording.manifestVersion,
 		InputDevice:   redactDevice(metadata.InputDevice, redactor),
 		OutputDevice:  redactDevice(metadata.OutputDevice, redactor),
 		Transport:     redactor.string(metadata.Transport),
@@ -565,6 +599,17 @@ func buildManifest(recording normalizedRecording, redactor credentialRedactor, a
 		Terminal:      cloneRecordingTerminalSummary(recording.terminal),
 		Artifacts:     artifacts,
 	}
+	if recording.browser != nil {
+		manifest.Browser = &BrowserManifest{
+			Format: recording.browser.format,
+			Artifact: ArtifactHash{
+				Path:   recording.browser.path,
+				SHA256: recording.browser.sha256,
+			},
+			Redaction: recording.browser.redaction,
+		}
+	}
+	return manifest
 }
 
 func redactDevice(device DeviceMetadata, redactor credentialRedactor) DeviceMetadata {

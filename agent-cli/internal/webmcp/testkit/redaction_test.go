@@ -6,8 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
 func TestRedactionPolicyHasStrictDeterministicWireShape(t *testing.T) {
@@ -341,6 +344,38 @@ func TestRecorderAppliesRedactionBeforeWriter(t *testing.T) {
 	rawPolicy := RedactionPolicy{RawCDP: true}
 	if _, err := NewRecorder(&bytes.Buffer{}, WithRedaction(rawPolicy)); !errors.Is(err, ErrRawCDPNotAllowed) {
 		t.Fatalf("raw policy recorder error = %v, want ErrRawCDPNotAllowed", err)
+	}
+}
+
+func TestRedactedBrowserArtifactAdaptsToTranscriptBundle(t *testing.T) {
+	data := []byte(`{"version":"webmcp.browser-events.v1","sequence":1}
+`)
+	artifact := RedactedBrowserArtifact{
+		Format: BrowserEventsVersion,
+		Data:   data,
+		SHA256: "",
+		Redaction: RedactionPolicy{
+			URLQuery:      true,
+			DigestTools:   []string{"digest_tool"},
+			ToolArguments: []string{"write_tool"},
+		},
+	}
+	converted := artifact.RecordingArtifact("")
+	if converted.Format != artifact.Format || converted.Path != transcript.BrowserArtifactDefaultPath || !bytes.Equal(converted.Data, data) {
+		t.Fatalf("converted browser artifact = %+v, want copied format/path/data", converted)
+	}
+	if converted.Redaction.URLQuery != artifact.Redaction.URLQuery || !sameStrings(converted.Redaction.DigestTools, artifact.Redaction.DigestTools) {
+		t.Fatalf("converted redaction policy = %+v, want equivalent policy", converted.Redaction)
+	}
+
+	destination := filepath.Join(t.TempDir(), "recording")
+	if err := transcript.WriteRecordingBundle(transcript.RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		BrowserArtifact:  &converted,
+	}); err != nil {
+		t.Fatalf("WriteRecordingBundle with converted artifact: %v", err)
 	}
 }
 

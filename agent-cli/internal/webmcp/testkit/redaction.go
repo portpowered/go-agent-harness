@@ -14,6 +14,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
 
 const (
@@ -558,6 +560,30 @@ type RedactedBrowserArtifact struct {
 	Data      []byte
 	SHA256    string
 	Redaction RedactionPolicy
+}
+
+// RecordingArtifact adapts a redacted browser artifact to the existing
+// transcript bundle writer. The conversion keeps the transcript package as
+// the sole owner of manifest.json while retaining the testkit's redaction
+// boundary as the source of the artifact bytes and effective policy.
+func (a RedactedBrowserArtifact) RecordingArtifact(path string) transcript.BrowserArtifact {
+	if path == "" {
+		path = transcript.BrowserArtifactDefaultPath
+	}
+	return transcript.BrowserArtifact{
+		Format: a.Format,
+		Path:   path,
+		Data:   append([]byte(nil), a.Data...),
+		SHA256: a.SHA256,
+		Redaction: transcript.BrowserRedactionPolicy{
+			URLQuery:           a.Redaction.URLQuery,
+			URLFragment:        a.Redaction.URLFragment,
+			ToolArguments:      append([]string(nil), a.Redaction.ToolArguments...),
+			ResultJSONPointers: append([]string(nil), a.Redaction.ResultJSONPointers...),
+			DigestTools:        append([]string(nil), a.Redaction.DigestTools...),
+			RawCDP:             a.Redaction.RawCDP,
+		},
+	}
 }
 
 // BuildRedactedBrowserArtifact performs the complete pre-persistence boundary
