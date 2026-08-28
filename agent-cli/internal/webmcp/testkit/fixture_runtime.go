@@ -107,6 +107,7 @@ type BrowserScriptRuntime struct {
 	generation uint64
 	position   int
 	pending    map[string]struct{}
+	operations []OperationRequest
 	tools      []ToolDescriptor
 	events     []FixtureEvent
 	last       RuntimeExecution
@@ -349,6 +350,7 @@ func (r *BrowserScriptRuntime) Execute(ctx context.Context, request OperationReq
 		execution.Events = append(execution.Events, event)
 	}
 	r.last = cloneRuntimeExecution(execution)
+	r.operations = append(r.operations, cloneOperationRequest(request))
 	r.maybeCompleteLocked()
 	return execution, nil
 }
@@ -718,6 +720,22 @@ func (r *BrowserScriptRuntime) PendingInvocationIDs() []string {
 // PendingInvocations is a descriptive alias for PendingInvocationIDs.
 func (r *BrowserScriptRuntime) PendingInvocations() []string { return r.PendingInvocationIDs() }
 
+// Operations returns the successfully consumed operation requests in script
+// order. Inputs are defensive copies; callers may safely inspect or mutate
+// the returned values.
+func (r *BrowserScriptRuntime) Operations() []OperationRequest {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := make([]OperationRequest, len(r.operations))
+	for index, operation := range r.operations {
+		result[index] = cloneOperationRequest(operation)
+	}
+	return result
+}
+
 // Tools returns the latest tools_added catalog as raw-schema-preserving data.
 func (r *BrowserScriptRuntime) Tools() []ToolDescriptor {
 	if r == nil {
@@ -771,6 +789,26 @@ func (r *BrowserScriptRuntime) Generation() uint64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.generation
+}
+
+// NextExpectedOperationType reports the next operation without consuming it.
+// Fixture adapters use this narrow look-ahead to perform optional cleanup
+// only when the script explicitly includes a close or detach operation.
+func (r *BrowserScriptRuntime) NextExpectedOperationType() (OperationType, bool) {
+	if r == nil {
+		return "", false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.position >= len(r.script.Operations) {
+		return "", false
+	}
+	return r.script.Operations[r.position].Expect.Type, true
+}
+
+// NextOperationType is a concise alias for NextExpectedOperationType.
+func (r *BrowserScriptRuntime) NextOperationType() (OperationType, bool) {
+	return r.NextExpectedOperationType()
 }
 
 // EnableLifecycle consumes the next lifecycle operation.

@@ -159,6 +159,12 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 			return c.deviceProbeExec(ctx, scenario, availability)
 		}, c.deviceProbeDeadline))
 	}
+	selections := probeSelections(positional, c.Scenarios)
+	if hasV2, err := probeSelectionsContainV2(selections); err != nil {
+		return err
+	} else if hasV2 {
+		return c.runScenarioV2(cmd, selections)
+	}
 	if strings.TrimSpace(c.Replay) == "" {
 		return fmt.Errorf("--replay <fixture-path-or-dir> is required to select recorded fixtures")
 	}
@@ -174,6 +180,18 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 	}
 
 	return c.runScenarios(cmd, scenarios, deadguardExec(exec, probeScenarioDeadline))
+}
+
+func probeSelectionsContainV2(selections []string) (bool, error) {
+	containsV2 := false
+	for _, selection := range selections {
+		isV2, err := probeScenarioFileIsV2(selection)
+		if err != nil {
+			return false, err
+		}
+		containsV2 = containsV2 || isV2
+	}
+	return containsV2, nil
 }
 
 func (c *ProbeRunCommand) runScenarios(cmd *cobra.Command, scenarios []probe.Scenario, exec probe.ExecFunc) error {
