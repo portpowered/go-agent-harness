@@ -41,6 +41,42 @@ func TestWebMCPDirectCommandTreeIsFrozen(t *testing.T) {
 	}
 }
 
+func TestWebMCPWatchHelpDocumentsCrossProcessObservationBoundary(t *testing.T) {
+	command := NewWebMCPCommand(flags.NewGlobalFlags()).Generate()
+	watch, _, err := command.Find([]string{"watch"})
+	if err != nil {
+		t.Fatalf("find webmcp watch command: %v", err)
+	}
+	tools, _, err := command.Find([]string{"tools"})
+	if err != nil {
+		t.Fatalf("find webmcp tools command: %v", err)
+	}
+
+	for _, test := range []struct {
+		name string
+		text string
+	}{
+		{name: "watch", text: watch.Long},
+		{name: "tools --watch", text: tools.Long},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, want := range []string{
+				"toolsAdded/toolsRemoved -> catalog_changed",
+				"toolInvoked             -> invocation_created",
+				"toolResponded           -> invocation_terminal",
+				"selected and session_closed are watcher-local lifecycle events",
+				"broker admission, approval, and cancellation-request history remains",
+				"process-local; no cross-process visibility",
+				"failed session_closed event",
+			} {
+				if !strings.Contains(test.text, want) {
+					t.Errorf("help text does not contain %q:\n%s", want, test.text)
+				}
+			}
+		})
+	}
+}
+
 func TestWebMCPDirectSelectionPersistsRedactedOpaqueIDs(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)

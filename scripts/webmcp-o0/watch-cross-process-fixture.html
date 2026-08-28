@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP watch cross-process probe</title>
+</head>
+<body>
+  <main>
+    <h1>WebMCP watch cross-process probe</h1>
+    <p id="ready">starting</p>
+    <p>State: <strong id="state">initial</strong></p>
+    <section id="initial-tools">
+      <form id="invoke-form"
+            toolname="webmcp_watch_probe_tool"
+            tooltitle="WebMCP watch probe tool"
+            tooldescription="Record a value in the page oracle and return it."
+            toolautosubmit>
+        <label>Value
+          <input name="value" type="text" value=""
+                 toolparamdescription="The value to record in the page oracle.">
+        </label>
+      </form>
+    </section>
+    <section id="dynamic-tools"></section>
+  </main>
+  <script>
+    (() => {
+      const state = {
+        ready: false,
+        value: "initial",
+        invocations: []
+      };
+      window.__webmcpWatchCrossProcess = state;
+
+      const ready = document.querySelector("#ready");
+      const visible = document.querySelector("#state");
+
+      const render = () => {
+        ready.textContent = state.ready ? "ready" : "starting";
+        visible.textContent = state.value;
+      };
+
+      const publishOracle = () => {
+        fetch("/__watch/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ready: state.ready,
+            value: state.value,
+            visibleText: visible.textContent || "",
+            invocations: state.invocations.slice()
+          })
+        }).catch(() => {});
+      };
+
+      document.querySelector("#invoke-form").addEventListener("submit", (event) => {
+        const data = new FormData(event.currentTarget);
+        const value = String(data.get("value") || "");
+        state.value = "invoked:" + value;
+        state.invocations.push(value);
+        render();
+        publishOracle();
+        if (typeof event.respondWith === "function") {
+          event.preventDefault();
+          event.respondWith(Promise.resolve({
+            observed: value,
+            state: state.value
+          }));
+        } else {
+          event.preventDefault();
+        }
+      });
+
+      state.ready = true;
+      render();
+      publishOracle();
+    })();
+  </script>
+</body>
+</html>

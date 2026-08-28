@@ -29,6 +29,29 @@ const (
 	webmcpDirectWatchStatusFailed   = "failed"
 )
 
+const webmcpWatchHelp = `Watch the selected target's semantic WebMCP stream.
+
+The following activity is target-observable and is emitted when it is caused by
+another CLI process or CDP client attached to the same target:
+
+  toolsAdded/toolsRemoved -> catalog_changed
+  toolInvoked             -> invocation_created
+  toolResponded           -> invocation_terminal
+
+The watcher also reports generation_changed when the target navigation boundary
+changes. selected and session_closed are watcher-local lifecycle events, and
+broker admission, approval, and cancellation-request history remains
+process-local; no cross-process visibility is promised for those classes.
+
+The tools --watch form uses this same observation and output contract. Target
+transport or bounded-delivery loss is reported as a failed session_closed event
+instead of a normal complete stream.`
+
+// ErrWebMCPOperationsRequiresLaneBOrD identifies the production discovery
+// and browser protocol seams that are intentionally not guessed by the CLI
+// composition root. Direct commands surface it as an unavailable operation.
+var ErrWebMCPOperationsRequiresLaneBOrD = ErrWebMCPDoctorRequiresLaneBOrD
+
 // WebMCPDirectBrowser is the safe browser listing shape. Endpoint addresses
 // are redacted before they are copied into this result.
 type WebMCPDirectBrowser struct {
@@ -396,6 +419,7 @@ func (c *WebMCPOperationsCommand) toolsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "tools",
 		Short:        "List tools exposed by the selected WebMCP page",
+		Long:         "List tools exposed by the selected WebMCP page. With --watch, observe the target-scoped semantic stream across independent CLI or CDP clients.\n\n" + webmcpWatchHelp,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -543,6 +567,7 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "watch",
 		Short:        "Watch WebMCP broker events",
+		Long:         webmcpWatchHelp,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
