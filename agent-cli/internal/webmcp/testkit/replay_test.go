@@ -3,6 +3,7 @@ package testkit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -91,7 +92,7 @@ func TestBrowserReplayObserveEventReportsSafeDivergenceAndOrdering(t *testing.T)
 		Type:         EmittedToolResponded,
 		InvocationID: "inv-1",
 		Status:       "Error",
-		Error:        MustJSONValue(map[string]any{"code": "safe"}),
+		Error:        MustJSONValue(map[string]any{"code": "safe", "message": secret}),
 	})
 	if !errors.Is(err, ErrReplayMismatch) {
 		t.Fatalf("wrong event = %v, want replay mismatch", err)
@@ -105,6 +106,9 @@ func TestBrowserReplayObserveEventReportsSafeDivergenceAndOrdering(t *testing.T)
 	}
 	if strings.Contains(err.Error(), secret) {
 		t.Fatalf("mismatch leaked event value: %v", err)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", mismatch), secret) {
+		t.Fatalf("typed mismatch context leaked event value: %+v", mismatch)
 	}
 }
 
@@ -139,6 +143,9 @@ func TestBrowserReplayReportsInputAndTerminalDivergenceWithoutValues(t *testing.
 	}
 	if strings.Contains(err.Error(), secret) {
 		t.Fatalf("input mismatch leaked value: %v", err)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", mismatch), secret) {
+		t.Fatalf("typed mismatch context leaked input value: %+v", mismatch)
 	}
 
 	minimal := replayTestScript(BrowserScriptOperation{

@@ -164,7 +164,7 @@ func (r RedactionMetadata) MarshalJSON() ([]byte, error) {
 		Rules []string      `json:"rules,omitempty"`
 	}
 	normalized := r.normalized()
-	return json.Marshal(wire{Mode: normalized.Mode, Rules: normalized.Rules})
+	return json.Marshal(wire(normalized))
 }
 
 func (r *RedactionMetadata) UnmarshalJSON(data []byte) error {
@@ -907,14 +907,6 @@ const (
 	payloadInteger
 	payloadIdentifier
 )
-
-func fields(names ...string) map[string]payloadFieldKind {
-	result := make(map[string]payloadFieldKind, len(names))
-	for _, name := range names {
-		result[name] = payloadAny
-	}
-	return result
-}
 
 func fieldsWithKinds(entries map[string]payloadFieldKind) map[string]payloadFieldKind {
 	result := make(map[string]payloadFieldKind, len(entries))

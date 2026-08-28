@@ -126,14 +126,7 @@ func (p BrowserRedactionPolicy) MarshalJSON() ([]byte, error) {
 		DigestTools        []string `json:"digest_tools"`
 		RawCDP             bool     `json:"raw_cdp"`
 	}
-	return json.Marshal(wire{
-		URLQuery:           normalized.URLQuery,
-		URLFragment:        normalized.URLFragment,
-		ToolArguments:      normalized.ToolArguments,
-		ResultJSONPointers: normalized.ResultJSONPointers,
-		DigestTools:        normalized.DigestTools,
-		RawCDP:             normalized.RawCDP,
-	})
+	return json.Marshal(wire(normalized))
 }
 
 // UnmarshalJSON accepts only the six frozen policy fields and requires each

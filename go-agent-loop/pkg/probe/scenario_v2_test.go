@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+const validScenarioV2ToolRef = "webmcp.tool-ref.v1:AAAAAAAAAAAAAAAAAAAAAA"
+
 type scenarioV2Corpus map[string]bool
 
 func (c scenarioV2Corpus) Has(id string) bool { return c[id] }
@@ -179,10 +181,11 @@ func TestLoadScenarioV2RejectsStrictShapeViolations(t *testing.T) {
 		{"missing expectations", strings.Replace(base, `,"expectations":[{"type":"no_pending_invocations"}]`, "", 1), nil, ErrInvalidScenarioV2, "expectations"},
 		{"empty expectations", strings.Replace(base, `"expectations":[{"type":"no_pending_invocations"}]`, `"expectations":[]`, 1), nil, ErrInvalidScenarioV2, "expectations"},
 		{"malformed expectations value", strings.Replace(base, `{"type":"no_pending_invocations"}`, `{"type":"page_state_equals","path":"$.state","value":}`, 1), nil, ErrInvalidScenarioV2, "expectations"},
-		{"missing invoke field", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"ref","input_json":"{}"}`, 1), nil, ErrInvalidScenarioV2, "reason"},
-		{"invoke nested input", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"ref","input":{"x":1},"reason":"read","input_json":"{}"}`, 1), nil, ErrInvalidScenarioV2, "input"},
-		{"invoke non-object input", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"ref","input_json":"[]","reason":"read"}`, 1), nil, ErrInvalidScenarioV2, "input_json"},
-		{"invoke malformed input", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"ref","input_json":"{","reason":"read"}`, 1), nil, ErrInvalidScenarioV2, "input_json"},
+		{"missing invoke field", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"`+validScenarioV2ToolRef+`","input_json":"{}"}`, 1), nil, ErrInvalidScenarioV2, "reason"},
+		{"invoke nested input", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"`+validScenarioV2ToolRef+`","input":{"x":1},"reason":"read","input_json":"{}"}`, 1), nil, ErrInvalidScenarioV2, "input"},
+		{"invoke non-object input", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"`+validScenarioV2ToolRef+`","input_json":"[]","reason":"read"}`, 1), nil, ErrInvalidScenarioV2, "input_json"},
+		{"invoke malformed input", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"`+validScenarioV2ToolRef+`","input_json":"{","reason":"read"}`, 1), nil, ErrInvalidScenarioV2, "input_json"},
+		{"invalid tool ref", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"ref","input_json":"{}","reason":"read"}`, 1), nil, ErrInvalidScenarioV2, "tool_ref"},
 		{"missing audio corpus", strings.Replace(base, `{"type":"close"}`, `{"type":"send_audio"}`, 1), nil, ErrInvalidScenarioV2, "corpus_id"},
 		{"audio path alias", strings.Replace(base, `{"type":"close"}`, `{"type":"send_audio","path":"audio.wav"}`, 1), scenarioV2Corpus{"audio.wav": true}, ErrInvalidScenarioV2, "path"},
 		{"unknown corpus", strings.Replace(base, `{"type":"close"}`, `{"type":"send_audio","corpus_id":"missing"}`, 1), scenarioV2Corpus{}, ErrScenarioV2UnknownCorpus, "corpus_id"},
@@ -289,6 +292,9 @@ func TestScenarioV2FixtureResolutionIsContainedAndCanonical(t *testing.T) {
 		t.Skipf("inside symlink test unavailable: %v", err)
 	}
 	resolved, err := ResolveScenarioV2FixturePath(scenarioPath, "inside-link.json")
+	if err != nil {
+		t.Fatalf("resolve contained symlink: %v", err)
+	}
 	canonicalInsideTarget, err := filepath.EvalSymlinks(insideTarget)
 	if err != nil {
 		t.Fatalf("canonicalize inside target: %v", err)
@@ -434,7 +440,7 @@ func TestScenarioV2RejectsMalformedDocumentsAndTypedValues(t *testing.T) {
 		{"bad method list", strings.Replace(base, `{"type":"no_pending_invocations"}`, `{"type":"generated_cdp_method_order","methods":[null]}`, 1)},
 		{"missing allowed chrome operations", strings.Replace(base, `{"type":"no_pending_invocations"}`, `{"type":"no_unexpected_chrome_operations"}`, 1)},
 		{"missing allowed cdp methods", strings.Replace(base, `{"type":"no_pending_invocations"}`, `{"type":"no_unexpected_generated_cdp_methods"}`, 1)},
-		{"duplicate input JSON", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"ref","input_json":"{\"a\":1,\"a\":2}","reason":"read"}`, 1)},
+		{"duplicate input JSON", strings.Replace(base, `{"type":"close"}`, `{"type":"webmcp_invoke","tool_ref":"`+validScenarioV2ToolRef+`","input_json":"{\"a\":1,\"a\":2}","reason":"read"}`, 1)},
 		{"empty browser fixture", strings.Replace(base, `"id":"case",`, `"id":"case","browser_fixture":"",`, 1)},
 	}
 	for _, test := range cases {
@@ -448,9 +454,9 @@ func TestScenarioV2RejectsMalformedDocumentsAndTypedValues(t *testing.T) {
 	stepCases := []string{
 		`{"type":"browser_select"}`,
 		`{"type":"browser_navigate_fixture"}`,
-		`{"type":"webmcp_invoke","tool_ref":"ref","input_json":"{}"}`,
+		`{"type":"webmcp_invoke","tool_ref":"` + validScenarioV2ToolRef + `","input_json":"{}"}`,
 		`{"type":"webmcp_invoke","input_json":"{}","reason":"read"}`,
-		`{"type":"webmcp_invoke","tool_ref":"ref","reason":"read"}`,
+		`{"type":"webmcp_invoke","tool_ref":"` + validScenarioV2ToolRef + `","reason":"read"}`,
 		`{"type":"webmcp_cancel"}`,
 		`{"type":"send_text"}`,
 		`{"type":"send_audio"}`,
@@ -584,10 +590,10 @@ func TestScenarioV2TypedValidationRejectsInvalidValues(t *testing.T) {
 			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, InputJSON: "{}", Reason: "read"}
 		}},
 		{"invoke without input", func(s *ScenarioV2) {
-			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: "ref", Reason: "read"}
+			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, Reason: "read"}
 		}},
 		{"invoke without reason", func(s *ScenarioV2) {
-			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: "ref", InputJSON: "{}"}
+			s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, InputJSON: "{}"}
 		}},
 		{"cancel without id", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepWebMCPCancel} }},
 		{"text without text", func(s *ScenarioV2) { s.Steps[0] = ScenarioV2Step{Type: ScenarioV2StepSendText} }},
@@ -661,7 +667,7 @@ func TestScenarioV2TypedValidationRejectsInvalidValues(t *testing.T) {
 	validWithValues.FixtureRoot = canonicalTypedRoot
 	validWithValues.BrowserFixture = "browser.json"
 	validWithValues.Steps = []ScenarioV2Step{
-		{Type: ScenarioV2StepWebMCPInvoke, ToolRef: "ref", InputJSON: "{}", Reason: "read"},
+		{Type: ScenarioV2StepWebMCPInvoke, ToolRef: validScenarioV2ToolRef, InputJSON: "{}", Reason: "read"},
 		{Type: ScenarioV2StepSendAudio, CorpusID: "known"},
 		{Type: ScenarioV2StepSleepFake, DurationMS: 0, HasDurationMS: true},
 	}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -1019,6 +1018,11 @@ func validateScenarioV2StepRequiredFields(step ScenarioV2Step, location string, 
 		}
 		return nil
 	}
+	if step.ToolRef != "" {
+		if err := validateScenarioV2ToolRef(step.ToolRef, location+".tool_ref"); err != nil {
+			return err
+		}
+	}
 	if step.HasDurationMS && step.DurationMS < 0 {
 		return newScenarioV2Error(location+".duration_ms", "must not be negative")
 	}
@@ -1172,6 +1176,11 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 		}
 		return nil
 	}
+	if expectation.ToolRef != "" {
+		if err := validateScenarioV2ToolRef(expectation.ToolRef, location+".tool_ref"); err != nil {
+			return err
+		}
+	}
 	if expectation.HasEquals && expectation.Equals < 0 {
 		return newScenarioV2Error(location+".equals", "must not be negative")
 	}
@@ -1244,6 +1253,22 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 	return nil
 }
 
+func validateScenarioV2ToolRef(value, location string) error {
+	const prefix = "webmcp.tool-ref.v1:"
+	const tokenLength = 22
+	if !strings.HasPrefix(value, prefix) || len(value)-len(prefix) != tokenLength {
+		return newScenarioV2Error(location, "must use the webmcp.tool-ref.v1 grammar")
+	}
+	for _, character := range value[len(prefix):] {
+		if !((character >= 'a' && character <= 'z') ||
+			(character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') || character == '_' || character == '-') {
+			return newScenarioV2Error(location, "must use the webmcp.tool-ref.v1 grammar")
+		}
+	}
+	return nil
+}
+
 func validateTypedScenarioV2Step(step ScenarioV2Step, index int, lookup CorpusLookup) error {
 	if _, ok := scenarioV2StepFields[step.Type]; !ok {
 		return newScenarioV2Error(fmt.Sprintf("steps[%d].type", index), "unknown step variant")
@@ -1263,118 +1288,4 @@ func cloneScenarioV2Raw(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return append(json.RawMessage(nil), raw...)
-}
-
-func canonicalScenarioV2Dir(scenarioPath string) (string, error) {
-	if strings.TrimSpace(scenarioPath) == "" {
-		return "", newScenarioV2Error("scenario", "scenario path is required when fixture references are present")
-	}
-	absolute, err := filepath.Abs(scenarioPath)
-	if err != nil {
-		return "", newScenarioV2Error("scenario", "cannot make scenario path absolute")
-	}
-	directory := filepath.Dir(absolute)
-	canonical, err := filepath.EvalSymlinks(directory)
-	if err != nil {
-		return "", newScenarioV2Error("scenario", "cannot canonicalize containing directory")
-	}
-	canonical, err = filepath.Abs(canonical)
-	if err != nil {
-		return "", newScenarioV2Error("scenario", "cannot make containing directory absolute")
-	}
-	return filepath.Clean(canonical), nil
-}
-
-func resolveScenarioV2FixturePathFromRoot(root, reference string) (string, error) {
-	if strings.TrimSpace(root) == "" {
-		return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	if err := validateScenarioV2FixtureReference(reference); err != nil {
-		return "", err
-	}
-	root, err := filepath.Abs(root)
-	if err != nil {
-		return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	root = filepath.Clean(root)
-	candidate := filepath.Clean(filepath.Join(root, filepath.FromSlash(strings.ReplaceAll(reference, `\`, "/"))))
-	if !scenarioV2PathContained(root, candidate) {
-		return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-
-	resolved, resolveErr := filepath.EvalSymlinks(candidate)
-	if resolveErr == nil {
-		resolved, _ = filepath.Abs(resolved)
-		if !scenarioV2PathContained(root, filepath.Clean(resolved)) {
-			return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-		}
-		return filepath.Clean(resolved), nil
-	}
-	if !os.IsNotExist(resolveErr) {
-		return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	// The final file may be created after scenario validation. Resolve its
-	// existing parent so a symlinked directory cannot hide an escape.
-	parent := filepath.Dir(candidate)
-	resolvedParent, parentErr := filepath.EvalSymlinks(parent)
-	if parentErr == nil {
-		resolvedParent, _ = filepath.Abs(resolvedParent)
-		if !scenarioV2PathContained(root, filepath.Clean(resolvedParent)) {
-			return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-		}
-		return filepath.Join(filepath.Clean(resolvedParent), filepath.Base(candidate)), nil
-	}
-	return candidate, nil
-}
-
-func validateScenarioV2FixtureReference(reference string) error {
-	if strings.TrimSpace(reference) == "" {
-		return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	if strings.IndexByte(reference, 0) >= 0 {
-		return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	if filepath.IsAbs(reference) || filepath.VolumeName(reference) != "" {
-		return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	// filepath.VolumeName is empty for Windows-looking paths when tests run on
-	// Unix, so reject drive-relative and UNC forms explicitly as well.
-	if len(reference) >= 2 && ((reference[0] >= 'A' && reference[0] <= 'Z') || (reference[0] >= 'a' && reference[0] <= 'z')) && reference[1] == ':' {
-		return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	if strings.HasPrefix(reference, `\\`) || strings.HasPrefix(reference, "//") {
-		return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	if strings.Contains(reference, "$") || strings.HasPrefix(reference, "~") {
-		return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-	}
-	// A URI scheme is never a local fixture reference. This also catches
-	// file:, http:, and custom schemes without dereferencing them.
-	if colon := strings.IndexByte(reference, ':'); colon > 0 {
-		if colon == 1 || !strings.Contains(reference[:colon], "/") {
-			return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-		}
-	}
-	depth := 0
-	for _, part := range strings.Split(strings.ReplaceAll(reference, `\`, "/"), "/") {
-		switch part {
-		case "", ".":
-		case "..":
-			if depth == 0 {
-				return &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
-			}
-			depth--
-		default:
-			depth++
-		}
-	}
-	return nil
-}
-
-func scenarioV2PathContained(root, candidate string) bool {
-	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
-	if err != nil || filepath.IsAbs(relative) {
-		return false
-	}
-	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
