@@ -262,6 +262,34 @@ func TestTargetCapabilityProbeControlsEligibility(t *testing.T) {
 	}
 }
 
+func TestListTargetsUnknownCapabilityIsNotEligibleWithoutProbe(t *testing.T) {
+	browser := BrowserCandidate{ID: "browser-unknown-capability", Source: SourceConfigured, Loopback: true}
+	descriptor := TargetDescriptor{
+		ID:                   "unknown-capability",
+		Type:                 "page",
+		Title:                "Unknown",
+		URL:                  "https://unknown-capability.test",
+		WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/unknown-capability",
+	}
+	service := New(Options{TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+		return []TargetDescriptor{descriptor}, nil
+	})})
+
+	snapshot, err := service.ListTargetSnapshot(context.Background(), browser)
+	assertDiscoveryError(t, err, CodeNoEligibleTab)
+	if snapshot.CandidateCount != 1 || snapshot.EligibleCount != 0 || len(snapshot.Targets) != 0 {
+		t.Fatalf("unknown capability snapshot = %#v, want one ineligible candidate", snapshot)
+	}
+
+	allTargets, err := service.ListTargets(context.Background(), browser, TargetListOptions{EligibleOnly: Bool(false)})
+	if err != nil {
+		t.Fatalf("ListTargets(eligible_only=false): %v", err)
+	}
+	if len(allTargets) != 1 || allTargets[0].WebMCP || allTargets[0].WebMCPKnown || allTargets[0].Eligible || allTargets[0].EligibilityReason != "unsupported_webmcp" {
+		t.Fatalf("unknown capability target = %#v, want explicitly unsupported", allTargets)
+	}
+}
+
 func equalStrings(left, right []string) bool {
 	if len(left) != len(right) {
 		return false

@@ -815,6 +815,23 @@ func (s *Service) reconnectExact(ctx context.Context, browser BrowserCandidate, 
 		s.mu.Unlock()
 		return Selection{}, failure
 	}
+	if options.ContinuityMarker != "" {
+		reason := ""
+		switch {
+		case options.Origin != "" && target.Origin != options.Origin:
+			reason = "origin_changed"
+		case target.ContinuityMarker != options.ContinuityMarker:
+			reason = "continuity_changed"
+		}
+		if reason != "" {
+			selectedGeneration := target.Generation
+			if s.selection != nil && s.selection.BrowserID == browser.ID && s.selection.TargetID == targetID {
+				selectedGeneration = s.selection.Generation
+			}
+			s.mu.Unlock()
+			return Selection{}, newStaleSelection(browser.ID, targetID, selectedGeneration, reason)
+		}
+	}
 	if generationFailure := s.advanceDisconnectedSelectionGenerationLocked(browser.ID, target.ID, &target); generationFailure != nil {
 		s.mu.Unlock()
 		return Selection{}, generationFailure

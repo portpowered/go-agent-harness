@@ -563,10 +563,10 @@ func descriptorWebMCP(descriptor TargetDescriptor) (bool, bool) {
 	if descriptor.WebMCP != nil {
 		return *descriptor.WebMCP, true
 	}
-	// /json/list does not carry the experimental domain capability. An
-	// optimistic unknown lets a neutral listing remain useful; an injected
-	// TargetCapabilityProbe is authoritative when selection needs proof.
-	return true, false
+	// /json/list does not carry the experimental domain capability. Unknown is
+	// deliberately not eligible; an injected TargetCapabilityProbe or explicit
+	// descriptor field must prove support before a target can be advertised.
+	return false, false
 }
 
 func descriptorToolCount(descriptor TargetDescriptor) (int, bool) {

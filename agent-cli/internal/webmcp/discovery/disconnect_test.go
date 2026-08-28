@@ -209,6 +209,44 @@ func TestReconnectUsesExactDisconnectedSelectionAndAdvancesGeneration(t *testing
 	}
 }
 
+func TestDisconnectedReconnectRejectsChangedContinuityMarker(t *testing.T) {
+	browser := BrowserCandidate{ID: "browser-disconnect-continuity", Source: SourceConfigured, Loopback: true}
+	descriptor := targetDescriptor("raw-page", "Page", "https://continuity-reconnect.test", 1)
+	descriptor.ContinuityMarker = "document-a"
+	descriptors := []TargetDescriptor{descriptor}
+	probe := &fakeWebSocketProbe{version: BrowserVersion{
+		Browser:              "Chrome/151",
+		ProtocolVersion:      "1.3",
+		WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/browser/browser-secret",
+	}}
+	service := New(Options{
+		IDMapper:       persistenceBrowserIDMapper{id: browser.ID},
+		WebSocketProbe: probe,
+		TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+			return append([]TargetDescriptor(nil), descriptors...), nil
+		}),
+	})
+	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
+	selected, err := service.SelectTarget(context.Background(), browser, targetID)
+	if err != nil {
+		t.Fatalf("initial selection: %v", err)
+	}
+	if _, err := service.HandleDisconnect(context.Background(), DisconnectEvent{BrowserID: browser.ID, TargetID: targetID, Phase: "transport"}); err == nil {
+		t.Fatal("disconnect returned nil")
+	}
+
+	descriptors[0].ContinuityMarker = "document-b"
+	_, err = service.Reconnect(context.Background(), reconnectInputs(), ReconnectOptions{AutoSelect: AutoSelectSingle})
+	stale := assertDiscoveryError(t, err, CodeStaleSelection)
+	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != selected.Generation || stale.Details["reason"] != "continuity_changed" {
+		t.Fatalf("changed continuity failure = %#v", stale.Details)
+	}
+	current, ok := service.Selected()
+	if !ok || current.BrowserID != browser.ID || current.TargetID != targetID || current.Context().Connected {
+		t.Fatalf("changed continuity altered disconnected selection = %#v ok=%v", current.Context(), ok)
+	}
+}
+
 func TestReleaseAfterDisconnectIsIdempotentAndDetachOnly(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-disconnect-release", Source: SourceConfigured, Loopback: true}
 	descriptor := targetDescriptor("raw-page", "Page", "https://release.test", 1)

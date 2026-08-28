@@ -195,3 +195,24 @@ func TestSelectTargetDoesNotCommitWhenAttachmentFails(t *testing.T) {
 		t.Fatal("failed attachment committed a selection")
 	}
 }
+
+func TestSelectDoesNotInferSoleCachedBrowserWhenBrowserIDIsOmitted(t *testing.T) {
+	browser := BrowserCandidate{ID: "browser-cached", Source: SourceConfigured, Loopback: true}
+	descriptor := targetDescriptor("raw-page", "Page", "https://cached.test", 1)
+	listCalls := 0
+	service := New(Options{TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+		listCalls++
+		return []TargetDescriptor{descriptor}, nil
+	})})
+	service.browsers[browser.ID] = browser
+	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
+
+	_, err := service.Select(context.Background(), TargetSelectionRequest{TargetID: targetID})
+	assertDiscoveryError(t, err, CodeNoEligibleTab)
+	if listCalls != 0 {
+		t.Fatalf("target list calls = %d, want zero without an exact browser ID", listCalls)
+	}
+	if _, ok := service.Selected(); ok {
+		t.Fatal("omitted browser ID unexpectedly committed a selection")
+	}
+}

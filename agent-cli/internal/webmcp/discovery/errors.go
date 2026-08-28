@@ -229,20 +229,6 @@ func newStaleSelection(browserID, targetID string, selectedGeneration uint64, re
 	}
 }
 
-func newTargetDetached(browserID, targetID string, generation uint64, reason string) *DiscoveryError {
-	return &DiscoveryError{
-		Code:      CodeTargetDetached,
-		Message:   "the selected browser target is detached",
-		Retryable: false,
-		Details: map[string]any{
-			"browser_id": boundedLabel(browserID, 64),
-			"target_id":  boundedLabel(targetID, 64),
-			"generation": generation,
-			"reason":     boundedLabel(reason, 64),
-		},
-	}
-}
-
 func newTargetAttachFailed(browserID, targetID, phase, reason string, cause error) *DiscoveryError {
 	return &DiscoveryError{
 		Code:      CodeTargetAttachFailed,
@@ -297,10 +283,6 @@ func classifiedFrom(err error, kind EndpointKind, source Source) *DiscoveryError
 		return discoveryErr
 	}
 	return newEndpointUnreachable(kind, addressClassFromEndpointKind(kind), "resolve", err)
-}
-
-func codeSentinel(code Code) error {
-	return &classifiedCode{code: code}
 }
 
 func (e *DiscoveryError) String() string {

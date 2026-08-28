@@ -304,10 +304,8 @@ func (s *Service) resolveSelectionBrowserLocked(request TargetSelectionRequest) 
 		}
 		sort.Strings(ids)
 		switch len(ids) {
-		case 0:
+		case 0, 1:
 			return BrowserCandidate{}, newNoEligibleTab("", TargetListOptions{TargetID: request.TargetID}, 0)
-		case 1:
-			requestedID = ids[0]
 		default:
 			return BrowserCandidate{}, newAmbiguousBrowser(ids)
 		}

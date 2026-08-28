@@ -417,17 +417,3 @@ func (s *Service) browserIDForEndpoint(endpoint Endpoint) string {
 	}
 	return ""
 }
-
-func disconnectFailurePhase(failure *DiscoveryError, fallback string) string {
-	if phase := detailString(failureDetails(failure), "phase"); phase != "" {
-		return phase
-	}
-	return fallback
-}
-
-func failureDetails(failure *DiscoveryError) map[string]any {
-	if failure == nil {
-		return nil
-	}
-	return failure.Details
-}
