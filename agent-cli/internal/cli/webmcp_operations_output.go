@@ -14,6 +14,16 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+// WebMCPDirectInvocationReceipt is the bounded stderr handoff emitted once a
+// browser invocation has been dispatched. It intentionally contains no page
+// input/output, schema, endpoint, or credential data.
+type WebMCPDirectInvocationReceipt struct {
+	Version      string `json:"version"`
+	InvocationID string `json:"invocation_id"`
+	ToolRef      string `json:"tool_ref"`
+	State        string `json:"state"`
+}
+
 func writeWebMCPDirectInvocationReceipt(out io.Writer, result webmcp.InvokeResult, toolRef webmcp.ToolRef) (webmcp.InvocationID, error) {
 	invocationID := result.BrowserInvocationID
 	if invocationID == "" {

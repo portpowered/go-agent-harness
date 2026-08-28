@@ -129,16 +129,6 @@ type WebMCPDirectInvocation struct {
 	Output       json.RawMessage `json:"output"`
 }
 
-// WebMCPDirectInvocationReceipt is the bounded stderr handoff emitted once a
-// browser invocation has been dispatched. It intentionally contains no page
-// input/output, schema, endpoint, or credential data.
-type WebMCPDirectInvocationReceipt struct {
-	Version      string `json:"version"`
-	InvocationID string `json:"invocation_id"`
-	ToolRef      string `json:"tool_ref"`
-	State        string `json:"state"`
-}
-
 type WebMCPDirectCancelData struct {
 	InvocationID string `json:"invocation_id"`
 	Status       string `json:"status"`

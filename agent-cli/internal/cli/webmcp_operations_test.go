@@ -73,7 +73,7 @@ func TestWebMCPWatchHelpDocumentsCrossProcessObservationBoundary(t *testing.T) {
 			} {
 				if !strings.Contains(test.text, want) {
 					t.Errorf("help text does not contain %q:\n%s", want, test.text)
- 				}
+				}
 			}
 		})
 	}
