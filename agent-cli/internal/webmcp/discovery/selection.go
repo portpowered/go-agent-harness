@@ -175,6 +175,9 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 		SelectedAt: selectedAt.UTC(),
 		Target:     target,
 		Handle:     handle,
+		statusSet:  true,
+		connected:  true,
+		ready:      true,
 	}
 	previous := s.selection
 	s.selection = &selected

@@ -364,6 +364,14 @@ type Selection struct {
 	SelectedAt time.Time     `json:"selected_at"`
 	Target     Target        `json:"target"`
 	Handle     *TargetHandle `json:"-"`
+
+	// statusSet distinguishes a service-owned selection from a value assembled
+	// by a caller. These fields are intentionally private: callers validate an
+	// exact selection through Service.ValidateSelection instead of changing
+	// readiness or connection state on a copied value.
+	statusSet bool
+	connected bool
+	ready     bool
 }
 
 // SelectedContext is a descriptive alias for the selected page state.
@@ -372,6 +380,11 @@ type SelectedContext = Selection
 // Context returns a broker-neutral context copy for callers that prefer the
 // method-shaped API used by later broker layers.
 func (s Selection) Context() PageContext {
+	connected, ready := true, true
+	if s.statusSet {
+		connected = s.connected
+		ready = s.ready
+	}
 	return PageContext{
 		BrowserID:  s.BrowserID,
 		TargetID:   s.TargetID,
@@ -380,8 +393,8 @@ func (s Selection) Context() PageContext {
 		Origin:     s.Origin,
 		Generation: s.Generation,
 		SelectedAt: s.SelectedAt,
-		Connected:  true,
-		Ready:      true,
+		Connected:  connected,
+		Ready:      ready,
 	}
 }
 
@@ -398,6 +411,19 @@ type PageContext struct {
 	Ready      bool      `json:"ready"`
 	SelectedAt time.Time `json:"selected_at"`
 }
+
+// SelectionValidationRequest identifies the exact selection generation an
+// operation intends to use. Browser and target display metadata are never
+// accepted as selectors.
+type SelectionValidationRequest struct {
+	BrowserID  string `json:"browser_id"`
+	TargetID   string `json:"target_id"`
+	Generation uint64 `json:"generation"`
+}
+
+// SelectionGeneration is a concise alias for callers that model the
+// generation-bearing identity separately from a full Selection value.
+type SelectionGeneration = SelectionValidationRequest
 
 // DiscoveryResult is provided for callers that prefer a named result object
 // while Discover continues to return the candidate directly.
@@ -467,13 +493,50 @@ type BrowserIdentity struct {
 type EventType string
 
 const (
-	EventDiscoveryStarted   EventType = "browser.discovery.started"
-	EventDiscoveryCompleted EventType = "browser.discovery.completed"
-	EventEndpointVersion    EventType = "browser.endpoint.version"
-	EventTargetsSnapshot    EventType = "browser.targets.snapshot"
-	EventTargetSelected     EventType = "browser.target.selected"
-	EventTargetAttached     EventType = "browser.chrome.target_attached"
+	EventDiscoveryStarted      EventType = "browser.discovery.started"
+	EventDiscoveryCompleted    EventType = "browser.discovery.completed"
+	EventEndpointVersion       EventType = "browser.endpoint.version"
+	EventTargetsSnapshot       EventType = "browser.targets.snapshot"
+	EventTargetSelected        EventType = "browser.target.selected"
+	EventTargetAttached        EventType = "browser.chrome.target_attached"
+	EventPageGenerationChanged EventType = "browser.page.generation_changed"
+	EventTargetDetached        EventType = "browser.target.detached"
 )
+
+// LifecycleEventType identifies normalized target lifecycle observations from
+// a browser adapter or deterministic fake.
+type LifecycleEventType string
+
+const (
+	LifecycleNavigation       LifecycleEventType = "navigation"
+	LifecycleDocumentReplaced LifecycleEventType = "document_replaced"
+	LifecycleTargetClosed     LifecycleEventType = "target_closed"
+	LifecycleTargetDetached   LifecycleEventType = "target_detached"
+)
+
+// LifecycleEvent is the neutral lifecycle seam used to invalidate exact page
+// selections. EventID, Sequence, DocumentID, or an explicit Generation can
+// make repeated delivery of the same adapter event idempotent. A lifecycle
+// event never carries transport URLs or credentials.
+type LifecycleEvent struct {
+	Type               LifecycleEventType
+	BrowserID          string
+	TargetID           string
+	EventID            string
+	Sequence           uint64
+	DocumentID         string
+	PreviousGeneration uint64
+	Generation         uint64
+	Reason             string
+	Capabilities       *TargetCapabilities
+	WebMCP             *bool
+	ToolCount          *int
+}
+
+// PageLifecycleEvent and TargetLifecycleEvent are descriptive aliases for
+// adapters that keep page and target notifications in separate streams.
+type PageLifecycleEvent = LifecycleEvent
+type TargetLifecycleEvent = LifecycleEvent
 
 // Redaction describes the safe representation of a semantic event. Discovery
 // never emits raw CDP frames or transport URLs, so the mode is always

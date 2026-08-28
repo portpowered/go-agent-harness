@@ -34,6 +34,7 @@ type targetState struct {
 	rawID         string
 	pageWebSocket string
 	generation    uint64
+	closed        bool
 }
 
 // HashTargetIDMapper is the default deterministic opaque target ID mapper.
@@ -389,6 +390,7 @@ func (s *Service) normalizeTargetsLocked(ctx context.Context, browser BrowserCan
 		s.targets[browser.ID] = make(map[string]targetState, len(states))
 	}
 	for _, state := range states {
+		state.closed = false
 		s.targets[browser.ID][state.target.ID] = state
 	}
 	return ordered, nil

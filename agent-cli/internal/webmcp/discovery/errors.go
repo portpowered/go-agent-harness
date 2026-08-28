@@ -18,7 +18,9 @@ const (
 	CodeNoEligibleTab          Code = "no_eligible_tab"
 	CodeAmbiguousBrowser       Code = "ambiguous_browser"
 	CodeAmbiguousTab           Code = "ambiguous_tab"
+	CodeStaleSelection         Code = "stale_selection"
 	CodeTargetAttachFailed     Code = "target_attach_failed"
+	CodeTargetDetached         Code = "target_detached"
 )
 
 // DiscoveryError is safe for model/user display. Details are constrained to
@@ -72,7 +74,9 @@ var (
 	ErrNoEligibleTab          error = &classifiedCode{code: CodeNoEligibleTab}
 	ErrAmbiguousBrowser       error = &classifiedCode{code: CodeAmbiguousBrowser}
 	ErrAmbiguousTab           error = &classifiedCode{code: CodeAmbiguousTab}
+	ErrStaleSelection         error = &classifiedCode{code: CodeStaleSelection}
 	ErrTargetAttachFailed     error = &classifiedCode{code: CodeTargetAttachFailed}
+	ErrTargetDetached         error = &classifiedCode{code: CodeTargetDetached}
 )
 
 func newEndpointNotFound(kind EndpointKind, source Source) *DiscoveryError {
@@ -205,6 +209,34 @@ func newAmbiguousTab(browserID string, candidateIDs []string) *DiscoveryError {
 		Details: map[string]any{
 			"browser_id":           boundedLabel(browserID, 64),
 			"candidate_target_ids": ids,
+		},
+	}
+}
+
+func newStaleSelection(browserID, targetID string, selectedGeneration uint64, reason string) *DiscoveryError {
+	return &DiscoveryError{
+		Code:      CodeStaleSelection,
+		Message:   "the selected browser target is no longer current",
+		Retryable: true,
+		Details: map[string]any{
+			"browser_id":          boundedLabel(browserID, 64),
+			"target_id":           boundedLabel(targetID, 64),
+			"selected_generation": selectedGeneration,
+			"reason":              boundedLabel(reason, 64),
+		},
+	}
+}
+
+func newTargetDetached(browserID, targetID string, generation uint64, reason string) *DiscoveryError {
+	return &DiscoveryError{
+		Code:      CodeTargetDetached,
+		Message:   "the selected browser target is detached",
+		Retryable: false,
+		Details: map[string]any{
+			"browser_id": boundedLabel(browserID, 64),
+			"target_id":  boundedLabel(targetID, 64),
+			"generation": generation,
+			"reason":     boundedLabel(reason, 64),
 		},
 	}
 }

@@ -79,6 +79,7 @@ type Service struct {
 	targets           map[string]map[string]targetState
 	browsers          map[string]BrowserCandidate
 	selection         *Selection
+	lifecycleSeen     map[string]struct{}
 }
 
 // New constructs a discovery service with standard-library defaults for the
@@ -156,6 +157,7 @@ func New(options Options) *Service {
 		endpoints:         make(map[string]targetEndpoint),
 		targets:           make(map[string]map[string]targetState),
 		browsers:          make(map[string]BrowserCandidate),
+		lifecycleSeen:     make(map[string]struct{}),
 	}
 }
 
