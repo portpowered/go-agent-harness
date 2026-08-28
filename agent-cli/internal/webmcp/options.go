@@ -18,6 +18,13 @@ type TargetSelector struct {
 	TargetID  TargetID
 }
 
+// SelectOptions is an optional extension seam for brokers that can activate a
+// target as part of selection. The frozen Broker interface remains compatible
+// with callers that only need exact selection.
+type SelectOptions struct {
+	Activate bool
+}
+
 type ListToolsOptions struct {
 	Refresh        bool
 	NameContains   string
