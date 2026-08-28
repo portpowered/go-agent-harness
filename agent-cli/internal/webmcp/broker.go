@@ -1162,6 +1162,9 @@ func normalizePageContext(page PageContext, browserID BrowserID, target Target) 
 		page.Origin = target.Origin
 	}
 	if page.Generation == 0 {
+		page.Generation = target.Generation
+	}
+	if page.Generation == 0 {
 		page.Generation = 1
 	}
 	page.Connected = true

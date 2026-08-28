@@ -41,12 +41,14 @@ var ErrWebMCPOperationsRequiresLaneBOrD = ErrWebMCPDoctorRequiresLaneBOrD
 // redacted origin; endpoint credentials and websocket paths never cross this
 // boundary.
 type WebMCPSelection struct {
-	Version    int       `json:"version"`
-	EndpointID string    `json:"endpoint_id"`
-	BrowserID  string    `json:"browser_id"`
-	TargetID   string    `json:"target_id"`
-	Origin     string    `json:"origin"`
-	SelectedAt time.Time `json:"selected_at"`
+	Version          int       `json:"version"`
+	EndpointID       string    `json:"endpoint_id"`
+	BrowserID        string    `json:"browser_id"`
+	TargetID         string    `json:"target_id"`
+	Origin           string    `json:"origin"`
+	ContinuityMarker string    `json:"continuity_marker,omitempty"`
+	Generation       uint64    `json:"generation,omitempty"`
+	SelectedAt       time.Time `json:"selected_at"`
 }
 
 // WebMCPSelectionStore persists and loads one opaque browser selection.
@@ -165,6 +167,9 @@ func validateWebMCPSelection(selection WebMCPSelection) error {
 		if selectionOrigin == "" {
 			return errors.New("WebMCP selection origin is invalid")
 		}
+	}
+	if selection.ContinuityMarker != "" && (len(selection.ContinuityMarker) > 128 || strings.ContainsAny(selection.ContinuityMarker, "\r\n\t") || strings.ContainsAny(selection.ContinuityMarker, "/?#") || strings.Contains(selection.ContinuityMarker, "://")) {
+		return errors.New("WebMCP selection continuity marker is invalid")
 	}
 	return nil
 }
@@ -1117,9 +1122,36 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		if stored.Origin != "" && safeOrigin(stored.Origin) != safeOrigin(target.Origin) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "origin_changed", nil)
 		}
+		if stored.ContinuityMarker != "" && target.ContinuityMarker != "" && stored.ContinuityMarker != target.ContinuityMarker {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "continuity_changed", nil)
+		}
+		if stored.Generation != 0 && target.Generation != 0 && stored.Generation != target.Generation {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "generation_changed", nil)
+		}
 	}
 	if err := directTargetPolicyError(*target, browser); err != nil {
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, err
+	}
+	if target.Type != "" && !strings.EqualFold(target.Type, "page") {
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target is not a page", map[string]any{
+			"browser_id": browserID,
+			"target_id":  targetID,
+			"reason":     "not_page",
+		})
+	}
+	if !target.Eligible {
+		if strings.EqualFold(target.EligibilityReason, "unsupported_webmcp") {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "the selected target does not provide WebMCP", map[string]any{
+				"browser_id":          browserID,
+				"target_id":           targetID,
+				"required_capability": "webmcp",
+			})
+		}
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target is not eligible for WebMCP", map[string]any{
+			"browser_id": browserID,
+			"target_id":  targetID,
+			"reason":     boundedDirectReason(target.EligibilityReason),
+		})
 	}
 	if browser.Selection.Origin != "" && safeOrigin(target.Origin) != safeOrigin(browser.Selection.Origin) {
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target does not match the requested origin", map[string]any{
@@ -1130,6 +1162,22 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		})
 	}
 	return candidate, *target, stored, nil
+}
+
+func boundedDirectReason(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "ineligible"
+	}
+	if len(value) > 80 {
+		return value[:80]
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return "ineligible"
+		}
+	}
+	return value
 }
 
 func stalePersistedSelectionError(browserID, targetID, reason string, cause error) error {
@@ -1220,12 +1268,14 @@ func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *c
 	}
 	if browser.Selection.Persist {
 		if err := c.saveDirectSelection(WebMCPSelection{
-			Version:    WebMCPSelectionVersion,
-			EndpointID: string(candidate.ID),
-			BrowserID:  string(page.Key.BrowserID),
-			TargetID:   string(page.Key.TargetID),
-			Origin:     safeOrigin(page.Origin),
-			SelectedAt: time.Now().UTC(),
+			Version:          WebMCPSelectionVersion,
+			EndpointID:       string(candidate.ID),
+			BrowserID:        string(page.Key.BrowserID),
+			TargetID:         string(page.Key.TargetID),
+			Origin:           safeOrigin(page.Origin),
+			ContinuityMarker: target.ContinuityMarker,
+			Generation:       page.Generation,
+			SelectedAt:       time.Now().UTC(),
 		}); err != nil {
 			return nil, fmt.Errorf("persist WebMCP selection: %w", err)
 		}

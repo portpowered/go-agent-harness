@@ -483,7 +483,7 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 	target.Origin = origin
 	pageWebSocket, normalizedWebSocket := normalizePageWebSocket(descriptor.WebSocketDebuggerURL)
 	target.WebSocketPresent = pageWebSocket
-	target.ContinuityMarker = targetContinuityMarker(browser.ID, rawID, origin, normalizedWebSocket, descriptor)
+	target.ContinuityMarker = targetContinuityMarker(browser.ID, rawID, origin, safePageURL, normalizedWebSocket, descriptor)
 	target.WebMCP, target.WebMCPKnown = descriptorWebMCP(descriptor)
 	target.ToolCount, target.ToolCountKnown = descriptorToolCount(descriptor)
 
@@ -526,16 +526,21 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 }
 
 // targetContinuityMarker turns adapter-provided continuity metadata into a
-// stable opaque value. When an adapter has no document marker, the normalized
-// page websocket path and raw target identity provide a useful best-effort
-// continuity claim; neither raw value crosses the persistence boundary.
-func targetContinuityMarker(browserID, rawID, origin, pageWebSocket string, descriptor TargetDescriptor) string {
+// stable opaque value. When an adapter has no document marker, the
+// query/fragment-free page URL, normalized page websocket path, and raw target
+// identity provide a useful best-effort continuity claim; neither raw value
+// crosses the persistence boundary. Including the safe page URL means a
+// normal navigation cannot silently reuse a selection for the old document.
+func targetContinuityMarker(browserID, rawID, origin, pageURL, pageWebSocket string, descriptor TargetDescriptor) string {
 	marker := strings.TrimSpace(descriptor.ContinuityMarker)
 	if marker == "" {
 		marker = strings.TrimSpace(descriptor.Continuity)
 	}
 	if marker == "" {
 		marker = strings.TrimSpace(descriptor.DocumentID)
+	}
+	if marker == "" {
+		marker = pageURL
 	}
 	if marker == "" {
 		marker = pageWebSocket
