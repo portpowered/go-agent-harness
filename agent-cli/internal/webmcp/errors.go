@@ -63,10 +63,9 @@ func IsKnownErrorCode(code ErrorCode) bool {
 	return ok
 }
 
-// ClassifiedError carries a safe, already-classified broker failure across a
-// neutral seam. Message and Details are model-visible and therefore callers
-// constructing this type must not put secrets, raw input, or page output in
-// them.
+// ClassifiedError carries safe, already-classified broker failure metadata
+// across a neutral seam. Message and Details are model-visible and therefore
+// must not contain secrets, raw input, or page output.
 type ClassifiedError struct {
 	Code      ErrorCode
 	Message   string
@@ -115,7 +114,7 @@ func ResultErrorFor(err error, fallback ErrorCode, details map[string]any) ToolR
 		}
 		message := classified.Message
 		if message == "" {
-			message = defaultErrorMessage(code)
+			message = DefaultErrorMessage(code)
 		}
 		return ToolResultError{Code: string(code), Message: message, Retryable: classified.Retryable, Details: details}
 	}
@@ -130,7 +129,7 @@ func ResultErrorFor(err error, fallback ErrorCode, details map[string]any) ToolR
 	}
 	return ToolResultError{
 		Code:      string(fallback),
-		Message:   defaultErrorMessage(fallback),
+		Message:   DefaultErrorMessage(fallback),
 		Retryable: defaultRetryable(fallback),
 		Details:   details,
 	}
@@ -148,7 +147,8 @@ func defaultRetryable(code ErrorCode) bool {
 	}
 }
 
-func defaultErrorMessage(code ErrorCode) string {
+// DefaultErrorMessage returns the safe model-facing message for code.
+func DefaultErrorMessage(code ErrorCode) string {
 	switch code {
 	case ErrorWebMCPDisabled:
 		return "Browser tools are not enabled."
@@ -169,4 +169,16 @@ func defaultErrorMessage(code ErrorCode) string {
 	default:
 		return "The WebMCP operation could not be completed."
 	}
+}
+
+// ContextErrorCode returns the C0 operation class for a context failure.
+// Adapter packages use this helper without exposing their transport errors.
+func ContextErrorCode(err error) ErrorCode {
+	if errors.Is(err, context.Canceled) {
+		return ErrorInvocationCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrorInvocationTimedOut
+	}
+	return ErrorInvocationFailed
 }
