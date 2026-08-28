@@ -335,16 +335,21 @@ implementation does not exist anywhere in this repo today. Grepped every
 `.go` file for something satisfying the interface: the only implementations
 are `LoopbackEndpoint` (signaling_loopback.go) and test doubles in
 `session_runtime_rtc_test.go`/`agent-cli/internal/probe/fault/rtc_test.go`.
-`SessionRTCSignalingResolver`/`ResolveSignaling` is not wired into `wire`/
-`cli` anywhere — the production `--transport webrtc` CLI path does not have
-a live resolver either yet. This is consistent with `s2s-b4-rtc-cli-surface`
-and `s2s-prereq-session-rtc-runtime-consumer` still being open/in-review
-lanes on the board — **a real signaling implementation is not a self-play-only
-gap, it is the same missing piece the core product's own WebRTC transport
-feature needs.** Building it for room-join should likely be the *same* work
-as whatever `s2s-b4-rtc-cli-surface` eventually needs, not a parallel
-self-play-only implementation — flag this dependency explicitly when this
-phase is ever filed as real work, rather than duplicating a signaling server.
+`SessionRTCSignalingResolver`/`ResolveSignaling` is wired into the production
+`wire`/`cli` graph through `provideSessionRTCRuntimeFactory` and the default
+`SessionRTCComponents`. That default resolver currently supports only the
+in-process loopback endpoint; a customer-reachable network resolver is not
+wired into the composition, so the production `--transport webrtc` CLI path
+has the runtime seam and loopback implementation but no live network
+signaling capability yet. This is consistent with
+`s2s-b4-rtc-cli-surface` and `s2s-prereq-session-rtc-runtime-consumer` still
+being open/in-review lanes on the board — **a real signaling implementation
+is not a self-play-only gap, it is the same missing piece the core product's
+own WebRTC transport feature needs.** Building it for room-join should likely
+be the *same* work as whatever `s2s-b4-rtc-cli-surface` eventually needs, not
+a parallel self-play-only implementation — flag this dependency explicitly
+when this phase is ever filed as real work, rather than duplicating a
+signaling server.
 
 Also checked and ruled out as a shortcut: `go-llm-gateway/pkg/transport/rtc/media_source.go`'s
 `ParseMediaSource` (go2rtc://, rtsp://) is a *receive-only* external media
