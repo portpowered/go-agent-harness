@@ -123,7 +123,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 
 func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	cfg := &config.Config{
-		Model: config.ModelConfig{Provider: config.ProviderOpenAI},
+		Model:   config.ModelConfig{Provider: config.ProviderOpenAI},
 		Browser: config.DefaultBrowserConfig(),
 	}
 	for _, id := range config.DefaultToolIDs {
