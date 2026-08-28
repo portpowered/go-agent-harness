@@ -324,12 +324,14 @@ func (s *Service) resolveSelectionBrowserLocked(request TargetSelectionRequest) 
 func (s *Service) refreshTargetsLocked(ctx context.Context, browser BrowserCandidate, options TargetListOptions) ([]Target, *DiscoveryError) {
 	descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 	if failure != nil {
+		failure = s.promoteRetainedBrowserEndpointLossLocked(failure, browser.ID, options.TargetID, "targets")
 		failure = enrichBrowserDisconnected(failure, browser.ID, options.TargetID, "targets")
 		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, options.TargetID, "targets")
 		return nil, failure
 	}
 	targets, failure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 	if failure != nil {
+		failure = s.promoteRetainedBrowserEndpointLossLocked(failure, browser.ID, options.TargetID, "targets")
 		failure = enrichBrowserDisconnected(failure, browser.ID, options.TargetID, "targets")
 		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, options.TargetID, "targets")
 		return nil, failure

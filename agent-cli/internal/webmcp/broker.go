@@ -101,9 +101,11 @@ type brokerSession struct {
 	target  Target
 	context PageContext
 
-	active       bool
-	catalog      map[catalogKey]ToolDescriptor
-	catalogError error
+	active            bool
+	invalidatedCode   ErrorCode
+	invalidatedReason string
+	catalog           map[catalogKey]ToolDescriptor
+	catalogError      error
 
 	// dispatchMu establishes a linearization point between the final ref
 	// check and a page command. Lifecycle/catalog events wait for it before
@@ -306,16 +308,33 @@ func (b *StatefulBroker) ListTargets(ctx context.Context, selector BrowserSelect
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
+	if b == nil {
+		return nil, ErrClosed
+	}
+	if selected := b.selectedForBrowser(selector.BrowserID); selected != nil {
+		if err := b.selectedStateError(selected, "list_targets", "selection_not_connected"); err != nil {
+			return nil, err
+		}
+	}
 	candidate, err := b.candidateFor(ctx, selector.BrowserID)
 	if err != nil {
+		if failure := b.promoteBrowserLoss(b.selectedForBrowser(selector.BrowserID), TargetSelector{BrowserID: selector.BrowserID}, "discover", err); failure != nil {
+			return nil, failure
+		}
 		return nil, err
 	}
 	handle, err := b.handleFor(ctx, candidate)
 	if err != nil {
+		if failure := b.promoteBrowserLoss(b.selectedForBrowser(candidate.ID), TargetSelector{BrowserID: candidate.ID}, "open", err); failure != nil {
+			return nil, failure
+		}
 		return nil, err
 	}
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
+		if failure := b.promoteBrowserLoss(b.selectedForBrowser(candidate.ID), TargetSelector{BrowserID: candidate.ID}, "list_targets", err); failure != nil {
+			return nil, failure
+		}
 		return nil, classified(ErrorStaleSelection, "the selected browser target is no longer current", map[string]any{
 			"browser_id":          string(candidate.ID),
 			"target_id":           "",
@@ -360,30 +379,51 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		b.mu.Unlock()
 		return PageContext{}, ErrClosed
 	}
-	if current := b.selected; current != nil && current.active &&
+	current := b.selected
+	if current != nil && current.active &&
 		current.context.Key.BrowserID == selector.BrowserID && current.context.Key.TargetID == selector.TargetID {
 		handle := current.handle
 		contextValue := clonePageContext(current.context)
 		b.mu.Unlock()
+		if err := b.selectedStateError(current, "lifecycle", "selection_not_connected"); err != nil {
+			return PageContext{}, err
+		}
 		if options.Activate {
 			if err := handle.Activate(ctx, selector.TargetID); err != nil {
+				if failure := b.promoteBrowserLoss(current, selector, "activate", err); failure != nil {
+					return PageContext{}, failure
+				}
 				return PageContext{}, staleSelectionError(selector.BrowserID, selector.TargetID, contextValue.Generation, "activation_failed")
 			}
 		}
 		return contextValue, nil
 	}
 	b.mu.Unlock()
+	if current != nil && current.context.Key.BrowserID == selector.BrowserID {
+		if err := b.selectedStateError(current, "selection", "selection_not_connected"); err != nil {
+			return PageContext{}, err
+		}
+	}
 
 	candidate, err := b.candidateFor(ctx, selector.BrowserID)
 	if err != nil {
+		if failure := b.promoteBrowserLoss(current, selector, "discover", err); failure != nil {
+			return PageContext{}, failure
+		}
 		return PageContext{}, err
 	}
 	handle, err := b.handleFor(ctx, candidate)
 	if err != nil {
+		if failure := b.promoteBrowserLoss(current, selector, "open", err); failure != nil {
+			return PageContext{}, failure
+		}
 		return PageContext{}, err
 	}
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
+		if failure := b.promoteBrowserLoss(current, selector, "list_targets", err); failure != nil {
+			return PageContext{}, failure
+		}
 		return PageContext{}, targetAttachError(selector, "list_targets", err)
 	}
 	target, ok := findTarget(targets, selector.TargetID)
@@ -395,11 +435,17 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	if options.Activate {
 		if err := handle.Activate(ctx, selector.TargetID); err != nil {
+			if failure := b.promoteBrowserLoss(current, selector, "activate", err); failure != nil {
+				return PageContext{}, failure
+			}
 			return PageContext{}, targetAttachError(selector, "activate", err)
 		}
 	}
 	session, err := handle.Attach(ctx, selector.TargetID, b.ownershipValue())
 	if err != nil {
+		if failure := b.promoteBrowserLoss(current, selector, "attach", err); failure != nil {
+			return PageContext{}, failure
+		}
 		return PageContext{}, targetAttachError(selector, "attach", err)
 	}
 	page := session.Context()
@@ -447,6 +493,10 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		_ = old.session.Close()
 	}
 	if err := session.EnableWebMCP(ctx); err != nil {
+		if failure := b.promoteBrowserLoss(newSession, selector, "enable_webmcp", err); failure != nil {
+			_ = session.Close()
+			return PageContext{}, failure
+		}
 		b.invalidateSession(newSession, "enable_failed")
 		_ = session.Close()
 		return PageContext{}, targetAttachError(selector, "enable_webmcp", err)
@@ -454,6 +504,10 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	b.flushSession(newSession)
 	b.syncSessionReadiness(newSession)
 	if err := b.waitForInitialCatalog(ctx, newSession); err != nil {
+		if failure := b.promoteBrowserLoss(newSession, selector, "catalog", err); failure != nil {
+			_ = session.Close()
+			return PageContext{}, failure
+		}
 		b.invalidateSession(newSession, "catalog_wait_canceled")
 		_ = session.Close()
 		if isCatalogEvidenceError(err) {
@@ -469,232 +523,6 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
 	return page, nil
-}
-
-// waitForInitialCatalog gives the browser a bounded opportunity to deliver
-// affirmative page-tool evidence triggered by WebMCP.enable. A timeout is a
-// diagnostic failure: an empty catalog is valid only when the page explicitly
-// proves that its catalog is ready.
-func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *brokerSession) error {
-	if selected == nil {
-		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	b.mu.Lock()
-	if selected.context.CatalogReady {
-		b.mu.Unlock()
-		return nil
-	}
-	signal := selected.catalogSignal
-	loopDone := selected.loopDone
-	b.mu.Unlock()
-	timer := time.NewTimer(initialCatalogWait)
-	defer timer.Stop()
-	select {
-	case <-signal:
-		return nil
-	case <-loopDone:
-		if err := selected.session.Err(); err != nil {
-			var classifiedErr *ClassifiedError
-			if errors.As(err, &classifiedErr) && classifiedErr != nil {
-				switch classifiedErr.Code {
-				case ErrorBrowserDisconnected, ErrorTargetDetached:
-					return err
-				}
-			}
-		}
-		return b.catalogEvidenceError(selected, "session_ended")
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return b.catalogEvidenceError(selected, "deadline_exceeded")
-	}
-}
-
-func (b *StatefulBroker) syncSessionReadiness(selected *brokerSession) {
-	if selected == nil {
-		return
-	}
-	page := selected.session.Context()
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.selected != selected || !selected.active {
-		return
-	}
-	// EnableWebMCP returned successfully, so this is domain support evidence.
-	// It is deliberately recorded independently from page-tool/catalog
-	// readiness, which still requires an affirmative page observation.
-	selected.context.WebMCPDomainSupported = true
-	if page.CatalogReady {
-		b.markCatalogReadyLocked(selected, page.CatalogEvidence)
-	}
-	b.updateReadinessLocked(selected)
-}
-
-func (b *StatefulBroker) updateReadinessLocked(selected *brokerSession) {
-	if selected == nil {
-		return
-	}
-	selected.context.Ready = selected.active && selected.context.Connected &&
-		selected.context.WebMCPDomainSupported && selected.context.CatalogReady
-}
-
-func (b *StatefulBroker) markCatalogReadyLocked(selected *brokerSession, evidence string) {
-	if selected == nil {
-		return
-	}
-	selected.context.WebMCPDomainSupported = true
-	if !selected.context.CatalogReady {
-		selected.context.CatalogReady = true
-		if selected.catalogSignal != nil {
-			close(selected.catalogSignal)
-		}
-	}
-	if selected.context.CatalogEvidence == "" {
-		selected.context.CatalogEvidence = evidence
-	}
-	b.updateReadinessLocked(selected)
-}
-
-func (b *StatefulBroker) catalogEvidenceError(selected *brokerSession, reason string) error {
-	details := map[string]any{
-		"phase":           "catalog",
-		"reason_code":     "page_tools_unverified",
-		"webmcp_domain":   "supported",
-		"page_tools":      "unverified",
-		"catalog":         "unverified",
-		"deadline_ms":     int(initialCatalogWait / time.Millisecond),
-		"evidence_needed": "affirmative page producer/catalog-ready observation",
-		"reason":          reason,
-	}
-	if selected != nil {
-		b.mu.Lock()
-		details["browser_id"] = string(selected.context.Key.BrowserID)
-		details["target_id"] = string(selected.context.Key.TargetID)
-		details["generation"] = selected.context.Generation
-		b.mu.Unlock()
-	}
-	return classified(ErrorBrowserProtocol, "the WebMCP domain is supported, but the selected page did not provide affirmative page-tool catalog evidence before the diagnostic deadline", details, nil)
-}
-
-func isCatalogEvidenceError(err error) bool {
-	var classifiedErr *ClassifiedError
-	if !errors.As(err, &classifiedErr) || classifiedErr == nil || classifiedErr.Code != ErrorBrowserProtocol {
-		return false
-	}
-	return classifiedErr.Details != nil && classifiedErr.Details["reason_code"] == "page_tools_unverified"
-}
-
-// Selected returns the current selection after reconciling any already
-// queued lifecycle/catalog events.
-func (b *StatefulBroker) Selected(ctx context.Context) (PageContext, error) {
-	return b.SelectedWithRefresh(ctx, false)
-}
-
-// SelectedWithRefresh is an optional extension for webmcp_get_context.
-func (b *StatefulBroker) SelectedWithRefresh(ctx context.Context, refresh bool) (PageContext, error) {
-	if err := contextError(ctx); err != nil {
-		return PageContext{}, err
-	}
-	if b == nil {
-		return PageContext{}, ErrClosed
-	}
-	b.flushSelected()
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return PageContext{}, ErrClosed
-	}
-	selected := b.selected
-	b.mu.Unlock()
-	if selected == nil || !selected.active || !selected.context.Connected {
-		return PageContext{}, staleSelectionForSession(selected, "selection_not_connected")
-	}
-	if refresh {
-		if err := selected.session.EnableWebMCP(ctx); err != nil {
-			return PageContext{}, targetAttachError(TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err)
-		}
-		b.flushSession(selected)
-		b.syncSessionReadiness(selected)
-		if err := b.waitForInitialCatalog(ctx, selected); err != nil {
-			if isCatalogEvidenceError(err) {
-				return PageContext{}, err
-			}
-			return PageContext{}, targetAttachError(TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err)
-		}
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.selected != selected || !selected.active || !selected.context.Connected {
-		return PageContext{}, staleSelectionForSession(selected, "selection_changed")
-	}
-	return clonePageContext(selected.context), nil
-}
-
-// ListTools returns the current selected page catalog. Refresh re-enables the
-// semantic catalog stream; the stable broker definitions remain elsewhere.
-func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions) (ToolCatalogSnapshot, error) {
-	if err := contextError(ctx); err != nil {
-		return ToolCatalogSnapshot{}, err
-	}
-	if b == nil {
-		return ToolCatalogSnapshot{}, ErrClosed
-	}
-	b.flushSelected()
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return ToolCatalogSnapshot{}, ErrClosed
-	}
-	selected := b.selected
-	b.mu.Unlock()
-	if selected == nil || !selected.active || !selected.context.Connected {
-		return ToolCatalogSnapshot{}, staleSelectionForSession(selected, "selection_not_connected")
-	}
-	if options.Refresh {
-		if err := selected.session.EnableWebMCP(ctx); err != nil {
-			return ToolCatalogSnapshot{}, targetAttachError(TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err)
-		}
-		b.flushSession(selected)
-		b.syncSessionReadiness(selected)
-		if err := b.waitForInitialCatalog(ctx, selected); err != nil {
-			if isCatalogEvidenceError(err) {
-				return ToolCatalogSnapshot{}, err
-			}
-			return ToolCatalogSnapshot{}, targetAttachError(TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err)
-		}
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.selected != selected || !selected.active || !selected.context.Connected {
-		return ToolCatalogSnapshot{}, staleSelectionForSession(selected, "selection_changed")
-	}
-	if selected.catalogError != nil {
-		return ToolCatalogSnapshot{}, classified(ErrorBrowserProtocol, "the page catalog is invalid", map[string]any{
-			"phase":       "catalog",
-			"protocol":    "webmcp",
-			"reason_code": "invalid_descriptor",
-		}, selected.catalogError)
-	}
-	tools := make([]ToolDescriptor, 0, len(selected.catalog))
-	for _, descriptor := range selected.catalog {
-		if options.NameContains != "" && !strings.Contains(descriptor.Name, options.NameContains) {
-			continue
-		}
-		if options.FrameID != "" && descriptor.FrameID != options.FrameID {
-			continue
-		}
-		tools = append(tools, cloneToolDescriptor(descriptor))
-	}
-	sort.Slice(tools, func(i, j int) bool {
-		if tools[i].FrameID != tools[j].FrameID {
-			return tools[i].FrameID < tools[j].FrameID
-		}
-		return tools[i].Name < tools[j].Name
-	})
-	return ToolCatalogSnapshot{Context: clonePageContext(selected.context), Generation: selected.context.Generation, Tools: tools}, nil
 }
 
 // Invoke admits one validated page call into the selected target's FIFO. The
@@ -842,6 +670,18 @@ func (b *StatefulBroker) candidateFor(ctx context.Context, browserID BrowserID) 
 	// discovery implementation. This fallback does not enumerate or choose a
 	// different browser.
 	return BrowserCandidate{ID: browserID}, nil
+}
+
+func (b *StatefulBroker) selectedForBrowser(browserID BrowserID) *brokerSession {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.selected == nil || b.selected.context.Key.BrowserID != browserID {
+		return nil
+	}
+	return b.selected
 }
 
 func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandidate) (BrowserHandle, error) {
@@ -1241,6 +1081,19 @@ func (b *StatefulBroker) invalidateSessionLocked(selected *brokerSession, reason
 }
 
 func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession, code ErrorCode, reason string) {
+	if selected == nil {
+		return
+	}
+	if code == "" {
+		code = ErrorInvocationOrphaned
+	}
+	if reason == "" {
+		reason = "session_closed"
+	}
+	if selected.invalidatedCode == "" {
+		selected.invalidatedCode = code
+		selected.invalidatedReason = reason
+	}
 	if !selected.active {
 		return
 	}
@@ -1252,9 +1105,6 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	selected.context.CatalogReady = false
 	selected.context.CatalogEvidence = ""
 	selected.context.Ready = false
-	if reason == "" {
-		reason = "session_closed"
-	}
 	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
 }
 
@@ -1264,7 +1114,11 @@ func (b *StatefulBroker) markSessionEnded(selected *brokerSession, reason string
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected == selected && selected.active {
-		b.invalidateSessionLocked(selected, reason)
+		code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
+		if code == ErrorInvocationOrphaned && isBrowserDisconnectedTransportError(selected.session.Err()) {
+			code = ErrorBrowserDisconnected
+		}
+		b.invalidateSessionWithCodeLocked(selected, code, reason)
 	}
 }
 
@@ -1275,6 +1129,10 @@ func (b *StatefulBroker) retireSessionLocked(selected *brokerSession, reason str
 	b.terminalizeSessionInvocationsLocked(selected, ErrorInvocationOrphaned, reason)
 	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)
+	if selected.invalidatedCode == "" {
+		selected.invalidatedCode = ErrorInvocationOrphaned
+		selected.invalidatedReason = reason
+	}
 	selected.active = false
 	selected.context.Connected = false
 	selected.context.CatalogReady = false

@@ -494,6 +494,7 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 	} else if browser, ok := s.browsers[selection.BrowserID]; ok && (s.targetLister != nil || s.endpoints[selection.BrowserID].httpURL != "") {
 		descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 		if failure != nil {
+			failure = s.promoteRetainedBrowserEndpointLossLocked(failure, selection.BrowserID, selection.TargetID, "targets")
 			failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, "targets")
 			selection.statusSet = true
 			selection.connected = failure.Code != CodeBrowserDisconnected
@@ -504,6 +505,7 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 		}
 		targets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 		if normalizeFailure != nil {
+			normalizeFailure = s.promoteRetainedBrowserEndpointLossLocked(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
 			normalizeFailure = enrichBrowserDisconnected(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
 			selection.statusSet = true
 			selection.connected = normalizeFailure.Code != CodeBrowserDisconnected
@@ -533,11 +535,12 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 		browser := s.browsers[selection.BrowserID]
 		capabilities, probeErr := s.targetProbe.Probe(ctx, browser, target)
 		if probeErr != nil {
+			failure := s.promoteRetainedBrowserEndpointLossLocked(classifyTargetListError(probeErr, browser), selection.BrowserID, selection.TargetID, "capability")
+			failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, "capability")
 			selection.statusSet = true
-			selection.connected = !isBrowserDisconnected(probeErr)
+			selection.connected = failure.Code != CodeBrowserDisconnected
 			selection.ready = false
 			s.selection = &selection
-			failure := enrichBrowserDisconnected(classifyTargetListError(probeErr, browser), selection.BrowserID, selection.TargetID, "capability")
 			s.noteBrowserDisconnectedFailureLocked(failure, selection.BrowserID, selection.TargetID, "capability")
 			return selection, failure
 		}

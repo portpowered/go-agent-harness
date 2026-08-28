@@ -338,6 +338,62 @@ func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 	}
 }
 
+func TestStatefulBrokerKeepsBrowserDisconnectClassificationAfterSessionEnds(t *testing.T) {
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
+	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
+		testkit.RuntimeOptions{Clock: clock, IDs: ids},
+		testkit.BrowserConfig{
+			Candidate: candidate,
+			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+			)},
+		},
+	)
+	broker, session, ref := newInvocationBroker(t, runtime, candidate, clock, ids, 30*time.Second)
+	if err := session.Disconnect("browser_exit"); err != nil {
+		t.Fatalf("disconnect session: %v", err)
+	}
+
+	assertDisconnected := func(label string, operation func() error) {
+		t.Helper()
+		err := operation()
+		if err == nil {
+			t.Fatalf("%s succeeded, want browser_disconnected", label)
+		}
+		var classified *webmcp.ClassifiedError
+		if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
+			t.Fatalf("%s error = %v (%T), want browser_disconnected", label, err, err)
+		}
+		if classified.Details["browser_id"] != string(candidate.ID) || classified.Details["target_id"] != "tab-a" || classified.Details["phase"] == "" || classified.Details["reconnect_required"] != true {
+			t.Fatalf("%s details = %#v, want exact disconnected identity", label, classified.Details)
+		}
+	}
+
+	assertDisconnected("selected context", func() error {
+		_, err := broker.Selected(context.Background())
+		return err
+	})
+	assertDisconnected("list tools", func() error {
+		_, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{})
+		return err
+	})
+	assertDisconnected("list targets", func() error {
+		_, err := broker.ListTargets(context.Background(), webmcp.BrowserSelector{BrowserID: candidate.ID})
+		return err
+	})
+	assertDisconnected("select exact target", func() error {
+		_, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"})
+		return err
+	})
+	assertDisconnected("invoke", func() error {
+		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: []byte(`{}`)})
+		return err
+	})
+}
+
 func TestStatefulBrokerCloseOrphansWorkAndIsIdempotent(t *testing.T) {
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()

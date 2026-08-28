@@ -1053,6 +1053,17 @@ func boundedDirectReason(value string) string {
 }
 
 func stalePersistedSelectionError(browserID, targetID, reason string, cause error) error {
+	if phase, disconnected := persistedBrowserLossPhase(reason, cause); disconnected {
+		details := map[string]any{
+			"browser_id":         browserID,
+			"target_id":          targetID,
+			"phase":              phase,
+			"reconnect_required": true,
+		}
+		err := webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected), details)
+		err.Cause = cause
+		return err
+	}
 	details := map[string]any{
 		"browser_id":          browserID,
 		"target_id":           targetID,
@@ -1062,6 +1073,70 @@ func stalePersistedSelectionError(browserID, targetID, reason string, cause erro
 	err := webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the persisted browser target selection is no longer current", details)
 	err.Cause = cause
 	return err
+}
+
+func persistedBrowserLossPhase(reason string, cause error) (string, bool) {
+	if reason == "target_not_found" {
+		return "", false
+	}
+	fallback := "targets"
+	if reason == "browser_not_found" {
+		fallback = "discovery"
+	}
+	return browserLossPhase(cause, fallback)
+}
+
+func browserLossPhase(err error, fallback string) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+	var classified *webmcp.ClassifiedError
+	if errors.As(err, &classified) && classified != nil {
+		switch classified.Code {
+		case webmcp.ErrorBrowserDisconnected, webmcp.ErrorEndpointNotFound, webmcp.ErrorEndpointUnreachable:
+			if phase, ok := safePersistedPhase(classified.Details["phase"]); ok {
+				return phase, true
+			}
+			return fallback, true
+		case webmcp.ErrorStaleSelection:
+			if classified.Details != nil && classified.Details["reason"] == "browser_not_found" {
+				return fallback, true
+			}
+		}
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, nested := range joined.Unwrap() {
+			if phase, found := browserLossPhase(nested, fallback); found {
+				return phase, true
+			}
+		}
+	}
+	if phase, found := browserLossPhase(errors.Unwrap(err), fallback); found {
+		return phase, true
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "connection refused") || strings.Contains(message, "connection reset") || strings.Contains(message, "connection lost") || strings.Contains(message, "browser disconnected") || strings.Contains(message, "endpoint not found") {
+		return fallback, true
+	}
+	return "", false
+}
+
+func safePersistedPhase(value any) (string, bool) {
+	phase, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	phase = strings.TrimSpace(phase)
+	if phase == "" || len(phase) > 32 {
+		return "", false
+	}
+	for _, character := range phase {
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') && character != '_' && character != '-' && character != '.' {
+			return "", false
+		}
+	}
+	return phase, true
 }
 
 func directTargetPolicyError(target webmcp.Target, browser config.BrowserConfig) error {

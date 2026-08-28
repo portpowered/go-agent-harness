@@ -84,12 +84,14 @@ func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandida
 
 	descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 	if failure != nil {
+		failure = s.promoteRetainedBrowserEndpointLossLocked(failure, browser.ID, listOptions.TargetID, "targets")
 		failure = enrichBrowserDisconnected(failure, browser.ID, listOptions.TargetID, "targets")
 		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, listOptions.TargetID, "targets")
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, failure
 	}
 	allTargets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 	if normalizeFailure != nil {
+		normalizeFailure = s.promoteRetainedBrowserEndpointLossLocked(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		normalizeFailure = enrichBrowserDisconnected(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		s.noteBrowserDisconnectedFailureLocked(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, normalizeFailure

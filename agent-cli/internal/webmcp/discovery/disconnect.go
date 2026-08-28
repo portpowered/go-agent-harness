@@ -141,6 +141,24 @@ func enrichBrowserDisconnected(failure *DiscoveryError, fallbackBrowserID, fallb
 	return newBrowserDisconnectedFromError(failure, fallbackBrowserID, fallbackTargetID, fallbackPhase)
 }
 
+// promoteRetainedBrowserEndpointLossLocked distinguishes a browser that was
+// previously selected from an endpoint that was never known to be alive. A
+// refused/missing endpoint is still an ordinary discovery failure on an
+// initial attempt, but becomes browser_disconnected when an exact retained
+// selection loses its connection. The distinction prevents a later command
+// from looking like it silently selected a different browser or tab.
+func (s *Service) promoteRetainedBrowserEndpointLossLocked(failure *DiscoveryError, browserID, targetID, phase string) *DiscoveryError {
+	if failure == nil || s == nil || s.selection == nil || s.selection.BrowserID != browserID {
+		return failure
+	}
+	switch failure.Code {
+	case CodeEndpointNotFound, CodeEndpointUnreachable:
+		return newBrowserDisconnectedFromError(failure, browserID, targetID, phase)
+	default:
+		return failure
+	}
+}
+
 func classifySelectionOperationError(err error, browserID, targetID, phase, reason string) *DiscoveryError {
 	if isBrowserDisconnected(err) {
 		return newBrowserDisconnectedFromError(err, browserID, targetID, phase)
