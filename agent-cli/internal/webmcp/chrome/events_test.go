@@ -403,3 +403,47 @@ func TestBrowserDisconnectPublishesTerminalEventAndClosesLifecycleOnce(t *testin
 		t.Fatalf("disconnect repeated cleanup count = %d, want one", *cancelCount)
 	}
 }
+
+func TestTargetSessionEventOverflowPublishesExplicitFailure(t *testing.T) {
+	_, session, _, _ := newLifecycleTestSession(t)
+	// The helper uses a larger physical channel so this test can exercise the
+	// ordinary-capacity guard without depending on a scheduler race. Production
+	// construction reserves the same terminal slot for the configured buffer.
+	session.eventBuffer = 1
+
+	session.publish(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded})
+	session.publish(webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, InvocationID: "overflowed"})
+
+	first := nextBrowserEvent(t, session.Events())
+	if first.Type != webmcp.EventToolsAdded {
+		t.Fatalf("first buffered event = %+v, want original event", first)
+	}
+	failure := nextBrowserEvent(t, session.Events())
+	if failure.Type != webmcp.EventSessionClosed || failure.Reason != webmcp.BrowserEventBufferFullReason || failure.ErrorCode != string(webmcp.ErrorBrowserProtocol) {
+		t.Fatalf("overflow event = %+v, want explicit event-buffer failure", failure)
+	}
+	if failure.Sequence <= first.Sequence {
+		t.Fatalf("overflow sequence = %d after first sequence %d, want increasing", failure.Sequence, first.Sequence)
+	}
+	if !errors.Is(session.Err(), webmcp.ErrEventBufferFull) {
+		t.Fatalf("session error = %v, want ErrEventBufferFull", session.Err())
+	}
+	select {
+	case <-session.Done():
+	case <-time.After(time.Second):
+		t.Fatal("overflowed session did not close")
+	}
+	select {
+	case _, ok := <-session.Events():
+		if ok {
+			t.Fatal("overflowed session emitted an event after its failure")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("overflowed session event channel did not close")
+	}
+	select {
+	case <-session.routerDone:
+	case <-time.After(time.Second):
+		t.Fatal("overflowed protocol router did not stop")
+	}
+}

@@ -26,6 +26,7 @@ const (
 	webmcpDirectWatchStatusEnded    = "ended"
 	webmcpDirectWatchStatusCanceled = "canceled"
 	webmcpDirectWatchStatusOnce     = "one_event"
+	webmcpDirectWatchStatusFailed   = "failed"
 )
 
 // WebMCPDirectBrowser is the safe browser listing shape. Endpoint addresses
@@ -400,16 +401,19 @@ func (c *WebMCPOperationsCommand) toolsCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if values.watch {
 				return c.executeDirect(cmd, values, "watch", webmcp.ErrorStaleSelection, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
-					if _, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser); err != nil {
-						return nil, err
-					}
 					watchCtx := ctx
 					if values.timeout > 0 {
 						var cancel context.CancelFunc
 						watchCtx, cancel = context.WithTimeout(ctx, values.timeout)
 						defer cancel()
 					}
-					return runDirectWatch(watchCtx, broker, values.once)
+					// Subscribe before selection so tools --watch observes the same
+					// selected and initial catalog events as webmcp watch.
+					stream := broker.Watch(watchCtx)
+					if _, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser); err != nil {
+						return nil, err
+					}
+					return runDirectWatchStream(watchCtx, stream, values.once)
 				})
 			}
 			return c.executeDirect(cmd, values, "tools", webmcp.ErrorStaleSelection, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {

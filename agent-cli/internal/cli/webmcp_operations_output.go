@@ -282,15 +282,27 @@ func runDirectWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent,
 	}
 	data := WebMCPDirectWatchData{Status: webmcpDirectWatchStatusEnded, Events: []WebMCPDirectEvent{}}
 	for {
+		if ctx.Err() != nil {
+			data.Status = webmcpDirectWatchStatusCanceled
+			return data, nil
+		}
 		select {
 		case <-ctx.Done():
 			data.Status = webmcpDirectWatchStatusCanceled
 			return data, nil
 		case event, ok := <-stream:
 			if !ok {
+				if ctx.Err() != nil {
+					data.Status = webmcpDirectWatchStatusCanceled
+				}
 				return data, nil
 			}
 			data.Events = append(data.Events, directEventFrom(event))
+			if event.Type == webmcp.BrokerEventSessionClosed &&
+				(event.Reason == webmcp.BrokerWatchBufferFullReason || event.Reason == webmcp.BrowserEventBufferFullReason) {
+				data.Status = webmcpDirectWatchStatusFailed
+				return data, nil
+			}
 			if once {
 				data.Status = webmcpDirectWatchStatusOnce
 				return data, nil

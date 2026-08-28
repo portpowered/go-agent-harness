@@ -82,7 +82,7 @@ type StatefulBroker struct {
 	earlyTerminalOrder   []InvocationID
 
 	eventSequence uint64
-	watchers      map[chan BrokerEvent]struct{}
+	watchers      map[*brokerWatcher]struct{}
 	closed        bool
 	closedCh      chan struct{}
 	closeDone     chan struct{}
@@ -227,7 +227,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		browserInvocations:  make(map[InvocationID]*brokerInvocation),
 		browserTerminalSeen: make(map[InvocationID]struct{}),
 		earlyTerminals:      make(map[InvocationID]terminalObservation),
-		watchers:            make(map[chan BrokerEvent]struct{}),
+		watchers:            make(map[*brokerWatcher]struct{}),
 		closedCh:            make(chan struct{}),
 		closeDone:           make(chan struct{}),
 	}
@@ -550,41 +550,6 @@ func (b *StatefulBroker) Cancel(ctx context.Context, request CancelRequest) erro
 	return b.cancelInvocation(ctx, request)
 }
 
-// Watch subscribes to bounded broker lifecycle observations. Dropped
-// observations never affect catalog correctness; the stateful API remains
-// authoritative for snapshots and invocation checks.
-func (b *StatefulBroker) Watch(ctx context.Context) <-chan BrokerEvent {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	out := make(chan BrokerEvent, defaultBrokerWatchBuffer)
-	if b == nil {
-		close(out)
-		return out
-	}
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		close(out)
-		return out
-	}
-	if cap(out) != b.watchBuffer {
-		out = make(chan BrokerEvent, b.watchBuffer)
-	}
-	b.watchers[out] = struct{}{}
-	closedCh := b.closedCh
-	b.mu.Unlock()
-	go func() {
-		select {
-		case <-ctx.Done():
-			b.removeWatcher(out)
-		case <-closedCh:
-			b.removeWatcher(out)
-		}
-	}()
-	return out
-}
-
 // Close retires every session-local reference and closes the broker-owned
 // handles. It is idempotent; a later call returns the first aggregate error.
 func (b *StatefulBroker) Close() error {
@@ -621,7 +586,7 @@ func (b *StatefulBroker) Close() error {
 	}
 	for watcher := range b.watchers {
 		delete(b.watchers, watcher)
-		close(watcher)
+		close(watcher.events)
 	}
 	b.mu.Unlock()
 
@@ -755,65 +720,6 @@ func (b *StatefulBroker) ownershipValue() TargetOwnership {
 	return b.ownership
 }
 
-func (b *StatefulBroker) flushSelected() {
-	b.mu.Lock()
-	selected := b.selected
-	b.mu.Unlock()
-	if selected != nil {
-		b.flushSession(selected)
-	}
-}
-
-func (b *StatefulBroker) flushSession(selected *brokerSession) {
-	if selected == nil {
-		return
-	}
-	ack := make(chan struct{})
-	select {
-	case selected.flush <- ack:
-		<-ack
-	case <-selected.loopDone:
-	}
-}
-
-func (b *StatefulBroker) runSession(selected *brokerSession) {
-	defer b.wg.Done()
-	defer close(selected.loopDone)
-	events := selected.session.Events()
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				b.drainSessionEvents(selected, events)
-				b.markSessionEnded(selected, "events_closed")
-				return
-			}
-			b.applyBrowserEvent(selected, event)
-		case <-selected.session.Done():
-			b.drainSessionEvents(selected, events)
-			b.markSessionEnded(selected, "session_done")
-			return
-		case ack := <-selected.flush:
-			b.drainSessionEvents(selected, events)
-			close(ack)
-		}
-	}
-}
-
-func (b *StatefulBroker) drainSessionEvents(selected *brokerSession, events <-chan BrowserEvent) {
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return
-			}
-			b.applyBrowserEvent(selected, event)
-		default:
-			return
-		}
-	}
-}
-
 func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event BrowserEvent) {
 	selected.dispatchMu.Lock()
 	defer selected.dispatchMu.Unlock()
@@ -851,7 +757,11 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	case EventBrowserDisconnected:
 		b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, event.Reason)
 	case EventSessionClosed:
-		b.invalidateSessionLocked(selected, event.Reason)
+		if event.Reason == BrowserEventBufferFullReason {
+			b.invalidateSessionWithCodeLocked(selected, ErrorBrowserProtocol, event.Reason)
+		} else {
+			b.invalidateSessionLocked(selected, event.Reason)
+		}
 	}
 }
 
@@ -1175,6 +1085,7 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	selected.context.CatalogEvidence = ""
 	selected.context.Ready = false
 	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
+	b.emitLocked(BrokerEvent{Type: BrokerEventSessionClosed, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
 }
 
 func (b *StatefulBroker) markSessionEnded(selected *brokerSession, reason string) {
@@ -1209,6 +1120,7 @@ func (b *StatefulBroker) retireSessionLocked(selected *brokerSession, reason str
 	selected.context.Ready = false
 	if reason != "" {
 		b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
+		b.emitLocked(BrokerEvent{Type: BrokerEventSessionClosed, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
 	}
 }
 
@@ -1303,32 +1215,4 @@ func classified(code ErrorCode, message string, details map[string]any, cause er
 	err := NewClassifiedError(code, message, details)
 	err.Cause = cause
 	return err
-}
-
-func (b *StatefulBroker) emitLocked(event BrokerEvent) {
-	if b.closed {
-		return
-	}
-	b.eventSequence++
-	event.Version = BrowserEventsVersion
-	event.Sequence = b.eventSequence
-	if event.At.IsZero() {
-		event.At = b.clock.Now()
-	}
-	for watcher := range b.watchers {
-		select {
-		case watcher <- event:
-		default:
-		}
-	}
-}
-
-func (b *StatefulBroker) removeWatcher(watcher chan BrokerEvent) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if _, ok := b.watchers[watcher]; !ok {
-		return
-	}
-	delete(b.watchers, watcher)
-	close(watcher)
 }

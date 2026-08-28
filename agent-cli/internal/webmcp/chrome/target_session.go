@@ -35,11 +35,14 @@ type targetSession struct {
 
 	protocolEvents  chan any
 	events          chan webmcp.BrowserEvent
+	eventBuffer     int
+	overflowSignal  chan struct{}
 	done            chan struct{}
 	stopRouter      chan struct{}
 	routerDone      chan struct{}
 	eventsMu        sync.Mutex
 	lifecycleClosed bool
+	overflowed      bool
 	finishMu        sync.Mutex
 	finished        bool
 	finishDone      chan struct{}
@@ -73,8 +76,10 @@ func newTargetSession(
 			Ready:      false,
 			SelectedAt: time.Now(),
 		},
-		protocolEvents: make(chan any, eventBuffer),
-		events:         make(chan webmcp.BrowserEvent, eventBuffer),
+		protocolEvents: make(chan any, eventBuffer+1),
+		events:         make(chan webmcp.BrowserEvent, eventBuffer+1),
+		eventBuffer:    eventBuffer,
+		overflowSignal: make(chan struct{}, 1),
 		done:           make(chan struct{}),
 		stopRouter:     make(chan struct{}),
 		routerDone:     make(chan struct{}),
@@ -108,7 +113,7 @@ func (s *targetSession) enqueueProtocolEvent(event any) {
 		return
 	case s.protocolEvents <- event:
 	default:
-		s.recordError(webmcp.ErrEventBufferFull)
+		s.signalEventBufferOverflow()
 	}
 }
 
@@ -133,6 +138,9 @@ func (s *targetSession) routeProtocolEvents() {
 		select {
 		case <-s.stopRouter:
 			return
+		case <-s.overflowSignal:
+			s.finishFromEventBufferOverflow()
+			return
 		case event := <-s.protocolEvents:
 			if converted, ok := s.convertProtocolEvent(event); ok {
 				if converted.Type == webmcp.EventTargetDetached {
@@ -147,13 +155,16 @@ func (s *targetSession) routeProtocolEvents() {
 
 func (s *targetSession) publish(event webmcp.BrowserEvent) {
 	s.eventsMu.Lock()
-	defer s.eventsMu.Unlock()
-	s.publishLocked(event, false)
+	overflowed := s.publishLocked(event, false)
+	s.eventsMu.Unlock()
+	if overflowed {
+		s.finishFromEventBufferOverflow()
+	}
 }
 
-func (s *targetSession) publishLocked(event webmcp.BrowserEvent, terminal bool) {
+func (s *targetSession) publishLocked(event webmcp.BrowserEvent, terminal bool) bool {
 	if s.lifecycleClosed {
-		return
+		return false
 	}
 	s.mu.Lock()
 	if event.Version == "" {
@@ -176,25 +187,126 @@ func (s *targetSession) publishLocked(event webmcp.BrowserEvent, terminal bool) 
 	event.Sequence = s.sequence
 	s.mu.Unlock()
 
+	// Keep one slot available for an explicit bounded failure event. A
+	// producer that outruns its consumer terminates this session instead of
+	// silently losing a target-observable catalog or invocation event.
+	if !terminal && len(s.events) >= s.eventBuffer {
+		s.queueEventBufferFailureLocked(event)
+		return true
+	}
+
 	select {
 	case s.events <- cloneEvent(event):
+		return false
 	default:
 		if terminal {
-			// Preserve the terminal lifecycle signal without blocking the
-			// protocol reader. A full bounded queue may discard its oldest
-			// observation, but it must not hide detach/disconnect semantics.
-			select {
-			case <-s.events:
-			default:
-			}
-			select {
-			case s.events <- cloneEvent(event):
-			default:
-			}
-			return
+			s.queueEventBufferFailureLocked(event)
+			return true
 		}
-		s.recordError(webmcp.ErrEventBufferFull)
+		s.queueEventBufferFailureLocked(event)
+		return true
 	}
+}
+
+func (s *targetSession) signalEventBufferOverflow() {
+	select {
+	case s.overflowSignal <- struct{}{}:
+	default:
+	}
+}
+
+func (s *targetSession) queueEventBufferFailureLocked(source webmcp.BrowserEvent) {
+	if s.overflowed {
+		return
+	}
+	s.overflowed = true
+	s.recordError(eventBufferFullError())
+	failure := webmcp.BrowserEvent{
+		Type:       webmcp.EventSessionClosed,
+		Version:    webmcp.BrowserEventsVersion,
+		At:         time.Now(),
+		BrowserID:  source.BrowserID,
+		TargetID:   source.TargetID,
+		Generation: source.Generation,
+		ErrorCode:  string(webmcp.ErrorBrowserProtocol),
+		Reason:     webmcp.BrowserEventBufferFullReason,
+	}
+	if failure.BrowserID == "" || failure.TargetID == "" || failure.Generation == 0 {
+		s.mu.Lock()
+		if failure.BrowserID == "" {
+			failure.BrowserID = s.page.Key.BrowserID
+		}
+		if failure.TargetID == "" {
+			failure.TargetID = s.page.Key.TargetID
+		}
+		if failure.Generation == 0 {
+			failure.Generation = s.page.Generation
+		}
+		s.mu.Unlock()
+	}
+	s.sequence++
+	failure.Sequence = s.sequence
+	select {
+	case s.events <- failure:
+	default:
+		// The channel reserves one slot for this failure. Keep the fallback
+		// explicit if a future producer bypasses the ordinary-capacity guard.
+		select {
+		case <-s.events:
+		default:
+		}
+		select {
+		case s.events <- failure:
+		default:
+		}
+	}
+}
+
+func eventBufferFullError() error {
+	err := webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the browser event stream overflowed", map[string]any{
+		"phase":       "events",
+		"reason_code": webmcp.BrowserEventBufferFullReason,
+	})
+	err.Cause = webmcp.ErrEventBufferFull
+	return err
+}
+
+// finishFromEventBufferOverflow closes a session after its bounded event
+// stream has reported loss. The failure event is already queued (or is queued
+// here for protocol-queue overflow), so callers can distinguish this outcome
+// from an ordinary clean close while still receiving the events that fit.
+func (s *targetSession) finishFromEventBufferOverflow() {
+	if !s.beginFinish(false) {
+		return
+	}
+
+	s.mu.Lock()
+	s.closed = true
+	s.page.Connected = false
+	if s.err == nil {
+		s.err = eventBufferFullError()
+	}
+	s.mu.Unlock()
+
+	// This method runs on the protocol router after it receives the overflow
+	// signal, or immediately after publish returns on that same path. Closing
+	// stopRouter is therefore safe without waiting for routerDone here.
+	s.stopOnce.Do(func() { close(s.stopRouter) })
+	cleanupErr := s.cleanupTarget()
+	s.mu.Lock()
+	s.closeErr = cleanupErr
+	s.mu.Unlock()
+
+	s.eventsMu.Lock()
+	if !s.overflowed {
+		s.queueEventBufferFailureLocked(webmcp.BrowserEvent{
+			Type: webmcp.EventSessionClosed,
+		})
+	}
+	s.eventsMu.Unlock()
+	s.closeLifecycle(webmcp.BrowserEvent{})
+	s.handle.unregister(s)
+	s.completeFinish()
 }
 
 func (s *targetSession) recordError(err error) {
