@@ -20,21 +20,21 @@ var (
 	ErrCancellationNotAcknowledged = errors.New("webmcp testkit: cancellation not acknowledged")
 )
 
-// OperationKind identifies an observable fake-runtime operation.
-type OperationKind string
+// OperationKind identifies an observable fake-runtime operation. It aliases
+// the fixture operation vocabulary so shared operation names such as
+// enable_webmcp and close_target retain one package-wide type.
+type OperationKind = OperationType
 
 const (
-	OperationOpen         OperationKind = "open_browser"
-	OperationListTargets  OperationKind = "list_targets"
-	OperationActivate     OperationKind = "activate_target"
-	OperationAttach       OperationKind = "attach_target"
-	OperationEnableWebMCP OperationKind = "enable_webmcp"
-	OperationInvoke       OperationKind = "invoke_tool"
-	OperationCancel       OperationKind = "cancel_invocation"
-	OperationDetach       OperationKind = "detach_target"
-	OperationCloseTarget  OperationKind = "close_target"
-	OperationCloseHandle  OperationKind = "close_browser"
-	OperationDisconnect   OperationKind = "disconnect_browser"
+	OperationOpen        OperationKind = "open_browser"
+	OperationListTargets OperationKind = "list_targets"
+	OperationActivate    OperationKind = "activate_target"
+	OperationAttach      OperationKind = "attach_target"
+	OperationInvoke      OperationKind = "invoke_tool"
+	OperationCancel      OperationKind = "cancel_invocation"
+	OperationDetach      OperationKind = "detach_target"
+	OperationCloseHandle OperationKind = "close_browser"
+	OperationDisconnect  OperationKind = "disconnect_browser"
 )
 
 // Operation is a race-safe snapshot of one fake-runtime command. Input and
@@ -94,7 +94,9 @@ type TargetConfig struct {
 func NewTargetConfig(target webmcp.Target, options ...ScriptedTargetSessionOption) TargetConfig {
 	resolved := ScriptedTargetSessionOptions{}
 	for _, option := range options {
-		option(&resolved)
+		if option != nil {
+			option.applySession(&resolved)
+		}
 	}
 	return TargetConfig{Target: target, Session: resolved}
 }
@@ -116,71 +118,65 @@ type ScriptedTargetSessionOptions struct {
 	Clock                    webmcp.Clock
 }
 
-type ScriptedTargetSessionOption func(*ScriptedTargetSessionOptions)
-
 func WithEventBuffer(size int) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.EventBuffer = size }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.EventBuffer = size })
 }
 
 func WithContext(page webmcp.PageContext) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.Context = page }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.Context = page })
 }
 
 func WithEnableEvents(events ...webmcp.BrowserEvent) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.EnableEvents = append([]webmcp.BrowserEvent(nil), events...)
-	}
+	})
 }
 
 func WithInitialCatalog(tools ...webmcp.ToolDescriptor) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.InitialCatalog = append([]webmcp.ToolDescriptor(nil), tools...)
-	}
+	})
 }
 
 func WithAutoResponse(output json.RawMessage) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.AutoRespond = true
 		options.AutoResponseOutput = cloneBytes(output)
-	}
+	})
 }
 
 func WithAutoResponseStatus(status string, output json.RawMessage) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.AutoRespond = true
 		options.AutoResponseStatus = status
 		options.AutoResponseOutput = cloneBytes(output)
-	}
+	})
 }
 
 func WithEnableError(err error) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.EnableError = err }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.EnableError = err })
 }
 
 func WithInvokeError(err error) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.InvokeError = err }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.InvokeError = err })
 }
 
 func WithCancelError(err error) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.CancelError = err }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.CancelError = err })
 }
 
 func WithCancellationAcknowledgement(acknowledged bool) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.AcknowledgeCancellation = boolPointer(acknowledged)
-	}
+	})
 }
 
 func WithCancellationResponse(enabled bool) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.EmitCancellationResponse = boolPointer(enabled) }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.EmitCancellationResponse = boolPointer(enabled) })
 }
 
 func WithIDs(ids webmcp.IDSource) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.IDs = ids }
-}
-
-func WithClock(clock webmcp.Clock) ScriptedTargetSessionOption {
-	return func(options *ScriptedTargetSessionOptions) { options.Clock = clock }
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.IDs = ids })
 }
 
 type ScriptedBrowserRuntime struct {

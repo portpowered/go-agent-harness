@@ -309,11 +309,7 @@ func liveScenarioInputs(scenario probe.Scenario) (prompt, audioPath string, err 
 }
 
 func loadFleetScenario(entry fleet.Entry) (probe.Scenario, error) {
-	data, err := os.ReadFile(entry.ScenarioPath)
-	if err != nil {
-		return probe.Scenario{}, fmt.Errorf("read scenario %q: %w", entry.ScenarioPath, err)
-	}
-	scenario, err := loadProbeScenario(data)
+	scenario, err := loadProbeScenarioFile(entry.ScenarioPath)
 	if err != nil {
 		return probe.Scenario{}, fmt.Errorf("load scenario %q: %w", entry.ScenarioPath, err)
 	}

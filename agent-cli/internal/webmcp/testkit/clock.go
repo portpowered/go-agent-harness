@@ -16,25 +16,43 @@ type FakeClock struct {
 	timers map[*FakeTimer]struct{}
 }
 
-func NewFakeClock(now time.Time) *FakeClock {
-	if now.IsZero() {
-		now = time.Unix(0, 0).UTC()
-	}
+// NewFakeClock accepts either a wall-clock timestamp for browser runtime
+// timers or a millisecond integer for recorder/fixture timestamps. The
+// flexible input keeps both deterministic seams on one clock implementation.
+func NewFakeClock(start any) *FakeClock {
+	now := fakeClockStart(start)
 	return &FakeClock{now: now, timers: make(map[*FakeTimer]struct{})}
 }
 
 func (c *FakeClock) Now() time.Time {
+	if c == nil {
+		return time.Unix(0, 0).UTC()
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.now
 }
 
+// MonotonicMillis adapts the clock to the semantic recorder clock interface.
+func (c *FakeClock) MonotonicMillis() uint64 {
+	if c == nil {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return fakeClockMillis(c.now)
+}
+
 // Advance moves the clock forward. Negative durations are ignored because a
 // logical clock never moves backwards.
-func (c *FakeClock) Advance(delta time.Duration) time.Time {
+func (c *FakeClock) Advance(delta any) time.Time {
+	if c == nil {
+		return time.Unix(0, 0).UTC()
+	}
+	duration := fakeClockDelta(delta)
 	c.mu.Lock()
-	if delta > 0 {
-		c.now = c.now.Add(delta)
+	if duration > 0 {
+		c.now = c.now.Add(duration)
 	}
 	c.fireDueLocked()
 	now := c.now
@@ -55,9 +73,19 @@ func (c *FakeClock) AdvanceTo(target time.Time) time.Time {
 	return now
 }
 
-// Set is an explicit alias for advancing to a timestamp. It never moves the
-// logical clock backward.
-func (c *FakeClock) Set(target time.Time) time.Time { return c.AdvanceTo(target) }
+// Set moves the clock to an exact timestamp. Unlike AdvanceTo, it may move
+// backward so recorder tests can exercise monotonic-clock rejection.
+func (c *FakeClock) Set(value any) time.Time {
+	if c == nil {
+		return time.Unix(0, 0).UTC()
+	}
+	c.mu.Lock()
+	c.now = fakeClockStart(value)
+	c.fireDueLocked()
+	now := c.now
+	c.mu.Unlock()
+	return now
+}
 
 // NewTimer implements webmcp.TimerFactory. The returned timer has a buffered
 // channel and is driven only by Advance/AdvanceTo.
@@ -152,4 +180,79 @@ var (
 	_ webmcp.Clock        = (*FakeClock)(nil)
 	_ webmcp.TimerFactory = (*FakeClock)(nil)
 	_ webmcp.Timer        = (*FakeTimer)(nil)
+	_ Clock               = (*FakeClock)(nil)
 )
+
+func fakeClockStart(value any) time.Time {
+	switch typed := value.(type) {
+	case time.Time:
+		if !typed.IsZero() {
+			return typed
+		}
+	case uint64:
+		return time.Unix(0, millisecondsToNanos(typed)).UTC()
+	case uint:
+		return time.Unix(0, millisecondsToNanos(uint64(typed))).UTC()
+	case uint32:
+		return time.Unix(0, millisecondsToNanos(uint64(typed))).UTC()
+	case int:
+		if typed > 0 {
+			return time.Unix(0, millisecondsToNanos(uint64(typed))).UTC()
+		}
+	case int64:
+		if typed > 0 {
+			return time.Unix(0, typed*int64(time.Millisecond)).UTC()
+		}
+	case int32:
+		if typed > 0 {
+			return time.Unix(0, int64(typed)*int64(time.Millisecond)).UTC()
+		}
+	}
+	return time.Unix(0, 0).UTC()
+}
+
+func fakeClockDelta(value any) time.Duration {
+	switch typed := value.(type) {
+	case time.Duration:
+		return typed
+	case uint64:
+		return time.Duration(millisecondsToNanos(typed))
+	case uint:
+		return time.Duration(millisecondsToNanos(uint64(typed)))
+	case uint32:
+		return time.Duration(millisecondsToNanos(uint64(typed)))
+	case int:
+		if typed > 0 {
+			return time.Duration(typed) * time.Millisecond
+		}
+	case int64:
+		if typed > 0 {
+			return time.Duration(typed) * time.Millisecond
+		}
+	case int32:
+		if typed > 0 {
+			return time.Duration(typed) * time.Millisecond
+		}
+	}
+	return 0
+}
+
+func millisecondsToNanos(value uint64) int64 {
+	const maxInt64 = uint64(^uint64(0) >> 1)
+	const nanosPerMillisecond = uint64(time.Millisecond)
+	if value > maxInt64/nanosPerMillisecond {
+		return int64(maxInt64)
+	}
+	return int64(value * nanosPerMillisecond)
+}
+
+func fakeClockMillis(now time.Time) uint64 {
+	seconds := now.Unix()
+	if seconds <= 0 {
+		if seconds == 0 && now.Nanosecond() > 0 {
+			return uint64(now.Nanosecond()) / uint64(time.Millisecond)
+		}
+		return 0
+	}
+	return uint64(seconds)*1000 + uint64(now.Nanosecond())/uint64(time.Millisecond)
+}

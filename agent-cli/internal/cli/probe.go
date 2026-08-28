@@ -346,8 +346,8 @@ func buildProbePlan(positional []string, flags []string, fixtures map[string]str
 // resolveProbeSelection resolves one selection into zero or more scenarios,
 // preferring on-disk scenario files over the registered scenario set.
 func resolveProbeSelection(selection string) ([]probe.Scenario, error) {
-	if data, readErr := os.ReadFile(selection); readErr == nil {
-		scenario, loadErr := loadProbeScenario(data)
+	if _, statErr := os.Stat(selection); statErr == nil {
+		scenario, loadErr := loadProbeScenarioFile(selection)
 		if loadErr != nil {
 			return nil, fmt.Errorf("load probe scenario %q: %w", selection, loadErr)
 		}
