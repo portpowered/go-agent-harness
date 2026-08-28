@@ -1162,6 +1162,10 @@ func parseScenarioV2Expectation(raw json.RawMessage, index int) (ScenarioV2Expec
 			return ScenarioV2Expectation{}, newScenarioV2Error(location+".equals", "must not be negative")
 		}
 		expectation.HasEquals = true
+		if expectation.Type == ScenarioV2ExpectationCatalogGenerationEquals {
+			expectation.Generation = expectation.Equals
+			expectation.HasGeneration = true
+		}
 	}
 	if err := validateScenarioV2ExpectationRequiredFields(expectation, location); err != nil {
 		return ScenarioV2Expectation{}, err
