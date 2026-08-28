@@ -55,12 +55,6 @@ type terminalInvocation struct {
 	result     InvokeResult
 }
 
-type targetCancellation struct {
-	session TargetSession
-	id      InvocationID
-	done    chan struct{}
-}
-
 // terminalObservation is deliberately smaller than BrowserEvent. In
 // particular, an early response whose output is too large is represented by
 // its byte count rather than retained in the broker buffer.
@@ -284,7 +278,7 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	} else {
 		removeQueuedInvocationLocked(invocation.selected, invocation)
 	}
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	wait := b.cancellationWaitLocked(invocation, action)
 	phase := "queue"
 	if invocation.invocation.State == InvocationDispatching {
@@ -310,36 +304,6 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	}
 	b.finishInvocationLocked(invocation, result)
 	b.mu.Unlock()
-}
-
-func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation) *targetCancellation {
-	if invocation == nil || invocation.cancelSent || !invocation.invocation.CancelRequested || invocation.browserID == "" {
-		return nil
-	}
-	invocation.cancelSent = true
-	invocation.cancelDone = make(chan struct{})
-	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, done: invocation.cancelDone}
-}
-
-func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, action *targetCancellation) <-chan struct{} {
-	if action != nil || invocation == nil || !invocation.cancelSent {
-		return nil
-	}
-	return invocation.cancelDone
-}
-
-func performTargetCancellation(action *targetCancellation) {
-	if action == nil {
-		return
-	}
-	defer close(action.done)
-	if action.session == nil || action.id == "" {
-		return
-	}
-	// Cancellation is best effort after the broker has claimed the request.
-	// A target that has already detached or replied is still
-	// reconciled by the broker's bounded browser-terminal cache.
-	_ = action.session.CancelWebMCP(context.Background(), action.id)
 }
 
 // runInvocationQueue owns one target-local FIFO. It intentionally waits for
@@ -390,7 +354,7 @@ func (b *StatefulBroker) dispatchQueuedInvocation(invocation *brokerInvocation) 
 	selected.dispatchMu.Lock()
 	b.dispatchQueuedInvocationWithLock(invocation)
 	b.mu.Lock()
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	b.mu.Unlock()
 	selected.dispatchMu.Unlock()
 	performTargetCancellation(action)
@@ -617,7 +581,7 @@ func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
 	}
 	invocation.invocation.CancelRequested = true
 	invocation.cancelPending = true
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(invocation.invocation.ID),
@@ -681,7 +645,7 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 	}
 	invocation.invocation.CancelRequested = true
 	invocation.cancelPending = true
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, ctx)
 	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(request.InvocationID),
@@ -1254,6 +1218,51 @@ func cloneDetails(details map[string]any) map[string]any {
 		}
 	}
 	return cloned
+}
+
+func classifyOperation(descriptor ToolDescriptor) OperationClass {
+	if descriptor.Annotations.ReadOnly == nil {
+		return OperationUnknown
+	}
+	if *descriptor.Annotations.ReadOnly {
+		return OperationReadOnly
+	}
+	return OperationMutating
+}
+
+func lifecycleInvocationErrorCode(reason string, fallback ErrorCode) ErrorCode {
+	switch strings.ToLower(reason) {
+	case "disconnect", "disconnected", "browser_disconnected":
+		return ErrorBrowserDisconnected
+	case "detach", "detached", "target_detached":
+		return ErrorTargetDetached
+	default:
+		return fallback
+	}
+}
+
+func errorCodeFor(err error, fallback ErrorCode) ErrorCode {
+	var classifiedError *ClassifiedError
+	if errors.As(err, &classifiedError) && classifiedError != nil && IsKnownErrorCode(classifiedError.Code) {
+		return classifiedError.Code
+	}
+	return fallback
+}
+
+func safePageErrorCode(code string) string {
+	if code == "" {
+		return ""
+	}
+	if len(code) > 64 {
+		return code[:64]
+	}
+	for _, character := range code {
+		if (character < 'A' || character > 'Z') && (character < 'a' || character > 'z') &&
+			(character < '0' || character > '9') && character != '_' && character != '-' && character != '.' {
+			return "unknown"
+		}
+	}
+	return code
 }
 
 // Invocation returns a defensive snapshot of an active or recently terminal

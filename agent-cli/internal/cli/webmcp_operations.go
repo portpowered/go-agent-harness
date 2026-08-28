@@ -483,7 +483,7 @@ func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "invoke [tool-name] [key=value...]",
 		Short: "Invoke a selected page tool by ref or unique name",
-		Long: `Invoke a selected page tool by exact reference or unique name.
+		Long: fmt.Sprintf(`Invoke a selected page tool by exact reference or unique name.
 
 After the browser accepts the invocation, this command writes one bounded,
 machine-readable dispatch receipt to stderr before waiting for the terminal
@@ -495,18 +495,27 @@ The receipt is copyable in human mode and is the documented machine-readable
 handoff in --json mode. Stdout remains one final command result. To cancel
 from another process, keep the exact browser selection persisted and pass the
 receipt invocation_id to agent webmcp cancel --invocation <id> --json.
-The first SIGINT during a dispatched wait requests cancellation and exits
-non-zero; cancellation does not claim rollback or safe retry.`,
+The first SIGINT during a dispatched wait requests cancellation with an
+independent reconciliation context and emits the final cancellation result
+within %v; cancellation does not claim rollback or safe retry.`, webmcpDirectInterruptReconciliationTimeout),
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.executeDirectWithContext(cmd, values, "invoke", webmcp.ErrorInvocationFailed, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
-				_, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser)
+			invokeCtx, interrupted, stopInterrupt := newWebMCPDirectInterruptContext(cmd.Context())
+			defer stopInterrupt()
+			return c.executeDirectWithParentContext(cmd, invokeCtx, values, "invoke", webmcp.ErrorInvocationFailed, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
+				selected, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser)
 				if err != nil {
+					if interrupted() {
+						return nil, directInvocationCanceledBeforeDispatch("")
+					}
 					return nil, err
 				}
 				toolRef, input, err := resolveDirectInvocation(args, values, broker, ctx)
 				if err != nil {
+					if interrupted() {
+						return nil, directInvocationCanceledBeforeDispatch("")
+					}
 					return nil, err
 				}
 				invokeCtx := ctx
@@ -521,14 +530,24 @@ non-zero; cancellation does not claim rollback or safe retry.`,
 					Reason:  values.reason,
 				})
 				if err != nil {
+					if interrupted() {
+						return nil, directInvocationCanceledBeforeDispatch(toolRef)
+					}
 					return nil, err
 				}
 				receiptID, err := writeWebMCPDirectInvocationReceipt(cmd.ErrOrStderr(), result, toolRef)
 				if err != nil {
 					return nil, err
 				}
+				if interrupted() {
+					return nil, reconcileDirectInvocationInterrupt(broker, result, selected.Key, receiptID, toolRef)
+				}
+				dispatchedResult := result
 				result, err = waitDirectInvocation(invokeCtx, broker, result)
 				if err != nil {
+					if interrupted() {
+						return nil, reconcileDirectInvocationInterrupt(broker, dispatchedResult, selected.Key, receiptID, toolRef)
+					}
 					return nil, err
 				}
 				if result.ErrorCode != "" || directInvocationFailed(result.State) {
@@ -674,6 +693,16 @@ func (c *WebMCPOperationsCommand) executeDirectWithContext(cmd *cobra.Command, v
 		return errors.New("WebMCP command is required")
 	}
 	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return c.executeDirectWithParentContext(cmd, ctx, values, kind, fallback, operation)
+}
+
+func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Command, ctx context.Context, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation webmcpDirectOperation) error {
+	if cmd == nil {
+		return errors.New("WebMCP command is required")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}

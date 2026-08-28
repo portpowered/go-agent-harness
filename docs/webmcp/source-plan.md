@@ -1929,6 +1929,15 @@ different target. Cancellation is a browser request and does not claim that a
 page side effect was rolled back; stale selection or browser rejection is a
 classified non-zero result.
 
+If the user sends the first SIGINT after dispatch, `invoke` stops its normal
+wait and requests cancellation with an independent bounded 2-second
+reconciliation context. It emits exactly one non-retryable
+`invocation_canceled` result containing the dispatched browser invocation ID,
+`cancel_source: "interrupt"`, and `side_effect_unknown: true`, then exits
+non-zero. Human output reports the same ID and does not claim rollback or safe
+retry. A SIGINT before dispatch has no invocation ID and is reported as a
+classified cancellation without fabricating one.
+
 Also support:
 
 ```bash

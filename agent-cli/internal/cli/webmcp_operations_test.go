@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -395,6 +397,195 @@ func TestWebMCPDirectInvokeReceiptUsesBrowserIDAndOnlyHandoffFields(t *testing.T
 	if data.InvocationID != "browser-invocation-9" {
 		t.Fatalf("final invocation ID = %q, want browser protocol ID", data.InvocationID)
 	}
+}
+
+func TestWebMCPDirectHumanCancellationReportsIDAndUnknownSideEffect(t *testing.T) {
+	var output bytes.Buffer
+	err := writeWebMCPDirectHuman(&output, "invoke", nil, webmcp.NewClassifiedError(webmcp.ErrorInvocationCanceled, webmcp.DefaultErrorMessage(webmcp.ErrorInvocationCanceled), map[string]any{
+		"invocation_id":       "browser-invocation-9",
+		"cancel_source":       "interrupt",
+		"side_effect_unknown": true,
+	}), webmcp.ErrorInvocationFailed)
+	if err != nil {
+		t.Fatalf("human cancellation output: %v", err)
+	}
+	got := output.String()
+	for _, want := range []string{
+		"Error: invocation_canceled",
+		"invocation_id=browser-invocation-9",
+		"cancel_source=interrupt",
+		"side_effect_unknown=true",
+		"rollback and retry safety are unknown",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("human cancellation output omitted %q: %q", want, got)
+		}
+	}
+}
+
+func TestWebMCPDirectInterruptBeforeDispatchDoesNotFabricateInvocationID(t *testing.T) {
+	result := webmcp.ResultErrorFor(directInvocationCanceledBeforeDispatch("webmcp.tool-ref.v1:fixture-ref"), webmcp.ErrorInvocationFailed, nil)
+	if result.Code != string(webmcp.ErrorInvocationCanceled) || result.Retryable {
+		t.Fatalf("pre-dispatch cancellation result = %+v", result)
+	}
+	if _, ok := result.Details["invocation_id"]; ok {
+		t.Fatalf("pre-dispatch cancellation fabricated an invocation ID: %#v", result.Details)
+	}
+	if result.Details["cancel_source"] != "interrupt" || result.Details["phase"] != "before_dispatch" {
+		t.Fatalf("pre-dispatch cancellation details = %#v", result.Details)
+	}
+}
+
+func TestWebMCPDirectInterruptCleanupContextIsIndependent(t *testing.T) {
+	status := boundedInterruptCancellationStatus(func(ctx context.Context) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return nil
+	})
+	if status != "requested" {
+		t.Fatalf("interrupt cleanup status = %q, want requested", status)
+	}
+}
+
+func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
+	if os.Getenv("WEBMCP_DIRECT_SIGINT_CHILD") == "1" {
+		runWebMCPDirectInvokeSIGINTChild(t)
+		return
+	}
+
+	command := exec.Command(os.Args[0], "-test.run=^TestWebMCPDirectInvokeSIGINTChildProcess$", "-test.v=false")
+	command.Env = append(os.Environ(), "WEBMCP_DIRECT_SIGINT_CHILD=1")
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		t.Fatalf("child stdout pipe: %v", err)
+	}
+	stderr, err := command.StderrPipe()
+	if err != nil {
+		t.Fatalf("child stderr pipe: %v", err)
+	}
+	if err := command.Start(); err != nil {
+		t.Fatalf("start SIGINT child: %v", err)
+	}
+	childAlive := true
+	defer func() {
+		if childAlive {
+			_ = command.Process.Kill()
+		}
+	}()
+
+	type pipeResult struct {
+		first string
+		rest  string
+		err   error
+	}
+	type firstLineResult struct {
+		value string
+		err   error
+	}
+	firstLine := make(chan firstLineResult, 1)
+	stderrResult := make(chan pipeResult, 1)
+	go func() {
+		reader := bufio.NewReader(stderr)
+		first, firstErr := reader.ReadString('\n')
+		firstLine <- firstLineResult{value: first, err: firstErr}
+		rest, restErr := io.ReadAll(reader)
+		if firstErr == nil {
+			firstErr = restErr
+		}
+		stderrResult <- pipeResult{first: first, rest: string(rest), err: firstErr}
+	}()
+	stdoutResult := make(chan string, 1)
+	go func() {
+		value, readErr := io.ReadAll(stdout)
+		if readErr != nil {
+			stdoutResult <- "read error: " + readErr.Error()
+			return
+		}
+		stdoutResult <- string(value)
+	}()
+
+	var firstValue firstLineResult
+	select {
+	case firstValue = <-firstLine:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SIGINT child did not emit a dispatch receipt")
+	}
+	if firstValue.err != nil && !errors.Is(firstValue.err, io.EOF) {
+		t.Fatalf("read child dispatch receipt: %v", firstValue.err)
+	}
+	var receipt WebMCPDirectInvocationReceipt
+	if err := json.Unmarshal([]byte(firstValue.value), &receipt); err != nil {
+		t.Fatalf("decode child dispatch receipt: %v; stderr=%q", err, firstValue.value)
+	}
+	if receipt.InvocationID != "browser-child-1" || receipt.State != string(webmcp.InvocationDispatched) {
+		t.Fatalf("child dispatch receipt = %+v", receipt)
+	}
+
+	signalAt := time.Now()
+	if err := command.Process.Signal(os.Interrupt); err != nil {
+		t.Fatalf("send SIGINT to child: %v", err)
+	}
+	exitErr := command.Wait()
+	childAlive = false
+	if exitErr == nil || command.ProcessState.ExitCode() == 0 {
+		t.Fatalf("SIGINT child exited successfully: err=%v exit=%d", exitErr, command.ProcessState.ExitCode())
+	}
+	if elapsed := time.Since(signalAt); elapsed > webmcpDirectInterruptReconciliationTimeout+time.Second {
+		t.Fatalf("SIGINT child completion took %s, want <= %s", elapsed, webmcpDirectInterruptReconciliationTimeout+time.Second)
+	}
+
+	stderrValue := <-stderrResult
+	stdoutValue := <-stdoutResult
+	envelope := decodeDirectEnvelope(t, stdoutValue)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvocationCanceled) || envelope.Error.Retryable {
+		t.Fatalf("SIGINT child envelope = %+v", envelope)
+	}
+	if envelope.Error.Details["invocation_id"] != "browser-child-1" || envelope.Error.Details["cancel_source"] != "interrupt" || envelope.Error.Details["side_effect_unknown"] != true {
+		t.Fatalf("SIGINT child cancellation details = %#v", envelope.Error.Details)
+	}
+	if strings.Contains(stdoutValue, "input_secret") || strings.Contains(stdoutValue, "page_output") || strings.Contains(stdoutValue, "credential") {
+		t.Fatalf("SIGINT child output leaked sensitive data: %q", stdoutValue)
+	}
+	if strings.TrimSpace(stderrValue.rest) != "" {
+		t.Fatalf("SIGINT child wrote unexpected stderr after receipt: %q", stderrValue.rest)
+	}
+}
+
+func runWebMCPDirectInvokeSIGINTChild(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, candidate, tool := directFixture()
+	broker := &sigintChildBroker{directCommandBroker: &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+		catalog:    webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
+		invokeResult: webmcp.InvokeResult{
+			InvocationID:        "broker-child-1",
+			BrowserInvocationID: "browser-child-1",
+			State:               webmcp.InvocationDispatched,
+		},
+	}}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	operations := NewWebMCPOperationsCommand(globalFlags, directFactory(broker))
+	operations.SelectionStore = store
+	root := &cobra.Command{Use: "webmcp", SilenceErrors: true, SilenceUsage: true}
+	operations.AddCommands(root)
+	root.SetOut(os.Stdout)
+	root.SetErr(os.Stderr)
+	root.SetArgs([]string{"invoke", "--browser", string(candidate.ID), "--tab", string(target.ID), "--tool-ref", string(tool.Ref), "--input-json", `{"input_secret":"do-not-echo"}`, "--json"})
+	if err := root.Execute(); err == nil {
+		os.Exit(43)
+	}
+	if broker.cancelRequest.InvocationID != "broker-child-1" {
+		os.Exit(44)
+	}
+	if broker.cancelContextErr != nil {
+		os.Exit(45)
+	}
+	os.Exit(42)
 }
 
 func TestWebMCPDirectCancelRehydratesExactSelectionWithoutLocalRegistry(t *testing.T) {
@@ -958,6 +1149,21 @@ type directCancelCommandBroker struct {
 
 	directCancelRequest webmcp.DirectCancelRequest
 	directCancelErr     error
+}
+
+type sigintChildBroker struct {
+	*directCommandBroker
+	cancelContextErr error
+}
+
+func (b *sigintChildBroker) WaitInvocation(ctx context.Context, _ webmcp.InvocationID) (webmcp.InvokeResult, error) {
+	<-ctx.Done()
+	return webmcp.InvokeResult{}, ctx.Err()
+}
+
+func (b *sigintChildBroker) Cancel(ctx context.Context, request webmcp.CancelRequest) error {
+	b.cancelContextErr = ctx.Err()
+	return b.directCommandBroker.Cancel(ctx, request)
 }
 
 func (b *directCancelCommandBroker) CancelDirect(_ context.Context, request webmcp.DirectCancelRequest) error {

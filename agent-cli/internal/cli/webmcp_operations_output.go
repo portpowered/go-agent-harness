@@ -409,7 +409,23 @@ func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr e
 	}
 	if operationErr != nil {
 		resultError := webmcpDirectErrorFor(operationErr, fallback)
-		_, err := fmt.Fprintf(out, "Error: %s — %s\n", resultError.Code, resultError.Message)
+		_, err := fmt.Fprintf(out, "Error: %s — %s", resultError.Code, resultError.Message)
+		if err == nil {
+			if invocationID, ok := resultError.Details["invocation_id"].(string); ok && invocationID != "" {
+				_, err = fmt.Fprintf(out, " invocation_id=%s", boundedDoctorText(invocationID, 160))
+			}
+		}
+		if err == nil {
+			if cancelSource, ok := resultError.Details["cancel_source"].(string); ok && cancelSource != "" {
+				_, err = fmt.Fprintf(out, " cancel_source=%s", boundedDoctorText(cancelSource, 40))
+			}
+		}
+		if err == nil && resultError.Details["side_effect_unknown"] == true {
+			_, err = io.WriteString(out, " side_effect_unknown=true; rollback and retry safety are unknown")
+		}
+		if err == nil {
+			_, err = fmt.Fprintln(out)
+		}
 		if err != nil {
 			return fmt.Errorf("write WebMCP command error: %w", err)
 		}
