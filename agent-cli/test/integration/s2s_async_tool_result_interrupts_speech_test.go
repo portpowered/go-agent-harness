@@ -639,26 +639,6 @@ func (c *asyncCollisionReplayConn) countOutboundType(eventType string) int {
 	return count
 }
 
-func (c *asyncCollisionReplayConn) countOutboundUserMessages() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	count := 0
-	for _, event := range c.outbound {
-		if event.Type != "conversation.item.create" {
-			continue
-		}
-		var payload struct {
-			Item struct {
-				Type string `json:"type"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(event.Payload, &payload) == nil && payload.Item.Type == "message" {
-			count++
-		}
-	}
-	return count
-}
-
 func (c *asyncCollisionReplayConn) outboundSnapshot() []asyncCollisionOutbound {
 	c.mu.Lock()
 	defer c.mu.Unlock()
