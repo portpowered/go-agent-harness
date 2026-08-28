@@ -88,6 +88,25 @@ func classifySessionError(session *targetSession, fallback webmcp.ErrorCode, pha
 	}
 }
 
+func classifyTargetCleanupError(session *targetSession, phase string, cause error) error {
+	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+		return classified
+	}
+	page := session.Context()
+	return &webmcp.ClassifiedError{
+		Code:      webmcp.ErrorTargetDetached,
+		Message:   webmcp.DefaultErrorMessage(webmcp.ErrorTargetDetached),
+		Retryable: false,
+		Details: map[string]any{
+			"browser_id":  string(page.Key.BrowserID),
+			"target_id":   string(page.Key.TargetID),
+			"phase":       phase,
+			"reason_code": safeReason(cause),
+		},
+		Cause: cause,
+	}
+}
+
 func safeReason(err error) string {
 	if err == nil {
 		return "unknown"

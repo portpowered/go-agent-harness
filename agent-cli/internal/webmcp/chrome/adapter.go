@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
@@ -81,6 +83,7 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 		cancelBrowser:   cancelBrowser,
 		cancelAllocator: cancelAllocator,
 		browser:         browser,
+		browserExecutor: browser,
 		httpClient:      r.options.HTTPClient,
 		commandTimeout:  r.options.CommandTimeout,
 		eventBuffer:     r.options.EventBuffer,
@@ -89,6 +92,47 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 	}
 	go handle.watchBrowserConnection()
 	return handle, nil
+}
+
+// Version connects to the explicit endpoint, reads Browser.getVersion, and
+// returns only the neutral version fields. The short-lived browser handle is
+// closed before returning; this method is the DevToolsCatalog seam for callers
+// that need protocol metadata without retaining a session.
+func (r *Runtime) Version(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserVersion, error) {
+	handleValue, err := r.Open(ctx, candidate)
+	if err != nil {
+		return webmcp.BrowserVersion{}, err
+	}
+	defer func() { _ = handleValue.Close() }()
+
+	handle, ok := handleValue.(*handle)
+	if !ok {
+		return webmcp.BrowserVersion{}, classifiedOpenError(candidate, errors.New("browser handle has an unsupported implementation"))
+	}
+	executor := handle.executor()
+	if executor == nil {
+		return webmcp.BrowserVersion{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "version", errors.New("browser connection is unavailable"))
+	}
+	protocolVersion, product, _, _, _, err := browser.GetVersion().Do(cdp.WithExecutor(ctx, executor))
+	if err != nil {
+		return webmcp.BrowserVersion{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "version", err)
+	}
+	return webmcp.BrowserVersion{
+		Browser:              product,
+		ProtocolVersion:      protocolVersion,
+		WebSocketDebuggerURL: candidate.BrowserWSURL,
+	}, nil
+}
+
+// ListTargets opens the explicit endpoint for one normalized target snapshot
+// and releases the browser handle after the snapshot is copied.
+func (r *Runtime) ListTargets(ctx context.Context, candidate webmcp.BrowserCandidate) ([]webmcp.Target, error) {
+	handle, err := r.Open(ctx, candidate)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = handle.Close() }()
+	return handle.ListTargets(ctx)
 }
 
 func contextError(ctx context.Context) error {
@@ -152,5 +196,6 @@ func cloneDetails(details map[string]any) map[string]any {
 }
 
 var (
-	_ webmcp.BrowserRuntime = (*Runtime)(nil)
+	_ webmcp.BrowserRuntime  = (*Runtime)(nil)
+	_ webmcp.DevToolsCatalog = (*Runtime)(nil)
 )
