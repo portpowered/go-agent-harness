@@ -233,6 +233,41 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	}
 }
 
+func TestRealtimeSessionSendMessage_EmptyToolResultPreservesCorrelation(t *testing.T) {
+	session, conn := newWireSeamSession(t)
+	msg := messages.Message{Role: messages.RoleTool, ToolCallID: "call-empty"}
+
+	if !session.SendMessage(context.Background(), msg) {
+		t.Fatal("SendMessage returned false for a valid empty tool result")
+	}
+	written := waitForWireMessages(t, conn, 2)
+
+	var output struct {
+		Type string `json:"type"`
+		Item struct {
+			Type   string `json:"type"`
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[0], &output); err != nil {
+		t.Fatalf("unmarshal empty function_call_output: %v", err)
+	}
+	if output.Type != "conversation.item.create" || output.Item.Type != "function_call_output" || output.Item.CallID != msg.ToolCallID || output.Item.Output != "" {
+		t.Fatalf("empty function_call_output = %#v, want correlated empty output", output)
+	}
+
+	var response struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(written[1], &response); err != nil {
+		t.Fatalf("unmarshal empty-result response.create: %v", err)
+	}
+	if response.Type != "response.create" {
+		t.Fatalf("empty-result second event = %q, want response.create", response.Type)
+	}
+}
+
 func TestRealtimeSessionSendMessage_ToolImageCorrelationIDIsBoundedForOpaqueCallID(t *testing.T) {
 	session, conn := newWireSeamSession(t)
 	toolCallID := "call/opaque id?" + strings.Repeat("/:? with spaces", 512)

@@ -82,6 +82,51 @@ func TestToolRunner_SingleCall(t *testing.T) {
 	}
 }
 
+func TestToolRunner_EmptyResultPreservesCallID(t *testing.T) {
+	exec := &testToolExecutor{results: map[string]string{"list_directory": ""}}
+	runner := NewToolRunner(exec, 10)
+	ap := NewActiveParticipant(messages.Tool, runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	runner.Inbox.Write(ctx, messages.ToolBatchRequest{
+		Calls: []messages.ToolCall{{ID: "tc-empty", Name: "list_directory"}},
+	})
+
+	var deltas []messages.StreamMessage
+	for {
+		delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+		if !ok {
+			t.Fatal("context cancelled waiting for empty tool result")
+		}
+		deltas = append(deltas, delta)
+		if _, ok := delta.Value.(*messages.MessageEndValue); ok {
+			break
+		}
+	}
+
+	if len(deltas) != 4 {
+		t.Fatalf("empty result deltas = %d, want MESSAGE.START, TEXT.START, TEXT.END, MESSAGE.END", len(deltas))
+	}
+	if _, ok := deltas[1].Value.(*messages.TextStartValue); !ok || deltas[1].ToolCallId != "tc-empty" {
+		t.Fatalf("empty result start = %#v, want correlated TEXT.START", deltas[1])
+	}
+	if _, ok := deltas[2].Value.(*messages.TextEndValue); !ok || deltas[2].ToolCallId != "tc-empty" {
+		t.Fatalf("empty result end = %#v, want correlated TEXT.END", deltas[2])
+	}
+
+	results := messages.ReconstructToolMessagesFromDeltas(deltas)
+	if len(results) != 1 || results[0].ToolCallID != "tc-empty" {
+		t.Fatalf("reconstructed empty results = %#v, want one result for tc-empty", results)
+	}
+	if len(results[0].ContentParts) != 1 || results[0].TextContent() != "" {
+		t.Fatalf("reconstructed empty content = %#v, want one empty text part", results[0].ContentParts)
+	}
+}
+
 func TestToolRunner_ParallelExecution(t *testing.T) {
 	exec := &testToolExecutor{
 		results: map[string]string{
