@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"net/http"
+	"time"
 )
 
 const (
@@ -149,6 +150,7 @@ type Target struct {
 	Title             string `json:"title"`
 	URL               string `json:"url"`
 	Origin            string `json:"origin"`
+	Generation        uint64 `json:"generation,omitempty"`
 	WebSocketPresent  bool   `json:"websocket_present"`
 	WebMCP            bool   `json:"webmcp"`
 	WebMCPKnown       bool   `json:"webmcp_known"`
@@ -255,6 +257,148 @@ type TargetSnapshot struct {
 // TargetListResult is a descriptive alias for TargetSnapshot.
 type TargetListResult = TargetSnapshot
 
+// TargetOwnership describes who is allowed to close a browser target. Lane B
+// selections are external by default and therefore use detach-only cleanup.
+// The ownership value is retained in the neutral contract so a later
+// harness-owned launcher can make its stronger cleanup rights explicit.
+type TargetOwnership string
+
+const (
+	TargetOwnershipExternal     TargetOwnership = "external"
+	TargetOwnershipHarnessOwned TargetOwnership = "harness_owned"
+)
+
+// TargetDetacher is the only lifecycle operation Lane B accepts from an
+// attached target. Keeping close-target and process operations out of this
+// interface makes it impossible for the neutral selection service to turn
+// closing an external handle into closing the customer's tab or browser.
+type TargetDetacher interface {
+	Detach(context.Context) error
+}
+
+// TargetDetacherFunc adapts a detach function to TargetDetacher.
+type TargetDetacherFunc func(context.Context) error
+
+// Detach implements TargetDetacher.
+func (f TargetDetacherFunc) Detach(ctx context.Context) error {
+	if f == nil {
+		return nil
+	}
+	return f(ctx)
+}
+
+// TargetAttacher attaches a neutral selection to a target. The returned
+// resource must expose detach only; browser-specific attach implementations
+// remain outside this package.
+type TargetAttacher interface {
+	Attach(context.Context, BrowserCandidate, Target) (TargetDetacher, error)
+}
+
+// TargetRuntime is a descriptive alias for callers that name the injected
+// attach seam as a runtime.
+type TargetRuntime = TargetAttacher
+
+// TargetAttacherFunc adapts an attach function to TargetAttacher.
+type TargetAttacherFunc func(context.Context, BrowserCandidate, Target) (TargetDetacher, error)
+
+// TargetRuntimeFunc is a descriptive alias for TargetAttacherFunc.
+type TargetRuntimeFunc = TargetAttacherFunc
+
+// Attach implements TargetAttacher.
+func (f TargetAttacherFunc) Attach(ctx context.Context, browser BrowserCandidate, target Target) (TargetDetacher, error) {
+	if f == nil {
+		return nil, nil
+	}
+	return f(ctx, browser, target)
+}
+
+// TargetActivator foregrounds an exact target when selection explicitly asks
+// for it. Selection itself never calls this seam unless Activate is true.
+type TargetActivator interface {
+	Activate(context.Context, BrowserCandidate, Target) error
+}
+
+// TargetActivatorFunc adapts an activation function to TargetActivator.
+type TargetActivatorFunc func(context.Context, BrowserCandidate, Target) error
+
+// Activate implements TargetActivator.
+func (f TargetActivatorFunc) Activate(ctx context.Context, browser BrowserCandidate, target Target) error {
+	if f == nil {
+		return nil
+	}
+	return f(ctx, browser, target)
+}
+
+// SelectionOptions controls the state-changing part of an exact selection.
+// Reason is diagnostic metadata only; it never changes which target is used.
+type SelectionOptions struct {
+	Activate bool
+	Reason   string
+}
+
+// TargetSelectionRequest is the neutral exact-selection request. Browser may
+// carry an already discovered candidate for callers that do not retain a
+// browser catalog on the service. BrowserID and TargetID are the only
+// authoritative selectors; title, URL, origin, and list order are ignored.
+type TargetSelectionRequest struct {
+	Browser   BrowserCandidate `json:"-"`
+	BrowserID string           `json:"browser_id"`
+	TargetID  string           `json:"target_id"`
+	Activate  bool             `json:"activate,omitempty"`
+	Reason    string           `json:"reason,omitempty"`
+}
+
+// SelectionRequest is a concise alias for TargetSelectionRequest.
+type SelectionRequest = TargetSelectionRequest
+
+// Selection is the current exact page selection. Its identity and generation
+// are copied into returned values, so an older caller retains the old target
+// identity even after the service selects a different page.
+type Selection struct {
+	BrowserID  string        `json:"browser_id"`
+	TargetID   string        `json:"target_id"`
+	Title      string        `json:"title"`
+	URL        string        `json:"url"`
+	Origin     string        `json:"origin"`
+	Generation uint64        `json:"generation"`
+	SelectedAt time.Time     `json:"selected_at"`
+	Target     Target        `json:"target"`
+	Handle     *TargetHandle `json:"-"`
+}
+
+// SelectedContext is a descriptive alias for the selected page state.
+type SelectedContext = Selection
+
+// Context returns a broker-neutral context copy for callers that prefer the
+// method-shaped API used by later broker layers.
+func (s Selection) Context() PageContext {
+	return PageContext{
+		BrowserID:  s.BrowserID,
+		TargetID:   s.TargetID,
+		Title:      s.Title,
+		URL:        s.URL,
+		Origin:     s.Origin,
+		Generation: s.Generation,
+		SelectedAt: s.SelectedAt,
+		Connected:  true,
+		Ready:      true,
+	}
+}
+
+// PageContext is the safe context returned by Selection.Context. It contains
+// no endpoint or target websocket values.
+type PageContext struct {
+	BrowserID  string    `json:"browser_id"`
+	TargetID   string    `json:"target_id"`
+	Title      string    `json:"title"`
+	URL        string    `json:"url"`
+	Origin     string    `json:"origin"`
+	Generation uint64    `json:"generation"`
+	Connected  bool      `json:"connected"`
+	Ready      bool      `json:"ready"`
+	SelectedAt time.Time `json:"selected_at"`
+}
+
 // DiscoveryResult is provided for callers that prefer a named result object
 // while Discover continues to return the candidate directly.
 type DiscoveryResult struct {
@@ -327,6 +471,8 @@ const (
 	EventDiscoveryCompleted EventType = "browser.discovery.completed"
 	EventEndpointVersion    EventType = "browser.endpoint.version"
 	EventTargetsSnapshot    EventType = "browser.targets.snapshot"
+	EventTargetSelected     EventType = "browser.target.selected"
+	EventTargetAttached     EventType = "browser.chrome.target_attached"
 )
 
 // Redaction describes the safe representation of a semantic event. Discovery
@@ -345,6 +491,8 @@ type Event struct {
 	MonotonicMS uint64         `json:"monotonic_ms"`
 	Type        EventType      `json:"type"`
 	BrowserID   string         `json:"browser_id,omitempty"`
+	TargetID    string         `json:"target_id,omitempty"`
+	Generation  uint64         `json:"generation,omitempty"`
 	Payload     map[string]any `json:"payload"`
 	Redaction   Redaction      `json:"redaction"`
 }

@@ -33,6 +33,7 @@ type targetState struct {
 	target        Target
 	rawID         string
 	pageWebSocket string
+	generation    uint64
 }
 
 // HashTargetIDMapper is the default deterministic opaque target ID mapper.
@@ -399,11 +400,16 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 		return Target{}, targetState{}, newProtocolInvalidAt("targets", "unknown", "malformed_target_id", nil)
 	}
 	publicID := normalizeTargetPublicID(s.targetIDMapper.TargetID(TargetIdentity{BrowserID: browser.ID, RawID: rawID}), browser.ID, rawID)
+	generation := uint64(1)
+	if prior, ok := s.targets[browser.ID][publicID]; ok && prior.generation > 0 {
+		generation = prior.generation
+	}
 	target := Target{
-		BrowserID: browser.ID,
-		ID:        publicID,
-		Type:      safeTargetType(descriptor.Type),
-		Title:     boundedLabel(descriptor.Title, maxTargetTitle),
+		BrowserID:  browser.ID,
+		ID:         publicID,
+		Type:       safeTargetType(descriptor.Type),
+		Title:      boundedLabel(descriptor.Title, maxTargetTitle),
+		Generation: generation,
 	}
 	safePageURL, origin, internal, urlReason := normalizePageURL(descriptor.URL)
 	target.URL = safePageURL
@@ -447,6 +453,7 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 		target:        target,
 		rawID:         rawID,
 		pageWebSocket: normalizedWebSocket,
+		generation:    generation,
 	}, nil
 }
 
@@ -653,6 +660,7 @@ func targetSnapshotPayload(snapshot TargetSnapshot) map[string]any {
 		targets = append(targets, map[string]any{
 			"browser_id":        target.BrowserID,
 			"id":                target.ID,
+			"generation":        target.Generation,
 			"type":              target.Type,
 			"title":             target.Title,
 			"url":               target.URL,

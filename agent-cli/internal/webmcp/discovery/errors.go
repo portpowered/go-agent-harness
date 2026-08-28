@@ -18,6 +18,7 @@ const (
 	CodeNoEligibleTab          Code = "no_eligible_tab"
 	CodeAmbiguousBrowser       Code = "ambiguous_browser"
 	CodeAmbiguousTab           Code = "ambiguous_tab"
+	CodeTargetAttachFailed     Code = "target_attach_failed"
 )
 
 // DiscoveryError is safe for model/user display. Details are constrained to
@@ -71,6 +72,7 @@ var (
 	ErrNoEligibleTab          error = &classifiedCode{code: CodeNoEligibleTab}
 	ErrAmbiguousBrowser       error = &classifiedCode{code: CodeAmbiguousBrowser}
 	ErrAmbiguousTab           error = &classifiedCode{code: CodeAmbiguousTab}
+	ErrTargetAttachFailed     error = &classifiedCode{code: CodeTargetAttachFailed}
 )
 
 func newEndpointNotFound(kind EndpointKind, source Source) *DiscoveryError {
@@ -203,6 +205,21 @@ func newAmbiguousTab(browserID string, candidateIDs []string) *DiscoveryError {
 		Details: map[string]any{
 			"browser_id":           boundedLabel(browserID, 64),
 			"candidate_target_ids": ids,
+		},
+	}
+}
+
+func newTargetAttachFailed(browserID, targetID, phase, reason string, cause error) *DiscoveryError {
+	return &DiscoveryError{
+		Code:      CodeTargetAttachFailed,
+		Message:   "browser target could not be initialized",
+		Retryable: true,
+		Cause:     cause,
+		Details: map[string]any{
+			"browser_id":  boundedLabel(browserID, 64),
+			"target_id":   boundedLabel(targetID, 64),
+			"phase":       boundedLabel(phase, 32),
+			"reason_code": boundedLabel(reason, 64),
 		},
 	}
 }

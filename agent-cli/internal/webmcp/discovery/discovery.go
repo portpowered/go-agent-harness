@@ -37,12 +37,17 @@ type Options struct {
 	TargetLister      TargetLister
 	TargetProbe       TargetCapabilityProbe
 	CapabilityProbe   TargetCapabilityProbe
+	TargetAttacher    TargetAttacher
+	TargetRuntime     TargetAttacher
+	Activator         TargetActivator
+	TargetActivator   TargetActivator
 	OriginPolicy      OriginPolicy
 	AllowedOrigins    []string
 	DeniedOrigins     []string
 	IDMapper          IDMapper
 	TargetIDMapper    TargetIDMapper
 	EventSink         EventSink
+	Clock             Clock
 	MaxVersionBytes   int64
 	MaxTargetBytes    int64
 	ProbeTimeout      time.Duration
@@ -59,16 +64,21 @@ type Service struct {
 	webSocketProbe    WebSocketProbe
 	targetLister      TargetLister
 	targetProbe       TargetCapabilityProbe
+	targetAttacher    TargetAttacher
+	activator         TargetActivator
 	originPolicy      OriginPolicy
 	idMapper          IDMapper
 	targetIDMapper    TargetIDMapper
 	eventSink         EventSink
+	clock             Clock
 	maxVersionBytes   int64
 	maxTargetBytes    int64
 	probeTimeout      time.Duration
 	eventSequence     uint64
 	endpoints         map[string]targetEndpoint
 	targets           map[string]map[string]targetState
+	browsers          map[string]BrowserCandidate
+	selection         *Selection
 }
 
 // New constructs a discovery service with standard-library defaults for the
@@ -89,6 +99,18 @@ func New(options Options) *Service {
 	targetProbe := options.TargetProbe
 	if targetProbe == nil {
 		targetProbe = options.CapabilityProbe
+	}
+	targetAttacher := options.TargetAttacher
+	if targetAttacher == nil {
+		targetAttacher = options.TargetRuntime
+	}
+	activator := options.Activator
+	if activator == nil {
+		activator = options.TargetActivator
+	}
+	clock := options.Clock
+	if clock == nil {
+		clock = wallClock{}
 	}
 	idMapper := options.IDMapper
 	if idMapper == nil {
@@ -121,15 +143,19 @@ func New(options Options) *Service {
 		webSocketProbe:    webSocketProbe,
 		targetLister:      options.TargetLister,
 		targetProbe:       targetProbe,
+		targetAttacher:    targetAttacher,
+		activator:         activator,
 		originPolicy:      newOriginPolicy(options.OriginPolicy, options.AllowedOrigins, options.DeniedOrigins),
 		idMapper:          idMapper,
 		targetIDMapper:    targetIDMapper,
 		eventSink:         eventSink,
+		clock:             clock,
 		maxVersionBytes:   maxVersionBytes,
 		maxTargetBytes:    maxTargetBytes,
 		probeTimeout:      probeTimeout,
 		endpoints:         make(map[string]targetEndpoint),
 		targets:           make(map[string]map[string]targetState),
+		browsers:          make(map[string]BrowserCandidate),
 	}
 }
 
@@ -453,6 +479,7 @@ func (s *Service) candidateFromVersion(version BrowserVersion, source Source, ki
 		Protocol: protocol,
 		Loopback: normalized.loopback,
 	}
+	s.browsers[candidate.ID] = candidate
 	s.emit(EventEndpointVersion, candidate.ID, map[string]any{
 		"product":  product,
 		"protocol": protocol,
@@ -700,3 +727,7 @@ func (validatingWebSocketProbe) Probe(ctx context.Context, endpoint string) (Bro
 var _ HTTPClient = (*http.Client)(nil)
 var _ ActivePortReader = FileActivePortReader{}
 var _ WebSocketProbe = validatingWebSocketProbe{}
+
+type wallClock struct{}
+
+func (wallClock) Now() time.Time { return time.Now().UTC() }
