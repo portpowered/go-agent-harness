@@ -501,20 +501,25 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 			t.Fatal("forced target failure returned nil error")
 		}
 		for _, id := range []string{"sibling", "observer"} {
-			if err := run.waitOutcome(t, id); !errors.Is(err, context.Canceled) {
-				t.Fatalf("sibling %q connection error = %v, want context cancellation after target failure", id, err)
+			run.decide(t, id, roomLifecycleConnectDecision{})
+			if err := run.waitOutcome(t, id); err != nil {
+				t.Fatalf("viable sibling %q connection error = %v, want successful admission outcome", id, err)
 			}
 		}
 		outcome := run.waitResult(t)
 		if outcome.result.Reason != RoomTerminationFailed {
 			t.Fatalf("room reason = %q, want failed", outcome.result.Reason)
 		}
+		assertAtomicStartupFailureResult(t, outcome.result, "target", []string{"sibling", "observer"})
 		observation := run.ledger.snapshot()
 		if err := observation.validate(); err != nil {
 			t.Fatalf("identity-aware observation: %v\n%+v", err, observation)
 		}
-		if !observation.eventBefore("target", "connect.outcome", "sibling", "connect.context_cancelled") {
-			t.Fatalf("forced failure was not observed before sibling cancellation: %+v", observation.Events)
+		// A fast failure must be recorded before the still-gated sibling is
+		// admitted. The sibling is then allowed to publish its own success
+		// outcome before rollback begins.
+		if !observation.eventBefore("target", "connect.outcome", "sibling", "connect.outcome") {
+			t.Fatalf("forced failure was not observed before sibling outcome: %+v", observation.Events)
 		}
 	})
 
@@ -530,13 +535,15 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 		if err := run.waitOutcome(t, "target"); err == nil {
 			t.Fatal("forced target failure returned nil error")
 		}
-		if err := run.waitOutcome(t, "observer"); !errors.Is(err, context.Canceled) {
-			t.Fatalf("observer connection error = %v, want context cancellation after target failure", err)
+		run.decide(t, "observer", roomLifecycleConnectDecision{})
+		if err := run.waitOutcome(t, "observer"); err != nil {
+			t.Fatalf("viable observer connection error = %v, want successful admission outcome", err)
 		}
 		outcome := run.waitResult(t)
 		if outcome.result.Reason != RoomTerminationFailed {
 			t.Fatalf("room reason = %q, want failed", outcome.result.Reason)
 		}
+		assertAtomicStartupFailureResult(t, outcome.result, "target", []string{"sibling", "observer"})
 		observation := run.ledger.snapshot()
 		if err := observation.validate(); err != nil {
 			t.Fatalf("identity-aware observation: %v\n%+v", err, observation)
@@ -633,6 +640,29 @@ func TestRunRoomLifecycleDiagnosis_ForcedOrderings(t *testing.T) {
 			t.Fatalf("identity-aware observation: %v", err)
 		}
 	})
+}
+
+func assertAtomicStartupFailureResult(t *testing.T, result RoomResult, failedID string, viableIDs []string) {
+	t.Helper()
+	if len(result.Participants) != len(viableIDs)+1 {
+		t.Fatalf("startup failure participants = %d, want %d: %+v", len(result.Participants), len(viableIDs)+1, result.Participants)
+	}
+	failed := result.Participants[failedID]
+	if failed.ParticipantID != failedID || failed.ID != failedID || failed.Connected {
+		t.Fatalf("failed participant result = %+v, want identity %q and no connection", failed, failedID)
+	}
+	if failed.Reason != ParticipantTerminationError || failed.Error == "" {
+		t.Fatalf("failed participant result = %+v, want causal error disposition", failed)
+	}
+	for _, id := range viableIDs {
+		participant := result.Participants[id]
+		if participant.ParticipantID != id || participant.ID != id || !participant.Connected {
+			t.Fatalf("viable participant %q result = %+v, want connected identity", id, participant)
+		}
+		if participant.Error != "" {
+			t.Fatalf("viable participant %q inherited startup error: %+v", id, participant)
+		}
+	}
 }
 
 func TestRunRoomLifecycleDiagnosis_NegativeControls(t *testing.T) {

@@ -304,6 +304,7 @@ func (l *roomParticipantLifecycle) snapshot() (connected bool, sessionOpened boo
 type roomConnectTrackingInferencer struct {
 	inner      messages.SessionInferencer
 	result     chan error
+	outcomes   chan<- roomConnectionOutcome
 	once       sync.Once
 	mu         sync.Mutex
 	ready      bool
@@ -311,8 +312,20 @@ type roomConnectTrackingInferencer struct {
 	lifecycle  *roomParticipantLifecycle
 }
 
+type roomConnectionOutcome struct {
+	tracker *roomConnectTrackingInferencer
+	err     error
+}
+
 func newRoomConnectTrackingInferencer(inner messages.SessionInferencer) *roomConnectTrackingInferencer {
 	return &roomConnectTrackingInferencer{inner: inner, result: make(chan error, 1)}
+}
+
+func (i *roomConnectTrackingInferencer) setOutcomeSink(outcomes chan<- roomConnectionOutcome) {
+	if i == nil {
+		return
+	}
+	i.outcomes = outcomes
 }
 
 func (i *roomConnectTrackingInferencer) publish(err error) {
@@ -325,6 +338,9 @@ func (i *roomConnectTrackingInferencer) publish(err error) {
 		i.connectErr = err
 		i.mu.Unlock()
 		i.result <- err
+		if i.outcomes != nil {
+			i.outcomes <- roomConnectionOutcome{tracker: i, err: err}
+		}
 	})
 }
 
@@ -825,6 +841,10 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 
 	results := make(chan roomParticipantRunResult, len(plans))
 	startGate := make(chan struct{})
+	connectionOutcomes := make(chan roomConnectionOutcome, len(plans))
+	for _, plan := range plans {
+		plan.tracker.setOutcomeSink(connectionOutcomes)
+	}
 	var runWG sync.WaitGroup
 	runWG.Add(len(plans))
 	for _, plan := range plans {
@@ -839,7 +859,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		defer timer.Stop()
 	}
 
-	startupErr := awaitRoomParticipantConnections(roomCtx, coordinator, plans, timer, secrets)
+	startupErr := awaitRoomParticipantConnections(roomCtx, coordinator, plans, timer, secrets, connectionOutcomes)
 	if startupErr != nil {
 		coordinator.fail(startupErr)
 	}
@@ -970,59 +990,67 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 	return plans, secrets, nil
 }
 
-func awaitRoomParticipantConnections(ctx context.Context, coordinator *roomCoordinator, plans []*roomParticipantPlan, timer *time.Timer, secrets []string) error {
-	remaining := len(plans)
+func awaitRoomParticipantConnections(
+	ctx context.Context,
+	coordinator *roomCoordinator,
+	plans []*roomParticipantPlan,
+	timer *time.Timer,
+	secrets []string,
+	outcomes <-chan roomConnectionOutcome,
+) error {
+	byTracker := make(map[*roomConnectTrackingInferencer]*roomParticipantPlan, len(plans))
+	for _, plan := range plans {
+		if plan != nil && plan.tracker != nil {
+			byTracker[plan.tracker] = plan
+		}
+	}
+	remaining := len(byTracker)
+	seen := make(map[*roomConnectTrackingInferencer]struct{}, remaining)
+	var firstErr error
+	ctxDone := ctx.Done()
+	timerDone := timerChannel(timer)
 	for remaining > 0 {
 		select {
-		case <-coordinator.done:
-			if err := coordinator.roomError(); err != nil {
-				return err
+		case outcome := <-outcomes:
+			plan, ok := byTracker[outcome.tracker]
+			if !ok {
+				continue
 			}
-			return nil
-		case <-ctx.Done():
-			coordinator.stop(RoomTerminationStopped, nil)
-			return nil
-		case <-timerChannel(timer):
-			coordinator.stop(RoomTerminationMaxDurationReached, nil)
-			return nil
-		default:
-		}
-		progress := false
-		for _, plan := range plans {
-			if plan.participant != nil && plan.participant.plan != nil {
-				// The tracker is created in the participant goroutine. It may not
-				// exist during this first non-blocking scan.
-				select {
-				case err := <-plan.tracker.result:
-					plan.participant.lifecycle.markConnected(err)
-					remaining--
-					progress = true
-					if err != nil {
-						return roomParticipantFailure(plan.manifest.ID, fmt.Errorf("connect live session: %w", err), append(secretsForPlan(plan), secrets...))
-					}
-				default:
-				}
+			if _, alreadySeen := seen[outcome.tracker]; alreadySeen {
+				continue
 			}
-		}
-		if remaining == 0 {
-			break
-		}
-		if !progress {
-			select {
-			case <-coordinator.done:
-				if err := coordinator.roomError(); err != nil {
-					return err
-				}
-				return nil
-			case <-ctx.Done():
+			seen[outcome.tracker] = struct{}{}
+			remaining--
+			if plan.participant != nil && plan.participant.lifecycle != nil {
+				plan.participant.lifecycle.markConnected(outcome.err)
+			}
+			if outcome.err != nil && firstErr == nil {
+				firstErr = roomParticipantFailure(plan.manifest.ID, fmt.Errorf("connect live session: %w", outcome.err), append(secretsForPlan(plan), secrets...))
+			}
+		case <-ctxDone:
+			// A cancellation must still drain all already-admitted connection
+			// attempts. Well-behaved inferencers observe the cancelled room
+			// context and publish their explicit context-cancelled outcome.
+			if firstErr != nil {
+				coordinator.fail(firstErr)
+			} else {
 				coordinator.stop(RoomTerminationStopped, nil)
-				return nil
-			case <-timerChannel(timer):
-				coordinator.stop(RoomTerminationMaxDurationReached, nil)
-				return nil
-			case <-time.After(time.Millisecond):
 			}
+			ctxDone = nil
+		case <-timerDone:
+			if firstErr != nil {
+				coordinator.fail(firstErr)
+			} else {
+				coordinator.stop(RoomTerminationMaxDurationReached, nil)
+			}
+			timerDone = nil
 		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	if coordinator.isStopping() {
+		return nil
 	}
 	for {
 		allOpened := true
