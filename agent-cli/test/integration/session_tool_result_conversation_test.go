@@ -457,7 +457,7 @@ func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing
 
 	outputs := functionCallOutputsInExchange(t, wirePath)
 	if len(outputs) != 1 {
-		t.Fatalf("provider exchange contains %d function_call_output events, want exactly 1: %q", len(outputs), outputs)
+		t.Fatalf("provider exchange contains %d function_call_output events, want exactly 1: %v", len(outputs), outputs)
 	}
 	if outputs[0].CallID != toolConversationCallID {
 		t.Fatalf("function_call_output call ID %q does not match originating call ID %q", outputs[0].CallID, toolConversationCallID)
