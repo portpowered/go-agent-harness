@@ -799,19 +799,6 @@ func TestBargeInLedgerRejectsMalformedNormalizedEvidence(t *testing.T) {
 	}
 }
 
-func requireBargeInViolations(t *testing.T, ledger *BargeInLedger, wants ...string) {
-	t.Helper()
-	err := ledger.Validate(BargeInContract{})
-	if err == nil {
-		t.Fatal("invalid ledger unexpectedly passed validation")
-	}
-	for _, want := range wants {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("validation error = %v, want %q", err, want)
-		}
-	}
-}
-
 func TestBargeInLedgerReportsContractBoundaryViolations(t *testing.T) {
 	stream := newBargeInTestStream()
 	stream.observe(BargeInEvent{Kind: BargeInEventInputAppend, InputID: "i1", TurnID: "t1", AppendGroupID: "g1", Bytes: 1, NonEmpty: true})
@@ -941,6 +928,7 @@ func TestBargeInLedgerOptionalTerminalAndNilSafety(t *testing.T) {
 
 func TestBargeInLedgerWaitForBoundaries(t *testing.T) {
 	ledger := NewBargeInLedger()
+	var missingContext context.Context
 	ready := make(chan struct{})
 	close(ready)
 	if err := ledger.WaitFor(context.Background(), "ready", ready, time.Second); err != nil {
@@ -956,7 +944,7 @@ func TestBargeInLedgerWaitForBoundaries(t *testing.T) {
 	}{
 		{name: "missing boundary", ctx: context.Background(), gate: "", time: time.Second, want: "wait boundary is required"},
 		{name: "non-positive timeout", ctx: context.Background(), gate: "ready", time: 0, want: "requires a positive timeout"},
-		{name: "missing context", ctx: nil, gate: "ready", time: time.Second, want: "requires a context"},
+		{name: "missing context", ctx: missingContext, gate: "ready", time: time.Second, want: "requires a context"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if err := ledger.WaitFor(testCase.ctx, testCase.gate, ready, testCase.time); err == nil || !errors.Is(err, ErrBargeInWait) || !strings.Contains(err.Error(), testCase.want) {
@@ -1040,7 +1028,8 @@ func TestBargeInCoordinatorCoversSignalAndBoundedTeardown(t *testing.T) {
 }
 
 func TestBargeInCoordinatorRejectsNilReceiverAndParent(t *testing.T) {
-	if _, err := NewBargeInCoordinator(nil, time.Second, NewBargeInLedger()); err == nil || !errors.Is(err, ErrBargeInWait) {
+	var missingParent context.Context
+	if _, err := NewBargeInCoordinator(missingParent, time.Second, NewBargeInLedger()); err == nil || !errors.Is(err, ErrBargeInWait) {
 		t.Fatalf("nil parent error = %v, want ErrBargeInWait", err)
 	}
 
