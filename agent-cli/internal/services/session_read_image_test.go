@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"image"
@@ -258,7 +257,7 @@ func assertReadImageFailure(t *testing.T, response messages.ToolCallResponse, ca
 	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error == "" || !strings.Contains(result.Error, wantText) {
 		t.Fatalf("failure response envelope = %#v, want version %d error containing %q", result, tools.ReadImageResultVersion, wantText)
 	}
-	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.DataURL != "" {
+	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" {
 		t.Fatalf("failure response unexpectedly carried image metadata: %#v", result)
 	}
 	for _, part := range response.ContentParts {
@@ -381,9 +380,8 @@ func assertReadImageResponse(t *testing.T, response messages.ToolCallResponse, c
 	if result.SHA256 != hex.EncodeToString(digest[:]) {
 		t.Fatalf("response envelope sha256 = %q, want %q", result.SHA256, hex.EncodeToString(digest[:]))
 	}
-	wantDataURL := "data:" + wantMIME + ";base64," + base64.StdEncoding.EncodeToString(wantBytes)
-	if result.DataURL != wantDataURL {
-		t.Fatalf("response envelope data URL = %q, want exact image bytes", result.DataURL)
+	if result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
+		t.Fatalf("response envelope typed projection = %q, want %q", result.TypedProjection, tools.ReadImageResultTypedProjectionInputImage)
 	}
 	part, ok := response.ContentParts[1].(messages.ImagePart)
 	if !ok {

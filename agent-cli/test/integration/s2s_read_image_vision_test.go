@@ -142,12 +142,12 @@ func materializeReadImageReplayFixtureMode(t *testing.T, committedPath, imagePat
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
 	digest := sha256.Sum256(imageBytes)
 	result, err := json.Marshal(tools.ReadImageResult{
-		Version:    tools.ReadImageResultVersion,
-		Status:     tools.ReadImageResultStatusSuccess,
-		MIMEType:   "image/png",
-		ByteLength: len(imageBytes),
-		SHA256:     hex.EncodeToString(digest[:]),
-		DataURL:    dataURL,
+		Version:         tools.ReadImageResultVersion,
+		Status:          tools.ReadImageResultStatusSuccess,
+		MIMEType:        "image/png",
+		ByteLength:      len(imageBytes),
+		SHA256:          hex.EncodeToString(digest[:]),
+		TypedProjection: tools.ReadImageResultTypedProjectionInputImage,
 	})
 	if err != nil {
 		t.Fatalf("marshal read_image result envelope: %v", err)
@@ -426,14 +426,11 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 				if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusSuccess {
 					t.Fatalf("function_call_output result = %#v, want versioned success", result)
 				}
-				if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.DataURL != wantDataURL {
-					t.Fatalf("function_call_output result metadata = %#v, want MIME image/png, length %d, digest %s, exact data URL", result, len(expectedBytes), wantDigestHex)
+				if len(event.Item.Output) > 1024 || strings.Contains(strings.ToLower(event.Item.Output), "data:") || strings.Contains(strings.ToLower(event.Item.Output), "base64") {
+					t.Fatalf("function_call_output is not a bounded metadata envelope: bytes=%d output=%q", len(event.Item.Output), event.Item.Output)
 				}
-				const dataURLPrefix = "data:image/png;base64,"
-				encoded := strings.TrimPrefix(result.DataURL, dataURLPrefix)
-				decoded, err := base64.StdEncoding.DecodeString(encoded)
-				if err != nil || !bytes.Equal(decoded, expectedBytes) {
-					t.Fatalf("function_call_output data URL does not decode to fixture bytes: decode error=%v, bytes=%d want=%d", err, len(decoded), len(expectedBytes))
+				if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
+					t.Fatalf("function_call_output result metadata = %#v, want MIME image/png, length %d, digest %s, typed image projection", result, len(expectedBytes), wantDigestHex)
 				}
 			case "message":
 				if event.Item.ID != readImageToolImageItemID(readImageCallID) {
@@ -561,7 +558,7 @@ func assertReadImageMissingWireContract(t *testing.T, fixturePath, imagePath str
 				if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error != wantError {
 					t.Fatalf("missing read_image result = %#v, want version %d error %q", result, tools.ReadImageResultVersion, wantError)
 				}
-				if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.DataURL != "" {
+				if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" {
 					t.Fatalf("missing read_image result unexpectedly carried image metadata: %#v", result)
 				}
 			case "message":

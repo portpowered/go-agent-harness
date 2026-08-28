@@ -489,14 +489,11 @@ func assertLiveReadImageEnvelope(t *testing.T, output liveReadImageFunctionOutpu
 		}
 		wantDigest := sha256.Sum256(expectedBytes)
 		wantDigestHex := hex.EncodeToString(wantDigest[:])
-		wantURL := liveReadImageDataURL(expectedBytes)
-		if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.DataURL != wantURL {
-			t.Fatalf("live success result metadata = (MIME=%q length=%d digest=%q data_url_length=%d), want exact PNG bytes", result.MIMEType, result.ByteLength, result.SHA256, len(result.DataURL))
+		if len(output.output) > 1024 || strings.Contains(strings.ToLower(output.output), "data:") || strings.Contains(strings.ToLower(output.output), "base64") {
+			t.Fatalf("live success result is not a bounded metadata envelope: bytes=%d", len(output.output))
 		}
-		encoded := strings.TrimPrefix(result.DataURL, "data:image/png;base64,")
-		decoded, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || !bytes.Equal(decoded, expectedBytes) {
-			t.Fatalf("live success data URL does not decode to the committed fixture bytes: decode error=%v decoded bytes=%d want=%d", err, len(decoded), len(expectedBytes))
+		if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
+			t.Fatalf("live success result metadata = (MIME=%q length=%d digest=%q projection=%q), want exact PNG metadata and typed projection", result.MIMEType, result.ByteLength, result.SHA256, result.TypedProjection)
 		}
 		return
 	}
@@ -508,8 +505,8 @@ func assertLiveReadImageEnvelope(t *testing.T, output liveReadImageFunctionOutpu
 	if !strings.Contains(errorText, "missing") && !strings.Contains(errorText, "no such file") && !strings.Contains(errorText, "not exist") {
 		t.Fatalf("live missing read_image error = %q, want a missing-file explanation", result.Error)
 	}
-	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.DataURL != "" || strings.Contains(strings.ToLower(output.output), "data:") {
-		t.Fatalf("live missing read_image result unexpectedly carried image data: metadata=(MIME=%q length=%d digest=%q data_url_length=%d)", result.MIMEType, result.ByteLength, result.SHA256, len(result.DataURL))
+	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" || strings.Contains(strings.ToLower(output.output), "data:") {
+		t.Fatalf("live missing read_image result unexpectedly carried image data: metadata=(MIME=%q length=%d digest=%q projection=%q)", result.MIMEType, result.ByteLength, result.SHA256, result.TypedProjection)
 	}
 }
 
