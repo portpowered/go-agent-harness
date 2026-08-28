@@ -427,8 +427,21 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 		return
 	}
 	if event.Capabilities != nil {
-		target.WebMCP = event.Capabilities.WebMCP
-		target.WebMCPKnown = true
+		capabilities := event.Capabilities
+		if capabilities.DomainKnown {
+			target.WebMCP = capabilities.DomainSupported
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.DomainSupported
+			target.WebMCPDomainKnown = true
+		} else {
+			target.WebMCP = capabilities.WebMCP
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.WebMCP
+			target.WebMCPDomainKnown = true
+		}
+		target.PageToolsReady = capabilities.PageToolsReady
+		target.PageToolsKnown = capabilities.PageToolsKnown
+		target.PageToolsEvidence = capabilities.PageToolsEvidence
 		if event.Capabilities.ToolCount >= 0 {
 			target.ToolCount = event.Capabilities.ToolCount
 			target.ToolCountKnown = event.Capabilities.ToolCountKnown || event.Capabilities.ToolCount >= 0
@@ -437,6 +450,8 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 	if event.WebMCP != nil {
 		target.WebMCP = *event.WebMCP
 		target.WebMCPKnown = true
+		target.WebMCPDomainSupported = *event.WebMCP
+		target.WebMCPDomainKnown = true
 	}
 	if event.ToolCount != nil && *event.ToolCount >= 0 {
 		target.ToolCount = *event.ToolCount
@@ -479,6 +494,7 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 	} else if browser, ok := s.browsers[selection.BrowserID]; ok && (s.targetLister != nil || s.endpoints[selection.BrowserID].httpURL != "") {
 		descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 		if failure != nil {
+			failure = s.promoteRetainedBrowserEndpointLossLocked(failure, selection.BrowserID, selection.TargetID, "targets")
 			failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, "targets")
 			selection.statusSet = true
 			selection.connected = failure.Code != CodeBrowserDisconnected
@@ -489,6 +505,7 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 		}
 		targets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 		if normalizeFailure != nil {
+			normalizeFailure = s.promoteRetainedBrowserEndpointLossLocked(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
 			normalizeFailure = enrichBrowserDisconnected(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
 			selection.statusSet = true
 			selection.connected = normalizeFailure.Code != CodeBrowserDisconnected
@@ -518,16 +535,29 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 		browser := s.browsers[selection.BrowserID]
 		capabilities, probeErr := s.targetProbe.Probe(ctx, browser, target)
 		if probeErr != nil {
+			failure := s.promoteRetainedBrowserEndpointLossLocked(classifyTargetListError(probeErr, browser), selection.BrowserID, selection.TargetID, "capability")
+			failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, "capability")
 			selection.statusSet = true
-			selection.connected = !isBrowserDisconnected(probeErr)
+			selection.connected = failure.Code != CodeBrowserDisconnected
 			selection.ready = false
 			s.selection = &selection
-			failure := enrichBrowserDisconnected(classifyTargetListError(probeErr, browser), selection.BrowserID, selection.TargetID, "capability")
 			s.noteBrowserDisconnectedFailureLocked(failure, selection.BrowserID, selection.TargetID, "capability")
 			return selection, failure
 		}
-		target.WebMCP = capabilities.WebMCP
-		target.WebMCPKnown = true
+		if capabilities.DomainKnown {
+			target.WebMCP = capabilities.DomainSupported
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.DomainSupported
+			target.WebMCPDomainKnown = true
+		} else {
+			target.WebMCP = capabilities.WebMCP
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.WebMCP
+			target.WebMCPDomainKnown = true
+		}
+		target.PageToolsReady = capabilities.PageToolsReady
+		target.PageToolsKnown = capabilities.PageToolsKnown
+		target.PageToolsEvidence = capabilities.PageToolsEvidence
 		if capabilities.ToolCount >= 0 {
 			target.ToolCount = capabilities.ToolCount
 			target.ToolCountKnown = capabilities.ToolCountKnown || capabilities.ToolCount >= 0

@@ -394,6 +394,37 @@ func TestWebMCPDirectClassifiesBrokerFailures(t *testing.T) {
 	}
 }
 
+func TestWebMCPDirectClassifiesPersistedBrowserLossAsDisconnected(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, candidate, _ := directFixture()
+	selected := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{candidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	if result := executeDirectCommand(t, configDir, store, directFactory(selected), "select", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json"); result.err != nil {
+		t.Fatalf("seed persisted selection: %v\nstdout=%s", result.err, result.stdout)
+	}
+
+	lost := &directCommandBroker{
+		discoverErr: webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
+			"phase": "discovery",
+		}),
+	}
+	result := executeDirectCommand(t, configDir, store, directFactory(lost), "context", "--json")
+	if result.err == nil {
+		t.Fatal("context unexpectedly succeeded after the persisted browser disappeared")
+	}
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorBrowserDisconnected) {
+		t.Fatalf("disconnected context envelope = %+v", envelope)
+	}
+	if envelope.Error.Details["browser_id"] != string(candidate.ID) || envelope.Error.Details["target_id"] != string(target.ID) || envelope.Error.Details["phase"] != "discovery" || envelope.Error.Details["reconnect_required"] != true {
+		t.Fatalf("disconnected context details = %#v", envelope.Error.Details)
+	}
+}
+
 type directCommandResult struct {
 	stdout string
 	stderr string

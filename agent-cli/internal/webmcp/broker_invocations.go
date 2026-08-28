@@ -110,8 +110,17 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 		return InvokeResult{}, ErrClosed
 	}
 	selected := b.selected
-	if selected == nil || !selected.active || !selected.context.Connected {
-		err := staleSelectionForSession(selected, "selection_not_connected")
+	b.mu.Unlock()
+	if err := b.selectedStateError(selected, "lifecycle", "selection_not_connected"); err != nil {
+		return InvokeResult{}, err
+	}
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return InvokeResult{}, ErrClosed
+	}
+	if b.selected != selected || !selected.active || !selected.context.Connected {
+		err := selectionStateErrorLocked(selected, "lifecycle", "selection_not_connected")
 		b.mu.Unlock()
 		return InvokeResult{}, err
 	}
@@ -140,7 +149,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 		return InvokeResult{}, ErrClosed
 	}
 	if b.selected != selected || !selected.active || !selected.context.Connected {
-		err := staleSelectionForSession(selected, "selection_changed_before_admission")
+		err := selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_admission")
 		b.mu.Unlock()
 		return InvokeResult{}, err
 	}
@@ -394,7 +403,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		return
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
-		err := staleSelectionForSession(selected, "selection_changed_before_dispatch")
+		err := selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
 		result := invocationFailureResult(invocation, InvocationError, errorCodeFor(err, ErrorStaleSelection), nil)
 		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
@@ -420,9 +429,16 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	// target disappearing while an earlier invocation occupied the lane.
 	targets, err := handle.ListTargets(ctx)
 	if err != nil || !targetPresent(targets, descriptor.TargetID) {
-		failure := staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
 		b.mu.Lock()
-		result := invocationFailureResult(invocation, InvocationError, ErrorStaleSelection, nil)
+		failure := staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
+		code := ErrorStaleSelection
+		if err != nil && b.selected == selected {
+			if promoted := b.browserDisconnectedLocked(selected, "list_targets", err); promoted != nil {
+				failure = promoted
+				code = ErrorBrowserDisconnected
+			}
+		}
+		result := invocationFailureResult(invocation, InvocationError, code, nil)
 		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, failure)
 		b.mu.Unlock()
@@ -436,8 +452,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		return
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
-		err = staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "selection_changed_before_dispatch")
-		result := invocationFailureResult(invocation, InvocationError, ErrorStaleSelection, nil)
+		err = selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
+		result := invocationFailureResult(invocation, InvocationError, errorCodeFor(err, ErrorStaleSelection), nil)
 		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
 		b.mu.Unlock()
@@ -460,6 +476,15 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	if id == "" {
 		code := ErrorInvocationFailed
 		state := InvocationError
+		if b.selected == selected && (isBrowserEndpointLossError(invokeErr) || isBrowserDisconnectedTransportError(session.Err())) {
+			if failure := b.browserDisconnectedLocked(selected, "invoke", invokeErr); failure != nil {
+				result := invocationFailureResult(invocation, InvocationError, ErrorBrowserDisconnected, nil)
+				b.finishInvocationLocked(invocation, result)
+				b.reportDispatchLocked(invocation, result, failure)
+				b.mu.Unlock()
+				return
+			}
+		}
 		if errors.Is(invokeErr, context.Canceled) {
 			code = ErrorInvocationCanceled
 			state = InvocationCanceled
@@ -1122,51 +1147,6 @@ func signalInvocationQueueLocked(selected *brokerSession) {
 	case selected.queueWake <- struct{}{}:
 	default:
 	}
-}
-
-func classifyOperation(descriptor ToolDescriptor) OperationClass {
-	if descriptor.Annotations.ReadOnly == nil {
-		return OperationUnknown
-	}
-	if *descriptor.Annotations.ReadOnly {
-		return OperationReadOnly
-	}
-	return OperationMutating
-}
-
-func lifecycleInvocationErrorCode(reason string, fallback ErrorCode) ErrorCode {
-	switch strings.ToLower(reason) {
-	case "disconnect", "disconnected", "browser_disconnected":
-		return ErrorBrowserDisconnected
-	case "detach", "detached", "target_detached":
-		return ErrorTargetDetached
-	default:
-		return fallback
-	}
-}
-
-func errorCodeFor(err error, fallback ErrorCode) ErrorCode {
-	var classifiedError *ClassifiedError
-	if errors.As(err, &classifiedError) && classifiedError != nil && IsKnownErrorCode(classifiedError.Code) {
-		return classifiedError.Code
-	}
-	return fallback
-}
-
-func safePageErrorCode(code string) string {
-	if code == "" {
-		return ""
-	}
-	if len(code) > 64 {
-		return code[:64]
-	}
-	for _, character := range code {
-		if (character < 'A' || character > 'Z') && (character < 'a' || character > 'z') &&
-			(character < '0' || character > '9') && character != '_' && character != '-' && character != '.' {
-			return "unknown"
-		}
-	}
-	return code
 }
 
 func cloneInvokeResult(result InvokeResult) InvokeResult {

@@ -143,6 +143,40 @@ func TestDisconnectDuringRefreshInvalidatesSelectionAndBlocksReuse(t *testing.T)
 	}
 }
 
+func TestRetainedEndpointLossIsBrowserDisconnectedButInitialLossStaysUnreachable(t *testing.T) {
+	browser := BrowserCandidate{ID: "browser-retained-endpoint", Source: SourceConfigured, Loopback: true}
+	descriptor := targetDescriptor("raw-page", "Page", "https://retained-endpoint.test", 1)
+	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
+	endpointLost := false
+	service := New(Options{TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+		if endpointLost {
+			return nil, errors.New("dial tcp 127.0.0.1:9222: connect: connection refused")
+		}
+		return []TargetDescriptor{descriptor}, nil
+	})})
+
+	if _, err := service.ListTargets(context.Background(), browser); err != nil {
+		t.Fatalf("initial target list: %v", err)
+	}
+	endpointLost = true
+	_, err := service.ListTargets(context.Background(), browser)
+	failure := assertDiscoveryError(t, err, CodeEndpointUnreachable)
+	if failure.Details["phase"] != "targets" {
+		t.Fatalf("initial endpoint failure details = %#v, want target phase", failure.Details)
+	}
+
+	endpointLost = false
+	if _, err := service.SelectTarget(context.Background(), browser, targetID); err != nil {
+		t.Fatalf("select retained target: %v", err)
+	}
+	endpointLost = true
+	_, err = service.RefreshSelection(context.Background())
+	failure = assertDiscoveryError(t, err, CodeBrowserDisconnected)
+	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != "targets" || failure.Details["reconnect_required"] != true {
+		t.Fatalf("retained endpoint failure details = %#v", failure.Details)
+	}
+}
+
 func TestReconnectUsesExactDisconnectedSelectionAndAdvancesGeneration(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-disconnect-reconnect", Source: SourceConfigured, Loopback: true}
 	descriptors := []TargetDescriptor{targetDescriptor("raw-a", "A", "https://reconnect.test/a", 1)}

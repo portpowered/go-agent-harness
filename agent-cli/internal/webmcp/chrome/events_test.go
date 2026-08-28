@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/runtime"
 	cdpTarget "github.com/chromedp/cdproto/target"
 	cdpWebMCP "github.com/chromedp/cdproto/webmcp"
 	"github.com/chromedp/chromedp"
@@ -19,6 +20,7 @@ import (
 type callbackExecutor struct {
 	base      *recordingExecutor
 	onExecute func(string) error
+	onResult  func(string, any)
 }
 
 func (e *callbackExecutor) Execute(ctx context.Context, method string, params, result any) error {
@@ -27,7 +29,13 @@ func (e *callbackExecutor) Execute(ctx context.Context, method string, params, r
 			return err
 		}
 	}
-	return e.base.Execute(ctx, method, params, result)
+	if err := e.base.Execute(ctx, method, params, result); err != nil {
+		return err
+	}
+	if e.onResult != nil {
+		e.onResult(method, result)
+	}
+	return nil
 }
 
 func nextBrowserEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp.BrowserEvent {
@@ -41,6 +49,60 @@ func nextBrowserEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp.Br
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for browser event")
 		return webmcp.BrowserEvent{}
+	}
+}
+
+func TestWebMCPEnablePublishesExplicitEmptyCatalogEvidence(t *testing.T) {
+	baseExecutor := &recordingExecutor{}
+	protocolExecutor := &callbackExecutor{base: baseExecutor}
+	protocolExecutor.onResult = func(method string, result any) {
+		if method != runtime.CommandEvaluate {
+			return
+		}
+		returns, ok := result.(*runtime.EvaluateReturns)
+		if !ok {
+			t.Fatalf("Runtime.evaluate result = %T, want *runtime.EvaluateReturns", result)
+		}
+		returns.Result = &runtime.RemoteObject{Value: jsontext.Value([]byte(`{"producer_present":true,"catalog_ready":true,"tool_count":0}`))}
+	}
+	handle := testHandle(baseExecutor)
+	handle.browserExecutor = protocolExecutor
+	targetContext, rawCancel := chromedp.NewContext(context.Background())
+	protocolTarget := &chromedp.Target{SessionID: "session-empty-catalog", TargetID: "target-empty-catalog"}
+	chromedp.FromContext(targetContext).Target = protocolTarget
+	session := newTargetSession(handle, targetContext, rawCancel, webmcp.Target{
+		BrowserID: handle.candidate.ID,
+		ID:        webmcp.TargetID(protocolTarget.TargetID),
+		Type:      "page",
+		URL:       "https://example.test/empty",
+	}, webmcp.TargetOwnershipExternal)
+	session.setProtocolTarget(protocolTarget)
+	session.runAction = func(ctx context.Context, actions ...chromedp.Action) error {
+		actionContext := cdp.WithExecutor(ctx, protocolExecutor)
+		for _, action := range actions {
+			if err := action.Do(actionContext); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	handle.sessions[session] = struct{}{}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close empty-catalog session: %v", err)
+		}
+	}()
+
+	if err := session.EnableWebMCP(context.Background()); err != nil {
+		t.Fatalf("enable WebMCP: %v", err)
+	}
+	page := session.Context()
+	if !page.WebMCPDomainSupported || !page.CatalogReady || !page.Ready {
+		t.Fatalf("page readiness = %+v, want supported domain and explicit empty catalog readiness", page)
+	}
+	event := nextBrowserEvent(t, session.Events())
+	if event.Type != webmcp.EventCatalogReady || !event.CatalogReady || !event.ToolCountKnown || event.ToolCount != 0 {
+		t.Fatalf("catalog event = %+v, want explicit empty catalog evidence", event)
 	}
 }
 
