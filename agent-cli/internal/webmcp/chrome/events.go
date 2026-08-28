@@ -61,10 +61,14 @@ func (s *targetSession) convertToolsAdded(value *cdpWebMCP.EventToolsAdded) webm
 	if value == nil {
 		return event
 	}
+	page := s.Context()
 	event.Tools = make([]webmcp.ToolDescriptor, 0, len(value.Tools))
 	for _, tool := range value.Tools {
-		if converted, ok := s.convertTool(tool); ok {
+		if converted, ok := s.convertToolAt(tool, page); ok {
 			event.Tools = append(event.Tools, converted)
+			if event.FrameID == "" {
+				event.FrameID = converted.FrameID
+			}
 		}
 	}
 	return event
@@ -119,6 +123,10 @@ func (s *targetSession) convertToolResponded(value *cdpWebMCP.EventToolResponded
 }
 
 func (s *targetSession) convertTool(value *cdpWebMCP.Tool) (webmcp.ToolDescriptor, bool) {
+	return s.convertToolAt(value, s.Context())
+}
+
+func (s *targetSession) convertToolAt(value *cdpWebMCP.Tool, page webmcp.PageContext) (webmcp.ToolDescriptor, bool) {
 	if value == nil || value.Name == "" || value.FrameID == "" {
 		return webmcp.ToolDescriptor{}, false
 	}
@@ -126,11 +134,11 @@ func (s *targetSession) convertTool(value *cdpWebMCP.Tool) (webmcp.ToolDescripto
 		Name:        value.Name,
 		Description: value.Description,
 		InputSchema: cloneBytes([]byte(value.InputSchema)),
-		BrowserID:   s.page.Key.BrowserID,
-		TargetID:    s.page.Key.TargetID,
+		BrowserID:   page.Key.BrowserID,
+		TargetID:    page.Key.TargetID,
 		FrameID:     webmcp.FrameID(value.FrameID),
-		Origin:      s.page.Origin,
-		Generation:  s.page.Generation,
+		Origin:      page.Origin,
+		Generation:  page.Generation,
 	}
 	if value.Annotations != nil {
 		readOnly := value.Annotations.ReadOnly

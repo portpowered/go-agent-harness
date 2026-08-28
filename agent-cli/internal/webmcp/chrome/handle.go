@@ -41,10 +41,11 @@ type handle struct {
 }
 
 type targetContextOps struct {
-	newContext func(context.Context, target.ID) (context.Context, context.CancelFunc)
-	listen     func(context.Context, func(any))
-	run        func(context.Context, ...chromedp.Action) error
-	target     func(context.Context) *chromedp.Target
+	newContext    func(context.Context, target.ID) (context.Context, context.CancelFunc)
+	listen        func(context.Context, func(any))
+	listenBrowser func(context.Context, func(any))
+	run           func(context.Context, ...chromedp.Action) error
+	target        func(context.Context) *chromedp.Target
 }
 
 func (h *handle) resolvedTargetContextOps() targetContextOps {
@@ -61,6 +62,13 @@ func (h *handle) resolvedTargetContextOps() targetContextOps {
 	}
 	if ops.listen == nil {
 		ops.listen = chromedp.ListenTarget
+	}
+	if ops.listenBrowser == nil {
+		if customContext {
+			ops.listenBrowser = func(context.Context, func(any)) {}
+		} else {
+			ops.listenBrowser = chromedp.ListenBrowser
+		}
 	}
 	if ops.run == nil {
 		ops.run = chromedp.Run
@@ -227,7 +235,9 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("target context is unavailable"))
 	}
 	session := newTargetSession(h, targetContext, cancelTarget, selected, ownership)
+	session.runAction = ops.run
 	ops.listen(targetContext, session.enqueueProtocolEvent)
+	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
 
 	attachCtx, cancelAttach := context.WithTimeout(targetContext, h.timeout())
 	err = ops.run(attachCtx, chromedp.ActionFunc(func(context.Context) error { return nil }))

@@ -20,6 +20,7 @@ type targetSession struct {
 	handle        *handle
 	targetContext context.Context
 	cancelTarget  context.CancelFunc
+	runAction     func(context.Context, ...chromedp.Action) error
 
 	mu               sync.Mutex
 	protocolTarget   *chromedp.Target
@@ -31,15 +32,18 @@ type targetSession struct {
 	err              error
 	closeErr         error
 
-	protocolEvents chan any
-	events         chan webmcp.BrowserEvent
-	done           chan struct{}
-	stopRouter     chan struct{}
-	routerDone     chan struct{}
-	stopOnce       sync.Once
-	lifecycleOnce  sync.Once
-	closeOnce      sync.Once
-	sequence       uint64
+	protocolEvents  chan any
+	events          chan webmcp.BrowserEvent
+	done            chan struct{}
+	stopRouter      chan struct{}
+	routerDone      chan struct{}
+	eventsMu        sync.Mutex
+	lifecycleClosed bool
+	finishMu        sync.Mutex
+	finished        bool
+	finishDone      chan struct{}
+	stopOnce        sync.Once
+	sequence        uint64
 }
 
 func newTargetSession(
@@ -49,6 +53,10 @@ func newTargetSession(
 	targetValue webmcp.Target,
 	ownership webmcp.TargetOwnership,
 ) *targetSession {
+	eventBuffer := handle.eventBuffer
+	if eventBuffer <= 0 {
+		eventBuffer = 1
+	}
 	session := &targetSession{
 		handle:        handle,
 		targetContext: targetContext,
@@ -64,11 +72,12 @@ func newTargetSession(
 			Ready:      false,
 			SelectedAt: time.Now(),
 		},
-		protocolEvents: make(chan any, handle.eventBuffer),
-		events:         make(chan webmcp.BrowserEvent, handle.eventBuffer),
+		protocolEvents: make(chan any, eventBuffer),
+		events:         make(chan webmcp.BrowserEvent, eventBuffer),
 		done:           make(chan struct{}),
 		stopRouter:     make(chan struct{}),
 		routerDone:     make(chan struct{}),
+		finishDone:     make(chan struct{}),
 	}
 	go session.routeProtocolEvents()
 	return session
@@ -102,6 +111,21 @@ func (s *targetSession) enqueueProtocolEvent(event any) {
 	}
 }
 
+// enqueueBrowserEvent receives browser-scoped target lifecycle events. The
+// browser listener is shared by all target sessions, so conversion below
+// filters by this session's protocol session/target identifiers.
+func (s *targetSession) enqueueBrowserEvent(event any) {
+	switch event.(type) {
+	case *cdpTarget.EventDetachedFromTarget,
+		cdpTarget.EventDetachedFromTarget,
+		*cdpTarget.EventTargetDestroyed,
+		cdpTarget.EventTargetDestroyed,
+		*cdpTarget.EventTargetCrashed,
+		cdpTarget.EventTargetCrashed:
+		s.enqueueProtocolEvent(event)
+	}
+}
+
 func (s *targetSession) routeProtocolEvents() {
 	defer close(s.routerDone)
 	for {
@@ -110,6 +134,10 @@ func (s *targetSession) routeProtocolEvents() {
 			return
 		case event := <-s.protocolEvents:
 			if converted, ok := s.convertProtocolEvent(event); ok {
+				if converted.Type == webmcp.EventTargetDetached {
+					s.finishFromProtocol(converted)
+					return
+				}
 				s.publish(converted)
 			}
 		}
@@ -117,6 +145,15 @@ func (s *targetSession) routeProtocolEvents() {
 }
 
 func (s *targetSession) publish(event webmcp.BrowserEvent) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+	s.publishLocked(event, false)
+}
+
+func (s *targetSession) publishLocked(event webmcp.BrowserEvent, terminal bool) {
+	if s.lifecycleClosed {
+		return
+	}
 	s.mu.Lock()
 	if event.Version == "" {
 		event.Version = webmcp.BrowserEventsVersion
@@ -138,10 +175,22 @@ func (s *targetSession) publish(event webmcp.BrowserEvent) {
 	s.mu.Unlock()
 
 	select {
-	case <-s.done:
-		return
 	case s.events <- cloneEvent(event):
 	default:
+		if terminal {
+			// Preserve the terminal lifecycle signal without blocking the
+			// protocol reader. A full bounded queue may discard its oldest
+			// observation, but it must not hide detach/disconnect semantics.
+			select {
+			case <-s.events:
+			default:
+			}
+			select {
+			case s.events <- cloneEvent(event):
+			default:
+			}
+			return
+		}
 		s.recordError(webmcp.ErrEventBufferFull)
 	}
 }
@@ -263,7 +312,11 @@ func (s *targetSession) run(ctx context.Context, action chromedp.Action) error {
 		case <-watchDone:
 		}
 	}()
-	err := chromedp.Run(commandContext, action)
+	runner := s.runAction
+	if runner == nil {
+		runner = chromedp.Run
+	}
+	err := runner(commandContext, action)
 	close(watchDone)
 	cancelCommand()
 	return err
@@ -288,43 +341,69 @@ func invalidInputError(code string) error {
 }
 
 func (s *targetSession) Close() error {
-	s.closeOnce.Do(func() {
+	if !s.beginFinish(true) {
 		s.mu.Lock()
-		s.closed = true
-		s.mu.Unlock()
+		defer s.mu.Unlock()
+		return s.closeErr
+	}
 
-		s.stopProtocolRouter()
-		cleanupErr := s.cleanupTarget()
-		s.mu.Lock()
-		s.closeErr = cleanupErr
-		s.mu.Unlock()
-		s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventSessionClosed, Reason: "closed"})
-		s.handle.unregister(s)
-	})
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+
+	s.stopProtocolRouter()
+	cleanupErr := s.cleanupTarget()
+	s.mu.Lock()
+	s.closeErr = cleanupErr
+	s.mu.Unlock()
+	s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventSessionClosed, Reason: "closed"})
+	s.handle.unregister(s)
+	s.completeFinish()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.closeErr
 }
 
 func (s *targetSession) abortOpen() error {
-	var cleanupErr error
-	s.closeOnce.Do(func() {
+	if !s.beginFinish(true) {
 		s.mu.Lock()
-		s.closed = true
-		s.mu.Unlock()
-		s.stopProtocolRouter()
-		cleanupErr = s.cleanupTarget()
-		s.mu.Lock()
-		s.closeErr = cleanupErr
-		s.mu.Unlock()
-		s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventSessionClosed, Reason: "attach_failed"})
-	})
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if cleanupErr != nil {
-		return cleanupErr
+		defer s.mu.Unlock()
+		return s.closeErr
 	}
-	return s.closeErr
+
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+	s.stopProtocolRouter()
+	cleanupErr := s.cleanupTarget()
+	s.mu.Lock()
+	s.closeErr = cleanupErr
+	s.mu.Unlock()
+	s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventSessionClosed, Reason: "attach_failed"})
+	s.handle.unregister(s)
+	s.completeFinish()
+	return cleanupErr
+}
+
+func (s *targetSession) beginFinish(waitForExisting bool) bool {
+	s.finishMu.Lock()
+	if s.finished {
+		done := s.finishDone
+		s.finishMu.Unlock()
+		if waitForExisting {
+			<-done
+		}
+		return false
+	}
+	s.finished = true
+	s.finishMu.Unlock()
+	return true
+}
+
+func (s *targetSession) completeFinish() {
+	s.finishMu.Lock()
+	defer s.finishMu.Unlock()
+	close(s.finishDone)
 }
 
 // cleanupTarget is the ownership boundary for an attached target. The
@@ -405,26 +484,59 @@ func (s *targetSession) clearClientTarget(targetValue *chromedp.Target) {
 }
 
 func (s *targetSession) transportLost() {
-	s.closeOnce.Do(func() {
-		s.mu.Lock()
-		s.closed = true
-		targetValue := s.protocolTarget
-		s.page.Connected = false
-		s.err = webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected), map[string]any{
-			"browser_id":         s.page.Key.BrowserID,
-			"target_id":          s.page.Key.TargetID,
-			"phase":              "connected",
-			"reconnect_required": true,
-		})
-		s.mu.Unlock()
-		s.stopProtocolRouter()
-		s.clearClientTarget(targetValue)
-		if s.cancelTarget != nil {
-			s.cancelTarget()
-		}
-		s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventBrowserDisconnected, Reason: "browser_disconnected"})
-		s.handle.unregister(s)
+	if !s.beginFinish(true) {
+		return
+	}
+
+	s.mu.Lock()
+	s.closed = true
+	targetValue := s.protocolTarget
+	s.page.Connected = false
+	s.err = webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected), map[string]any{
+		"browser_id":         s.page.Key.BrowserID,
+		"target_id":          s.page.Key.TargetID,
+		"phase":              "connected",
+		"reconnect_required": true,
 	})
+	s.mu.Unlock()
+	s.stopProtocolRouter()
+	s.clearClientTarget(targetValue)
+	if s.cancelTarget != nil {
+		s.cancelTarget()
+	}
+	s.closeLifecycle(webmcp.BrowserEvent{
+		Type:      webmcp.EventBrowserDisconnected,
+		ErrorCode: string(webmcp.ErrorBrowserDisconnected),
+		Reason:    "browser_disconnected",
+	})
+	s.handle.unregister(s)
+	s.completeFinish()
+}
+
+func (s *targetSession) finishFromProtocol(event webmcp.BrowserEvent) {
+	if !s.beginFinish(false) {
+		return
+	}
+
+	s.mu.Lock()
+	s.closed = true
+	targetValue := s.protocolTarget
+	s.page.Connected = false
+	s.err = webmcp.NewClassifiedError(webmcp.ErrorTargetDetached, webmcp.DefaultErrorMessage(webmcp.ErrorTargetDetached), map[string]any{
+		"browser_id": s.page.Key.BrowserID,
+		"target_id":  s.page.Key.TargetID,
+		"generation": s.page.Generation,
+		"reason":     event.Reason,
+	})
+	s.mu.Unlock()
+	s.clearClientTarget(targetValue)
+	if s.cancelTarget != nil {
+		s.cancelTarget()
+	}
+	event.ErrorCode = string(webmcp.ErrorTargetDetached)
+	s.closeLifecycle(event)
+	s.handle.unregister(s)
+	s.completeFinish()
 }
 
 func (s *targetSession) stopProtocolRouter() {
@@ -433,13 +545,17 @@ func (s *targetSession) stopProtocolRouter() {
 }
 
 func (s *targetSession) closeLifecycle(event webmcp.BrowserEvent) {
-	s.lifecycleOnce.Do(func() {
-		if event.Type != "" {
-			s.publish(event)
-		}
-		close(s.done)
-		close(s.events)
-	})
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+	if s.lifecycleClosed {
+		return
+	}
+	if event.Type != "" {
+		s.publishLocked(event, true)
+	}
+	s.lifecycleClosed = true
+	close(s.done)
+	close(s.events)
 }
 
 func cloneEvent(event webmcp.BrowserEvent) webmcp.BrowserEvent {
@@ -450,6 +566,18 @@ func cloneEvent(event webmcp.BrowserEvent) webmcp.BrowserEvent {
 	for i := range event.Tools {
 		event.Tools[i].InputSchema = cloneBytes(event.Tools[i].InputSchema)
 		event.Tools[i].Annotations.Raw = cloneBytes(event.Tools[i].Annotations.Raw)
+		if event.Tools[i].Annotations.ReadOnly != nil {
+			value := *event.Tools[i].Annotations.ReadOnly
+			event.Tools[i].Annotations.ReadOnly = &value
+		}
+		if event.Tools[i].Annotations.UntrustedContent != nil {
+			value := *event.Tools[i].Annotations.UntrustedContent
+			event.Tools[i].Annotations.UntrustedContent = &value
+		}
+		if event.Tools[i].Annotations.AutoSubmit != nil {
+			value := *event.Tools[i].Annotations.AutoSubmit
+			event.Tools[i].Annotations.AutoSubmit = &value
+		}
 	}
 	return event
 }
