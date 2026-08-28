@@ -386,11 +386,10 @@ func TestRunRoom_StopsWhenEveryParticipantReachesMaxTurns(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	inferencers := make(map[string]*roomTestInferencer, len(ids))
 	for _, id := range ids {
-		inferencers[id] = &roomTestInferencer{events: []messages.StreamMessage{
-			roomTestSessionOpen(id),
-			roomTestMessageEnd(),
-			roomTestMessageEnd(),
-		}}
+		events := []messages.StreamMessage{roomTestSessionOpen(id)}
+		events = append(events, roomTestResponse("turn one")...)
+		events = append(events, roomTestResponse("turn two")...)
+		inferencers[id] = &roomTestInferencer{events: events}
 	}
 	opts, _ := newRoomTestRunOptions(ids, inferencers)
 	opts.Manifest.Room.MaxTurns = 2
@@ -745,6 +744,14 @@ func roomTestMessageEnd() messages.StreamMessage {
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+}
+
+func roomTestResponse(text string) []messages.StreamMessage {
+	return []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(text)},
+		roomTestMessageEnd(),
 	}
 }
 

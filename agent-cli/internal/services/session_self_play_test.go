@@ -222,11 +222,23 @@ func TestSessionProgressObserver_TurnAdmissionRejectsPostBoundCompletion(t *test
 		admitted++
 		return admitted == 1
 	}
+	messageStart := messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	}
+	messageText := messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("admitted"),
+	}
 	messageEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	}
+	observer.observe(messageStart)
+	observer.observe(messageText)
 	observer.observe(messageEnd)
 	observer.observe(messageEnd)
 

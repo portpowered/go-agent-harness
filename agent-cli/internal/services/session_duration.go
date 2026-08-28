@@ -1096,7 +1096,7 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if err != nil {
 		return result, err
 	}
-	if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent {
+	if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
 		result.closeAfterOpenPending = true
 	}
 	state, err := closePendingSessionIfReady(ctx, loop, opts, sessionLoopMessageState{
