@@ -5,23 +5,36 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// WebMCPCommand is the protocol-specific direct WebMCP command group. The
-// remaining operation commands are added by the direct-operations story;
-// doctor is available independently because it has its own diagnostic seam.
+// WebMCPCommand is the protocol-specific direct WebMCP command group.
 type WebMCPCommand struct {
-	DoctorCommand *WebMCPDoctorCommand
+	DoctorCommand     *WebMCPDoctorCommand
+	OperationsCommand *WebMCPOperationsCommand
 }
 
-// NewWebMCPCommand constructs the direct WebMCP group with an optional doctor
-// factory for hermetic command tests and alternate composition roots.
+// NewWebMCPCommand constructs the direct WebMCP group with an optional
+// request-scoped runtime factory for hermetic command tests and alternate
+// composition roots. The same factory is shared by doctor and direct
+// operations so a composition root cannot accidentally give the two surfaces
+// different browser ownership semantics.
 func NewWebMCPCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorFactory) *WebMCPCommand {
-	return &WebMCPCommand{DoctorCommand: NewWebMCPDoctorCommand(globalFlags, factories...)}
+	factory := unavailableWebMCPDoctorFactory
+	if len(factories) > 0 && factories[0] != nil {
+		factory = factories[0]
+	}
+	return &WebMCPCommand{
+		DoctorCommand:     NewWebMCPDoctorCommand(globalFlags, factory),
+		OperationsCommand: NewWebMCPOperationsCommand(globalFlags, factory),
+	}
 }
 
 func (c *WebMCPCommand) Generate() *cobra.Command {
 	doctor := c.DoctorCommand
 	if doctor == nil {
 		doctor = NewWebMCPDoctorCommand(nil)
+	}
+	operations := c.OperationsCommand
+	if operations == nil {
+		operations = NewWebMCPOperationsCommand(nil, unavailableWebMCPDoctorFactory)
 	}
 	command := &cobra.Command{
 		Use:   "webmcp",
@@ -31,5 +44,6 @@ func (c *WebMCPCommand) Generate() *cobra.Command {
 		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	command.AddCommand(NewPath("doctor", doctor.Generate()).CreateCommand())
+	operations.AddCommands(command)
 	return command
 }
