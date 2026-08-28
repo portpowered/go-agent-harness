@@ -229,6 +229,90 @@ func TestMeshContextCancellationClosesAllPairsAndRepeatedCloseIsSafe(t *testing.
 	}
 }
 
+func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing.T) {
+	parentContext, cancelParent := context.WithCancel(context.Background())
+	closeErr := errors.New("gated pair close failed")
+	pair := &gatedClosePair{
+		closeStarted: make(chan struct{}),
+		release:      make(chan struct{}),
+		closeErr:     closeErr,
+	}
+	t.Cleanup(pair.releaseClose)
+	mesh := NewMesh(MeshConfig{
+		Context: parentContext,
+		PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) {
+			return pair, nil
+		},
+	})
+	if err := mesh.Join(context.Background(), "first"); err != nil {
+		t.Fatalf("first Join: %v", err)
+	}
+	if err := mesh.Join(context.Background(), "second"); err != nil {
+		t.Fatalf("second Join: %v", err)
+	}
+
+	cancelParent()
+	awaitClosed(t, mesh.Context().Done())
+	awaitClosed(t, pair.closeStarted)
+
+	closeResults := make(chan error, 3)
+	closeCallStarted := make(chan struct{}, 3)
+	for index := 0; index < 3; index++ {
+		go func() {
+			closeCallStarted <- struct{}{}
+			closeResults <- mesh.Close()
+		}()
+	}
+	for index := 0; index < 3; index++ {
+		select {
+		case <-closeCallStarted:
+		case <-time.After(time.Second):
+			t.Fatal("concurrent Close caller did not start")
+		}
+	}
+	select {
+	case <-mesh.Done():
+		t.Fatal("Mesh.Done closed while PairResource.Close was gated")
+	default:
+	}
+	select {
+	case err := <-closeResults:
+		t.Fatalf("concurrent Close returned while PairResource.Close was gated: %v", err)
+	default:
+	}
+	if got := pair.closeCount.Load(); got != 1 {
+		t.Fatalf("gated pair close count while blocked = %d, want 1", got)
+	}
+
+	pair.releaseClose()
+	var firstResult error
+	for index := 0; index < 3; index++ {
+		select {
+		case err := <-closeResults:
+			if err == nil || !errors.Is(err, closeErr) || err.Error() != closeErr.Error() {
+				t.Fatalf("concurrent Close result %d = %v, want stable close error %v", index, err, closeErr)
+			}
+			if firstResult == nil {
+				firstResult = err
+			} else if err != firstResult {
+				t.Fatalf("concurrent Close result %d = %v, want same published result %v", index, err, firstResult)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("concurrent Close did not complete after PairResource.Close was released")
+		}
+	}
+	awaitClosed(t, mesh.Done())
+	if got := pair.closeCount.Load(); got != 1 {
+		t.Fatalf("gated pair close count at Done boundary = %d, want 1", got)
+	}
+	for index := 0; index < 3; index++ {
+		err := mesh.Close()
+		if err != firstResult {
+			t.Fatalf("repeated Close result %d = %v, want same published result %v", index, err, firstResult)
+		}
+	}
+}
+
 func TestMeshCancellationUnblocksAnInFlightJoinAndClosesPendingPair(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	pending := &blockingPair{started: make(chan struct{})}
@@ -292,6 +376,30 @@ func (p *blockingPair) Connect(ctx context.Context) error {
 func (p *blockingPair) Close() error {
 	p.closeCount.Add(1)
 	return nil
+}
+
+type gatedClosePair struct {
+	closeStarted chan struct{}
+	release      chan struct{}
+	closeErr     error
+	closeCount   atomic.Int32
+	startOnce    sync.Once
+	releaseOnce  sync.Once
+}
+
+func (p *gatedClosePair) Connect(context.Context) error {
+	return nil
+}
+
+func (p *gatedClosePair) Close() error {
+	p.closeCount.Add(1)
+	p.startOnce.Do(func() { close(p.closeStarted) })
+	<-p.release
+	return p.closeErr
+}
+
+func (p *gatedClosePair) releaseClose() {
+	p.releaseOnce.Do(func() { close(p.release) })
 }
 
 func equalStrings(got, want []string) bool {

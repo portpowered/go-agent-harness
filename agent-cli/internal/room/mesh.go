@@ -239,7 +239,8 @@ func (m *Mesh) Context() context.Context {
 	return m.ctx
 }
 
-// Done closes when the mesh is closed or its parent context is canceled.
+// Done closes after the mesh is closed, all captured pair resources have been
+// closed, and the final close result has been published.
 func (m *Mesh) Done() <-chan struct{} {
 	if m == nil {
 		closed := make(chan struct{})
@@ -536,7 +537,8 @@ func (m *Mesh) PairCount() int {
 }
 
 // Close prevents new membership changes, cancels in-flight pair operations,
-// and closes every connected or pending pair. It is safe to call repeatedly.
+// and closes every connected or pending pair before publishing Done. It is
+// safe to call repeatedly; every caller waits for and returns the same result.
 func (m *Mesh) Close() error {
 	if m == nil {
 		return nil
@@ -564,7 +566,6 @@ func (m *Mesh) Close() error {
 		m.participants = make(map[string]struct{})
 		m.pairs = make(map[PairSpec]*meshPair)
 		m.pending = nil
-		close(m.done)
 		stopParent := m.stopParent
 		cancel := m.cancel
 		m.mu.Unlock()
@@ -576,6 +577,7 @@ func (m *Mesh) Close() error {
 			cancel()
 		}
 		m.closeErr = closeMeshPairs(all)
+		close(m.done)
 	})
 	return m.closeErr
 }
