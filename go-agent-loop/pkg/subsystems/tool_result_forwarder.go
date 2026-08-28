@@ -106,7 +106,10 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 		// Keep response creation as a distinct, single batch boundary so
 		// parallel tool results cannot create one provider response per call.
 		select {
-		case f.sessionEvents <- messages.StreamMessage{Type: messages.StreamTypeResponseCreate}:
+		case f.sessionEvents <- messages.StreamMessage{
+			Type:  messages.StreamTypeResponseCreate,
+			Value: messages.NewResponseCreateValue(),
+		}:
 		case <-ctx.Done():
 			return ctx.Err()
 		}

@@ -343,7 +343,10 @@ func TestSessionModelRunner_ContinuesAfterAcceptedResponseRequest(t *testing.T) 
 	errCh := make(chan error, 1)
 	go func() { errCh <- runner.Run(ctx) }()
 
-	runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeResponseCreate}
+	runner.UserEventInbox <- messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}
 	select {
 	case sent := <-session.sendCh:
 		if sent.Type != messages.StreamTypeResponseCreate {
@@ -386,7 +389,10 @@ func TestSessionModelRunner_SuppressesContinuationAfterRejectedToolResult(t *tes
 		Type:  messages.StreamTypeToolCallEnd,
 		Value: messages.NewToolCallEndValue("call-rejected", "date", "result"),
 	}
-	runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeResponseCreate}
+	runner.UserEventInbox <- messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}
 
 	failure := waitForDelta(t, ctx, runner, messages.StreamTypeError)
 	value, ok := failure.Value.(*messages.ErrorValue)
@@ -784,8 +790,8 @@ func TestModelRunner_SendLatestSessionToolResultsFallsBackForStreamOnlySession(t
 	if sent[2].Type != messages.StreamTypeResponseCreate {
 		t.Fatalf("response trigger type = %s, want RESPONSE.CREATE", sent[2].Type)
 	}
-	if sent[2].Value != nil {
-		t.Fatalf("response trigger value = %#v, want nil", sent[2].Value)
+	if _, ok := sent[2].Value.(*messages.ResponseCreateValue); !ok {
+		t.Fatalf("response trigger value = %T, want *ResponseCreateValue", sent[2].Value)
 	}
 }
 
