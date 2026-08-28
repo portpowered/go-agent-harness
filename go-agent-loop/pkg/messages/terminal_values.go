@@ -87,8 +87,15 @@ func MessageEndTerminalSource(v *MessageEndValue) TerminalSource {
 
 // MessageEndValue is the value for MESSAGE.END (inner type "message_end").
 type MessageEndValue struct {
-	Type               string              `json:"type"` // "message_end"
-	Usage              TokenUsage          `json:"usage,omitempty"`
+	Type  string     `json:"type"` // "message_end"
+	Usage TokenUsage `json:"usage,omitempty"`
+	// Status and StatusDetails preserve the provider's terminal response
+	// outcome without making consumers parse provider-specific wire events.
+	// Status is commonly "completed", "failed", "cancelled", or
+	// "incomplete". StatusDetails contains only compact, provider-sanitized
+	// detail text; it is never a raw provider JSON object.
+	Status             string              `json:"status,omitempty"`
+	StatusDetails      string              `json:"status_details,omitempty"`
 	TerminalReason     TerminalReason      `json:"terminal_reason,omitempty"`
 	TerminalProvenance TerminalProvenance  `json:"terminal_provenance,omitempty"`
 	OutputState        TerminalOutputState `json:"output_state,omitempty"`

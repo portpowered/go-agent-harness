@@ -636,6 +636,9 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 	if !awaitingResponse {
 		return msg.Type == messages.StreamTypeSessionClose
 	}
+	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil && opts.observer.hasTerminalToolContinuationFailure() {
+		return true
+	}
 	if opts.WaitForClose {
 		return msg.Type == messages.StreamTypeError || msg.Type == messages.StreamTypeSessionClose
 	}

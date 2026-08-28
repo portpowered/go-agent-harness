@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"mime"
 	"strings"
 
@@ -108,13 +109,20 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 			return nil, false
 		}
 	}
-	// Keep older image-producing tools usable: when a rich result has no text,
-	// derive the same documented envelope from its one owned image snapshot.
-	// read_image normally supplies this envelope itself, which also retains any
-	// tool-specific error detail. A result with no text or image remains valid;
-	// the empty output is still correlated by call_id.
+	// Keep older image-producing tools usable while making an empty output
+	// impossible: when a rich result has no text, derive the same compact
+	// envelope from its one owned image snapshot. read_image normally supplies
+	// this envelope itself, which also retains any tool-specific error detail.
 	if text == "" && len(imageParts) == 1 {
 		text = fallbackRealtimeImageResult(imageParts[0])
+	}
+	if len(imageParts) > 0 {
+		// Realtime has no image-bearing function_call_output variant. The
+		// metadata envelope and the typed projection must therefore be a
+		// single internally consistent pair before either wire item is queued.
+		if strings.TrimSpace(text) == "" || len(imageParts) != 1 || !validRealtimeImageResult(text, imageParts[0]) {
+			return nil, false
+		}
 	}
 	outputData, err := json.Marshal(map[string]any{
 		"item": map[string]any{
@@ -130,10 +138,14 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 
 	imageContent := make([]map[string]any, 0, len(msg.ContentParts))
 	for _, part := range imageParts {
+		mediaType, ok := normalizedRealtimeImageMIME(part.MediaType)
+		if !ok {
+			return nil, false
+		}
 		encoded := base64.StdEncoding.EncodeToString(part.Bytes)
 		imageContent = append(imageContent, map[string]any{
 			"type":      "input_image",
-			"image_url": "data:" + part.MediaType + ";base64," + encoded,
+			"image_url": "data:" + mediaType + ";base64," + encoded,
 		})
 	}
 	if len(imageParts) > 0 {
@@ -160,6 +172,10 @@ func realtimeToolResultEvents(msg messages.Message, requestResponse bool) ([]mod
 const (
 	realtimeToolImageItemIDPrefix      = "item_tool_result_"
 	realtimeToolImageItemIDDigestBytes = 11
+	realtimeImageResultVersion         = 2
+	realtimeImageResultStatusSuccess   = "success"
+	realtimeImageTypedProjection       = "input_image"
+	realtimeImageEnvelopeMaxBytes      = 1024
 )
 
 // realtimeToolImageItemID uses the documented client-supplied ID on a
@@ -175,31 +191,77 @@ func realtimeToolImageItemID(toolCallID string) string {
 	return realtimeToolImageItemIDPrefix + base64.RawURLEncoding.EncodeToString(digest[:realtimeToolImageItemIDDigestBytes])
 }
 
+// realtimeImageResultEnvelope is intentionally local to the gateway. The CLI
+// tool package owns the producer type, while the provider boundary only needs
+// to validate the stable wire contract without importing that package.
+type realtimeImageResultEnvelope struct {
+	Version         int    `json:"version"`
+	Status          string `json:"status"`
+	MIMEType        string `json:"mime_type"`
+	ByteLength      int    `json:"byte_length"`
+	SHA256          string `json:"sha256"`
+	TypedProjection string `json:"typed_projection"`
+}
+
 // fallbackRealtimeImageResult keeps the provider boundary lossless for older
 // rich tools that have not yet added a textual result envelope. It never reads
-// a path; it hashes and encodes only the immutable bytes already in msg.
+// a path or embeds pixels in text; it hashes only the immutable bytes already
+// in msg.
 func fallbackRealtimeImageResult(part messages.ImagePart) string {
-	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(part.MediaType))
-	if err != nil || strings.TrimSpace(mediaType) == "" || len(part.Bytes) == 0 {
+	mediaType, ok := normalizedRealtimeImageMIME(part.MediaType)
+	if !ok || len(part.Bytes) == 0 {
 		return ""
 	}
-	mediaType = strings.ToLower(mediaType)
 	digest := sha256.Sum256(part.Bytes)
-	result := struct {
-		Version    int    `json:"version"`
-		Status     string `json:"status"`
-		MIMEType   string `json:"mime_type"`
-		ByteLength int    `json:"byte_length"`
-		SHA256     string `json:"sha256"`
-		DataURL    string `json:"data_url"`
-	}{
-		Version:    1,
-		Status:     "success",
-		MIMEType:   mediaType,
-		ByteLength: len(part.Bytes),
-		SHA256:     hex.EncodeToString(digest[:]),
-		DataURL:    "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(part.Bytes),
+	result := realtimeImageResultEnvelope{
+		Version:         realtimeImageResultVersion,
+		Status:          realtimeImageResultStatusSuccess,
+		MIMEType:        mediaType,
+		ByteLength:      len(part.Bytes),
+		SHA256:          hex.EncodeToString(digest[:]),
+		TypedProjection: realtimeImageTypedProjection,
 	}
 	encoded, _ := json.Marshal(result)
 	return string(encoded)
+}
+
+// validRealtimeImageResult verifies the only rich tool-result shape that this
+// boundary can safely project. Keeping this check before event construction
+// prevents an inconsistent function output from being queued before the typed
+// image item or the continuation request.
+func validRealtimeImageResult(encoded string, part messages.ImagePart) bool {
+	if len(encoded) == 0 || len(encoded) > realtimeImageEnvelopeMaxBytes || len(part.Bytes) == 0 {
+		return false
+	}
+
+	var result realtimeImageResultEnvelope
+	decoder := json.NewDecoder(strings.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil {
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return false
+	}
+
+	mediaType, ok := normalizedRealtimeImageMIME(part.MediaType)
+	if !ok {
+		return false
+	}
+	digest := sha256.Sum256(part.Bytes)
+	return result.Version == realtimeImageResultVersion &&
+		result.Status == realtimeImageResultStatusSuccess &&
+		result.MIMEType == mediaType &&
+		result.ByteLength == len(part.Bytes) &&
+		result.SHA256 == hex.EncodeToString(digest[:]) &&
+		result.TypedProjection == realtimeImageTypedProjection
+}
+
+func normalizedRealtimeImageMIME(raw string) (string, bool) {
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+	return mediaType, mediaType != "" && strings.HasPrefix(mediaType, "image/")
 }

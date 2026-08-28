@@ -61,7 +61,7 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 	case models.SessionEventResponseCreated:
 		return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}}
 	case models.SessionEventResponseDone:
-		return []messages.StreamMessage{{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeMessageEnd, Value: realtimeResponseDoneMessageEnd(event.Data)}}
 	case models.SessionEventResponseOutputItemAdded:
 		itemType := firstStringField(event.Data, "item.type")
 		if itemType != "function_call" {
@@ -157,6 +157,62 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 	default:
 		return nil
 	}
+}
+
+// realtimeResponseDoneMessageEnd carries the provider terminal outcome across
+// the provider-neutral stream boundary. Older fixtures omit status, so the
+// zero-value path remains a legacy MESSAGE.END while status-bearing events
+// retain enough bounded detail for lifecycle diagnostics.
+func realtimeResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndValue {
+	status := strings.ToLower(strings.TrimSpace(firstStringField(data, "response.status", "status")))
+	value := messages.NewMessageEndValue(messages.TokenUsage{})
+	value.Status = status
+	value.StatusDetails = realtimeResponseDoneStatusDetails(data)
+	if status == "" {
+		return value
+	}
+
+	value.TerminalProvenance = messages.TerminalProvenanceProvider
+	value.TerminalSource = messages.TerminalSourceProvider
+	switch status {
+	case "completed":
+		value.TerminalReason = messages.TerminalReasonProviderAuthoredCompletion
+		value.OutputState = messages.TerminalOutputComplete
+	case "cancelled", "canceled":
+		value.TerminalReason = messages.TerminalReasonCancellation
+		value.OutputState = messages.TerminalOutputNone
+	default:
+		// A non-empty status that is not an explicit success is intentionally
+		// treated as non-success. This prevents a newly introduced provider
+		// status from silently discharging a tool continuation.
+		value.TerminalReason = messages.TerminalReasonTerminalFailure
+		value.OutputState = messages.TerminalOutputNone
+	}
+	return value
+}
+
+// realtimeResponseDoneStatusDetails extracts a small allowlisted set of
+// provider detail fields. Keeping the detail text bounded and field-based
+// prevents raw response JSON or image-sized values from reaching diagnostics.
+func realtimeResponseDoneStatusDetails(data json.RawMessage) string {
+	parts := make([]string, 0, 4)
+	appendField := func(label string, paths ...string) {
+		value := strings.TrimSpace(firstStringField(data, paths...))
+		if value == "" {
+			return
+		}
+		for _, existing := range parts {
+			if existing == label+"="+value {
+				return
+			}
+		}
+		parts = append(parts, label+"="+value)
+	}
+	appendField("reason", "response.status_details.reason", "status_details.reason")
+	appendField("type", "response.status_details.type", "status_details.type")
+	appendField("code", "response.status_details.code", "status_details.code", "response.status_details.error.code", "status_details.error.code")
+	appendField("message", "response.status_details.message", "status_details.message", "response.status_details.error.message", "status_details.error.message")
+	return strings.Join(parts, ", ")
 }
 
 func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, bool) {

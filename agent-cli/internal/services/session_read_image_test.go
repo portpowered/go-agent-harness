@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -112,6 +112,56 @@ func TestRunAgentLoopSession_ReadImageResultReachesNextModelTurn(t *testing.T) {
 	}
 	if !gotStart || !gotDelta || !gotEnd {
 		t.Fatalf("observed image result events = %#v, want correlated start/delta/end with fixture bytes", observed)
+	}
+}
+
+func TestRunAgentLoopSession_FailedImageContinuationReturnsTypedFailure(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := writeSessionReadImagePNG(t, dir, "failed.png", color.RGBA{B: 255, A: 255})
+	registry := tools.NewToolRegistryFromConfig(nil)
+	executor := tools.NewRegistryExecutor(registry)
+	plan := planReadImageTestSession(t, filepath.Join(dir, "config"), executor, registry.ToAgentLoopDefs())
+	arguments, err := json.Marshal(map[string]string{"path": imagePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const callID = "failed-image-call"
+	inferencer := &failedReadImageContinuationInferencer{callID: callID, arguments: string(arguments)}
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err = runAgentLoopSession(ctx, newSignalingBuffer(), inferencer, sessionLoopOptions{
+		MaxDuration:          2 * time.Second,
+		WaitForClose:         true,
+		ToolExecutor:         plan.loop.ToolExecutor,
+		ToolDefinitions:      plan.loop.ToolDefinitions,
+		ToolExecutionTimeout: 2 * time.Second,
+		observer:             observer,
+	})
+	if err == nil {
+		t.Fatal("failed image continuation returned clean success")
+	}
+	if !errors.Is(err, ErrSessionImageContinuationIncomplete) {
+		t.Fatalf("failed image continuation error = %v, want image continuation sentinel", err)
+	}
+	var continuationErr *SessionImageContinuationError
+	if !errors.As(err, &continuationErr) {
+		t.Fatalf("failed image continuation error = %v, want typed continuation error", err)
+	}
+	if len(continuationErr.CallIDs) != 1 || continuationErr.CallIDs[0] != callID {
+		t.Fatalf("failed image continuation IDs = %v, want [%s]", continuationErr.CallIDs, callID)
+	}
+	if continuationErr.ProviderStatuses[callID] != "failed" || continuationErr.ProviderDetails[callID] != "reason=max_output_tokens" {
+		t.Fatalf("failed image continuation provider context = status %q detail %q", continuationErr.ProviderStatuses[callID], continuationErr.ProviderDetails[callID])
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 {
+		t.Fatalf("failed image continuation diagnostics = %d, want exactly one", len(failures))
+	}
+	if got := failures[0].Fields[SessionDiagnosticFieldPendingImageContinuationIDs]; got != callID {
+		t.Fatalf("failed image continuation diagnostic IDs = %q, want %s", got, callID)
 	}
 }
 
@@ -258,7 +308,7 @@ func assertReadImageFailure(t *testing.T, response messages.ToolCallResponse, ca
 	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error == "" || !strings.Contains(result.Error, wantText) {
 		t.Fatalf("failure response envelope = %#v, want version %d error containing %q", result, tools.ReadImageResultVersion, wantText)
 	}
-	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.DataURL != "" {
+	if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" {
 		t.Fatalf("failure response unexpectedly carried image metadata: %#v", result)
 	}
 	for _, part := range response.ContentParts {
@@ -272,6 +322,46 @@ type readImageResultGatedInferencer struct {
 	ready     <-chan struct{}
 	callID    string
 	arguments string
+}
+
+type failedReadImageContinuationInferencer struct {
+	callID    string
+	arguments string
+}
+
+func (i *failedReadImageContinuationInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session := newRoundTripSession()
+	go func() {
+		if !session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeSessionOpen,
+			Value: messages.NewSessionOpenValue("failed-read-image-session", "gpt-realtime"),
+		}) {
+			return
+		}
+		for _, event := range toolCallEvents(i.callID, tools.ReadImageToolID, i.arguments) {
+			if !session.recv.Write(ctx, event) {
+				return
+			}
+		}
+		if !session.waitForSent(ctx, messages.StreamTypeResponseCreate) {
+			return
+		}
+		_ = session.recv.Write(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeMessageStart,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewMessageStartValue(),
+		})
+		_ = session.recv.Write(ctx, messages.StreamMessage{
+			Type: messages.StreamTypeMessageEnd,
+			Role: messages.RoleAssistant,
+			Value: &messages.MessageEndValue{
+				Type:          "message_end",
+				Status:        "failed",
+				StatusDetails: "reason=max_output_tokens",
+			},
+		})
+	}()
+	return session, nil
 }
 
 func (i *readImageResultGatedInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
@@ -381,9 +471,8 @@ func assertReadImageResponse(t *testing.T, response messages.ToolCallResponse, c
 	if result.SHA256 != hex.EncodeToString(digest[:]) {
 		t.Fatalf("response envelope sha256 = %q, want %q", result.SHA256, hex.EncodeToString(digest[:]))
 	}
-	wantDataURL := "data:" + wantMIME + ";base64," + base64.StdEncoding.EncodeToString(wantBytes)
-	if result.DataURL != wantDataURL {
-		t.Fatalf("response envelope data URL = %q, want exact image bytes", result.DataURL)
+	if result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
+		t.Fatalf("response envelope typed projection = %q, want %q", result.TypedProjection, tools.ReadImageResultTypedProjectionInputImage)
 	}
 	part, ok := response.ContentParts[1].(messages.ImagePart)
 	if !ok {

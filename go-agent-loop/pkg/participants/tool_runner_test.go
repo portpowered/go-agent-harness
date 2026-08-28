@@ -83,7 +83,8 @@ func TestToolRunner_SingleCall(t *testing.T) {
 }
 
 func TestToolRunner_EmptyResultPreservesCallID(t *testing.T) {
-	exec := &testToolExecutor{results: map[string]string{"list_directory": ""}}
+	const callID = "tc-empty"
+	exec := &testToolExecutor{results: map[string]string{"empty": ""}}
 	runner := NewToolRunner(exec, 10)
 	ap := NewActiveParticipant(messages.Tool, runner)
 
@@ -93,7 +94,7 @@ func TestToolRunner_EmptyResultPreservesCallID(t *testing.T) {
 	defer ap.Stop()
 
 	runner.Inbox.Write(ctx, messages.ToolBatchRequest{
-		Calls: []messages.ToolCall{{ID: "tc-empty", Name: "list_directory"}},
+		Calls: []messages.ToolCall{{ID: callID, Name: "empty"}},
 	})
 
 	var deltas []messages.StreamMessage
