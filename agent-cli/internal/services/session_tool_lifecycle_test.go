@@ -367,6 +367,7 @@ func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t
 		name       string
 		status     string
 		detail     string
+		reason     messages.TerminalReason
 		outputType messages.StreamMessageType
 		wantError  bool
 	}{
@@ -374,6 +375,7 @@ func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t
 		{name: "completed empty", status: "completed", wantError: true},
 		{name: "completed text", status: "completed", outputType: messages.StreamTypeTextDelta},
 		{name: "completed audio", status: "completed", outputType: messages.StreamTypeAudioDelta},
+		{name: "provider close with partial text", reason: messages.TerminalReasonProviderClose, outputType: messages.StreamTypeTextDelta, wantError: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -411,7 +413,7 @@ func TestSessionProgressObserverContinuationRequiresSuccessfulObservableOutput(t
 					Value: messages.NewAudioDeltaValue([]byte{1, 2, 3}),
 				})
 			}
-			terminal := &messages.MessageEndValue{Type: "message_end", Status: tc.status, StatusDetails: tc.detail}
+			terminal := &messages.MessageEndValue{Type: "message_end", Status: tc.status, StatusDetails: tc.detail, TerminalReason: tc.reason}
 			terminalMessage := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: terminal}
 			observer.observe(terminalMessage)
 

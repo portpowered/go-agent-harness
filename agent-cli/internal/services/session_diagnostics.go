@@ -267,6 +267,7 @@ type toolContinuationState struct {
 	continuationTerminalSeen    bool
 	continuationStatus          string
 	continuationStatusDetails   string
+	continuationTerminalReason  messages.TerminalReason
 	continuationOutputObserved  bool
 	continuationFailureObserved bool
 	continuationComplete        bool
@@ -353,6 +354,9 @@ func continuationCanCompleteLocked(state *toolContinuationState) bool {
 	if state.continuationFailureObserved || (status != "" && status != "completed") {
 		return false
 	}
+	if state.continuationTerminalReason != "" && state.continuationTerminalReason != messages.TerminalReasonProviderAuthoredCompletion && state.continuationTerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+		return false
+	}
 	return state.continuationOutputObserved
 }
 
@@ -362,6 +366,9 @@ func continuationTerminalFailureLocked(state *toolContinuationState) bool {
 	}
 	status := normalizeContinuationStatus(state.continuationStatus)
 	if state.continuationFailureObserved || (status != "" && status != "completed") {
+		return true
+	}
+	if state.continuationTerminalReason != "" && state.continuationTerminalReason != messages.TerminalReasonProviderAuthoredCompletion && state.continuationTerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
 		return true
 	}
 	return !state.continuationOutputObserved
@@ -1022,13 +1029,18 @@ func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role, 
 				if terminal != nil {
 					state.continuationStatus = normalizeContinuationStatus(terminal.Status)
 					state.continuationStatusDetails = sanitizeContinuationDetail(terminal.StatusDetails)
+					state.continuationTerminalReason = terminal.TerminalReason
 				}
 				state.continuationOutputObserved = o.assistantOutputObserved
-				if !state.continuationOutputObserved && state.continuationStatusDetails == "" {
+				status := normalizeContinuationStatus(state.continuationStatus)
+				reason := state.continuationTerminalReason
+				terminalFailed := !state.continuationOutputObserved || (status != "" && status != "completed") || (reason != "" && reason != messages.TerminalReasonProviderAuthoredCompletion && reason != messages.TerminalReasonLoopSynthesizedCompletion)
+				if terminalFailed && state.continuationStatusDetails == "" && reason != "" && !state.continuationOutputObserved {
 					state.continuationStatusDetails = "assistant continuation produced no observable output"
 				}
-				status := normalizeContinuationStatus(state.continuationStatus)
-				terminalFailed := !state.continuationOutputObserved || (status != "" && status != "completed")
+				if terminalFailed && state.continuationStatusDetails == "" && reason != "" {
+					state.continuationStatusDetails = "terminal reason=" + string(reason)
+				}
 				if terminalFailed {
 					state.continuationFailureObserved = true
 				}
