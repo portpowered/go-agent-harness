@@ -52,6 +52,14 @@ func runRoomParticipant(
 	}
 	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
 	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
+	observer.turnAdmission = func(msg messages.StreamMessage) bool {
+		value, ok := msg.Value.(*messages.MessageEndValue)
+		if !ok || value == nil || value.TerminalReason == "" {
+			return true
+		}
+		return value.TerminalReason == messages.TerminalReasonProviderAuthoredCompletion ||
+			value.TerminalReason == messages.TerminalReasonLoopSynthesizedCompletion
+	}
 	observer.streamObserver = func(msg messages.StreamMessage) {
 		observeRoomParticipantStream(coordinator, runtime, opts, evidence, participantEvidence, participantStream, msg)
 	}
