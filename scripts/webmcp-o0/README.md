@@ -17,6 +17,7 @@ and forces `GOWORK=off` for every Go command.
 ./probe.sh test
 ./probe.sh typecheck
 ./probe.sh smoke
+./probe.sh chrome
 ./probe.sh go1.24.2
 ```
 
@@ -31,3 +32,14 @@ distribution before running the check.
 graph, and `go mod verify` result. The committed `go.sum` is the integrity
 record used by the module; browser artifacts are intentionally out of scope
 for this compatibility-only probe.
+
+`chrome` downloads the Stable `mac-arm64` pin in
+`chrome-for-testing.json`, rechecks the pin against the official Chrome for
+Testing channel manifest, verifies the archive SHA-256, checks the extracted
+executable version, and launches only with a temporary profile and
+`127.0.0.1` remote debugging. It discovers the browser websocket from
+Chrome's startup output, checks `/json/version`, and issues CDP
+`Browser.getVersion` through the pinned Go bindings. The script owns and
+terminates only the Chrome PID it starts and removes its exact temporary
+directory. If Stable advances beyond the lock, it stops with an actionable
+refresh-the-pin error rather than silently changing the experiment.

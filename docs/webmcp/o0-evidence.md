@@ -1,8 +1,8 @@
 # WebMCP O0 evidence
 
-Status: story `webmcp-o0-toolchain-gate-001` complete; browser launch,
-WebMCP availability, external-target ownership, and fixture trials remain
-pending.
+Status: stories `webmcp-o0-toolchain-gate-001` and
+`webmcp-o0-toolchain-gate-002` complete; WebMCP availability, external-target
+ownership, and fixture trials remain pending.
 
 ## Run context
 
@@ -111,6 +111,106 @@ is Go 1.26. Lane A must either upgrade the whole workspace to one exact Go
 story records that downstream decision only; it does not change `go.work`, an
 existing `go.mod`, or production code.
 
+## Story 002: Pin and launch Chrome for Testing
+
+### Research input and locked artifact
+
+The [Chrome for Testing availability dashboard](https://googlechromelabs.github.io/chrome-for-testing/)
+publishes the channel manifest used here:
+`https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json`.
+The manifest was retrieved on 2026-08-28 at 08:19:47 UTC. The following is the
+committed lock in [scripts/webmcp-o0/chrome-for-testing.json](../../scripts/webmcp-o0/chrome-for-testing.json),
+not an ambient installed browser:
+
+| Field | Locked value |
+| --- | --- |
+| Channel | `Stable` |
+| Platform | `mac-arm64` |
+| Version | `152.0.7977.64` |
+| Revision | `1669021` |
+| Download URL | `https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/mac-arm64/chrome-mac-arm64.zip` |
+| Archive SHA-256 | `10033804338bd0a5aa098149a8dd64f3f2e0e8b201bf3d400d7c17d067ff696f` |
+| Executable | `Google Chrome for Testing 152.0.7977.64` |
+
+The script re-fetches the channel manifest and rejects a channel/version,
+revision, or download URL mismatch. It downloads the archive, computes
+`shasum -a 256`, compares it to the lock, and only then extracts or executes
+the binary. A later rerun stops with an actionable lock-refresh error if the
+Stable channel has advanced.
+
+### Reproduction command and observed launch
+
+From `scripts/webmcp-o0/`:
+
+```sh
+./probe.sh chrome
+```
+
+The launch uses a newly-created temporary profile and these exact browser
+flags:
+
+```text
+--headless=new
+--disable-gpu
+--disable-background-networking
+--disable-component-update
+--disable-extensions
+--disable-sync
+--no-default-browser-check
+--no-first-run
+--remote-debugging-address=127.0.0.1
+--remote-debugging-port=0
+--user-data-dir=<temporary profile>
+about:blank
+```
+
+The command passed on the target machine at 2026-08-28 08:20:11 UTC. Its
+concise report was:
+
+```json
+{
+  "channel": "Stable",
+  "platform": "mac-arm64",
+  "version": "152.0.7977.64",
+  "revision": "1669021",
+  "archiveSHA256": "10033804338bd0a5aa098149a8dd64f3f2e0e8b201bf3d400d7c17d067ff696f",
+  "executableVersion": "Google Chrome for Testing 152.0.7977.64",
+  "remoteDebuggingAddress": "127.0.0.1",
+  "remoteDebuggingPort": 54222,
+  "websocketURL": "ws://127.0.0.1:54222/devtools/browser/c5be83e9-f812-45fa-bccc-acaca5e78327",
+  "httpVersionEndpoint": {"Browser": "Chrome/152.0.7977.64", "ProtocolVersion": "1.3"},
+  "cdpBrowserGetVersion": {"product": "Chrome/152.0.7977.64", "protocolVersion": "1.3"},
+  "checks": {
+    "manifestPin": "matched",
+    "archiveIntegrity": "matched",
+    "executableVersion": "matched",
+    "loopbackEndpoint": "matched",
+    "cdpBrowserGetVersion": "matched"
+  }
+}
+```
+
+The port is intentionally assigned by Chrome with `--remote-debugging-port=0`;
+the script deterministically discovers the `ws://127.0.0.1:<port>/devtools/browser/...`
+URL from Chrome's startup line, then cross-checks it against
+`http://127.0.0.1:<port>/json/version`. The Go check invokes CDP
+`Browser.getVersion` through the pinned `chromedp`/`cdproto` module. The shell
+trap sends termination only to the Chrome PID it started, waits, and removes
+only its exact temporary root; the remote allocator does not issue
+`Browser.close`. This proves pinned launch and generic CDP reachability, not
+native WebMCP availability.
+
+### Verdict and downstream consequence
+
+**PASS for the pinned Chrome-for-Testing launch assumption.** Stable
+`152.0.7977.64` is obtainable for `darwin/arm64`, its archive and executable
+identity match the lock, and both the HTTP version endpoint and CDP
+`Browser.getVersion` report the same build over loopback. Lane A can use this
+artifact pin while preserving the separate Go 1.24.2 compatibility finding;
+Lane D/I1 may treat this as the browser acquisition and generic CDP launch
+baseline, but it does not authorize a native WebMCP claim or change the
+detach-ownership rule that story 004 must prove.
+
 ## Remaining O0 assumptions
 
 The remaining rows will be filled by the later stories using the same dated
@@ -118,7 +218,7 @@ observed-versus-researched distinction:
 
 | Assumption | Verdict | Story |
 | --- | --- | --- |
-| Pinned Chrome for Testing launch | Pending | `webmcp-o0-toolchain-gate-002` |
+| Pinned Chrome for Testing launch | PASS | `webmcp-o0-toolchain-gate-002` |
 | Native WebMCP page/CDP surface and binding coverage | Pending | `webmcp-o0-toolchain-gate-003` |
 | Detach-only preservation of an external visible tab | Pending | `webmcp-o0-toolchain-gate-004` |
 | Hermetic loopback fixture control | Pending | `webmcp-o0-toolchain-gate-005` |

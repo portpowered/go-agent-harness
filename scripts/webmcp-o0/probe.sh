@@ -11,12 +11,13 @@ export GOWORK=off
 
 usage() {
 	cat >&2 <<'EOF'
-usage: ./probe.sh <metadata|test|typecheck|smoke|go1.24.2>
+usage: ./probe.sh <metadata|test|typecheck|smoke|chrome|go1.24.2>
 
   metadata   print toolchain, module graph, and checksum verification
   test       run the isolated probe tests
   typecheck  compile the isolated probe without running tests
   smoke      execute the generated-binding smoke report
+  chrome     download, verify, launch, and query pinned Chrome for Testing
   go1.24.2   run the exact baseline toolchain and require its version error
 EOF
 }
@@ -37,6 +38,9 @@ typecheck)
 	;;
 smoke)
 	go run .
+	;;
+chrome)
+	./chrome-launch.sh
 	;;
 go1.24.2)
 	GOTOOLCHAIN=go1.24.2 go version

@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"runtime/debug"
+	"time"
 
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/webmcp"
 	"github.com/chromedp/chromedp"
@@ -30,6 +33,16 @@ type smokeReport struct {
 	EventTypes      []string          `json:"eventTypes"`
 	AllocatorURL    string            `json:"allocatorURL"`
 	Checks          map[string]string `json:"checks"`
+}
+
+type cdpVersionReport struct {
+	Endpoint        string `json:"endpoint"`
+	GoVersion       string `json:"goVersion"`
+	ProtocolVersion string `json:"protocolVersion"`
+	Product         string `json:"product"`
+	Revision        string `json:"revision"`
+	UserAgent       string `json:"userAgent"`
+	JSVersion       string `json:"jsVersion"`
 }
 
 // bindingSmoke constructs every WebMCP command and event type required by the
@@ -89,11 +102,70 @@ func dependencyVersion(path string) string {
 	return "unavailable"
 }
 
-func main() {
-	report := bindingSmoke()
-	encoded, err := json.MarshalIndent(report, "", "  ")
+func readCDPVersion(endpoint string) (cdpVersionReport, error) {
+	if endpoint == "" {
+		return cdpVersionReport{}, fmt.Errorf("CDP endpoint is empty")
+	}
+
+	rootContext, cancelRoot := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelRoot()
+
+	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
+	defer cancelAllocator()
+
+	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
+	defer func() {
+		// NewRemoteAllocator never owns the browser process. Cancel the remote
+		// client context so only the temporary tab created by this probe is
+		// detached and closed; the shell launcher owns browser termination.
+		_ = chromedp.Cancel(browserContext)
+		cancelBrowser()
+	}()
+
+	report := cdpVersionReport{
+		Endpoint:  endpoint,
+		GoVersion: runtime.Version(),
+	}
+	if err := chromedp.Run(browserContext, chromedp.ActionFunc(func(actionContext context.Context) error {
+		c := chromedp.FromContext(actionContext)
+		if c == nil || c.Browser == nil {
+			return fmt.Errorf("remote browser was not initialized")
+		}
+
+		var err error
+		report.ProtocolVersion, report.Product, report.Revision, report.UserAgent, report.JSVersion, err = browser.GetVersion().Do(cdp.WithExecutor(actionContext, c.Browser))
+		return err
+	})); err != nil {
+		return cdpVersionReport{}, fmt.Errorf("Browser.getVersion: %w", err)
+	}
+
+	return report, nil
+}
+
+func printJSON(value any) {
+	encoded, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		panic(fmt.Errorf("encode smoke report: %w", err))
+		fmt.Fprintf(os.Stderr, "encode JSON: %v\n", err)
+		os.Exit(1)
 	}
 	fmt.Println(string(encoded))
+}
+
+func main() {
+	if len(os.Args) > 1 {
+		if os.Args[1] != "cdp-version" || len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint>]")
+			os.Exit(2)
+		}
+
+		report, err := readCDPVersion(os.Args[2])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cdp-version: %v\n", err)
+			os.Exit(1)
+		}
+		printJSON(report)
+		return
+	}
+
+	printJSON(bindingSmoke())
 }
