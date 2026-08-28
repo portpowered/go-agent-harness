@@ -467,6 +467,7 @@ type liveBargeInCaptureFacts struct {
 	UserItems      int
 	Cancels        int
 	ProviderErrors int
+	ProviderCodes  []string
 	InputStarts    []int
 	Responses      []liveBargeInWireResponse
 }
@@ -498,7 +499,11 @@ func normalizeLiveBargeInCapture(capture gwtesting.SessionCapture) (*probe.Barge
 		return adapter.ledger, adapter.facts, errors.New(strings.Join(adapter.issues, "; "))
 	}
 	if adapter.facts.ProviderErrors > 0 {
-		return adapter.ledger, adapter.facts, &liveBargeInInconclusiveError{Reason: "provider error event observed"}
+		reason := "provider error event observed"
+		if len(adapter.facts.ProviderCodes) > 0 {
+			reason += ": code/type=" + strings.Join(adapter.facts.ProviderCodes, ",")
+		}
+		return adapter.ledger, adapter.facts, &liveBargeInInconclusiveError{Reason: reason}
 	}
 	return adapter.ledger, adapter.facts, nil
 }
@@ -523,6 +528,11 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 	case "error":
 		if server {
 			a.facts.ProviderErrors++
+			code := liveBargeInSafeToken(liveBargeInJSONField(payload, "error.code", "error.type", "code", "type"))
+			if code == "unknown" {
+				code = "unknown"
+			}
+			a.facts.ProviderCodes = append(a.facts.ProviderCodes, code)
 		}
 	case "input_audio_buffer.append":
 		if !client {
@@ -930,7 +940,7 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 }
 
 func liveBargeInCaptureSummary(facts liveBargeInCaptureFacts, recordCount int) string {
-	return fmt.Sprintf("records=%d,session_created=%d,session_updated=%d,session_closed=%d,appends=%d,commits=%d,user_items=%d,responses=%d,cancels=%d,provider_errors=%d",
+	return fmt.Sprintf("records=%d,session_created=%d,session_updated=%d,session_closed=%d,appends=%d,commits=%d,user_items=%d,responses=%d,cancels=%d,provider_errors=%d,provider_codes=%v",
 		recordCount,
 		facts.SessionCreated,
 		facts.SessionUpdated,
@@ -941,6 +951,7 @@ func liveBargeInCaptureSummary(facts liveBargeInCaptureFacts, recordCount int) s
 		len(facts.Responses),
 		facts.Cancels,
 		facts.ProviderErrors,
+		facts.ProviderCodes,
 	)
 }
 
