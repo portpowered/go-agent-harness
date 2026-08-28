@@ -331,3 +331,278 @@ projection would lose nesting, enums, unions, or unsupported assertion
 semantics; it is not a prerequisite for this broker MVP. Later sections of this
 C0 document freeze the lifecycle, recording, probe, annotation, and downstream
 lane boundaries without changing the six-tool result contract above.
+
+## 4. Activation, configuration, and session admission
+
+This section freezes the operator surface for a model session. The direct
+agent webmcp command group remains protocol-specific, but a session receives
+browser tools only through the capability-oriented --browser-tools input.
+The names and precedence below follow the accepted CLI decision and the
+repository's actual Koanf nesting rule; the current Config type does not yet
+contain these fields, so these are future integration edits rather than claims
+about existing flags. See [Architecture Decision §2](architecture-decision.md#2-cli-and-configuration-surface)
+and [Understanding §2](understanding.md#2-verified-mapping-to-current-machinery).
+
+### 4.1 Explicit activation and precedence
+
+The default is disabled. The following are the only activation inputs:
+
+* browser.tools.enabled: true in YAML;
+* AGENT_BROWSER__TOOLS__ENABLED=true; or
+* --browser-tools=webmcp.
+
+--browser-tools=webmcp sets both browser.tools.enabled: true and
+browser.tools.backend: webmcp for that session and is a valid live-session
+admission trigger by itself. A session MUST NOT return help merely because it
+has no provider recording, replay capture, recording directory, or scheduled
+audio turn when this flag is present. An unset flag leaves the loaded config
+value in force. webmcp is the only backend value frozen by C0; an unknown
+value is an invalid configuration, not a request to guess another backend.
+
+An endpoint, user-data directory, selected browser, persisted target, replay
+fixture, or direct agent webmcp command MUST NOT activate browser tools in a
+model session. When disabled, the session MUST neither advertise the six
+broker definitions nor dial a browser on their behalf. Direct WebMCP commands
+may still perform their own explicitly requested diagnostics.
+
+Configuration precedence is, from lowest to highest: built-in defaults, YAML,
+AGENT_ environment variables, then command-line flags. An explicitly
+provided selection flag wins over persisted selection state. A higher layer
+replaces only the value it supplies; it MUST NOT clear unrelated browser
+configuration implicitly. This matches the current defaults -> YAML -> env
+loader and command-applied override model described in
+[Understanding §2](understanding.md#2-verified-mapping-to-current-machinery).
+
+### 4.2 Canonical flag, YAML, and environment mapping
+
+The following names are normative. Duration values use Go duration syntax (for
+example 30s), byte limits are non-negative decimal integers, booleans are
+true or false, and list environment values are JSON arrays. Empty strings
+and empty lists have the meanings shown in the table. Repeatable list flags
+append values in command-line order.
+
+| Concern | Canonical CLI flag and type | YAML key, type, and default | Environment variable | Contract meaning |
+| --- | --- | --- | --- | --- |
+| Activation | --browser-tools=<backend> string | browser.tools.enabled bool false; browser.tools.backend string webmcp | AGENT_BROWSER__TOOLS__ENABLED; AGENT_BROWSER__TOOLS__BACKEND | Only webmcp enables the session capability. |
+| CDP HTTP endpoint | --browser-cdp-url <url> string | browser.connection.cdp_url string "" | AGENT_BROWSER__CONNECTION__CDP_URL | First explicit discovery source; credentials are rejected and query/fragment data is redacted. |
+| CDP WebSocket endpoint | --browser-ws-endpoint <url> string | browser.connection.ws_endpoint string "" | AGENT_BROWSER__CONNECTION__WS_ENDPOINT | Second explicit discovery source; used only when no CDP URL is supplied. |
+| Browser profile | --browser-user-data-dir <path> string | browser.connection.user_data_dir string "" | AGENT_BROWSER__CONNECTION__USER_DATA_DIR | Reads DevToolsActivePort for the selected profile; it does not imply process ownership. |
+| Process discovery | --browser-allow-process-scan bool | browser.connection.allow_process_scan bool false | AGENT_BROWSER__CONNECTION__ALLOW_PROCESS_SCAN | Allows the optional, platform-specific process-discovery fallback after explicit/configured sources. It never scans arbitrary network addresses. |
+| Remote CDP | --browser-allow-remote-cdp bool | browser.connection.allow_remote_cdp bool false | AGENT_BROWSER__CONNECTION__ALLOW_REMOTE_CDP | Required for a non-loopback endpoint; loopback remains the default. |
+| Browser selection | --browser-browser <id> string | browser.selection.browser string "" | AGENT_BROWSER__SELECTION__BROWSER | Exact normalized browser ID; empty means no browser constraint. |
+| Tab selection | --browser-tab <id> string | browser.selection.tab string "" | AGENT_BROWSER__SELECTION__TAB | Exact target ID; title and URL are never selectors. |
+| Origin filter | --browser-origin <origin> string | browser.selection.origin string "" | AGENT_BROWSER__SELECTION__ORIGIN | Exact canonical origin constraint; query and fragment are not part of selection. |
+| Automatic selection | --browser-auto-select=off\|single\|persisted enum | browser.selection.auto_select enum off | AGENT_BROWSER__SELECTION__AUTO_SELECT | off requires explicit selection; single permits exactly one ready match; persisted uses only a still-valid persisted ID and never falls back to another match. |
+| Foreground tab | --browser-activate-tab bool | browser.selection.activate_tab bool false | AGENT_BROWSER__SELECTION__ACTIVATE_TAB | Selects without stealing focus unless true. |
+| Persist selection | --browser-persist-selection bool | browser.selection.persist bool true | AGENT_BROWSER__SELECTION__PERSIST | Persists only opaque IDs and redacted metadata, never websocket credentials. |
+| Allowed origins | --browser-allowed-origin <origin> repeatable | browser.policy.allowed_origins list [] | AGENT_BROWSER__POLICY__ALLOWED_ORIGINS | If non-empty, only exact origins in this list pass policy. |
+| Denied origins | --browser-denied-origin <origin> repeatable | browser.policy.denied_origins list [] | AGENT_BROWSER__POLICY__DENIED_ORIGINS | Deny wins over allow and produces origin_denied. |
+| Approval | --browser-approval=always\|writes\|never enum | browser.policy.approval enum writes | AGENT_BROWSER__POLICY__APPROVAL | writes requires approval for mutating or unknown tools; always includes reads; never asks for no interactive approval but does not bypass origin or input policy. |
+| Interrupt cancellation | --browser-cancel-on-interrupt=never\|read-only\|always enum | browser.policy.cancel_on_interrupt enum read-only | AGENT_BROWSER__POLICY__CANCEL_ON_INTERRUPT | Controls cancellation requests, never promises rollback of a dispatched page action. |
+| Invocation timeout | --browser-invocation-timeout <duration> duration | browser.limits.invocation_timeout duration 30s | AGENT_BROWSER__LIMITS__INVOCATION_TIMEOUT | Bounds local waiting and classifies an unresolved dispatched call as invocation_timed_out. |
+| Input size | --browser-max-input-bytes <n> integer | browser.limits.max_input_bytes integer 262144 | AGENT_BROWSER__LIMITS__MAX_INPUT_BYTES | Bounds UTF-8 input_json bytes before page dispatch. |
+| Result size | --browser-max-result-bytes <n> integer | browser.limits.max_result_bytes integer 262144 | AGENT_BROWSER__LIMITS__MAX_RESULT_BYTES | Bounds the serialized, policy-redacted result envelope; overflow is result_too_large. |
+| Per-target serialization | --browser-serialize-per-target bool | browser.limits.serialize_per_target bool true | AGENT_BROWSER__LIMITS__SERIALIZE_PER_TARGET | Enforces FIFO and at most one mutating/unknown page operation per target. |
+| Browser recording | --browser-record bool | browser.recording.enabled bool false | AGENT_BROWSER__RECORDING__ENABLED | Adds semantic browser events to the existing session recording bundle when recording is requested. |
+| Record arguments | --browser-record-arguments bool | browser.recording.include_arguments bool true | AGENT_BROWSER__RECORDING__INCLUDE_ARGUMENTS | Retains arguments only after tool-specific redaction policy. |
+| Record results | --browser-record-results bool | browser.recording.include_results bool true | AGENT_BROWSER__RECORDING__INCLUDE_RESULTS | Retains results only after size limits and redaction policy. |
+| URL query redaction | --browser-redact-url-query bool | browser.recording.redact_url_query bool true | AGENT_BROWSER__RECORDING__REDACT_URL_QUERY | Removes query data from recorded URLs and diagnostics. |
+| URL fragment redaction | --browser-redact-url-fragment bool | browser.recording.redact_url_fragment bool true | AGENT_BROWSER__RECORDING__REDACT_URL_FRAGMENT | Removes fragment data from recorded URLs and diagnostics. |
+| Browser replay | --browser-replay <path> path | browser.replay.path string ""; browser.replay.strict bool true | AGENT_BROWSER__REPLAY__PATH; AGENT_BROWSER__REPLAY__STRICT | Selects a semantic browser fixture; strict mode rejects unknown or divergent events. Replay does not itself activate a live session. |
+| Replay strictness | --browser-replay-strict bool | browser.replay.strict bool true | AGENT_BROWSER__REPLAY__STRICT | Rejects unknown or divergent semantic browser events when true. |
+
+The equivalent default YAML shape is:
+
+~~~
+browser:
+  tools:
+    enabled: false
+    backend: webmcp
+  connection:
+    cdp_url: ""
+    ws_endpoint: ""
+    user_data_dir: ""
+    allow_process_scan: false
+    allow_remote_cdp: false
+  selection:
+    browser: ""
+    tab: ""
+    origin: ""
+    auto_select: off
+    activate_tab: false
+    persist: true
+  policy:
+    allowed_origins: []
+    denied_origins: []
+    approval: writes
+    cancel_on_interrupt: read-only
+  limits:
+    invocation_timeout: 30s
+    max_input_bytes: 262144
+    max_result_bytes: 262144
+    serialize_per_target: true
+  recording:
+    enabled: false
+    include_arguments: true
+    include_results: true
+    redact_url_query: true
+    redact_url_fragment: true
+  replay:
+    path: ""
+    strict: true
+~~~
+
+Discovery is deterministic: explicit cdp_url, explicit ws_endpoint,
+user_data_dir/DevToolsActivePort, configured values, then process discovery
+only when allowed. A stale persisted selection MUST produce
+stale_selection; it MUST NOT silently select a different matching tab. The
+source plan's --webmcp-*, webmcp: YAML, and AGENT_WEBMCP_* names are
+superseded by this table. The double underscore is required because the loader
+maps each __ to one nested key, as verified in
+agent-cli/internal/config/loading.go and recorded in
+[Understanding §2](understanding.md#2-verified-mapping-to-current-machinery).
+
+## 5. Cleanup and lifecycle ownership
+
+The session capability surface is amended conceptually to:
+
+~~~
+type SessionToolCapabilities struct {
+    Executor    messages.ToolExecutor
+    Definitions []messages.ToolDefinition
+    Close       func() error
+}
+~~~
+
+Close is optional (nil means that the capability owns no closeable browser
+resources), idempotent, and owned by the session coordinator after the
+capability factory returns successfully. The first call performs shutdown;
+later calls perform no work and return the same recorded error. A close hook
+MUST never panic. If several resources fail, it MUST attempt every applicable
+close step and return an errors.Join-equivalent aggregate rather than losing
+later failures to an early return.
+
+This is a contract amendment, not an edit to the current leased session file.
+The need is grounded in the verified fact that SessionToolCapabilities
+currently has only Executor and Definitions, while session runtime cleanup
+is distributed across the runtime plan and provider/RTC paths. See
+[Understanding §2](understanding.md#2-verified-mapping-to-current-machinery)
+and [Architecture Decision §4](architecture-decision.md#4-overall-topology).
+
+### 5.1 Transfer and shutdown order
+
+Ownership transfers exactly once when the capability factory returns without an
+error. Before that point, the factory/composition owner MUST close every
+partially constructed browser resource on an error path. After transfer, the
+session coordinator is the only caller of Close; the broker, executor,
+provider adapter, and command wrappers MUST NOT close the same capability.
+
+The coordinator performs the following ordered shutdown:
+
+1. Stop admitting new model calls and stop scheduling a continuation.
+2. Cancel pending approval prompts and queued calls. For dispatched calls,
+   request browser cancellation only when cancel_on_interrupt permits it;
+   cancellation is not rollback.
+3. Stop catalog mutation and event admission, then let pending invocation
+   waiters reach a terminal result, or classify bounded unresolved work as
+   invocation_orphaned.
+4. Detach every harness-attached target session. A target in an externally
+   owned browser is detach-only: the harness MUST NOT close its tab, browser
+   process, profile, or unrelated targets.
+5. Flush and close the semantic browser recorder after the final browser event
+   has been queued, then close the harness-owned browser transport/runtime.
+   Only a browser launch owner holding the matching ownership token may stop a
+   browser process it launched.
+6. Close the provider/session runtime and flush its provider capture.
+7. Finalize the existing recording bundle manifest exactly once, after both
+   browser and provider artifacts are durable. A browser artifact is an
+   extension of that bundle, never a second manifest contract.
+
+The order is bounded: a non-cooperative page or transport MUST NOT hold session
+shutdown forever. Any unresolved work is recorded and surfaced through the
+classified result/diagnostic contract. The ordered responsibilities follow the
+target-preservation, invocation-registry, and existing recording observations
+in [Understanding §2](understanding.md#2-verified-mapping-to-current-machinery)
+and [Architecture Decision §3](architecture-decision.md#3-testability-and-production-site-ramps).
+
+### 5.2 One cleanup owner for each lifecycle path
+
+The following table is normative. The session coordinator is the sole owner of
+the transferred capability and the selected runtime plan for the whole run.
+The runtime plan's capture finalizer, the capability's Close hook, and the
+existing recording runner are delegated one-shot helpers, not competing
+owners. No row may be implemented by adding a second independent defer that
+closes the same resource.
+
+| Lifecycle point or resource | Sole cleanup owner | Required behavior |
+| --- | --- | --- |
+| Partial browser capability construction before factory return | Capability factory/composition owner | Close all allocated browser, broker, recorder, and persisted-state handles before returning the construction error; join cleanup failures with the original error. |
+| Session planning and preflight failure after transfer | Session coordinator | Close the transferred capability exactly once; do not dial the provider until browser configuration/preflight has passed. |
+| injected-live runtime mode | Session coordinator | Run the injected inferencer to completion or cancellation, then invoke the common runtime-plan and capability finalizers in order. |
+| replay-generic runtime mode | Session coordinator | Close replay transport/inferencer once and still invoke capability cleanup when a browser replay is paired. |
+| replay-grok-websocket runtime mode | Session coordinator | Drain and close the Grok replay transport once; late browser events are recorded, not replayed into a new turn. |
+| replay-openai-websocket runtime mode | Session coordinator | Preserve strict replay completion and then invoke the common runtime-plan and capability finalizers. |
+| record-grok runtime mode | Session coordinator | Invoke the Grok capture finalizer once even on provider error or context cancellation. |
+| record-openai runtime mode | Session coordinator | Invoke the OpenAI capture finalizer once even on provider error or context cancellation. |
+| Normal session exit | Session coordinator | Invoke the common shutdown exactly once, then return the primary session result plus joined cleanup failures. |
+| Error exit, including configuration, provider, browser, and tool errors | Session coordinator | Run cleanup before returning; do not skip browser cleanup because the loop already has an error. |
+| Cancel/interrupt exit, including audio barge-in | Session coordinator | Stop continuation, apply the interrupt policy, reconcile or orphan pending calls, and run cleanup exactly once. |
+| Duration-bounded execution and finite audio turns | Duration/session coordinator | The timer or turn boundary cancels the run and delegates to the same coordinator finalizer; it does not close provider or browser resources itself. |
+| Browser semantic capture flush | Session coordinator, through SessionToolCapabilities.Close | Flush after the last browser event is queued and before its transport/runtime is closed. |
+| Provider capture flush | Session coordinator, through the runtime plan's capture finalizer | Flush the provider recorder once after the runtime has stopped and before manifest finalization. |
+| Recording-directory finalization | Session coordinator, through the existing recording runner | Write/update the one manifest.json once, after provider and browser artifacts, and join any finalization error with the run result. |
+
+The explicit mode rows mirror the current runtime planner's injected, replay,
+and record variants; the browser hook is common to all of them. This avoids the
+current risk that duration-bounded or audio/error paths bypass a cleanup branch,
+which is why the accepted architecture assigns the CLI composition root the
+least-coupled browser ownership point.
+
+No cleanup owner may terminate an external Chrome process. A process is
+harness-owned only when this run launched it and retained its ownership token.
+A target selected from an existing browser remains usable by the customer
+after session shutdown.
+
+## 6. Continuation and result ownership
+
+The loop coordinator/ModelRunner exclusively owns post-tool continuation. A
+browser broker is an executor and result serializer; it is never a provider
+session controller. This follows the verified batch behavior (tool calls in one
+batch execute concurrently and results are awaited in input order) and the
+verified distinction between ordinary textual tool results and rich complete
+messages. See [Understanding §2](understanding.md#2-verified-mapping-to-current-machinery)
+and [Architecture Decision §4](architecture-decision.md#4-overall-topology).
+
+For each model tool batch, the coordinator MUST:
+
+1. register every provider call ID before dispatch;
+2. allow the runner to execute calls concurrently while the broker enforces
+   its own per-target FIFO/mutation policy;
+3. wait until every call has one terminal result, preserving the runner's
+   correlation and result ordering;
+4. forward each result at most once with its original provider call ID; and
+5. schedule exactly one continuation after the batch is terminal, provided the
+   session is still active and no cancellation, interruption, or close has
+   suppressed continuation.
+
+The broker MUST NOT emit response.create, inject a synthetic user message,
+decide that a batch is complete, or use the rich-result path. In Realtime
+broker mode it returns the compact textual ToolCallResponse.Content envelope;
+the provider/session loop performs the ordinary function-call-output delivery
+and the one continuation through its existing provider-specific mechanism.
+Whether that mechanism is direct or indirect is an implementation detail, but
+there MUST be one continuation, never one per browser result and never a
+second continuation from a late result.
+
+A late browser result after model cancellation, a new user turn, tab switch,
+navigation, or session shutdown is still reconciled and recorded by the broker.
+It MUST NOT start a new model response. If the call ID has already received a
+terminal result, a duplicate browser event is ignored for delivery and retained
+only for diagnostics. A dispatched mutation whose result is unknown remains
+unknown; continuation ownership does not create permission to retry it.
+
+The source-plan claim that the browser path can simply emit output followed by
+its own request is therefore superseded. The current repository has a separate
+ordinary textual result path and rich-result path, and the accepted decision
+requires the broker to remain on the former while the loop coordinator owns the
+exactly-once continuation.
