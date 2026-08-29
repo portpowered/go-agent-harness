@@ -55,6 +55,7 @@ These are the supported consumer-facing command groups:
 | `agent chat` | Interactive multi-turn chat, with optional audio input and iterative loop mode. |
 | `agent tool <tool-id> key=value...` | Direct tool invocation for debugging tool behavior outside a full model run. |
 | `agent probe acceptance <binary> <goal>` | Run one blind, artifact-backed acceptance probe in a fresh empty directory. |
+| `agent probe customer-simulation --live ...` | Run the explicitly billed conversational customer-simulation suite and write sanitized reports plus finalized evidence bundles. |
 | `agent session ...` | Live session capture, offline replay, and stored session inspection via `show`, `list`, and `delete`. |
 | `agent config add-local ...` | Write a local provider entry into the CLI config for OpenAI-compatible local inference servers. |
 
@@ -78,6 +79,9 @@ agent tool read_file path=./README.md
 
 # Blind acceptance probe (the probe receives only the binary, goal, and empty cwd)
 agent probe acceptance ./probe-agent "Create the requested result"
+
+# Billed conversational customer simulation; see docs/customer-simulation-live.md
+agent probe customer-simulation --live --required --audio-dir /absolute/path/to/audio
 
 # Provider-neutral interaction fixture replay
 agent interaction replay fixtures/demo.interaction.json

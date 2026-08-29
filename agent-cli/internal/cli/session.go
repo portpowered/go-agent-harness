@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -474,7 +475,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if !hasSessionMode && !browserToolsAdmission(cmd) {
 				return cmd.Help()
 			}
-			sessionContext := cmd.Context()
+			sessionContext, stopSignal := signal.NotifyContext(cmd.Context(), os.Interrupt)
+			defer stopSignal()
 			if maxDuration > 0 {
 				capturePath := c.askFlags.RecordCapturePath
 				if capturePath == "" {
@@ -492,12 +494,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Value:   prompt,
 				Present: cmd.Flags().Changed("prompt"),
 			}
-			audioInput := services.SessionAudioInput{
-				Path:          audioIn,
-				Stdin:         cmd.InOrStdin(),
-				Present:       cmd.Flags().Changed("audio-in"),
-				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
-			}
+			audioInput := sessionAudioInputFromCommand(cmd, audioIn)
 			// Validate command-only combinations before constructing the browser
 			// capability. Once construction succeeds, ownership transfers to the
 			// service coordinator and every remaining error is finalized there.
@@ -738,6 +735,16 @@ func prepareSessionAudioInterruptions(
 		}
 		return nil
 	}, nil
+}
+
+func sessionAudioInputFromCommand(cmd *cobra.Command, path string) services.SessionAudioInput {
+	return services.SessionAudioInput{
+		Path:               path,
+		Stdin:              cmd.InOrStdin(),
+		CloseStdinOnCancel: path == "-",
+		Present:            cmd.Flags().Changed("audio-in"),
+		DevicePresent:      cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+	}
 }
 
 func validateSessionSignaling(transport, signaling string, provided bool) error {

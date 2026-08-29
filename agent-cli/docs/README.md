@@ -7,6 +7,7 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [PNIG interaction replay](interaction-replay.md) explains how to replay normalized interaction fixtures as NDJSON without provider credentials or live network calls.
 - [Agent session record and replay](session-record-replay.md) explains how to record live Grok and OpenAI Realtime sessions, replay captures without provider network calls, and interpret replay divergence errors.
 - [Blind acceptance probes](acceptance-probe.md) explains the artifact-backed verdict contract and live/replay transport seam.
+- [Conversational customer simulation](customer-simulation-live.md) documents the explicit billed live suite, A/B/D selectors, safe key setup, audio layout, and hermetic versus live reruns.
 - [Room live visualizer](room-visualizer.html) is a zero-build browser page for the room's transcript, diagnostic, and lifecycle SSE events.
 - [Three-participant room fixture](room-three-participant.json) is a credential-free manifest with one opening seed and distinct Realtime voices.
 - [Tool-assistant room fixture](room-tool-assistant.json) is a bounded two-participant manifest with a tool-less customer and an exec-only assistant.

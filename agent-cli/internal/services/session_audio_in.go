@@ -90,6 +90,10 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 type SessionAudioInput struct {
 	Path  string
 	Stdin io.Reader
+	// CloseStdinOnCancel allows the process-owned `--audio-in -` descriptor to
+	// interrupt a blocked read when the CLI session is cancelled. Callers that
+	// provide a shared or caller-owned stdin must leave this false.
+	CloseStdinOnCancel bool
 	// MaxDuration bounds an audio-enabled session through the shared loop
 	// options when the caller supplies one.
 	MaxDuration time.Duration
@@ -382,7 +386,7 @@ func openSessionAudioInput(input SessionAudioInput) (*sessionAudioSource, error)
 		if stdin == nil {
 			return nil, classifySessionAudioOpenError(input.Path, audio.ErrNilStream)
 		}
-		inputReader = newSessionAudioReader(stdin)
+		inputReader = newSessionAudioReader(stdin, input.CloseStdinOnCancel)
 		stdin = inputReader
 	}
 	source, err := audio.NewFileSource(input.Path, stdin)
@@ -523,9 +527,10 @@ func (s *sessionAudioSource) Close() error {
 // blocking Read in a helper goroutine would leak that goroutine when stdin is
 // caller-owned and cannot be closed.
 type sessionAudioReader struct {
-	reader io.Reader
-	mu     sync.RWMutex
-	ctx    context.Context
+	reader        io.Reader
+	closeOnCancel bool
+	mu            sync.RWMutex
+	ctx           context.Context
 }
 
 type contextAudioReader interface {
@@ -538,8 +543,8 @@ type deadlineAudioReader interface {
 
 const sessionAudioReadDeadline = 250 * time.Millisecond
 
-func newSessionAudioReader(reader io.Reader) *sessionAudioReader {
-	return &sessionAudioReader{reader: reader}
+func newSessionAudioReader(reader io.Reader, closeOnCancel bool) *sessionAudioReader {
+	return &sessionAudioReader{reader: reader, closeOnCancel: closeOnCancel}
 }
 
 func (r *sessionAudioReader) bindContext(ctx context.Context) {
@@ -572,9 +577,20 @@ func (r *sessionAudioReader) Read(destination []byte) (int, error) {
 	}
 	deadliner, ok := reader.(deadlineAudioReader)
 	if !ok {
+		if r.closeOnCancel {
+			closer, closeOK := reader.(io.Closer)
+			if closeOK {
+				return readAudioReaderWithCancellation(ctx, reader, closer, destination)
+			}
+		}
 		return 0, fmt.Errorf("%w: stdin must implement ReadContext or SetReadDeadline", ErrSessionAudioInputUninterruptible)
 	}
 	if err := deadliner.SetReadDeadline(time.Now().Add(sessionAudioReadDeadline)); err != nil {
+		if r.closeOnCancel {
+			if closer, closeOK := reader.(io.Closer); closeOK {
+				return readAudioReaderWithCancellation(ctx, reader, closer, destination)
+			}
+		}
 		return 0, errors.Join(
 			ErrSessionAudioInputUninterruptible,
 			fmt.Errorf("stdin read deadline setup failed: %w", err),
@@ -596,6 +612,34 @@ func (r *sessionAudioReader) Read(destination []byte) (int, error) {
 		}
 		_ = deadliner.SetReadDeadline(time.Time{})
 		return count, readErr
+	}
+}
+
+type audioReadResult struct {
+	count int
+	err   error
+}
+
+// readAudioReaderWithCancellation is reserved for descriptors explicitly
+// owned by the CLI process. Closing the descriptor is the only portable way
+// to interrupt a blocked pipe read on platforms where SetReadDeadline is not
+// implemented for os.File pipes.
+func readAudioReaderWithCancellation(ctx context.Context, reader io.Reader, closer io.Closer, destination []byte) (int, error) {
+	resultCh := make(chan audioReadResult, 1)
+	go func() {
+		count, err := reader.Read(destination)
+		resultCh <- audioReadResult{count: count, err: err}
+	}()
+	select {
+	case result := <-resultCh:
+		return result.count, result.err
+	case <-ctx.Done():
+		_ = closer.Close()
+		result := <-resultCh
+		if result.count > 0 {
+			return result.count, ctx.Err()
+		}
+		return 0, ctx.Err()
 	}
 }
 

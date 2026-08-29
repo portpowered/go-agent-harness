@@ -22,13 +22,14 @@ type Router struct {
 	InteractionCommand       *InteractionCommand
 	InteractionReplayCommand *InteractionReplayCommand
 
-	ProbeCommand           *ProbeCommand
-	ProbeRunCommand        *ProbeRunCommand
-	ProbeGateCommand       *ProbeGateCommand
-	ProbeReportCommand     *ProbeReportCommand
-	ProbeAcceptanceCommand *ProbeAcceptanceCommand
-	ProbeFleetCommand      *ProbeFleetCommand
-	MediaCommand           *MediaCommand
+	ProbeCommand              *ProbeCommand
+	ProbeRunCommand           *ProbeRunCommand
+	ProbeGateCommand          *ProbeGateCommand
+	ProbeReportCommand        *ProbeReportCommand
+	ProbeAcceptanceCommand    *ProbeAcceptanceCommand
+	ProbeFleetCommand         *ProbeFleetCommand
+	CustomerSimulationCommand *CustomerSimulationCommand
+	MediaCommand              *MediaCommand
 
 	SessionCommand       *SessionCommand
 	SessionShowCommand   *SessionShowCommand
@@ -84,29 +85,30 @@ func NewRouter(
 		probeRunCommand.SetBrowserExecutorFactory(productionWebMCPFactory)
 	}
 	return &Router{
-		Flags:                    flags,
-		deviceRegistry:           deviceRegistry,
-		RootCommand:              rootCommand,
-		AskCommand:               askCommand,
-		ChatCommand:              chatCommand,
-		ToolCommand:              toolCommand,
-		InteractionCommand:       interactionCommand,
-		InteractionReplayCommand: interactionReplayCommand,
-		ProbeCommand:             probeCommand,
-		ProbeRunCommand:          probeRunCommand,
-		ProbeGateCommand:         probeGateCommand,
-		ProbeReportCommand:       probeReportCommand,
-		ProbeAcceptanceCommand:   acceptanceCommand,
-		ProbeFleetCommand:        probeFleetCommand,
-		MediaCommand:             NewMediaCommand(),
-		SessionCommand:           sessionCommand,
-		SessionShowCommand:       sessionShowCommand,
-		SessionListCommand:       sessionListCommand,
-		SessionDeleteCommand:     sessionDeleteCommand,
-		RoomRunCommand:           NewRoomRunCommand(flags),
-		ConfigCommand:            configCommand,
-		ConfigAddLocalCommand:    configAddLocalCommand,
-		WebMCPCommand:            NewWebMCPCommand(flags),
+		Flags:                     flags,
+		deviceRegistry:            deviceRegistry,
+		RootCommand:               rootCommand,
+		AskCommand:                askCommand,
+		ChatCommand:               chatCommand,
+		ToolCommand:               toolCommand,
+		InteractionCommand:        interactionCommand,
+		InteractionReplayCommand:  interactionReplayCommand,
+		ProbeCommand:              probeCommand,
+		ProbeRunCommand:           probeRunCommand,
+		ProbeGateCommand:          probeGateCommand,
+		ProbeReportCommand:        probeReportCommand,
+		ProbeAcceptanceCommand:    acceptanceCommand,
+		ProbeFleetCommand:         probeFleetCommand,
+		CustomerSimulationCommand: NewCustomerSimulationCommand(flags),
+		MediaCommand:              NewMediaCommand(),
+		SessionCommand:            sessionCommand,
+		SessionShowCommand:        sessionShowCommand,
+		SessionListCommand:        sessionListCommand,
+		SessionDeleteCommand:      sessionDeleteCommand,
+		RoomRunCommand:            NewRoomRunCommand(flags),
+		ConfigCommand:             configCommand,
+		ConfigAddLocalCommand:     configAddLocalCommand,
+		WebMCPCommand:             NewWebMCPCommand(flags),
 	}
 }
 
@@ -128,6 +130,11 @@ func (r *Router) BuildRoot() *cobra.Command {
 	probeGroup.AddCommand(NewPath("report --out <result.jsonl>...", r.ProbeReportCommand.Generate()))
 	probeGroup.AddCommand(NewPath("acceptance <binary> <goal>", r.ProbeAcceptanceCommand.Generate()))
 	probeGroup.AddCommand(NewPath("fleet --manifest <file>", r.ProbeFleetCommand.Generate()))
+	customerSimulationCommand := r.CustomerSimulationCommand
+	if customerSimulationCommand == nil {
+		customerSimulationCommand = NewCustomerSimulationCommand(r.Flags)
+	}
+	probeGroup.AddCommand(NewPath("customer-simulation [scenario-path...]", customerSimulationCommand.Generate()))
 	root.AddCommand(probeGroup)
 
 	mediaCommand := r.MediaCommand

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "id": "family-e-patient-listener",
+  "name": "Patient Aurora listener",
+  "family": "E",
+  "persona": "A human-like customer who listens before checking in",
+  "goal": "Wait for observable product speech or work and surface dead air honestly",
+  "wording_freedom": "Use natural wording while preserving the listen, progress, re-prompt, and dead-air boundaries.",
+  "text_seed": "The customer listens while the product speaks or tools make progress. A check-in is allowed only after the re-prompt threshold, and absolute dead air is a broken run.",
+  "image_events": [],
+  "actions": [
+    {
+      "id": "complete-after-patience",
+      "intent": "Handle the customer request while exposing truthful latency and progress.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "forbid",
+      "side_effect_rule": "Do not create a filesystem artifact; retain the empty sandbox while latency is evaluated.",
+      "oracle": {
+        "description": "The request completes with a truthful spoken response and patience evidence; patience/marker.txt remains absent.",
+        "checkpoints": [
+          {"path": "patience/marker.txt", "type": "absent"}
+        ],
+        "require_confirmation": true,
+        "required_text": ["request is complete"],
+        "forbidden_text": ["timeout", "dead air"]
+      }
+    }
+  ],
+  "sandbox": {
+    "name": "fresh-family-e-sandbox",
+    "root": ".",
+    "fresh": true
+  },
+  "interruption_trigger": {
+    "kind": "none",
+    "before_terminal": false
+  },
+  "patience": {
+    "listen_before_follow_up": 250000000,
+    "response_start": 1000000000,
+    "in_progress_work": 2000000000,
+    "reprompt": 3000000000,
+    "absolute_dead_air": 8000000000,
+    "max_reprompts": 1
+  },
+  "termination": "natural",
+  "deadline": 20000000000
+}
