@@ -18,7 +18,7 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("coveragegate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	manifestPath := flags.String("manifest", "", "path to the coverage manifest JSON file")
+	manifestPath := flags.String("manifest", "", "path to the coverage manifest fragment directory")
 	var profilePaths stringList
 	flags.Var(&profilePaths, "profile", "coverage profile path (may be repeated)")
 	if err := flags.Parse(args); err != nil {
@@ -32,11 +32,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return errors.New("coverage gate requires at least one coverage profile")
 	}
 
-	manifestData, err := os.ReadFile(*manifestPath)
-	if err != nil {
-		return fmt.Errorf("read coverage manifest %q: %w", *manifestPath, err)
-	}
-	manifest, err := ParseManifest(manifestData)
+	manifest, err := LoadManifest(*manifestPath)
 	if err != nil {
 		return err
 	}

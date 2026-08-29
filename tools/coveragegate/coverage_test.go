@@ -12,8 +12,8 @@ import (
 
 func TestManifestErrorModes(t *testing.T) {
 	tests := []struct {
-		name string
-		data string
+		name  string
+		data  string
 		check func(t *testing.T, err error)
 	}{
 		{
@@ -174,6 +174,79 @@ func TestCompareReportsAllUnregisteredPackagesInOrder(t *testing.T) {
 	}
 }
 
+func TestLoadManifestDirMergesIndependentFragmentsInPackageOrder(t *testing.T) {
+	directory := t.TempDir()
+	writeManifestFragment(t, filepath.Join(directory, "nested", "zeta.fragment"), `{"package":"example/zeta","minimum":50.00}`)
+	writeManifestFragment(t, filepath.Join(directory, "alpha.fragment"), `{"package":"example/alpha","minimum":80.00}`)
+
+	manifest, err := LoadManifestDir(directory)
+	if err != nil {
+		t.Fatalf("LoadManifestDir() error = %v", err)
+	}
+	if got, want := len(manifest.Packages), 2; got != want {
+		t.Fatalf("registered package count = %d, want %d", got, want)
+	}
+	if got, want := manifest.Packages[0].ImportPath, "example/alpha"; got != want {
+		t.Fatalf("first package = %q, want %q", got, want)
+	}
+	if got, want := manifest.Packages[1].ImportPath, "example/zeta"; got != want {
+		t.Fatalf("second package = %q, want %q", got, want)
+	}
+
+	err = Compare(manifest, map[string]Coverage{
+		"example/alpha": {Covered: 7, Total: 10},
+		"example/zeta":  {Covered: 4, Total: 10},
+	})
+	if err == nil {
+		t.Fatal("Compare() succeeded with both fragment floors below their minimum")
+	}
+	if !errors.Is(err, ErrCoverageFloorViolation) {
+		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
+	}
+	want := "coverage gate found coverage floor violations:\n- example/alpha: expected minimum 80.00%, actual 70.00%, delta -10.00%\n- example/zeta: expected minimum 50.00%, actual 40.00%, delta -10.00%"
+	if got := err.Error(); got != want {
+		t.Fatalf("report = %q, want %q", got, want)
+	}
+}
+
+func TestLoadManifestDirReportsDuplicateFragments(t *testing.T) {
+	directory := t.TempDir()
+	first := filepath.Join(directory, "first.fragment")
+	second := filepath.Join(directory, "second.fragment")
+	writeManifestFragment(t, first, `{"package":"example/duplicate","minimum":40.00}`)
+	writeManifestFragment(t, second, `{"package":"example/duplicate","exception":"tracked separately"}`)
+
+	_, err := LoadManifestDir(directory)
+	if err == nil {
+		t.Fatal("LoadManifestDir() succeeded with duplicate package fragments")
+	}
+	if !errors.Is(err, ErrManifestDuplicate) {
+		t.Fatalf("errors.Is(%v, ErrManifestDuplicate) = false", err)
+	}
+	for _, want := range []string{"example/duplicate", first, second} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("duplicate error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestLoadManifestDirReportsMalformedFragmentPath(t *testing.T) {
+	directory := t.TempDir()
+	fragment := filepath.Join(directory, "broken.fragment")
+	writeManifestFragment(t, fragment, `{"package":"example/broken","minimum":80.0}`)
+
+	_, err := LoadManifestDir(directory)
+	if err == nil {
+		t.Fatal("LoadManifestDir() succeeded with malformed fragment")
+	}
+	if !errors.Is(err, ErrManifestMinimumPrecision) {
+		t.Fatalf("errors.Is(%v, ErrManifestMinimumPrecision) = false", err)
+	}
+	if !strings.Contains(err.Error(), fragment) {
+		t.Fatalf("malformed fragment error = %q, want it to contain %q", err, fragment)
+	}
+}
+
 func TestKnownGoodManifestAndProfiles(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "coverage-manifest.json"))
 	if err != nil {
@@ -278,4 +351,14 @@ func writeProfile(t *testing.T, data string) string {
 		t.Fatalf("write profile: %v", err)
 	}
 	return path
+}
+
+func writeManifestFragment(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir fragment directory: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("write manifest fragment: %v", err)
+	}
 }

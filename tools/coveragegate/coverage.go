@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -16,16 +18,17 @@ import (
 )
 
 var (
-	ErrManifestInvalid             = errors.New("invalid coverage manifest")
-	ErrManifestMinimumPrecision    = errors.New("coverage minimum must use exactly two decimal places")
-	ErrManifestUnsorted             = errors.New("coverage manifest packages are not strictly sorted")
-	ErrManifestBothFields           = errors.New("coverage manifest entry defines both minimum and exception")
-	ErrManifestNeitherField          = errors.New("coverage manifest entry defines neither minimum nor exception")
-	ErrManifestException             = errors.New("coverage manifest exception must be a string")
-	ErrProfileInvalid                = errors.New("invalid Go coverage profile")
-	ErrUnregisteredPackage           = errors.New("coverage profile contains an unregistered package")
-	ErrMissingCoverage               = errors.New("manifest package has no measured coverage")
-	ErrCoverageFloorViolation        = errors.New("measured coverage is below its minimum")
+	ErrManifestInvalid          = errors.New("invalid coverage manifest")
+	ErrManifestMinimumPrecision = errors.New("coverage minimum must use exactly two decimal places")
+	ErrManifestUnsorted         = errors.New("coverage manifest packages are not strictly sorted")
+	ErrManifestBothFields       = errors.New("coverage manifest entry defines both minimum and exception")
+	ErrManifestNeitherField     = errors.New("coverage manifest entry defines neither minimum nor exception")
+	ErrManifestException        = errors.New("coverage manifest exception must be a string")
+	ErrManifestDuplicate        = errors.New("coverage manifest contains duplicate package registrations")
+	ErrProfileInvalid           = errors.New("invalid Go coverage profile")
+	ErrUnregisteredPackage      = errors.New("coverage profile contains an unregistered package")
+	ErrMissingCoverage          = errors.New("manifest package has no measured coverage")
+	ErrCoverageFloorViolation   = errors.New("measured coverage is below its minimum")
 )
 
 // Manifest is the validated, hand-maintained coverage registration set.
@@ -37,10 +40,10 @@ type Manifest struct {
 // hundredths (40.20% is 4020). Exceptions are registered but do not impose a
 // floor or require a measured profile entry.
 type PackageEntry struct {
-	ImportPath  string
+	ImportPath   string
 	MinimumCents int
-	HasMinimum  bool
-	Exception   string
+	HasMinimum   bool
+	Exception    string
 	HasException bool
 }
 
@@ -52,7 +55,7 @@ type Coverage struct {
 
 // Violation is a deterministic, actionable floor failure.
 type Violation struct {
-	ImportPath   string
+	ImportPath    string
 	ExpectedCents int
 	ActualCents   int
 	DeltaCents    int
@@ -116,16 +119,160 @@ func (e *FindingsError) Unwrap() []error {
 }
 
 type ManifestError struct {
-	Kind        error
-	ImportPath  string
-	Message     string
+	Kind       error
+	ImportPath string
+	Message    string
 }
 
 func (e *ManifestError) Error() string { return e.Message }
 
 func (e *ManifestError) Unwrap() error { return e.Kind }
 
+// DuplicateRegistration identifies two fragments that claim the same
+// package. Fragment paths are retained so maintainers can resolve the
+// conflict without inspecting the merged catalog.
+type DuplicateRegistration struct {
+	ImportPath     string
+	FirstFragment  string
+	SecondFragment string
+}
+
+// DuplicateManifestError reports all duplicate package registrations found
+// while loading a fragment directory.
+type DuplicateManifestError struct {
+	Duplicates []DuplicateRegistration
+}
+
+func (e *DuplicateManifestError) Error() string {
+	var b strings.Builder
+	b.WriteString("coverage manifest found duplicate package registrations:")
+	for _, duplicate := range e.Duplicates {
+		fmt.Fprintf(&b, "\n- %s: fragments %q and %q",
+			duplicate.ImportPath,
+			duplicate.FirstFragment,
+			duplicate.SecondFragment,
+		)
+	}
+	return b.String()
+}
+
+func (e *DuplicateManifestError) Unwrap() error { return ErrManifestDuplicate }
+
 var minimumPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.[0-9]{2}$`)
+
+// LoadManifest loads either the fragment directory used by the repository
+// gate or the legacy single JSON manifest. Keeping the file form available
+// makes the command transition safe for callers that still use a file.
+func LoadManifest(path string) (Manifest, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("%w: stat coverage manifest %q: %v", ErrManifestInvalid, path, err)
+	}
+	if info.IsDir() {
+		return LoadManifestDir(path)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("%w: read coverage manifest %q: %v", ErrManifestInvalid, path, err)
+	}
+	manifest, err := ParseManifest(data)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("coverage manifest %q: %w", path, err)
+	}
+	return manifest, nil
+}
+
+// LoadManifestDir discovers and merges one-package registration fragments
+// below path. The directory is a dedicated catalog: every non-directory
+// entry is treated as a fragment, including entries in nested directories.
+// Discovery and merged registrations are sorted explicitly so neither
+// filesystem traversal order nor fragment filenames affect the result.
+func LoadManifestDir(path string) (Manifest, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("%w: stat coverage manifest directory %q: %v", ErrManifestInvalid, path, err)
+	}
+	if !info.IsDir() {
+		return Manifest{}, fmt.Errorf("%w: coverage manifest path %q is not a directory", ErrManifestInvalid, path)
+	}
+
+	var fragmentPaths []string
+	walkErr := filepath.WalkDir(path, func(fragmentPath string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("%w: inspect coverage manifest fragment %q: %v", ErrManifestInvalid, fragmentPath, err)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		fragmentPaths = append(fragmentPaths, fragmentPath)
+		return nil
+	})
+	if walkErr != nil {
+		return Manifest{}, walkErr
+	}
+	sort.Strings(fragmentPaths)
+
+	manifest := Manifest{Packages: make([]PackageEntry, 0, len(fragmentPaths))}
+	locations := make(map[string]string, len(fragmentPaths))
+	var duplicates []DuplicateRegistration
+	for _, fragmentPath := range fragmentPaths {
+		data, err := os.ReadFile(fragmentPath)
+		if err != nil {
+			return Manifest{}, fmt.Errorf("%w: read coverage manifest fragment %q: %v", ErrManifestInvalid, fragmentPath, err)
+		}
+		entry, err := ParseManifestFragment(data)
+		if err != nil {
+			return Manifest{}, fmt.Errorf("coverage manifest fragment %q: %w", fragmentPath, err)
+		}
+		if firstFragment, ok := locations[entry.ImportPath]; ok {
+			duplicates = append(duplicates, DuplicateRegistration{
+				ImportPath:     entry.ImportPath,
+				FirstFragment:  firstFragment,
+				SecondFragment: fragmentPath,
+			})
+			continue
+		}
+		locations[entry.ImportPath] = fragmentPath
+		manifest.Packages = append(manifest.Packages, entry)
+	}
+	if len(duplicates) != 0 {
+		sort.Slice(duplicates, func(i, j int) bool {
+			if duplicates[i].ImportPath != duplicates[j].ImportPath {
+				return duplicates[i].ImportPath < duplicates[j].ImportPath
+			}
+			return duplicates[i].SecondFragment < duplicates[j].SecondFragment
+		})
+		return Manifest{}, &DuplicateManifestError{Duplicates: duplicates}
+	}
+
+	sort.Slice(manifest.Packages, func(i, j int) bool {
+		return manifest.Packages[i].ImportPath < manifest.Packages[j].ImportPath
+	})
+	if err := validateManifest(manifest); err != nil {
+		return Manifest{}, err
+	}
+	return manifest, nil
+}
+
+// ParseManifestFragment parses one JSON registration object. Unlike the
+// legacy manifest parser, a fragment has no packages array: exactly one
+// package registration is required in the object itself.
+func ParseManifestFragment(data []byte) (PackageEntry, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	var rawEntry json.RawMessage
+	if err := decoder.Decode(&rawEntry); err != nil {
+		return PackageEntry{}, fmt.Errorf("%w: %v", ErrManifestInvalid, err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return PackageEntry{}, fmt.Errorf("%w: manifest fragment contains more than one JSON value", ErrManifestInvalid)
+		}
+		return PackageEntry{}, fmt.Errorf("%w: %v", ErrManifestInvalid, err)
+	}
+	return parseEntry(rawEntry)
+}
 
 // ParseManifest validates the JSON and preserves the lexical minimum format
 // before converting it to an integer percentage representation.
