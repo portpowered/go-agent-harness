@@ -12,8 +12,8 @@ import (
 
 func TestManifestErrorModes(t *testing.T) {
 	tests := []struct {
-		name string
-		data string
+		name  string
+		data  string
 		check func(t *testing.T, err error)
 	}{
 		{
@@ -174,15 +174,187 @@ func TestCompareReportsAllUnregisteredPackagesInOrder(t *testing.T) {
 	}
 }
 
-func TestKnownGoodManifestAndProfiles(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "coverage-manifest.json"))
-	if err != nil {
-		t.Fatalf("read committed manifest: %v", err)
+func TestCompareAllowsCoverageQuantizationBandWithoutChangingFloor(t *testing.T) {
+	tests := []struct {
+		name      string
+		minimum   string
+		wantDelta int
+	}{
+		{name: "half band", minimum: "80.05", wantDelta: -5},
+		{name: "exact band", minimum: "80.10", wantDelta: -10},
 	}
-	manifest, err := ParseManifest(data)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := mustParseManifest(t, manifestJSON(fmt.Sprintf(`{"package":"example/a","minimum":%s}`, tt.minimum)))
+			if err := Compare(manifest, map[string]Coverage{"example/a": {Covered: 8, Total: 10}}); err != nil {
+				t.Fatalf("Compare() rejected a shortfall within the 0.10-point band: %v", err)
+			}
+			if got, want := manifest.Packages[0].MinimumCents, 8000+(-tt.wantDelta); got != want {
+				t.Fatalf("stored minimum = %d cents, want %d cents", got, want)
+			}
+		})
+	}
+}
+
+func TestCompareRejectsCoverageBeyondQuantizationBand(t *testing.T) {
+	manifest := mustParseManifest(t, manifestJSON(`{"package":"example/a","minimum":80.50}`))
+	err := Compare(manifest, map[string]Coverage{"example/a": {Covered: 8, Total: 10}})
+	if err == nil {
+		t.Fatal("Compare() accepted a 0.50-point floor regression")
+	}
+	if !errors.Is(err, ErrCoverageFloorViolation) {
+		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
+	}
+	want := "coverage gate found coverage floor violations:\n- example/a: expected minimum 80.50%, actual 80.00%, delta -0.50%"
+	if got := err.Error(); got != want {
+		t.Fatalf("report = %q, want %q", got, want)
+	}
+	if got, want := manifest.Packages[0].MinimumCents, 8050; got != want {
+		t.Fatalf("stored minimum = %d cents, want %d cents", got, want)
+	}
+}
+
+func TestLoadManifestDirMergesIndependentFragmentsInPackageOrder(t *testing.T) {
+	directory := t.TempDir()
+	writeManifestFragment(t, filepath.Join(directory, "nested", "zeta.fragment"), `{"package":"example/zeta","minimum":50.00}`)
+	writeManifestFragment(t, filepath.Join(directory, "alpha.fragment"), `{"package":"example/alpha","minimum":80.00}`)
+
+	manifest, err := LoadManifestDir(directory)
+	if err != nil {
+		t.Fatalf("LoadManifestDir() error = %v", err)
+	}
+	if got, want := len(manifest.Packages), 2; got != want {
+		t.Fatalf("registered package count = %d, want %d", got, want)
+	}
+	if got, want := manifest.Packages[0].ImportPath, "example/alpha"; got != want {
+		t.Fatalf("first package = %q, want %q", got, want)
+	}
+	if got, want := manifest.Packages[1].ImportPath, "example/zeta"; got != want {
+		t.Fatalf("second package = %q, want %q", got, want)
+	}
+
+	err = Compare(manifest, map[string]Coverage{
+		"example/alpha": {Covered: 7, Total: 10},
+		"example/zeta":  {Covered: 4, Total: 10},
+	})
+	if err == nil {
+		t.Fatal("Compare() succeeded with both fragment floors below their minimum")
+	}
+	if !errors.Is(err, ErrCoverageFloorViolation) {
+		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
+	}
+	want := "coverage gate found coverage floor violations:\n- example/alpha: expected minimum 80.00%, actual 70.00%, delta -10.00%\n- example/zeta: expected minimum 50.00%, actual 40.00%, delta -10.00%"
+	if got := err.Error(); got != want {
+		t.Fatalf("report = %q, want %q", got, want)
+	}
+}
+
+func TestLoadManifestDirReportsDuplicateFragments(t *testing.T) {
+	directory := t.TempDir()
+	first := filepath.Join(directory, "first.fragment")
+	second := filepath.Join(directory, "second.fragment")
+	writeManifestFragment(t, first, `{"package":"example/duplicate","minimum":40.00}`)
+	writeManifestFragment(t, second, `{"package":"example/duplicate","exception":"tracked separately"}`)
+
+	_, err := LoadManifestDir(directory)
+	if err == nil {
+		t.Fatal("LoadManifestDir() succeeded with duplicate package fragments")
+	}
+	if !errors.Is(err, ErrManifestDuplicate) {
+		t.Fatalf("errors.Is(%v, ErrManifestDuplicate) = false", err)
+	}
+	for _, want := range []string{"example/duplicate", first, second} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("duplicate error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestLoadManifestDirReportsMalformedFragmentPath(t *testing.T) {
+	directory := t.TempDir()
+	fragment := filepath.Join(directory, "broken.fragment")
+	writeManifestFragment(t, fragment, `{"package":"example/broken","minimum":80.0}`)
+
+	_, err := LoadManifestDir(directory)
+	if err == nil {
+		t.Fatal("LoadManifestDir() succeeded with malformed fragment")
+	}
+	if !errors.Is(err, ErrManifestMinimumPrecision) {
+		t.Fatalf("errors.Is(%v, ErrManifestMinimumPrecision) = false", err)
+	}
+	if !strings.Contains(err.Error(), fragment) {
+		t.Fatalf("malformed fragment error = %q, want it to contain %q", err, fragment)
+	}
+}
+
+func TestRepositoryFragmentCatalogMatchesPreMigrationBaseline(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "pre-migration-coverage-manifest.json"))
+	if err != nil {
+		t.Fatalf("read pre-migration baseline: %v", err)
+	}
+	want, err := ParseManifest(data)
 	if err != nil {
 		t.Fatalf("ParseManifest() error = %v", err)
 	}
+	got := mustLoadRepositoryManifest(t)
+	if len(got.Packages) != len(want.Packages) {
+		t.Fatalf("registered package count = %d, want %d", len(got.Packages), len(want.Packages))
+	}
+	for i := range want.Packages {
+		if got.Packages[i] != want.Packages[i] {
+			t.Fatalf("package registration %d = %#v, want %#v", i, got.Packages[i], want.Packages[i])
+		}
+	}
+}
+
+func TestRepositoryFragmentCatalogPreservesCoverageEnforcement(t *testing.T) {
+	manifest := mustLoadRepositoryManifest(t)
+	measurements := allPackagesMeasured(manifest)
+	if err := Compare(manifest, measurements); err != nil {
+		t.Fatalf("non-regressing repository measurements rejected: %v", err)
+	}
+
+	withUnregistered := cloneMeasurements(measurements)
+	const unregisteredPackage = "github.com/portpowered/go-agent-harness/new/package"
+	withUnregistered[unregisteredPackage] = Coverage{Covered: 1, Total: 1}
+	err := Compare(manifest, withUnregistered)
+	if !errors.Is(err, ErrUnregisteredPackage) {
+		t.Fatalf("errors.Is(%v, ErrUnregisteredPackage) = false", err)
+	}
+	if !strings.Contains(err.Error(), unregisteredPackage) {
+		t.Fatalf("unregistered-package report = %q, want %q", err, unregisteredPackage)
+	}
+
+	const targetPackage = "github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	withoutMeasurement := cloneMeasurements(measurements)
+	delete(withoutMeasurement, targetPackage)
+	err = Compare(manifest, withoutMeasurement)
+	if !errors.Is(err, ErrMissingCoverage) {
+		t.Fatalf("errors.Is(%v, ErrMissingCoverage) = false", err)
+	}
+	if !strings.Contains(err.Error(), targetPackage) {
+		t.Fatalf("missing-coverage report = %q, want %q", err, targetPackage)
+	}
+
+	withRegression := cloneMeasurements(measurements)
+	withRegression[targetPackage] = Coverage{Covered: 397, Total: 1000}
+	err = Compare(manifest, withRegression)
+	if !errors.Is(err, ErrCoverageFloorViolation) {
+		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
+	}
+	var findings *FindingsError
+	if !errors.As(err, &findings) {
+		t.Fatalf("coverage regression error %T does not expose FindingsError", err)
+	}
+	wantViolation := Violation{ImportPath: targetPackage, ExpectedCents: 4020, ActualCents: 3970, DeltaCents: -50}
+	if len(findings.Violations) != 1 || findings.Violations[0] != wantViolation {
+		t.Fatalf("coverage violations = %#v, want %#v", findings.Violations, []Violation{wantViolation})
+	}
+}
+
+func TestKnownGoodManifestAndProfiles(t *testing.T) {
+	manifest := mustLoadRepositoryManifest(t)
 	if len(manifest.Packages) == 0 {
 		t.Fatal("manifest contains no packages")
 	}
@@ -233,11 +405,9 @@ func TestReadProfilesAggregatesPackages(t *testing.T) {
 
 func TestCommandFailureExitsNonZero(t *testing.T) {
 	directory := t.TempDir()
-	manifestPath := filepath.Join(directory, "manifest.json")
+	manifestPath := filepath.Join(directory, "manifest")
 	profilePath := filepath.Join(directory, "profile.out")
-	if err := os.WriteFile(manifestPath, []byte(manifestJSON(`{"package":"example/a","minimum":80.00}`)), 0o600); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
+	writeManifestFragment(t, filepath.Join(manifestPath, "example-a.json"), `{"package":"example/a","minimum":80.00}`)
 	if err := os.WriteFile(profilePath, []byte("mode: set\nexample/a/a.go:1.1,1.2 10 0\n"), 0o600); err != nil {
 		t.Fatalf("write profile: %v", err)
 	}
@@ -256,6 +426,31 @@ func TestCommandFailureExitsNonZero(t *testing.T) {
 	if !strings.Contains(string(output), "example/a: expected minimum 80.00%, actual 0.00%, delta -80.00%") {
 		t.Fatalf("command output = %q, want actionable floor diagnostic", output)
 	}
+}
+
+func mustLoadRepositoryManifest(t *testing.T) Manifest {
+	t.Helper()
+	manifest, err := LoadManifestDir(filepath.Join("..", "..", "coverage-manifest"))
+	if err != nil {
+		t.Fatalf("LoadManifestDir() error = %v", err)
+	}
+	return manifest
+}
+
+func allPackagesMeasured(manifest Manifest) map[string]Coverage {
+	measurements := make(map[string]Coverage, len(manifest.Packages))
+	for _, entry := range manifest.Packages {
+		measurements[entry.ImportPath] = Coverage{Covered: 1, Total: 1}
+	}
+	return measurements
+}
+
+func cloneMeasurements(measurements map[string]Coverage) map[string]Coverage {
+	clone := make(map[string]Coverage, len(measurements))
+	for packagePath, coverage := range measurements {
+		clone[packagePath] = coverage
+	}
+	return clone
 }
 
 func manifestJSON(entry string) string {
@@ -278,4 +473,14 @@ func writeProfile(t *testing.T, data string) string {
 		t.Fatalf("write profile: %v", err)
 	}
 	return path
+}
+
+func writeManifestFragment(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir fragment directory: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("write manifest fragment: %v", err)
+	}
 }
