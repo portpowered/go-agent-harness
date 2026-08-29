@@ -299,6 +299,7 @@ type ValidatorInput struct {
 	FilesystemCheckpoints []FilesystemCheckpoint `json:"filesystem_checkpoints"`
 	Process               ProcessFacts           `json:"process"`
 	Mechanical            MechanicalVerdict      `json:"mechanical"`
+	MixedModal            *MixedModalEvidence    `json:"mixed_modal,omitempty"`
 	EvidenceRefs          []string               `json:"evidence_refs"`
 }
 
@@ -339,6 +340,14 @@ func (i ValidatorInput) validate(scenario CustomerScenario, field string) error 
 	}
 	if err := i.Mechanical.validate(scenario, field+".mechanical"); err != nil {
 		return err
+	}
+	if scenario.Family == ScenarioFamilyC {
+		if i.MixedModal == nil {
+			return contractFieldError(ErrMissingEvidence, field+".mixed_modal", "Family C validator input requires mixed-modal evidence")
+		}
+		if err := i.MixedModal.Validate(scenario); err != nil {
+			return err
+		}
 	}
 	if len(i.EvidenceRefs) == 0 {
 		return contractFieldError(ErrMissingEvidence, field+".evidence_refs", "must not be empty")
@@ -403,11 +412,12 @@ const (
 	ArtifactKindMechanicalVerdict     ArtifactKind = "mechanical_verdict"
 	ArtifactKindValidatorInput        ArtifactKind = "validator_input"
 	ArtifactKindValidatorVerdict      ArtifactKind = "validator_verdict"
+	ArtifactKindMixedModalEvidence    ArtifactKind = "mixed_modal_evidence"
 )
 
 func (k ArtifactKind) valid() bool {
 	switch k {
-	case ArtifactKindScenario, ArtifactKindCustomerTranscript, ArtifactKindProductTranscript, ArtifactKindAudioTurnEvents, ArtifactKindProductRecordDir, ArtifactKindToolObservations, ArtifactKindFilesystemCheckpoints, ArtifactKindProcessFacts, ArtifactKindMechanicalVerdict, ArtifactKindValidatorInput, ArtifactKindValidatorVerdict:
+	case ArtifactKindScenario, ArtifactKindCustomerTranscript, ArtifactKindProductTranscript, ArtifactKindAudioTurnEvents, ArtifactKindProductRecordDir, ArtifactKindToolObservations, ArtifactKindFilesystemCheckpoints, ArtifactKindProcessFacts, ArtifactKindMechanicalVerdict, ArtifactKindValidatorInput, ArtifactKindValidatorVerdict, ArtifactKindMixedModalEvidence:
 		return true
 	}
 	return false
@@ -517,6 +527,7 @@ type CustomerEvidenceBundle struct {
 	MechanicalVerdict     *MechanicalVerdict     `json:"mechanical_verdict"`
 	ValidatorInput        *ValidatorInput        `json:"validator_input"`
 	ValidatorVerdict      *ValidatorVerdict      `json:"validator_verdict"`
+	MixedModal            *MixedModalEvidence    `json:"mixed_modal,omitempty"`
 	Artifacts             []ArtifactEntry        `json:"artifacts"`
 	Finalized             bool                   `json:"finalized"`
 	FinalizedAt           time.Time              `json:"finalized_at"`
@@ -601,6 +612,17 @@ func (b CustomerEvidenceBundle) Validate() error {
 	if b.MechanicalVerdict == nil || b.ValidatorInput == nil || b.ValidatorVerdict == nil {
 		return contractFieldError(ErrMissingEvidence, "bundle", "mechanical verdict, validator input, and validator verdict are required")
 	}
+	if b.Scenario.Family == ScenarioFamilyC {
+		if b.MixedModal == nil {
+			return contractFieldError(ErrMissingEvidence, "mixed_modal", "Family C bundles require mixed-modal evidence")
+		}
+		if err := b.MixedModal.Validate(b.Scenario); err != nil {
+			return err
+		}
+		if !hasArtifactKind(b.Artifacts, ArtifactKindMixedModalEvidence) {
+			return contractFieldError(ErrMissingEvidence, "artifacts", "Family C bundles require a hash-verified mixed-modal evidence artifact")
+		}
+	}
 	if err := b.Process.validate("process"); err != nil {
 		return err
 	}
@@ -609,6 +631,14 @@ func (b CustomerEvidenceBundle) Validate() error {
 	}
 	if err := b.ValidatorInput.validate(b.Scenario, "validator_input"); err != nil {
 		return err
+	}
+	if b.Scenario.Family == ScenarioFamilyC {
+		if b.ValidatorInput.MixedModal == nil {
+			return contractFieldError(ErrMissingEvidence, "validator_input.mixed_modal", "Family C validator input requires mixed-modal evidence")
+		}
+		if err := b.ValidatorInput.MixedModal.Validate(b.Scenario); err != nil {
+			return err
+		}
 	}
 	if err := b.ValidatorVerdict.Validate(); err != nil {
 		return err
@@ -638,6 +668,14 @@ func (b CustomerEvidenceBundle) Validate() error {
 	}
 	if !allEvidenceRefsAvailable(b.ValidatorInput.EvidenceRefs, available) {
 		return contractFieldError(ErrMissingEvidence, "validator_input.evidence_refs", "references unavailable evidence")
+	}
+	if b.Scenario.Family == ScenarioFamilyC {
+		if !allEvidenceRefsAvailable(b.MixedModal.EvidenceRefs, available) {
+			return contractFieldError(ErrMissingEvidence, "mixed_modal.evidence_refs", "references unavailable evidence")
+		}
+		if !allEvidenceRefsAvailable(b.ValidatorInput.MixedModal.EvidenceRefs, available) {
+			return contractFieldError(ErrMissingEvidence, "validator_input.mixed_modal.evidence_refs", "references unavailable evidence")
+		}
 	}
 	if !allEvidenceRefsAvailable(b.ValidatorVerdict.EvidenceRefs, available) {
 		return contractFieldError(ErrMissingEvidence, "validator_verdict.evidence_refs", "references unavailable evidence")
@@ -818,6 +856,13 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 	add(b.writeJSONLinesArtifact("tool-observations.jsonl", ArtifactKindToolObservations, b.ToolObservations, true))
 	add(b.writeJSONLinesArtifact("filesystem-checkpoints.jsonl", ArtifactKindFilesystemCheckpoints, b.FilesystemCheckpoints, true))
 	add(b.writeJSONArtifact("process.json", ArtifactKindProcessFacts, b.Process, true))
+	if b.Scenario.Family == ScenarioFamilyC {
+		if b.MixedModal == nil {
+			add(b.RecordMissingArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, true, "mixed-modal boundary evidence was not produced"))
+		} else {
+			add(b.writeJSONArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, b.MixedModal, true))
+		}
+	}
 	if b.MechanicalVerdict == nil {
 		add(b.RecordMissingArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, true, "mechanical verdict was not produced"))
 	} else {

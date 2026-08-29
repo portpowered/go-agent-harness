@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "family-c-mixed-modal-brief",
+  "name": "Mixed-modal Aurora brief",
+  "family": "C",
+  "persona": "A concise collaborator who adds visual context after text work",
+  "goal": "Build a text brief, then record a fact grounded in the actual later image event",
+  "wording_freedom": "Use natural wording while preserving the text-first order, later image boundary, fixture digest, and falsifiable final fact.",
+  "text_seed": "Begin with the customer's text context. The image arrives only after the text iteration and its bytes are the source of truth for the final fact.",
+  "image_events": [
+    {
+      "id": "family-c-indigo-pixel",
+      "path": "fixtures/indigo-pixel.png",
+      "sha256": "6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5",
+      "text": "A committed one-pixel indigo fixture delivered after the text context; do not infer its fact from customer wording.",
+      "after_action_id": "add-text-context"
+    }
+  ],
+  "actions": [
+    {
+      "id": "create-mixed-modal-brief",
+      "intent": "Create mixed-modal brief content.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Preserve the initial brief bytes and report them if later image delivery is unavailable.",
+      "oracle": {
+        "description": "mixed-modal/brief.md exists with the initial brief content.",
+        "checkpoints": [
+          {
+            "path": "mixed-modal/brief.md",
+            "type": "file",
+            "sha256": "7d734b70a44dae55600dfe8a8cf77022caf6214d03d9a280ae4c5afdc8afc392",
+            "content": "# Aurora Mixed-Modal Brief\n\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["created mixed-modal/brief.md"]
+      }
+    },
+    {
+      "id": "add-text-context",
+      "intent": "Add the declared audience and concise tone text context.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Keep the text context as the last truthful brief state even if the later image boundary is unsupported.",
+      "oracle": {
+        "description": "mixed-modal/brief.md contains the declared text context before any image-grounded work.",
+        "checkpoints": [
+          {
+            "path": "mixed-modal/brief.md",
+            "type": "file",
+            "sha256": "0210e5f8d6e0fce5faa55395fba88fecaa440b71416688a81a67fdf3a2416f5f",
+            "content": "# Aurora Mixed-Modal Brief\n\nAudience: engineers.\nTone: concise.\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["updated mixed-modal/brief.md", "audience: engineers", "concise"]
+      }
+    },
+    {
+      "id": "record-image-grounded-fact",
+      "intent": "Record the actual image pixel fact in the brief.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Only write and confirm the image fact after the declared image bytes cross the same supported session boundary; otherwise preserve the gap as BROKEN.",
+      "oracle": {
+        "description": "The final brief retains text context and mixed-modal/image-fact.txt contains the actual indigo pixel fact.",
+        "checkpoints": [
+          {
+            "path": "mixed-modal/brief.md",
+            "type": "file",
+            "sha256": "0210e5f8d6e0fce5faa55395fba88fecaa440b71416688a81a67fdf3a2416f5f",
+            "content": "# Aurora Mixed-Modal Brief\n\nAudience: engineers.\nTone: concise.\n"
+          },
+          {
+            "path": "mixed-modal/image-fact.txt",
+            "type": "file",
+            "sha256": "ca1be92577e4ea09fcf757ad70dcdda9338fb911dab5e532e51c996d2510f6bc",
+            "content": "Observed image: indigo pixel (#4f46e5).\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["recorded indigo", "mixed-modal/image-fact.txt", "#4f46e5"],
+        "forbidden_text": ["image unavailable without evidence"]
+      }
+    }
+  ],
+  "sandbox": {
+    "name": "fresh-family-c-sandbox",
+    "root": ".",
+    "fresh": true
+  },
+  "interruption_trigger": {
+    "kind": "none",
+    "before_terminal": false
+  },
+  "patience": {
+    "listen_before_follow_up": 250000000,
+    "response_start": 1000000000,
+    "in_progress_work": 2000000000,
+    "reprompt": 3000000000,
+    "absolute_dead_air": 10000000000,
+    "max_reprompts": 1
+  },
+  "termination": "natural",
+  "deadline": 30000000000
+}
