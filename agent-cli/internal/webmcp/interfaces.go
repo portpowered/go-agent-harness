@@ -34,6 +34,14 @@ type BrowserHandle interface {
 	Close() error
 }
 
+// BrowserHandleHealth is an optional BrowserHandle extension. A handle that
+// has observed transport loss reports Disconnected()=true so callers holding
+// a cached handle can discard it and re-dial the (possibly healthy) endpoint
+// instead of failing every subsequent operation against a dead connection.
+type BrowserHandleHealth interface {
+	Disconnected() bool
+}
+
 type TargetSession interface {
 	Context() PageContext
 	Ownership() TargetOwnership
