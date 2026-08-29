@@ -342,10 +342,20 @@ func TestShouldStopAudioInputSessionLoopWaitsForFinalAssistantResponse(t *testin
 
 	observer.noteToolResultAccepted("call-1")
 	observer.noteToolContinuationRequested()
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("final answer"),
+	})
 	finalAssistantEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"},
 	}
 	observer.observe(finalAssistantEnd)
 	if !shouldStopAudioInputSessionLoop(finalAssistantEnd, sessionLoopOptions{

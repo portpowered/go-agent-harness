@@ -1,10 +1,5 @@
 package webmcp
 
-import (
-	"context"
-	"errors"
-)
-
 func staleSelectionForSession(selected *brokerSession, reason string) error {
 	if selected == nil {
 		return staleSelectionError("", "", 0, reason)
@@ -98,18 +93,4 @@ func invocationStateForError(code ErrorCode) InvocationState {
 	default:
 		return InvocationError
 	}
-}
-
-func errorCodeFor(err error, fallback ErrorCode) ErrorCode {
-	var classifiedError *ClassifiedError
-	if errors.As(err, &classifiedError) && classifiedError != nil && IsKnownErrorCode(classifiedError.Code) {
-		return classifiedError.Code
-	}
-	if errors.Is(err, context.Canceled) {
-		return ErrorInvocationCanceled
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return ErrorInvocationTimedOut
-	}
-	return fallback
 }

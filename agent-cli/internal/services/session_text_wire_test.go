@@ -50,6 +50,7 @@ func (c *scriptedRealtimeConn) WriteMessage(_ int, payload []byte) error {
 		c.dialer.enqueue([]byte(`{"type":"session.created","session":{"id":"sess_wire","model":"gpt-realtime-2.1-mini"}}`))
 	case "response.create":
 		c.dialer.enqueue([]byte(`{"type":"response.created"}`))
+		c.dialer.enqueue([]byte(`{"type":"response.output_audio_transcript.delta","delta":"ok"}`))
 		c.dialer.enqueue([]byte(`{"type":"response.done"}`))
 	case "response.cancel":
 		c.dialer.enqueue([]byte(`{"type":"response.done"}`))

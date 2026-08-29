@@ -126,6 +126,75 @@ func TestWriteRecordingBundleAllowsProviderOnlyV2Manifest(t *testing.T) {
 	}
 }
 
+func TestWriteRecordingBundleIncludesValidatedAdditionalArtifacts(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "recording")
+	data := []byte(`{"state":"REDACTED","count":9007199254740993}`)
+	if err := WriteRecordingBundle(RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		Credentials:      []string{"fixture-secret"},
+		AdditionalArtifacts: []RecordingArtifact{
+			{Path: "evidence/page-state.json", Data: []byte(`{"state":"fixture-secret","count":9007199254740993}`)},
+			{Path: "provider.capture.json", Data: []byte(`{"version":1,"session":{"fixture_provenance":"synthetic"},"records":[]}`)},
+		},
+	}); err != nil {
+		t.Fatalf("WriteRecordingBundle: %v", err)
+	}
+
+	pageState := readBundleFile(t, destination, "evidence/page-state.json")
+	if !bytes.Equal(pageState, data) {
+		t.Fatalf("additional artifact = %s, want redacted data %s", pageState, data)
+	}
+	manifestBytes := readBundleFile(t, destination, "manifest.json")
+	var manifest RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	seen := map[string]int{}
+	for _, artifact := range manifest.Artifacts {
+		seen[artifact.Path]++
+	}
+	if seen["evidence/page-state.json"] != 1 || seen["provider.capture.json"] != 1 {
+		t.Fatalf("additional artifact entries = %v, want one entry per path", seen)
+	}
+
+	duplicateDestination := filepath.Join(t.TempDir(), "duplicate")
+	err := WriteRecordingBundle(RecordingConfig{
+		Destination:      duplicateDestination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		AdditionalArtifacts: []RecordingArtifact{
+			{Path: "evidence.json", Data: []byte("one")},
+			{Path: "evidence.json", Data: []byte("two")},
+		},
+	})
+	if err == nil {
+		t.Fatal("duplicate additional artifact unexpectedly finalized")
+	}
+	if _, statErr := os.Stat(duplicateDestination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("duplicate destination stat error = %v, want absent", statErr)
+	}
+
+	for _, path := range []string{"manifest.json", "../escape.json", "audio/raw.pcm"} {
+		failedDestination := filepath.Join(t.TempDir(), "failed")
+		err := WriteRecordingBundle(RecordingConfig{
+			Destination:      failedDestination,
+			ClientTranscript: []byte("client\n"),
+			AgentTranscript:  []byte("agent\n"),
+			AdditionalArtifacts: []RecordingArtifact{
+				{Path: path, Data: []byte("unsafe")},
+			},
+		})
+		if err == nil {
+			t.Fatalf("artifact %q unexpectedly finalized", path)
+		}
+		if _, statErr := os.Stat(failedDestination); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("failed destination for %q stat error = %v, want absent", path, statErr)
+		}
+	}
+}
+
 func TestRecordingManifestV1GoldenRemainsReadableWithoutBrowserEvidence(t *testing.T) {
 	golden, err := os.ReadFile("testdata/recording-manifest-v1.golden.json")
 	if err != nil {

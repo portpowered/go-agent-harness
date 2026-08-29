@@ -110,6 +110,13 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 			fields[SessionDiagnosticFieldDispatchedInputCount] = strconv.Itoa(dispatchedInputs)
 			fields[SessionDiagnosticFieldCompletedTurnCount] = strconv.Itoa(completedScheduled)
 		}
+		continuationStatuses, continuationDetails := o.pendingContinuationMetadata()
+		if formatted := formatContinuationMetadata(continuationStatuses); formatted != "" {
+			fields[SessionDiagnosticFieldPendingContinuationStatuses] = formatted
+		}
+		if formatted := formatContinuationMetadata(continuationDetails); formatted != "" {
+			fields[SessionDiagnosticFieldPendingContinuationDetails] = formatted
+		}
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event:  SessionDiagnosticEventFailure,
 			Fields: fields,

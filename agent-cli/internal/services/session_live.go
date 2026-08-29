@@ -297,7 +297,7 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 			return state, false, errors.Join(err, stopAndDrain())
 		}
 	}
-	if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent {
+	if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
 		state.closeAfterOpenPending = true
 		var closeErr error
 		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
@@ -305,7 +305,7 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 			return state, false, errors.Join(closeErr, stopAndDrain())
 		}
 	}
-	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd {
+	if opts.CloseAfterScheduledAudio && msg.Type == messages.StreamTypeMessageEnd && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
 		var closeErr error
 		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
 		if closeErr != nil {

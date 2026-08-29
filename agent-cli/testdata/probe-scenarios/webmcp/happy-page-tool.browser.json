@@ -1,0 +1,83 @@
+{
+  "version": "webmcp.browser-script.v1",
+  "endpoint": {
+    "version": {
+      "Browser": "Chrome/Fixture",
+      "Protocol-Version": "1.3",
+      "webSocketDebuggerUrl": "ws://fixture/browser"
+    },
+    "targets": [
+      {
+        "id": "tab-1",
+        "type": "page",
+        "title": "WebMCP fixture page",
+        "url": "https://webmcp.example/home",
+        "webSocketDebuggerUrl": "ws://fixture/page/tab-1"
+      }
+    ]
+  },
+  "operations": [
+    {
+      "expect": {
+        "type": "enable_lifecycle"
+      },
+      "result": {}
+    },
+    {
+      "expect": {
+        "type": "enable_webmcp"
+      },
+      "result": {},
+      "emit": [
+        {
+          "type": "tools_added",
+          "tools": [
+            {
+              "name": "read_state",
+              "description": "Read the fixture page state",
+              "frame_id": "frame-1",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "read_only": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "expect": {
+        "type": "invoke_tool",
+        "frame_id": "frame-1",
+        "tool_name": "read_state",
+        "input": {
+          "key": "status"
+        }
+      },
+      "result": {
+        "invocation_id": "happy-page-tool-invocation"
+      },
+      "emit": [
+        {
+          "type": "tool_responded",
+          "invocation_id": "happy-page-tool-invocation",
+          "status": "Completed",
+          "output": {
+            "value": "ready"
+          }
+        }
+      ]
+    }
+  ]
+}

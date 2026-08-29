@@ -86,10 +86,10 @@ func WithWebMCPProductionSelectionStoreFactory(factory func() any) WebMCPProduct
 	return func(options *WebMCPProductionOptions) { options.SelectionStoreFactory = factory }
 }
 
-// NewProductionWebMCPDoctorFactory composes Lane B discovery, the neutral
-// browser broker, and Lane D's Chrome runtime for the actual CLI routes.
-// Construction remains lazy: no browser endpoint is opened until a command
-// invokes the returned factory runtime.
+// NewProductionWebMCPDoctorFactory composes browser discovery, the neutral
+// broker, and Chrome's browser runtime for the actual CLI routes. Construction
+// remains lazy: no browser endpoint is opened until a command invokes the
+// returned factory runtime.
 func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPDoctorFactory {
 	resolved := WebMCPProductionOptions{}
 	for _, option := range options {
@@ -219,6 +219,37 @@ func configDirForGlobalFlags(globalFlags *flags.GlobalFlags) string {
 	return globalFlags.ConfigDir()
 }
 
+// defaultWebMCPDoctorFactory is the single default composition used by
+// direct commands and router fallbacks. The selection store is created only
+// after flags have been parsed, so --config-dir applies consistently without
+// making command construction touch the filesystem.
+func defaultWebMCPDoctorFactory(globalFlags *flags.GlobalFlags) WebMCPDoctorFactory {
+	return NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionSelectionStoreFactory(func() any {
+			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(globalFlags))
+		}),
+	)
+}
+
+func webmcpRuntimeUnavailableError(phase string) error {
+	return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP browser runtime is unavailable", map[string]any{
+		"phase": phase,
+	})
+}
+
+func webmcpRuntimeFactoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var classified *webmcp.ClassifiedError
+	if errors.As(err, &classified) && classified != nil {
+		return err
+	}
+	return webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP browser runtime could not be constructed", map[string]any{
+		"phase": "runtime_factory",
+	})
+}
+
 func productionDiscoveryInputs(browser config.BrowserConfig) discovery.ConnectionInputs {
 	return discovery.ConnectionInputs{
 		CDPURL:            browser.Connection.CDPURL,
@@ -249,8 +280,8 @@ type productionWebMCPComposition struct {
 }
 
 // Discover is the only browser enumeration path used by the production
-// broker. Lane B supplies normalized candidates; this adapter restores the
-// raw endpoint only inside the neutral runtime boundary for the exact ID.
+// broker. Discovery supplies normalized candidates; this adapter restores the
+// raw endpoint only inside the runtime boundary for the exact ID.
 func (p *productionWebMCPComposition) Discover(ctx context.Context, options webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
 	if p == nil || p.discovery == nil {
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", nil)
@@ -279,8 +310,8 @@ func (p *productionWebMCPComposition) Discover(ctx context.Context, options webm
 }
 
 // Open retains one command-scoped raw browser handle. Target discovery still
-// flows through Lane B so all public target IDs and continuity markers remain
-// normalized there.
+// flows through the discovery service so all public target IDs and continuity
+// markers remain normalized there.
 func (p *productionWebMCPComposition) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
 	if p == nil || p.runtime == nil {
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", nil)
@@ -490,19 +521,60 @@ func (p *productionWebMCPComposition) probeTarget(ctx context.Context, lane disc
 		return discovery.TargetCapabilities{}, err
 	}
 	enableErr := session.EnableWebMCP(ctx)
+	capabilities := discovery.TargetCapabilities{
+		WebMCP:          true,
+		DomainSupported: true,
+		DomainKnown:     true,
+		ToolCount:       -1,
+	}
+	if enableErr == nil {
+		page := session.Context()
+		capabilities.PageToolsReady = page.CatalogReady
+		capabilities.PageToolsKnown = page.CatalogReady
+		capabilities.PageToolsEvidence = page.CatalogEvidence
+		for {
+			select {
+			case event, ok := <-session.Events():
+				if !ok {
+					goto drained
+				}
+				switch event.Type {
+				case webmcp.EventCatalogReady:
+					capabilities.PageToolsReady = true
+					capabilities.PageToolsKnown = event.ToolCountKnown
+					capabilities.PageToolsEvidence = "page_producer"
+					if event.ToolCountKnown {
+						capabilities.ToolCount = event.ToolCount
+						capabilities.ToolCountKnown = true
+					}
+				case webmcp.EventToolsAdded:
+					if len(event.Tools) > 0 {
+						capabilities.PageToolsReady = true
+						capabilities.PageToolsKnown = true
+						capabilities.PageToolsEvidence = "tools_added"
+						capabilities.ToolCount = len(event.Tools)
+						capabilities.ToolCountKnown = true
+					}
+				}
+			default:
+				goto drained
+			}
+		}
+	}
+drained:
 	sessionCloseErr := session.Close()
 	handleCloseErr := handle.Close()
 	cleanupErr := errors.Join(sessionCloseErr, handleCloseErr)
 	if enableErr != nil {
 		if isUnsupportedWebMCPError(enableErr) {
-			return discovery.TargetCapabilities{ToolCount: -1}, cleanupErr
+			return discovery.TargetCapabilities{ToolCount: -1, DomainKnown: true}, cleanupErr
 		}
 		return discovery.TargetCapabilities{}, errors.Join(enableErr, cleanupErr)
 	}
 	if cleanupErr != nil {
 		return discovery.TargetCapabilities{}, cleanupErr
 	}
-	return discovery.TargetCapabilities{WebMCP: true, ToolCount: -1}, nil
+	return capabilities, nil
 }
 
 func (p *productionWebMCPComposition) rawTargetForPublicID(ctx context.Context, handle webmcp.BrowserHandle, browserID string, publicID webmcp.TargetID) (webmcp.Target, error) {
@@ -893,16 +965,20 @@ func (s *productionTargetSession) forwardEvent(event webmcp.BrowserEvent) bool {
 
 func productionNeutralTarget(browserID webmcp.BrowserID, target discovery.Target) webmcp.Target {
 	return webmcp.Target{
-		BrowserID:         browserID,
-		ID:                webmcp.TargetID(target.ID),
-		Type:              target.Type,
-		Title:             target.Title,
-		URL:               productionSafePageURL(target.URL),
-		Origin:            productionSafeOrigin(target.Origin),
-		ContinuityMarker:  target.ContinuityMarker,
-		Generation:        target.Generation,
-		Eligible:          target.Eligible,
-		EligibilityReason: target.EligibilityReason,
+		BrowserID:             browserID,
+		ID:                    webmcp.TargetID(target.ID),
+		Type:                  target.Type,
+		Title:                 target.Title,
+		URL:                   productionSafePageURL(target.URL),
+		Origin:                productionSafeOrigin(target.Origin),
+		ContinuityMarker:      target.ContinuityMarker,
+		Generation:            target.Generation,
+		Eligible:              target.Eligible,
+		EligibilityReason:     target.EligibilityReason,
+		WebMCPDomainSupported: target.WebMCPDomainSupported,
+		PageToolsReady:        target.PageToolsReady,
+		PageToolsKnown:        target.PageToolsKnown,
+		PageToolsEvidence:     target.PageToolsEvidence,
 	}
 }
 

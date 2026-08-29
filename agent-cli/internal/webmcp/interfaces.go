@@ -58,6 +58,14 @@ type Broker interface {
 	Close() error
 }
 
+// DirectCanceller is an optional broker extension for a fresh direct CLI
+// process. It cancels only the supplied browser invocation ID against the
+// already exact-selected target and does not consult the local invocation
+// registry.
+type DirectCanceller interface {
+	CancelDirect(context.Context, DirectCancelRequest) error
+}
+
 // Clock is the minimum time seam required by broker state and deadline
 // handling. Implementations should return a stable timezone-normalized value
 // when deterministic replay is desired.

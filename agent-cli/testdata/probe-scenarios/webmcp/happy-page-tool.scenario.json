@@ -1,0 +1,156 @@
+{
+  "schema_version": "probe.scenario.v2",
+  "id": "webmcp-happy-page-tool",
+  "name": "WebMCP happy page-tool invocation",
+  "description": "Connect to the fixture page, discover its WebMCP catalog, invoke read_state, and verify the result against the independent page-state oracle.",
+  "browser_fixture": "happy-page-tool.browser.json",
+  "provider_fixture": "happy-page-tool.provider.json",
+  "steps": [
+    {
+      "type": "browser_connect",
+      "browser_id": "fixture-browser"
+    },
+    {
+      "type": "browser_discover",
+      "browser_id": "fixture-browser"
+    },
+    {
+      "type": "browser_select",
+      "browser_id": "fixture-browser",
+      "target_id": "tab-1"
+    },
+    {
+      "type": "webmcp_wait_ready"
+    },
+    {
+      "type": "webmcp_list_tools",
+      "include_schemas": true
+    },
+    {
+      "type": "send_text",
+      "text": "Read the current fixture page state."
+    },
+    {
+      "type": "webmcp_invoke",
+      "tool_ref": "webmcp.tool-ref.v1:iXWiNo9N95l1B_hgbIvVDw",
+      "input_json": "{\"key\":\"status\"}",
+      "reason": "read the page state"
+    },
+    {
+      "type": "close"
+    }
+  ],
+  "expectations": [
+    {
+      "type": "browser_count_equals",
+      "equals": 1
+    },
+    {
+      "type": "selected_tab_equals",
+      "target_id": "tab-1"
+    },
+    {
+      "type": "selected_origin_equals",
+      "origin": "https://webmcp.example"
+    },
+    {
+      "type": "catalog_generation_equals",
+      "equals": 1
+    },
+    {
+      "type": "tool_catalog_contains",
+      "name": "read_state"
+    },
+    {
+      "type": "tool_schema_equals",
+      "name": "read_state",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "tool_invocation_count",
+      "name": "read_state",
+      "equals": 1
+    },
+    {
+      "type": "tool_input_json_equals",
+      "name": "read_state",
+      "input_json": "{\"key\":\"status\"}"
+    },
+    {
+      "type": "tool_result_jsonpath_equals",
+      "name": "read_state",
+      "path": "$.value",
+      "value": "ready"
+    },
+    {
+      "type": "tool_status_equals",
+      "name": "read_state",
+      "status": "completed"
+    },
+    {
+      "type": "chrome_operation_order",
+      "operations": [
+        "connect",
+        "select",
+        "attach",
+        "list_tools",
+        "invoke",
+        "detach",
+        "close"
+      ]
+    },
+    {
+      "type": "no_unexpected_chrome_operations",
+      "operations": [
+        "connect",
+        "discover",
+        "select",
+        "attach",
+        "list_tools",
+        "invoke",
+        "detach",
+        "close"
+      ]
+    },
+    {
+      "type": "generated_cdp_method_order",
+      "methods": [
+        "WebMCP.enable",
+        "WebMCP.invokeTool"
+      ]
+    },
+    {
+      "type": "no_unexpected_generated_cdp_methods",
+      "methods": [
+        "WebMCP.enable",
+        "WebMCP.invokeTool"
+      ]
+    },
+    {
+      "type": "no_pending_invocations"
+    },
+    {
+      "type": "page_state_equals",
+      "path": "$",
+      "value": {}
+    },
+    {
+      "type": "transcript_contains",
+      "text": "fixture provider acknowledgement"
+    },
+    {
+      "type": "browser_connection_closed"
+    }
+  ]
+}

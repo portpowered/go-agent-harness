@@ -262,6 +262,49 @@ func TestTargetCapabilityProbeControlsEligibility(t *testing.T) {
 	}
 }
 
+func TestTargetCapabilityProbeKeepsDomainAndPageToolEvidenceIndependent(t *testing.T) {
+	browser := BrowserCandidate{ID: "browser-independent", Source: SourceConfigured, Loopback: true}
+	domain := true
+	service := New(Options{
+		TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+			return []TargetDescriptor{{
+				ID:                   "page",
+				Type:                 "page",
+				Title:                "Page",
+				URL:                  "https://independent.test",
+				WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/page",
+				WebMCPSupported:      &domain,
+			}}, nil
+		}),
+		TargetProbe: TargetCapabilityProbeFunc(func(context.Context, BrowserCandidate, Target) (TargetCapabilities, error) {
+			return TargetCapabilities{
+				WebMCP:          true,
+				DomainKnown:     true,
+				DomainSupported: true,
+				PageToolsKnown:  false,
+			}, nil
+		}),
+	})
+
+	targets, err := service.ListTargets(context.Background(), browser, TargetListOptions{EligibleOnly: Bool(false)})
+	if err != nil {
+		t.Fatalf("ListTargets: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("targets = %#v, want one target", targets)
+	}
+	target := targets[0]
+	if !target.WebMCP || !target.WebMCPKnown || !target.WebMCPDomainSupported || !target.WebMCPDomainKnown {
+		t.Fatalf("domain capability = %#v, want known supported domain", target)
+	}
+	if target.PageToolsReady || target.PageToolsKnown || target.PageToolsEvidence != "" {
+		t.Fatalf("page-tool capability = %#v, want unverified page tools", target)
+	}
+	if !target.Eligible {
+		t.Fatalf("target = %#v, want eligible for later page-tool probing", target)
+	}
+}
+
 func TestListTargetsUnknownCapabilityIsNotEligibleWithoutProbe(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-unknown-capability", Source: SourceConfigured, Loopback: true}
 	descriptor := TargetDescriptor{

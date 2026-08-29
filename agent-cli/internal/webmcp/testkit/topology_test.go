@@ -288,7 +288,7 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 	}
 	newTarget := target
 	newTarget.BrowserID = newCandidate.ID
-	newHandle, err := runtime.ReplaceEndpoint(oldCandidate, newCandidate, NewTargetConfig(newTarget, WithEventBuffer(16)))
+	replacementTemplate, err := runtime.ReplaceEndpoint(oldCandidate, newCandidate, NewTargetConfig(newTarget, WithEventBuffer(16)))
 	if err != nil {
 		t.Fatalf("replace endpoint: %v", err)
 	}
@@ -311,8 +311,12 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 	if err != nil {
 		t.Fatalf("open replacement browser: %v", err)
 	}
-	if newHandleValue != newHandle {
-		t.Fatalf("replacement open returned %p, want installed handle %p", newHandleValue, newHandle)
+	newHandle, ok := newHandleValue.(*ScriptedBrowserHandle)
+	if !ok {
+		t.Fatalf("replacement open returned %T, want scripted browser handle", newHandleValue)
+	}
+	if newHandle == replacementTemplate {
+		t.Fatal("replacement open returned the runtime template, want an independent client handle")
 	}
 	newSessionValue, err := newHandle.Attach(context.Background(), newTarget.ID, webmcp.TargetOwnershipExternal)
 	if err != nil {

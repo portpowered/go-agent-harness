@@ -329,9 +329,11 @@ func TestRoomEventBroker_ConcurrentParticipantStreamsPreserveOrder(t *testing.T)
 
 func TestRunRoom_PublishesParticipantAndTerminalRoomEvents(t *testing.T) {
 	ids := []string{"a", "b"}
-	inferencers := map[string]*roomTestInferencer{
-		"a": {events: []messages.StreamMessage{roomTestSessionOpen("a"), roomTestMessageEnd()}},
-		"b": {events: []messages.StreamMessage{roomTestSessionOpen("b"), roomTestMessageEnd()}},
+	inferencers := make(map[string]*roomTestInferencer, 2)
+	for _, id := range []string{"a", "b"} {
+		events := []messages.StreamMessage{roomTestSessionOpen(id)}
+		events = append(events, roomTestResponse("room stream response")...)
+		inferencers[id] = &roomTestInferencer{events: events}
 	}
 	broker, err := NewRoomEventBroker(ids)
 	if err != nil {

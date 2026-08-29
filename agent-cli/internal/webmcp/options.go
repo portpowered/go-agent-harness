@@ -75,14 +75,30 @@ type InvokeRequest struct {
 }
 
 type InvokeResult struct {
+	// InvocationID is the broker-owned correlation ID used by model-facing
+	// callers and WaitInvocation.
 	InvocationID InvocationID
-	State        InvocationState
-	Output       json.RawMessage
-	ErrorCode    string
-	ErrorDetails map[string]any
+	// BrowserInvocationID is the browser protocol ID returned by the selected
+	// target. It is available for direct CLI handoff; model-facing callers
+	// should continue to use InvocationID.
+	BrowserInvocationID InvocationID
+	State               InvocationState
+	Output              json.RawMessage
+	ErrorCode           string
+	ErrorDetails        map[string]any
 }
 
 type CancelRequest struct {
+	InvocationID InvocationID
+	Reason       string
+}
+
+// DirectCancelRequest is the exact-selection handoff used by a direct CLI
+// process that did not admit the original invocation. InvocationID is the
+// browser-issued protocol ID from the invoke dispatch receipt, not a broker
+// registry lookup key.
+type DirectCancelRequest struct {
+	Target       TargetSelector
 	InvocationID InvocationID
 	Reason       string
 }

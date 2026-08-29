@@ -1,29 +1,6 @@
 package testkit
 
-import (
-	"context"
-	"time"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-)
-
-func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return nil
-	}
-}
-
-type wallClock struct{}
-
-func (wallClock) Now() time.Time { return time.Now() }
-
-func boolPointer(value bool) *bool { return &value }
+import "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 
 func cloneCandidate(candidate webmcp.BrowserCandidate) webmcp.BrowserCandidate {
 	candidate.Diagnostics = append([]webmcp.Diagnostic(nil), candidate.Diagnostics...)
@@ -71,6 +48,14 @@ func cloneEvents(events []webmcp.BrowserEvent) []webmcp.BrowserEvent {
 	return cloned
 }
 
+func cloneEvent(event webmcp.BrowserEvent) webmcp.BrowserEvent {
+	event.Tools = cloneTools(event.Tools)
+	event.RemovedToolNames = append([]string(nil), event.RemovedToolNames...)
+	event.Input = cloneBytes(event.Input)
+	event.Output = cloneBytes(event.Output)
+	return event
+}
+
 func cloneBytes(value []byte) []byte {
 	if value == nil {
 		return nil
@@ -91,9 +76,3 @@ func cloneInvocationRecord(record InvocationRecord) InvocationRecord {
 	record.Output = cloneBytes(record.Output)
 	return record
 }
-
-var (
-	_ webmcp.BrowserRuntime = (*ScriptedBrowserRuntime)(nil)
-	_ webmcp.BrowserHandle  = (*ScriptedBrowserHandle)(nil)
-	_ webmcp.TargetSession  = (*ScriptedTargetSession)(nil)
-)

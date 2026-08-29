@@ -135,9 +135,10 @@ func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, resul
 			for _, part := range result.ContentParts {
 				switch p := part.(type) {
 				case messages.TextPart:
-					// Emit the text boundaries even when the text itself is empty.
-					// The boundaries carry the result's call ID through reconstruction,
-					// so an empty successful result remains a correlated result.
+					// Preserve the text boundaries even for an empty result. The
+					// ToolCallId on TEXT.START is the stream-only correlation
+					// mechanism used by the ordering layer and must survive a
+					// successful empty tool response.
 					contentEmitted = true
 					writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleTool, Value: messages.NewTextStartValue(), ToolCallId: result.ToolCallID})
 					if p.Text != "" {
@@ -150,6 +151,7 @@ func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, resul
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeImageStart, Role: messages.RoleTool, Value: messages.NewImageStartValue(p.MediaType), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeImageDelta, Role: messages.RoleTool, Value: messages.NewImageDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeImageEnd, Role: messages.RoleTool, Value: messages.NewImageEndValue(), ToolCallId: result.ToolCallID})
+						contentEmitted = true
 					}
 				case messages.AudioPart:
 					if len(p.Bytes) > 0 {
@@ -157,6 +159,7 @@ func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, resul
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleTool, Value: messages.NewAudioStartValue(), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleTool, Value: messages.NewAudioDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeAudioEnd, Role: messages.RoleTool, Value: messages.NewAudioEndValue(), ToolCallId: result.ToolCallID})
+						contentEmitted = true
 					}
 				case messages.VideoPart:
 					if len(p.Bytes) > 0 {
@@ -164,6 +167,7 @@ func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, resul
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeVideoStart, Role: messages.RoleTool, Value: messages.NewVideoStartValue(p.MediaType), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeVideoDelta, Role: messages.RoleTool, Value: messages.NewVideoDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeVideoEnd, Role: messages.RoleTool, Value: messages.NewVideoEndValue(), ToolCallId: result.ToolCallID})
+						contentEmitted = true
 					}
 				case messages.FilePart:
 					if len(p.Bytes) > 0 {
@@ -171,6 +175,7 @@ func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, resul
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeFileStart, Role: messages.RoleTool, Value: messages.NewFileStartValue(p.MediaType, p.Name), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeFileDelta, Role: messages.RoleTool, Value: messages.NewFileDeltaValue(p.Bytes), ToolCallId: result.ToolCallID})
 						writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeFileEnd, Role: messages.RoleTool, Value: messages.NewFileEndValue(), ToolCallId: result.ToolCallID})
+						contentEmitted = true
 					}
 				}
 			}
@@ -181,6 +186,7 @@ func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, resul
 			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleTool, Value: messages.NewTextStartValue(), ToolCallId: result.ToolCallID})
 			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, Value: messages.NewTextDeltaValue(text), ToolCallId: result.ToolCallID})
 			writeToolDelta(messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleTool, Value: messages.NewTextEndValue(), ToolCallId: result.ToolCallID})
+			contentEmitted = true
 		}
 		if !contentEmitted {
 			// A successful empty result still needs one reconstructible content

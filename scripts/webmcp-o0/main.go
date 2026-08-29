@@ -212,8 +212,20 @@ func main() {
 			}
 			printJSON(report)
 			return
+		case "watch-cross-process":
+			if len(os.Args) != 4 {
+				fmt.Fprintln(os.Stderr, "usage: go run . watch-cross-process <browser-websocket-endpoint> <agent-cli-binary>")
+				os.Exit(2)
+			}
+			report, err := runWatchCrossProcessProbe(os.Args[2], os.Args[3])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "watch-cross-process: %v\n", err)
+				os.Exit(1)
+			}
+			printJSON(report)
+			return
 		default:
-			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture | hermetic <browser-websocket-endpoint>]")
+			fmt.Fprintln(os.Stderr, "usage: go run . [cdp-version <browser-websocket-endpoint> | webmcp-matrix <browser-websocket-endpoint> | detach-probe <browser-websocket-endpoint> <target-id> <initial|reattach> | serve-detach-fixture | hermetic <browser-websocket-endpoint> | watch-cross-process <browser-websocket-endpoint> <agent-cli-binary>]")
 			os.Exit(2)
 		}
 	}

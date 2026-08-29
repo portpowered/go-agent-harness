@@ -719,7 +719,7 @@ var _ transport.Conn = (*recordingRealtimeTestConn)(nil)
 
 func newRecordingRealtimeTestConn() *recordingRealtimeTestConn {
 	c := &recordingRealtimeTestConn{
-		inbound: make(chan []byte, 4),
+		inbound: make(chan []byte, 16),
 		closed:  make(chan struct{}),
 	}
 	c.inbound <- []byte(`{"type":"session.created","session_id":"test-session","model":"gpt-realtime"}`)
@@ -744,6 +744,11 @@ func (c *recordingRealtimeTestConn) WriteMessage(_ int, payload []byte) error {
 		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err == nil && (envelope.Type == "response.create" || (c.respondToConversationItem && envelope.Type == "conversation.item.create")) {
+		// A bare response.done is an empty provider response and is not a
+		// successful session turn. Keep this test transport contentful so the
+		// instruction assertions exercise the normal completion path.
+		c.inbound <- []byte(`{"type":"response.created"}`)
+		c.inbound <- []byte(`{"type":"response.output_audio_transcript.delta","delta":"ok"}`)
 		c.inbound <- []byte(`{"type":"response.done"}`)
 	}
 	return nil

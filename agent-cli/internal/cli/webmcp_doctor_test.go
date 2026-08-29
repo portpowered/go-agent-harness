@@ -121,7 +121,8 @@ browser:
 func TestWebMCPDoctorHumanOutputIsDeterministic(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: "http://127.0.0.1:9222", Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}),
+		testkit.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true},
+			testkit.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady})),
 	))
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: doctorDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}}})
 	configDir := writeDoctorConfig(t, `
@@ -162,6 +163,60 @@ browser:
 	}
 }
 
+func TestWebMCPDoctorReportsSupportedDomainButUnverifiedPageTools(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: "http://127.0.0.1:9222", Loopback: true}
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
+		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}),
+	))
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: doctorDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}}})
+	configDir := writeDoctorConfig(t, `
+browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: http://127.0.0.1:9222
+  selection:
+    browser: browser-a
+    tab: tab-a
+`)
+	factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+		return WebMCPDoctorRuntime{
+			Broker: broker,
+			VersionFunc: func(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserVersion, error) {
+				return webmcp.BrowserVersion{Browser: candidate.Product, ProtocolVersion: candidate.Protocol}, nil
+			},
+		}, nil
+	}
+	root, stdout, stderr := executeDoctorCommand(t, configDir, factory, "--json")
+	err := root.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("doctor unexpectedly reported ready without page-tool evidence")
+	}
+	_ = stderr
+	report := decodeDoctorReport(t, stdout.String())
+	if report.Status != doctorStatusNotReady || report.Error == nil {
+		t.Fatalf("report status/error = %s/%+v, want not_ready with error", report.Status, report.Error)
+	}
+	if report.WebMCP != "supported" || report.WebMCPDomain != "supported" || report.PageTools != "unverified" {
+		t.Fatalf("independent readiness = webmcp:%q domain:%q page_tools:%q", report.WebMCP, report.WebMCPDomain, report.PageTools)
+	}
+	if report.Catalog.Ready || report.Catalog.ToolCountKnown || report.Catalog.Evidence != "unverified" {
+		t.Fatalf("unverified catalog = %+v", report.Catalog)
+	}
+	if report.Error.Code != string(webmcp.ErrorBrowserProtocol) {
+		t.Fatalf("doctor error code = %q, want %s", report.Error.Code, webmcp.ErrorBrowserProtocol)
+	}
+	for _, want := range []string{doctorTestedChromeRow, doctorTestedChromeFlags, "Permissions-Policy: tools=(self)"} {
+		if !strings.Contains(report.Error.Message, want) {
+			t.Fatalf("doctor error message missing %q: %s", want, report.Error.Message)
+		}
+	}
+	if report.Error.Details["webmcp_domain"] != "supported" || report.Error.Details["page_tools"] != "unverified" {
+		t.Fatalf("doctor error details = %#v", report.Error.Details)
+	}
+}
+
 func TestWebMCPDoctorInvalidConfigurationDoesNotConstructRuntime(t *testing.T) {
 	configDir := writeDoctorConfig(t, `
 browser:
@@ -187,21 +242,21 @@ browser:
 	}
 }
 
-func TestWebMCPDoctorDefaultRuntimeReportsLaneDependencies(t *testing.T) {
+func TestWebMCPDoctorDefaultRuntimeReportsClassifiedDiscoveryFailure(t *testing.T) {
 	root, stdout, _ := executeDoctorCommand(t, t.TempDir(), nil, "--json")
 	err := root.ExecuteContext(context.Background())
-	if err == nil || !strings.Contains(err.Error(), doctorErrorRequiresLaneBOrD) {
-		t.Fatalf("doctor error = %v, want requires Lane B or Lane D", err)
+	if err == nil || !strings.Contains(err.Error(), string(webmcp.ErrorEndpointNotFound)) {
+		t.Fatalf("doctor error = %v, want classified endpoint-not-found failure", err)
 	}
 	report := decodeDoctorReport(t, stdout.String())
-	if report.Status != doctorStatusUnavailable || report.Error == nil || report.Error.Code != doctorErrorRequiresLaneBOrD {
-		t.Fatalf("default runtime report = %+v, want unavailable requires_lane_b_or_d", report)
+	if report.Status != doctorStatusNotReady || report.Error == nil || report.Error.Code != string(webmcp.ErrorEndpointNotFound) {
+		t.Fatalf("default runtime report = %+v, want not-ready endpoint_not_found", report)
 	}
-	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckUnavailable || !strings.Contains(discovery.Message, "Lane B") {
-		t.Fatalf("discovery check = %+v, want Lane B unavailable", discovery)
+	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckFail {
+		t.Fatalf("discovery check = %+v, want discovery failure", discovery)
 	}
-	if version := doctorCheckByName(report, "version"); version.Status != doctorCheckUnavailable || !strings.Contains(version.Message, "Lane D") {
-		t.Fatalf("version check = %+v, want Lane D unavailable", version)
+	if strings.Contains(stdout.String(), "Lane B") || strings.Contains(stdout.String(), "Lane D") {
+		t.Fatalf("default runtime output exposed internal implementation names: %s", stdout.String())
 	}
 }
 

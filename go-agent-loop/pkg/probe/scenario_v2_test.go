@@ -117,6 +117,9 @@ func TestLoadScenarioV2AcceptsFrozenGrammarAndPreservesJSON(t *testing.T) {
 	if string(got.Expectations[10].Value) != "9007199254740993" || string(got.Expectations[7].Schema) != `{"type":"object","properties":{"count":{"type":"integer"}}}` {
 		t.Fatalf("JSON token preservation: value=%s schema=%s", got.Expectations[10].Value, got.Expectations[7].Schema)
 	}
+	if got.Expectations[4].Generation != 7 || !got.Expectations[4].HasGeneration {
+		t.Fatalf("catalog generation = %#v, want normalized generation 7", got.Expectations[4])
+	}
 	if got.Expectations[10].Path != "$.data.output.value" || got.Expectations[10].JSONPath != got.Expectations[10].Path {
 		t.Fatalf("JSONPath = %#v", got.Expectations[10])
 	}

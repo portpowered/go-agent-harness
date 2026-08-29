@@ -34,8 +34,10 @@ type ModelRunner struct {
 	Inbox             *messages.TypedBuffer[messages.InferenceRequest]
 	DeltaOutbox       *messages.TypedBuffer[messages.StreamMessage]
 	// UserAudioInbox receives raw PCM audio frames from the user in session mode.
-	// When audio arrives while the model is streaming an audio response, the
-	// model runner sends RESPONSE.CANCEL (barge-in) before forwarding the audio.
+	// When contentful audio arrives while the model is streaming an audio
+	// response, the model runner sends RESPONSE.CANCEL (barge-in) before
+	// forwarding the audio. Zero-filled cadence frames are forwarded without
+	// cancelling the response.
 	UserAudioInbox chan []byte
 	// UserEventInbox receives pre-built outbound StreamMessages from the user
 	// side in session mode. Each message is forwarded to the provider session
@@ -82,7 +84,8 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // When config is non-nil, a SESSION.UPDATE message is sent to the session
 // immediately after SESSION.CREATED is received from the provider.
 // UserAudioInbox is a buffered channel for accepting raw PCM audio input;
-// audio arriving while the model is streaming triggers barge-in (RESPONSE.CANCEL).
+// contentful audio arriving while the model is streaming triggers barge-in
+// (RESPONSE.CANCEL). Silence frames continue to reach the provider unchanged.
 func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, config *messages.SessionUpdateConfig) *ModelRunner {
 	return &ModelRunner{
 		sessionInferencer: si,
@@ -353,7 +356,7 @@ func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.
 	// intentionally included: provider response creation and its first output
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
-	if *responseInFlight && !*responseCancelSent {
+	if *responseInFlight && !*responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
@@ -458,7 +461,27 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		responseInFlight = true
 	case messages.StreamTypeMessageEnd:
 		responseInFlight = false
-		responseCompleted = true
+		if responseCancelSent {
+			// Realtime providers normally acknowledge RESPONSE.CANCEL with a
+			// response.done event. Preserve that wire boundary so the next
+			// input can proceed, but mark it as interrupted rather than a
+			// normally completed assistant turn.
+			if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
+				outputState := messages.TerminalOutputNone
+				if hasOutput {
+					outputState = messages.TerminalOutputPartial
+				}
+				msg.Value = messages.NewMessageEndValueWithTerminal(
+					value.Usage,
+					messages.TerminalReasonPartialOutput,
+					messages.TerminalProvenanceLoop,
+					outputState,
+				)
+			}
+			responseCompleted = false
+		} else {
+			responseCompleted = true
+		}
 	case messages.StreamTypeSessionClose:
 		sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)
@@ -961,6 +984,20 @@ func outputState(hasOutput bool) messages.TerminalOutputState {
 		return messages.TerminalOutputPartial
 	}
 	return messages.TerminalOutputNone
+}
+
+// hasPCM16Signal distinguishes a real input frame from the zero-filled
+// cadence frames produced by a room mixer while no participant is speaking.
+// The frame is still forwarded in either case so the provider's audio timing
+// and VAD state remain intact; only a frame with at least one non-zero byte can
+// be the user activity that cancels an in-flight response.
+func hasPCM16Signal(pcm []byte) bool {
+	for _, value := range pcm {
+		if value != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func cancellationErrorValue(err error, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) *messages.ErrorValue {

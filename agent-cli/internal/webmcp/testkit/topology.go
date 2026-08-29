@@ -405,7 +405,10 @@ func (r *ScriptedBrowserRuntime) unregisterSession(session *ScriptedTargetSessio
 	if r == nil || session == nil {
 		return
 	}
-	target := session.Target()
+	// sessionClosed calls this while the session mutex is held. Browser and
+	// target IDs are immutable for a session, so read those identity fields
+	// directly instead of re-entering Target and deadlocking the close path.
+	target := session.target
 	r.mu.Lock()
 	if current := r.sessions[sessionKey(target.BrowserID, target.ID)]; current == session {
 		delete(r.sessions, sessionKey(target.BrowserID, target.ID))
@@ -466,9 +469,12 @@ func (h *ScriptedBrowserHandle) BlockListTargets() {
 	if h == nil {
 		return
 	}
-	h.mu.Lock()
-	h.listBlocked = true
-	h.mu.Unlock()
+	if h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	h.control.listBlocked = true
+	h.control.mu.Unlock()
 }
 
 func (h *ScriptedBrowserHandle) updateTarget(session *ScriptedTargetSession, target webmcp.Target, page webmcp.PageContext) {
@@ -476,10 +482,16 @@ func (h *ScriptedBrowserHandle) updateTarget(session *ScriptedTargetSession, tar
 		return
 	}
 	h.mu.Lock()
-	if entry := h.targets[target.ID]; entry != nil && entry.session == session {
-		entry.target = cloneTarget(target)
-		entry.config.Target = cloneTarget(target)
-		entry.config.Session.Context = page
+	entry := h.targets[target.ID]
+	if entry != nil {
+		entry.mu.Lock()
+		_, attached := entry.sessions[session]
+		if attached {
+			entry.target = cloneTarget(target)
+			entry.config.Target = cloneTarget(target)
+			entry.config.Session.Context = page
+		}
+		entry.mu.Unlock()
 	}
 	h.mu.Unlock()
 }
@@ -488,13 +500,16 @@ func (h *ScriptedBrowserHandle) UnblockListTargets() {
 	if h == nil {
 		return
 	}
-	h.mu.Lock()
-	if h.listBlocked {
-		h.listBlocked = false
-		close(h.listChanges)
-		h.listChanges = make(chan struct{})
+	if h.control == nil {
+		return
 	}
-	h.mu.Unlock()
+	h.control.mu.Lock()
+	if h.control.listBlocked {
+		h.control.listBlocked = false
+		close(h.control.listChanges)
+		h.control.listChanges = make(chan struct{})
+	}
+	h.control.mu.Unlock()
 }
 
 // Disconnect closes the browser transport and all attached target sessions.
@@ -519,14 +534,26 @@ func (h *ScriptedBrowserHandle) Disconnect(reasons ...string) error {
 		return err
 	}
 	h.disconnected = true
-	sessions := make([]*ScriptedTargetSession, 0, len(h.targets))
+	sessions := make([]*ScriptedTargetSession, 0)
 	for _, entry := range h.targets {
-		if entry.session != nil {
-			sessions = append(sessions, entry.session)
+		entry.mu.Lock()
+		for session := range entry.sessions {
+			sessions = append(sessions, session)
 		}
+		entry.mu.Unlock()
 	}
 	browserID := h.candidate.ID
 	h.mu.Unlock()
+	if h.control != nil {
+		h.control.mu.Lock()
+		h.control.disconnected = true
+		if h.control.listBlocked {
+			h.control.listBlocked = false
+			close(h.control.listChanges)
+			h.control.listChanges = make(chan struct{})
+		}
+		h.control.mu.Unlock()
+	}
 	h.runtime.retireHandle(h)
 
 	reason := ""
@@ -589,17 +616,34 @@ func (h *ScriptedBrowserHandle) CloseTarget(ctx context.Context, targetID webmcp
 		h.mu.Unlock()
 		return fmt.Errorf("%w: %s", webmcp.ErrTargetNotFound, targetID)
 	}
-	session := entry.session
-	if session == nil || session.isClosed() {
-		delete(h.targets, targetID)
+	entry.mu.Lock()
+	if entry.removed {
+		entry.mu.Unlock()
+		h.mu.Unlock()
+		return fmt.Errorf("%w: %s", webmcp.ErrTargetNotFound, targetID)
+	}
+	sessions := make([]*ScriptedTargetSession, 0, len(entry.sessions))
+	for session := range entry.sessions {
+		sessions = append(sessions, session)
+	}
+	generation := entry.target.Generation
+	entry.mu.Unlock()
+	if len(sessions) == 0 {
+		entry.mu.Lock()
+		entry.removed = true
+		entry.target.Attached = false
+		entry.mu.Unlock()
 		browserID := h.candidate.ID
-		generation := entry.target.Generation
 		h.mu.Unlock()
 		h.runtime.record(Operation{Kind: OperationCloseTarget, BrowserID: browserID, TargetID: targetID, Generation: generation, Reason: "target_closed"})
 		return nil
 	}
 	h.mu.Unlock()
-	return session.terminateWithOptions(webmcp.EventTargetDetached, "target_closed", webmcp.ErrClosed, true, true)
+	var joined error
+	for _, session := range sessions {
+		joined = errors.Join(joined, session.terminateWithOptions(webmcp.EventTargetDetached, "target_closed", webmcp.ErrClosed, true, true))
+	}
+	return joined
 }
 
 // ClosePage and DestroyTarget are descriptive aliases for CloseTarget.
@@ -627,31 +671,6 @@ func (s *ScriptedTargetSession) emitPublished(event webmcp.BrowserEvent) (Publis
 		return PublishedEvent{}, webmcp.ErrClosed
 	}
 	return s.emitPublishedLocked(event, false)
-}
-
-func (s *ScriptedTargetSession) emitPublishedLocked(event webmcp.BrowserEvent, terminal bool) (PublishedEvent, error) {
-	decorated := s.decorateProducedEventLocked(event)
-	select {
-	case s.events <- decorated:
-		return s.runtime.publishEvent(decorated), nil
-	default:
-		if !terminal {
-			return PublishedEvent{}, webmcp.ErrEventBufferFull
-		}
-	}
-	// A terminal lifecycle event must remain observable even when a test has
-	// intentionally filled the session event buffer. Match the Chrome adapter's
-	// lossless terminal publication policy by evicting the oldest event.
-	select {
-	case <-s.events:
-	default:
-	}
-	select {
-	case s.events <- decorated:
-		return s.runtime.publishEvent(decorated), nil
-	default:
-		return PublishedEvent{}, webmcp.ErrEventBufferFull
-	}
 }
 
 // BlockEnableWebMCP holds the enable operation after admission. Disconnect

@@ -149,7 +149,10 @@ func TestRealtimeSessionSendMessageWithoutResponse_QueuesOnlyMessageItem(t *test
 
 func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testing.T) {
 	session, conn := newWireSeamSession(t)
-	imageBytes := []byte{0x89, 'P', 'N', 'G'}
+	// Use a multi-megabyte logical image so the wire assertion proves that
+	// only the typed projection, rather than the function output, grows with
+	// the prepared image.
+	imageBytes := bytes.Repeat([]byte{0x89, 'P', 'N', 'G'}, 512*1024)
 	msg := messages.Message{
 		Role:       messages.RoleTool,
 		ToolCallID: "call-read-image",
@@ -181,20 +184,23 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 		t.Fatal("function_call_output output is empty for an image result")
 	}
 	var result struct {
-		Version    int    `json:"version"`
-		Status     string `json:"status"`
-		MIMEType   string `json:"mime_type"`
-		ByteLength int    `json:"byte_length"`
-		SHA256     string `json:"sha256"`
-		DataURL    string `json:"data_url"`
+		Version         int    `json:"version"`
+		Status          string `json:"status"`
+		MIMEType        string `json:"mime_type"`
+		ByteLength      int    `json:"byte_length"`
+		SHA256          string `json:"sha256"`
+		TypedProjection string `json:"typed_projection"`
 	}
 	if err := json.Unmarshal([]byte(functionOutput.Item.Output), &result); err != nil {
 		t.Fatalf("decode image result envelope: %v", err)
 	}
 	digest := sha256.Sum256(imageBytes)
 	wantURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
-	if result.Version != 1 || result.Status != "success" || result.MIMEType != "image/png" || result.ByteLength != len(imageBytes) || result.SHA256 != hex.EncodeToString(digest[:]) || result.DataURL != wantURL {
-		t.Fatalf("image result envelope = %#v, want exact non-empty image representation", result)
+	if len(functionOutput.Item.Output) > realtimeImageEnvelopeMaxBytes || strings.Contains(strings.ToLower(functionOutput.Item.Output), "data:") || strings.Contains(strings.ToLower(functionOutput.Item.Output), "base64") {
+		t.Fatalf("image result envelope is not compact metadata: bytes=%d output=%q", len(functionOutput.Item.Output), functionOutput.Item.Output)
+	}
+	if result.Version != realtimeImageResultVersion || result.Status != realtimeImageResultStatusSuccess || result.MIMEType != "image/png" || result.ByteLength != len(imageBytes) || result.SHA256 != hex.EncodeToString(digest[:]) || result.TypedProjection != realtimeImageTypedProjection {
+		t.Fatalf("image result envelope = %#v, want compact metadata for %d bytes", result, len(imageBytes))
 	}
 
 	var imageItem struct {
@@ -231,6 +237,91 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if response.Type != "response.create" {
 		t.Fatalf("third event type = %q, want response.create", response.Type)
 	}
+	encodedImage := base64.StdEncoding.EncodeToString(imageBytes)
+	if got := strings.Count(string(bytes.Join(written, nil)), encodedImage); got != 1 {
+		t.Fatalf("encoded image payload occurs %d times across the provider transaction, want exactly once", got)
+	}
+}
+
+func TestRealtimeSessionSendMessage_RejectsInconsistentToolImageBeforeWriting(t *testing.T) {
+	imageBytes := []byte("prepared image bytes")
+	digest := sha256.Sum256(imageBytes)
+	valid := realtimeImageResultEnvelope{
+		Version:         realtimeImageResultVersion,
+		Status:          realtimeImageResultStatusSuccess,
+		MIMEType:        "image/png",
+		ByteLength:      len(imageBytes),
+		SHA256:          hex.EncodeToString(digest[:]),
+		TypedProjection: realtimeImageTypedProjection,
+	}
+	// Keep the test data readable while still deriving the valid baseline from
+	// the same fields the provider validates.
+	validJSON, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatalf("marshal valid image envelope: %v", err)
+	}
+	var validMap map[string]any
+	if err := json.Unmarshal(validJSON, &validMap); err != nil {
+		t.Fatalf("decode valid image envelope: %v", err)
+	}
+
+	cases := map[string]func(map[string]any, []messages.ContentPart) ([]messages.ContentPart, string){
+		"wrong version": func(envelope map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
+			envelope["version"] = float64(realtimeImageResultVersion - 1)
+			return parts, "version"
+		},
+		"wrong byte length": func(envelope map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
+			envelope["byte_length"] = float64(len(imageBytes) + 1)
+			return parts, "byte length"
+		},
+		"wrong digest": func(envelope map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
+			envelope["sha256"] = strings.Repeat("0", sha256.Size*2)
+			return parts, "digest"
+		},
+		"unknown image data field": func(envelope map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
+			envelope["data_url"] = "data:image/png;base64,not-inline-pixels"
+			return parts, "data URL"
+		},
+		"duplicate typed images": func(envelope map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
+			return append(parts, messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"}), "duplicate image"
+		},
+	}
+
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			envelope := make(map[string]any, len(validMap))
+			for key, value := range validMap {
+				envelope[key] = value
+			}
+			parts, want := mutate(envelope, []messages.ContentPart{
+				messages.TextPart{Text: mustMarshalJSON(t, envelope)},
+				messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
+			})
+			// The mutation callback receives the baseline text part before the
+			// mutation is serialized; replace it with the final envelope now.
+			parts[0] = messages.TextPart{Text: mustMarshalJSON(t, envelope)}
+			session, conn := newWireSeamSession(t)
+			if session.SendMessage(context.Background(), messages.Message{
+				Role:         messages.RoleTool,
+				ToolCallID:   "call-inconsistent-image",
+				ContentParts: parts,
+			}) {
+				t.Fatalf("inconsistent %s result was accepted", want)
+			}
+			if written := conn.getClientMessages(); len(written) != 0 {
+				t.Fatalf("inconsistent %s result wrote %d provider events before rejection", want, len(written))
+			}
+		})
+	}
+}
+
+func mustMarshalJSON(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal JSON: %v", err)
+	}
+	return string(data)
 }
 
 func TestRealtimeSessionSendMessage_EmptyToolResultPreservesCorrelation(t *testing.T) {

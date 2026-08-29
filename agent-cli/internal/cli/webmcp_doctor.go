@@ -36,24 +36,19 @@ const (
 	doctorCheckSkipped     = "skipped"
 
 	doctorErrorInvalidConfiguration = "invalid_configuration"
-	doctorErrorRuntimeUnavailable   = "runtime_unavailable"
-	doctorErrorRequiresLaneBOrD     = "requires_lane_b_or_d"
 	doctorErrorCleanupFailed        = "cleanup_failed"
-)
 
-// ErrWebMCPDoctorRequiresLaneBOrD identifies the production browser seams
-// that are intentionally not guessed by the CLI composition root. A shipped
-// doctor must surface this as an unavailable check instead of reporting a
-// false ready result.
-var ErrWebMCPDoctorRequiresLaneBOrD = errors.New("requires Lane B or requires Lane D")
+	doctorTestedChromeRow   = "Stable Chrome for Testing 152.0.7977.64 (mac-arm64, revision 1669021)"
+	doctorTestedChromeFlags = "--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport"
+)
 
 // WebMCPDoctorVersionFunc supplies the browser version/protocol check. It is
 // separate from the broker because the broker's stable interface deliberately
 // contains only browser operations needed by model-facing tools.
 type WebMCPDoctorVersionFunc func(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserVersion, error)
 
-// WebMCPDiscoveryService is the neutral Lane B service consumed by the
-// production composition. Keeping this interface at the CLI boundary lets
+// WebMCPDiscoveryService is the discovery service consumed by the production
+// composition. Keeping this interface at the CLI boundary lets
 // command tests inject a discovery fake without importing a browser protocol
 // package or depending on a concrete service implementation.
 type WebMCPDiscoveryService interface {
@@ -74,6 +69,11 @@ type WebMCPDoctorRuntime struct {
 	VersionFunc WebMCPDoctorVersionFunc
 	Catalog     webmcp.DevToolsCatalog
 	Close       func() error
+	// Navigate and PageState are optional run-scoped browser observations used
+	// by probe.scenario.v2. Keeping them outside BrowserRuntime preserves the
+	// neutral broker contract for callers that do not need probe evidence.
+	Navigate  func(context.Context, string) error
+	PageState func(context.Context) (json.RawMessage, error)
 }
 
 // WebMCPDoctorFactory constructs one diagnostic runtime for a resolved
@@ -101,6 +101,8 @@ type WebMCPDoctorReport struct {
 	EligiblePages int                    `json:"eligible_pages"`
 	SelectedPage  *WebMCPDoctorTarget    `json:"selected_page"`
 	WebMCP        string                 `json:"webmcp"`
+	WebMCPDomain  string                 `json:"webmcp_domain"`
+	PageTools     string                 `json:"page_tools"`
 	Catalog       WebMCPDoctorCatalog    `json:"catalog"`
 	Checks        []WebMCPDoctorCheck    `json:"checks"`
 	Warnings      []string               `json:"warnings"`
@@ -123,21 +125,27 @@ type WebMCPDoctorBrowser struct {
 }
 
 type WebMCPDoctorTarget struct {
-	BrowserID         string `json:"browser_id"`
-	TargetID          string `json:"target_id"`
-	Type              string `json:"type"`
-	Title             string `json:"title"`
-	Origin            string `json:"origin"`
-	Eligible          bool   `json:"eligible"`
-	EligibilityReason string `json:"eligibility_reason,omitempty"`
-	Attached          bool   `json:"attached"`
-	Selected          bool   `json:"selected"`
+	BrowserID             string `json:"browser_id"`
+	TargetID              string `json:"target_id"`
+	Type                  string `json:"type"`
+	Title                 string `json:"title"`
+	Origin                string `json:"origin"`
+	Eligible              bool   `json:"eligible"`
+	EligibilityReason     string `json:"eligibility_reason,omitempty"`
+	Attached              bool   `json:"attached"`
+	Selected              bool   `json:"selected"`
+	WebMCPDomainSupported bool   `json:"webmcp_domain_supported"`
+	PageToolsReady        bool   `json:"page_tools_ready"`
+	PageToolsKnown        bool   `json:"page_tools_known"`
+	PageToolsEvidence     string `json:"page_tools_evidence,omitempty"`
 }
 
 type WebMCPDoctorCatalog struct {
-	Ready      bool   `json:"ready"`
-	Generation uint64 `json:"generation"`
-	ToolCount  int    `json:"tool_count"`
+	Ready          bool   `json:"ready"`
+	Generation     uint64 `json:"generation"`
+	ToolCount      int    `json:"tool_count"`
+	ToolCountKnown bool   `json:"tool_count_known"`
+	Evidence       string `json:"evidence,omitempty"`
 }
 
 type WebMCPDoctorCheck struct {
@@ -190,10 +198,9 @@ type WebMCPDoctorCommand struct {
 }
 
 // NewWebMCPDoctorCommand constructs doctor with an optional injected runtime
-// factory. The default is intentionally unavailable until Lane B discovery
-// and Lane D browser protocol adapters are supplied.
+// factory. The default uses the production discovery and browser runtime.
 func NewWebMCPDoctorCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorFactory) *WebMCPDoctorCommand {
-	factory := unavailableWebMCPDoctorFactory
+	factory := defaultWebMCPDoctorFactory(globalFlags)
 	if len(factories) > 0 && factories[0] != nil {
 		factory = factories[0]
 	}
@@ -347,38 +354,21 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 
 	factory := c.factory
 	if factory == nil {
-		factory = unavailableWebMCPDoctorFactory
+		factory = defaultWebMCPDoctorFactory(c.globalFlags)
 	}
 	factoryRuntime, factoryErr := factory(loaded.Browser)
 	runtimeOwned = factoryRuntime.Close != nil || factoryRuntime.Broker != nil
 	if factoryErr != nil {
-		primary = factoryErr
-		if errors.Is(factoryErr, ErrWebMCPDoctorRequiresLaneBOrD) {
-			report.Status = doctorStatusUnavailable
-			report.Error = &WebMCPDoctorErrorData{
-				Code:      doctorErrorRequiresLaneBOrD,
-				Message:   "WebMCP doctor requires Lane B or requires Lane D for production browser discovery and CDP runtime.",
-				Retryable: false,
-				Details:   map[string]any{"requires": []string{"Lane B", "Lane D"}},
-			}
-			report.setCheck("discovery", doctorCheckUnavailable, "Production browser discovery is unavailable; requires Lane B.", map[string]any{"requires": "Lane B"})
-			report.setCheck("version", doctorCheckUnavailable, "Production browser protocol access is unavailable; requires Lane D.", map[string]any{"requires": "Lane D"})
-		} else {
-			report.Status = doctorStatusUnavailable
-			report.Error = doctorErrorDataFor(factoryErr, webmcp.ErrorEndpointUnreachable, map[string]any{"phase": "runtime_factory"})
-			report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime is unavailable.", map[string]any{"phase": "runtime_factory"})
-		}
+		primary = webmcpRuntimeFactoryError(factoryErr)
+		report.Status = doctorStatusUnavailable
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "runtime_factory"})
+		report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime could not be constructed.", map[string]any{"phase": "runtime_factory"})
 		return report, nil
 	}
 	if factoryRuntime.Broker == nil {
-		primary = errors.New("doctor runtime factory returned no broker")
+		primary = webmcpRuntimeUnavailableError("runtime_factory")
 		report.Status = doctorStatusUnavailable
-		report.Error = &WebMCPDoctorErrorData{
-			Code:      doctorErrorRuntimeUnavailable,
-			Message:   "WebMCP doctor runtime is unavailable; install the production discovery and browser protocol seams.",
-			Retryable: false,
-			Details:   map[string]any{"phase": "runtime_factory"},
-		}
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
 		report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime returned no broker.", nil)
 		return report, nil
 	}
@@ -447,15 +437,10 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 		return versionErr
 	}
 	if !versionAvailable {
-		primary := ErrWebMCPDoctorRequiresLaneBOrD
-		report.Status = doctorStatusUnavailable
-		report.Error = &WebMCPDoctorErrorData{
-			Code:      doctorErrorRequiresLaneBOrD,
-			Message:   "WebMCP doctor requires Lane D for the production browser protocol version check.",
-			Retryable: false,
-			Details:   map[string]any{"requires": "Lane D", "phase": "version"},
-		}
-		report.setCheck("version", doctorCheckUnavailable, "Browser protocol version access is unavailable; requires Lane D.", map[string]any{"requires": "Lane D"})
+		primary := webmcpRuntimeUnavailableError("version")
+		report.Status = doctorStatusNotReady
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
+		report.setCheck("version", doctorCheckFail, "Browser protocol metadata is unavailable.", map[string]any{"phase": "version"})
 		return primary
 	}
 	if version.Browser != "" || version.ProtocolVersion != "" {
@@ -534,6 +519,26 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 
 	selectedContext, selectionErr := selectDoctorTarget(ctx, runtime.Broker, selectedTarget, browser.Selection.ActivateTab)
 	if selectionErr != nil {
+		if isDoctorPageToolsUnverified(selectionErr) {
+			markDoctorTargetSelected(report, selectedTarget, false)
+			report.WebMCP = "supported"
+			report.WebMCPDomain = report.WebMCP
+			report.PageTools = "unverified"
+			report.Catalog = WebMCPDoctorCatalog{Evidence: "unverified"}
+			report.setCheck("selection", doctorCheckPass, "The exact browser and target selection is valid.", map[string]any{
+				"browser_id": string(selectedTarget.BrowserID),
+				"target_id":  string(selectedTarget.ID),
+			})
+			report.setCheck("webmcp", doctorCheckPass, "The CDP WebMCP domain is supported; page-tool readiness is checked separately.", map[string]any{
+				"supported":  true,
+				"page_tools": "unverified",
+			})
+			primary := doctorPageToolsUnverifiedError(selectionErr, selectedTarget, 0)
+			report.Status = doctorStatusNotReady
+			report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
+			report.setCheck("catalog", doctorCheckFail, "The selected page did not provide affirmative page-tool catalog evidence before the diagnostic deadline.", report.Error.Details)
+			return primary
+		}
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(selectionErr, webmcp.ErrorTargetAttachFailed, map[string]any{
 			"browser_id": string(selectedTarget.BrowserID),
@@ -547,6 +552,10 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 	selectedPage := doctorTargetFromTarget(*selectedTarget)
 	selectedPage.Selected = true
 	selectedPage.Attached = selectedContext.Connected
+	selectedPage.WebMCPDomainSupported = selectedContext.WebMCPDomainSupported || selectedContext.Ready
+	selectedPage.PageToolsReady = selectedContext.CatalogReady
+	selectedPage.PageToolsKnown = selectedContext.CatalogReady
+	selectedPage.PageToolsEvidence = selectedContext.CatalogEvidence
 	selectedPage.Origin = safeOrigin(selectedContext.Origin)
 	selectedPage.Title = boundedDoctorText(selectedContext.Title, 160)
 	if selectedContext.Key.BrowserID != "" {
@@ -572,9 +581,11 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 		"browser_id": string(selectedContext.Key.BrowserID),
 		"target_id":  string(selectedContext.Key.TargetID),
 	})
-	if selectedContext.Ready && selectedContext.Connected {
+	domainSupported := selectedContext.WebMCPDomainSupported || selectedContext.Ready
+	if domainSupported && selectedContext.Connected {
 		report.WebMCP = "supported"
-		report.setCheck("webmcp", doctorCheckPass, "The selected target supports WebMCP.", map[string]any{"supported": true})
+		report.WebMCPDomain = report.WebMCP
+		report.setCheck("webmcp", doctorCheckPass, "The CDP WebMCP domain is supported; page-tool readiness is checked separately.", map[string]any{"supported": true, "page_tools": "pending"})
 	} else {
 		primary := webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "the selected target does not provide WebMCP", map[string]any{
 			"browser_id":          string(selectedContext.Key.BrowserID),
@@ -584,39 +595,69 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorUnsupportedWebMCP, nil)
 		report.WebMCP = "unsupported"
+		report.WebMCPDomain = report.WebMCP
+		report.PageTools = "unsupported"
 		report.setCheck("webmcp", doctorCheckFail, "The selected target does not support WebMCP.", map[string]any{"supported": false})
 		return primary
 	}
 
 	catalog, catalogErr := runtime.Broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if catalogErr != nil {
+		if isDoctorPageToolsUnverified(catalogErr) {
+			primary := doctorPageToolsUnverifiedError(catalogErr, selectedTarget, catalog.Generation)
+			report.PageTools = "unverified"
+			report.Status = doctorStatusNotReady
+			report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
+			report.setCheck("catalog", doctorCheckFail, "The selected page did not provide affirmative page-tool catalog evidence before the diagnostic deadline.", report.Error.Details)
+			return primary
+		}
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(catalogErr, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "catalog"})
 		report.setCheck("catalog", doctorCheckFail, "The WebMCP catalog could not be synchronized.", map[string]any{"phase": "catalog"})
 		return catalogErr
 	}
-	report.Catalog = WebMCPDoctorCatalog{Ready: catalog.Context.Ready && catalog.Context.Connected, Generation: catalog.Generation, ToolCount: len(catalog.Tools)}
+	report.Catalog = WebMCPDoctorCatalog{
+		Ready:          catalog.Context.CatalogReady && catalog.Context.Connected,
+		Generation:     catalog.Generation,
+		ToolCount:      len(catalog.Tools),
+		ToolCountKnown: catalog.Context.CatalogReady,
+		Evidence:       catalog.Context.CatalogEvidence,
+	}
+	// Older injected brokers only expose Ready. Keep the compatibility path
+	// while production brokers use CatalogReady as the affirmative evidence
+	// boundary.
+	if !report.Catalog.Ready && catalog.Context.Ready && catalog.Context.Connected {
+		report.Catalog.Ready = true
+		report.Catalog.ToolCountKnown = true
+		if report.Catalog.Evidence == "" {
+			report.Catalog.Evidence = "legacy_ready_context"
+		}
+	}
 	if !report.Catalog.Ready {
-		primary := webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "the WebMCP catalog is not ready", map[string]any{"phase": "catalog"})
+		report.PageTools = "unverified"
+		primary := doctorPageToolsUnverifiedError(nil, selectedTarget, catalog.Generation)
 		report.Status = doctorStatusNotReady
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, nil)
-		report.setCheck("catalog", doctorCheckFail, "The WebMCP catalog is not ready.", map[string]any{"generation": catalog.Generation})
+		report.setCheck("catalog", doctorCheckFail, "The selected page did not provide affirmative page-tool catalog evidence before the diagnostic deadline.", report.Error.Details)
 		return primary
 	}
-	report.setCheck("catalog", doctorCheckPass, "The WebMCP catalog is ready.", map[string]any{"generation": catalog.Generation, "tool_count": len(catalog.Tools)})
+	report.PageTools = "ready"
+	report.setCheck("catalog", doctorCheckPass, "The WebMCP catalog is ready.", map[string]any{"generation": catalog.Generation, "tool_count": len(catalog.Tools), "evidence": report.Catalog.Evidence})
 	report.Status = doctorStatusReady
 	return nil
 }
 
 func newWebMCPDoctorReport() WebMCPDoctorReport {
 	report := WebMCPDoctorReport{
-		Version:  doctorResultVersion,
-		Status:   doctorStatusNotReady,
-		Warnings: []string{},
-		Checks:   make([]WebMCPDoctorCheck, 0, 11),
-		Browsers: []WebMCPDoctorBrowser{},
-		Targets:  []WebMCPDoctorTarget{},
-		WebMCP:   "not_checked",
+		Version:      doctorResultVersion,
+		Status:       doctorStatusNotReady,
+		Warnings:     []string{},
+		Checks:       make([]WebMCPDoctorCheck, 0, 11),
+		Browsers:     []WebMCPDoctorBrowser{},
+		Targets:      []WebMCPDoctorTarget{},
+		WebMCP:       "not_checked",
+		WebMCPDomain: "not_checked",
+		PageTools:    "not_checked",
 	}
 	for _, name := range []string{"configuration", "activation", "endpoint", "discovery", "version", "targets", "selection", "policy", "webmcp", "catalog", "cleanup"} {
 		report.Checks = append(report.Checks, WebMCPDoctorCheck{Name: name, Status: doctorCheckSkipped})
@@ -648,10 +689,6 @@ func (r *WebMCPDoctorReport) addWarning(warning string) {
 		}
 	}
 	r.Warnings = append(r.Warnings, boundedDoctorText(warning, 240))
-}
-
-func unavailableWebMCPDoctorFactory(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
-	return WebMCPDoctorRuntime{}, ErrWebMCPDoctorRequiresLaneBOrD
 }
 
 func closeWebMCPDoctorRuntime(runtime WebMCPDoctorRuntime) (err error) {
@@ -917,14 +954,18 @@ func doctorTargetFromTarget(target webmcp.Target) WebMCPDoctorTarget {
 		typeName = "page"
 	}
 	return WebMCPDoctorTarget{
-		BrowserID:         string(target.BrowserID),
-		TargetID:          string(target.ID),
-		Type:              boundedDoctorText(typeName, 40),
-		Title:             boundedDoctorText(target.Title, 160),
-		Origin:            safeOrigin(target.Origin),
-		Eligible:          target.Eligible,
-		EligibilityReason: boundedDoctorText(target.EligibilityReason, 160),
-		Attached:          target.Attached,
+		BrowserID:             string(target.BrowserID),
+		TargetID:              string(target.ID),
+		Type:                  boundedDoctorText(typeName, 40),
+		Title:                 boundedDoctorText(target.Title, 160),
+		Origin:                safeOrigin(target.Origin),
+		Eligible:              target.Eligible,
+		EligibilityReason:     boundedDoctorText(target.EligibilityReason, 160),
+		Attached:              target.Attached,
+		WebMCPDomainSupported: target.WebMCPDomainSupported,
+		PageToolsReady:        target.PageToolsReady,
+		PageToolsKnown:        target.PageToolsKnown,
+		PageToolsEvidence:     target.PageToolsEvidence,
 	}
 }
 
@@ -1108,14 +1149,6 @@ func boundedDoctorText(value string, limit int) string {
 }
 
 func doctorErrorDataFor(err error, fallback webmcp.ErrorCode, details map[string]any) *WebMCPDoctorErrorData {
-	if errors.Is(err, ErrWebMCPDoctorRequiresLaneBOrD) {
-		return &WebMCPDoctorErrorData{
-			Code:      doctorErrorRequiresLaneBOrD,
-			Message:   "WebMCP doctor requires Lane B or requires Lane D for production browser discovery and CDP runtime.",
-			Retryable: false,
-			Details:   map[string]any{"requires": []string{"Lane B", "Lane D"}},
-		}
-	}
 	result := webmcp.ResultErrorFor(err, fallback, details)
 	return &WebMCPDoctorErrorData{Code: result.Code, Message: result.Message, Retryable: result.Retryable, Details: result.Details}
 }
@@ -1156,6 +1189,12 @@ func writeWebMCPDoctorHuman(out io.Writer, report WebMCPDoctorReport) error {
 		}
 	}
 	fmt.Fprintf(&builder, "WebMCP domain:   %s\n", report.WebMCP)
+	fmt.Fprintf(&builder, "Page tools:      %s\n", displayDoctorValue(report.PageTools, "not_checked"))
+	catalogStatus := "unverified"
+	if report.Catalog.Ready {
+		catalogStatus = "ready"
+	}
+	fmt.Fprintf(&builder, "Catalog:         %s (%d tools)\n", catalogStatus, report.Catalog.ToolCount)
 	fmt.Fprintf(&builder, "Page targets:    %d\n", report.PageTargets)
 	fmt.Fprintf(&builder, "Eligible pages:  %d\n", report.EligiblePages)
 	if report.SelectedPage == nil {

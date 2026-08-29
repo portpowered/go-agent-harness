@@ -89,12 +89,14 @@ func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandida
 
 	descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
 	if failure != nil {
+		failure = s.promoteRetainedBrowserEndpointLossLocked(failure, browser.ID, listOptions.TargetID, "targets")
 		failure = enrichBrowserDisconnected(failure, browser.ID, listOptions.TargetID, "targets")
 		s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, listOptions.TargetID, "targets")
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, failure
 	}
 	allTargets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
 	if normalizeFailure != nil {
+		normalizeFailure = s.promoteRetainedBrowserEndpointLossLocked(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		normalizeFailure = enrichBrowserDisconnected(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		s.noteBrowserDisconnectedFailureLocked(normalizeFailure, browser.ID, listOptions.TargetID, "targets")
 		return TargetSnapshot{Browsers: []BrowserCandidate{browser}, Filters: listOptions}, normalizeFailure
@@ -490,6 +492,9 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 	target.WebSocketPresent = pageWebSocket
 	target.ContinuityMarker = targetContinuityMarker(browser.ID, rawID, origin, safePageURL, normalizedWebSocket, descriptor)
 	target.WebMCP, target.WebMCPKnown = descriptorWebMCP(descriptor)
+	target.WebMCPDomainSupported, target.WebMCPDomainKnown = target.WebMCP, target.WebMCPKnown
+	target.PageToolsReady, target.PageToolsKnown = descriptorPageTools(descriptor)
+	target.PageToolsEvidence = strings.TrimSpace(descriptor.PageToolsEvidence)
 	target.ToolCount, target.ToolCountKnown = descriptorToolCount(descriptor)
 
 	structuralReason := ""
@@ -510,8 +515,20 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 		if err != nil {
 			return Target{}, targetState{}, classifyTargetListError(err, browser)
 		}
-		target.WebMCP = capabilities.WebMCP
-		target.WebMCPKnown = true
+		if capabilities.DomainKnown {
+			target.WebMCPDomainSupported = capabilities.DomainSupported
+			target.WebMCPDomainKnown = true
+			target.WebMCP = capabilities.DomainSupported
+			target.WebMCPKnown = true
+		} else {
+			target.WebMCP = capabilities.WebMCP
+			target.WebMCPKnown = true
+			target.WebMCPDomainSupported = capabilities.WebMCP
+			target.WebMCPDomainKnown = true
+		}
+		target.PageToolsReady = capabilities.PageToolsReady
+		target.PageToolsKnown = capabilities.PageToolsKnown
+		target.PageToolsEvidence = strings.TrimSpace(capabilities.PageToolsEvidence)
 		if capabilities.ToolCount >= 0 {
 			target.ToolCount = capabilities.ToolCount
 			target.ToolCountKnown = capabilities.ToolCountKnown || capabilities.ToolCount >= 0
@@ -582,6 +599,17 @@ func descriptorWebMCP(descriptor TargetDescriptor) (bool, bool) {
 	// /json/list does not carry the experimental domain capability. Unknown is
 	// deliberately not eligible; an injected TargetCapabilityProbe or explicit
 	// descriptor field must prove support before a target can be advertised.
+	return false, false
+}
+
+func descriptorPageTools(descriptor TargetDescriptor) (bool, bool) {
+	if descriptor.PageToolsReady != nil {
+		known := true
+		if descriptor.PageToolsKnown != nil {
+			known = *descriptor.PageToolsKnown
+		}
+		return *descriptor.PageToolsReady, known
+	}
 	return false, false
 }
 
@@ -765,17 +793,22 @@ func targetSnapshotPayload(snapshot TargetSnapshot) map[string]any {
 	targets := make([]map[string]any, 0, len(snapshot.Targets))
 	for _, target := range snapshot.Targets {
 		targets = append(targets, map[string]any{
-			"browser_id":        target.BrowserID,
-			"id":                target.ID,
-			"generation":        target.Generation,
-			"type":              target.Type,
-			"title":             target.Title,
-			"url":               target.URL,
-			"origin":            target.Origin,
-			"websocket_present": target.WebSocketPresent,
-			"webmcp":            target.WebMCP,
-			"tool_count":        target.ToolCount,
-			"eligible":          target.Eligible,
+			"browser_id":              target.BrowserID,
+			"id":                      target.ID,
+			"generation":              target.Generation,
+			"type":                    target.Type,
+			"title":                   target.Title,
+			"url":                     target.URL,
+			"origin":                  target.Origin,
+			"websocket_present":       target.WebSocketPresent,
+			"webmcp":                  target.WebMCP,
+			"webmcp_domain_supported": target.WebMCPDomainSupported,
+			"webmcp_domain_known":     target.WebMCPDomainKnown,
+			"page_tools_ready":        target.PageToolsReady,
+			"page_tools_known":        target.PageToolsKnown,
+			"page_tools_evidence":     target.PageToolsEvidence,
+			"tool_count":              target.ToolCount,
+			"eligible":                target.Eligible,
 		})
 	}
 	return map[string]any{

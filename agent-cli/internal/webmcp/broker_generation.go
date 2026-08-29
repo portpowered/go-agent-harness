@@ -34,6 +34,12 @@ func (b *StatefulBroker) advanceGenerationLocked(selected *brokerSession, genera
 	// A descriptor validation failure belongs to the retired document. A fresh
 	// generation gets an independent catalog validation result.
 	selected.catalogError = nil
+	if selected.catalogSignal != nil {
+		close(selected.catalogSignal)
+	}
+	selected.catalogSignal = make(chan struct{})
+	selected.context.CatalogReady = false
+	selected.context.CatalogEvidence = ""
 	selected.context.Ready = false
 	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: generation, Reason: reason})
 }

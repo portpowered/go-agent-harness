@@ -71,12 +71,19 @@ type Target struct {
 	// ContinuityMarker and Generation are normalized selection state carried
 	// across the CLI composition boundary. They contain no browser transport
 	// values; adapters derive the marker from the target's continuity claim.
-	ContinuityMarker  string
-	Generation        uint64
-	WebSocketURL      string
-	Attached          bool
-	Eligible          bool
-	EligibilityReason string
+	ContinuityMarker string
+	Generation       uint64
+	WebSocketURL     string
+	Attached         bool
+	// WebMCPDomainSupported and PageToolsReady are separate observations. A
+	// browser protocol domain can be available even when this page has not
+	// materialized a tool producer/catalog.
+	WebMCPDomainSupported bool
+	PageToolsReady        bool
+	PageToolsKnown        bool
+	PageToolsEvidence     string
+	Eligible              bool
+	EligibilityReason     string
 }
 
 type PageKey struct {
@@ -87,14 +94,17 @@ type PageKey struct {
 // PageContext identifies the document currently owned by a target session.
 // Generation changes invalidate page-provided catalog references.
 type PageContext struct {
-	Key        PageKey
-	Title      string
-	URL        string
-	Origin     string
-	Generation uint64
-	Connected  bool
-	Ready      bool
-	SelectedAt time.Time
+	Key                   PageKey
+	Title                 string
+	URL                   string
+	Origin                string
+	Generation            uint64
+	Connected             bool
+	WebMCPDomainSupported bool
+	CatalogReady          bool
+	CatalogEvidence       string
+	Ready                 bool
+	SelectedAt            time.Time
 }
 
 type ToolAnnotations struct {
@@ -127,8 +137,12 @@ type ToolDescriptor struct {
 type BrowserEventType string
 
 const (
-	EventToolsAdded          BrowserEventType = "tools_added"
-	EventToolsRemoved        BrowserEventType = "tools_removed"
+	EventToolsAdded   BrowserEventType = "tools_added"
+	EventToolsRemoved BrowserEventType = "tools_removed"
+	// EventCatalogReady is an affirmative page capability observation. It is
+	// intentionally distinct from tools_added so an empty page catalog can be
+	// proven ready without treating the absence of tools as evidence.
+	EventCatalogReady        BrowserEventType = "catalog_ready"
 	EventToolInvoked         BrowserEventType = "tool_invoked"
 	EventToolResponded       BrowserEventType = "tool_responded"
 	EventPageNavigated       BrowserEventType = "page_navigated"
@@ -152,15 +166,21 @@ type BrowserEvent struct {
 	FrameID            FrameID
 	Generation         uint64
 	PreviousGeneration uint64
-	ToolName           string
-	Tools              []ToolDescriptor
-	RemovedToolNames   []string
-	InvocationID       InvocationID
-	Status             string
-	Input              json.RawMessage
-	Output             json.RawMessage
-	ErrorCode          string
-	Reason             string
+	// CatalogReady and ToolCountKnown let an adapter explicitly prove an empty
+	// catalog. A tools_added event with one or more valid descriptors is also
+	// affirmative catalog evidence.
+	CatalogReady     bool
+	ToolCount        int
+	ToolCountKnown   bool
+	ToolName         string
+	Tools            []ToolDescriptor
+	RemovedToolNames []string
+	InvocationID     InvocationID
+	Status           string
+	Input            json.RawMessage
+	Output           json.RawMessage
+	ErrorCode        string
+	Reason           string
 }
 
 // InvocationState is shared by broker implementations and test fixtures.
@@ -223,6 +243,15 @@ const (
 	BrokerEventInvocationCreated  BrokerEventType = "invocation_created"
 	BrokerEventInvocationTerminal BrokerEventType = "invocation_terminal"
 	BrokerEventSessionClosed      BrokerEventType = "session_closed"
+)
+
+// Stream termination reasons are bounded, machine-readable values carried by
+// the existing Reason field. They let a caller distinguish an incomplete
+// stream from an ordinary clean close without adding fields to the watch wire
+// shape.
+const (
+	BrokerWatchBufferFullReason  = "watch_buffer_full"
+	BrowserEventBufferFullReason = "event_buffer_full"
 )
 
 type BrokerEvent struct {

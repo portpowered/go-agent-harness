@@ -8,11 +8,11 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -25,8 +25,9 @@ const (
 	// SessionDiagnosticEventFailure is emitted exactly once per terminal
 	// session failure with the canonical failure field map.
 	SessionDiagnosticEventFailure = "session_failure"
-	// SessionDiagnosticEventTurn is emitted once per completed assistant turn
-	// (MESSAGE.END) with per-turn input/output byte accounting.
+	// SessionDiagnosticEventTurn is emitted once per admitted assistant turn
+	// (a non-empty output response at MESSAGE.END) with per-turn input/output
+	// byte accounting.
 	SessionDiagnosticEventTurn = "session_turn_completed"
 	// SessionDiagnosticEventToolCall is emitted per provider tool-call event
 	// that cannot be executed by the session runtime.
@@ -84,6 +85,10 @@ const (
 	SessionDiagnosticFieldScheduledInputCount  = "scheduled_input_count"
 	SessionDiagnosticFieldDispatchedInputCount = "dispatched_input_count"
 	SessionDiagnosticFieldCompletedTurnCount   = "completed_turn_count"
+	// These fields retain bounded provider terminal context for pending
+	// continuations. Values are encoded as comma-separated call_id=value pairs.
+	SessionDiagnosticFieldPendingContinuationStatuses = "pending_continuation_statuses"
+	SessionDiagnosticFieldPendingContinuationDetails  = "pending_continuation_details"
 )
 
 const (
@@ -196,9 +201,14 @@ type sessionProgressObserver struct {
 	recorder       metrics.Recorder
 	productionSink *metrics.InMemorySink
 	streamObserver SessionStreamObserver
+	// admittedTurnObserver runs after this observer has admitted one provider
+	// response as a completed turn. Room accounting uses this boundary instead
+	// of counting raw MESSAGE.END events.
+	admittedTurnObserver SessionStreamObserver
 	// turnAdmission is an optional owner-controlled admission boundary for
-	// MESSAGE.END. Returning false keeps the raw stream event observable but
-	// prevents it from advancing completed-turn state or evidence.
+	// an otherwise valid completed response. Returning false keeps the raw
+	// stream event observable but prevents it from advancing completed-turn
+	// state or evidence.
 	turnAdmission  func(messages.StreamMessage) bool
 	runtime        *sessionRuntimeObservationRecorder
 	provider       string
@@ -220,16 +230,25 @@ type sessionProgressObserver struct {
 	totals                audioTurnCounters
 	pendingInputs         []ScheduledAudioInput
 
-	toolStateMu           sync.Mutex
-	unresolvedToolCalls   map[string]struct{}
-	acceptedToolCalls     map[string]struct{}
-	toolResultRejections  map[string]messages.SessionSendStatus
-	toolLifecycleCh       chan struct{}
-	toolContinuations     map[string]*toolContinuationState
-	toolCallInTurn        bool
-	messageEndSeen        bool
-	providerToolCallSeen  bool
-	assistantResponseDone bool
+	toolStateMu             sync.Mutex
+	unresolvedToolCalls     map[string]struct{}
+	acceptedToolCalls       map[string]struct{}
+	toolResultRejections    map[string]messages.SessionSendStatus
+	toolLifecycleCh         chan struct{}
+	toolContinuations       map[string]*toolContinuationState
+	toolCallInTurn          bool
+	messageEndSeen          bool
+	messageEndAdmitted      bool
+	providerToolCallSeen    bool
+	assistantResponseDone   bool
+	assistantOutputObserved bool
+	// These fields describe only the current provider response. The logical
+	// turn counters intentionally span a provider tool-call response and its
+	// later continuation, so they cannot be used to decide whether the current
+	// response itself emitted output.
+	responseOutputTextBytes  uint64
+	responseOutputAudioBytes uint64
+	responseActionableTool   bool
 	// toolResultsEnabled is false for explicit no-tools session plans, where a
 	// provider tool event is reported as unexecutable rather than creating an
 	// obligation that no executor can satisfy.
@@ -253,13 +272,18 @@ type sessionProgressObserver struct {
 }
 
 type toolContinuationState struct {
-	toolName                 string
-	providerCallObserved     bool
-	resultAccepted           bool
-	toolResponseComplete     bool
-	continuationRequested    bool
-	continuationTerminalSeen bool
-	continuationComplete     bool
+	toolName                    string
+	providerCallObserved        bool
+	resultAccepted              bool
+	toolResponseComplete        bool
+	continuationRequested       bool
+	continuationTerminalSeen    bool
+	continuationStatus          string
+	continuationStatusDetails   string
+	continuationTerminalReason  messages.TerminalReason
+	continuationOutputObserved  bool
+	continuationFailureObserved bool
+	continuationComplete        bool
 }
 
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {
@@ -310,6 +334,57 @@ func (o *sessionProgressObserver) ensureToolStateLocked() {
 	if o.toolContinuations == nil {
 		o.toolContinuations = make(map[string]*toolContinuationState)
 	}
+}
+
+func normalizeContinuationStatus(status string) string {
+	return strings.ToLower(strings.TrimSpace(status))
+}
+
+func sanitizeContinuationDetail(detail string) string {
+	detail = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, detail)
+	detail = strings.Join(strings.Fields(detail), " ")
+	const maxDetailBytes = 256
+	if len(detail) > maxDetailBytes {
+		return detail[:maxDetailBytes]
+	}
+	return detail
+}
+
+// continuationCanCompleteLocked is deliberately stricter than a provider
+// terminal boundary. A continuation is successful only when the provider
+// reports completed (or a legacy provider omits status) and the assistant
+// emitted customer-visible text, transcript, or audio.
+func continuationCanCompleteLocked(state *toolContinuationState) bool {
+	if state == nil || !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.continuationTerminalSeen {
+		return false
+	}
+	status := normalizeContinuationStatus(state.continuationStatus)
+	if state.continuationFailureObserved || (status != "" && status != "completed") {
+		return false
+	}
+	if state.continuationTerminalReason != "" && state.continuationTerminalReason != messages.TerminalReasonProviderAuthoredCompletion && state.continuationTerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+		return false
+	}
+	return state.continuationOutputObserved
+}
+
+func continuationTerminalFailureLocked(state *toolContinuationState) bool {
+	if state == nil || !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.continuationTerminalSeen || state.continuationComplete {
+		return false
+	}
+	status := normalizeContinuationStatus(state.continuationStatus)
+	if state.continuationFailureObserved || (status != "" && status != "completed") {
+		return true
+	}
+	if state.continuationTerminalReason != "" && state.continuationTerminalReason != messages.TerminalReasonProviderAuthoredCompletion && state.continuationTerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+		return true
+	}
+	return !state.continuationOutputObserved
 }
 
 // observeProviderToolCallStart records a provider tool call as soon as its
@@ -378,7 +453,7 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 		o.toolContinuations[callID] = state
 	}
 	state.resultAccepted = true
-	if state.continuationRequested && state.continuationTerminalSeen && state.toolResponseComplete {
+	if continuationCanCompleteLocked(state) {
 		state.continuationComplete = true
 	}
 	delete(o.toolResultRejections, callID)
@@ -420,7 +495,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 			continue
 		}
 		state.continuationRequested = true
-		if state.resultAccepted && state.continuationTerminalSeen && state.toolResponseComplete {
+		if continuationCanCompleteLocked(state) {
 			state.continuationComplete = true
 		}
 		changed = true
@@ -454,7 +529,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string
 	}
 	if state != nil && state.resultAccepted {
 		state.continuationRequested = true
-		if state.continuationTerminalSeen && state.toolResponseComplete {
+		if continuationCanCompleteLocked(state) {
 			state.continuationComplete = true
 		}
 	}
@@ -640,6 +715,81 @@ func (o *sessionProgressObserver) pendingNonImageToolContinuationCallIDs() []str
 	return ids
 }
 
+func (o *sessionProgressObserver) pendingImageContinuationSnapshot() ([]string, map[string]string, map[string]string) {
+	if o == nil {
+		return nil, nil, nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.toolContinuations))
+	statuses := make(map[string]string)
+	details := make(map[string]string)
+	for id, state := range o.toolContinuations {
+		if state == nil || state.toolName != tools.ReadImageToolID || !state.resultAccepted || state.continuationComplete {
+			continue
+		}
+		ids = append(ids, id)
+		if state.continuationStatus != "" {
+			statuses[id] = state.continuationStatus
+		}
+		if state.continuationStatusDetails != "" {
+			details[id] = state.continuationStatusDetails
+		}
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids, statuses, details
+}
+
+func (o *sessionProgressObserver) pendingNonImageToolContinuationSnapshot() ([]string, map[string]string, map[string]string) {
+	if o == nil {
+		return nil, nil, nil
+	}
+	o.toolStateMu.Lock()
+	ids := make([]string, 0, len(o.toolContinuations))
+	statuses := make(map[string]string)
+	details := make(map[string]string)
+	for id, state := range o.toolContinuations {
+		if state == nil || state.toolName == tools.ReadImageToolID || !state.resultAccepted || state.continuationComplete {
+			continue
+		}
+		ids = append(ids, id)
+		if state.continuationStatus != "" {
+			statuses[id] = state.continuationStatus
+		}
+		if state.continuationStatusDetails != "" {
+			details[id] = state.continuationStatusDetails
+		}
+	}
+	o.toolStateMu.Unlock()
+	sort.Strings(ids)
+	return ids, statuses, details
+}
+
+// pendingContinuationMetadata returns deterministic provider context for all
+// accepted continuations still pending at terminal time. The diagnostic uses
+// the same call-ID correlation as the typed errors.
+func (o *sessionProgressObserver) pendingContinuationMetadata() (map[string]string, map[string]string) {
+	if o == nil {
+		return nil, nil
+	}
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	statuses := make(map[string]string)
+	details := make(map[string]string)
+	for id, state := range o.toolContinuations {
+		if state == nil || !state.resultAccepted || state.continuationComplete {
+			continue
+		}
+		if state.continuationStatus != "" {
+			statuses[id] = state.continuationStatus
+		}
+		if state.continuationStatusDetails != "" {
+			details[id] = state.continuationStatusDetails
+		}
+	}
+	return statuses, details
+}
+
 // unresolvedToolCallIDs returns a deterministic snapshot for lifecycle
 // consumers and future terminal diagnostics.
 func (o *sessionProgressObserver) unresolvedToolCallIDs() []string {
@@ -671,24 +821,6 @@ func (o *sessionProgressObserver) unresolvedToolResultSendStatuses() map[string]
 	return statuses
 }
 
-// account is the single observation seam: every counted byte crosses here
-// exactly once, forwarding to the metrics recorder and advancing both the
-// per-turn counters and the lifetime totals in one step. Recording failures
-// are diagnostics-only and never alter session behavior.
-func (o *sessionProgressObserver) account(direction metrics.Direction, modality metrics.Modality, n int) {
-	if o == nil || n <= 0 {
-		return
-	}
-	if o.productionSink != nil {
-		_ = o.productionSink.Record(direction, modality, int64(n))
-	}
-	if o.recorder != nil {
-		_ = o.recorder.Record(direction, modality, int64(n))
-	}
-	o.counters.account(direction, modality, uint64(n))
-	o.totals.account(direction, modality, uint64(n))
-}
-
 // scheduleAudioInputs registers caller-scheduled user audio injections.
 func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
 	if o == nil {
@@ -704,15 +836,8 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
 	}
-	turnAdmitted := true
-	if msg.Type == messages.StreamTypeMessageEnd && o.turnAdmission != nil {
-		turnAdmitted = o.turnAdmission(msg)
-	}
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
-	}
-	if msg.Type == messages.StreamTypeMessageEnd && !turnAdmitted {
-		return
 	}
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen:
@@ -743,7 +868,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.sawSessionOpen = true
 	case *messages.MessageStartValue:
 		o.toolStateMu.Lock()
+		o.resetResponseOutputLocked()
 		o.assistantResponseDone = false
+		o.assistantOutputObserved = false
 		o.toolCallInTurn = false
 		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
@@ -754,28 +881,72 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		// responses. Any content-start boundary is enough to distinguish a new
 		// response from a duplicate MESSAGE.END for the previous one.
 		o.toolStateMu.Lock()
+		if o.messageEndSeen || o.assistantResponseDone {
+			o.assistantOutputObserved = false
+		}
+		o.beginResponseContentLocked()
 		o.assistantResponseDone = false
-		o.messageEndSeen = false
 		o.toolStateMu.Unlock()
 	case *messages.AudioDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityAudio, len(v.Content))
 		o.toolStateMu.Lock()
-		o.messageEndSeen = false
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		o.beginResponseContentLocked()
+		if assistantResponseDelta(msg) && len(v.Content) > 0 {
+			o.responseOutputAudioBytes += uint64(len(v.Content))
+		}
+		if len(v.Content) > 0 && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
 		o.toolStateMu.Unlock()
 	case *messages.TextDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Content))
 		o.toolStateMu.Lock()
-		o.messageEndSeen = false
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		o.beginResponseContentLocked()
+		if assistantResponseDelta(msg) && len(v.Content) > 0 {
+			o.responseOutputTextBytes += uint64(len(v.Content))
+		}
+		if strings.TrimSpace(v.Content) != "" && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
 		o.toolStateMu.Unlock()
 	case *messages.TranscriptDeltaValue:
 		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Text))
 		o.toolStateMu.Lock()
-		o.messageEndSeen = false
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		o.beginResponseContentLocked()
+		if assistantResponseDelta(msg) && len(v.Text) > 0 {
+			o.responseOutputTextBytes += uint64(len(v.Text))
+		}
+		if strings.TrimSpace(v.Text) != "" && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
+		o.toolStateMu.Unlock()
+	case *messages.TranscriptEndValue:
+		o.toolStateMu.Lock()
+		if o.messageEndSeen {
+			o.assistantOutputObserved = false
+		}
+		o.beginResponseContentLocked()
+		if assistantResponseDelta(msg) && len(v.FullText) > 0 {
+			o.responseOutputTextBytes += uint64(len(v.FullText))
+		}
+		if strings.TrimSpace(v.FullText) != "" && msg.Role != messages.RoleTool && msg.Role != messages.RoleUser {
+			o.assistantOutputObserved = true
+		}
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallStartValue:
 		o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
 		o.toolDeltaSeen = false
 		o.toolStateMu.Lock()
+		o.beginResponseContentLocked()
 		o.assistantResponseDone = false
 		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
@@ -784,17 +955,27 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
 		o.toolDeltaSeen = true
 		o.toolStateMu.Lock()
+		o.beginResponseContentLocked()
 		o.assistantResponseDone = false
 		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallEndValue:
-		o.observeProviderToolCallWithID(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+		callID := firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId)
+		o.observeProviderToolCallWithID(callID, v.Name)
 		if !o.toolResultsEnabledForObservation() {
 			o.emitToolCallRecord(v)
 		}
 		o.toolStateMu.Lock()
+		o.beginResponseContentLocked()
 		o.assistantResponseDone = false
 		o.toolCallInTurn = o.toolResultsEnabled
+		// A complete, correlated tool call is provider output even when the
+		// caller has no executor. Tool-enabled sessions still keep the existing
+		// intermediate-call/continuation lifecycle below; this flag only
+		// prevents a valid tool-only response from being mistaken for empty.
+		if strings.TrimSpace(callID) != "" && strings.TrimSpace(v.Name) != "" {
+			o.responseActionableTool = true
+		}
 		if o.toolResultsEnabled {
 			o.providerToolCallSeen = true
 		}
@@ -805,229 +986,28 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolDeltaSeen = false
 	case *messages.MessageEndValue:
 		o.noteProviderUsage(v.Usage)
-		if o.observeProviderMessageEnd(msg.Role) {
+		o.setAssistantResponseDone(false)
+		outputPresent := o.responseHasAdmissibleOutput()
+		candidate := o.observeProviderMessageEnd(msg.Role, v, outputPresent)
+		admitted := candidate && outputPresent
+		if admitted && o.turnAdmission != nil {
+			admitted = o.turnAdmission(msg)
+		}
+		o.setAssistantResponseDone(admitted)
+		o.toolStateMu.Lock()
+		o.messageEndAdmitted = admitted
+		o.toolStateMu.Unlock()
+		if admitted {
 			o.completeTurn()
+			if o.admittedTurnObserver != nil {
+				o.admittedTurnObserver(msg)
+			}
 		}
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
 	}
-}
-
-func (o *sessionProgressObserver) toolResultsEnabledForObservation() bool {
-	if o == nil {
-		return false
-	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	return o.toolResultsEnabled
-}
-
-// observeProviderMessageEnd advances the provider response state. The first
-// MESSAGE.END after a tool call closes the provider's function-call response;
-// only a later non-tool MESSAGE.END can complete an accepted continuation.
-// The bool return reports whether this boundary is one new, terminal assistant
-// response and should therefore count as a completed turn.
-func (o *sessionProgressObserver) observeProviderMessageEnd(role messages.Role) bool {
-	if o == nil {
-		return false
-	}
-	o.toolStateMu.Lock()
-	toolTurn := o.toolCallInTurn
-	duplicateEnd := o.messageEndSeen
-	o.messageEndSeen = true
-	continuationChanged := false
-	if toolTurn {
-		for _, state := range o.toolContinuations {
-			if state != nil && state.providerCallObserved && !state.toolResponseComplete {
-				state.toolResponseComplete = true
-			}
-		}
-	} else if role != messages.RoleTool {
-		for _, state := range o.toolContinuations {
-			if state == nil || !state.toolResponseComplete || state.continuationComplete {
-				continue
-			}
-			state.continuationTerminalSeen = true
-			if state.resultAccepted && state.continuationRequested {
-				state.continuationComplete = true
-				continuationChanged = true
-			}
-		}
-	}
-	pending := false
-	for _, state := range o.toolContinuations {
-		if state != nil && state.resultAccepted && !state.continuationComplete {
-			pending = true
-			break
-		}
-	}
-	terminalAssistantResponse := role != messages.RoleTool && !toolTurn && len(o.unresolvedToolCalls) == 0 && !pending
-	if terminalAssistantResponse {
-		o.assistantResponseDone = true
-	}
-	o.toolCallInTurn = false
-	lifecycleCh := o.toolLifecycleCh
-	o.toolStateMu.Unlock()
-	if continuationChanged {
-		select {
-		case lifecycleCh <- struct{}{}:
-		default:
-		}
-	}
-	return terminalAssistantResponse && !duplicateEnd
-}
-
-// assistantResponseCompleted reports whether a non-tool assistant response
-// reached MESSAGE.END without another tool call still in the turn.
-func (o *sessionProgressObserver) assistantResponseCompleted() bool {
-	if o == nil {
-		return false
-	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	return o.assistantResponseDone
-}
-
-func (o *sessionProgressObserver) providerToolCallObserved() bool {
-	if o == nil {
-		return false
-	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	return o.providerToolCallSeen
-}
-
-// noteUserTextInput accounts for prompt text injected into the session as
-// user input.
-func (o *sessionProgressObserver) noteUserTextInput(text string) {
-	if o == nil || text == "" {
-		return
-	}
-	o.account(metrics.DirectionInput, metrics.ModalityText, len(text))
-}
-
-// dispatchScheduledInputs delivers due scheduled audio through the loop's
-// existing SendAudioInput seam and attributes the bytes to the in-flight turn.
-func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, loop scheduledSessionInputSender) error {
-	if o == nil || loop == nil {
-		return nil
-	}
-	// A response boundary is not enough to release the next spoken turn. The
-	// current provider call must have its accepted result and terminal
-	// continuation first; this check keeps scheduling independent of the
-	// particular input source that created the call.
-	if o.hasToolLifecycleObligation() || !o.scheduledAudioReady() {
-		return nil
-	}
-	for len(o.pendingInputs) > 0 && o.pendingInputs[0].AfterCompletedTurns <= o.turnsCompleted && !o.hasToolLifecycleObligation() {
-		input := o.pendingInputs[0]
-		inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
-		if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
-			return fmt.Errorf("send scheduled audio input %d: %w", inputIndex, err)
-		}
-		if input.EndOfTurn {
-			if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
-				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
-			}
-		}
-		if !o.scheduledTurnBaseSet {
-			o.scheduledTurnBase = o.turnsCompleted
-			o.scheduledTurnBaseSet = true
-		}
-		o.dispatchedInputs++
-		o.pendingInputs = o.pendingInputs[1:]
-		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
-	}
-	return nil
-}
-
-// scheduledAudioReady reports whether the scheduler may release its next
-// input. The acknowledgement requirement is opt-in so replay and existing
-// non-OpenAI session paths preserve their previous behavior.
-func (o *sessionProgressObserver) scheduledAudioReady() bool {
-	return o == nil || !o.requireSessionUpdated || (o.sawSessionOpen && o.sessionUpdated)
-}
-
-func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
-	return o != nil && o.requireSessionUpdated && len(o.pendingInputs) > 0 && !o.scheduledAudioReady()
-}
-
-// scheduledAudioComplete reports whether every scheduled input has been
-// accepted and its corresponding assistant response has crossed MESSAGE.END.
-// It is intentionally separate from replay capture inspection: live planning
-// owns the decision to close after the schedule, while replay follows its
-// captured lifecycle.
-func (o *sessionProgressObserver) scheduledAudioComplete() bool {
-	return o != nil && o.scheduledInputs > 0 && len(o.pendingInputs) == 0 && o.completedScheduled >= o.scheduledInputs && !o.hasToolLifecycleObligation()
-}
-
-func (o *sessionProgressObserver) scheduledAudioIncomplete() bool {
-	return o != nil && o.scheduledInputs > 0 && !o.scheduledAudioComplete()
-}
-
-// scheduledAudioCounts returns the terminal schedule counters in a stable
-// order. Completed is the number of scheduled inputs whose assistant response
-// reached MESSAGE.END; it is distinct from the total session turn count when
-// a prompt or seed turn precedes scheduled audio.
-func (o *sessionProgressObserver) scheduledAudioCounts() (completed, dispatched, scheduled int) {
-	if o == nil {
-		return 0, 0, 0
-	}
-	return o.completedScheduled, o.dispatchedInputs, o.scheduledInputs
-}
-
-// noteProviderUsage accumulates the provider-reported token usage delivered on
-// MESSAGE.END. Each value is an incremental contribution for the completed
-// turn; the terminal runtime observation publishes the resulting
-// session-cumulative totals.
-func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
-	if o == nil {
-		return
-	}
-	if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens < 0 || usage.ReasoningTokens < 0 {
-		return
-	}
-	o.usagePrompt += uint64(usage.PromptTokens)
-	o.usageCompletion += uint64(usage.CompletionTokens)
-	o.usageTotal += uint64(usage.TotalTokens)
-	o.usageReasoning += uint64(usage.ReasoningTokens)
-	if usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 || usage.ReasoningTokens != 0 {
-		o.usageSeen = true
-	}
-}
-
-// completeTurn closes the current turn boundary and emits the per-turn record.
-func (o *sessionProgressObserver) completeTurn() {
-	o.turnsCompleted++
-	if o.scheduledTurnBaseSet && o.turnsCompleted > o.scheduledTurnBase {
-		completed := o.turnsCompleted - o.scheduledTurnBase
-		if completed > o.dispatchedInputs {
-			completed = o.dispatchedInputs
-		}
-		if completed > o.scheduledInputs {
-			completed = o.scheduledInputs
-		}
-		o.completedScheduled = completed
-	}
-	if o.runtime != nil {
-		o.runtime.turnCompleted(o.turnsCompleted)
-	}
-	if o.sink != nil {
-		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
-			Event: SessionDiagnosticEventTurn,
-			Fields: map[string]string{
-				fieldTurnIndex:        strconv.Itoa(o.turnsCompleted),
-				fieldInputAudioBytes:  strconv.FormatUint(o.counters.inputAudio, 10),
-				fieldOutputToolBytes:  strconv.FormatUint(o.counters.outTool, 10),
-				fieldInputTextBytes:   strconv.FormatUint(o.counters.inputText, 10),
-				fieldOutputAudioBytes: strconv.FormatUint(o.counters.outAudio, 10),
-				fieldOutputTextBytes:  strconv.FormatUint(o.counters.outText, 10),
-			},
-		})
-	}
-	o.counters.reset()
 }
 
 func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue) {

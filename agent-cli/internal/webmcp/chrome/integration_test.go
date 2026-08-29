@@ -3,6 +3,7 @@ package chrome
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -685,18 +686,18 @@ func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureU
 		close(running.done)
 	}()
 	endpoint := make(chan string, 1)
-	for _, output := range []io.Reader{stdout, stderr} {
-		go scanChromeEndpoint(output, endpoint)
-	}
+	var stdoutLog, stderrLog bytes.Buffer
+	go scanChromeEndpoint(io.TeeReader(stdout, &stdoutLog), endpoint)
+	go scanChromeEndpoint(io.TeeReader(stderr, &stderrLog), endpoint)
 	select {
 	case value := <-endpoint:
 		running.setEndpoint(value)
 		return running, nil
 	case <-running.done:
-		return nil, fmt.Errorf("Chrome exited before exposing DevTools: %v", running.waitErr)
+		return nil, fmt.Errorf("Chrome exited before exposing DevTools: %v (stdout=%q stderr=%q)", running.waitErr, strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
 	case <-ctx.Done():
 		_ = running.Close()
-		return nil, fmt.Errorf("wait for Chrome DevTools endpoint: %w", ctx.Err())
+		return nil, fmt.Errorf("wait for Chrome DevTools endpoint: %w (stdout=%q stderr=%q)", ctx.Err(), strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
 	}
 }
 
