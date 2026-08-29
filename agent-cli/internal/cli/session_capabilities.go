@@ -34,10 +34,6 @@ func NewSessionToolCapabilitiesFactory(
 	staticExecutor messages.ToolExecutor,
 	brokerFactory SessionBrowserBrokerFactory,
 ) SessionToolCapabilitiesFactory {
-	if brokerFactory == nil {
-		brokerFactory = NewSessionBrowserBroker
-	}
-
 	return func(cfg *config.Config) (SessionToolCapabilities, error) {
 		if cfg != nil {
 			if err := cfg.ValidateBrowser(); err != nil {
@@ -72,7 +68,13 @@ func NewSessionToolCapabilitiesFactory(
 			return SessionToolCapabilities{}, fmt.Errorf("compose session tools: %w", err)
 		}
 
-		broker, err := brokerFactory(cfg.Browser)
+		resolvedBrokerFactory := brokerFactory
+		if resolvedBrokerFactory == nil {
+			resolvedBrokerFactory = func(browser config.BrowserConfig) (webmcp.Broker, error) {
+				return newSessionBrowserBrokerWithConfigDir(browser, cfg.ConfigDir)
+			}
+		}
+		broker, err := resolvedBrokerFactory(cfg.Browser)
 		if err != nil {
 			return closeFailedBroker(broker, fmt.Errorf("construct WebMCP broker: %w", err))
 		}
@@ -91,12 +93,17 @@ func NewSessionToolCapabilitiesFactory(
 			return closeFailedBroker(broker, fmt.Errorf("compose session tools: %w", err))
 		}
 		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
-		return SessionToolCapabilities{
+		capabilities := SessionToolCapabilities{
 			Executor:     surface.Executor,
 			Definitions:  surface.Definitions,
 			BrowserWatch: broker.Watch,
 			Close:        capabilityCoordinator.Close,
-		}, nil
+		}
+		if initializer, ok := broker.(SessionCapabilityInitializer); ok {
+			capabilities.Initialize = initializer.InitializeSession
+			capabilities.Status = initializer.SessionCapabilityStatus
+		}
+		return capabilities, nil
 	}
 }
 
@@ -105,7 +112,15 @@ func NewSessionToolCapabilitiesFactory(
 // can retire both broker state and discovery resources through one idempotent
 // close hook.
 func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error) {
-	return newSessionBrowserBrokerWithDoctorFactory(browser, NewProductionWebMCPDoctorFactory())
+	return newSessionBrowserBrokerWithConfigDir(browser, "")
+}
+
+func newSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {
+	return newSessionBrowserBrokerWithDoctorFactory(browser, NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionSelectionStoreFactory(func() any {
+			return NewFileWebMCPSelectionStore(configDir)
+		}),
+	))
 }
 
 func newSessionBrowserBrokerWithDoctorFactory(browser config.BrowserConfig, factory WebMCPDoctorFactory) (webmcp.Broker, error) {
@@ -122,7 +137,14 @@ func newSessionBrowserBrokerWithDoctorFactory(browser config.BrowserConfig, fact
 		}
 		return nil, webmcpRuntimeUnavailableError("session_runtime")
 	}
-	return &sessionBrowserBroker{Broker: runtime.Broker, closeRuntime: runtime.Close}, nil
+	broker := &sessionBrowserBroker{
+		Broker:       runtime.Broker,
+		closeRuntime: runtime.Close,
+		initDone:     make(chan struct{}),
+		initState:    SessionCapabilityInitializing,
+	}
+	broker.bootstrap = sessionCapabilityBootstrap(browser, runtime.Discovery, runtime.Broker)
+	return broker, nil
 }
 
 type sessionBrowserBroker struct {
@@ -130,6 +152,16 @@ type sessionBrowserBroker struct {
 	closeRuntime func() error
 	closeOnce    sync.Once
 	closeErr     error
+
+	bootstrap   func(context.Context) error
+	initOnce    sync.Once
+	initDone    chan struct{}
+	initMu      sync.Mutex
+	initStarted bool
+	initState   SessionCapabilityState
+	initErr     error
+	initCancel  context.CancelFunc
+	closed      bool
 }
 
 func (b *sessionBrowserBroker) Close() error {
@@ -137,6 +169,28 @@ func (b *sessionBrowserBroker) Close() error {
 		return nil
 	}
 	b.closeOnce.Do(func() {
+		b.initMu.Lock()
+		if b.initDone == nil {
+			b.initDone = make(chan struct{})
+			b.initState = SessionCapabilityInitializing
+		}
+		b.closed = true
+		cancel := b.initCancel
+		started := b.initStarted
+		done := b.initDone
+		if !started {
+			b.initStarted = true
+			b.initErr = webmcp.ErrClosed
+			b.initState = SessionCapabilityFailed
+			close(done)
+		}
+		b.initMu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		if started {
+			<-done
+		}
 		b.closeErr = b.Broker.Close()
 		if b.closeRuntime != nil {
 			b.closeErr = errors.Join(b.closeErr, b.closeRuntime())
@@ -153,6 +207,9 @@ func (b *sessionBrowserBroker) WaitInvocation(ctx context.Context, id webmcp.Inv
 	if b == nil || b.Broker == nil {
 		return webmcp.InvokeResult{}, errors.New("WebMCP invocation waiter is unavailable")
 	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.InvokeResult{}, err
+	}
 	waiter, ok := b.Broker.(webmcp.InvocationWaiter)
 	if !ok {
 		return webmcp.InvokeResult{}, errors.New("WebMCP broker does not support terminal invocation results")
@@ -165,6 +222,9 @@ func (b *sessionBrowserBroker) WaitInvocation(ctx context.Context, id webmcp.Inv
 func (b *sessionBrowserBroker) SelectedWithRefresh(ctx context.Context, refresh bool) (webmcp.PageContext, error) {
 	if b == nil || b.Broker == nil {
 		return webmcp.PageContext{}, errors.New("WebMCP broker is unavailable")
+	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.PageContext{}, err
 	}
 	if refresher, ok := b.Broker.(interface {
 		SelectedWithRefresh(context.Context, bool) (webmcp.PageContext, error)
@@ -180,6 +240,9 @@ func (b *sessionBrowserBroker) SelectWithOptions(ctx context.Context, selector w
 	if b == nil || b.Broker == nil {
 		return webmcp.PageContext{}, errors.New("WebMCP broker is unavailable")
 	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return webmcp.PageContext{}, err
+	}
 	if selectorWithOptions, ok := b.Broker.(interface {
 		SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
 	}); ok {
@@ -193,6 +256,9 @@ func (b *sessionBrowserBroker) SelectWithOptions(ctx context.Context, selector w
 func (b *sessionBrowserBroker) CancelDirect(ctx context.Context, request webmcp.DirectCancelRequest) error {
 	if b == nil || b.Broker == nil {
 		return errors.New("WebMCP broker is unavailable")
+	}
+	if err := b.ensureInitialized(ctx); err != nil {
+		return err
 	}
 	if canceller, ok := b.Broker.(webmcp.DirectCanceller); ok {
 		return canceller.CancelDirect(ctx, request)

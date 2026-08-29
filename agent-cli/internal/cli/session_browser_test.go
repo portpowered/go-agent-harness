@@ -104,6 +104,9 @@ browser:
 	if err != nil {
 		t.Fatalf("resolveSessionBrowserConfig(): %v", err)
 	}
+	if resolved.ConfigDir != configDir {
+		t.Fatalf("resolved config directory = %q, want %q", resolved.ConfigDir, configDir)
+	}
 	got := resolved.Browser
 	if !got.BrowserBackendEnabled() || got.Tools.Backend != config.BrowserToolsBackendWebMCP {
 		t.Fatalf("CLI tools activation = %+v, want enabled WebMCP", got.Tools)

@@ -28,6 +28,14 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// Initialize is called synchronously after capability construction and
+	// before the session provider can issue a browser tool call. Implementations
+	// retain a classified failed state in the executor when initialization
+	// returns an error, so a stale selection is observable instead of becoming
+	// an identity-free selection_not_connected result.
+	Initialize func(context.Context) error
+	// Status reports the explicit lifecycle state of an optional capability.
+	Status func() SessionCapabilityStatus
 	// BrowserWatch exposes the already-owned broker observation stream to an
 	// opt-in live session input boundary. It is nil for non-browser capability
 	// sets; callers must use the returned context to stop the watch.
@@ -35,6 +43,31 @@ type SessionToolCapabilities struct {
 	// Close transfers ownership of any capability resources to the session
 	// coordinator. Nil means this capability has no closeable resources.
 	Close func() error
+}
+
+// SessionCapabilityState is the lifecycle state of a request-scoped session
+// capability. Browser capabilities begin initializing, then become ready or
+// retain a classified failure for every subsequent tool call.
+type SessionCapabilityState string
+
+const (
+	SessionCapabilityInitializing SessionCapabilityState = "initializing"
+	SessionCapabilityReady        SessionCapabilityState = "ready"
+	SessionCapabilityFailed       SessionCapabilityState = "failed"
+)
+
+// SessionCapabilityStatus is a read-only snapshot of capability setup.
+type SessionCapabilityStatus struct {
+	State SessionCapabilityState
+	Err   error
+}
+
+// SessionCapabilityInitializer is the optional lifecycle seam exposed by a
+// browser-backed capability set. It is deliberately separate from the frozen
+// messages.ToolExecutor interface.
+type SessionCapabilityInitializer interface {
+	InitializeSession(context.Context) error
+	SessionCapabilityStatus() SessionCapabilityStatus
 }
 
 // SessionToolCapabilitiesFactory builds the session tool surface from the
@@ -489,6 +522,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				capabilities, err := c.sessionToolCapabilities(loadedConfig)
 				if err != nil {
 					return fmt.Errorf("configure session tools: %w", err)
+				}
+				if capabilities.Initialize != nil {
+					// Initialization is deliberately completed before the provider
+					// receives the executor. A failed initializer remains represented by
+					// the broker's classified failed state, allowing the session to keep
+					// static tools while refusing every browser dispatch.
+					_ = capabilities.Initialize(sessionContext)
 				}
 				toolExecutor = capabilities.Executor
 				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)

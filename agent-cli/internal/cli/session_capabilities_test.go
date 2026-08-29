@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -155,6 +157,283 @@ func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testin
 	}
 	if len(mutations) != 1 || mutations[0].ToolName != pageTool.Name || string(mutations[0].Input) != `{"value":7}` {
 		t.Fatalf("session fixture mutations = %#v, want one terminal write_fixture mutation", mutations)
+	}
+}
+
+func TestSessionBrowserBrokerRestoresPersistedSelectionBeforeFirstToolCall(t *testing.T) {
+	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
+	defer server.Close()
+
+	browserConfig := config.DefaultBrowserConfig()
+	browserConfig.Tools.Enabled = true
+	browserConfig.Connection.CDPURL = server.URL + "/json/version"
+	browserConfig.Selection.Persist = true
+	selectionStore := NewFileWebMCPSelectionStore(t.TempDir())
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+		WithWebMCPProductionSelectionStore(selectionStore),
+	)
+
+	// Seed the exact record through the same production composition used by a
+	// prior CLI process, then construct a fresh session broker.
+	seedBroker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
+	if err != nil {
+		t.Fatalf("construct seed broker: %v", err)
+	}
+	if _, err := seedBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: webmcp.BrowserID(browserID), TargetID: webmcp.TargetID(targetID)}); err != nil {
+		t.Fatalf("seed selection: %v", err)
+	}
+	if err := seedBroker.Close(); err != nil {
+		t.Fatalf("close seed broker: %v", err)
+	}
+	if _, err := selectionStore.Load(); err != nil {
+		t.Fatalf("seed selection was not persisted: %v", err)
+	}
+	runtime.resetOperations()
+
+	sessionBroker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
+	if err != nil {
+		t.Fatalf("construct session broker: %v", err)
+	}
+	defer func() { _ = sessionBroker.Close() }()
+
+	initializer, ok := sessionBroker.(SessionCapabilityInitializer)
+	if !ok {
+		t.Fatal("session broker does not expose capability initialization")
+	}
+	if status := initializer.SessionCapabilityStatus(); status.State != SessionCapabilityInitializing || status.Err != nil {
+		t.Fatalf("initial capability status = %+v, want initializing", status)
+	}
+
+	response, err := webmcpTools.NewBrokerToolSet(sessionBroker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "first-browser-call",
+		Name:      webmcp.GetContextToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("first browser call: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode first browser result: %v", err)
+	}
+	if !envelope.OK {
+		t.Fatalf("first browser result failed: %+v", envelope.Error)
+	}
+	var contextData struct {
+		BrowserID  string `json:"browser_id"`
+		TargetID   string `json:"target_id"`
+		Generation uint64 `json:"generation"`
+		Connected  bool   `json:"connected"`
+		Ready      bool   `json:"ready"`
+	}
+	if err := json.Unmarshal(envelope.Data, &contextData); err != nil {
+		t.Fatalf("decode first browser context: %v", err)
+	}
+	if contextData.BrowserID != browserID || contextData.TargetID != targetID || contextData.Generation == 0 || !contextData.Connected || !contextData.Ready {
+		t.Fatalf("first browser context = %+v, want exact ready persisted selection", contextData)
+	}
+	if status := initializer.SessionCapabilityStatus(); status.State != SessionCapabilityReady || status.Err != nil {
+		t.Fatalf("final capability status = %+v, want ready", status)
+	}
+
+	// The first provider-facing operation was get_context. Internal bootstrap
+	// may probe the endpoint, but no model-driven list-tabs call is involved.
+	if runtime.count("activate") != 0 {
+		t.Fatalf("bootstrap unexpectedly activated the target: %v", runtime.operationSnapshot())
+	}
+}
+
+func TestSessionBrowserBrokerRetainsStalePersistedIdentityInFailedState(t *testing.T) {
+	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
+	defer server.Close()
+
+	browserConfig := config.DefaultBrowserConfig()
+	browserConfig.Tools.Enabled = true
+	browserConfig.Connection.CDPURL = server.URL + "/json/version"
+	selectionStore := NewFileWebMCPSelectionStore(t.TempDir())
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+		WithWebMCPProductionSelectionStore(selectionStore),
+	)
+
+	seedBroker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
+	if err != nil {
+		t.Fatalf("construct seed broker: %v", err)
+	}
+	if _, err := seedBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: webmcp.BrowserID(browserID), TargetID: webmcp.TargetID(targetID)}); err != nil {
+		t.Fatalf("seed selection: %v", err)
+	}
+	if err := seedBroker.Close(); err != nil {
+		t.Fatalf("close seed broker: %v", err)
+	}
+	record, err := selectionStore.Load()
+	if err != nil {
+		t.Fatalf("load persisted selection: %v", err)
+	}
+	runtime.mu.Lock()
+	runtime.targets = nil
+	runtime.mu.Unlock()
+	runtime.resetOperations()
+
+	broker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
+	if err != nil {
+		t.Fatalf("construct stale session broker: %v", err)
+	}
+	defer func() { _ = broker.Close() }()
+
+	response, err := webmcpTools.NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "stale-first-browser-call",
+		Name:      webmcp.GetContextToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("stale first browser call: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode stale browser result: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+		t.Fatalf("stale browser envelope = %+v, want stale_selection", envelope)
+	}
+	if got := envelope.Error.Details; got["browser_id"] != browserID || got["target_id"] != targetID || got["selected_generation"] != float64(record.Generation) || got["reason"] != "target_missing_after_reconnect" {
+		t.Fatalf("stale browser details = %#v, want persisted identity and reason", got)
+	}
+	initializer, ok := broker.(SessionCapabilityInitializer)
+	if !ok {
+		t.Fatal("stale session broker does not expose capability status")
+	}
+	status := initializer.SessionCapabilityStatus()
+	if status.State != SessionCapabilityFailed || status.Err == nil {
+		t.Fatalf("stale capability status = %+v, want failed with error", status)
+	}
+	if runtime.count("attach") != 0 {
+		t.Fatalf("stale bootstrap attached a replacement target: %v", runtime.operationSnapshot())
+	}
+}
+
+func TestSessionBrowserBrokerSharesInitializationAcrossConcurrentFirstUse(t *testing.T) {
+	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
+	defer server.Close()
+
+	browserConfig := config.DefaultBrowserConfig()
+	browserConfig.Tools.Enabled = true
+	browserConfig.Connection.CDPURL = server.URL + "/json/version"
+	selectionStore := NewFileWebMCPSelectionStore(t.TempDir())
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+		WithWebMCPProductionSelectionStore(selectionStore),
+	)
+	seedBroker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
+	if err != nil {
+		t.Fatalf("construct seed broker: %v", err)
+	}
+	if _, err := seedBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: webmcp.BrowserID(browserID), TargetID: webmcp.TargetID(targetID)}); err != nil {
+		t.Fatalf("seed selection: %v", err)
+	}
+	if err := seedBroker.Close(); err != nil {
+		t.Fatalf("close seed broker: %v", err)
+	}
+	runtime.resetOperations()
+
+	broker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
+	if err != nil {
+		t.Fatalf("construct concurrent session broker: %v", err)
+	}
+	defer func() { _ = broker.Close() }()
+	toolSet := webmcpTools.NewBrokerToolSet(broker)
+	const callers = 6
+	responses := make(chan messages.ToolCallResponse, callers)
+	errorsCh := make(chan error, callers)
+	var group sync.WaitGroup
+	start := make(chan struct{})
+	for index := 0; index < callers; index++ {
+		group.Add(1)
+		go func(index int) {
+			defer group.Done()
+			<-start
+			response, callErr := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
+				ID:        fmt.Sprintf("concurrent-%d", index),
+				Name:      webmcp.GetContextToolName,
+				Arguments: `{}`,
+			})
+			if callErr != nil {
+				errorsCh <- callErr
+				return
+			}
+			responses <- response
+		}(index)
+	}
+	close(start)
+	group.Wait()
+	close(responses)
+	close(errorsCh)
+	for callErr := range errorsCh {
+		t.Fatalf("concurrent first-use error: %v", callErr)
+	}
+	if len(responses) != callers {
+		t.Fatalf("concurrent responses = %d, want %d", len(responses), callers)
+	}
+	for response := range responses {
+		envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+		if err != nil || !envelope.OK {
+			t.Fatalf("concurrent response = %s, decode error=%v", response.Content, err)
+		}
+	}
+	initializer, ok := broker.(SessionCapabilityInitializer)
+	if !ok {
+		t.Fatal("concurrent session broker does not expose capability status")
+	}
+	if status := initializer.SessionCapabilityStatus(); status.State != SessionCapabilityReady || status.Err != nil {
+		t.Fatalf("concurrent capability status = %+v, want ready", status)
+	}
+	// The production composition performs bounded capability probes while
+	// reconnecting and while the broker adopts the exact target. Those probes
+	// are all detached; concurrent first use must not multiply this fixed
+	// restore/adoption sequence or leak a handle.
+	if got := runtime.count("attach"); got != 4 || runtime.sessionCount("close") != got-1 {
+		t.Fatalf("concurrent attach/close count = %d/%d, want one fixed restore sequence plus one live session: %v", got, runtime.sessionCount("close"), runtime.operationSnapshot())
+	}
+}
+
+func TestSessionBrowserBrokerCloseCancelsInitializationAndClosesOnce(t *testing.T) {
+	base := &capabilityBroker{}
+	started := make(chan struct{})
+	broker := &sessionBrowserBroker{
+		Broker:    base,
+		initDone:  make(chan struct{}),
+		initState: SessionCapabilityInitializing,
+		bootstrap: func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	}
+
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- broker.InitializeSession(context.Background()) }()
+	<-started
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- broker.Close() }()
+	if err := <-firstDone; !errors.Is(err, context.Canceled) && !errors.Is(err, webmcp.ErrClosed) {
+		t.Fatalf("initialization cancellation error = %v, want cancellation", err)
+	}
+	if err := <-closeDone; err != nil {
+		t.Fatalf("close after initialization cancellation: %v", err)
+	}
+	if base.closeCalls != 1 {
+		t.Fatalf("underlying broker close calls = %d, want one", base.closeCalls)
+	}
+	status := broker.SessionCapabilityStatus()
+	if status.State != SessionCapabilityFailed || status.Err == nil {
+		t.Fatalf("canceled capability status = %+v, want failed with cancellation", status)
+	}
+	if _, err := broker.Selected(context.Background()); !errors.Is(err, context.Canceled) && !errors.Is(err, webmcp.ErrClosed) {
+		t.Fatalf("post-cancel selection error = %v, want no dispatch after failed bootstrap", err)
 	}
 }
 
