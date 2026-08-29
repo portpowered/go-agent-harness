@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "id": "family-b-corrected-release-note",
+  "name": "Corrected Aurora release note",
+  "family": "B",
+  "persona": "A precise collaborator who corrects an active request",
+  "goal": "Preserve any completed draft work while honoring the corrected final-note request",
+  "wording_freedom": "Use natural wording, but make the correction explicit and preserve the declared action order, paths, and side-effect policy.",
+  "text_seed": "The first request may already have written a draft when the customer changes the destination. Do not hide or silently discard that state.",
+  "image_events": [],
+  "actions": [
+    {
+      "id": "create-draft-release-note",
+      "intent": "Create the original draft release note at draft/brief.md.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Preserve any draft bytes already written when the correction interrupts the explanation, and report that original state explicitly.",
+      "oracle": {
+        "description": "The original draft file exists with its exact content and the replacement path is still absent at the original checkpoint.",
+        "checkpoints": [
+          {
+            "path": "draft/brief.md",
+            "type": "file",
+            "sha256": "c9777d19f569b6c5c9d500d31b707ae1fcee2d1b33a9f797a17917691c3c4769",
+            "content": "# Aurora Release Draft\n\nStatus: draft.\n"
+          },
+          {"path": "final/brief.md", "type": "absent"}
+        ],
+        "require_confirmation": true,
+        "required_text": ["created draft/brief.md"]
+      }
+    },
+    {
+      "id": "create-final-release-note",
+      "intent": "Create the corrected final release note at final/brief.md.",
+      "allowed_dispositions": ["completed"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Complete and independently verify final/brief.md; the original draft must not be mistaken for the replacement.",
+      "oracle": {
+        "description": "The corrected final file exists with its exact content while the preserved original draft remains observable.",
+        "checkpoints": [
+          {
+            "path": "draft/brief.md",
+            "type": "file",
+            "sha256": "c9777d19f569b6c5c9d500d31b707ae1fcee2d1b33a9f797a17917691c3c4769",
+            "content": "# Aurora Release Draft\n\nStatus: draft.\n"
+          },
+          {
+            "path": "final/brief.md",
+            "type": "file",
+            "sha256": "1d13b7646c0630d0775f09d289d2171b5f44767acc03163930fba5bfe67caafc",
+            "content": "# Aurora Release Note\n\nStatus: final.\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["created final/brief.md", "corrected"]
+      }
+    }
+  ],
+  "sandbox": {
+    "name": "fresh-family-b-sandbox",
+    "root": ".",
+    "fresh": true
+  },
+  "interruption_trigger": {
+    "kind": "during_output",
+    "action_id": "create-draft-release-note",
+    "description": "Begin the correction after the original confirmation audio starts but before that response reaches its terminal event.",
+    "before_terminal": true
+  },
+  "patience": {
+    "listen_before_follow_up": 250000000,
+    "response_start": 1000000000,
+    "in_progress_work": 2000000000,
+    "reprompt": 3000000000,
+    "absolute_dead_air": 10000000000,
+    "max_reprompts": 1
+  },
+  "termination": "natural",
+  "deadline": 30000000000
+}
