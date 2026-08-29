@@ -321,7 +321,7 @@ func (s *sessionDurationAdmissionSession) drainSourceAfterClose() {
 			return
 		}
 		s.observeProviderMessage(msg)
-		if isDurationShutdownMessage(msg) {
+		if isDurationForwardMessage(msg) {
 			s.receive.Write(context.Background(), msg)
 		}
 	}
@@ -357,13 +357,13 @@ func (s *sessionDurationAdmissionSession) forward(ctx context.Context) {
 			if admissionOpen {
 				if !s.admission.admit(s.receive, msg) {
 					admissionOpen = false
-					if isDurationShutdownMessage(msg) {
+					if isDurationForwardMessage(msg) {
 						s.receive.Write(context.Background(), msg)
 					}
 				}
 				continue
 			}
-			if isDurationShutdownMessage(msg) {
+			if isDurationForwardMessage(msg) {
 				s.receive.Write(context.Background(), msg)
 			}
 		}
@@ -383,14 +383,18 @@ func (s *sessionDurationAdmissionSession) drainSource(source *messages.TypedBuff
 			}
 			admissionOpen = false
 		}
-		if isDurationShutdownMessage(msg) {
+		if isDurationForwardMessage(msg) {
 			s.receive.Write(context.Background(), msg)
 		}
 	}
 }
 
 func isDurationShutdownMessage(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeSessionClose || msg.Type == messages.StreamTypeError
+	return msg.Type == messages.StreamTypeSessionClose || isTerminalErrorMessage(msg)
+}
+
+func isDurationForwardMessage(msg messages.StreamMessage) bool {
+	return isDurationShutdownMessage(msg) || msg.Type == messages.StreamTypeError
 }
 
 func (s *sessionDurationAdmissionSession) closeDone() {

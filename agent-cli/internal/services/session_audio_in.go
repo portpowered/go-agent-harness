@@ -627,7 +627,7 @@ func isSessionCancellation(err error) bool {
 // shouldStopAudioInputSessionLoop applies audio-aware stop rules. Before the
 // end-of-turn signal is accepted, only a provider-initiated SESSION.CLOSE may
 // stop the run. Once awaitingResponse is set (end-of-turn delivered after
-// local EOF), only a completed non-tool assistant response, an explicit ERROR,
+// local EOF), only a completed non-tool assistant response, a terminal ERROR,
 // or a provider SESSION.CLOSE ends the session. When the session has a real
 // executor, the provider's tool-call MESSAGE.END and the ToolRunner's
 // RoleTool MESSAGE.END are intermediate boundaries and must not stop the
@@ -640,7 +640,7 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 		return true
 	}
 	if opts.WaitForClose {
-		return msg.Type == messages.StreamTypeError || msg.Type == messages.StreamTypeSessionClose
+		return isTerminalErrorMessage(msg) || msg.Type == messages.StreamTypeSessionClose
 	}
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
@@ -653,10 +653,10 @@ func shouldStopAudioInputSessionLoop(msg messages.StreamMessage, opts sessionLoo
 			}
 		}
 		return true
-	case messages.StreamTypeError, messages.StreamTypeSessionClose:
+	case messages.StreamTypeSessionClose:
 		return true
 	default:
-		return false
+		return isTerminalErrorMessage(msg)
 	}
 }
 

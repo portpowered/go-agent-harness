@@ -14,6 +14,11 @@ import (
 
 const conversationItemCreateEvent = models.SessionEventType("conversation.item.create")
 
+const (
+	realtimeInvalidRequestErrorType     = "invalid_request_error"
+	realtimeResponseCancelNotActiveCode = "response_cancel_not_active"
+)
+
 func parseRealtimeServerEvent(raw []byte) (models.SessionEvent, error) {
 	var envelope struct {
 		Type string `json:"type"`
@@ -136,20 +141,27 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		if msg == "" {
 			msg = "session error"
 		}
-		value := messages.NewErrorValueWithTerminal(
-			msg,
-			providers.SessionErrorClassification(
-				firstStringField(event.Data, "error.type"),
-				firstStringField(event.Data, "error.code"),
-			),
-			messages.TerminalReasonTerminalFailure,
-			messages.TerminalProvenanceProvider,
-			messages.TerminalOutputNone,
-		)
-		value.ErrorType = firstStringField(event.Data, "error.type")
-		value.Code = firstStringField(event.Data, "error.code")
-		value.Param = firstStringField(event.Data, "error.param")
-		value.EventID = firstStringField(event.Data, "error.event_id")
+		errorType := firstStringField(event.Data, "error.type")
+		code := firstStringField(event.Data, "error.code")
+		param := firstStringField(event.Data, "error.param")
+		eventID := firstStringField(event.Data, "error.event_id")
+		var value *messages.ErrorValue
+		if errorType == realtimeInvalidRequestErrorType && code == realtimeResponseCancelNotActiveCode {
+			value = messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
+			value.Classification = providers.ErrorClassResponseCancelNotActive
+		} else {
+			value = messages.NewErrorValueWithTerminal(
+				msg,
+				providers.SessionErrorClassification(errorType, code),
+				messages.TerminalReasonTerminalFailure,
+				messages.TerminalProvenanceProvider,
+				messages.TerminalOutputNone,
+			)
+			value.ErrorType = errorType
+			value.Code = code
+			value.Param = param
+			value.EventID = eventID
+		}
 		return []messages.StreamMessage{{
 			Type:  messages.StreamTypeError,
 			Value: value,

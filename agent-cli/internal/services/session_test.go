@@ -455,6 +455,16 @@ func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.
 	}
 }
 
+func TestWriteSessionReplayMessage_IgnoresNonTerminalDiagnostic(t *testing.T) {
+	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
+	})
+	if err != nil {
+		t.Fatalf("nonterminal diagnostic became a replay error: %v", err)
+	}
+}
+
 type stubInferencer struct{}
 
 func (stubInferencer) Infer(context.Context, messages.InferenceRequest) (messages.InferenceResult, error) {

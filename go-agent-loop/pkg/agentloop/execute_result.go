@@ -263,7 +263,9 @@ func (s *chanStream) recordEvent(item streamEvent) {
 	if item.err != nil {
 		s.setTerminalError(item.err)
 	} else if item.event.Type == messages.StreamTypeError {
-		s.setTerminalError(errorFromStreamEvent(item.event))
+		if value, ok := item.event.Value.(*messages.ErrorValue); !ok || value.IsTerminal() {
+			s.setTerminalError(errorFromStreamEvent(item.event))
+		}
 	} else if item.event.Type == messages.StreamTypeMessageEnd {
 		if v, ok := item.event.Value.(*messages.MessageEndValue); ok {
 			s.source = messages.MessageEndTerminalSource(v)

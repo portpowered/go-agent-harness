@@ -21,9 +21,10 @@ import (
 type mockWebSocketConn struct {
 	mu sync.Mutex
 
-	serverMessages [][]byte
-	readIdx        int
-	clientMessages [][]byte
+	serverMessages  [][]byte
+	readIdx         int
+	clientMessages  [][]byte
+	clientMessageCh chan []byte
 
 	closed    bool
 	readBlock chan struct{}
@@ -31,7 +32,10 @@ type mockWebSocketConn struct {
 }
 
 func newMockWebSocketConn() *mockWebSocketConn {
-	return &mockWebSocketConn{readBlock: make(chan struct{})}
+	return &mockWebSocketConn{
+		readBlock:       make(chan struct{}),
+		clientMessageCh: make(chan []byte, 64),
+	}
 }
 
 func (c *mockWebSocketConn) addServerEvent(eventType string, fields map[string]any) {
@@ -76,7 +80,12 @@ func (c *mockWebSocketConn) WriteMessage(_ int, data []byte) error {
 	if c.writeErr != nil {
 		return c.writeErr
 	}
-	c.clientMessages = append(c.clientMessages, data)
+	payload := append([]byte(nil), data...)
+	c.clientMessages = append(c.clientMessages, payload)
+	select {
+	case c.clientMessageCh <- payload:
+	default:
+	}
 	return nil
 }
 
@@ -860,6 +869,108 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 	}
 }
 
+func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *testing.T) {
+	conn := newMockWebSocketConn()
+	dialer := &mockWebSocketDialer{conn: conn}
+	provider := New(
+		WithAPIKey("test-key"),
+		WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"),
+		WithWebSocketDialer(dialer),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	session, err := provider.ConnectSession(ctx, models.SessionConfig{Model: "gpt-realtime"})
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	var initial struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn), &initial); err != nil {
+		t.Fatalf("unmarshal initial client event: %v", err)
+	}
+	if initial.Type != string(models.SessionEventSessionUpdate) {
+		t.Fatalf("initial client event type = %q, want %q", initial.Type, models.SessionEventSessionUpdate)
+	}
+
+	if !session.Send(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCancel,
+		Value: messages.NewResponseCancelValue(),
+	}) {
+		t.Fatal("sending response cancel returned false")
+	}
+	var cancelEvent struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(waitForClientMessage(t, ctx, conn), &cancelEvent); err != nil {
+		t.Fatalf("unmarshal response.cancel event: %v", err)
+	}
+	if cancelEvent.Type != string(models.SessionEventResponseCancel) {
+		t.Fatalf("cancel client event type = %q, want %q", cancelEvent.Type, models.SessionEventResponseCancel)
+	}
+
+	conn.addServerEvent("error", map[string]any{
+		"error": map[string]any{
+			"type":     "invalid_request_error",
+			"code":     "response_cancel_not_active",
+			"param":    "response.cancel",
+			"event_id": "evt-cancel-1",
+			"message":  "Can only cancel an active response.",
+		},
+	})
+	got, ok := session.Receive().ReadBlockingContext(ctx)
+	if !ok {
+		t.Fatal("timed out waiting for inactive-cancel diagnostic")
+	}
+	if got.Type != messages.StreamTypeError {
+		t.Fatalf("diagnostic type = %q, want %q", got.Type, messages.StreamTypeError)
+	}
+	diagnostic, ok := got.Value.(*messages.ErrorValue)
+	if !ok || diagnostic == nil {
+		t.Fatalf("diagnostic value = %T, want *messages.ErrorValue", got.Value)
+	}
+	if diagnostic.IsTerminal() || diagnostic.Classification != providers.ErrorClassResponseCancelNotActive ||
+		diagnostic.ErrorType != "invalid_request_error" || diagnostic.Code != "response_cancel_not_active" ||
+		diagnostic.Param != "response.cancel" || diagnostic.EventID != "evt-cancel-1" {
+		t.Fatalf("inactive-cancel diagnostic = %#v", diagnostic)
+	}
+	select {
+	case <-session.Done():
+		t.Fatal("inactive-cancel diagnostic terminated the session")
+	default:
+	}
+
+	conn.addServerEvent("response.created", nil)
+	conn.addServerEvent("response.output_text.delta", map[string]any{"delta": "still alive"})
+	conn.addServerEvent("response.output_text.done", nil)
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"status": "completed"}})
+	wantTypes := []messages.StreamMessageType{
+		messages.StreamTypeMessageStart,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeMessageEnd,
+	}
+	for _, wantType := range wantTypes {
+		got, ok = session.Receive().ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatalf("timed out waiting for %s after inactive-cancel diagnostic", wantType)
+		}
+		if got.Type != wantType {
+			t.Fatalf("event after diagnostic = %q, want %q", got.Type, wantType)
+		}
+	}
+	end, ok := got.Value.(*messages.MessageEndValue)
+	if !ok || end == nil {
+		t.Fatalf("final event value = %T, want *MessageEndValue", got.Value)
+	}
+	if end.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
+		t.Fatalf("final MESSAGE.END terminal reason = %q, want provider completion", end.TerminalReason)
+	}
+}
+
 func TestConnectSession_SurfacesUnexpectedWebSocketReadError(t *testing.T) {
 	readErr := errors.New("websocket: close 1008 (policy violation): invalid API key")
 	dialer := &readErrorWebSocketDialer{conn: &readErrorWebSocketConn{err: readErr}}
@@ -1006,6 +1117,17 @@ func waitForClientMessages(t *testing.T, conn *mockWebSocketConn, want int) [][]
 	messages := conn.getClientMessages()
 	t.Fatalf("timed out waiting for %d client messages, got %d", want, len(messages))
 	return nil
+}
+
+func waitForClientMessage(t *testing.T, ctx context.Context, conn *mockWebSocketConn) []byte {
+	t.Helper()
+	select {
+	case data := <-conn.clientMessageCh:
+		return data
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for client message: %v", ctx.Err())
+		return nil
+	}
 }
 
 func TestConnectSession_InvalidRealtimeEndpointFailsBeforeDial(t *testing.T) {

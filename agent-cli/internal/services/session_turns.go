@@ -217,6 +217,9 @@ func readTurnResponse(ctx context.Context, session messages.Session) (messages.M
 		switch msg.Type {
 		case messages.StreamTypeError:
 			value, _ := msg.Value.(*messages.ErrorValue)
+			if value != nil && value.IsNonTerminal() {
+				continue
+			}
 			if value != nil && value.Err != nil {
 				return messages.Message{}, value.Err
 			}

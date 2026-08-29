@@ -112,6 +112,18 @@ func runReplayFixture(t *testing.T, fixture string) sessionDiagnosticArtifacts {
 	})
 }
 
+func TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
+	})
+
+	if observer.failure != nil {
+		t.Fatalf("nonterminal provider diagnostic became a session failure: %#v", observer.failure)
+	}
+}
+
 // failureSignature is the identifying structured signature of one closed-set
 // failure mode: exact field values on the single canonical failure record.
 type failureSignature struct {

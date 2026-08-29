@@ -31,6 +31,9 @@ func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error 
 			return err
 		}
 	case *messages.ErrorValue:
+		if v.IsNonTerminal() {
+			return nil
+		}
 		fields := sessionTerminalFields(v.Classification, v.TerminalReason, v.TerminalProvenance, v.OutputState)
 		if v.Message != "" {
 			if fields != "" {
@@ -44,6 +47,14 @@ func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error 
 		return fmt.Errorf("session error")
 	}
 	return nil
+}
+
+func isTerminalErrorMessage(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeError {
+		return false
+	}
+	value, ok := msg.Value.(*messages.ErrorValue)
+	return !ok || value.IsTerminal()
 }
 
 func sessionTerminalFields(classification string, reason messages.TerminalReason, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) string {

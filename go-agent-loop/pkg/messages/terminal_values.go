@@ -136,9 +136,13 @@ func NewSynthesizedMessageEndValue(usage TokenUsage) *MessageEndValue {
 
 // ErrorValue is the value for ERROR (inner type "error").
 type ErrorValue struct {
-	Type               string              `json:"type"`                     // "error"
-	Message            string              `json:"message"`                  // error description
-	Classification     string              `json:"classification,omitempty"` // public gateway taxonomy classification
+	Type           string `json:"type"`                     // "error"
+	Message        string `json:"message"`                  // error description
+	Classification string `json:"classification,omitempty"` // public gateway taxonomy classification
+	// NonTerminal marks an informational provider diagnostic that does not end
+	// the stream or session. Error values remain terminal by default for
+	// backwards compatibility; producers must opt into this behavior explicitly.
+	NonTerminal        bool                `json:"non_terminal,omitempty"`
 	TerminalReason     TerminalReason      `json:"terminal_reason,omitempty"`
 	TerminalProvenance TerminalProvenance  `json:"terminal_provenance,omitempty"`
 	OutputState        TerminalOutputState `json:"output_state,omitempty"`
@@ -151,6 +155,19 @@ type ErrorValue struct {
 
 func (*ErrorValue) streamMessageValue() {}
 
+// IsNonTerminal reports whether the error is an informational diagnostic that
+// must not terminate the stream or session.
+func (v *ErrorValue) IsNonTerminal() bool {
+	return v != nil && v.NonTerminal
+}
+
+// IsTerminal reports whether the error ends the stream or session. A nil error
+// value is treated as terminal to preserve the legacy behavior of typed ERROR
+// values whose payload is unexpectedly nil.
+func (v *ErrorValue) IsTerminal() bool {
+	return v == nil || !v.NonTerminal
+}
+
 // NewErrorValue returns a value for ERROR.
 func NewErrorValue(message string) *ErrorValue {
 	return &ErrorValue{Type: "error", Message: message}
@@ -160,6 +177,17 @@ func NewErrorValue(message string) *ErrorValue {
 // taxonomy classification for stream/event consumers.
 func NewErrorValueWithClassification(message, classification string) *ErrorValue {
 	return &ErrorValue{Type: "error", Message: message, Classification: classification}
+}
+
+// NewNonTerminalErrorValue returns an informational ERROR diagnostic. It is
+// intentionally opt-in; ordinary ERROR values continue to terminate streams.
+func NewNonTerminalErrorValue(message, classification string) *ErrorValue {
+	return &ErrorValue{
+		Type:           "error",
+		Message:        message,
+		Classification: classification,
+		NonTerminal:    true,
+	}
 }
 
 // NewErrorValueWithTerminal returns an ERROR value with public error
@@ -195,6 +223,20 @@ func NewErrorValueWithDetails(message, errorType, code, param, eventID string) *
 		Code:      code,
 		Param:     param,
 		EventID:   eventID,
+	}
+}
+
+// NewNonTerminalErrorValueWithDetails returns an informational ERROR
+// diagnostic with bounded provider error details.
+func NewNonTerminalErrorValueWithDetails(message, errorType, code, param, eventID string) *ErrorValue {
+	return &ErrorValue{
+		Type:        "error",
+		Message:     message,
+		ErrorType:   errorType,
+		Code:        code,
+		Param:       param,
+		EventID:     eventID,
+		NonTerminal: true,
 	}
 }
 

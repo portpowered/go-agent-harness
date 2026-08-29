@@ -794,8 +794,9 @@ func (r *ModelRunner) writeDelta(ctx context.Context, sm messages.StreamMessage)
 }
 
 // drainStream forwards each StreamMessage from the inferencer channel to DeltaOutbox.
-// It stops on MESSAGE.END, ERROR, or channel close (emitting a synthetic MESSAGE.END in
-// the latter case so the ordering layer always sees a complete message boundary).
+// It stops on MESSAGE.END, terminal ERROR, or channel close (emitting a synthetic
+// MESSAGE.END in the latter case so the ordering layer always sees a complete message
+// boundary). Nonterminal ERROR diagnostics are forwarded and do not stop the stream.
 func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan messages.StreamMessage) {
 	hasOutput := false
 	for {
@@ -846,9 +847,13 @@ func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan m
 			if isOutputDelta(msg) {
 				hasOutput = true
 			}
-			switch msg.Value.(type) {
-			case *messages.MessageEndValue, *messages.ErrorValue:
+			switch value := msg.Value.(type) {
+			case *messages.MessageEndValue:
 				return
+			case *messages.ErrorValue:
+				if value.IsTerminal() {
+					return
+				}
 			}
 		}
 	}
@@ -966,6 +971,9 @@ func normalizeProviderTerminalMessage(msg messages.StreamMessage, hasOutput bool
 			value.OutputState = messages.TerminalOutputComplete
 		}
 	case *messages.ErrorValue:
+		if value.IsNonTerminal() {
+			break
+		}
 		if value.TerminalReason == "" {
 			value.TerminalReason = messages.TerminalReasonTerminalFailure
 		}

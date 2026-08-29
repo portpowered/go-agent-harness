@@ -303,6 +303,13 @@ func TestShouldStopAudioInputAwaitingResponseSemantics(t *testing.T) {
 			}
 		})
 	}
+	nonTerminalError := messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
+	}
+	if shouldStopAudioInputSessionLoop(nonTerminalError, sessionLoopOptions{}, false, true) {
+		t.Fatal("nonterminal provider diagnostic stopped the awaiting audio session")
+	}
 }
 
 func TestShouldStopAudioInputSessionLoopWaitsForFinalAssistantResponse(t *testing.T) {
