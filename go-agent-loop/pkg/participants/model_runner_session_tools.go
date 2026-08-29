@@ -50,10 +50,15 @@ func (r *ModelRunner) sendLatestUserTextOnly(ctx context.Context, session messag
 		if msg.Role != messages.RoleUser {
 			continue
 		}
-		text := msg.TextContent()
-		if text == "" {
+		// A message with an explicit TextPart is a valid user turn even when
+		// its text is empty. This distinction is required by replay, where an
+		// explicitly recorded empty prompt must still produce its captured
+		// conversation.item.create frame. A message with no text part remains
+		// ineligible for this text-only fallback.
+		if !msg.HasText() {
 			return false
 		}
+		text := msg.TextContent()
 		session.Send(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Value: messages.NewTextDeltaValue(text),

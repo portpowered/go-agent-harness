@@ -125,7 +125,7 @@ func TestModelRunner_SendLatestUserTextPicksNewestUserText(t *testing.T) {
 	}
 }
 
-func TestModelRunner_SendLatestUserTextSkipsEmptyAndNonUserMessages(t *testing.T) {
+func TestModelRunner_SendLatestUserTextSkipsTextlessAndNonUserMessages(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
 	ctx := context.Background()
@@ -142,14 +142,14 @@ func TestModelRunner_SendLatestUserTextSkipsEmptyAndNonUserMessages(t *testing.T
 	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{
 		Messages: []messages.Message{
 			messages.NewTextMessage(messages.RoleUser, "real"),
-			messages.NewTextMessage(messages.RoleUser, ""),
+			{Role: messages.RoleUser},
 		},
 	})
-	// The newest user message has empty text, so the search stops before
+	// The newest user message has no text part, so the search stops before
 	// reaching the older non-empty one: nothing is sent.
 	sent := session.sentMessages()
 	if len(sent) != 0 {
-		t.Fatalf("empty-text user message must stop the search without sending; got %d sends", len(sent))
+		t.Fatalf("textless user message must stop the search without sending; got %d sends", len(sent))
 	}
 
 	runner.sendLatestUserText(ctx, session, messages.InferenceRequest{
@@ -160,6 +160,24 @@ func TestModelRunner_SendLatestUserTextSkipsEmptyAndNonUserMessages(t *testing.T
 	})
 	if sent = session.sentMessages(); len(sent) != 1 {
 		t.Fatalf("sent %d messages, want 1 for older user text after non-user skip", len(sent))
+	}
+}
+
+func TestModelRunner_SendLatestUserTextPreservesExplicitEmptyTextPart(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	runner.sendLatestUserText(context.Background(), session, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "")},
+	})
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeTextDelta {
+		t.Fatalf("explicit empty text sends = %#v, want one TEXT.DELTA", sent)
+	}
+	value, ok := sent[0].Value.(*messages.TextDeltaValue)
+	if !ok || value.Content != "" {
+		t.Fatalf("explicit empty text value = %#v, want empty TextDeltaValue", sent[0].Value)
 	}
 }
 
