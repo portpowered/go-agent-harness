@@ -329,7 +329,7 @@ stable validation codes, never the offending input value.
 | `target_attach_failed` | The broker cannot attach or initialize the selected target before dispatch. | true | `{"browser_id":string,"target_id":string,"phase":string,"reason_code":string}` |
 | `target_detached` | The selected target detached while an operation was in progress. | false | `{"browser_id":string,"target_id":string,"generation":number,"reason":string}` |
 | `page_navigated` | The page generation changed during an operation, invalidating its catalog context. | false | `{"browser_id":string,"target_id":string,"previous_generation":number,"current_generation":number}` |
-| `invocation_failed` | The page handler or browser command returned a failure after invocation was dispatched. | false | `{"invocation_id":string,"tool_ref":string,"phase":string,"page_error_code":string,"side_effect_unknown":true}` |
+| `invocation_failed` | The page handler or browser command returned a failure after invocation was dispatched. | false | `{"invocation_id":string,"tool_ref":string?,"browser_id":string?,"target_id":string?,"phase":string,"cancel_phase":string?,"outcome":string?,"terminal_observed":boolean?,"page_error_code":string?,"side_effect_unknown":true}` |
 | `invocation_canceled` | The invocation was canceled by the user, policy, session, or explicit cancel call. | false | `{"invocation_id":string,"cancel_source":string}` |
 | `invocation_timed_out` | The invocation exceeded its configured deadline. | false | `{"invocation_id":string,"timeout_ms":number,"phase":string,"side_effect_unknown":true}` |
 | `invocation_orphaned` | The target or broker closed before a terminal page response could be observed. | false | `{"invocation_id":string,"target_id":string,"generation":number,"terminal_observed":false}` |
@@ -349,6 +349,17 @@ No error detail may include a CDP authorization token, a raw websocket URL, a
 credential-bearing endpoint, raw invocation arguments, raw page output, or
 unredacted query/fragment data. Candidate IDs and operation IDs are safe to
 return because they are opaque broker identifiers.
+
+For the fresh-process direct cancellation command, `invocation_failed`
+is the C0-compatible non-retryable code for a correlated `Completed` or
+`Error` terminal (`outcome: "completed_anyway"`) and for a missing
+terminal (`outcome: "cancellation_unconfirmed"`). Both outcomes include
+`cancel_phase: "cancel_dispatched"`, `terminal_observed`, and
+`side_effect_unknown: true`. A confirmed cancellation is successful only
+when the exact target reports `Canceled` for the same invocation ID; target
+detach, page navigation, browser disconnect, and event-stream loss retain their
+distinct existing C0 codes. Direct cancellation never copies page output into
+the error details.
 
 ## 3. Supersession and rationale
 

@@ -132,6 +132,8 @@ type WebMCPDirectInvocation struct {
 type WebMCPDirectCancelData struct {
 	InvocationID string `json:"invocation_id"`
 	Status       string `json:"status"`
+	Phase        string `json:"phase,omitempty"`
+	Outcome      string `json:"outcome,omitempty"`
 }
 
 type WebMCPDirectEvent struct {
@@ -580,9 +582,10 @@ Two-process flow:
   agent webmcp invoke --tool-ref <tool-ref> --input-json '{}' --json
   agent webmcp cancel --invocation <receipt-invocation-id> --json
 
-The receipt is on stderr and the one final cancel result is on stdout. A
-successful cancel is a request, not proof of rollback; stale selection or
-browser rejection is reported as a classified non-zero result.`,
+The receipt is on stderr and the one final cancel result is on stdout. The
+result is successful only after the exact target reports terminal Canceled.
+Completed or Error is a non-retryable completed-anyway result, while a missing
+terminal or lifecycle loss is classified with side_effect_unknown.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -612,26 +615,38 @@ browser rejection is reported as a classified non-zero result.`,
 				if _, err := selectDirectTarget(ctx, broker, selector, false); err != nil {
 					return nil, err
 				}
+				cancelCtx := ctx
+				var cancelContext context.CancelFunc
+				if values.timeout > 0 {
+					cancelCtx, cancelContext = context.WithTimeout(ctx, values.timeout)
+					defer cancelContext()
+				}
 				request := webmcp.CancelRequest{InvocationID: webmcp.InvocationID(invocationID), Reason: values.reason}
 				if directCanceller, ok := broker.(webmcp.DirectCanceller); ok {
-					err = directCanceller.CancelDirect(ctx, webmcp.DirectCancelRequest{
+					err = directCanceller.CancelDirect(cancelCtx, webmcp.DirectCancelRequest{
 						Target:       selector,
 						InvocationID: request.InvocationID,
 						Reason:       request.Reason,
 					})
 				} else {
-					err = broker.Cancel(ctx, request)
+					err = broker.Cancel(cancelCtx, request)
 				}
 				if err != nil {
 					return nil, err
 				}
-				return WebMCPDirectCancelData{InvocationID: invocationID, Status: "cancel_requested"}, nil
+				return WebMCPDirectCancelData{
+					InvocationID: invocationID,
+					Status:       "canceled",
+					Phase:        "terminal",
+					Outcome:      "confirmed_canceled",
+				}, nil
 			})
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
 	cmd.Flags().StringVar(&values.invocationID, "invocation", "", "Exact invocation ID")
 	cmd.Flags().StringVar(&values.reason, "reason", "direct CLI cancellation", "User-facing cancellation reason")
+	cmd.Flags().DurationVar(&values.timeout, "timeout", 0, "Bound cancellation reconciliation duration (Go duration)")
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
 	return cmd
 }
@@ -1215,35 +1230,4 @@ func directTargetPolicyError(target webmcp.Target, browser config.BrowserConfig)
 		})
 	}
 	return nil
-}
-
-func (c *WebMCPOperationsCommand) loadDirectSelection() (WebMCPSelection, error) {
-	store, err := c.selectionStore()
-	if err != nil {
-		return WebMCPSelection{}, err
-	}
-	return store.Load()
-}
-
-func (c *WebMCPOperationsCommand) saveDirectSelection(selection WebMCPSelection) error {
-	store, err := c.selectionStore()
-	if err != nil {
-		return err
-	}
-	return store.Save(selection)
-}
-
-func (c *WebMCPOperationsCommand) selectionStore() (WebMCPSelectionStore, error) {
-	if c != nil && c.SelectionStore != nil {
-		return c.SelectionStore, nil
-	}
-	configDir := ""
-	if c != nil && c.globalFlags != nil {
-		configDir = c.globalFlags.ConfigDir()
-	}
-	store := NewFileWebMCPSelectionStore(configDir)
-	if store.Path == "" {
-		return nil, errors.New("WebMCP selection store is unavailable")
-	}
-	return store, nil
 }

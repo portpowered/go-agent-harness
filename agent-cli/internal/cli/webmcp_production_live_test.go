@@ -194,7 +194,7 @@ browser:
 	cancelEnvelope := requireDirectSuccess(t, cancelResult)
 	var cancelData WebMCPDirectCancelData
 	decodeDirectData(t, cancelEnvelope.Data, &cancelData)
-	if cancelData.InvocationID != string(browserInvocationID) || cancelData.Status != "cancel_requested" {
+	if cancelData.InvocationID != string(browserInvocationID) || cancelData.Status != "canceled" || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
 		t.Fatalf("live cancellation result = %+v", cancelData)
 	}
 
