@@ -289,7 +289,7 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 				"phase":      "select",
 			})
 		}
-		return webmcp.EncodeToolResult(contextDataFrom(selected), nil)
+		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
 
 	case webmcp.ListToolsToolName:
 		options := webmcp.ListToolsOptions{
@@ -699,6 +699,14 @@ type contextData struct {
 	Ready      bool             `json:"ready"`
 }
 
+// selectionData makes the next model action explicit after a target is
+// selected. The page catalog remains dynamic, so callers must ask the broker
+// for current tool refs instead of guessing from the selection context.
+type selectionData struct {
+	contextData
+	NextStep string `json:"next_step"`
+}
+
 func contextDataFrom(context webmcp.PageContext) contextData {
 	return contextData{
 		BrowserID:  context.Key.BrowserID,
@@ -709,6 +717,13 @@ func contextDataFrom(context webmcp.PageContext) contextData {
 		Generation: context.Generation,
 		Connected:  context.Connected,
 		Ready:      context.Ready,
+	}
+}
+
+func selectionDataFrom(context webmcp.PageContext) selectionData {
+	return selectionData{
+		contextData: contextDataFrom(context),
+		NextStep:    "selected; call webmcp_list_tools to obtain tool refs",
 	}
 }
 

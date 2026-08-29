@@ -185,6 +185,37 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 		t.Fatalf("context golden = %s", response.Content)
 	}
 
+	response, err = executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "call-select",
+		Name:      webmcp.SelectTabToolName,
+		Arguments: `{"browser_id":"browser-a","target_id":"tab-a","activate":true}`,
+	})
+	if err != nil {
+		t.Fatalf("select tab: %v", err)
+	}
+	assertTextualResponse(t, response, "call-select", webmcp.SelectTabToolName)
+	var selected struct {
+		BrowserID webmcp.BrowserID `json:"browser_id"`
+		TargetID  webmcp.TargetID  `json:"target_id"`
+		NextStep  string           `json:"next_step"`
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode select result: %v", err)
+	}
+	if !envelope.OK {
+		t.Fatalf("select envelope = %#v, want success", envelope)
+	}
+	if err := json.Unmarshal(envelope.Data, &selected); err != nil {
+		t.Fatalf("decode select data: %v", err)
+	}
+	if selected.BrowserID != "browser-a" || selected.TargetID != "tab-a" || selected.NextStep != "selected; call webmcp_list_tools to obtain tool refs" {
+		t.Fatalf("select data = %+v, want exact selection and next step", selected)
+	}
+	if len(broker.calls) == 0 || broker.calls[len(broker.calls)-1] != "select_with_options" {
+		t.Fatalf("select broker calls = %#v, want select_with_options", broker.calls)
+	}
+
 	response, err = executor.Execute(context.Background(), messages.ToolCall{ID: "call-invoke", Name: webmcp.InvokeToolName, Arguments: `{"tool_ref":"webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw","input_json":"{\"count\":90071992547409931234567890}","reason":"read it"}`})
 	if err != nil {
 		t.Fatalf("invoke: %v", err)
