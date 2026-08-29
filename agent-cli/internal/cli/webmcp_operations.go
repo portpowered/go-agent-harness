@@ -892,23 +892,14 @@ func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) conf
 }
 
 func discoverDirectBrowsers(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig, browserID string) ([]webmcp.BrowserCandidate, error) {
-	if broker == nil {
-		return nil, webmcpRuntimeUnavailableError("discovery")
-	}
-	candidates, err := broker.Discover(ctx, webmcp.DiscoverOptions{
-		BrowserID:        webmcp.BrowserID(browserID),
-		ExplicitOnly:     browser.Connection.CDPURL != "" || browser.Connection.WSEndpoint != "",
-		AllowProcessScan: browser.Connection.AllowProcessScan,
-		AllowRemoteCDP:   browser.Connection.AllowRemoteCDP,
-	})
+	candidates, err := discoverDirectCandidates(ctx, broker, browser)
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	if browserID != "" {
 		for _, candidate := range candidates {
 			if string(candidate.ID) == browserID {
-				return candidates, nil
+				return []webmcp.BrowserCandidate{candidate}, nil
 			}
 		}
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the selected browser is no longer current", map[string]any{
@@ -918,6 +909,22 @@ func discoverDirectBrowsers(ctx context.Context, broker webmcp.Broker, browser c
 			"reason":              "browser_not_found",
 		})
 	}
+	return candidates, nil
+}
+
+func discoverDirectCandidates(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) ([]webmcp.BrowserCandidate, error) {
+	if broker == nil {
+		return nil, webmcpRuntimeUnavailableError("discovery")
+	}
+	candidates, err := broker.Discover(ctx, webmcp.DiscoverOptions{
+		ExplicitOnly:     browser.Connection.CDPURL != "" || browser.Connection.WSEndpoint != "",
+		AllowProcessScan: browser.Connection.AllowProcessScan,
+		AllowRemoteCDP:   browser.Connection.AllowRemoteCDP,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
 	if len(candidates) == 0 {
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
 			"endpoint_kind": endpointKindFor(browser),
@@ -958,10 +965,10 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		}
 	}
 
-	candidates, err := discoverDirectBrowsers(ctx, broker, browser, browserID)
+	candidates, err := discoverDirectCandidates(ctx, broker, browser)
 	if err != nil {
 		if stored != nil {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "browser_not_found", err)
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "browser_not_found", err)
 		}
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 	}
@@ -985,22 +992,35 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		}
 	}
 	if candidate.ID == "" {
+		if stored != nil {
+			if reason, replacement := directReplacementReason(candidates, browser, *stored); replacement {
+				return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, reason, nil)
+			}
+		}
 		err := webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the selected browser is no longer current", map[string]any{
 			"browser_id":          browserID,
 			"target_id":           targetID,
-			"selected_generation": uint64(0),
+			"selected_generation": persistedSelectionGeneration(stored),
 			"reason":              "browser_not_found",
 		})
 		if stored != nil {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "browser_not_found", err)
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "browser_not_found", err)
 		}
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
+	}
+	if stored != nil {
+		if stored.EndpointID != "" && stored.EndpointID != string(candidate.ID) {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "endpoint_changed", nil)
+		}
+		if stored.BrowserInstanceID != candidate.BrowserInstanceID && (stored.BrowserInstanceID != "" || candidate.BrowserInstanceID != "") {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "browser_instance_changed", nil)
+		}
 	}
 
 	targets, err := broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
 	if err != nil {
 		if stored != nil {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "target_list_failed", err)
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "target_list_failed", err)
 		}
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 	}
@@ -1027,7 +1047,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 				"reason":              "target_not_found",
 			})
 			if stored != nil {
-				return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "target_not_found", err)
+				return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "target_not_found", err)
 			}
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 		}
@@ -1085,20 +1105,14 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "")
 	}
 	if stored != nil {
-		if stored.EndpointID != "" && stored.EndpointID != string(candidate.ID) {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "endpoint_changed", nil)
-		}
-		if stored.BrowserInstanceID != "" && stored.BrowserInstanceID != candidate.BrowserInstanceID {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "browser_instance_changed", nil)
-		}
 		if stored.Origin != "" && safeOrigin(stored.Origin) != safeOrigin(target.Origin) {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "origin_changed", nil)
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "origin_changed", nil)
 		}
 		if stored.ContinuityMarker != "" && target.ContinuityMarker != "" && stored.ContinuityMarker != target.ContinuityMarker {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "continuity_changed", nil)
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "continuity_changed", nil)
 		}
 		if stored.Generation != 0 && target.Generation != 0 && stored.Generation != target.Generation {
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "generation_changed", nil)
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionErrorAtGeneration(browserID, targetID, stored.Generation, "generation_changed", nil)
 		}
 	}
 	if err := directTargetPolicyError(*target, browser); err != nil {
@@ -1150,6 +1164,10 @@ func boundedDirectReason(value string) string {
 }
 
 func stalePersistedSelectionError(browserID, targetID, reason string, cause error) error {
+	return stalePersistedSelectionErrorAtGeneration(browserID, targetID, 0, reason, cause)
+}
+
+func stalePersistedSelectionErrorAtGeneration(browserID, targetID string, generation uint64, reason string, cause error) error {
 	if phase, disconnected := persistedBrowserLossPhase(reason, cause); disconnected {
 		details := map[string]any{
 			"browser_id":         browserID,
@@ -1164,12 +1182,28 @@ func stalePersistedSelectionError(browserID, targetID, reason string, cause erro
 	details := map[string]any{
 		"browser_id":          browserID,
 		"target_id":           targetID,
-		"selected_generation": uint64(0),
+		"selected_generation": generation,
 		"reason":              reason,
 	}
-	err := webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the persisted browser target selection is no longer current", details)
+	err := webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, stalePersistedSelectionMessage(reason), details)
 	err.Cause = cause
 	return err
+}
+
+func stalePersistedSelectionMessage(reason string) string {
+	switch reason {
+	case "browser_instance_changed", "endpoint_changed":
+		return "the selected browser was replaced; rediscover and explicitly select a browser target"
+	default:
+		return "the persisted browser target selection is no longer current"
+	}
+}
+
+func persistedSelectionGeneration(selection *WebMCPSelection) uint64 {
+	if selection == nil {
+		return 0
+	}
+	return selection.Generation
 }
 
 func persistedBrowserLossPhase(reason string, cause error) (string, bool) {

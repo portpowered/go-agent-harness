@@ -285,6 +285,15 @@ func randomizedWebMCPTestID(t *testing.T, prefix string) string {
 	return prefix + hex.EncodeToString(value)
 }
 
+func randomizedWebMCPInstanceID(t *testing.T) string {
+	t.Helper()
+	value := make([]byte, 12)
+	if _, err := cryptorand.Read(value); err != nil {
+		t.Fatalf("randomize WebMCP instance ID: %v", err)
+	}
+	return "incarnation-" + hex.EncodeToString(value)
+}
+
 func TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
@@ -984,6 +993,73 @@ func TestWebMCPDirectClassifiesPersistedBrowserLossAsDisconnected(t *testing.T) 
 	}
 	if envelope.Error.Details["browser_id"] != string(candidate.ID) || envelope.Error.Details["target_id"] != string(target.ID) || envelope.Error.Details["phase"] != "discovery" || envelope.Error.Details["reconnect_required"] != true {
 		t.Fatalf("disconnected context details = %#v", envelope.Error.Details)
+	}
+}
+
+func TestWebMCPDirectRetainedSelectionDistinguishesFreshReplacementFromEndpointLoss(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	store := NewFileWebMCPSelectionStore(configDir)
+	page, target, oldCandidate, _ := directFixture()
+	oldCandidate.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	selected := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{oldCandidate},
+		targets:    []webmcp.Target{target},
+		selected:   page,
+	}
+	seed := executeDirectCommand(t, configDir, store, directFactory(selected), "select", "--browser", string(oldCandidate.ID), "--tab", string(target.ID), "--json")
+	if seed.err != nil {
+		t.Fatalf("seed persisted selection: %v\nstdout=%s", seed.err, seed.stdout)
+	}
+	oldRecord, err := store.Load()
+	if err != nil {
+		t.Fatalf("load old selection: %v", err)
+	}
+	if oldRecord.BrowserInstanceID != oldCandidate.BrowserInstanceID || oldRecord.Generation != page.Generation {
+		t.Fatalf("persisted identity = %+v, want instance=%q generation=%d", oldRecord, oldCandidate.BrowserInstanceID, page.Generation)
+	}
+
+	replacement := oldCandidate
+	replacement.ID = webmcp.BrowserID(randomizedWebMCPTestID(t, "browser-"))
+	replacement.BrowserInstanceID = randomizedWebMCPInstanceID(t)
+	replacementTarget := target
+	replacementTarget.BrowserID = replacement.ID
+	replacementBroker := &directCommandBroker{
+		candidates: []webmcp.BrowserCandidate{replacement},
+		targets:    []webmcp.Target{replacementTarget},
+	}
+	replaced := executeDirectCommand(t, configDir, store, directFactory(replacementBroker), "context", "--json")
+	if replaced.err == nil {
+		t.Fatal("context unexpectedly selected a reachable fresh browser replacement")
+	}
+	replacedEnvelope := decodeDirectEnvelope(t, replaced.stdout)
+	if replacedEnvelope.OK || replacedEnvelope.Error == nil || replacedEnvelope.Error.Code != string(webmcp.ErrorStaleSelection) {
+		t.Fatalf("replacement envelope = %+v", replacedEnvelope)
+	}
+	if details := replacedEnvelope.Error.Details; details["browser_id"] != oldRecord.BrowserID || details["target_id"] != oldRecord.TargetID || details["selected_generation"] != float64(oldRecord.Generation) || details["reason"] != "browser_instance_changed" {
+		t.Fatalf("replacement details = %#v", details)
+	}
+	if len(replacementBroker.selectCalls) != 0 || len(replacementBroker.activateCalls) != 0 {
+		t.Fatalf("replacement received selection work: select=%+v activate=%+v", replacementBroker.selectCalls, replacementBroker.activateCalls)
+	}
+	if oldAfterReplacement, loadErr := store.Load(); loadErr != nil || oldAfterReplacement != oldRecord {
+		t.Fatalf("replacement changed persisted selection: before=%+v after=%+v err=%v", oldRecord, oldAfterReplacement, loadErr)
+	}
+
+	lostBroker := &directCommandBroker{
+		discoverErr: webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
+			"phase": "discovery",
+		}),
+	}
+	lost := executeDirectCommand(t, configDir, store, directFactory(lostBroker), "context", "--json")
+	if lost.err == nil {
+		t.Fatal("context unexpectedly succeeded after endpoint loss")
+	}
+	lostEnvelope := decodeDirectEnvelope(t, lost.stdout)
+	if lostEnvelope.OK || lostEnvelope.Error == nil || lostEnvelope.Error.Code != string(webmcp.ErrorBrowserDisconnected) {
+		t.Fatalf("lost endpoint envelope = %+v", lostEnvelope)
+	}
+	if details := lostEnvelope.Error.Details; details["browser_id"] != oldRecord.BrowserID || details["target_id"] != oldRecord.TargetID || details["phase"] != "discovery" || details["reconnect_required"] != true {
+		t.Fatalf("lost endpoint details = %#v", details)
 	}
 }
 
