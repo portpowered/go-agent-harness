@@ -417,8 +417,8 @@ func validatePatience(p PatienceThresholds) error {
 	if p.MaxReprompts < 0 {
 		return contractFieldError(ErrInvalidCustomerScenario, "patience.max_reprompts", "must not be negative")
 	}
-	if p.ListenBeforeFollowUp > p.Reprompt || p.Reprompt > p.AbsoluteDeadAir {
-		return contractFieldError(ErrInvalidCustomerScenario, "patience", "thresholds must be ordered")
+	if p.ListenBeforeFollowUp > p.ResponseStart || p.ResponseStart > p.InProgressWork || p.InProgressWork > p.Reprompt || p.Reprompt > p.AbsoluteDeadAir {
+		return contractFieldError(ErrInvalidCustomerScenario, "patience", "thresholds must be ordered from listening through absolute dead air")
 	}
 	return nil
 }

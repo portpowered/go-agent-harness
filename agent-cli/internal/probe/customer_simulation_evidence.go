@@ -310,6 +310,7 @@ type ValidatorInput struct {
 	Mechanical            MechanicalVerdict      `json:"mechanical"`
 	MixedModal            *MixedModalEvidence    `json:"mixed_modal,omitempty"`
 	Termination           *TerminationEvidence   `json:"termination,omitempty"`
+	Patience              *PatienceEvidence      `json:"patience,omitempty"`
 	EvidenceRefs          []string               `json:"evidence_refs"`
 }
 
@@ -364,6 +365,14 @@ func (i ValidatorInput) validate(scenario CustomerScenario, field string) error 
 			return contractFieldError(ErrMissingEvidence, field+".termination", "Family D validator input requires termination evidence")
 		}
 		if err := i.Termination.Validate(scenario); err != nil {
+			return err
+		}
+	}
+	if scenario.Family == ScenarioFamilyE {
+		if i.Patience == nil {
+			return contractFieldError(ErrMissingEvidence, field+".patience", "Family E validator input requires patience evidence")
+		}
+		if err := i.Patience.Validate(scenario); err != nil {
 			return err
 		}
 	}
@@ -432,11 +441,12 @@ const (
 	ArtifactKindValidatorVerdict      ArtifactKind = "validator_verdict"
 	ArtifactKindMixedModalEvidence    ArtifactKind = "mixed_modal_evidence"
 	ArtifactKindTerminationEvidence   ArtifactKind = "termination_evidence"
+	ArtifactKindPatienceEvidence      ArtifactKind = "patience_evidence"
 )
 
 func (k ArtifactKind) valid() bool {
 	switch k {
-	case ArtifactKindScenario, ArtifactKindCustomerTranscript, ArtifactKindProductTranscript, ArtifactKindAudioTurnEvents, ArtifactKindProductRecordDir, ArtifactKindToolObservations, ArtifactKindFilesystemCheckpoints, ArtifactKindProcessFacts, ArtifactKindMechanicalVerdict, ArtifactKindValidatorInput, ArtifactKindValidatorVerdict, ArtifactKindMixedModalEvidence, ArtifactKindTerminationEvidence:
+	case ArtifactKindScenario, ArtifactKindCustomerTranscript, ArtifactKindProductTranscript, ArtifactKindAudioTurnEvents, ArtifactKindProductRecordDir, ArtifactKindToolObservations, ArtifactKindFilesystemCheckpoints, ArtifactKindProcessFacts, ArtifactKindMechanicalVerdict, ArtifactKindValidatorInput, ArtifactKindValidatorVerdict, ArtifactKindMixedModalEvidence, ArtifactKindTerminationEvidence, ArtifactKindPatienceEvidence:
 		return true
 	}
 	return false
@@ -548,6 +558,7 @@ type CustomerEvidenceBundle struct {
 	ValidatorVerdict      *ValidatorVerdict      `json:"validator_verdict"`
 	MixedModal            *MixedModalEvidence    `json:"mixed_modal,omitempty"`
 	Termination           *TerminationEvidence   `json:"termination,omitempty"`
+	Patience              *PatienceEvidence      `json:"patience,omitempty"`
 	Artifacts             []ArtifactEntry        `json:"artifacts"`
 	Finalized             bool                   `json:"finalized"`
 	FinalizedAt           time.Time              `json:"finalized_at"`
@@ -662,6 +673,17 @@ func (b CustomerEvidenceBundle) Validate() error {
 			return contractFieldError(ErrMissingEvidence, "artifacts", "Family D bundles require a hash-verified termination evidence artifact")
 		}
 	}
+	if b.Scenario.Family == ScenarioFamilyE {
+		if b.Patience == nil {
+			return contractFieldError(ErrMissingEvidence, "patience", "Family E bundles require patience evidence")
+		}
+		if err := b.Patience.Validate(b.Scenario); err != nil {
+			return err
+		}
+		if !hasArtifactKind(b.Artifacts, ArtifactKindPatienceEvidence) {
+			return contractFieldError(ErrMissingEvidence, "artifacts", "Family E bundles require a hash-verified patience evidence artifact")
+		}
+	}
 	if err := b.Process.validate("process"); err != nil {
 		return err
 	}
@@ -684,6 +706,14 @@ func (b CustomerEvidenceBundle) Validate() error {
 			return contractFieldError(ErrMissingEvidence, "validator_input.termination", "Family D validator input requires termination evidence")
 		}
 		if err := b.ValidatorInput.Termination.Validate(b.Scenario); err != nil {
+			return err
+		}
+	}
+	if b.Scenario.Family == ScenarioFamilyE {
+		if b.ValidatorInput.Patience == nil {
+			return contractFieldError(ErrMissingEvidence, "validator_input.patience", "Family E validator input requires patience evidence")
+		}
+		if err := b.ValidatorInput.Patience.Validate(b.Scenario); err != nil {
 			return err
 		}
 	}
@@ -730,6 +760,14 @@ func (b CustomerEvidenceBundle) Validate() error {
 		}
 		if !allEvidenceRefsAvailable(b.ValidatorInput.Termination.EvidenceRefs, available) {
 			return contractFieldError(ErrMissingEvidence, "validator_input.termination.evidence_refs", "references unavailable evidence")
+		}
+	}
+	if b.Scenario.Family == ScenarioFamilyE {
+		if !allEvidenceRefsAvailable(b.Patience.EvidenceRefs, available) {
+			return contractFieldError(ErrMissingEvidence, "patience.evidence_refs", "references unavailable evidence")
+		}
+		if !allEvidenceRefsAvailable(b.ValidatorInput.Patience.EvidenceRefs, available) {
+			return contractFieldError(ErrMissingEvidence, "validator_input.patience.evidence_refs", "references unavailable evidence")
 		}
 	}
 	if !allEvidenceRefsAvailable(b.ValidatorVerdict.EvidenceRefs, available) {
@@ -923,6 +961,13 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 			add(b.RecordMissingArtifact("events/termination.json", ArtifactKindTerminationEvidence, true, "termination evidence was not produced"))
 		} else {
 			add(b.writeJSONArtifact("events/termination.json", ArtifactKindTerminationEvidence, b.Termination, true))
+		}
+	}
+	if b.Scenario.Family == ScenarioFamilyE {
+		if b.Patience == nil {
+			add(b.RecordMissingArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, true, "patience timing evidence was not produced"))
+		} else {
+			add(b.writeJSONArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, b.Patience, true))
 		}
 	}
 	if b.MechanicalVerdict == nil {
