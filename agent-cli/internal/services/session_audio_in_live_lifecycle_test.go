@@ -143,20 +143,21 @@ func (c *audioInLifecycleConn) Close() error {
 // captured session.closed event. The session runner must close locally only
 // after the final scheduled response.
 type scheduledAudioLifecycleServer struct {
-	mu                    sync.Mutex
-	writes                []string
-	sessionUpdates        []json.RawMessage
-	responses             chan int
-	events                chan string
-	closed                chan struct{}
-	closeOnce             sync.Once
-	sessionCreated        chan struct{}
-	sessionUpdatedRelease chan struct{}
-	bargeIn               bool
-	bargeResponseTurn     int
-	firstResponseCancel   chan struct{}
-	firstCancelOnce       sync.Once
-	nextTurn              int
+	mu                      sync.Mutex
+	writes                  []string
+	sessionUpdates          []json.RawMessage
+	responses               chan int
+	events                  chan string
+	closed                  chan struct{}
+	closeOnce               sync.Once
+	sessionCreated          chan struct{}
+	sessionUpdatedRelease   chan struct{}
+	bargeIn                 bool
+	holdBargeResponseOutput bool
+	bargeResponseTurn       int
+	firstResponseCancel     chan struct{}
+	firstCancelOnce         sync.Once
+	nextTurn                int
 }
 
 func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
@@ -188,6 +189,7 @@ func newBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 func newPromptBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 	server := newBargeInScheduledAudioLifecycleServer()
 	server.bargeResponseTurn = 2
+	server.holdBargeResponseOutput = true
 	return server
 }
 
@@ -225,7 +227,9 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 					s.events <- `{"type":"input_audio_buffer.speech_started"}`
 					s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
 					s.events <- `{"type":"response.created","response":{"id":"resp_` + string(rune('0'+turn)) + `"}}`
-					s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
+					if !s.holdBargeResponseOutput {
+						s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
+					}
 					select {
 					case <-s.firstResponseCancel:
 						// This delta is deliberately stale. ModelRunner must suppress
@@ -1006,6 +1010,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 	destination := filepath.Join(t.TempDir(), "recording")
 	recordPath := filepath.Join(t.TempDir(), "capture.json")
 	audioPath := committedSessionAudioInputWAVPath(t)
+	diagnostics := &scheduledTurnDiagnosticSink{}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1023,6 +1028,7 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 				WebSocketDialer:  server,
 				Prompt:           "initial prompt",
 				AudioInTurnBarge: true,
+				Diagnostics:      diagnostics,
 			},
 			destination,
 			"",
@@ -1058,6 +1064,25 @@ func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing
 		!(promptItem < responseCreates[0] && responseCreates[0] < initialDone && initialDone < appends[0] &&
 			appends[0] < responseCreates[1] && responseCreates[1] < cancelIndex && cancelIndex < appends[1]) {
 		t.Fatalf("prompt/seed scheduled wire order = %v, want prompt response before first append and cancellation only during second response", writes)
+	}
+
+	var terminalMetrics []services.SessionDiagnosticRecord
+	for _, record := range diagnostics.recordsSnapshot() {
+		if record.Event == services.SessionDiagnosticEventMetrics {
+			terminalMetrics = append(terminalMetrics, record)
+		}
+	}
+	if len(terminalMetrics) != 1 {
+		t.Fatalf("prompt/seed terminal metrics = %#v, want exactly one", terminalMetrics)
+	}
+	for field, want := range map[string]string{
+		services.SessionDiagnosticFieldCompletedTurnCount:   "2",
+		services.SessionDiagnosticFieldDispatchedInputCount: "2",
+		services.SessionDiagnosticFieldScheduledInputCount:  "2",
+	} {
+		if got := terminalMetrics[0].Fields[field]; got != want {
+			t.Fatalf("prompt/seed terminal metric %q = %q, want %q; fields=%v", field, got, want, terminalMetrics[0].Fields)
+		}
 	}
 }
 

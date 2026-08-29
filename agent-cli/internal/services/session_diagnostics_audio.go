@@ -69,11 +69,8 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
 			}
 		}
-		if !o.scheduledTurnBaseSet {
-			o.scheduledTurnBase = o.turnsCompleted
-			o.scheduledTurnBaseSet = true
-		}
 		o.dispatchedInputs++
+		o.scheduledResponses = append(o.scheduledResponses, scheduledAudioResponseLifecycle{})
 		o.pendingInputs = o.pendingInputs[1:]
 		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	}
@@ -111,7 +108,9 @@ func (o *sessionProgressObserver) scheduledAudioAwaitingConfiguration() bool {
 }
 
 // scheduledAudioComplete reports whether every scheduled input has been
-// accepted and its corresponding assistant response has crossed MESSAGE.END.
+// accepted and its corresponding response has an explicit terminal
+// disposition. A local barge-in cancellation is complete lifecycle work for
+// the interrupted input even though it is not an admitted assistant turn.
 // It is intentionally separate from replay capture inspection: live planning
 // owns the decision to close after the schedule, while replay follows its
 // captured lifecycle.
@@ -124,9 +123,10 @@ func (o *sessionProgressObserver) scheduledAudioIncomplete() bool {
 }
 
 // scheduledAudioCounts returns the terminal schedule counters in a stable
-// order. Completed is the number of scheduled inputs whose assistant response
-// reached MESSAGE.END; it is distinct from the total session turn count when a
-// prompt or seed turn precedes scheduled audio.
+// order. Completed is the number of scheduled inputs with a terminal response
+// disposition (normal completion or owned cancellation); it is distinct from
+// the total session turn count when a prompt or seed turn precedes scheduled
+// audio.
 func (o *sessionProgressObserver) scheduledAudioCounts() (completed, dispatched, scheduled int) {
 	if o == nil {
 		return 0, 0, 0
@@ -157,16 +157,6 @@ func (o *sessionProgressObserver) noteProviderUsage(usage messages.TokenUsage) {
 // completeTurn closes the current turn boundary and emits the per-turn record.
 func (o *sessionProgressObserver) completeTurn() {
 	o.turnsCompleted++
-	if o.scheduledTurnBaseSet && o.turnsCompleted > o.scheduledTurnBase {
-		completed := o.turnsCompleted - o.scheduledTurnBase
-		if completed > o.dispatchedInputs {
-			completed = o.dispatchedInputs
-		}
-		if completed > o.scheduledInputs {
-			completed = o.scheduledInputs
-		}
-		o.completedScheduled = completed
-	}
 	if o.runtime != nil {
 		o.runtime.turnCompleted(o.turnsCompleted)
 	}

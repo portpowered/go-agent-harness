@@ -219,22 +219,27 @@ type sessionProgressObserver struct {
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
-	sessionUpdated         bool
-	requireSessionUpdated  bool
-	scheduledAudioDispatch ScheduledAudioDispatchPolicy
-	activeResponse         bool
-	activeResponseID       string
-	completedResponseIDs   map[string]struct{}
-	retiredResponseIDs     map[string]struct{}
-	turnsCompleted         int
-	scheduledInputs        int
-	dispatchedInputs       int
-	completedScheduled     int
-	scheduledTurnBase      int
-	scheduledTurnBaseSet   bool
-	counters               audioTurnCounters
-	totals                 audioTurnCounters
-	pendingInputs          []ScheduledAudioInput
+	sessionUpdated                bool
+	requireSessionUpdated         bool
+	scheduledAudioDispatch        ScheduledAudioDispatchPolicy
+	activeResponse                bool
+	activeResponseID              string
+	completedResponseIDs          map[string]struct{}
+	retiredResponseIDs            map[string]struct{}
+	turnsCompleted                int
+	scheduledInputs               int
+	dispatchedInputs              int
+	completedScheduled            int
+	scheduledResponses            []scheduledAudioResponseLifecycle
+	scheduledResponseByID         map[string]int
+	nextScheduledResponse         int
+	activeScheduledResponseIndex  int
+	activeScheduledResponseSet    bool
+	logicalScheduledResponseIndex int
+	logicalScheduledResponseSet   bool
+	counters                      audioTurnCounters
+	totals                        audioTurnCounters
+	pendingInputs                 []ScheduledAudioInput
 
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}
@@ -304,18 +309,19 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
-		sink:                 sink,
-		recorder:             recorder,
-		productionSink:       productionSink,
-		provider:             provider,
-		model:                model,
-		unresolvedToolCalls:  make(map[string]struct{}),
-		acceptedToolCalls:    make(map[string]struct{}),
-		toolResultRejections: make(map[string]messages.SessionSendStatus),
-		toolLifecycleCh:      make(chan struct{}, 1),
-		toolContinuations:    make(map[string]*toolContinuationState),
-		completedResponseIDs: make(map[string]struct{}),
-		retiredResponseIDs:   make(map[string]struct{}),
+		sink:                  sink,
+		recorder:              recorder,
+		productionSink:        productionSink,
+		provider:              provider,
+		model:                 model,
+		unresolvedToolCalls:   make(map[string]struct{}),
+		acceptedToolCalls:     make(map[string]struct{}),
+		toolResultRejections:  make(map[string]messages.SessionSendStatus),
+		toolLifecycleCh:       make(chan struct{}, 1),
+		toolContinuations:     make(map[string]*toolContinuationState),
+		completedResponseIDs:  make(map[string]struct{}),
+		retiredResponseIDs:    make(map[string]struct{}),
+		scheduledResponseByID: make(map[string]int),
 	}
 }
 
@@ -823,9 +829,17 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		// (MESSAGE.START) or the compatible audio-only start through its
 		// terminal MESSAGE.END. Use the envelope type as the source of truth so
 		// a provider with an empty value still participates in scheduling.
+		continuationIndex, continuation := o.pendingScheduledContinuationIndex()
 		newResponseBoundary = o.beginObservedResponse(msgResponseID)
 		if !o.responseEventBelongsToActive(msgResponseID) {
 			return
+		}
+		if newResponseBoundary {
+			if continuation {
+				o.bindScheduledContinuation(continuationIndex, msgResponseID)
+			} else {
+				o.bindNextScheduledResponse(msgResponseID)
+			}
 		}
 	case messages.StreamTypeMessageEnd:
 		// A terminal event is allowed to advance state only for the active
@@ -838,7 +852,20 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			return
 		}
 		if !o.activeResponse && msgResponseID != "" {
+			continuationIndex, continuation := o.pendingScheduledContinuationIndex()
 			newResponseBoundary = o.beginObservedResponse(msgResponseID)
+			if newResponseBoundary {
+				if continuation {
+					o.bindScheduledContinuation(continuationIndex, msgResponseID)
+				} else {
+					o.bindNextScheduledResponse(msgResponseID)
+				}
+			}
+		} else if !o.activeResponse {
+			// A legacy provider may expose only the terminal boundary. Bind it to
+			// the next dispatched scheduled input when one is available; an
+			// unrelated prompt/session terminal has no slot to consume.
+			o.bindNextScheduledResponse("")
 		}
 		if responseLifecycleID == "" {
 			responseLifecycleID = o.activeResponseID
@@ -1006,11 +1033,15 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		}
 		o.toolDeltaSeen = false
 	case *messages.MessageEndValue:
+		cancelled := isLocalResponseCancellation(v)
 		o.noteProviderUsage(v.Usage)
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
 		candidate := o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
-		admitted := candidate && outputPresent
+		// A cancelled response can have output queued before the cancellation
+		// boundary. It is still an interrupted lifecycle disposition, never a
+		// normal assistant turn, and must not satisfy output admission.
+		admitted := !cancelled && candidate && outputPresent
 		if admitted && o.turnAdmission != nil {
 			admitted = o.turnAdmission(msg)
 		}
@@ -1019,10 +1050,13 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.messageEndAdmitted = admitted
 		o.toolStateMu.Unlock()
 		if admitted {
+			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCompleted)
 			o.completeTurn()
 			if o.admittedTurnObserver != nil {
 				o.admittedTurnObserver(msg)
 			}
+		} else if cancelled {
+			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
 		}
 		o.finishObservedResponse(responseLifecycleID)
 	case *messages.ErrorValue:
@@ -1229,6 +1263,11 @@ func (o *sessionProgressObserver) emitMetricsMatrix() {
 			fields[fieldProviderCompletionTokens] = strconv.FormatUint(o.usageCompletion, 10)
 			fields[fieldProviderTotalTokens] = strconv.FormatUint(o.usageTotal, 10)
 			fields[fieldProviderReasoningTokens] = strconv.FormatUint(o.usageReasoning, 10)
+		}
+		if o.scheduledInputs > 0 {
+			fields[SessionDiagnosticFieldScheduledInputCount] = strconv.Itoa(o.scheduledInputs)
+			fields[SessionDiagnosticFieldDispatchedInputCount] = strconv.Itoa(o.dispatchedInputs)
+			fields[SessionDiagnosticFieldCompletedTurnCount] = strconv.Itoa(o.completedScheduled)
 		}
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event:  SessionDiagnosticEventMetrics,

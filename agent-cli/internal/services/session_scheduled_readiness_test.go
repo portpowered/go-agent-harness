@@ -321,6 +321,70 @@ func TestSessionProgressObserverTerminalResponseWinsBeforeActiveDispatch(t *test
 	}
 }
 
+func TestSessionProgressObserverCountsCancelledScheduledResponseDisposition(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduledAudioDispatch = ScheduledAudioDispatchActiveResponse
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first scheduled input: %v", err)
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-cancelled",
+		Value:      messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch interrupting scheduled input: %v", err)
+	}
+
+	// No output crossed the cancellation boundary. The cancelled response is
+	// still a terminal disposition for its already-dispatched input, but it is
+	// not an admitted assistant turn.
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-cancelled",
+		Role:       messages.RoleAssistant,
+		Value: messages.NewMessageEndValueWithTerminal(
+			messages.TokenUsage{},
+			messages.TerminalReasonPartialOutput,
+			messages.TerminalProvenanceLoop,
+			messages.TerminalOutputNone,
+		),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-replacement",
+		Value:      messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeTextDelta,
+		ResponseID: "resp-replacement",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewTextDeltaValue("replacement answer"),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-replacement",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if observer.turnsCompleted != 1 {
+		t.Fatalf("ordinary completed turns = %d, want replacement only", observer.turnsCompleted)
+	}
+	if completed, dispatched, scheduled := observer.scheduledAudioCounts(); completed != 2 || dispatched != 2 || scheduled != 2 {
+		t.Fatalf("scheduled terminal dispositions = %d/%d/%d, want completed=2 dispatched=2 scheduled=2", completed, dispatched, scheduled)
+	}
+	if !observer.scheduledAudioComplete() {
+		t.Fatal("cancelled and replacement scheduled responses did not satisfy clean completion")
+	}
+}
+
 func TestSessionProgressObserverCompletionGatedIgnoresActiveResponse(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	probe := &scheduledInputDispatchProbe{}

@@ -6,6 +6,187 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+type scheduledAudioResponseDisposition uint8
+
+const (
+	scheduledAudioResponsePending scheduledAudioResponseDisposition = iota
+	scheduledAudioResponseCompleted
+	scheduledAudioResponseCancelled
+)
+
+// scheduledAudioResponseLifecycle tracks one dispatched scheduled input's
+// logical response. A single input may own an intermediate tool-call response
+// and a later continuation response, so provider response IDs are indexed back
+// to this one lifecycle rather than being counted as independent turns.
+type scheduledAudioResponseLifecycle struct {
+	bound       bool
+	disposition scheduledAudioResponseDisposition
+}
+
+func (o *sessionProgressObserver) ensureScheduledResponseState() {
+	if o == nil {
+		return
+	}
+	if o.scheduledResponseByID == nil {
+		o.scheduledResponseByID = make(map[string]int)
+	}
+}
+
+// pendingScheduledContinuationIndex identifies the scheduled logical turn
+// that owns an accepted tool result whose follow-on response is about to
+// begin. Tool continuations must not consume the next scheduled input slot.
+func (o *sessionProgressObserver) pendingScheduledContinuationIndex() (int, bool) {
+	if o == nil {
+		return 0, false
+	}
+	var providerResponseID string
+	o.toolStateMu.Lock()
+	for _, state := range o.toolContinuations {
+		if state == nil || !state.resultAccepted || !state.continuationRequested || !state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
+			continue
+		}
+		providerResponseID = strings.TrimSpace(state.responseID)
+		break
+	}
+	o.toolStateMu.Unlock()
+
+	o.ensureScheduledResponseState()
+	if providerResponseID != "" {
+		if index, ok := o.scheduledResponseByID[providerResponseID]; ok {
+			return index, true
+		}
+	}
+	if o.logicalScheduledResponseSet {
+		return o.logicalScheduledResponseIndex, true
+	}
+	return 0, false
+}
+
+func (o *sessionProgressObserver) bindScheduledResponseID(index int, id string) {
+	if o == nil || index < 0 || index >= len(o.scheduledResponses) {
+		return
+	}
+	o.ensureScheduledResponseState()
+	id = strings.TrimSpace(id)
+	o.scheduledResponses[index].bound = true
+	if id != "" {
+		o.scheduledResponseByID[id] = index
+	}
+}
+
+func (o *sessionProgressObserver) setActiveScheduledResponse(index int) {
+	if o == nil || index < 0 || index >= len(o.scheduledResponses) {
+		return
+	}
+	o.activeScheduledResponseIndex = index
+	o.activeScheduledResponseSet = true
+	o.logicalScheduledResponseIndex = index
+	o.logicalScheduledResponseSet = true
+}
+
+// bindNextScheduledResponse associates a new provider response boundary with
+// the next dispatched input. It is called only for a new logical response;
+// continuation responses use bindScheduledContinuation instead.
+func (o *sessionProgressObserver) bindNextScheduledResponse(id string) (int, bool) {
+	if o == nil {
+		return 0, false
+	}
+	o.ensureScheduledResponseState()
+	id = strings.TrimSpace(id)
+	if id != "" {
+		if index, ok := o.scheduledResponseByID[id]; ok {
+			o.setActiveScheduledResponse(index)
+			return index, true
+		}
+	}
+	for o.nextScheduledResponse < len(o.scheduledResponses) && o.scheduledResponses[o.nextScheduledResponse].bound {
+		o.nextScheduledResponse++
+	}
+	if o.nextScheduledResponse >= len(o.scheduledResponses) {
+		return 0, false
+	}
+	index := o.nextScheduledResponse
+	o.nextScheduledResponse++
+	o.bindScheduledResponseID(index, id)
+	o.setActiveScheduledResponse(index)
+	return index, true
+}
+
+func (o *sessionProgressObserver) bindScheduledContinuation(index int, id string) bool {
+	if o == nil {
+		return false
+	}
+	if index < 0 || index >= len(o.scheduledResponses) {
+		if o.logicalScheduledResponseSet {
+			index = o.logicalScheduledResponseIndex
+		} else {
+			return false
+		}
+	}
+	o.bindScheduledResponseID(index, id)
+	o.setActiveScheduledResponse(index)
+	return true
+}
+
+func (o *sessionProgressObserver) scheduledResponseIndex(id string) (int, bool) {
+	if o == nil {
+		return 0, false
+	}
+	o.ensureScheduledResponseState()
+	id = strings.TrimSpace(id)
+	if id != "" {
+		if index, ok := o.scheduledResponseByID[id]; ok {
+			return index, true
+		}
+	}
+	if o.activeScheduledResponseSet {
+		return o.activeScheduledResponseIndex, true
+	}
+	if o.logicalScheduledResponseSet {
+		return o.logicalScheduledResponseIndex, true
+	}
+	return 0, false
+}
+
+// noteScheduledResponseDisposition records one terminal disposition for a
+// dispatched logical scheduled input. Cancellation counts as resolved
+// lifecycle work but never advances the ordinary completed-turn counter.
+func (o *sessionProgressObserver) noteScheduledResponseDisposition(id string, disposition scheduledAudioResponseDisposition) {
+	if o == nil || disposition == scheduledAudioResponsePending {
+		return
+	}
+	index, ok := o.scheduledResponseIndex(id)
+	if !ok {
+		_, ok = o.bindNextScheduledResponse(id)
+		if !ok {
+			return
+		}
+		index, ok = o.scheduledResponseIndex(id)
+		if !ok {
+			return
+		}
+	}
+	if index < 0 || index >= len(o.scheduledResponses) {
+		return
+	}
+	lifecycle := &o.scheduledResponses[index]
+	if !lifecycle.bound || lifecycle.disposition != scheduledAudioResponsePending {
+		return
+	}
+	lifecycle.disposition = disposition
+	o.completedScheduled++
+	if o.logicalScheduledResponseSet && o.logicalScheduledResponseIndex == index {
+		o.logicalScheduledResponseSet = false
+	}
+	if o.activeScheduledResponseSet && o.activeScheduledResponseIndex == index {
+		o.activeScheduledResponseSet = false
+	}
+}
+
+func isLocalResponseCancellation(value *messages.MessageEndValue) bool {
+	return value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput && value.TerminalProvenance == messages.TerminalProvenanceLoop
+}
+
 func (o *sessionProgressObserver) resetObservedResponseState() {
 	if o == nil {
 		return
@@ -95,6 +276,9 @@ func (o *sessionProgressObserver) adoptObservedResponseID(id string) bool {
 		return false
 	}
 	o.activeResponseID = id
+	if o.activeScheduledResponseSet {
+		o.bindScheduledResponseID(o.activeScheduledResponseIndex, id)
+	}
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
 	for _, state := range o.toolContinuations {
@@ -168,6 +352,7 @@ func (o *sessionProgressObserver) finishObservedResponse(id string) {
 	}
 	o.activeResponse = false
 	o.activeResponseID = ""
+	o.activeScheduledResponseSet = false
 }
 
 func (o *sessionProgressObserver) responseEventBelongsToActive(id string) bool {

@@ -115,7 +115,7 @@ included in any field.
 | `provider_error_code` | Provider error code when present. Absent otherwise. | `invalid_api_key` |
 | `scheduled_input_count` | Total configured scheduled audio inputs for an incomplete scheduled run. | `3` |
 | `dispatched_input_count` | Scheduled inputs accepted by the session input boundary before termination. | `2` |
-| `completed_turn_count` | Scheduled inputs whose assistant response reached `MESSAGE.END` before termination. | `2` |
+| `completed_turn_count` | Scheduled inputs with an explicit terminal response disposition before termination, including an owned barge-in cancellation. Cancelled inputs are resolved here but do not emit `session_turn_completed`. | `2` |
 
 An incomplete scheduled run also returns the typed
 `services.SessionScheduledAudioIncompleteError`, which unwraps to
