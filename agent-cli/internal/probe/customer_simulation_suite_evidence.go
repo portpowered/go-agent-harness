@@ -45,6 +45,28 @@ type customerSimulationResponse struct {
 	AudioObserved bool
 }
 
+type customerSimulationRecordedMessage struct {
+	message messages.StreamMessage
+	at      time.Duration
+	wallAt  time.Time
+	dir     transcript.Direction
+}
+
+type customerSimulationStreamParser struct {
+	facts             customerSimulationRecordingFacts
+	scenario          CustomerScenario
+	knownResponses    int
+	completedToolIDs  map[string]time.Duration
+	pending           map[string]*customerSimulationTool
+	current           *customerSimulationResponse
+	text              strings.Builder
+	activeResponseID  string
+	responseIndex     int
+	inputSpeechActive bool
+	lastWallAt        time.Time
+	lastAt            time.Duration
+}
+
 type customerSimulationTool struct {
 	ID       string
 	Name     string
@@ -119,13 +141,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		return facts, fmt.Errorf("open product transcript: %v", err)
 	}
 	defer file.Close()
-	type recordedMessage struct {
-		message messages.StreamMessage
-		at      time.Duration
-		wallAt  time.Time
-		dir     transcript.Direction
-	}
-	var records []recordedMessage
+	var records []customerSimulationRecordedMessage
 	var base time.Time
 	completedToolIDs := make(map[string]time.Duration)
 	scanner := bufio.NewScanner(file)
@@ -159,192 +175,232 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 			}
 			return facts, fmt.Errorf("decode product stream message: %v", messageErr)
 		}
-		records = append(records, recordedMessage{message: message, at: at, wallAt: wallAt, dir: record.Direction})
+		records = append(records, customerSimulationRecordedMessage{message: message, at: at, wallAt: wallAt, dir: record.Direction})
 	}
 	if err := scanner.Err(); err != nil {
 		return facts, fmt.Errorf("read product transcript: %v", err)
 	}
 
-	facts.recordingBase = base
-	var current *customerSimulationResponse
-	var text strings.Builder
-	pending := make(map[string]*customerSimulationTool)
-	activeResponseID := ""
-	responseIndex := 0
-	lastWallAt := base
-	lastAt := time.Duration(0)
-	inputSpeechActive := false
-	flush := func(at time.Duration, wallAt time.Time, complete, cancelled bool) {
-		if current == nil {
-			return
-		}
-		current.Text = text.String()
-		current.End = at
-		current.WallEnd = wallAt
-		current.Complete = complete
-		current.Cancelled = cancelled
-		facts.responses = append(facts.responses, *current)
-		current = nil
-		text.Reset()
+	parser := customerSimulationStreamParser{
+		facts:            customerSimulationRecordingFacts{recordingBase: base},
+		scenario:         scenario,
+		knownResponses:   knownResponses,
+		completedToolIDs: completedToolIDs,
+		pending:          make(map[string]*customerSimulationTool),
+		lastWallAt:       base,
 	}
 	for _, record := range records {
-		lastAt = record.at
-		if !record.wallAt.IsZero() {
-			lastWallAt = record.wallAt
-		}
-		msg := record.message
-		// The shipped recorder's agent transcript preserves provider output as
-		// DirectionOut and tool-result delivery as DirectionIn. Provider adapters
-		// do not consistently retain role/actor fields on every neutralized
-		// message, so direction is the primary response-side discriminator.
-		isAssistant := record.dir == transcript.DirectionOut || msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model
-		switch msg.Type {
-		case messages.StreamTypeMessageStart:
-			if isAssistant && current == nil {
-				current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
-				activeResponseID = strings.TrimSpace(msg.ResponseID)
-				responseIndex++
-			}
-		case messages.StreamTypeTextDelta:
-			if isAssistant {
-				if current == nil {
-					current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
-				} else if current.ID == "" {
-					current.ID = msg.ResponseID
-				}
-				if activeResponseID == "" {
-					activeResponseID = strings.TrimSpace(msg.ResponseID)
-				}
-				if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
-					text.WriteString(value.Content)
-				}
-			}
-		case messages.StreamTypeTranscriptEnd:
-			if isAssistant {
-				if current == nil {
-					current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
-				} else if current.ID == "" {
-					current.ID = msg.ResponseID
-				}
-				if activeResponseID == "" {
-					activeResponseID = strings.TrimSpace(msg.ResponseID)
-				}
-				if value, ok := msg.Value.(*messages.TranscriptEndValue); ok && value != nil && text.Len() == 0 {
-					text.WriteString(value.FullText)
-				}
-			}
-		case messages.StreamTypeAudioDelta:
-			value, ok := msg.Value.(*messages.AudioDeltaValue)
-			if !ok || value == nil {
-				break
-			}
-			if isAssistant {
-				if current == nil {
-					current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
-				} else if current.ID == "" {
-					current.ID = msg.ResponseID
-				}
-				if activeResponseID == "" {
-					activeResponseID = strings.TrimSpace(msg.ResponseID)
-				}
-				current.AudioBytes += len(value.Content)
-				if !current.AudioObserved {
-					current.AudioStart = record.at
-					current.AudioObserved = true
-				}
-				end := record.at + customerSimulationPCM16Duration(len(value.Content))
-				if end <= record.at {
-					end = record.at + time.Nanosecond
-				}
-				if end > current.AudioEnd {
-					current.AudioEnd = end
-				}
-				// A provider audio response is an observable boundary between
-				// customer speech runs. This also covers providers that omit
-				// explicit VAD silence frames from the recording.
-				inputSpeechActive = false
-			} else if record.dir == transcript.DirectionIn {
-				// The recorder's agent-side DirectionIn is the outbound
-				// provider-bound customer audio. Keep only the first frame of
-				// each non-silent run so the correction boundary is grounded in
-				// this same transcript clock as response audio and RESPONSE.CANCEL.
-				signal := customerSimulationPCM16HasSignal(value.Content)
-				if signal && !inputSpeechActive {
-					facts.inputSpeechStarts = append(facts.inputSpeechStarts, record.at)
-				}
-				inputSpeechActive = signal
-			}
-		case messages.StreamTypeToolCallEnd:
-			if isAssistant {
-				if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil && strings.TrimSpace(value.ToolCallID) != "" {
-					pending[value.ToolCallID] = &customerSimulationTool{ID: value.ToolCallID, Name: value.Name, Start: record.at}
-				}
-			} else if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil && strings.TrimSpace(value.ToolCallID) != "" {
-				completedToolIDs[value.ToolCallID] = record.at
-			}
-		case messages.StreamTypeResponseCancel:
-			if record.dir == transcript.DirectionIn {
-				// DirectionIn on the agent transcript is the actual outbound
-				// provider cancellation. Do not treat a provider-side or
-				// inferred terminal event as proof of a customer barge-in.
-				if !facts.cancelObserved {
-					facts.cancelObserved = true
-					facts.cancelAt = record.at
-					facts.cancelWallAt = record.wallAt
-					facts.cancelResponseID = strings.TrimSpace(msg.ResponseID)
-					if facts.cancelResponseID == "" {
-						facts.cancelResponseID = activeResponseID
-					}
-					if facts.cancelResponseID == "" && current != nil {
-						facts.cancelResponseID = current.ID
-					}
-				}
-				if current != nil {
-					current.Cancelled = true
-				}
-			}
-		case messages.StreamTypeMessageEnd:
-			if isAssistant {
-				flush(record.at, record.wallAt, true, current != nil && current.Cancelled)
-				activeResponseID = ""
-			}
-		}
-		if responseIndex > len(scenario.Actions)+knownResponses+1 {
+		if parser.consume(record) {
 			break
 		}
 	}
-	if current != nil {
-		flush(lastAt, lastWallAt, false, current.Cancelled)
+	parser.finish()
+	return parser.facts, nil
+}
+
+func (p *customerSimulationStreamParser) consume(record customerSimulationRecordedMessage) bool {
+	p.lastAt = record.at
+	if !record.wallAt.IsZero() {
+		p.lastWallAt = record.wallAt
 	}
-	toolIDs := make([]string, 0, len(pending))
-	for id := range pending {
+	msg := record.message
+	// The shipped recorder's agent transcript preserves provider output as
+	// DirectionOut and tool-result delivery as DirectionIn. Provider adapters
+	// do not consistently retain role/actor fields on every neutralized
+	// message, so direction is the primary response-side discriminator.
+	isAssistant := record.dir == transcript.DirectionOut || msg.Role == messages.RoleAssistant || msg.ActorID == messages.Model
+	switch msg.Type {
+	case messages.StreamTypeMessageStart:
+		p.consumeMessageStart(record, isAssistant)
+	case messages.StreamTypeTextDelta:
+		p.consumeTextDelta(record, isAssistant)
+	case messages.StreamTypeTranscriptEnd:
+		p.consumeTranscriptEnd(record, isAssistant)
+	case messages.StreamTypeAudioDelta:
+		p.consumeAudioDelta(record, isAssistant)
+	case messages.StreamTypeToolCallEnd:
+		p.consumeToolCallEnd(record, isAssistant)
+	case messages.StreamTypeResponseCancel:
+		p.consumeResponseCancel(record)
+	case messages.StreamTypeMessageEnd:
+		p.consumeMessageEnd(record, isAssistant)
+	}
+	return p.responseIndex > len(p.scenario.Actions)+p.knownResponses+1
+}
+
+func (p *customerSimulationStreamParser) consumeMessageStart(record customerSimulationRecordedMessage, isAssistant bool) {
+	if !isAssistant || p.current != nil {
+		return
+	}
+	p.current = &customerSimulationResponse{ID: record.message.ResponseID, Start: record.at, WallStart: record.wallAt}
+	p.activeResponseID = strings.TrimSpace(record.message.ResponseID)
+	p.responseIndex++
+}
+
+func (p *customerSimulationStreamParser) ensureResponse(record customerSimulationRecordedMessage) {
+	if p.current == nil {
+		p.current = &customerSimulationResponse{ID: record.message.ResponseID, Start: record.at, WallStart: record.wallAt}
+	} else if p.current.ID == "" {
+		p.current.ID = record.message.ResponseID
+	}
+	if p.activeResponseID == "" {
+		p.activeResponseID = strings.TrimSpace(record.message.ResponseID)
+	}
+}
+
+func (p *customerSimulationStreamParser) consumeTextDelta(record customerSimulationRecordedMessage, isAssistant bool) {
+	if !isAssistant {
+		return
+	}
+	p.ensureResponse(record)
+	if value, ok := record.message.Value.(*messages.TextDeltaValue); ok && value != nil {
+		p.text.WriteString(value.Content)
+	}
+}
+
+func (p *customerSimulationStreamParser) consumeTranscriptEnd(record customerSimulationRecordedMessage, isAssistant bool) {
+	if !isAssistant {
+		return
+	}
+	p.ensureResponse(record)
+	if value, ok := record.message.Value.(*messages.TranscriptEndValue); ok && value != nil && p.text.Len() == 0 {
+		p.text.WriteString(value.FullText)
+	}
+}
+
+func (p *customerSimulationStreamParser) consumeAudioDelta(record customerSimulationRecordedMessage, isAssistant bool) {
+	value, ok := record.message.Value.(*messages.AudioDeltaValue)
+	if !ok || value == nil {
+		return
+	}
+	if isAssistant {
+		p.consumeAssistantAudio(record, value)
+		return
+	}
+	if record.dir != transcript.DirectionIn {
+		return
+	}
+	// The recorder's agent-side DirectionIn is the outbound provider-bound
+	// customer audio. Keep only the first frame of each non-silent run so the
+	// correction boundary is grounded in this same transcript clock as
+	// response audio and RESPONSE.CANCEL.
+	signal := customerSimulationPCM16HasSignal(value.Content)
+	if signal && !p.inputSpeechActive {
+		p.facts.inputSpeechStarts = append(p.facts.inputSpeechStarts, record.at)
+	}
+	p.inputSpeechActive = signal
+}
+
+func (p *customerSimulationStreamParser) consumeAssistantAudio(record customerSimulationRecordedMessage, value *messages.AudioDeltaValue) {
+	p.ensureResponse(record)
+	p.current.AudioBytes += len(value.Content)
+	if !p.current.AudioObserved {
+		p.current.AudioStart = record.at
+		p.current.AudioObserved = true
+	}
+	end := record.at + customerSimulationPCM16Duration(len(value.Content))
+	if end <= record.at {
+		end = record.at + time.Nanosecond
+	}
+	if end > p.current.AudioEnd {
+		p.current.AudioEnd = end
+	}
+	// A provider audio response is an observable boundary between customer
+	// speech runs. This also covers providers that omit explicit VAD silence
+	// frames from the recording.
+	p.inputSpeechActive = false
+}
+
+func (p *customerSimulationStreamParser) consumeToolCallEnd(record customerSimulationRecordedMessage, isAssistant bool) {
+	value, ok := record.message.Value.(*messages.ToolCallEndValue)
+	if !ok || value == nil || strings.TrimSpace(value.ToolCallID) == "" {
+		return
+	}
+	if isAssistant {
+		p.pending[value.ToolCallID] = &customerSimulationTool{ID: value.ToolCallID, Name: value.Name, Start: record.at}
+		return
+	}
+	p.completedToolIDs[value.ToolCallID] = record.at
+}
+
+func (p *customerSimulationStreamParser) consumeResponseCancel(record customerSimulationRecordedMessage) {
+	if record.dir != transcript.DirectionIn {
+		return
+	}
+	// DirectionIn on the agent transcript is the actual outbound provider
+	// cancellation. Do not treat a provider-side or inferred terminal event as
+	// proof of a customer barge-in.
+	if !p.facts.cancelObserved {
+		p.facts.cancelObserved = true
+		p.facts.cancelAt = record.at
+		p.facts.cancelWallAt = record.wallAt
+		p.facts.cancelResponseID = strings.TrimSpace(record.message.ResponseID)
+		if p.facts.cancelResponseID == "" {
+			p.facts.cancelResponseID = p.activeResponseID
+		}
+		if p.facts.cancelResponseID == "" && p.current != nil {
+			p.facts.cancelResponseID = p.current.ID
+		}
+	}
+	if p.current != nil {
+		p.current.Cancelled = true
+	}
+}
+
+func (p *customerSimulationStreamParser) consumeMessageEnd(record customerSimulationRecordedMessage, isAssistant bool) {
+	if !isAssistant {
+		return
+	}
+	p.flush(record.at, record.wallAt, true, p.current != nil && p.current.Cancelled)
+	p.activeResponseID = ""
+}
+
+func (p *customerSimulationStreamParser) flush(at time.Duration, wallAt time.Time, complete, cancelled bool) {
+	if p.current == nil {
+		return
+	}
+	p.current.Text = p.text.String()
+	p.current.End = at
+	p.current.WallEnd = wallAt
+	p.current.Complete = complete
+	p.current.Cancelled = cancelled
+	p.facts.responses = append(p.facts.responses, *p.current)
+	p.current = nil
+	p.text.Reset()
+}
+
+func (p *customerSimulationStreamParser) finish() {
+	if p.current != nil {
+		p.flush(p.lastAt, p.lastWallAt, false, p.current.Cancelled)
+	}
+	toolIDs := make([]string, 0, len(p.pending))
+	for id := range p.pending {
 		toolIDs = append(toolIDs, id)
 	}
 	sort.Strings(toolIDs)
 	for _, toolID := range toolIDs {
-		tool := pending[toolID]
-		actionIndex := len(facts.tools)
-		if actionIndex >= len(scenario.Actions) {
-			actionIndex = len(scenario.Actions) - 1
+		tool := p.pending[toolID]
+		actionIndex := len(p.facts.tools)
+		if actionIndex >= len(p.scenario.Actions) {
+			actionIndex = len(p.scenario.Actions) - 1
 		}
 		if actionIndex < 0 {
 			actionIndex = 0
 		}
-		turnID := customerSimulationTurnID(scenario, actionIndex)
-		resultAt, resultSeen := completedToolIDs[tool.ID]
+		turnID := customerSimulationTurnID(p.scenario, actionIndex)
+		resultAt, resultSeen := p.completedToolIDs[tool.ID]
 		status := "started"
 		duration := maxDuration(0, resultAt-tool.Start)
 		if resultSeen {
 			status = "completed"
 		}
-		facts.tools = append(facts.tools, ToolObservation{ID: tool.ID, ActionID: scenario.Actions[actionIndex].ID, TurnID: turnID, Tool: customerSimulationSlug(tool.Name), Status: status, At: tool.Start, Duration: duration, ResultSeen: resultSeen})
+		p.facts.tools = append(p.facts.tools, ToolObservation{ID: tool.ID, ActionID: p.scenario.Actions[actionIndex].ID, TurnID: turnID, Tool: customerSimulationSlug(tool.Name), Status: status, At: tool.Start, Duration: duration, ResultSeen: resultSeen})
 	}
-	for index := range facts.responses {
-		if facts.responses[index].End < facts.responses[index].Start {
-			facts.responses[index].End = facts.responses[index].Start
+	for index := range p.facts.responses {
+		if p.facts.responses[index].End < p.facts.responses[index].Start {
+			p.facts.responses[index].End = p.facts.responses[index].Start
 		}
 	}
-	return facts, nil
 }
 
 func recordContainsStreamType(payload []byte, want string) bool {
