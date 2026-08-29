@@ -181,7 +181,27 @@ func sessionAdoptSelection(ctx context.Context, broker webmcp.Broker, selected d
 		unused, err = broker.Select(ctx, selector)
 	}
 	_ = unused
+	// Selection attaches and starts the target event consumer before it waits
+	// for affirmative page-tool evidence. A late catalog is therefore an
+	// operation-level result: keep the exact connected selection usable for a
+	// later model-facing list/retry instead of failing the whole session
+	// capability bootstrap. Do not generalize this to every retryable error;
+	// discovery, attachment, and lifecycle failures must still fail closed.
+	if sessionRetryableCatalogDeadline(err) {
+		return nil
+	}
 	return sessionCapabilityError(err)
+}
+
+func sessionRetryableCatalogDeadline(err error) bool {
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified == nil || classified.Code != webmcp.ErrorBrowserProtocol || !classified.Retryable {
+		return false
+	}
+	if classified.Details == nil {
+		return false
+	}
+	return classified.Details["reason_code"] == "page_tools_unverified" && classified.Details["reason"] == "deadline_exceeded"
 }
 
 func sessionNoSelectionError(err error) bool {
