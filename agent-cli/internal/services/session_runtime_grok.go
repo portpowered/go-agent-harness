@@ -61,17 +61,25 @@ func planGrokReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFactory
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
-	model := replayDialer.Model()
+	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	model := configuration.model
+	if strings.TrimSpace(model) == "" {
+		model = replayDialer.Model()
+	}
 	if strings.TrimSpace(model) == "" {
 		model = "grok-replay"
 	}
-	// A websocket replay owns its historical initial session.update payload.
-	// The selected definitions still reach the replay loop through plan.loop,
-	// but must not add a new outbound payload that would invalidate the capture.
+	// The initial provider configuration is captured wire data. The current
+	// tool definitions remain on plan.loop for local execution, but are not
+	// used to rebuild the provider handshake.
+	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(replayDialer, configuration)
 	sessionInferencer, err := factory.newGrokSessionInferencerForTools(config.GrokConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, replayDialer, nil)
+	}, replayDialerWithConfiguration, nil)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}

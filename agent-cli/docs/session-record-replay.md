@@ -109,6 +109,20 @@ agent session --replay captures/grok-demo.session.json
 
 Replay mode uses the capture file as the provider transport. It accepts dummy or missing live credentials because all provider traffic comes from the capture. Raw WebSocket replay routes by `provider.name`: use `openai` for OpenAI Realtime fixtures and `grok` for Grok fixtures.
 
+For raw provider captures, the first outbound `session.update` is the replay
+handshake. Replay uses that captured payload as the authoritative provider
+configuration, including any recorded instructions, tool schemas, model,
+modalities, voice, audio settings, or turn-detection fields. The current
+workspace and tool configuration still owns local tool execution, but it does
+not rewrite the provider handshake or grant implementations that are not
+currently allowlisted. Every outbound event after the handshake remains an
+ordered strict comparison against the capture, so changed prompts, audio,
+tool results, extra events, and omitted events still fail replay.
+
+The handshake must be a usable captured `session.update`; missing or malformed
+initial configuration fails before a provider session starts and includes the
+capture path and reason in the error.
+
 You can pass a prompt when the capture expects an outbound user event:
 
 ```bash

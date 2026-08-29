@@ -74,7 +74,7 @@ func TestSessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay(t *test
 	}
 }
 
-func TestSessionCommand_StrictOpenAIReplayRejectsMissingExecAdvertisement(t *testing.T) {
+func TestSessionCommand_StrictOpenAIReplayRejectsRecordedExecCallWithoutCurrentAllowlist(t *testing.T) {
 	configDir := t.TempDir()
 	writeSessionToolConfig(t, configDir, false)
 	execCommand := fmt.Sprintf("echo %s", strictOpenAIExecAdvertisementMarker)
@@ -100,8 +100,8 @@ func TestSessionCommand_StrictOpenAIReplayRejectsMissingExecAdvertisement(t *tes
 	if err == nil {
 		t.Fatal("strict replay unexpectedly accepted a session without exec definitions")
 	}
-	if !strings.Contains(err.Error(), "expected outbound payload for session.update") {
-		t.Fatalf("missing-advertisement error = %v, want expected-versus-actual session.update mismatch", err)
+	if !strings.Contains(err.Error(), "expected outbound payload for conversation.item.create at sequence 9") {
+		t.Fatalf("recorded-tool allowlist error = %v, want strict post-handshake tool-result mismatch", err)
 	}
 }
 

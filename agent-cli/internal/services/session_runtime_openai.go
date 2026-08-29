@@ -3,7 +3,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -65,22 +63,25 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
-	model := replayDialer.Model()
-	if strings.TrimSpace(model) == "" {
-		model = openAIRealtimeModel
-	}
-	replayToolDefinitions, err := openAIReplayToolDefinitions(opts.ReplayPath, opts.ToolDefinitions)
+	configuration, err := loadReplaySessionConfiguration(opts.ReplayPath)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
-	// A websocket replay owns its historical initial session.update payload.
-	// Historical captures without a tools field must keep their original
-	// outbound sequence, while a strict tool-bearing capture opts into the
-	// selected definitions so the production provider config is validated.
+	model := configuration.model
+	if strings.TrimSpace(model) == "" {
+		model = replayDialer.Model()
+	}
+	if strings.TrimSpace(model) == "" {
+		model = openAIRealtimeModel
+	}
+	// The initial provider configuration is captured wire data. The current
+	// tool definitions remain on plan.loop for local execution, but are not
+	// used to rebuild the provider handshake.
+	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(replayDialer, configuration)
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, opts.Voice, replayDialer, replayToolDefinitions, false)
+	}, opts.Voice, replayDialerWithConfiguration, nil, false)
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -102,47 +103,6 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			return nil
 		},
 	}, nil
-}
-
-// openAIReplayToolDefinitions selects definitions only for captures whose
-// initial session.update explicitly contains a tools field. This keeps older
-// no-tools fixtures replayable while making a tool-bearing fixture a strict
-// assertion of the provider-facing session configuration.
-func openAIReplayToolDefinitions(path string, definitions []messages.ToolDefinition) ([]messages.ToolDefinition, error) {
-	if len(definitions) == 0 {
-		return nil, nil
-	}
-
-	capture, err := gwtesting.LoadSessionCapture(path)
-	if err != nil {
-		return nil, fmt.Errorf("inspect replay session capture %s: %w", path, err)
-	}
-	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "session.update" {
-			continue
-		}
-		payload := record.Payload
-		if len(payload) == 0 {
-			payload = record.Data
-		}
-		var envelope struct {
-			Session map[string]json.RawMessage `json:"session"`
-		}
-		if err := json.Unmarshal(payload, &envelope); err != nil {
-			return nil, fmt.Errorf("decode replay session.update: %w", err)
-		}
-		if _, hasTools := envelope.Session["tools"]; !hasTools {
-			return nil, nil
-		}
-
-		selected := make([]messages.ToolDefinition, len(definitions))
-		copy(selected, definitions)
-		for i := range selected {
-			selected[i].Parameters = append([]messages.ToolParameter(nil), definitions[i].Parameters...)
-		}
-		return selected, nil
-	}
-	return nil, nil
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
