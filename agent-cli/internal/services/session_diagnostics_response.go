@@ -69,6 +69,43 @@ func (o *sessionProgressObserver) beginObservedResponse(id string) bool {
 	return true
 }
 
+// adoptObservedResponseID upgrades a legacy response that opened without an
+// ID when a later terminal event supplies one. It preserves the response's
+// output ledger while binding accepted tool continuations to the newly known
+// owner, so a terminal-only provider ID remains useful without allowing a
+// completed or retired response to reclaim the active lifecycle.
+func (o *sessionProgressObserver) adoptObservedResponseID(id string) bool {
+	if o == nil || !o.activeResponse || o.activeResponseID != "" {
+		return true
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return true
+	}
+	if o.completedResponseIDs == nil {
+		o.completedResponseIDs = make(map[string]struct{})
+	}
+	if o.retiredResponseIDs == nil {
+		o.retiredResponseIDs = make(map[string]struct{})
+	}
+	if _, completed := o.completedResponseIDs[id]; completed {
+		return false
+	}
+	if _, retired := o.retiredResponseIDs[id]; retired {
+		return false
+	}
+	o.activeResponseID = id
+	o.toolStateMu.Lock()
+	o.ensureToolStateLocked()
+	for _, state := range o.toolContinuations {
+		if state != nil && state.resultAccepted && state.continuationRequested && state.providerCallObserved && state.toolResponseComplete && state.continuationResponseID == "" {
+			state.continuationResponseID = id
+		}
+	}
+	o.toolStateMu.Unlock()
+	return true
+}
+
 func (o *sessionProgressObserver) ownsObservedResponseEnd(id string) bool {
 	if o == nil {
 		return false
@@ -81,7 +118,18 @@ func (o *sessionProgressObserver) ownsObservedResponseEnd(id string) bool {
 			// belongs to the active response; a non-empty wrong ID never does.
 			return id == "" || id == o.activeResponseID
 		}
-		return id == ""
+		if id == "" {
+			return true
+		}
+		if o.completedResponseIDs == nil {
+			o.completedResponseIDs = make(map[string]struct{})
+		}
+		if o.retiredResponseIDs == nil {
+			o.retiredResponseIDs = make(map[string]struct{})
+		}
+		_, completed := o.completedResponseIDs[id]
+		_, retired := o.retiredResponseIDs[id]
+		return !completed && !retired
 	}
 	if id != "" {
 		if o.completedResponseIDs == nil {

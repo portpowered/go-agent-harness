@@ -834,6 +834,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		if !o.ownsObservedResponseEnd(msgResponseID) {
 			return
 		}
+		if msgResponseID != "" && o.activeResponse && o.activeResponseID == "" && !o.adoptObservedResponseID(msgResponseID) {
+			return
+		}
 		if !o.activeResponse && msgResponseID != "" {
 			newResponseBoundary = o.beginObservedResponse(msgResponseID)
 		}
@@ -841,8 +844,10 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			responseLifecycleID = o.activeResponseID
 		}
 	case messages.StreamTypeSessionClose:
-		o.activeResponse = false
-		o.activeResponseID = ""
+		// Keep the active response owner while draining already-queued provider
+		// output. A transport can deliver SESSION.CLOSE before the response's
+		// terminal event; clearing the owner here would make that terminal look
+		// like a new response and discard its output ledger.
 	default:
 		if responseScopedStreamType(msg.Type) && !o.responseEventBelongsToActive(msgResponseID) {
 			return
@@ -1024,8 +1029,6 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
-		o.activeResponse = false
-		o.activeResponseID = ""
 	}
 }
 
