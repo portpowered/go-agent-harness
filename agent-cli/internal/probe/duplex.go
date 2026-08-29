@@ -452,59 +452,13 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		}()
 	}
 
-	// A pipe write or a segment gate cannot be left waiting after cancellation.
-	// Closing stdin unblocks an in-flight write, and killing the process group
-	// closes inherited stdout/stderr descriptors held by descendants.
-	watchDone := make(chan struct{})
-	var watchWG sync.WaitGroup
-	watchWG.Add(1)
-	go func() {
-		defer watchWG.Done()
-		select {
-		case <-runCtx.Done():
-			_ = closeStdin()
-			_ = terminate()
-		case <-watchDone:
-		}
-	}()
-
 	waitDone := make(chan error, 1)
 	go func() {
 		waitCount.Add(1)
 		waitDone <- child.Wait()
 	}()
 
-	var waitErr error
-	var processWaitOK bool
-	select {
-	case waitErr = <-waitDone:
-		processWaitOK = true
-	case <-runCtx.Done():
-		waitErr, processWaitOK = waitForDuplexProcess(waitDone, normalized.ShutdownGrace, terminate)
-	}
-
-	// The process may exit before the script has delivered every segment. Close
-	// the caller-owned write end so the input pump observes the premature EOF
-	// rather than remaining blocked on a dead child.
-	_ = closeStdin()
-	if processWaitOK {
-		cancelRun()
-	}
-	close(watchDone)
-	watchWG.Wait()
-
-	pumpsDone := make(chan struct{})
-	go func() {
-		pumps.Wait()
-		close(pumpsDone)
-	}()
-	var pumpsJoined bool
-	select {
-	case <-pumpsDone:
-		pumpsJoined = true
-	case <-time.After(normalized.ShutdownGrace):
-	}
-	terminationWG.Wait()
+	waitErr, processWaitOK, pumpsJoined := waitForDuplexChild(runCtx, closeStdin, terminate, waitDone, &pumps, &terminationWG, cancelRun, normalized.ShutdownGrace)
 
 	result.Duration = time.Since(startedAt)
 	result.ExitCode = duplexExitCode(child, waitErr)
@@ -585,6 +539,63 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		failures = append(failures, ErrDuplexOutputCaptureLimit)
 	}
 	return result, errors.Join(failures...)
+}
+
+func waitForDuplexChild(
+	runCtx context.Context,
+	closeStdin func() error,
+	terminate func() error,
+	waitDone <-chan error,
+	pumps *sync.WaitGroup,
+	terminationWG *sync.WaitGroup,
+	cancelRun context.CancelFunc,
+	shutdownGrace time.Duration,
+) (waitErr error, processWaitOK, pumpsJoined bool) {
+	// A pipe write or a segment gate cannot be left waiting after cancellation.
+	// Closing stdin unblocks an in-flight write, and killing the process group
+	// closes inherited stdout/stderr descriptors held by descendants.
+	watchDone := make(chan struct{})
+	var watchWG sync.WaitGroup
+	watchWG.Add(1)
+	go func() {
+		defer watchWG.Done()
+		select {
+		case <-runCtx.Done():
+			_ = closeStdin()
+			_ = terminate()
+		case <-watchDone:
+		}
+	}()
+
+	select {
+	case waitErr = <-waitDone:
+		processWaitOK = true
+	case <-runCtx.Done():
+		waitErr, processWaitOK = waitForDuplexProcess(waitDone, shutdownGrace, terminate)
+	}
+
+	// The process may exit before the script has delivered every segment. Close
+	// the caller-owned write end so the input pump observes the premature EOF
+	// rather than remaining blocked on a dead child.
+	_ = closeStdin()
+	if processWaitOK {
+		cancelRun()
+	}
+	close(watchDone)
+	watchWG.Wait()
+
+	pumpsDone := make(chan struct{})
+	go func() {
+		pumps.Wait()
+		close(pumpsDone)
+	}()
+	select {
+	case <-pumpsDone:
+		pumpsJoined = true
+	case <-time.After(shutdownGrace):
+	}
+	terminationWG.Wait()
+	return waitErr, processWaitOK, pumpsJoined
 }
 
 // RunDuplexSession is the convenient function form for callers that do not
@@ -855,150 +866,6 @@ func duplexChildEnvironment(config normalizedDuplexConfig) []string {
 		}
 	}
 	return environment
-}
-
-type duplexProgressState struct {
-	mu            sync.Mutex
-	changed       chan struct{}
-	startedAt     time.Time
-	inputBytes    int64
-	inputFrames   int
-	outputBytes   int64
-	outputReads   int
-	inputSegments int
-	output        []DuplexOutputEvent
-	outputClosed  bool
-}
-
-func newDuplexProgressState() *duplexProgressState {
-	return &duplexProgressState{changed: make(chan struct{})}
-}
-
-func (s *duplexProgressState) snapshot() DuplexProgressSnapshot {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return DuplexProgressSnapshot{
-		At:            s.elapsedLocked(),
-		InputBytes:    s.inputBytes,
-		InputFrames:   s.inputFrames,
-		OutputBytes:   s.outputBytes,
-		OutputReads:   s.outputReads,
-		InputSegments: s.inputSegments,
-		OutputClosed:  s.outputClosed,
-	}
-}
-
-func (s *duplexProgressState) setStartedAt(startedAt time.Time) {
-	s.mu.Lock()
-	s.startedAt = startedAt
-	s.mu.Unlock()
-}
-
-func (s *duplexProgressState) elapsed() time.Duration {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.elapsedLocked()
-}
-
-func (s *duplexProgressState) elapsedLocked() time.Duration {
-	if s.startedAt.IsZero() {
-		return 0
-	}
-	return time.Since(s.startedAt)
-}
-
-func (s *duplexProgressState) noteInputSegment() {
-	s.mu.Lock()
-	s.inputSegments++
-	close(s.changed)
-	s.changed = make(chan struct{})
-	s.mu.Unlock()
-}
-
-func (s *duplexProgressState) noteInput(data []byte) {
-	s.mu.Lock()
-	s.inputBytes += int64(len(data))
-	s.inputFrames++
-	close(s.changed)
-	s.changed = make(chan struct{})
-	s.mu.Unlock()
-}
-
-func (s *duplexProgressState) noteOutput(event DuplexOutputEvent) {
-	s.mu.Lock()
-	s.outputBytes += int64(event.Bytes)
-	s.outputReads++
-	event.Total = s.outputBytes
-	event.Read = s.outputReads
-	s.output = append(s.output, event)
-	close(s.changed)
-	s.changed = make(chan struct{})
-	s.mu.Unlock()
-}
-
-func (s *duplexProgressState) waitForOutput(ctx context.Context, minimum int64, reads bool) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	for {
-		s.mu.Lock()
-		met := s.outputBytes >= minimum
-		if reads {
-			met = int64(s.outputReads) >= minimum
-		}
-		if met {
-			s.mu.Unlock()
-			return nil
-		}
-		changed := s.changed
-		s.mu.Unlock()
-		select {
-		case <-changed:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-func (s *duplexProgressState) outputEvents() []DuplexOutputEvent {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]DuplexOutputEvent(nil), s.output...)
-}
-
-func (s *duplexProgressState) waitForChange(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	s.mu.Lock()
-	if s.outputClosed {
-		s.mu.Unlock()
-		return nil
-	}
-	changed := s.changed
-	s.mu.Unlock()
-	select {
-	case <-changed:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (s *duplexProgressState) noteOutputClosed() {
-	s.mu.Lock()
-	if !s.outputClosed {
-		s.outputClosed = true
-		close(s.changed)
-		s.changed = make(chan struct{})
-	}
-	s.mu.Unlock()
-}
-
-func (s *duplexProgressState) outputIsClosed() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.outputClosed
 }
 
 type duplexCapture struct {
