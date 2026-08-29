@@ -41,6 +41,20 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 		selection := browser.Selection
 		browserID := strings.TrimSpace(selection.Browser)
 		targetID := strings.TrimSpace(selection.Tab)
+		if refBrowserID, refTargetID, composite := splitCompositeTargetRef(targetID); composite {
+			// The tabs listing prints "browserID/targetID" references; accept
+			// that exact token here the same way the direct commands do.
+			if browserID != "" && browserID != refBrowserID {
+				return webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the target reference names a different browser than the explicit browser selector", map[string]any{
+					"browser_id":          normalizeDirectOpaqueID(browserID),
+					"target_id":           normalizeDirectOpaqueID(refTargetID),
+					"selected_generation": uint64(0),
+					"reason":              "selector_browser_mismatch",
+				})
+			}
+			browserID = refBrowserID
+			targetID = refTargetID
+		}
 		origin := strings.TrimSpace(selection.Origin)
 		hasExplicitSelection := browserID != "" || targetID != "" || origin != ""
 

@@ -251,3 +251,21 @@ func directReplacementReason(candidates []webmcp.BrowserCandidate, browser confi
 	}
 	return "", false
 }
+
+// splitCompositeTargetRef accepts the exact "browserID/targetID" reference
+// form that the tabs, context, and tools outputs print, so a listed reference
+// can be handed back verbatim to --tab. Both halves must be valid opaque IDs;
+// any other shape is left untouched and treated as a bare target ID.
+func splitCompositeTargetRef(value string) (string, string, bool) {
+	value = strings.TrimSpace(value)
+	browserPart, targetPart, found := strings.Cut(value, "/")
+	if !found {
+		return "", "", false
+	}
+	browserID := normalizeDirectOpaqueID(browserPart)
+	targetID := normalizeDirectOpaqueID(targetPart)
+	if browserID == "" || targetID == "" {
+		return "", "", false
+	}
+	return browserID, targetID, true
+}
