@@ -33,7 +33,7 @@
     {
       "id": "create-final-release-note",
       "intent": "Create the corrected final release note at final/brief.md.",
-      "allowed_dispositions": ["completed"],
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
       "partial_side_effect_policy": "preserve",
       "side_effect_rule": "Complete and independently verify final/brief.md; the original draft must not be mistaken for the replacement.",
       "oracle": {

@@ -61,13 +61,13 @@ func (e TerminationEvidence) Validate(scenario CustomerScenario) error {
 			return contractFieldError(ErrInvalidCustomerEvidence, "termination."+field.name, "must not be empty")
 		}
 	}
-	if e.ActiveResponseStatus != "completed" && e.ActiveResponseStatus != "cancelled" && e.ActiveResponseStatus != "interrupted" {
+	if e.ActiveResponseStatus != "completed" && e.ActiveResponseStatus != "cancelled" && e.ActiveResponseStatus != "interrupted" && e.ActiveResponseStatus != "incomplete" {
 		return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_status", fmt.Sprintf("%q is invalid", e.ActiveResponseStatus))
 	}
 	if e.ActiveResponseStartedAt < 0 || e.ActiveResponseEndedAt < e.ActiveResponseStartedAt || e.SatisfactionAt < 0 || e.SignalAt < 0 {
 		return contractFieldError(ErrInvalidCustomerEvidence, "termination", "timestamps must be non-negative and ordered")
 	}
-	if e.ActiveResponseStartedAt == e.ActiveResponseEndedAt {
+	if e.ActiveResponseStartedAt == e.ActiveResponseEndedAt && e.ActiveResponseStatus != "incomplete" {
 		return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_ended_at", "must follow response start")
 	}
 	if e.SignalSent {
@@ -84,24 +84,31 @@ func (e TerminationEvidence) Validate(scenario CustomerScenario) error {
 		return contractFieldError(ErrInvalidCustomerEvidence, "termination.signal", "must be empty when no signal was sent")
 	}
 	if e.Method == TerminationSIGINT {
-		if !e.SignalSent {
-			return contractFieldError(ErrInvalidCustomerEvidence, "termination.signal_sent", "SIGINT runs must record the sent signal")
-		}
 		if e.SatisfactionDeclared {
 			return contractFieldError(ErrInvalidCustomerEvidence, "termination.satisfaction_declared", "SIGINT must not be reported as natural satisfaction")
 		}
-		if e.ActiveResponseStatus != "cancelled" && e.ActiveResponseStatus != "interrupted" {
-			return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_status", "SIGINT must interrupt the active response")
+		if e.SignalSent {
+			if e.ActiveResponseStatus != "cancelled" && e.ActiveResponseStatus != "interrupted" {
+				return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_status", "SIGINT must interrupt the active response")
+			}
+		} else if e.ActiveResponseStatus != "incomplete" {
+			return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_status", "an unrecorded SIGINT must leave the response incomplete")
 		}
 	} else {
 		if e.SignalSent {
 			return contractFieldError(ErrInvalidCustomerEvidence, "termination.signal_sent", "natural completion must not send SIGINT")
 		}
-		if !e.SatisfactionDeclared || e.SatisfactionAt < e.ActiveResponseEndedAt {
-			return contractFieldError(ErrInvalidCustomerEvidence, "termination.satisfaction_declared", "natural completion needs a satisfaction decision after the response")
-		}
-		if e.ActiveResponseStatus != "completed" {
-			return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_status", "natural completion needs a completed response")
+		if e.ActiveResponseStatus == "incomplete" {
+			if e.SatisfactionDeclared || e.SatisfactionAt != 0 {
+				return contractFieldError(ErrInvalidCustomerEvidence, "termination.satisfaction_declared", "an incomplete response cannot declare satisfaction")
+			}
+		} else {
+			if !e.SatisfactionDeclared || e.SatisfactionAt < e.ActiveResponseEndedAt {
+				return contractFieldError(ErrInvalidCustomerEvidence, "termination.satisfaction_declared", "natural completion needs a satisfaction decision after the response")
+			}
+			if e.ActiveResponseStatus != "completed" {
+				return contractFieldError(ErrInvalidCustomerEvidence, "termination.active_response_status", "natural completion needs a completed response")
+			}
 		}
 	}
 	if e.ActiveActionID != FamilyDActionID {

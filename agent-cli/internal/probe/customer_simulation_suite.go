@@ -1181,17 +1181,26 @@ func customerSimulationTerminationEvidence(scenario CustomerScenario, product []
 	if start == 0 && len(result.Output) > 0 {
 		start = result.Output[0].At
 	}
-	if end <= start {
-		end = start + time.Millisecond
-	}
-	status := "completed"
+	status := "incomplete"
 	if scenario.Termination == TerminationSIGINT {
-		status = "interrupted"
+		if process.SignalSent {
+			status = "interrupted"
+			if facts.cancelObserved {
+				status = "cancelled"
+			}
+		}
+	} else if len(product) > 0 && product[0].Final {
+		status = "completed"
 	}
-	if scenario.Termination == TerminationSIGINT && facts.cancelObserved {
-		status = "cancelled"
+	if status != "incomplete" {
+		if end <= start {
+			end = start + time.Millisecond
+		}
+		if process.SignalSent && process.SignalAt > end {
+			end = process.SignalAt
+		}
 	}
-	satisfaction := scenario.Termination == TerminationNatural && len(product) > 0 && product[0].Final
+	satisfaction := status == "completed" && scenario.Termination == TerminationNatural
 	satisfactionAt := time.Duration(0)
 	if satisfaction {
 		satisfactionAt = end + time.Nanosecond

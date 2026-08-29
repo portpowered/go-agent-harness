@@ -156,7 +156,7 @@ func NewFamilyBScenario() CustomerScenario {
 			{
 				ID:                      FamilyBReplacementActionID,
 				Intent:                  "Create the corrected final release note at final/brief.md.",
-				AllowedDispositions:     []TerminalDisposition{DispositionCompleted},
+				AllowedDispositions:     append([]TerminalDisposition(nil), allDispositions...),
 				PartialSideEffectPolicy: PartialSideEffectsPreserve,
 				SideEffectRule:          "Complete and independently verify final/brief.md; the original draft must not be mistaken for the replacement.",
 				Oracle: ActionOracle{

@@ -85,6 +85,54 @@ func TestRunCustomerSimulationSuiteLeavesTypedBrokenBundleWithoutProductRecord(t
 	}
 }
 
+func TestRunCustomerSimulationSuiteLeavesTypedBrokenTerminationBundles(t *testing.T) {
+	binaryPath := filepath.Join(t.TempDir(), "child.sh")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nwhile IFS= read -r -n 1 byte; do :; done\nexit 1\n"), 0o700); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+	validator := CustomerSimulationValidatorAgentFunc(func(_ context.Context, request CustomerSimulationValidatorRequest) ([]byte, error) {
+		return json.Marshal(ValidatorVerdict{
+			Verdict: ValidatorBroken, FirstFailingTurn: request.Input.Scenario.Actions[0].ID,
+			Behavior: "the fake child exited before producing product evidence", Violation: "the session did not finish",
+			EvidenceRefs: []string{"scenario.json", "process.json"}, CustomerImpact: "the customer received no verified response",
+		})
+	})
+	for _, scenario := range []CustomerScenario{
+		NewFamilyBScenario(),
+		NewFamilyDScenario(TerminationSIGINT),
+		NewFamilyDScenario(TerminationNatural),
+	} {
+		t.Run(scenario.ID, func(t *testing.T) {
+			script := CustomerSimulationScenarioScript(scenario)
+			audio := make([][]byte, len(script))
+			for index := range audio {
+				audio[index] = []byte{byte(index + 1), 0}
+			}
+			result, err := RunCustomerSimulationSuite(context.Background(), CustomerSimulationSuiteOptions{
+				BinaryPath: binaryPath, RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime", APIKey: "test-key",
+				Runs: []CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: audio}}, Validator: validator,
+				MaxDuration: time.Second, FrameDuration: time.Millisecond, SilenceDuration: 0, ShutdownGrace: 100 * time.Millisecond,
+			})
+			if err == nil {
+				t.Fatal("RunCustomerSimulationSuite error = nil, want failed child/non-passing run")
+			}
+			if len(result.Runs) != 1 {
+				t.Fatalf("run count = %d, want 1", len(result.Runs))
+			}
+			run := result.Runs[0]
+			if run.Validator.Verdict.Verdict != ValidatorBroken || run.Validator.Pass() {
+				t.Fatalf("validator result = %+v, want structured BROKEN", run.Validator)
+			}
+			if _, err := VerifyCustomerEvidenceBundle(run.BundleRoot); err != nil {
+				t.Fatalf("VerifyCustomerEvidenceBundle(%q): %v", run.BundleRoot, err)
+			}
+			if strings.Contains(run.Error, "test-key") {
+				t.Fatalf("run error leaked API key: %q", run.Error)
+			}
+		})
+	}
+}
+
 func TestReadCustomerSimulationStreamCorrelatesCompleteToolMessage(t *testing.T) {
 	root := t.TempDir()
 	base := time.Unix(0, 0)
