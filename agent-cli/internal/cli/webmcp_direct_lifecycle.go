@@ -38,7 +38,14 @@ func registerWebMCPDirectCommandTimeoutFlag(cmd *cobra.Command, values *webmcpDi
 	if cmd == nil || values == nil {
 		return
 	}
-	cmd.Flags().DurationVar(&values.commandTimeout, "command-timeout", DefaultWebMCPDirectCommandTimeout, "End-to-end WebMCP command bound (Go duration; zero uses the safe default)")
+	registerWebMCPCommandTimeoutFlag(cmd, &values.commandTimeout)
+}
+
+func registerWebMCPCommandTimeoutFlag(cmd *cobra.Command, target *time.Duration) {
+	if cmd == nil || target == nil {
+		return
+	}
+	cmd.Flags().DurationVar(target, "command-timeout", DefaultWebMCPDirectCommandTimeout, "End-to-end WebMCP command bound (Go duration; zero uses the safe default)")
 }
 
 func directCommandTimeout(values *webmcpDirectFlags) time.Duration {
@@ -74,8 +81,10 @@ func constructWebMCPDoctorRuntime(ctx context.Context, factory WebMCPDoctorFacto
 	// A caller may enter the command with an already-canceled context (for
 	// example, a watch that is being shut down). Preserve the pre-existing
 	// command behavior of constructing and closing its request-scoped runtime;
-	// the operation itself still observes the canceled context below.
-	if ctx.Err() != nil {
+	// the operation itself still observes the canceled context below. A
+	// deadline, however, must never force a potentially blocking legacy
+	// factory call onto the command's critical path.
+	if errors.Is(ctx.Err(), context.Canceled) {
 		return factory(browser)
 	}
 
