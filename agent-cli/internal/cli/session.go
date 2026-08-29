@@ -493,10 +493,11 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				Present: cmd.Flags().Changed("prompt"),
 			}
 			audioInput := services.SessionAudioInput{
-				Path:          audioIn,
-				Stdin:         cmd.InOrStdin(),
-				Present:       cmd.Flags().Changed("audio-in"),
-				DevicePresent: cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
+				Path:               audioIn,
+				Stdin:              cmd.InOrStdin(),
+				CloseStdinOnCancel: audioIn == "-",
+				Present:            cmd.Flags().Changed("audio-in"),
+				DevicePresent:      cmd.Flags().Lookup("audio-in-device") != nil && cmd.Flags().Changed("audio-in-device"),
 			}
 			// Validate command-only combinations before constructing the browser
 			// capability. Once construction succeeds, ownership transfers to the

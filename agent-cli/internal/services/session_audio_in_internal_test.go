@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -113,6 +115,61 @@ func TestNewSessionWAVSourceStreamsFrameByFrame(t *testing.T) {
 	if reader.consumed != int64(len(wav)) {
 		t.Fatalf("EOF read consumed beyond payload: %d vs %d", reader.consumed, len(wav))
 	}
+}
+
+func TestSessionAudioReaderClosesOwnedPipeWhenDeadlineUnsupported(t *testing.T) {
+	reader := &ownedBlockingDeadlineReader{started: make(chan struct{}), closed: make(chan struct{})}
+	audioReader := newSessionAudioReader(reader, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	audioReader.bindContext(ctx)
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := audioReader.Read(make([]byte, 4))
+		result <- err
+	}()
+	select {
+	case <-reader.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("owned pipe reader did not start")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("owned pipe read error = %v, want context cancellation", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("owned pipe reader remained blocked after cancellation")
+	}
+	select {
+	case <-reader.closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("owned pipe was not closed to interrupt the read")
+	}
+}
+
+type ownedBlockingDeadlineReader struct {
+	started   chan struct{}
+	closed    chan struct{}
+	startOnce sync.Once
+	closeOnce sync.Once
+}
+
+func (r *ownedBlockingDeadlineReader) Read([]byte) (int, error) {
+	r.startOnce.Do(func() { close(r.started) })
+	<-r.closed
+	return 0, errors.New("owned reader closed")
+}
+
+func (r *ownedBlockingDeadlineReader) Close() error {
+	r.closeOnce.Do(func() { close(r.closed) })
+	return nil
+}
+
+func (*ownedBlockingDeadlineReader) SetReadDeadline(time.Time) error {
+	return errors.New("deadline unsupported")
 }
 
 func TestSessionWAVSourceZeroPadsFinalShortFrame(t *testing.T) {
