@@ -100,7 +100,7 @@ func TestSessionCommand_StrictOpenAIReplayRejectsRecordedExecCallWithoutCurrentA
 	if err == nil {
 		t.Fatal("strict replay unexpectedly accepted a session without exec definitions")
 	}
-	if !strings.Contains(err.Error(), "expected outbound payload for conversation.item.create at sequence 9") {
+	if !strings.Contains(err.Error(), `expected event type "conversation.item.create" at sequence 9`) {
 		t.Fatalf("recorded-tool allowlist error = %v, want strict post-handshake tool-result mismatch", err)
 	}
 }
