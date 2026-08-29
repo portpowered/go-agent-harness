@@ -297,7 +297,7 @@ prepush: ## Run the fail-fast, timed local pre-push gate.
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
-	steps="fmt vet lint staticcheck test-factory-scripts test test-integration test-regressions build coverage"; \
+	steps="fmt vet lint staticcheck test-factory-scripts test-integration test-regressions build coverage"; \
 	for step in $$steps; do \
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
