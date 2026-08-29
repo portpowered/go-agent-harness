@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "id": "family-d-natural",
+  "name": "Customer natural termination",
+  "family": "D",
+  "persona": "A listener who waits for a truthful completed response",
+  "goal": "End a conversational session through declared satisfaction and natural completion",
+  "wording_freedom": "Use natural wording while preserving the active-response boundary and natural termination method.",
+  "text_seed": "The request has no filesystem side effect. Wait for the completed response, declare satisfaction, and record clean stream and process facts.",
+  "image_events": [],
+  "actions": [
+    {
+      "id": "active-customer-request",
+      "intent": "Handle the active customer request until natural satisfaction.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "forbid",
+      "side_effect_rule": "Do not create a filesystem artifact; natural completion preserves the empty sandbox and records the completed action.",
+      "oracle": {
+        "description": "termination/marker.txt remains absent and the product response truthfully reports completion.",
+        "checkpoints": [
+          {"path": "termination/marker.txt", "type": "absent"}
+        ],
+        "require_confirmation": true,
+        "required_text": ["request is complete", "ready to stop"]
+      }
+    }
+  ],
+  "sandbox": {
+    "name": "fresh-family-d-sandbox",
+    "root": ".",
+    "fresh": true
+  },
+  "interruption_trigger": {
+    "kind": "none",
+    "before_terminal": false
+  },
+  "patience": {
+    "listen_before_follow_up": 250000000,
+    "response_start": 1000000000,
+    "in_progress_work": 2000000000,
+    "reprompt": 3000000000,
+    "absolute_dead_air": 10000000000,
+    "max_reprompts": 1
+  },
+  "termination": "natural",
+  "deadline": 30000000000
+}

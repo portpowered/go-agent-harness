@@ -2,13 +2,28 @@
 
 package probe
 
-import "os/exec"
+import (
+	"errors"
+	"os"
+	"os/exec"
+)
 
 func prepareDuplexCommand(*exec.Cmd) {}
 
 func terminateDuplexCommand(command *exec.Cmd) error {
-	if command == nil || command.Process == nil || command.ProcessState != nil && command.ProcessState.Exited() {
+	if command == nil || command.Process == nil {
 		return nil
 	}
-	return command.Process.Kill()
+	err := command.Process.Kill()
+	if errors.Is(err, os.ErrProcessDone) {
+		return nil
+	}
+	return err
+}
+
+func duplexDescendantsAlive(command *exec.Cmd, childWaited bool) bool {
+	if command == nil || command.Process == nil {
+		return false
+	}
+	return !childWaited
 }

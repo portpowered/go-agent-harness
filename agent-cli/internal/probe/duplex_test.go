@@ -42,7 +42,7 @@ func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 		t.Fatalf("RunDuplexSession() error = %v", err)
 	}
 
-	if result.ExitCode != 0 || !result.ChildWaited {
+	if result.ExitCode != 0 || result.ExitClassification != "normal" || !result.ChildWaited || result.WaitCount != 1 || result.DescendantsAlive {
 		t.Fatalf("process result = %+v, want a waited zero-exit child", result)
 	}
 	if !result.InputClosed || !result.InputFinished || !result.StdoutClosed || !result.StderrClosed {
@@ -83,6 +83,40 @@ func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 	}
 	if !result.Input[1].Silent {
 		t.Fatalf("silence input evidence = %+v, want silent frame", result.Input[1])
+	}
+}
+
+func TestDuplexRunnerSendsSIGINTAtOutputBoundary(t *testing.T) {
+	binary := buildDuplexSIGINTChild(t)
+	result, err := RunDuplexSession(context.Background(), DuplexSessionConfig{
+		BinaryPath:                  binary,
+		RecordDir:                   filepath.Join(t.TempDir(), "record"),
+		Provider:                    "openai",
+		Model:                       "duplex-test-model",
+		APIKey:                      "sigint-secret",
+		MaxDuration:                 time.Second,
+		FrameDuration:               time.Millisecond,
+		ShutdownGrace:               200 * time.Millisecond,
+		Termination:                 TerminationSIGINT,
+		TerminationAfterOutputBytes: 2,
+		Segments: []DuplexAudioSegment{{
+			ID: "active-speech", PCM16: duplexTestFrame(7), SilenceFor: 500 * time.Millisecond,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("RunDuplexSession() error = %v; result = %+v", err, result)
+	}
+	if result.ExitClassification != "sigint" || !result.SignalSent || result.Signal != duplexSIGINTName {
+		t.Fatalf("SIGINT result = %+v, want recorded SIGINT classification", result)
+	}
+	if result.SignalAt <= 0 || result.SignalAt > result.Duration {
+		t.Fatalf("SIGINT timing = signal_at:%s duration:%s, want signal during run", result.SignalAt, result.Duration)
+	}
+	if !result.ChildWaited || result.WaitCount != 1 || result.DescendantsAlive {
+		t.Fatalf("SIGINT process lifecycle = %+v, want exactly one reap and no descendants", result)
+	}
+	if !result.InputClosed || result.InputFinished || !result.StdoutClosed || !result.StderrClosed {
+		t.Fatalf("SIGINT pipe lifecycle = %+v, want closed input/output with interrupted input", result)
 	}
 }
 
@@ -223,6 +257,42 @@ func main() {
 	command.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build child: %v\n%s", err, output)
+	}
+	return binary
+}
+
+func buildDuplexSIGINTChild(t *testing.T) string {
+	t.Helper()
+	source := filepath.Join(t.TempDir(), "duplex-sigint-child.go")
+	binary := filepath.Join(t.TempDir(), "duplex-sigint-child")
+	const program = `package main
+
+import (
+	"io"
+	"os"
+	"os/signal"
+)
+
+func main() {
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	frame := make([]byte, 960)
+	if n, err := io.ReadFull(os.Stdin, frame); n > 0 {
+		_, _ = os.Stdout.Write([]byte{0xa1, 0xb2})
+		if err != nil {
+			return
+		}
+	}
+	<-interrupt
+}
+`
+	if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
+		t.Fatalf("write SIGINT child source: %v", err)
+	}
+	command := exec.Command("go", "build", "-o", binary, source)
+	command.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build SIGINT child: %v\n%s", err, output)
 	}
 	return binary
 }

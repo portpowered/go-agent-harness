@@ -74,6 +74,14 @@ type DuplexSessionConfig struct {
 	AdditionalArgs []string
 	Segments       []DuplexAudioSegment
 
+	// Termination selects how the runner ends the child after the input
+	// script. The zero value is natural completion. SIGINT requires one of the
+	// output gates below and sends os.Interrupt once that observable product
+	// output crosses the child stdout boundary.
+	Termination                 TerminationMethod
+	TerminationAfterOutputBytes int64
+	TerminationAfterOutputReads int
+
 	// Output and ErrorOutput receive the same bytes that the child writes to
 	// stdout and stderr while the runner independently captures bounded copies.
 	Output      io.Writer
@@ -178,14 +186,20 @@ func (p *DuplexProgress) WaitForOutputReads(ctx context.Context, minimum int) er
 // receive the complete drained streams until their own writer reports an
 // error.
 type DuplexRunResult struct {
-	Command       string        `json:"command"`
-	SanitizedArgs []string      `json:"sanitized_args"`
-	PID           int           `json:"pid"`
-	ExitCode      int           `json:"exit_code"`
-	Duration      time.Duration `json:"duration"`
-	TimedOut      bool          `json:"timed_out"`
-	Cancelled     bool          `json:"cancelled"`
-	ChildWaited   bool          `json:"child_waited"`
+	Command            string        `json:"command"`
+	SanitizedArgs      []string      `json:"sanitized_args"`
+	PID                int           `json:"pid"`
+	ExitCode           int           `json:"exit_code"`
+	ExitClassification string        `json:"exit_classification"`
+	Duration           time.Duration `json:"duration"`
+	TimedOut           bool          `json:"timed_out"`
+	Cancelled          bool          `json:"cancelled"`
+	Signal             string        `json:"signal,omitempty"`
+	SignalSent         bool          `json:"signal_sent"`
+	SignalAt           time.Duration `json:"signal_at,omitempty"`
+	ChildWaited        bool          `json:"child_waited"`
+	WaitCount          int           `json:"wait_count"`
+	DescendantsAlive   bool          `json:"descendants_alive"`
 
 	InputClosed   bool `json:"input_closed"`
 	InputFinished bool `json:"input_finished"`
@@ -273,6 +287,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	var inputClosed atomic.Bool
 	var stdoutClosed atomic.Bool
 	var stderrClosed atomic.Bool
+	var waitCount atomic.Int32
 
 	var closeStdinOnce sync.Once
 	var closeStdinErr error
@@ -291,10 +306,15 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		return terminateErr
 	}
 
+	var signalSent atomic.Bool
+	var terminationRequested atomic.Bool
+	var signalAt time.Duration
+	var signalMu sync.Mutex
+
 	failureCh := make(chan error, 4)
 	var failureOnce sync.Once
 	recordFailure := func(failure error) {
-		if failure == nil || isExpectedDuplexCancellation(failure, runCtx) {
+		if failure == nil || isExpectedDuplexCancellation(failure, runCtx) || (terminationRequested.Load() && isExpectedDuplexSignalShutdown(failure)) {
 			return
 		}
 		failureOnce.Do(func() {
@@ -326,11 +346,51 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		}
 	}()
 
+	var terminationWG sync.WaitGroup
+	if normalized.Termination == TerminationSIGINT {
+		terminationWG.Add(1)
+		go func() {
+			defer terminationWG.Done()
+			var waitErr error
+			switch {
+			case normalized.TerminationAfterOutputBytes > 0:
+				waitErr = progress.waitForOutput(runCtx, normalized.TerminationAfterOutputBytes, false)
+			case normalized.TerminationAfterOutputReads > 0:
+				waitErr = progress.waitForOutput(runCtx, int64(normalized.TerminationAfterOutputReads), true)
+			}
+			if waitErr != nil {
+				return
+			}
+			terminationRequested.Store(true)
+			sent, err := sendDuplexSIGINT(child)
+			if err != nil {
+				terminationRequested.Store(false)
+				recordFailure(duplexPipeError("send SIGINT", err))
+				return
+			}
+			if !sent {
+				terminationRequested.Store(false)
+				return
+			}
+			signalSent.Store(true)
+			signalMu.Lock()
+			signalAt = time.Since(startedAt)
+			signalMu.Unlock()
+			// Stop feeding a process that has been asked to terminate. The input
+			// pump treats the resulting closed-pipe write as expected signal
+			// shutdown, while stdout/stderr continue draining concurrently.
+			_ = closeStdin()
+		}()
+	}
+
 	// A pipe write or a segment gate cannot be left waiting after cancellation.
 	// Closing stdin unblocks an in-flight write, and killing the process group
 	// closes inherited stdout/stderr descriptors held by descendants.
 	watchDone := make(chan struct{})
+	var watchWG sync.WaitGroup
+	watchWG.Add(1)
 	go func() {
+		defer watchWG.Done()
 		select {
 		case <-runCtx.Done():
 			_ = closeStdin()
@@ -340,7 +400,10 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	}()
 
 	waitDone := make(chan error, 1)
-	go func() { waitDone <- child.Wait() }()
+	go func() {
+		waitCount.Add(1)
+		waitDone <- child.Wait()
+	}()
 
 	var waitErr error
 	var processWaitOK bool
@@ -359,6 +422,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		cancelRun()
 	}
 	close(watchDone)
+	watchWG.Wait()
 
 	pumpsDone := make(chan struct{})
 	go func() {
@@ -371,16 +435,27 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		pumpsJoined = true
 	case <-time.After(normalized.ShutdownGrace):
 	}
+	terminationWG.Wait()
 
 	result.Duration = time.Since(startedAt)
 	result.ExitCode = duplexExitCode(child, waitErr)
 	result.TimedOut = deadlineReached.Load()
 	result.Cancelled = ctx.Err() != nil && !result.TimedOut
+	result.SignalSent = signalSent.Load()
+	if result.SignalSent {
+		result.Signal = duplexSIGINTName
+		signalMu.Lock()
+		result.SignalAt = signalAt
+		signalMu.Unlock()
+	}
 	result.ChildWaited = processWaitOK
+	result.WaitCount = int(waitCount.Load())
 	result.InputClosed = inputClosed.Load()
 	result.InputFinished = inputFinished.Load()
 	result.StdoutClosed = stdoutClosed.Load()
 	result.StderrClosed = stderrClosed.Load()
+	result.DescendantsAlive = duplexDescendantsAlive(child, processWaitOK)
+	result.ExitClassification = duplexExitClassification(result, normalized.Termination, waitErr)
 	result.CapturedOutputTruncated = stdoutCapture.truncated() || stderrCapture.truncated()
 	result.Stdout = stdoutCapture.bytes()
 	result.Stderr = stderrCapture.bytes()
@@ -414,7 +489,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	} else if result.TimedOut {
 		failures = append(failures, fmt.Errorf("%w after %s", ErrDuplexDeadline, normalized.MaxDuration))
 	}
-	if waitErr != nil && processWaitOK && !result.TimedOut {
+	if waitErr != nil && processWaitOK && !result.TimedOut && result.ExitClassification != "sigint" {
 		if result.ExitCode != 0 {
 			failures = append(failures, fmt.Errorf("%w: exit code %d", ErrDuplexProcessExit, result.ExitCode))
 		} else {
@@ -424,7 +499,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	if result.Cancelled {
 		failures = append(failures, ctx.Err())
 	}
-	if processWaitOK && !result.InputFinished && !result.TimedOut && !result.Cancelled {
+	if processWaitOK && !result.InputFinished && !result.TimedOut && !result.Cancelled && result.ExitClassification != "sigint" {
 		failures = append(failures, ErrDuplexInputIncomplete)
 	}
 	if !pumpsJoined {
@@ -493,6 +568,24 @@ func normalizeDuplexConfig(config DuplexSessionConfig) (normalizedDuplexConfig, 
 	}
 	if config.ShutdownGrace <= 0 {
 		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: shutdown grace must be positive", ErrDuplexConfigInvalid)
+	}
+	if config.Termination == "" {
+		config.Termination = TerminationNatural
+	}
+	if !config.Termination.valid() {
+		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: termination must be natural or sigint", ErrDuplexConfigInvalid)
+	}
+	if config.TerminationAfterOutputBytes < 0 || config.TerminationAfterOutputReads < 0 {
+		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: termination output gates must not be negative", ErrDuplexConfigInvalid)
+	}
+	if config.TerminationAfterOutputBytes > 0 && config.TerminationAfterOutputReads > 0 {
+		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: configure one termination output gate", ErrDuplexConfigInvalid)
+	}
+	if config.Termination == TerminationSIGINT && config.TerminationAfterOutputBytes == 0 && config.TerminationAfterOutputReads == 0 {
+		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: sigint termination requires an output gate", ErrDuplexConfigInvalid)
+	}
+	if config.Termination == TerminationNatural && (config.TerminationAfterOutputBytes > 0 || config.TerminationAfterOutputReads > 0) {
+		return normalizedDuplexConfig{}, func() {}, fmt.Errorf("%w: natural termination cannot configure an output gate", ErrDuplexConfigInvalid)
 	}
 	if err := validateDuplexAdditionalArgs(config.AdditionalArgs, config.APIKey); err != nil {
 		return normalizedDuplexConfig{}, func() {}, err
@@ -1021,6 +1114,43 @@ func isExpectedDuplexCancellation(err error, ctx context.Context) bool {
 		return false
 	}
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
+}
+
+const DuplexSIGINTName = "SIGINT"
+
+const duplexSIGINTName = DuplexSIGINTName
+
+func sendDuplexSIGINT(command *exec.Cmd) (bool, error) {
+	if command == nil || command.Process == nil {
+		return false, fmt.Errorf("%w: child process is unavailable", ErrDuplexProcessExit)
+	}
+	if err := command.Process.Signal(os.Interrupt); err != nil {
+		if errors.Is(err, os.ErrProcessDone) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func isExpectedDuplexSignalShutdown(err error) bool {
+	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
+}
+
+func duplexExitClassification(result DuplexRunResult, termination TerminationMethod, waitErr error) string {
+	if result.TimedOut {
+		return "timeout"
+	}
+	if result.Cancelled {
+		return "cancelled"
+	}
+	if result.SignalSent && termination == TerminationSIGINT {
+		return "sigint"
+	}
+	if result.ChildWaited && waitErr == nil && result.ExitCode == 0 {
+		return "normal"
+	}
+	return "failed"
 }
 
 func formatDuplexCommand(command string, args []string) string {

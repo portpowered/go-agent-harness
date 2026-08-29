@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -474,7 +475,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if !hasSessionMode && !browserToolsAdmission(cmd) {
 				return cmd.Help()
 			}
-			sessionContext := cmd.Context()
+			sessionContext, stopSignal := signal.NotifyContext(cmd.Context(), os.Interrupt)
+			defer stopSignal()
 			if maxDuration > 0 {
 				capturePath := c.askFlags.RecordCapturePath
 				if capturePath == "" {
