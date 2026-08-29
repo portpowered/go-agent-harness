@@ -14,6 +14,71 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+// WebMCPDirectInvocationReceipt is the bounded stderr handoff emitted once a
+// browser invocation has been dispatched. It intentionally contains no page
+// input/output, schema, endpoint, or credential data.
+type WebMCPDirectInvocationReceipt struct {
+	Version      string `json:"version"`
+	InvocationID string `json:"invocation_id"`
+	ToolRef      string `json:"tool_ref"`
+	State        string `json:"state"`
+}
+
+func writeWebMCPDirectInvocationReceipt(out io.Writer, result webmcp.InvokeResult, toolRef webmcp.ToolRef) (webmcp.InvocationID, error) {
+	invocationID := result.BrowserInvocationID
+	if invocationID == "" {
+		invocationID = result.InvocationID
+	}
+	if invocationID == "" {
+		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("browser returned no invocation ID"))
+	}
+	if out == nil {
+		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("stderr writer is unavailable"))
+	}
+	receipt, err := json.Marshal(WebMCPDirectInvocationReceipt{
+		Version:      webmcpDirectInvocationReceiptVersion,
+		InvocationID: string(invocationID),
+		ToolRef:      string(toolRef),
+		State:        string(webmcp.InvocationDispatched),
+	})
+	if err != nil {
+		return "", directInvocationReceiptError(invocationID, toolRef, err)
+	}
+	if len(receipt)+1 > webmcpDirectInvocationReceiptMaxBytes {
+		return "", directInvocationReceiptError(invocationID, toolRef, errors.New("receipt exceeds the bounded size"))
+	}
+	receipt = append(receipt, '\n')
+	for len(receipt) > 0 {
+		written, writeErr := out.Write(receipt)
+		if written > 0 {
+			receipt = receipt[written:]
+		}
+		if writeErr != nil {
+			return "", directInvocationReceiptError(invocationID, toolRef, writeErr)
+		}
+		if written == 0 {
+			return "", directInvocationReceiptError(invocationID, toolRef, io.ErrShortWrite)
+		}
+	}
+	if flusher, ok := out.(interface{ Flush() error }); ok {
+		if err := flusher.Flush(); err != nil {
+			return "", directInvocationReceiptError(invocationID, toolRef, err)
+		}
+	}
+	return invocationID, nil
+}
+
+func directInvocationReceiptError(invocationID webmcp.InvocationID, toolRef webmcp.ToolRef, cause error) error {
+	err := webmcp.NewClassifiedError(webmcp.ErrorInvocationFailed, "the WebMCP dispatch receipt could not be written", map[string]any{
+		"invocation_id":       string(invocationID),
+		"tool_ref":            string(toolRef),
+		"phase":               "dispatch_receipt",
+		"side_effect_unknown": true,
+	})
+	err.Cause = cause
+	return err
+}
+
 func (c *WebMCPOperationsCommand) contextWithCatalog(ctx context.Context, broker webmcp.Broker, page webmcp.PageContext, refresh bool) (WebMCPDirectContext, error) {
 	if refresh {
 		refreshed, err := selectedDirectContext(ctx, broker, true)
@@ -148,12 +213,11 @@ func resolveDirectInvocation(args []string, values *webmcpDirectFlags, broker we
 	if len(bytes.TrimSpace(input)) == 0 {
 		input = json.RawMessage(`{}`)
 	}
-	if !json.Valid(input) {
-		return "", nil, webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, "--input-json must contain one valid JSON value", map[string]any{
-			"tool_ref": values.toolRef,
-			"issues":   []webmcp.ToolResultIssue{{Path: "/input-json", Code: "invalid_json"}},
-		})
-	}
+	// Keep malformed input opaque until the broker has resolved the exact
+	// descriptor. The broker owns page-schema validation and can therefore
+	// include the selected tool's complete schema in its retryable error.
+	// Performing json.Valid here would lose that descriptor context and would
+	// also make positional tool names behave differently from --tool-ref.
 	if values.toolRef != "" {
 		return webmcp.ToolRef(values.toolRef), append(json.RawMessage(nil), input...), nil
 	}
@@ -263,6 +327,14 @@ func directInvocationResultError(result webmcp.InvokeResult, toolRef webmcp.Tool
 	if details == nil {
 		details = map[string]any{"invocation_id": string(result.InvocationID), "tool_ref": string(toolRef), "phase": "invoke"}
 	}
+	if result.BrowserInvocationID != "" {
+		copied := make(map[string]any, len(details)+1)
+		for key, value := range details {
+			copied[key] = value
+		}
+		copied["invocation_id"] = string(result.BrowserInvocationID)
+		details = copied
+	}
 	return webmcp.NewClassifiedError(code, "the WebMCP invocation could not be completed", details)
 }
 
@@ -347,7 +419,23 @@ func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr e
 	}
 	if operationErr != nil {
 		resultError := webmcpDirectErrorFor(operationErr, fallback)
-		_, err := fmt.Fprintf(out, "Error: %s — %s\n", resultError.Code, resultError.Message)
+		_, err := fmt.Fprintf(out, "Error: %s — %s", resultError.Code, resultError.Message)
+		if err == nil {
+			if invocationID, ok := resultError.Details["invocation_id"].(string); ok && invocationID != "" {
+				_, err = fmt.Fprintf(out, " invocation_id=%s", boundedDoctorText(invocationID, 160))
+			}
+		}
+		if err == nil {
+			if cancelSource, ok := resultError.Details["cancel_source"].(string); ok && cancelSource != "" {
+				_, err = fmt.Fprintf(out, " cancel_source=%s", boundedDoctorText(cancelSource, 40))
+			}
+		}
+		if err == nil && resultError.Details["side_effect_unknown"] == true {
+			_, err = io.WriteString(out, " side_effect_unknown=true; rollback and retry safety are unknown")
+		}
+		if err == nil {
+			_, err = fmt.Fprintln(out)
+		}
 		if err != nil {
 			return fmt.Errorf("write WebMCP command error: %w", err)
 		}

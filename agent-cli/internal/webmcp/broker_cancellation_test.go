@@ -72,6 +72,78 @@ func TestStatefulBrokerCancelsDispatchedWorkOnceAndIgnoresLateResults(t *testing
 	}
 }
 
+func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testing.T) {
+	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := testkit.NewDeterministicIDs()
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
+	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
+		testkit.RuntimeOptions{Clock: clock, IDs: ids},
+		testkit.BrowserConfig{
+			Candidate: candidate,
+			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: "test_fixture"}),
+				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+			)},
+		},
+	)
+	original, session, ref := newInvocationBroker(t, runtime, candidate, clock, ids, 30*time.Second)
+	session.BlockInvocations()
+
+	dispatched, err := original.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: []byte(`{"step":1}`)})
+	if err != nil {
+		t.Fatalf("invoke: %v", err)
+	}
+	if dispatched.BrowserInvocationID == "" {
+		t.Fatalf("dispatch result omitted browser invocation ID: %#v", dispatched)
+	}
+	if _, err := session.WaitForInvocation(context.Background()); err != nil {
+		t.Fatalf("observe target invocation: %v", err)
+	}
+
+	fresh := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:           runtime,
+		Discoverer:        staticDiscoverer{candidate},
+		IDs:               testkit.NewDeterministicIDs(),
+		Clock:             clock,
+		InvocationTimeout: 30 * time.Second,
+	})
+	t.Cleanup(func() { _ = fresh.Close() })
+	if _, err := fresh.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+		t.Fatalf("fresh select: %v", err)
+	}
+	if _, ok := fresh.Invocation(dispatched.InvocationID); ok {
+		t.Fatalf("fresh broker unexpectedly inherited the original invocation registry")
+	}
+
+	wrongTargetErr := fresh.CancelDirect(context.Background(), webmcp.DirectCancelRequest{
+		Target:       webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-b"},
+		InvocationID: dispatched.BrowserInvocationID,
+	})
+	var classifiedErr *webmcp.ClassifiedError
+	if !errors.As(wrongTargetErr, &classifiedErr) || classifiedErr.Code != webmcp.ErrorStaleSelection {
+		t.Fatalf("wrong-target direct cancel error = %v, want stale selection", wrongTargetErr)
+	}
+	if pending := session.PendingInvocations(); len(pending) != 1 {
+		t.Fatalf("wrong-target cancellation changed pending target work = %#v", pending)
+	}
+
+	if err := fresh.CancelDirect(context.Background(), webmcp.DirectCancelRequest{
+		Target:       webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"},
+		InvocationID: dispatched.BrowserInvocationID,
+		Reason:       "operator stopped the pending call",
+	}); err != nil {
+		t.Fatalf("fresh direct cancel: %v", err)
+	}
+	if pending := session.PendingInvocations(); len(pending) != 0 {
+		t.Fatalf("target pending invocations after direct cancel = %#v", pending)
+	}
+	cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel)
+	if len(cancelOperations) != 1 || cancelOperations[0].BrowserID != candidate.ID || cancelOperations[0].TargetID != "tab-a" || cancelOperations[0].InvocationID != dispatched.BrowserInvocationID || !cancelOperations[0].CancellationAcknowledged {
+		t.Fatalf("direct cancel operations = %#v", cancelOperations)
+	}
+}
+
 func TestStatefulBrokerCancelsQueuedWorkWithoutDispatch(t *testing.T) {
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()

@@ -829,24 +829,28 @@ func (s *ScriptedTargetSession) CancelWebMCP(ctx context.Context, id webmcp.Invo
 		s.mu.Unlock()
 		return webmcp.ErrClosed
 	}
-	if s.options.CancelError != nil {
-		err := s.options.CancelError
-		s.mu.Unlock()
-		return err
+	cancelErr := s.options.CancelError
+	acknowledged := *s.options.AcknowledgeCancellation
+	emitResponse := *s.options.EmitCancellationResponse && acknowledged
+	s.mu.Unlock()
+	if cancelErr != nil {
+		return cancelErr
 	}
-	record := s.invokes[id]
-	if record == nil {
-		s.mu.Unlock()
+	owner, record := s.findInvocation(id)
+	if owner == nil || record == nil {
 		return fmt.Errorf("%w: %s", webmcp.ErrInvocationNotFound, id)
 	}
+	owner.mu.Lock()
+	if owner.closed {
+		owner.mu.Unlock()
+		return webmcp.ErrClosed
+	}
 	record.CancelRequested = true
-	record.CancellationAcknowledged = *s.options.AcknowledgeCancellation
-	record.Terminal = record.CancellationAcknowledged
+	record.CancellationAcknowledged = acknowledged
+	record.Terminal = acknowledged
 	record.State = webmcp.InvocationCanceled
-	acknowledged := record.CancellationAcknowledged
-	emitResponse := *s.options.EmitCancellationResponse && acknowledged
-	s.notifyLocked()
-	s.mu.Unlock()
+	owner.notifyLocked()
+	owner.mu.Unlock()
 
 	s.runtime.record(Operation{
 		Kind:                     OperationCancel,
@@ -860,9 +864,44 @@ func (s *ScriptedTargetSession) CancelWebMCP(ctx context.Context, id webmcp.Invo
 		return ErrCancellationNotAcknowledged
 	}
 	if emitResponse {
-		return s.EmitToolResponse(id, "Canceled", nil)
+		return owner.EmitToolResponse(id, "Canceled", nil)
 	}
 	return nil
+}
+
+// findInvocation models the browser-owned invocation registry. A direct
+// cancellation request may arrive through a different target session than
+// the one that dispatched the call, while local invocation APIs remain
+// scoped to each client session.
+func (s *ScriptedTargetSession) findInvocation(id webmcp.InvocationID) (*ScriptedTargetSession, *InvocationRecord) {
+	s.mu.Lock()
+	if record := s.invokes[id]; record != nil {
+		s.mu.Unlock()
+		return s, record
+	}
+	entry := s.entry
+	s.mu.Unlock()
+	if entry == nil {
+		return nil, nil
+	}
+	entry.mu.Lock()
+	sessions := make([]*ScriptedTargetSession, 0, len(entry.sessions))
+	for session := range entry.sessions {
+		sessions = append(sessions, session)
+	}
+	entry.mu.Unlock()
+	for _, session := range sessions {
+		if session == s {
+			continue
+		}
+		session.mu.Lock()
+		record := session.invokes[id]
+		session.mu.Unlock()
+		if record != nil {
+			return session, record
+		}
+	}
+	return nil, nil
 }
 
 // BlockInvocations prevents configured automatic responses. It does not

@@ -28,8 +28,9 @@ type brokerInvocation struct {
 	invocation Invocation
 
 	// browserID is the protocol invocation ID returned by the target session.
-	// It is kept separately so browser events can be reconciled without exposing
-	// a provider-owned identifier as the broker's public invocation ID.
+	// It is kept separately so browser events can be reconciled without changing
+	// the broker's public invocation ID. Direct CLI handoff may expose this
+	// opaque ID explicitly so a fresh process can cancel the exact target call.
 	browserID     InvocationID
 	timer         Timer
 	cancelSent    bool
@@ -52,12 +53,6 @@ type invocationDispatch struct {
 type terminalInvocation struct {
 	invocation Invocation
 	result     InvokeResult
-}
-
-type targetCancellation struct {
-	session TargetSession
-	id      InvocationID
-	done    chan struct{}
 }
 
 // terminalObservation is deliberately smaller than BrowserEvent. In
@@ -204,16 +199,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 	signalInvocationQueueLocked(selected)
 	b.mu.Unlock()
 
-	select {
-	case outcome := <-invocation.dispatchDone:
-		return cloneInvokeResult(outcome.result), outcome.err
-	case <-ctx.Done():
-		b.cancelAdmission(invocation)
-		return InvokeResult{}, ctx.Err()
-	case <-b.closedCh:
-		b.cancelAdmission(invocation)
-		return InvokeResult{}, ErrClosed
-	}
+	return b.waitForAdmissionDispatch(ctx, invocation)
 }
 
 func (b *StatefulBroker) mintInvocationIDLocked() (InvocationID, error) {
@@ -283,7 +269,7 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	} else {
 		removeQueuedInvocationLocked(invocation.selected, invocation)
 	}
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	wait := b.cancellationWaitLocked(invocation, action)
 	phase := "queue"
 	if invocation.invocation.State == InvocationDispatching {
@@ -309,36 +295,6 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	}
 	b.finishInvocationLocked(invocation, result)
 	b.mu.Unlock()
-}
-
-func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation) *targetCancellation {
-	if invocation == nil || invocation.cancelSent || !invocation.invocation.CancelRequested || invocation.browserID == "" {
-		return nil
-	}
-	invocation.cancelSent = true
-	invocation.cancelDone = make(chan struct{})
-	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, done: invocation.cancelDone}
-}
-
-func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, action *targetCancellation) <-chan struct{} {
-	if action != nil || invocation == nil || !invocation.cancelSent {
-		return nil
-	}
-	return invocation.cancelDone
-}
-
-func performTargetCancellation(action *targetCancellation) {
-	if action == nil {
-		return
-	}
-	defer close(action.done)
-	if action.session == nil || action.id == "" {
-		return
-	}
-	// Cancellation is best effort after the broker has claimed the request.
-	// A target that has already detached or replied is still
-	// reconciled by the broker's bounded browser-terminal cache.
-	_ = action.session.CancelWebMCP(context.Background(), action.id)
 }
 
 // runInvocationQueue owns one target-local FIFO. It intentionally waits for
@@ -389,7 +345,7 @@ func (b *StatefulBroker) dispatchQueuedInvocation(invocation *brokerInvocation) 
 	selected.dispatchMu.Lock()
 	b.dispatchQueuedInvocationWithLock(invocation)
 	b.mu.Lock()
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	b.mu.Unlock()
 	selected.dispatchMu.Unlock()
 	performTargetCancellation(action)
@@ -528,6 +484,7 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	invocation.browserID = id
 
 	if invocation.terminalized {
+		invocation.finalResult.BrowserInvocationID = id
 		b.recordBrowserTerminalIDLocked(id)
 		b.takeEarlyTerminalLocked(id, 0)
 		b.rebindTerminalInvocationLocked(invocation)
@@ -538,9 +495,10 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	invocation.invocation.State = InvocationDispatched
 	invocation.invocation.DispatchedAt = b.clock.Now()
 	b.browserInvocations[id] = invocation
-	result := InvokeResult{InvocationID: invocation.invocation.ID, State: InvocationDispatched}
+	result := InvokeResult{InvocationID: invocation.invocation.ID, BrowserInvocationID: id, State: InvocationDispatched}
 	if early, ok := b.takeEarlyTerminalLocked(id, invocation.invocation.Tool.Generation); ok {
 		b.applyTerminalObservationLocked(invocation, early)
+		invocation.finalResult.BrowserInvocationID = id
 		result = cloneInvokeResult(invocation.finalResult)
 	}
 	if invokeErr != nil && !invocation.terminalized {
@@ -576,22 +534,11 @@ func (b *StatefulBroker) reportDispatchLocked(invocation *brokerInvocation, resu
 	if invocation.reported {
 		return
 	}
+	if result.BrowserInvocationID == "" {
+		result.BrowserInvocationID = invocation.browserID
+	}
 	invocation.reported = true
 	invocation.dispatchDone <- invocationDispatch{result: cloneInvokeResult(result), err: err}
-}
-
-func (b *StatefulBroker) cancelAdmission(invocation *brokerInvocation) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if invocation.terminalized || invocation.invocation.State != InvocationQueued {
-		return
-	}
-	removeQueuedInvocationLocked(invocation.selected, invocation)
-	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
-		"invocation_id": string(invocation.invocation.ID),
-		"cancel_source": "context",
-	})
-	b.finishInvocationLocked(invocation, result)
 }
 
 func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
@@ -611,7 +558,7 @@ func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
 	}
 	invocation.invocation.CancelRequested = true
 	invocation.cancelPending = true
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, context.Background())
 	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(invocation.invocation.ID),
@@ -675,7 +622,7 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 	}
 	invocation.invocation.CancelRequested = true
 	invocation.cancelPending = true
-	action := b.claimTargetCancellationLocked(invocation)
+	action := b.claimTargetCancellationLocked(invocation, ctx)
 	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(request.InvocationID),
@@ -692,6 +639,63 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 	}
 	b.finishInvocationLocked(invocation, result)
 	b.mu.Unlock()
+	return nil
+}
+
+func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request DirectCancelRequest) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if request.InvocationID == "" {
+		return classified(ErrorInvalidToolInput, "the browser invocation ID is required", map[string]any{
+			"issues": []ToolResultIssue{{Path: "/invocation_id", Code: "required"}},
+		}, ErrInvalidToolInput)
+	}
+	if request.Target.BrowserID == "" || request.Target.TargetID == "" {
+		return staleSelectionError(request.Target.BrowserID, request.Target.TargetID, 0, "exact_browser_and_target_required")
+	}
+	if b == nil {
+		return ErrClosed
+	}
+
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return ErrClosed
+	}
+	selected := b.selected
+	if selected == nil || !selected.active || !selected.context.Connected {
+		err := staleSelectionForSession(selected, "selection_not_connected")
+		b.mu.Unlock()
+		return err
+	}
+	if selected.context.Key.BrowserID != request.Target.BrowserID || selected.context.Key.TargetID != request.Target.TargetID {
+		err := staleSelectionError(request.Target.BrowserID, request.Target.TargetID, selected.context.Generation, "exact_target_not_selected")
+		b.mu.Unlock()
+		return err
+	}
+	session := selected.session
+	b.mu.Unlock()
+
+	if session == nil {
+		return targetAttachError(request.Target, "cancel", ErrClosed)
+	}
+	if err := session.CancelWebMCP(ctx, request.InvocationID); err != nil {
+		var classifiedErr *ClassifiedError
+		if errors.As(err, &classifiedErr) && classifiedErr != nil {
+			return err
+		}
+		return classified(ErrorInvocationFailed, "the browser rejected the direct cancellation request", map[string]any{
+			"browser_id":          string(request.Target.BrowserID),
+			"target_id":           string(request.Target.TargetID),
+			"invocation_id":       string(request.InvocationID),
+			"phase":               "cancel",
+			"side_effect_unknown": true,
+		}, err)
+	}
 	return nil
 }
 
@@ -943,6 +947,9 @@ func (b *StatefulBroker) finishInvocationLocked(invocation *brokerInvocation, re
 		return
 	}
 	result.InvocationID = invocation.invocation.ID
+	if result.BrowserInvocationID == "" {
+		result.BrowserInvocationID = invocation.browserID
+	}
 	if result.State == "" {
 		result.State = InvocationError
 	}
@@ -1027,6 +1034,7 @@ func (b *StatefulBroker) rebindTerminalInvocationLocked(invocation *brokerInvoca
 	if terminal, ok := b.terminalResults[invocation.invocation.ID]; ok {
 		terminal.invocation.ID = invocation.invocation.ID
 		terminal.result.InvocationID = invocation.invocation.ID
+		terminal.result.BrowserInvocationID = invocation.browserID
 		b.terminalResults[invocation.invocation.ID] = terminal
 		return
 	}
@@ -1156,37 +1164,6 @@ func signalInvocationQueueLocked(selected *brokerSession) {
 	case selected.queueWake <- struct{}{}:
 	default:
 	}
-}
-
-func cloneInvokeResult(result InvokeResult) InvokeResult {
-	result.Output = cloneJSON(result.Output)
-	result.ErrorDetails = cloneDetails(result.ErrorDetails)
-	return result
-}
-
-func cloneInvocation(invocation Invocation) Invocation {
-	invocation.Tool = cloneToolDescriptor(invocation.Tool)
-	invocation.Arguments = cloneJSON(invocation.Arguments)
-	invocation.Result = cloneJSON(invocation.Result)
-	return invocation
-}
-
-func cloneDetails(details map[string]any) map[string]any {
-	if details == nil {
-		return nil
-	}
-	cloned := make(map[string]any, len(details))
-	for key, value := range details {
-		switch typed := value.(type) {
-		case json.RawMessage:
-			cloned[key] = cloneJSON(typed)
-		case []byte:
-			cloned[key] = append([]byte(nil), typed...)
-		default:
-			cloned[key] = value
-		}
-	}
-	return cloned
 }
 
 // Invocation returns a defensive snapshot of an active or recently terminal

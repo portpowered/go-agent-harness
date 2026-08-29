@@ -27,6 +27,9 @@ const (
 	webmcpDirectWatchStatusCanceled = "canceled"
 	webmcpDirectWatchStatusOnce     = "one_event"
 	webmcpDirectWatchStatusFailed   = "failed"
+
+	webmcpDirectInvocationReceiptVersion  = "webmcp.invoke-receipt.v1"
+	webmcpDirectInvocationReceiptMaxBytes = 1024
 )
 
 const webmcpWatchHelp = `Watch the selected target's semantic WebMCP stream.
@@ -468,18 +471,41 @@ func (c *WebMCPOperationsCommand) toolsCommand() *cobra.Command {
 func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 	values := newWebMCPDirectFlags()
 	cmd := &cobra.Command{
-		Use:          "invoke [tool-name] [key=value...]",
-		Short:        "Invoke a selected page tool by ref or unique name",
+		Use:   "invoke [tool-name] [key=value...]",
+		Short: "Invoke a selected page tool by ref or unique name",
+		Long: fmt.Sprintf(`Invoke a selected page tool by exact reference or unique name.
+
+After the browser accepts the invocation, this command writes one bounded,
+machine-readable dispatch receipt to stderr before waiting for the terminal
+result. The receipt has only version, invocation_id, tool_ref, and state, for
+example:
+  {"version":"webmcp.invoke-receipt.v1","invocation_id":"...","tool_ref":"...","state":"dispatched"}
+
+The receipt is copyable in human mode and is the documented machine-readable
+handoff in --json mode. Stdout remains one final command result. To cancel
+from another process, keep the exact browser selection persisted and pass the
+receipt invocation_id to agent webmcp cancel --invocation <id> --json.
+The first SIGINT during a dispatched wait requests cancellation with an
+independent reconciliation context and emits the final cancellation result
+within %v; cancellation does not claim rollback or safe retry.`, webmcpDirectInterruptReconciliationTimeout),
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.executeDirectWithContext(cmd, values, "invoke", webmcp.ErrorInvocationFailed, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
-				_, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser)
+			invokeCtx, interrupted, stopInterrupt := newWebMCPDirectInterruptContext(cmd.Context())
+			defer stopInterrupt()
+			return c.executeDirectWithParentContext(cmd, invokeCtx, values, "invoke", webmcp.ErrorInvocationFailed, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
+				selected, err := c.ensureDirectSelection(ctx, cmd, values, broker, browser)
 				if err != nil {
+					if interrupted() {
+						return nil, directInvocationCanceledBeforeDispatch("")
+					}
 					return nil, err
 				}
 				toolRef, input, err := resolveDirectInvocation(args, values, broker, ctx)
 				if err != nil {
+					if interrupted() {
+						return nil, directInvocationCanceledBeforeDispatch("")
+					}
 					return nil, err
 				}
 				invokeCtx := ctx
@@ -494,10 +520,24 @@ func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 					Reason:  values.reason,
 				})
 				if err != nil {
+					if interrupted() {
+						return nil, directInvocationCanceledBeforeDispatch(toolRef)
+					}
 					return nil, err
 				}
+				receiptID, err := writeWebMCPDirectInvocationReceipt(cmd.ErrOrStderr(), result, toolRef)
+				if err != nil {
+					return nil, err
+				}
+				if interrupted() {
+					return nil, reconcileDirectInvocationInterrupt(broker, result, selected.Key, receiptID, toolRef)
+				}
+				dispatchedResult := result
 				result, err = waitDirectInvocation(invokeCtx, broker, result)
 				if err != nil {
+					if interrupted() {
+						return nil, reconcileDirectInvocationInterrupt(broker, dispatchedResult, selected.Key, receiptID, toolRef)
+					}
 					return nil, err
 				}
 				if result.ErrorCode != "" || directInvocationFailed(result.State) {
@@ -511,7 +551,7 @@ func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 				if status == "" {
 					status = string(webmcp.InvocationDispatched)
 				}
-				return WebMCPDirectInvocation{InvocationID: string(result.InvocationID), ToolRef: string(toolRef), Status: status, Output: append(json.RawMessage(nil), output...)}, nil
+				return WebMCPDirectInvocation{InvocationID: string(receiptID), ToolRef: string(toolRef), Status: status, Output: append(json.RawMessage(nil), output...)}, nil
 			})
 		},
 	}
@@ -527,12 +567,26 @@ func (c *WebMCPOperationsCommand) invokeCommand() *cobra.Command {
 func (c *WebMCPOperationsCommand) cancelCommand() *cobra.Command {
 	values := newWebMCPDirectFlags()
 	cmd := &cobra.Command{
-		Use:          "cancel [invocation-id]",
-		Short:        "Cancel a pending WebMCP invocation",
+		Use:   "cancel [invocation-id]",
+		Short: "Cancel a pending WebMCP invocation",
+		Long: `Cancel a pending browser invocation using the exact ID from the
+invoke dispatch receipt. A fresh process rehydrates only the exact persisted
+browser and target selection (or an explicitly supplied --browser and --tab)
+and asks that target to cancel the supplied ID; it never searches for or
+falls back to another target.
+
+Two-process flow:
+  agent webmcp select --browser <browser-id> --tab <target-id> --persist-selection --json
+  agent webmcp invoke --tool-ref <tool-ref> --input-json '{}' --json
+  agent webmcp cancel --invocation <receipt-invocation-id> --json
+
+The receipt is on stderr and the one final cancel result is on stdout. A
+successful cancel is a request, not proof of rollback; stale selection or
+browser rejection is reported as a classified non-zero result.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.executeDirect(cmd, values, "cancel", webmcp.ErrorInvocationFailed, func(ctx context.Context, broker webmcp.Broker, _ config.BrowserConfig) (any, error) {
+			return c.executeDirect(cmd, values, "cancel", webmcp.ErrorInvocationFailed, func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
 				invocationID := values.invocationID
 				if invocationID == "" && len(args) == 1 {
 					invocationID = args[0]
@@ -543,7 +597,32 @@ func (c *WebMCPOperationsCommand) cancelCommand() *cobra.Command {
 				if values.invocationID != "" && len(args) == 1 {
 					return nil, directInvalidInputError("invocation ID must be supplied by --invocation or positionally, not both", "/invocation_id")
 				}
-				if err := broker.Cancel(ctx, webmcp.CancelRequest{InvocationID: webmcp.InvocationID(invocationID), Reason: values.reason}); err != nil {
+				candidate, target, stored, err := c.resolveDirectTarget(ctx, cmd, values, broker, browser)
+				if err != nil {
+					return nil, err
+				}
+				if !directCancelHasExactTarget(cmd, browser, stored) {
+					return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "direct cancellation requires an exact persisted or explicitly selected browser target", map[string]any{
+						"browser_id": browser.Selection.Browser,
+						"target_id":  browser.Selection.Tab,
+						"reason":     "exact_selection_required",
+					})
+				}
+				selector := webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}
+				if _, err := selectDirectTarget(ctx, broker, selector, false); err != nil {
+					return nil, err
+				}
+				request := webmcp.CancelRequest{InvocationID: webmcp.InvocationID(invocationID), Reason: values.reason}
+				if directCanceller, ok := broker.(webmcp.DirectCanceller); ok {
+					err = directCanceller.CancelDirect(ctx, webmcp.DirectCancelRequest{
+						Target:       selector,
+						InvocationID: request.InvocationID,
+						Reason:       request.Reason,
+					})
+				} else {
+					err = broker.Cancel(ctx, request)
+				}
+				if err != nil {
 					return nil, err
 				}
 				return WebMCPDirectCancelData{InvocationID: invocationID, Status: "cancel_requested"}, nil
@@ -604,6 +683,16 @@ func (c *WebMCPOperationsCommand) executeDirectWithContext(cmd *cobra.Command, v
 		return errors.New("WebMCP command is required")
 	}
 	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return c.executeDirectWithParentContext(cmd, ctx, values, kind, fallback, operation)
+}
+
+func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Command, ctx context.Context, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation webmcpDirectOperation) error {
+	if cmd == nil {
+		return errors.New("WebMCP command is required")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1051,6 +1140,16 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 	return candidate, *target, stored, nil
 }
 
+func directCancelHasExactTarget(cmd *cobra.Command, browser config.BrowserConfig, stored *WebMCPSelection) bool {
+	if stored != nil {
+		return true
+	}
+	if browser.Selection.Tab != "" {
+		return true
+	}
+	return directFlagChanged(cmd, "tab", "browser-tab")
+}
+
 func boundedDirectReason(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -1200,76 +1299,4 @@ func (c *WebMCPOperationsCommand) selectionStore() (WebMCPSelectionStore, error)
 		return nil, errors.New("WebMCP selection store is unavailable")
 	}
 	return store, nil
-}
-
-func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
-	candidate, target, _, err := c.resolveDirectTarget(ctx, cmd, values, broker, browser)
-	if err != nil {
-		return nil, err
-	}
-	activate := browser.Selection.ActivateTab
-	if directFlagChanged(cmd, "activate") {
-		activate = values.activate
-	}
-	page, err := selectDirectTarget(ctx, broker, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}, activate)
-	if err != nil {
-		return nil, err
-	}
-	if page.Key.BrowserID == "" {
-		page.Key.BrowserID = candidate.ID
-	}
-	if page.Key.TargetID == "" {
-		page.Key.TargetID = target.ID
-	}
-	if page.Origin == "" {
-		page.Origin = target.Origin
-	}
-	data, err := c.contextWithCatalog(ctx, broker, page, false)
-	if err != nil {
-		return nil, err
-	}
-	if browser.Selection.Persist {
-		if err := c.saveDirectSelection(WebMCPSelection{
-			Version:          WebMCPSelectionVersion,
-			EndpointID:       string(candidate.ID),
-			BrowserID:        string(page.Key.BrowserID),
-			TargetID:         string(page.Key.TargetID),
-			Origin:           safeOrigin(page.Origin),
-			ContinuityMarker: target.ContinuityMarker,
-			Generation:       page.Generation,
-			SelectedAt:       time.Now().UTC(),
-		}); err != nil {
-			return nil, fmt.Errorf("persist WebMCP selection: %w", err)
-		}
-	}
-	return data, nil
-}
-
-func selectDirectTarget(ctx context.Context, broker webmcp.Broker, selector webmcp.TargetSelector, activate bool) (webmcp.PageContext, error) {
-	if selectorWithOptions, ok := broker.(interface {
-		SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
-	}); ok {
-		return selectorWithOptions.SelectWithOptions(ctx, selector, webmcp.SelectOptions{Activate: activate})
-	}
-	if activate {
-		return webmcp.PageContext{}, webmcpRuntimeUnavailableError("target_activation")
-	}
-	return broker.Select(ctx, selector)
-}
-
-func (c *WebMCPOperationsCommand) ensureDirectSelection(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.PageContext, error) {
-	candidate, target, _, err := c.resolveDirectTarget(ctx, cmd, values, broker, browser)
-	if err != nil {
-		return webmcp.PageContext{}, err
-	}
-	return selectDirectTarget(ctx, broker, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}, browser.Selection.ActivateTab)
-}
-
-func selectedDirectContext(ctx context.Context, broker webmcp.Broker, refresh bool) (webmcp.PageContext, error) {
-	if refresher, ok := broker.(interface {
-		SelectedWithRefresh(context.Context, bool) (webmcp.PageContext, error)
-	}); ok {
-		return refresher.SelectedWithRefresh(ctx, refresh)
-	}
-	return broker.Selected(ctx)
 }
