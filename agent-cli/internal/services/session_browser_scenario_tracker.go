@@ -182,11 +182,6 @@ func (t *browserConversationEvidenceTracker) observe(message messages.StreamMess
 			t.setErrorLocked(fmt.Errorf("assistant turn arrived out of order for step %q", t.currentStepIDValue))
 			return
 		}
-		step := browserConversationStepByID(t.scenario, t.currentStepIDValue)
-		if step != nil && browserConversationExpectedState(step) != nil && !browserConversationCompletedInvokeForStep(t.run.Snapshot().BrokerCalls, step.ID) {
-			t.setErrorLocked(fmt.Errorf("assistant turn arrived before completed browser invocation for step %q", step.ID))
-			return
-		}
 		if err := t.run.ObserveAssistantTurn(t.currentStepIDValue, text); err != nil {
 			t.setErrorLocked(err)
 			return

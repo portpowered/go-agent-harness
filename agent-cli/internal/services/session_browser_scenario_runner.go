@@ -1126,8 +1126,11 @@ func evaluateBrowserConversation(scenario BrowserConversationScenario, result Br
 			} else if !browserConversationJSONEqual(after.State, expectedState.After) {
 				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": after oracle mismatch")
 			}
-			if !browserConversationCompletedInvokeForStep(result.BrokerCalls, step.ID) {
+			terminalInvoke := browserConversationTerminalInvokeForStep(result.BrokerCalls, step.ID)
+			if terminalInvoke == nil {
 				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": missing terminal tool result")
+			} else if assistant != nil && assistant.Sequence <= terminalInvoke.Sequence {
+				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": assistant turn was observed before the completed browser invocation")
 			}
 		}
 	}
@@ -1195,15 +1198,20 @@ func browserConversationOracleForStep(oracles []BrowserConversationOracleSnapsho
 }
 
 func browserConversationCompletedInvokeForStep(calls []BrowserConversationBrokerCall, stepID string) bool {
+	return browserConversationTerminalInvokeForStep(calls, stepID) != nil
+}
+
+func browserConversationTerminalInvokeForStep(calls []BrowserConversationBrokerCall, stepID string) *BrowserConversationBrokerCall {
 	for _, call := range calls {
 		if call.StepID == stepID &&
 			call.Operation == BrowserConversationInvoke &&
 			call.Terminal &&
 			call.State == webmcp.InvocationCompleted {
-			return true
+			candidate := call
+			return &candidate
 		}
 	}
-	return false
+	return nil
 }
 
 func browserConversationJSONEqual(left, right json.RawMessage) bool {

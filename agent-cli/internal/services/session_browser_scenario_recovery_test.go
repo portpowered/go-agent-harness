@@ -144,6 +144,41 @@ func TestRunBrowserConversationRejectsCustomerTurnsOutOfOrder(t *testing.T) {
 	}
 }
 
+func TestRunBrowserConversationRejectsUngroundedAssistantTurn(t *testing.T) {
+	fixture, broker := newBrowserConversationFailureFixture(true)
+	result, err := RunBrowserConversation(context.Background(), io.Discard, browserConversationFailureRunOptions(
+		fixture,
+		broker,
+		&browserConversationSequenceOracle{states: []json.RawMessage{
+			json.RawMessage(`{"value":false}`),
+			json.RawMessage(`{"value":true}`),
+			json.RawMessage(`{"value":true}`),
+		}},
+		func(ctx context.Context, _ io.Writer, request BrowserConversationSessionRequest) error {
+			request.StreamObserver(messages.StreamMessage{
+				Type:  messages.StreamTypeTranscriptEnd,
+				Role:  messages.RoleUser,
+				Value: messages.NewTranscriptEndValue("apply"),
+			})
+			emitBrowserConversationAssistant(request.StreamObserver, "I changed it")
+			arguments := `{"tool_ref":"` + string(browserConversationRunnerToolRef()) + `","input_json":"{\"value\":true}","reason":"apply"}`
+			_, executeErr := request.ToolExecutor.Execute(ctx, messages.ToolCall{
+				ID: "call-ungrounded", Name: webmcp.InvokeToolName, Arguments: arguments,
+			})
+			return executeErr
+		},
+	))
+	if err == nil || !errors.Is(err, ErrBrowserConversationEvidence) {
+		t.Fatalf("error = %v, want evidence failure", err)
+	}
+	if result.Mechanical.Passed || !containsBrowserConversationFailure(result.Mechanical.Failures, "assistant turn was observed before the completed browser invocation") {
+		t.Fatalf("mechanical = %+v, want ungrounded assistant failure", result.Mechanical)
+	}
+	if fixture.CloseCount() != 1 || broker.closeCount != 1 {
+		t.Fatalf("cleanup counts fixture=%d broker=%d, want one each", fixture.CloseCount(), broker.closeCount)
+	}
+}
+
 func TestBrowserConversationTrackerDeadlineCancelsRun(t *testing.T) {
 	run, err := NewBrowserConversationRun(browserConversationRunnerScenario())
 	if err != nil {
@@ -167,6 +202,15 @@ func TestBrowserConversationTrackerDeadlineCancelsRun(t *testing.T) {
 	default:
 		t.Fatal("deadline did not cancel the run context")
 	}
+}
+
+func containsBrowserConversationFailure(failures []string, want string) bool {
+	for _, failure := range failures {
+		if strings.Contains(failure, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func browserConversationRecoveryScenario() BrowserConversationScenario {
