@@ -888,7 +888,11 @@ func (s *Service) reconnectPersisted(ctx context.Context, inputs ConnectionInput
 		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "endpoint_changed")
 	}
 	if persisted.BrowserInstanceID != "" && normalizedBrowserInstanceID(browser) != persisted.BrowserInstanceID {
-		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "browser_instance_changed")
+		// The public browser locator is intentionally stable across fresh
+		// services. A changed incarnation therefore reaches this branch instead
+		// of looking like a missing browser ID; the persisted selection is still
+		// stale because its exact browser instance is gone.
+		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "browser_missing_after_reconnect")
 	}
 
 	s.mu.Lock()
