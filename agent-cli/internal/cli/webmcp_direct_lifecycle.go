@@ -78,16 +78,6 @@ func constructWebMCPDoctorRuntime(ctx context.Context, factory WebMCPDoctorFacto
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// A caller may enter the command with an already-canceled context (for
-	// example, a watch that is being shut down). Preserve the pre-existing
-	// command behavior of constructing and closing its request-scoped runtime;
-	// the operation itself still observes the canceled context below. A
-	// deadline, however, must never force a potentially blocking legacy
-	// factory call onto the command's critical path.
-	if errors.Is(ctx.Err(), context.Canceled) {
-		return factory(browser)
-	}
-
 	result := make(chan directRuntimeFactoryResult, 1)
 	go func() {
 		runtime, err := factory(browser)

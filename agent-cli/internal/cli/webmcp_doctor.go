@@ -273,7 +273,7 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 		report.Status = doctorStatusInvalidConfiguration
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorInvalidToolInput, nil)
 		report.setCheck("configuration", doctorCheckFail, "The WebMCP command timeout is invalid.", map[string]any{"phase": "command_timeout"})
-		return report, nil
+		return report, primary
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()

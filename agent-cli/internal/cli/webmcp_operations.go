@@ -715,7 +715,15 @@ func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Comm
 		operationErr = directInvalidInputError("--timeout must be positive", "/timeout")
 	} else {
 		commandCtx, cancel := context.WithTimeout(ctx, commandTimeout)
-		data, operationErr = c.runDirect(commandCtx, cmd, values, operation)
+		if kind == "watch" && commandCtx.Err() != nil {
+			// A canceled watch has a terminal data result and does not need to
+			// construct a runtime just to observe that its stream is canceled.
+			// This also keeps a legacy, non-cooperative factory off the critical
+			// path after an interrupt-before-setup.
+			data, operationErr = runDirectWatchStream(commandCtx, nil, values != nil && values.once)
+		} else {
+			data, operationErr = c.runDirect(commandCtx, cmd, values, operation)
+		}
 		cancel()
 	}
 	operationErr = preferDirectBrowserDisconnected(operationErr)

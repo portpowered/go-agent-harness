@@ -170,10 +170,14 @@ func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector Ta
 	if selector.BrowserID != "" {
 		b.mu.Lock()
 		state := b.browsers[selector.BrowserID]
-		known = state != nil && state.candidate.ID != ""
+		// Discovery records candidates before the first Open succeeds. That
+		// observation proves only that an endpoint was advertised, not that
+		// this broker established a browser transport. Keep initial dial/open
+		// failures in the endpoint error vocabulary until a handle exists.
+		known = state != nil && state.handle != nil
 		b.mu.Unlock()
 	}
-	if known || isBrowserDisconnectedTransportError(cause) {
+	if known {
 		return browserDisconnectedErrorForSelector(selector, phase, cause)
 	}
 	return nil

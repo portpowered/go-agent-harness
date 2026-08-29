@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -580,6 +581,83 @@ func TestWebMCPDoctorCommandTimeoutBoundsRuntimeConstruction(t *testing.T) {
 	}
 	if report.Error.Details["phase"] != "runtime_factory" {
 		t.Fatalf("runtime construction timeout details = %#v", report.Error.Details)
+	}
+}
+
+func TestWebMCPDoctorCanceledContextBoundsNonCooperativeRuntimeConstruction(t *testing.T) {
+	configDir := writeDoctorConfig(t, "\nbrowser:\n  connection:\n    cdp_url: http://127.0.0.1:9222\n")
+	factoryStarted := make(chan struct{})
+	releaseFactory := make(chan struct{})
+	runtimeClosed := make(chan struct{})
+	var closeOnce sync.Once
+	factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+		close(factoryStarted)
+		<-releaseFactory
+		return WebMCPDoctorRuntime{Close: func() error {
+			closeOnce.Do(func() { close(runtimeClosed) })
+			return nil
+		}}, nil
+	}
+	root, stdout, _ := executeDoctorCommand(t, configDir, factory, "--json")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	started := time.Now()
+	go func() { done <- root.ExecuteContext(ctx) }()
+	select {
+	case <-factoryStarted:
+	case <-time.After(time.Second):
+		close(releaseFactory)
+		t.Fatal("doctor runtime factory did not start")
+	}
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(time.Second):
+		close(releaseFactory)
+		t.Fatal("doctor remained blocked by a non-cooperative factory after context cancellation")
+	}
+	if err == nil {
+		t.Fatal("doctor unexpectedly succeeded with an already-canceled context")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("doctor took %s after an already-canceled context", elapsed)
+	}
+	if report := decodeDoctorReport(t, stdout.String()); report.Error == nil {
+		t.Fatalf("canceled doctor report = %+v, want an error", report)
+	}
+
+	close(releaseFactory)
+	select {
+	case <-runtimeClosed:
+	case <-time.After(time.Second):
+		t.Fatal("late runtime was not cleaned up after the factory completed")
+	}
+}
+
+func TestWebMCPDoctorRejectsNegativeCommandTimeoutAtCLIBoundary(t *testing.T) {
+	configDir := writeDoctorConfig(t, "\nbrowser:\n  connection:\n    cdp_url: http://127.0.0.1:9222\n")
+	factoryCalls := 0
+	factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+		factoryCalls++
+		return WebMCPDoctorRuntime{}, nil
+	}
+	root, stdout, _ := executeDoctorCommand(t, configDir, factory, "--command-timeout=-1s", "--json")
+	err := root.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("doctor unexpectedly succeeded with a negative command timeout")
+	}
+	if factoryCalls != 0 {
+		t.Fatalf("factory calls = %d, want zero for invalid input", factoryCalls)
+	}
+	report := decodeDoctorReport(t, stdout.String())
+	if report.Status != doctorStatusInvalidConfiguration || report.Error == nil || report.Error.Code != string(webmcp.ErrorInvalidToolInput) {
+		t.Fatalf("negative timeout report = %+v, want invalid_tool_input", report)
+	}
+	if report.Error.Details["issues"] == nil {
+		t.Fatalf("negative timeout details = %#v, want validation issues", report.Error.Details)
 	}
 }
 
