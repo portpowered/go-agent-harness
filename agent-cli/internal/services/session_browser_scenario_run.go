@@ -163,11 +163,16 @@ type BrowserConversationOracleSnapshot struct {
 // BrowserConversationCancellationEvidence records interruption and explicit
 // cancellation without pretending that a canceled invocation completed.
 type BrowserConversationCancellationEvidence struct {
-	Interrupted  bool                   `json:"interrupted"`
-	Requested    bool                   `json:"requested"`
-	InvocationID webmcp.InvocationID    `json:"invocation_id,omitempty"`
-	FinalState   webmcp.InvocationState `json:"final_state,omitempty"`
-	Reason       string                 `json:"reason,omitempty"`
+	Interrupted             bool                   `json:"interrupted"`
+	Requested               bool                   `json:"requested"`
+	InvocationID            webmcp.InvocationID    `json:"invocation_id,omitempty"`
+	FinalState              webmcp.InvocationState `json:"final_state,omitempty"`
+	Reason                  string                 `json:"reason,omitempty"`
+	InterruptedStepID       string                 `json:"interrupted_step_id,omitempty"`
+	CancelStepID            string                 `json:"cancel_step_id,omitempty"`
+	OverlappingAudioSent    bool                   `json:"overlapping_audio_sent"`
+	ExplicitCancelAudioSent bool                   `json:"explicit_cancel_audio_sent"`
+	LateEventsSuppressed    int                    `json:"late_events_suppressed,omitempty"`
 }
 
 // BrowserConversationLifecycleEvidence records process/session cleanup and
@@ -179,11 +184,16 @@ type BrowserConversationLifecycleEvidence struct {
 	SessionTerminated         bool                                `json:"session_terminated"`
 	Detached                  bool                                `json:"detached"`
 	DetachCount               int                                 `json:"detach_count"`
+	DetachRequired            bool                                `json:"detach_required"`
 	BrowserClosed             bool                                `json:"browser_closed"`
 	TargetClosed              bool                                `json:"target_closed"`
+	ExternalBrowserID         webmcp.BrowserID                    `json:"external_browser_id,omitempty"`
+	ExternalTargetID          webmcp.TargetID                     `json:"external_target_id,omitempty"`
 	ExternalTabAlive          bool                                `json:"external_tab_alive"`
 	ExternalTabResponsive     bool                                `json:"external_tab_responsive"`
 	ExternalTabAllowsMutation bool                                `json:"external_tab_allows_mutation"`
+	ExternalTabRead           bool                                `json:"external_tab_read"`
+	ExternalTabMutation       bool                                `json:"external_tab_mutation"`
 	Error                     string                              `json:"error,omitempty"`
 }
 
@@ -318,6 +328,12 @@ func (r BrowserConversationResult) Validate() error {
 	}
 	if r.Lifecycle.DetachCount < 0 {
 		return browserConversationResultError("lifecycle.detach_count", "must not be negative")
+	}
+	if r.Cancellation.LateEventsSuppressed < 0 {
+		return browserConversationResultError("cancellation.late_events_suppressed", "must not be negative")
+	}
+	if r.Cancellation.FinalState != "" && !browserConversationInvocationStateTerminal(r.Cancellation.FinalState) {
+		return browserConversationResultError("cancellation.final_state", "must be a terminal invocation state")
 	}
 	if r.Validator.Version != "" && r.Validator.Version != BrowserConversationValidatorVersion {
 		return browserConversationResultError("validator.version", "must be %q", BrowserConversationValidatorVersion)
@@ -594,7 +610,10 @@ func (r *BrowserConversationRun) ObserveOracleSnapshot(snapshot BrowserConversat
 	return nil
 }
 
-// RecordCancellation records interruption/cancel facts once.
+// RecordCancellation joins interruption, explicit-cancel, terminal, and late
+// event facts into one run-scoped record. Each fact is monotonic: later
+// observations may fill fields but can never turn a canceled invocation into
+// a completed one or replace its identity.
 func (r *BrowserConversationRun) RecordCancellation(evidence BrowserConversationCancellationEvidence) error {
 	if r == nil {
 		return errors.New("browser conversation run is nil")
@@ -604,11 +623,47 @@ func (r *BrowserConversationRun) RecordCancellation(evidence BrowserConversation
 	if err := r.ensureMutableLocked(); err != nil {
 		return err
 	}
-	if r.hasCancellation {
-		return ErrBrowserConversationDuplicateObservation
-	}
-	if evidence.FinalState == webmcp.InvocationCompleted && (evidence.Interrupted || evidence.Requested) {
+	current := r.result.Cancellation
+	if evidence.FinalState == webmcp.InvocationCompleted && (evidence.Interrupted || evidence.Requested || current.Interrupted || current.Requested) {
 		return browserConversationObservationError("cancellation.final_state", "a canceled or interrupted invocation cannot be completed")
+	}
+	if evidence.FinalState != "" && !browserConversationInvocationStateTerminal(evidence.FinalState) {
+		return browserConversationObservationError("cancellation.final_state", "must be a terminal invocation state")
+	}
+	if evidence.LateEventsSuppressed < 0 {
+		return browserConversationObservationError("cancellation.late_events_suppressed", "must not be negative")
+	}
+	if r.hasCancellation {
+		if current.InvocationID != "" && evidence.InvocationID != "" && current.InvocationID != evidence.InvocationID {
+			return browserConversationObservationError("cancellation.invocation_id", "cannot change after the invocation is identified")
+		}
+		if current.FinalState != "" && evidence.FinalState != "" && current.FinalState != evidence.FinalState {
+			return browserConversationObservationError("cancellation.final_state", "cannot change after a terminal disposition is recorded")
+		}
+		current.Interrupted = current.Interrupted || evidence.Interrupted
+		current.Requested = current.Requested || evidence.Requested
+		if current.InvocationID == "" {
+			current.InvocationID = evidence.InvocationID
+		}
+		if current.FinalState == "" {
+			current.FinalState = evidence.FinalState
+		}
+		if current.Reason == "" {
+			current.Reason = evidence.Reason
+		}
+		if current.InterruptedStepID == "" {
+			current.InterruptedStepID = evidence.InterruptedStepID
+		}
+		if current.CancelStepID == "" {
+			current.CancelStepID = evidence.CancelStepID
+		}
+		current.OverlappingAudioSent = current.OverlappingAudioSent || evidence.OverlappingAudioSent
+		current.ExplicitCancelAudioSent = current.ExplicitCancelAudioSent || evidence.ExplicitCancelAudioSent
+		if evidence.LateEventsSuppressed > 0 {
+			current.LateEventsSuppressed += evidence.LateEventsSuppressed
+		}
+		r.result.Cancellation = current
+		return nil
 	}
 	r.hasCancellation = true
 	r.result.Cancellation = evidence

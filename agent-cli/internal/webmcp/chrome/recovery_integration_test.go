@@ -64,6 +64,13 @@ func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
 	}) {
 		return
 	}
+	if !t.Run("in_flight_cancellation_external_tab", func(t *testing.T) {
+		caseContext, caseCancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer caseCancel()
+		testRecoveryInFlightCancellation(t, caseContext, pinned)
+	}) {
+		return
+	}
 	if !t.Run("spoken_correction_oracle", func(t *testing.T) {
 		caseContext, caseCancel := context.WithTimeout(ctx, 3*time.Minute)
 		defer caseCancel()
@@ -72,7 +79,7 @@ func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
 		return
 	}
 
-	t.Log("WEBMCP_CHROME_RECOVERY_PASS cases=4 exit=0 output=redacted")
+	t.Log("WEBMCP_CHROME_RECOVERY_PASS cases=5 exit=0 output=redacted")
 }
 
 type recoveryDiscoverer struct {
@@ -535,6 +542,78 @@ func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinn
 	t.Logf("case=spoken_correction customer_original=%q customer_correction=%q original_terminal=%s correction_terminal=%s original_oracle=%q corrected_oracle=%q detach_survived=true", originalMessage, correctionMessage, originalTerminal.State, correctedTerminal.State, originalOracle.Value, correctedOracle.Value)
 }
 
+func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	fixture := newFixtureServer()
+	t.Cleanup(fixture.Close)
+	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+
+	// The invocation-created broker event is the synchronization point. No
+	// timer is used to guess when the page-side operation became cancellable.
+	admitted, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: selection.initialCancel.Ref,
+		Input:   recoveryInput("overlap"),
+	})
+	if err != nil || admitted.State != webmcp.InvocationDispatched || admitted.InvocationID == "" {
+		t.Fatalf("admit in-flight cancellation call: state=%s id=%s err=%v", admitted.State, admitted.InvocationID, err)
+	}
+	created, err := waitForRecoveryInvocationCreated(ctx, selection.watch, admitted.InvocationID)
+	if err != nil {
+		t.Fatalf("wait for observed in-flight invocation: %v", err)
+	}
+	if created.State != webmcp.InvocationDispatched || created.InvocationID != admitted.InvocationID {
+		t.Fatalf("created invocation = %+v, want dispatched identity %s", created, admitted.InvocationID)
+	}
+	beforeCancel, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Pending && oracle.Value == "pending:overlap"
+	})
+	if err != nil {
+		t.Fatalf("wait for in-flight page oracle: %v", err)
+	}
+
+	if err := selection.broker.Cancel(ctx, webmcp.CancelRequest{
+		InvocationID: admitted.InvocationID,
+		Reason:       "customer interruption",
+	}); err != nil {
+		t.Fatalf("cancel exact in-flight invocation: %v", err)
+	}
+	terminal, err := selection.broker.WaitInvocation(ctx, admitted.InvocationID)
+	if err != nil {
+		t.Fatalf("wait for canceled in-flight invocation: %v", err)
+	}
+	if terminal.InvocationID != admitted.InvocationID || terminal.State != webmcp.InvocationCanceled || terminal.ErrorCode != string(webmcp.ErrorInvocationCanceled) {
+		t.Fatalf("canceled terminal = %+v, want exact canceled disposition", terminal)
+	}
+	afterCancel, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		for _, invocation := range oracle.Invocations {
+			if invocation == "canceled:"+cancelToolName {
+				return true
+			}
+		}
+		return false
+	})
+	if err != nil {
+		t.Fatalf("wait for page cancellation observation: %v", err)
+	}
+	if afterCancel.Value != beforeCancel.Value || !afterCancel.Pending {
+		t.Fatalf("page oracle after cancellation = %+v, want preserved pending value %q", afterCancel, beforeCancel.Value)
+	}
+
+	if err := selection.broker.Close(); err != nil {
+		t.Fatalf("detach external target after cancellation: %v", err)
+	}
+	if err := mutateExternalTarget(ctx, selection.browser.endpoint(), string(selection.target.ID), "post-detach-probe"); err != nil {
+		t.Fatalf("mutate external target after detach: %v", err)
+	}
+	afterDetach, err := inspectExternalTarget(ctx, selection.browser.endpoint(), string(selection.target.ID))
+	if err != nil {
+		t.Fatalf("read external target after detach: %v", err)
+	}
+	if !afterDetach.Ready || afterDetach.Value != "post-detach-probe" || afterDetach.VisibleText != "post-detach-probe" {
+		t.Fatalf("post-detach page state = %+v, want responsive mutation", afterDetach)
+	}
+	t.Logf("case=in_flight_cancellation_external_tab invocation=%s observed_state=%q terminal=%s after_cancel=%q detached_target=%s post_detach_mutation=%q", admitted.InvocationID, beforeCancel.Value, terminal.State, afterCancel.Value, selection.target.ID, afterDetach.Value)
+}
+
 func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedChrome) {
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
@@ -678,6 +757,22 @@ func waitForRecoveryTerminalEvent(ctx context.Context, events <-chan webmcp.Brok
 	}
 }
 
+func waitForRecoveryInvocationCreated(ctx context.Context, events <-chan webmcp.BrokerEvent, invocationID webmcp.InvocationID) (webmcp.BrokerEvent, error) {
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return webmcp.BrokerEvent{}, errors.New("broker watch closed before invocation-created event")
+			}
+			if event.Type == webmcp.BrokerEventInvocationCreated && event.InvocationID == invocationID {
+				return event, nil
+			}
+		case <-ctx.Done():
+			return webmcp.BrokerEvent{}, ctx.Err()
+		}
+	}
+}
+
 func drainRecoveryEvents(events <-chan webmcp.BrokerEvent) []webmcp.BrokerEvent {
 	var result []webmcp.BrokerEvent
 	for {
@@ -781,6 +876,40 @@ func navigateRecoveryTarget(ctx context.Context, endpoint string, targetID webmc
 	}()
 	if err := chromedp.Run(targetContext, chromedp.Navigate(destination), chromedp.WaitReady("#ready")); err != nil {
 		return fmt.Errorf("navigate target: %w", err)
+	}
+	return nil
+}
+
+func mutateExternalTarget(ctx context.Context, endpoint, targetID, value string) (err error) {
+	rootContext, cancelRoot := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelRoot()
+	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
+	defer cancelAllocator()
+	targetContext, cancelTarget := chromedp.NewContext(allocatorContext, chromedp.WithTargetID(cdpTarget.ID(targetID)))
+	defer func() {
+		cleanupErr := detachExternalIntegrationTarget(targetContext, cancelTarget)
+		if err == nil && cleanupErr != nil {
+			err = cleanupErr
+		}
+	}()
+	encodedValue, marshalErr := json.Marshal(value)
+	if marshalErr != nil {
+		return fmt.Errorf("encode post-detach probe value: %w", marshalErr)
+	}
+	expression := `(() => {
+  const state = window.__webmcpLaneD;
+  if (!state) return false;
+  state.value = ` + string(encodedValue) + `;
+  const visible = document.querySelector("#state");
+  if (visible) visible.textContent = state.value;
+  return state.value;
+})()`
+	var mutated string
+	if err := chromedp.Run(targetContext, chromedp.WaitReady("#state"), chromedp.Evaluate(expression, &mutated)); err != nil {
+		return fmt.Errorf("mutate external target: %w", err)
+	}
+	if mutated != value {
+		return fmt.Errorf("post-detach probe mutation returned %q, want %q", mutated, value)
 	}
 	return nil
 }

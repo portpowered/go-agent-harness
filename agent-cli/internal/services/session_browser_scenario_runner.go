@@ -334,12 +334,27 @@ func (f *BrowserConversationFixtureRun) ProbeBrowserConversationTab(ctx context.
 		}
 	}
 	outcome := f.Runtime.Outcome()
-	responsive := outcome.Status != testkit.BrowserScriptDiverged && outcome.Status != testkit.BrowserScriptCanceled
+	responsive := outcome.Status == testkit.BrowserScriptCompleted
+	state := f.Runtime.PageState()
+	if len(state) == 0 {
+		return BrowserConversationTabStateProbeResult{}, errors.New("browser conversation post-session tab read returned no state")
+	}
+	if f.Oracle == nil {
+		return BrowserConversationTabStateProbeResult{}, errors.New("browser conversation post-session tab has no writable state oracle")
+	}
+	if err := f.Oracle.SetJSON(state); err != nil {
+		return BrowserConversationTabStateProbeResult{}, fmt.Errorf("browser conversation post-session tab mutation: %w", err)
+	}
+	target := f.Runtime.Target()
 	return BrowserConversationTabStateProbeResult{
-		PageID:         pageID,
-		Alive:          !targetClosed,
-		Responsive:     responsive,
-		AllowsMutation: !targetClosed,
+		PageID:            pageID,
+		BrowserID:         webmcp.BrowserID(f.Runtime.BrowserID()),
+		TargetID:          webmcp.TargetID(target.ID),
+		Alive:             !targetClosed,
+		Responsive:        responsive,
+		AllowsMutation:    !targetClosed && responsive,
+		ReadSucceeded:     true,
+		MutationSucceeded: true,
 	}, nil
 }
 
@@ -358,6 +373,7 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	if err != nil {
 		return BrowserConversationResult{}, err
 	}
+	sessionAudioInputs, interruptionAudio := partitionBrowserConversationAudio(scenario, audioInputs)
 	run, err := NewBrowserConversationRun(scenario)
 	if err != nil {
 		return BrowserConversationResult{}, err
@@ -373,6 +389,10 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	defer cancel()
 	tracker := newBrowserConversationEvidenceTracker(run, scenario)
 	tracker.configure(runContext, cancel, nil, options.CustomerNavigate)
+	interruptionController := newBrowserConversationInterruptionController(run, tracker, scenario, interruptionAudio)
+	if interruptionController != nil {
+		defer interruptionController.Close()
+	}
 	var fixture *BrowserConversationFixtureRun
 	customerNavigate := options.CustomerNavigate
 	var observedBroker *browserConversationBroker
@@ -437,7 +457,10 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 			tracker.configure(runContext, cancel, fixture, customerNavigate)
 		}
 		if fixture != nil && rootErr == nil {
-			observedBroker = newBrowserConversationBroker(fixture.Broker, run, tracker, scenario, options.Oracle, fixture)
+			observedBroker = newBrowserConversationBroker(fixture.Broker, run, tracker, scenario, options.Oracle, fixture, interruptionController)
+			tracker.setCancelInvocation(func(cancelContext context.Context, invocationID webmcp.InvocationID, reason string) error {
+				return observedBroker.Cancel(cancelContext, webmcp.CancelRequest{InvocationID: invocationID, Reason: reason})
+			})
 			if err := prepareBrowserConversationFixture(runContext, scenario, observedBroker); err != nil {
 				addContextError(BrowserConversationPhaseFixtureStartup, "", err)
 			}
@@ -445,12 +468,18 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 		if fixture != nil && rootErr == nil {
 			toolSet := webmcptools.NewBrokerToolSet(observedBroker)
 			sessionRequest := BrowserConversationSessionRequest{
-				Scenario:         cloneBrowserConversationScenario(scenario),
-				Fixture:          fixture,
-				Broker:           observedBroker,
-				ToolExecutor:     toolSet.Executor(),
-				ToolDefinitions:  toolSet.Definitions(),
-				AudioInputs:      cloneScheduledAudioInputs(audioInputs),
+				Scenario:        cloneBrowserConversationScenario(scenario),
+				Fixture:         fixture,
+				Broker:          observedBroker,
+				ToolExecutor:    toolSet.Executor(),
+				ToolDefinitions: toolSet.Definitions(),
+				AudioInputs:     cloneScheduledAudioInputs(sessionAudioInputs),
+				AudioInterruptions: func() <-chan ScheduledAudioInput {
+					if interruptionController == nil {
+						return nil
+					}
+					return interruptionController.AudioInterruptions()
+				}(),
 				SessionOptions:   options.SessionOptions,
 				StreamObserver:   tracker.observe,
 				CustomerNavigate: customerNavigate,
@@ -459,6 +488,9 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 			sessionRunner := options.SessionRunner
 			if sessionRunner == nil {
 				sessionRunner = runBrowserConversationSession
+			}
+			if sessionRequest.AudioInterruptions != nil {
+				sessionRequest.SessionOptions.AudioInterruptions = sessionRequest.AudioInterruptions
 			}
 			sessionErr := sessionRunner(runContext, out, sessionRequest)
 			lifecycle.SessionTerminated = true
@@ -473,59 +505,79 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	}
 
 	if fixture != nil {
-		probe := options.PostSessionProbe
-		if probe == nil {
-			probe = func(probeContext context.Context, runFixture *BrowserConversationFixtureRun, pageID string) (BrowserConversationTabStateProbeResult, error) {
-				return runFixture.ProbeBrowserConversationTab(probeContext, pageID)
-			}
-		}
-		if rootErr == nil || runContext.Err() == nil {
-			probeResult, probeErr := probe(runContext, fixture, scenario.PostSession.PageID)
-			if probeErr != nil {
-				addContextError(BrowserConversationPhaseEvidence, "", probeErr)
-			} else {
-				lifecycle.ExternalTabAlive = probeResult.Alive
-				lifecycle.ExternalTabResponsive = probeResult.Responsive
-				lifecycle.ExternalTabAllowsMutation = probeResult.AllowsMutation
-				if probeResult.PageID != "" && probeResult.PageID != scenario.PostSession.PageID {
-					addRootError(browserConversationPhaseError(
-						BrowserConversationPhaseEvidence,
-						"",
-						errors.New("post-session probe returned the wrong page"),
-					))
-				}
-				reader := options.Oracle
-				if reader == nil {
-					reader = fixture
-				}
-				if reader != nil {
-					state, stateErr := reader.ReadBrowserConversationState(runContext, scenario.PostSession.PageID)
-					if stateErr != nil {
-						addContextError(BrowserConversationPhaseEvidence, "", stateErr)
-					} else if observeErr := run.ObserveOracleSnapshot(BrowserConversationOracleSnapshot{
-						StepID: "",
-						PageID: scenario.PostSession.PageID,
-						Phase:  BrowserConversationOraclePostSession,
-						State:  state,
-					}); observeErr != nil {
-						addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", observeErr))
-					}
-				}
-			}
-		}
+		// Detach before probing. The probe is intentionally independent of the
+		// session-owned broker and runs even after the session context was
+		// canceled, proving that external tab ownership survived termination.
 		cleanupErr := fixture.Close()
 		if cleanupErr != nil {
 			addRootError(browserConversationPhaseError(BrowserConversationPhaseCleanup, "", cleanupErr))
 		}
 		detachCount, targetClosed := browserConversationFixtureLifecycle(fixture)
 		lifecycle.DetachCount = detachCount
-		lifecycle.Detached = detachCount > 0
+		lifecycle.Detached = detachCount == 1
+		lifecycle.DetachRequired = fixture.Runtime != nil
 		lifecycle.TargetClosed = targetClosed
+
+		probe := options.PostSessionProbe
+		if probe == nil {
+			probe = func(probeContext context.Context, runFixture *BrowserConversationFixtureRun, pageID string) (BrowserConversationTabStateProbeResult, error) {
+				return runFixture.ProbeBrowserConversationTab(probeContext, pageID)
+			}
+		}
+		probeContext, probeCancel := context.WithTimeout(context.Background(), scenario.RunTimeout)
+		probeResult, probeErr := probe(probeContext, fixture, scenario.PostSession.PageID)
+		if probeErr != nil {
+			addContextError(BrowserConversationPhaseEvidence, "", probeErr)
+		} else {
+			lifecycle.ExternalTabAlive = probeResult.Alive
+			lifecycle.ExternalTabResponsive = probeResult.Responsive
+			lifecycle.ExternalTabAllowsMutation = probeResult.AllowsMutation
+			lifecycle.ExternalTabRead = probeResult.ReadSucceeded
+			lifecycle.ExternalTabMutation = probeResult.MutationSucceeded
+			lifecycle.ExternalBrowserID = probeResult.BrowserID
+			lifecycle.ExternalTargetID = probeResult.TargetID
+			if fixture.Runtime != nil && probeResult.BrowserID != "" && probeResult.BrowserID != webmcp.BrowserID(fixture.Runtime.BrowserID()) {
+				addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", errors.New("post-session probe returned a different browser")))
+			}
+			if fixture.Runtime != nil && probeResult.TargetID != "" && probeResult.TargetID != webmcp.TargetID(fixture.Runtime.Target().ID) {
+				addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", errors.New("post-session probe returned a different target")))
+			}
+			if probeResult.PageID != "" && probeResult.PageID != scenario.PostSession.PageID {
+				addRootError(browserConversationPhaseError(
+					BrowserConversationPhaseEvidence,
+					"",
+					errors.New("post-session probe returned the wrong page"),
+				))
+			}
+			reader := options.Oracle
+			if reader == nil {
+				reader = fixture
+			}
+			if reader != nil {
+				state, stateErr := reader.ReadBrowserConversationState(probeContext, scenario.PostSession.PageID)
+				if stateErr != nil {
+					addContextError(BrowserConversationPhaseEvidence, "", stateErr)
+				} else if observeErr := run.ObserveOracleSnapshot(BrowserConversationOracleSnapshot{
+					StepID: "",
+					PageID: scenario.PostSession.PageID,
+					Phase:  BrowserConversationOraclePostSession,
+					State:  state,
+				}); observeErr != nil {
+					addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", observeErr))
+				}
+			}
+		}
+		probeCancel()
 	}
 
 	tracker.stopDeadline()
 	if evidenceErr := tracker.err(); evidenceErr != nil {
 		addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, tracker.currentStep(), evidenceErr))
+	}
+	if lateEvents := tracker.lateEventCount(); lateEvents > 0 {
+		if err := run.RecordCancellation(BrowserConversationCancellationEvidence{LateEventsSuppressed: lateEvents}); err != nil {
+			addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", err))
+		}
 	}
 	if rootErr == nil {
 		if contextErr := runContext.Err(); contextErr != nil {
@@ -612,6 +664,7 @@ func runBrowserConversationSession(ctx context.Context, out io.Writer, request B
 	sessionOptions.ToolExecutor = request.ToolExecutor
 	sessionOptions.ToolDefinitions = append([]messages.ToolDefinition(nil), request.ToolDefinitions...)
 	sessionOptions.AudioInputs = cloneScheduledAudioInputs(request.AudioInputs)
+	sessionOptions.AudioInterruptions = request.AudioInterruptions
 	sessionOptions.WaitForClose = true
 	sessionOptions.StreamObserver = combineBrowserConversationStreamObservers(
 		sessionOptions.StreamObserver,
@@ -685,14 +738,15 @@ func prepareBrowserConversationFixture(ctx context.Context, scenario BrowserConv
 }
 
 type browserConversationBroker struct {
-	inner     webmcp.Broker
-	run       *BrowserConversationRun
-	tracker   *browserConversationEvidenceTracker
-	scenario  BrowserConversationScenario
-	oracle    BrowserConversationOracleReader
-	fixture   *BrowserConversationFixtureRun
-	catalogMu sync.Mutex
-	catalog   map[webmcp.ToolRef]webmcp.ToolDescriptor
+	inner         webmcp.Broker
+	run           *BrowserConversationRun
+	tracker       *browserConversationEvidenceTracker
+	scenario      BrowserConversationScenario
+	oracle        BrowserConversationOracleReader
+	fixture       *BrowserConversationFixtureRun
+	interruptions *browserConversationInterruptionController
+	catalogMu     sync.Mutex
+	catalog       map[webmcp.ToolRef]webmcp.ToolDescriptor
 }
 
 func newBrowserConversationBroker(
@@ -702,10 +756,12 @@ func newBrowserConversationBroker(
 	scenario BrowserConversationScenario,
 	oracle BrowserConversationOracleReader,
 	fixture *BrowserConversationFixtureRun,
+	interruptions *browserConversationInterruptionController,
 ) *browserConversationBroker {
 	return &browserConversationBroker{
 		inner: inner, run: run, tracker: tracker, scenario: scenario,
-		oracle: oracle, fixture: fixture, catalog: make(map[webmcp.ToolRef]webmcp.ToolDescriptor),
+		oracle: oracle, fixture: fixture, interruptions: interruptions,
+		catalog: make(map[webmcp.ToolRef]webmcp.ToolDescriptor),
 	}
 }
 
@@ -763,6 +819,13 @@ func (b *browserConversationBroker) ListTools(ctx context.Context, options webmc
 
 func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
 	stepID := b.tracker.currentStep()
+	if b.tracker != nil {
+		resolvedStepID, stepErr := b.tracker.invocationStep(ctx)
+		if stepErr != nil {
+			return webmcp.InvokeResult{State: webmcp.InvocationError}, stepErr
+		}
+		stepID = resolvedStepID
+	}
 	step := browserConversationStepByID(b.scenario, stepID)
 	if step != nil && browserConversationExpectedState(step) != nil {
 		b.observeOracle(ctx, step, BrowserConversationOracleBefore)
@@ -781,6 +844,12 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I
 	}
 	b.recordOperation(b.callFromInvoke(stepID, request, result))
 	if !browserConversationInvocationStateTerminal(result.State) && result.InvocationID != "" {
+		if b.tracker != nil {
+			b.tracker.noteInFlight(stepID, result.InvocationID)
+		}
+		if b.interruptions != nil {
+			b.interruptions.observeInFlight(stepID, result.InvocationID, b.toolName(request.ToolRef))
+		}
 		if waiter, ok := b.inner.(interface {
 			WaitInvocation(context.Context, webmcp.InvocationID) (webmcp.InvokeResult, error)
 		}); ok {
@@ -788,6 +857,17 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I
 			if waitErr == nil {
 				result = terminal
 				b.recordOperation(b.callFromInvoke(stepID, request, result))
+				if result.State == webmcp.InvocationCanceled && b.run != nil {
+					current := b.run.Snapshot().Cancellation
+					if current.Interrupted || current.Requested {
+						if cancellationErr := b.run.RecordCancellation(BrowserConversationCancellationEvidence{
+							InvocationID: result.InvocationID,
+							FinalState:   result.State,
+						}); cancellationErr != nil && b.tracker != nil {
+							b.tracker.setError(cancellationErr)
+						}
+					}
+				}
 			} else if b.tracker != nil {
 				b.tracker.setError(errors.Join(
 					ErrBrowserConversationEvidence,
@@ -1100,77 +1180,6 @@ func sanitizeBrowserConversationVerdict(verdict BrowserConversationValidatorVerd
 		verdict.Checks[index].Detail = safeBrowserConversationText(verdict.Checks[index].Detail)
 	}
 	return verdict
-}
-
-func evaluateBrowserConversation(scenario BrowserConversationScenario, result BrowserConversationResult, rootErr error) BrowserConversationMechanicalEvaluation {
-	var failures []string
-	if rootErr != nil {
-		failures = append(failures, "run: "+safeBrowserConversationError(rootErr))
-	}
-	for _, step := range scenario.Steps {
-		customer, assistant := browserConversationTurnsForStep(result.Turns, step.ID)
-		if customer == nil {
-			failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": missing customer transcript")
-		} else if !strings.EqualFold(strings.TrimSpace(customer.ObservedText), strings.TrimSpace(step.Utterance)) {
-			failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": customer transcript does not match utterance")
-		}
-		if assistant == nil {
-			failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": missing assistant turn")
-		}
-		expectedState := browserConversationExpectedState(&step)
-		if expectedState != nil {
-			before := browserConversationOracleForStep(result.Oracles, step.ID, BrowserConversationOracleBefore)
-			after := browserConversationOracleForStep(result.Oracles, step.ID, BrowserConversationOracleAfter)
-			if before == nil {
-				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": missing before oracle")
-			} else if !browserConversationJSONEqual(before.State, expectedState.Before) {
-				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": before oracle mismatch")
-			}
-			if after == nil {
-				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": missing after oracle")
-			} else if !browserConversationJSONEqual(after.State, expectedState.After) {
-				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": after oracle mismatch")
-			}
-			terminalInvoke := browserConversationTerminalInvokeForStep(result.BrokerCalls, step.ID)
-			if terminalInvoke == nil {
-				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": missing terminal tool result")
-			} else if assistant != nil && assistant.Sequence <= terminalInvoke.Sequence {
-				failures = append(failures, "step "+safeBrowserConversationText(step.ID)+": assistant turn was observed before the completed browser invocation")
-			}
-		}
-	}
-	failures = append(failures, browserConversationCorrectionFailures(scenario, result)...)
-	failures = append(failures, browserConversationRecoveryFailures(scenario, result)...)
-	post := browserConversationOracleForStep(result.Oracles, "", BrowserConversationOraclePostSession)
-	if post == nil {
-		failures = append(failures, "post-session: missing independent oracle")
-	}
-	required := scenario.PostSession
-	if !result.Lifecycle.ExternalTabAlive && required.MustRemainAlive {
-		failures = append(failures, "post-session: external tab is not alive")
-	}
-	if !result.Lifecycle.ExternalTabResponsive && required.MustBeResponsive {
-		failures = append(failures, "post-session: external tab is not responsive")
-	}
-	if !result.Lifecycle.ExternalTabAllowsMutation && required.MustAllowMutation {
-		failures = append(failures, "post-session: external tab does not allow mutation")
-	}
-	if result.Lifecycle.BrowserClosed {
-		failures = append(failures, "lifecycle: externally owned browser was closed")
-	}
-	if result.Lifecycle.TargetClosed {
-		failures = append(failures, "lifecycle: externally owned target was closed")
-	}
-	if !result.Lifecycle.SessionStarted {
-		failures = append(failures, "lifecycle: session was not started")
-	}
-	if !result.Lifecycle.SessionTerminated {
-		failures = append(failures, "lifecycle: session was not terminated")
-	}
-	return BrowserConversationMechanicalEvaluation{
-		Passed:   len(failures) == 0,
-		Failures: failures,
-	}
 }
 
 func browserConversationTurnsForStep(turns []BrowserConversationTurn, stepID string) (*BrowserConversationTurn, *BrowserConversationTurn) {

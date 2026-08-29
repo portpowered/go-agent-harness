@@ -73,9 +73,17 @@ func (f BrowserConversationOracleFunc) ReadBrowserConversationState(ctx context.
 // health result. It is separate from assistant language and page-tool output.
 type BrowserConversationTabStateProbeResult struct {
 	PageID         string
+	BrowserID      webmcp.BrowserID
+	TargetID       webmcp.TargetID
 	Alive          bool
 	Responsive     bool
 	AllowsMutation bool
+	// ReadSucceeded and MutationSucceeded are optional detail from a stronger
+	// independent probe. The legacy booleans remain the compact health
+	// contract, while these fields let a live probe report its read/write
+	// operations without deriving health from assistant prose.
+	ReadSucceeded     bool
+	MutationSucceeded bool
 }
 
 // BrowserConversationTabStateProbe is an injectable post-session health seam.
@@ -101,15 +109,19 @@ type BrowserConversationNavigationFunc = BrowserConversationCustomerNavigateFunc
 // shared session runner. Audio, tools, and stream observation all use the
 // existing service seams.
 type BrowserConversationSessionRequest struct {
-	Scenario         BrowserConversationScenario
-	Fixture          *BrowserConversationFixtureRun
-	Broker           webmcp.Broker
-	ToolExecutor     messages.ToolExecutor
-	ToolDefinitions  []messages.ToolDefinition
-	AudioInputs      []ScheduledAudioInput
-	SessionOptions   SessionRunOptions
-	StreamObserver   SessionStreamObserver
-	CustomerNavigate BrowserConversationCustomerNavigateFunc
+	Scenario        BrowserConversationScenario
+	Fixture         *BrowserConversationFixtureRun
+	Broker          webmcp.Broker
+	ToolExecutor    messages.ToolExecutor
+	ToolDefinitions []messages.ToolDefinition
+	AudioInputs     []ScheduledAudioInput
+	// AudioInterruptions is the event-driven customer-input seam. The runner
+	// emits these only after the corresponding browser lifecycle event, so a
+	// caller cannot accidentally turn a fixed delay into interruption evidence.
+	AudioInterruptions <-chan ScheduledAudioInput
+	SessionOptions     SessionRunOptions
+	StreamObserver     SessionStreamObserver
+	CustomerNavigate   BrowserConversationCustomerNavigateFunc
 }
 
 // BrowserConversationSessionRunner executes one shared duplex session.

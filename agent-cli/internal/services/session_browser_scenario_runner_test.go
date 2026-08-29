@@ -187,6 +187,291 @@ func TestRunBrowserConversationDefaultRunnerUsesSharedDuplexAudioPath(t *testing
 	}
 }
 
+func TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab(t *testing.T) {
+	scenario := browserConversationInterruptScenario()
+	inferencer := &browserConversationInterruptInferencer{toolRef: browserConversationRunnerToolRef()}
+	result, err := RunBrowserConversation(context.Background(), nil, BrowserConversationRunOptions{
+		Scenario: scenario,
+		AudioByStep: map[string][]byte{
+			"apply":     {1},
+			"start":     {2},
+			"interrupt": {3},
+			"cancel":    {4},
+		},
+		FixtureScript: browserConversationInterruptScript(),
+		FixtureOptions: []BrowserConversationFixtureOption{
+			WithBrowserConversationFixtureBrokerOptions(webmcp.BrokerOptions{
+				ToolRefFactory: func(webmcp.ToolDescriptor) (webmcp.ToolRef, error) {
+					return browserConversationRunnerToolRef(), nil
+				},
+			}),
+		},
+		Oracle: &browserConversationSequenceOracle{states: []json.RawMessage{
+			json.RawMessage(`{"value":false}`),
+			json.RawMessage(`{"value":true}`),
+			json.RawMessage(`{"value":true}`),
+		}},
+		SessionOptions: SessionRunOptions{SessionInferencer: inferencer},
+	})
+	if err == nil || !errors.Is(err, ErrBrowserConversationSession) {
+		t.Fatalf("RunBrowserConversation error = %v, want expected canceled session error", err)
+	}
+	if !result.Finalized || !result.Mechanical.Passed {
+		t.Fatalf("result = %+v, want finalized mechanical pass", result)
+	}
+	cancellation := result.Cancellation
+	if !cancellation.Interrupted || !cancellation.Requested || cancellation.InvocationID == "" || cancellation.FinalState != webmcp.InvocationCanceled {
+		t.Fatalf("cancellation = %+v, want interrupted requested canceled invocation", cancellation)
+	}
+	if cancellation.InterruptedStepID != "start" || cancellation.CancelStepID != "cancel" ||
+		!cancellation.OverlappingAudioSent || !cancellation.ExplicitCancelAudioSent || cancellation.LateEventsSuppressed == 0 {
+		t.Fatalf("cancellation = %+v, want step/audio/late-event evidence", cancellation)
+	}
+	if result.Lifecycle.Outcome != BrowserConversationLifecycleCanceled || !result.Lifecycle.Detached ||
+		result.Lifecycle.DetachCount != 1 || !result.Lifecycle.ExternalTabAlive ||
+		!result.Lifecycle.ExternalTabResponsive || !result.Lifecycle.ExternalTabAllowsMutation ||
+		!result.Lifecycle.ExternalTabRead || !result.Lifecycle.ExternalTabMutation ||
+		result.Lifecycle.TargetClosed || result.Lifecycle.BrowserClosed {
+		t.Fatalf("lifecycle = %+v, want canceled one-detach surviving-tab lifecycle", result.Lifecycle)
+	}
+	for _, turn := range result.Turns {
+		if turn.ObservedText == "late response" {
+			t.Fatalf("late response crossed customer evidence boundary: %+v", result.Turns)
+		}
+	}
+	inferencer.mu.Lock()
+	audio := append([]byte(nil), inferencer.audio...)
+	inferencer.mu.Unlock()
+	if !bytes.Equal(audio, []byte{1, 2, 3, 4}) {
+		t.Fatalf("shared session audio = %v, want initial/in-flight/overlap/cancel audio", audio)
+	}
+}
+
+func TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation(t *testing.T) {
+	scenario := browserConversationRunnerScenario()
+	scenario.Steps = append(scenario.Steps, BrowserConversationStep{
+		ID: "cancel", Utterance: "cancel", PageID: "checkout", Deadline: time.Second,
+		Cancel: &BrowserConversationCancelRequest{Reason: "customer requested stop"},
+	})
+	inputs, err := scenario.ScheduleAudioInputs(map[string][]byte{"apply": {1}, "cancel": {2}})
+	if err != nil {
+		t.Fatalf("ScheduleAudioInputs: %v", err)
+	}
+	normal, special := partitionBrowserConversationAudio(scenario, inputs)
+	if len(normal) != 1 || len(special) != 1 || len(special["cancel"].PCM) != 1 {
+		t.Fatalf("partitioned audio normal=%+v special=%+v, want one ordinary and one held cancel input", normal, special)
+	}
+	run, err := NewBrowserConversationRun(scenario)
+	if err != nil {
+		t.Fatalf("NewBrowserConversationRun: %v", err)
+	}
+	tracker := newBrowserConversationEvidenceTracker(run, scenario)
+	controller := newBrowserConversationInterruptionController(run, tracker, scenario, special)
+	if controller == nil {
+		t.Fatal("standalone cancel did not create an event-driven controller")
+	}
+	defer controller.Close()
+	controller.observeInFlight("apply", "invocation-1", "write_state")
+	select {
+	case input := <-controller.AudioInterruptions():
+		if input.EndOfTurn != true || !bytes.Equal(input.PCM, []byte{2}) {
+			t.Fatalf("held cancel input = %+v, want PCM [2] with end-of-turn", input)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("standalone cancel was not released by in-flight observation")
+	}
+	cancellation := run.Snapshot().Cancellation
+	if cancellation.Interrupted || !cancellation.ExplicitCancelAudioSent || cancellation.InvocationID != "invocation-1" {
+		t.Fatalf("cancellation = %+v, want explicit cancel audio without interruption", cancellation)
+	}
+}
+
+func browserConversationInterruptScenario() BrowserConversationScenario {
+	return BrowserConversationScenario{
+		Version: BrowserConversationScenarioVersion,
+		ID:      "interrupt-cancel-flow",
+		Name:    "Interrupt and cancel flow",
+		Fixture: BrowserConversationFixture{
+			ID:          "shop",
+			InitialPage: "checkout",
+			Pages:       []BrowserConversationPage{{ID: "checkout", URL: "https://fixture.test/checkout"}},
+		},
+		Steps: []BrowserConversationStep{
+			{
+				ID: "apply", Utterance: "apply", PageID: "checkout", Deadline: time.Second,
+				ExpectedState: &BrowserStateTransition{
+					PageID: "checkout", Before: json.RawMessage(`{"value":false}`), After: json.RawMessage(`{"value":true}`),
+				},
+			},
+			{ID: "start", Utterance: "start the slow request", PageID: "checkout", Deadline: time.Second},
+			{
+				ID: "interrupt", Utterance: "stop that request", PageID: "checkout", Deadline: time.Second,
+				Interrupt: &BrowserConversationInterrupt{Trigger: BrowserInterruptOnInFlightInvocation, ToolName: "write_state"},
+			},
+			{
+				ID: "cancel", Utterance: "cancel the session", PageID: "checkout", Deadline: time.Second,
+				Cancel: &BrowserConversationCancelRequest{Reason: "customer requested stop"},
+			},
+		},
+		RunTimeout: 3 * time.Second,
+		PostSession: BrowserConversationTabStateRequired{
+			PageID: "checkout", MustRemainAlive: true, MustBeResponsive: true, MustAllowMutation: true,
+		},
+	}
+}
+
+func browserConversationInterruptScript() testkit.BrowserScript {
+	base := browserConversationRunnerScript()
+	operations := append([]testkit.BrowserScriptOperation(nil), base.Operations[:3]...)
+	operations = append(operations,
+		testkit.BrowserScriptOperation{
+			Expect: testkit.OperationExpectation{
+				Type: testkit.OperationInvokeTool, FrameID: "frame-1", ToolName: "write_state",
+				Input: json.RawMessage(`{"value":false}`),
+			},
+			Result: json.RawMessage(`{"invocation_id":"slow-invocation"}`),
+		},
+		testkit.BrowserScriptOperation{
+			Expect: testkit.OperationExpectation{Type: testkit.OperationCancelTool, InvocationID: "slow-invocation"},
+			Emit: []testkit.EmittedEvent{{
+				Type: testkit.EmittedToolResponded, InvocationID: "slow-invocation", Status: "Canceled",
+				Error: json.RawMessage(`{"code":"invocation_canceled"}`),
+			}},
+		},
+		testkit.BrowserScriptOperation{Expect: testkit.OperationExpectation{Type: testkit.OperationDetachTarget}},
+	)
+	base.Operations = operations
+	return base
+}
+
+type browserConversationInterruptInferencer struct {
+	mu      sync.Mutex
+	toolRef webmcp.ToolRef
+	audio   []byte
+}
+
+func (i *browserConversationInterruptInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	session := &browserConversationInterruptSession{
+		receive: messages.NewTypedBuffer[messages.StreamMessage](128),
+		done:    make(chan struct{}),
+		owner:   i,
+		toolRef: i.toolRef,
+	}
+	if !session.write(ctx,
+		messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("fixture-session", "session")},
+		messages.StreamMessage{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("fixture-session")},
+	) {
+		return nil, ctx.Err()
+	}
+	return session, nil
+}
+
+type browserConversationInterruptSession struct {
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	owner   *browserConversationInterruptInferencer
+	toolRef webmcp.ToolRef
+
+	mu          sync.Mutex
+	inputTurns  int
+	responseEnd int
+	closed      bool
+}
+
+func (s *browserConversationInterruptSession) Send(ctx context.Context, message messages.StreamMessage) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return false
+	}
+	switch message.Type {
+	case messages.StreamTypeAudioDelta:
+		if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil && s.owner != nil {
+			s.owner.mu.Lock()
+			s.owner.audio = append(s.owner.audio, value.Content...)
+			s.owner.mu.Unlock()
+		}
+	case messages.StreamTypeMessageEnd:
+		s.inputTurns++
+		switch s.inputTurns {
+		case 1:
+			return s.write(ctx,
+				messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("apply")},
+				messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+				s.toolCall("call-apply", `{"value":true}`),
+				messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			)
+		case 2:
+			return s.write(ctx,
+				messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("start the slow request")},
+				messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+				s.toolCall("call-slow", `{"value":false}`),
+				messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			)
+		case 3:
+			return s.write(ctx, messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("stop that request")})
+		case 4:
+			return s.write(ctx,
+				messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("cancel the session")},
+				messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+				messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("late response")},
+				messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			)
+		}
+	case messages.StreamTypeResponseCreate:
+		s.responseEnd++
+		if s.responseEnd == 1 {
+			return s.write(ctx,
+				messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+				messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("applied")},
+				messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+			)
+		}
+	case messages.StreamTypeSessionClose:
+		s.closed = true
+		select {
+		case <-s.done:
+		default:
+			close(s.done)
+		}
+	}
+	return true
+}
+
+func (s *browserConversationInterruptSession) toolCall(id, input string) messages.StreamMessage {
+	return messages.StreamMessage{
+		Type: messages.StreamTypeToolCallEnd,
+		Role: messages.RoleAssistant,
+		Value: messages.NewToolCallEndValue(id, webmcp.InvokeToolName,
+			`{"tool_ref":"`+string(s.toolRef)+`","input_json":"`+strings.ReplaceAll(input, `"`, `\"`)+`","reason":"browser"}`),
+	}
+}
+
+func (s *browserConversationInterruptSession) write(ctx context.Context, messagesToWrite ...messages.StreamMessage) bool {
+	for _, message := range messagesToWrite {
+		if !s.receive.Write(ctx, message) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *browserConversationInterruptSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *browserConversationInterruptSession) Done() <-chan struct{} { return s.done }
+
+func (s *browserConversationInterruptSession) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.closed {
+		s.closed = true
+		close(s.done)
+	}
+	return nil
+}
+
 func TestRunBrowserConversationAttributesSessionFailureAndCleansOnce(t *testing.T) {
 	scenario := browserConversationRunnerScenario()
 	script := browserConversationRunnerScript()

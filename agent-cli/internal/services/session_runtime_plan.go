@@ -216,6 +216,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
+	plan.loop.AudioInterruptions = opts.AudioInterruptions
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding
 	// The single composed executor crosses into every session mode (live,
 	// replay, record) here; the duplex loop construction seam decides whether
