@@ -48,6 +48,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
+		opts.PromptProvided = true
 	}
 
 	if err := validateSessionRunOptions(opts); err != nil {

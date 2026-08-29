@@ -126,6 +126,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 	}
 
 	opts.Prompt = seed.Value
+	opts.PromptProvided = true
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
@@ -179,6 +180,9 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		// stage. This keeps duration, image, and recording runs on one C0 order.
 		runErr = finalizer.finish(ctx, out, runErr)
 		runErr = errors.Join(runErr, finalizeSessionDurationArtifacts(artifacts))
+		if runErr == nil && plan.replayCompletion != nil {
+			runErr = plan.replayCompletion(out)
+		}
 	}()
 	deviceBinding, err := PrepareRTCDeviceBindings(plan.rtcDeviceRequest)
 	if err != nil {

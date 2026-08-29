@@ -517,6 +517,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				BaseURL:             c.askFlags.BaseURL,
 				ConfigDir:           c.globalFlags.ConfigDir(),
 				Prompt:              strings.Join(args, " "),
+				PromptProvided:      cmd.Flags().Changed("prompt") || len(args) > 0,
 				Voice:               voice,
 				Transport:           selectedTransport,
 				Signaling:           signaling,

@@ -74,6 +74,7 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
+		opts.PromptProvided = true
 	}
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err

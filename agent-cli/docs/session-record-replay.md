@@ -129,6 +129,20 @@ You can pass a prompt when the capture expects an outbound user event:
 agent session "hello from the CLI" --replay captures/grok-demo.session.json
 ```
 
+For an OpenAI Realtime capture whose first post-handshake client actions are
+one user `conversation.item.create` containing a single `input_text` part and
+one `response.create`, a bare replay reuses that recorded prompt automatically:
+
+```bash
+agent session --replay captures/openai-demo.session.json
+```
+
+The strict replay transport still validates the generated client frames in
+capture order. A successful capture-derived prompt replay ends with exactly
+one `[session replay complete]` line; a failed replay does not print that
+success marker. Supplying `--prompt` (including `--prompt=`) remains an
+explicit prompt and continues to use strict mismatch validation.
+
 ### Reproduce a prompt
 
 Record through the normal CLI boundary, then replay the produced capture with

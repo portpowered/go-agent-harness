@@ -186,6 +186,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	}
 	if opts.TextSeed.Present {
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+		opts.SessionRunOptions.PromptProvided = true
 	}
 	destination, err := prepareSessionRecordingDestination(directory)
 	if err != nil {

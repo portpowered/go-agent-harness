@@ -33,6 +33,7 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 	}
 
 	opts.Prompt = seed.Value
+	opts.PromptProvided = true
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}

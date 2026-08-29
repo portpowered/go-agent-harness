@@ -79,6 +79,7 @@ func awaitSessionFirstTurn(ctx context.Context, ack <-chan error) error {
 
 type sessionLoopOptions struct {
 	Prompt         string
+	PromptProvided bool
 	CloseAfterOpen bool
 	WaitForClose   bool
 	MaxDuration    time.Duration
@@ -274,12 +275,13 @@ type sessionLoopMessageState struct {
 }
 
 func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
+	promptProvided := opts.PromptProvided || opts.Prompt != ""
 	opts.observer.observe(msg)
 	if err := writeSessionReplayMessage(out, msg); err != nil {
 		return state, false, errors.Join(err, stopAndDrain())
 	}
 	if msg.Type == messages.StreamTypeSessionOpen {
-		if opts.Prompt != "" && !state.promptSent {
+		if promptProvided && !state.promptSent {
 			state.promptSent = true
 			userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
 			if err := loop.Send(ctx, []messages.Message{userMsg}); err != nil {
@@ -292,7 +294,7 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 				}
 			}
 		}
-		if opts.CloseAfterOpen && opts.Prompt == "" && opts.AudioIn == nil && !state.closeSent {
+		if opts.CloseAfterOpen && !promptProvided && opts.AudioIn == nil && !state.closeSent {
 			state.closeAfterOpenPending = true
 			var closeErr error
 			state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)
@@ -307,7 +309,7 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 			return state, false, errors.Join(err, stopAndDrain())
 		}
 	}
-	if opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
+	if opts.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd && !state.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
 		state.closeAfterOpenPending = true
 		var closeErr error
 		state, closeErr = closePendingSessionIfReady(ctx, loop, opts, state)

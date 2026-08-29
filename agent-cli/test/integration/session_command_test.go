@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -305,6 +306,78 @@ func TestSessionCommand_OpenAIRealtimeReplayWithoutVoicePreservesProviderDefault
 	}
 }
 
+func TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsCompletion(t *testing.T) {
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	capturePath := filepath.Join(t.TempDir(), "openai-bare-prompt.session.json")
+	writeOpenAIBarePromptCapture(t, capturePath)
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--replay", capturePath,
+	})
+
+	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute bare OpenAI realtime replay without live network: %v", err)
+	}
+
+	got := testWriter.StdoutString()
+	want := "recorded bare replay transcript\n[session replay complete]\n"
+	if got != want {
+		t.Fatalf("bare OpenAI replay output = %q, want %q", got, want)
+	}
+	if strings.Count(got, "[session replay complete]") != 1 {
+		t.Fatalf("bare OpenAI replay should report exactly one completion marker, got:\n%s", got)
+	}
+	if strings.Contains(got, "[session closed: client_close]") {
+		t.Fatalf("bare OpenAI replay reported a synthesized client close, got:\n%s", got)
+	}
+	if bytes.Contains([]byte(got), []byte{0x52, 0x49, 0x46, 0x46, 0x10, 0x20, 0x30, 0x40}) {
+		t.Fatalf("bare OpenAI replay wrote recorded PCM to text output, got: %q", got)
+	}
+}
+
+func TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict(t *testing.T) {
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--replay", locateCLIFixture(t, "openai_realtime_text.session.json"),
+		"--prompt=",
+	})
+
+	err = rootCmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("expected explicit empty prompt to mismatch the recorded prompt")
+	}
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("expected strict replay mismatch, got: %v", err)
+	}
+	if strings.Contains(testWriter.StdoutString(), "[session replay complete]") {
+		t.Fatalf("strict replay mismatch should not report completion, got:\n%s", testWriter.StdoutString())
+	}
+}
+
 func TestSessionCommand_OpenAIRealtimeReplayVoiceMatchesCurrentWire(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
@@ -549,6 +622,41 @@ func writeGrokWebSocketCapture(t *testing.T, path string) {
 	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatalf("write websocket capture: %v", err)
+	}
+}
+
+func writeOpenAIBarePromptCapture(t *testing.T, path string) {
+	t.Helper()
+
+	records := []gwtesting.CapturedSessionEvent{
+		grokWebSocketRecord(gwtesting.DirectionClientToServer, 1, `{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 2, `{"type":"session.created","session_id":"sess-bare-replay","model":"gpt-realtime"}`),
+		grokWebSocketRecord(gwtesting.DirectionClientToServer, 3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"recorded bare replay prompt"}]}}`),
+		grokWebSocketRecord(gwtesting.DirectionClientToServer, 4, `{"type":"response.create"}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 5, `{"type":"response.created"}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 6, `{"type":"response.output_audio.delta","delta":"UklGECAwQA==","format":"pcm16"}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 7, `{"type":"response.output_text.delta","delta":"recorded bare replay transcript"}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 8, `{"type":"response.output_text.done"}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 9, `{"type":"response.output_audio.done"}`),
+		grokWebSocketRecord(gwtesting.DirectionServerToClient, 10, `{"type":"response.done"}`),
+	}
+	data, err := json.MarshalIndent(gwtesting.SessionCapture{
+		Version: gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{
+			Name:  "openai",
+			Model: "gpt-realtime",
+		},
+		Session: gwtesting.SessionMetadata{
+			ID:           "sess-bare-replay",
+			StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
+		},
+		Records: records,
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal bare OpenAI websocket capture: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("write bare OpenAI websocket capture: %v", err)
 	}
 }
 

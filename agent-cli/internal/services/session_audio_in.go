@@ -237,6 +237,7 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	}
 	if seed.Present {
 		opts.Prompt = seed.Value
+		opts.PromptProvided = true
 	}
 	input.MaxDuration = maxDuration
 	if err := validateSessionAudioInput(input); err != nil {

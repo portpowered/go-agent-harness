@@ -160,6 +160,10 @@ type SessionRunOptions struct {
 	BaseURL       string
 	ConfigDir     string
 	Prompt        string
+	// PromptProvided distinguishes an explicitly supplied empty prompt from an
+	// omitted prompt. Replay uses the distinction to opt into capture-derived
+	// prompt planning only when the caller did not provide a prompt.
+	PromptProvided bool
 	// Voice selects the optional OpenAI Realtime audio output voice for this
 	// invocation. The empty value preserves the provider default. It is kept
 	// on the session options rather than package state so concurrent sessions

@@ -131,6 +131,7 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 	}
 	if opts.TextSeed.Present {
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+		opts.SessionRunOptions.PromptProvided = true
 	}
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
@@ -177,6 +178,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	}
 	if opts.TextSeed.Present {
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
+		opts.SessionRunOptions.PromptProvided = true
 	}
 	audioSource, err := openSessionAudioInput(input)
 	if err != nil {

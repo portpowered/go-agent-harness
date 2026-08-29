@@ -470,6 +470,129 @@ func TestLoadReplaySessionConfigurationRejectsMissingOrMalformedHandshake(t *tes
 	}
 }
 
+func TestLoadReplaySessionPromptExtractsSimpleInitialTextTurn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "openai-prompt-replay.session.json")
+	writeSessionCapture(t, path, gwtesting.SessionCapture{
+		Version:  gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{Name: sessionProviderOpenAI, Model: "gpt-realtime"},
+		Records: []gwtesting.CapturedSessionEvent{
+			{
+				Sequence:    1,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+			},
+			{
+				Sequence:    2,
+				Direction:   gwtesting.DirectionServerToClient,
+				Type:        "session.created",
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"session.created"}`),
+			},
+			{
+				Sequence:    3,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        conversationItemCreateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"captured bare prompt"}]}}`),
+			},
+			{
+				Sequence:    4,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        responseCreateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(`{"type":"response.create"}`),
+			},
+		},
+	})
+
+	got, err := loadReplaySessionPrompt(path)
+	if err != nil {
+		t.Fatalf("loadReplaySessionPrompt: %v", err)
+	}
+	if got == nil || got.text != "captured bare prompt" {
+		t.Fatalf("captured prompt = %#v, want captured bare prompt", got)
+	}
+}
+
+func TestLoadReplaySessionPromptRejectsAmbiguousOrIncompleteTextTurn(t *testing.T) {
+	cases := []struct {
+		name       string
+		records    []gwtesting.CapturedSessionEvent
+		wantReason string
+	}{
+		{
+			name: "missing response request",
+			records: []gwtesting.CapturedSessionEvent{
+				replayPromptRecord(3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"prompt"}]}}`),
+			},
+			wantReason: "incomplete recorded prompt",
+		},
+		{
+			name: "multiple text prompts",
+			records: []gwtesting.CapturedSessionEvent{
+				replayPromptRecord(3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"first"}]}}`),
+				replayPromptRecord(4, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"second"}]}}`),
+			},
+			wantReason: "ambiguous recorded text prompts",
+		},
+		{
+			name: "text prompt with missing text",
+			records: []gwtesting.CapturedSessionEvent{
+				replayPromptRecord(3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text"}]}}`),
+				replayResponseCreateRecord(4),
+			},
+			wantReason: "must contain exactly one input_text part with text",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "openai-prompt-replay.session.json")
+			records := append([]gwtesting.CapturedSessionEvent{
+				{
+					Sequence:    1,
+					Direction:   gwtesting.DirectionClientToServer,
+					Type:        sessionUpdateEventType,
+					PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+					Payload:     json.RawMessage(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+				},
+			}, tc.records...)
+			writeSessionCapture(t, path, gwtesting.SessionCapture{
+				Version:  gwtesting.SessionCaptureVersion,
+				Provider: gwtesting.SessionProviderMetadata{Name: sessionProviderOpenAI, Model: "gpt-realtime"},
+				Records:  records,
+			})
+
+			_, err := loadReplaySessionPrompt(path)
+			if err == nil || !strings.Contains(err.Error(), tc.wantReason) || !strings.Contains(err.Error(), path) {
+				t.Fatalf("loadReplaySessionPrompt error = %v, want path and %q", err, tc.wantReason)
+			}
+		})
+	}
+}
+
+func replayPromptRecord(sequence int, payload string) gwtesting.CapturedSessionEvent {
+	return gwtesting.CapturedSessionEvent{
+		Sequence:    sequence,
+		Direction:   gwtesting.DirectionClientToServer,
+		Type:        conversationItemCreateEventType,
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     json.RawMessage(payload),
+	}
+}
+
+func replayResponseCreateRecord(sequence int) gwtesting.CapturedSessionEvent {
+	return gwtesting.CapturedSessionEvent{
+		Sequence:    sequence,
+		Direction:   gwtesting.DirectionClientToServer,
+		Type:        responseCreateEventType,
+		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+		Payload:     json.RawMessage(`{"type":"response.create"}`),
+	}
+}
+
 func TestReplayInitialSessionUpdateDialerReplacesOnlyProviderHandshake(t *testing.T) {
 	innerConn := &replayHandshakeRecordingConn{}
 	inner := &replayHandshakeRecordingDialer{conn: innerConn}
