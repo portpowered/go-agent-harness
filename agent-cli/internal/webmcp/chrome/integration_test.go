@@ -127,6 +127,143 @@ type runningChrome struct {
 	closeErr  error
 }
 
+// liveCDPProxy adds one observable hold to the browser HTTP surface while
+// leaving the browser WebSocket endpoint in the version response untouched.
+// This makes a real CLI selection stop in target resolution without changing
+// the production command or browser process.
+type liveCDPProxy struct {
+	server   *httptest.Server
+	upstream string
+	client   *http.Client
+
+	mu            sync.Mutex
+	browserDead   bool
+	delayNextList bool
+	listAdmitted  chan struct{}
+	admitOnce     sync.Once
+	releaseOnce   sync.Once
+	releaseList   chan struct{}
+}
+
+func newLiveCDPProxy(upstream string) *liveCDPProxy {
+	proxy := &liveCDPProxy{
+		upstream:     strings.TrimRight(upstream, "/"),
+		client:       &http.Client{Timeout: 2 * time.Second},
+		listAdmitted: make(chan struct{}),
+		releaseList:  make(chan struct{}),
+	}
+	proxy.server = httptest.NewServer(http.HandlerFunc(proxy.handle))
+	return proxy
+}
+
+func (p *liveCDPProxy) URL() string {
+	if p == nil || p.server == nil {
+		return ""
+	}
+	return p.server.URL
+}
+
+func (p *liveCDPProxy) DelayNextList() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	p.delayNextList = true
+	p.mu.Unlock()
+}
+
+func (p *liveCDPProxy) MarkBrowserDead() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	p.browserDead = true
+	p.mu.Unlock()
+}
+
+func (p *liveCDPProxy) ListAdmitted() <-chan struct{} {
+	if p == nil {
+		return nil
+	}
+	return p.listAdmitted
+}
+
+func (p *liveCDPProxy) ReleaseList() {
+	if p == nil {
+		return
+	}
+	p.releaseOnce.Do(func() { close(p.releaseList) })
+}
+
+func (p *liveCDPProxy) Close() {
+	if p == nil {
+		return
+	}
+	p.ReleaseList()
+	if p.server != nil {
+		p.server.Close()
+	}
+}
+
+func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request) {
+	delay := false
+	dead := false
+	if request.URL.Path == "/json/list" {
+		p.mu.Lock()
+		delay = p.delayNextList
+		p.delayNextList = false
+		dead = p.browserDead
+		p.mu.Unlock()
+	} else {
+		p.mu.Lock()
+		dead = p.browserDead
+		p.mu.Unlock()
+	}
+	if delay {
+		p.admitOnce.Do(func() { close(p.listAdmitted) })
+		<-p.releaseList
+		// The test releases this request only after killing Chrome. Returning a
+		// bounded upstream failure avoids retaining an HTTP handler while a
+		// platform Chrome child may still own the DevTools port.
+		closeLiveCDPProxyConnection(writer)
+		return
+	}
+	if dead {
+		closeLiveCDPProxyConnection(writer)
+		return
+	}
+
+	upstreamRequest, err := http.NewRequestWithContext(request.Context(), http.MethodGet, p.upstream+request.URL.Path, nil)
+	if err != nil {
+		http.Error(writer, "invalid upstream request", http.StatusBadGateway)
+		return
+	}
+	response, err := p.client.Do(upstreamRequest)
+	if err != nil {
+		http.Error(writer, "upstream browser unavailable", http.StatusBadGateway)
+		return
+	}
+	defer response.Body.Close()
+	for key, values := range response.Header {
+		for _, value := range values {
+			writer.Header().Add(key, value)
+		}
+	}
+	writer.WriteHeader(response.StatusCode)
+	_, _ = io.Copy(writer, response.Body)
+}
+
+func closeLiveCDPProxyConnection(writer http.ResponseWriter) {
+	hijacker, ok := writer.(http.Hijacker)
+	if !ok {
+		return
+	}
+	connection, _, err := hijacker.Hijack()
+	if err == nil {
+		_ = connection.Close()
+	}
+}
+
 var devToolsEndpointPattern = regexp.MustCompile(`DevTools listening on (ws://127\.0\.0\.1:[0-9]+/devtools/browser/[^[:space:]]+)`)
 
 func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {

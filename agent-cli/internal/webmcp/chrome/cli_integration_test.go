@@ -18,6 +18,7 @@ import (
 )
 
 const cliChromeIntegrationEnv = "WEBMCP_CLI_CHROME_INTEGRATION"
+const cliSelectDeathIntegrationEnv = "WEBMCP_CLI_SELECT_DEATH_INTEGRATION"
 
 // TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel exercises the shipped
 // CLI binary against the actual pinned Chrome/WebMCP fixture. The invoke and
@@ -59,7 +60,6 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 	if version.WebSocketDebuggerURL != browser.endpoint() {
 		t.Fatalf("DevTools websocket = %q, launch announcement = %q", version.WebSocketDebuggerURL, browser.endpoint())
 	}
-
 	binary := filepath.Join(workDir, "agent")
 	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./agent-cli/cmd/agent")
 	root, err := repositoryRoot()
@@ -216,6 +216,209 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 	}
 
 	t.Logf("WEBMCP_DIRECT_CLI_INTEGRATION_PASS chrome=%s revision=%s browser=%s target=%s receipt=%s cancel=%s recovery=%s", lockedChromeVersion, lockedChromeRevision, browserID, targetID, receipt.InvocationID, cancelData.Status, recoveredData.Status)
+}
+
+// TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome is the live replay of
+// acceptance-gate probe 07. It holds the target-resolution HTTP request to
+// prove select is in flight before killing the externally connected browser.
+// The test never gives the CLI a browser-owned launch path; its only browser
+// cleanup is the explicit kill below.
+func TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome(t *testing.T) {
+	if os.Getenv(cliSelectDeathIntegrationEnv) != "1" {
+		t.Skipf("set %s=1 to run the live kill-during-select proof", cliSelectDeathIntegrationEnv)
+	}
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	workDir := t.TempDir()
+	pinned, err := acquirePinnedChrome(ctx, workDir)
+	if err != nil {
+		t.Fatalf("acquire locked Chrome for Testing: %v", err)
+	}
+
+	fixture := newFixtureServer()
+	t.Cleanup(fixture.Close)
+	fixtureURL := fixture.URL()
+	assertFixtureHeaders(t, ctx, fixtureURL)
+
+	browser, err := launchPinnedChrome(ctx, pinned, fixtureURL)
+	if err != nil {
+		t.Fatalf("launch locked Chrome for Testing: %v", err)
+	}
+	browserKilled := false
+	t.Cleanup(func() {
+		if !browserKilled {
+			if closeErr := browser.Close(); closeErr != nil {
+				t.Logf("live select Chrome cleanup: %v", closeErr)
+			}
+		}
+	})
+
+	baseURL := browserHTTPURL(browser.endpoint())
+	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	if err != nil {
+		t.Fatalf("read pinned Chrome DevTools version: %v", err)
+	}
+	if version.WebSocketDebuggerURL != browser.endpoint() {
+		t.Fatalf("DevTools websocket = %q, launch announcement = %q", version.WebSocketDebuggerURL, browser.endpoint())
+	}
+	proxy := newLiveCDPProxy(baseURL)
+	t.Cleanup(proxy.Close)
+
+	binary := filepath.Join(workDir, "agent")
+	root, err := repositoryRoot()
+	if err != nil {
+		t.Fatalf("locate repository root: %v", err)
+	}
+	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./agent-cli/cmd/agent")
+	build.Dir = root
+	if output, buildErr := build.CombinedOutput(); buildErr != nil {
+		t.Fatalf("build agent CLI: %v\n%s", buildErr, output)
+	}
+
+	configDir := filepath.Join(workDir, "config")
+	if err := os.Mkdir(configDir, 0o700); err != nil {
+		t.Fatalf("create CLI config directory: %v", err)
+	}
+	configYAML := fmt.Sprintf(`browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: %q
+  selection:
+    persist: true
+  policy:
+    cancel_on_interrupt: always
+`, strings.TrimRight(proxy.URL(), "/")+"/json/version")
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configYAML), 0o600); err != nil {
+		t.Fatalf("write CLI integration config: %v", err)
+	}
+
+	browsers := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "browsers", "--json")
+	browsersEnvelope := requireCLIChromeIntegrationSuccess(t, browsers)
+	var browsersData struct {
+		Browsers []struct {
+			ID string `json:"id"`
+		} `json:"browsers"`
+	}
+	decodeCLIChromeIntegrationData(t, browsersEnvelope.Data, &browsersData)
+	if len(browsersData.Browsers) != 1 || browsersData.Browsers[0].ID == "" {
+		t.Fatalf("live select browser discovery = %+v", browsersData)
+	}
+	browserID := browsersData.Browsers[0].ID
+
+	tabs := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
+	tabsEnvelope := requireCLIChromeIntegrationSuccess(t, tabs)
+	var tabsData struct {
+		Tabs []struct {
+			TargetID string `json:"target_id"`
+			Origin   string `json:"origin"`
+		} `json:"tabs"`
+	}
+	decodeCLIChromeIntegrationData(t, tabsEnvelope.Data, &tabsData)
+	if len(tabsData.Tabs) != 1 || tabsData.Tabs[0].TargetID == "" || tabsData.Tabs[0].Origin == "" {
+		t.Fatalf("live select target discovery = %+v", tabsData)
+	}
+	targetID := tabsData.Tabs[0].TargetID
+
+	selected := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "select", "--browser", browserID, "--tab", targetID, "--json")
+	_ = requireCLIChromeIntegrationSuccess(t, selected)
+	selectionPath := filepath.Join(configDir, "webmcp-selection.json")
+	priorBytes, err := os.ReadFile(selectionPath)
+	if err != nil {
+		t.Fatalf("read prior persisted selection: %v", err)
+	}
+	proxy.DelayNextList()
+
+	started := time.Now()
+	selectProcess := startCLIChromeIntegrationProcess(t, binary, configDir, "webmcp", "select", "--browser", browserID, "--tab", targetID, "--command-timeout", "5s", "--json")
+	selectDone := make(chan struct{})
+	var selectErr error
+	go func() {
+		selectErr = selectProcess.Wait()
+		close(selectDone)
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-selectDone:
+		default:
+			if selectProcess.command.Process != nil {
+				_ = selectProcess.command.Process.Kill()
+			}
+			<-selectDone
+		}
+	})
+	select {
+	case <-selectDone:
+		t.Fatalf("select exited before target-resolution hold was observed: err=%v stdout=%q stderr=%q", selectErr, selectProcess.stdout.String(), selectProcess.stderr.String())
+	case <-proxy.ListAdmitted():
+		t.Log("synchronization=select_target_resolution_list_admitted")
+	case <-time.After(10 * time.Second):
+		t.Fatalf("select did not reach the observable target-resolution hold")
+	}
+	select {
+	case <-browser.done:
+		t.Fatalf("Chrome exited before the explicit Chrome kill")
+	default:
+	}
+	if _, err := readDevToolsTargets(ctx, baseURL); err != nil {
+		t.Fatalf("observe live browser before explicit kill: %v", err)
+	}
+
+	if err := browser.Kill(); err != nil {
+		t.Fatalf("kill only the live Chrome process: %v", err)
+	}
+	browserKilled = true
+	proxy.MarkBrowserDead()
+	proxy.ReleaseList()
+
+	select {
+	case <-selectDone:
+	case <-time.After(12 * time.Second):
+		if selectProcess.command.Process != nil {
+			_ = selectProcess.command.Process.Kill()
+		}
+		<-selectDone
+		t.Fatalf("select did not exit within command bound plus cleanup allowance: err=%v stdout=%q stderr=%q", selectErr, selectProcess.stdout.String(), selectProcess.stderr.String())
+	}
+	elapsed := time.Since(started)
+	if selectErr == nil {
+		t.Fatalf("select unexpectedly succeeded after Chrome death: stdout=%q", selectProcess.stdout.String())
+	}
+	envelope := decodeCLIChromeIntegrationEnvelope(t, selectProcess.stdout.String())
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorBrowserDisconnected) {
+		t.Fatalf("live kill-during-select envelope = %+v; stderr=%q", envelope, selectProcess.stderr.String())
+	}
+	if envelope.Error.Details["browser_id"] != browserID || envelope.Error.Details["target_id"] != "" || envelope.Error.Details["phase"] != "list_targets" || envelope.Error.Details["reconnect_required"] != true {
+		t.Fatalf("live kill-during-select details = %#v", envelope.Error.Details)
+	}
+	phase, _ := envelope.Error.Details["phase"].(string)
+
+	afterBytes, err := os.ReadFile(selectionPath)
+	if err != nil {
+		t.Fatalf("read selection after failed select: %v", err)
+	}
+	if string(afterBytes) != string(priorBytes) {
+		t.Fatalf("failed select changed persisted selection: before=%q after=%q", string(priorBytes), string(afterBytes))
+	}
+
+	followUp := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "context", "--command-timeout", "5s", "--json")
+	if followUp.err == nil {
+		t.Fatalf("follow-up context unexpectedly succeeded after Chrome death: stdout=%q", followUp.stdout)
+	}
+	followUpEnvelope := decodeCLIChromeIntegrationEnvelope(t, followUp.stdout)
+	if followUpEnvelope.OK || followUpEnvelope.Error == nil || followUpEnvelope.Error.Code != string(webmcp.ErrorBrowserDisconnected) {
+		t.Fatalf("follow-up context envelope code=%v details=%#v; stderr=%q stdout=%q", followUpEnvelope.Error.Code, followUpEnvelope.Error.Details, followUp.stderr, followUp.stdout)
+	}
+	if followUpEnvelope.Error.Details["browser_id"] != browserID || followUpEnvelope.Error.Details["target_id"] != targetID || followUpEnvelope.Error.Details["reconnect_required"] != true {
+		t.Fatalf("follow-up context details = %#v", followUpEnvelope.Error.Details)
+	}
+
+	t.Logf("WEBMCP_DIRECT_CLI_SELECT_DEATH_PASS chrome=%s revision=%s browser=%s target=%s synchronization=select_target_resolution_list_admitted kill=isolated_chrome_process command_bound=5s elapsed=%s exit_status=nonzero error_code=%s phase=%s reconnect_required=true externally_owned=true relaunch=false selection_preserved=true follow_up_code=%s output=%s stderr=%q follow_up_output=%s follow_up_stderr=%q", lockedChromeVersion, lockedChromeRevision, browserID, targetID, elapsed, envelope.Error.Code, phase, followUpEnvelope.Error.Code, selectProcess.stdout.String(), selectProcess.stderr.String(), followUp.stdout, followUp.stderr)
 }
 
 type cliChromeIntegrationReceipt struct {
