@@ -11,9 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
-// emitTerminal emits at most one canonical failure record per session run. A
-// captured stream failure always wins; otherwise a non-cancellation run error
-// becomes a synthesized connect/run-phase failure. Clean runs emit nothing.
 func (o *sessionProgressObserver) emitTerminal(runErr error) {
 	if o == nil || o.sink == nil {
 		return
@@ -119,6 +116,79 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		}
 		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
 			Event:  SessionDiagnosticEventFailure,
+			Fields: fields,
+		})
+	})
+}
+
+func (o *sessionProgressObserver) finish(err error) error {
+	if o == nil {
+		return err
+	}
+	err = withUnresolvedToolResults(err, o)
+	err = withPendingToolContinuations(err, o)
+	err = withPendingImageContinuations(err, o)
+	o.emitTerminal(err)
+	o.emitMetricsMatrix()
+	if o.runtime != nil {
+		o.runtime.terminalWithAccounting(o.turnsCompleted, err, o.finalAccounting())
+	}
+	return err
+}
+
+// finalAccounting captures the runtime-owned production counters only after
+// the session consumer has drained every accounted delta. The optional
+// MetricsRecorder and SessionStreamObserver are deliberately not consulted.
+func (o *sessionProgressObserver) finalAccounting() *SessionFinalAccounting {
+	if o == nil {
+		return nil
+	}
+	accounting := &SessionFinalAccounting{
+		PromptTokens:     o.usagePrompt,
+		CompletionTokens: o.usageCompletion,
+		TotalTokens:      o.usageTotal,
+		ReasoningTokens:  o.usageReasoning,
+		UsageSemantics:   SessionTokenUsageIncremental,
+	}
+	if o.productionSink != nil {
+		accounting.Metrics = o.productionSink.Snapshot()
+	}
+	return accounting
+}
+
+// emitMetricsMatrix emits the terminal per-direction/per-modality byte matrix
+// exactly once per run, after every delta it summarizes has crossed. The
+// provider-reported message-end token usage rides alongside so operators can
+// compare both accounting sources; byte counts and token counts measure
+// different units and are not expected to be numerically equal.
+func (o *sessionProgressObserver) emitMetricsMatrix() {
+	if o == nil || o.sink == nil {
+		return
+	}
+	o.metricsOnce.Do(func() {
+		fields := map[string]string{
+			fieldProvider:         o.provider,
+			fieldModel:            o.model,
+			fieldTurnsCompleted:   strconv.Itoa(o.turnsCompleted),
+			fieldInputAudioBytes:  strconv.FormatUint(o.totals.inputAudio, 10),
+			fieldInputTextBytes:   strconv.FormatUint(o.totals.inputText, 10),
+			fieldOutputAudioBytes: strconv.FormatUint(o.totals.outAudio, 10),
+			fieldOutputTextBytes:  strconv.FormatUint(o.totals.outText, 10),
+			fieldOutputToolBytes:  strconv.FormatUint(o.totals.outTool, 10),
+		}
+		if o.usageSeen {
+			fields[fieldProviderPromptTokens] = strconv.FormatUint(o.usagePrompt, 10)
+			fields[fieldProviderCompletionTokens] = strconv.FormatUint(o.usageCompletion, 10)
+			fields[fieldProviderTotalTokens] = strconv.FormatUint(o.usageTotal, 10)
+			fields[fieldProviderReasoningTokens] = strconv.FormatUint(o.usageReasoning, 10)
+		}
+		if o.scheduledInputs > 0 {
+			fields[SessionDiagnosticFieldScheduledInputCount] = strconv.Itoa(o.scheduledInputs)
+			fields[SessionDiagnosticFieldDispatchedInputCount] = strconv.Itoa(o.dispatchedInputs)
+			fields[SessionDiagnosticFieldCompletedTurnCount] = strconv.Itoa(o.completedScheduled)
+		}
+		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
+			Event:  SessionDiagnosticEventMetrics,
 			Fields: fields,
 		})
 	})
