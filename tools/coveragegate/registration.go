@@ -29,7 +29,7 @@ func (e *RegistrationError) Error() string {
 	var sections []string
 	if len(e.Missing) > 0 {
 		var b strings.Builder
-		b.WriteString("coverage registration found workspace packages missing from coverage-manifest.json (update coverage-manifest.json):")
+		b.WriteString("coverage registration found workspace packages missing from coverage-manifest (update coverage-manifest):")
 		for _, packagePath := range e.Missing {
 			fmt.Fprintf(&b, "\n- %s", packagePath)
 		}
@@ -37,7 +37,7 @@ func (e *RegistrationError) Error() string {
 	}
 	if len(e.Stale) > 0 {
 		var b strings.Builder
-		b.WriteString("coverage registration found manifest packages outside the current workspace (remove stale entries):")
+		b.WriteString("coverage registration found manifest packages outside the current workspace (remove stale entries from coverage-manifest):")
 		for _, packagePath := range e.Stale {
 			fmt.Fprintf(&b, "\n- %s", packagePath)
 		}

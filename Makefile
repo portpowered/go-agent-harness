@@ -9,6 +9,7 @@ AGENT_CLI_INTEGRATION_TIMEOUT ?= 180s
 AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 COVERAGE_MANIFEST_DIR ?= coverage-manifest
+COVERAGE_BASE ?= origin/main
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
@@ -31,13 +32,14 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\nOptional skip env vars:\n"
 	@printf "  %-18s %s\n" "SKIP_LINT=1" "Skip golangci-lint with a visible message."
 	@printf "  %-18s %s\n" "SKIP_STATICCHECK=1" "Skip staticcheck with a visible message."
+	@printf "  %-18s %s\n" "COVERAGE_BASE=..." "Git ref used as the changed-package coverage comparison base."
 	@printf "\nOpt-in test env vars:\n"
 	@printf "  %-18s %s\n" "RUN_CUSTOMER_SESSIONS=1" "Acknowledge local-only private session sweep targets."
 	@printf "  %-18s %s\n" "CUSTOMER_SESSION_DIR=..." "Override the private session directory checked by test-customer-sessions."
@@ -241,7 +243,20 @@ coverage-registration: ## Validate every workspace Go package is registered with
 	echo "==> coverage-registration"; \
 	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
 		--validate-registration \
-		--manifest ../../coverage-manifest.json \
+		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
+		--module-dir ../../agent-cli \
+		--module-dir ../../go-agent-loop \
+		--module-dir ../../go-llm-gateway)
+
+coverage-changed: ## Measure coverage floors only for packages owning changed Go files.
+	@set -euo pipefail; \
+	echo "==> coverage-changed (base: $(COVERAGE_BASE))"; \
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
+		--changed \
+		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
+		--repo ../.. \
+		--base "$(COVERAGE_BASE)" \
+		--test-timeout "$(GO_TEST_TIMEOUT)" \
 		--module-dir ../../agent-cli \
 		--module-dir ../../go-agent-loop \
 		--module-dir ../../go-llm-gateway)

@@ -21,9 +21,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.SetOutput(stderr)
 	manifestPath := flags.String("manifest", "", "path to the coverage manifest fragment directory or legacy JSON file")
 	goBinary := flags.String("go", "go", "Go executable used for package discovery")
+	gitBinary := flags.String("git", "git", "Git executable used for changed-package discovery")
+	repoDir := flags.String("repo", ".", "repository directory used for changed-package discovery")
+	base := flags.String("base", "origin/main", "comparison base used for changed-package discovery")
+	testTimeout := flags.String("test-timeout", "120s", "timeout passed to changed-package go test runs")
 	validateRegistration := false
-	flags.BoolVar(&validateRegistration, "validate-registration", false, "validate coverage-manifest.json against packages discovered in workspace modules")
+	flags.BoolVar(&validateRegistration, "validate-registration", false, "validate coverage-manifest against packages discovered in workspace modules")
 	flags.BoolVar(&validateRegistration, "check-registration", false, "alias for -validate-registration")
+	changedCoverage := false
+	flags.BoolVar(&changedCoverage, "changed", false, "measure and enforce floors only for packages owning changed Go files")
 	var moduleDirs stringList
 	flags.Var(&moduleDirs, "module-dir", "workspace module directory (may be repeated for registration validation)")
 	flags.Var(&moduleDirs, "module", "alias for -module-dir")
@@ -31,6 +37,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Var(&profilePaths, "profile", "coverage profile path (may be repeated)")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if changedCoverage {
+		if validateRegistration {
+			return errors.New("changed coverage cannot be combined with registration validation")
+		}
+		if len(profilePaths) > 0 || len(flags.Args()) > 0 {
+			return errors.New("changed coverage does not accept explicit coverage profiles")
+		}
+		return runChangedCoverage(*manifestPath, *gitBinary, *goBinary, *repoDir, *base, *testTimeout, moduleDirs, stdout, stderr)
 	}
 	if validateRegistration {
 		if len(profilePaths) > 0 {
@@ -70,11 +85,7 @@ func runRegistration(manifestPath, goBinary string, moduleDirs []string, stdout 
 		return errors.New("registration validation requires at least one --module-dir")
 	}
 
-	manifestData, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return fmt.Errorf("read coverage manifest %q: %w", manifestPath, err)
-	}
-	manifest, err := ParseManifest(manifestData)
+	manifest, err := LoadManifest(manifestPath)
 	if err != nil {
 		return err
 	}

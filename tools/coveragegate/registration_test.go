@@ -60,7 +60,7 @@ func TestValidateRegistrationReportsMissingAndStalePackages(t *testing.T) {
 		t.Fatalf("stale packages = %v", registrationErr.Stale)
 	}
 	message := err.Error()
-	for _, expected := range []string{"example/new", "example/stale", "update coverage-manifest.json"} {
+	for _, expected := range []string{"example/new", "example/stale", "update coverage-manifest"} {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("registration error = %q, want substring %q", message, expected)
 		}

@@ -564,6 +564,56 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 		}
 	}
 
+	return finishFindings(findings)
+}
+
+// CompareSelected applies the same rounded coverage-floor calculation as
+// Compare, but only to the selected package paths. Measurements for
+// unchanged packages are intentionally ignored so a changed-package run can
+// enforce local floors without accidentally becoming a repository-wide gate.
+func CompareSelected(manifest Manifest, selected []string, measurements map[string]Coverage) error {
+	if err := validateManifest(manifest); err != nil {
+		return err
+	}
+	registered := make(map[string]PackageEntry, len(manifest.Packages))
+	for _, entry := range manifest.Packages {
+		registered[entry.ImportPath] = entry
+	}
+
+	findings := &FindingsError{}
+	seen := make(map[string]struct{}, len(selected))
+	for _, packagePath := range selected {
+		if _, duplicate := seen[packagePath]; duplicate {
+			continue
+		}
+		seen[packagePath] = struct{}{}
+		entry, ok := registered[packagePath]
+		if !ok {
+			findings.Unregistered = append(findings.Unregistered, packagePath)
+			continue
+		}
+		if entry.HasException {
+			continue
+		}
+		coverage, measured := measurements[packagePath]
+		if !measured || coverage.Total == 0 {
+			findings.Unmeasured = append(findings.Unmeasured, packagePath)
+			continue
+		}
+		actualCents := coverage.actualCents()
+		if actualCents+coverageComparisonBandCents < entry.MinimumCents {
+			findings.Violations = append(findings.Violations, Violation{
+				ImportPath:    packagePath,
+				ExpectedCents: entry.MinimumCents,
+				ActualCents:   actualCents,
+				DeltaCents:    actualCents - entry.MinimumCents,
+			})
+		}
+	}
+	return finishFindings(findings)
+}
+
+func finishFindings(findings *FindingsError) error {
 	sort.Strings(findings.Unregistered)
 	sort.Strings(findings.Unmeasured)
 	sort.Slice(findings.Violations, func(i, j int) bool {

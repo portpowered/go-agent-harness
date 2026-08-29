@@ -361,8 +361,11 @@ func TestKnownGoodManifestAndProfiles(t *testing.T) {
 	hasZeroMinimum := false
 	hasPositiveMinimum := false
 	for _, entry := range manifest.Packages {
-		if entry.ImportPath == "" || !entry.HasMinimum || entry.HasException {
+		if entry.ImportPath == "" || entry.HasMinimum == entry.HasException {
 			t.Fatalf("entry %q is not a minimum registration: %#v", entry.ImportPath, entry)
+		}
+		if entry.HasException {
+			continue
 		}
 		if entry.MinimumCents == 0 {
 			hasZeroMinimum = true
