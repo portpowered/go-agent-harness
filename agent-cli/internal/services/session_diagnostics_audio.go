@@ -69,6 +69,10 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
 			}
 		}
+		if !o.scheduledTurnBaseSet {
+			o.scheduledTurnBase = o.turnsCompleted
+			o.scheduledTurnBaseSet = true
+		}
 		o.dispatchedInputs++
 		o.scheduledResponses = append(o.scheduledResponses, scheduledAudioResponseLifecycle{})
 		o.pendingInputs = o.pendingInputs[1:]
@@ -78,12 +82,23 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 }
 
 // scheduledAudioInputDue applies the explicit scheduling policy to the next
-// queued input. The active-response policy advances only one logical response
-// boundary beyond the completed-turn count; this keeps the ordered schedule
-// serialized while allowing the next input to reach the model runner while
-// that immediately preceding response is still non-terminal.
+// queued input. Once scheduled dispatch begins, the completion threshold
+// includes every resolved scheduled lifecycle, including owned cancellation,
+// while retaining the initial prompt/seed offset. Active-response lookahead
+// remains based on admitted turns so a cancellation cannot release more than
+// the one input that barged the active response.
 func (o *sessionProgressObserver) scheduledAudioInputDue(input ScheduledAudioInput) bool {
-	if o == nil || input.AfterCompletedTurns <= o.turnsCompleted {
+	if o == nil {
+		return true
+	}
+	completionThreshold := o.turnsCompleted
+	if o.scheduledTurnBaseSet {
+		scheduledThreshold := o.scheduledTurnBase + o.completedScheduled
+		if scheduledThreshold > completionThreshold {
+			completionThreshold = scheduledThreshold
+		}
+	}
+	if input.AfterCompletedTurns <= completionThreshold {
 		return true
 	}
 	// A prompt or seed response may be active before any scheduled input has

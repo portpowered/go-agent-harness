@@ -70,6 +70,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	recordDir := filepath.Join(t.TempDir(), "recording")
 	firstAudio := locateCLIFixture(t, "multiturn_turn1.wav")
 	secondAudio := locateCLIFixture(t, "multiturn_turn2.wav")
+	thirdAudio := locateCLIFixture(t, "multiturn_turn1.wav")
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
@@ -84,6 +85,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 		"--max-duration", "5s",
 		"--audio-in-turn", firstAudio,
 		"--audio-in-turn", secondAudio,
+		"--audio-in-turn", thirdAudio,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -100,27 +102,29 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	if containsTimeline(timeline, "in:session.closed") {
 		t.Fatal("hermetic provider unexpectedly supplied a captured session.closed event")
 	}
-	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 || countTimeline(timeline, "out:input_audio_buffer.commit") != 2 || countTimeline(timeline, "out:response.create") != 2 {
-		t.Fatalf("live outbound lifecycle = %v, want two appends, commits, and response.create events", timeline)
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 3 || countTimeline(timeline, "out:input_audio_buffer.commit") != 3 || countTimeline(timeline, "out:response.create") != 3 {
+		t.Fatalf("live outbound lifecycle = %v, want three appends, commits, and response.create events", timeline)
 	}
 	firstAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 0)
 	firstResponseDone := indexOfTimeline(timeline, "in:response.done", 0)
 	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
-	if firstAppend < 0 || firstResponseDone < 0 || secondAppend <= firstResponseDone {
+	secondResponseDone := indexOfTimeline(timeline, "in:response.done", 1)
+	thirdAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 2)
+	if firstAppend < 0 || firstResponseDone < 0 || secondAppend <= firstResponseDone || secondResponseDone < 0 || thirdAppend <= secondResponseDone {
 		t.Fatalf("turn-zero or response-gated dispatch order is wrong: %v", timeline)
 	}
 
-	appendAudio := make([][]byte, 0, 2)
+	appendAudio := make([][]byte, 0, 3)
 	for _, event := range outbound {
 		if event.typeName == "input_audio_buffer.append" {
 			appendAudio = append(appendAudio, event.audio)
 		}
 	}
-	if len(appendAudio) != 2 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 {
-		t.Fatalf("provider observed scheduled audio payloads = %d with lengths %v, want two non-empty payloads", len(appendAudio), audioLengths(appendAudio))
+	if len(appendAudio) != 3 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 || len(appendAudio[2]) == 0 {
+		t.Fatalf("provider observed scheduled audio payloads = %d with lengths %v, want three non-empty payloads", len(appendAudio), audioLengths(appendAudio))
 	}
 
-	assertCLILiveRecordingBundle(t, recordDir, 2)
+	assertCLILiveRecordingBundle(t, recordDir, 3)
 }
 
 func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
@@ -142,6 +146,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 		recordDir,
 		locateCLIFixture(t, "multiturn_turn1.wav"),
 		locateCLIFixture(t, "multiturn_turn2.wav"),
+		locateCLIFixture(t, "multiturn_turn1.wav"),
 	)
 	args = append(args, "--audio-in-turn-barge")
 	rootCmd := agentCLI.Generate()
@@ -160,31 +165,33 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 	if dialCount != 1 || serverVAD || len(providerErrors) != 0 {
 		t.Fatalf("active scheduled provider state = dials:%d server_vad:%t errors:%v timeline=%v; want one client-owned clean session", dialCount, serverVAD, providerErrors, timeline)
 	}
-	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 ||
-		countTimeline(timeline, "out:input_audio_buffer.commit") != 2 ||
-		countTimeline(timeline, "out:response.create") != 2 ||
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 3 ||
+		countTimeline(timeline, "out:input_audio_buffer.commit") != 3 ||
+		countTimeline(timeline, "out:response.create") != 3 ||
 		countTimeline(timeline, "out:response.cancel") != 1 ||
-		countTimeline(timeline, "in:response.done") != 2 {
-		t.Fatalf("active scheduled lifecycle = %v, want two inputs/responses and one cancellation", timeline)
+		countTimeline(timeline, "in:response.done") != 3 {
+		t.Fatalf("active scheduled lifecycle = %v, want three inputs/responses and one cancellation", timeline)
 	}
 	firstResponse := indexOfTimeline(timeline, "in:response.created", 0)
 	cancelIndex := indexOfTimeline(timeline, "out:response.cancel", 0)
 	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
-	if firstResponse < 0 || cancelIndex <= firstResponse || secondAppend <= cancelIndex {
-		t.Fatalf("active scheduled ordering = %v, want response.created < response.cancel < second append", timeline)
+	secondResponseDone := indexOfTimeline(timeline, "in:response.done", 1)
+	thirdAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 2)
+	if firstResponse < 0 || cancelIndex <= firstResponse || secondAppend <= cancelIndex || secondResponseDone < 0 || thirdAppend <= secondResponseDone {
+		t.Fatalf("active scheduled ordering = %v, want response.created < response.cancel < second append < second response.done < third append", timeline)
 	}
 	if firstResponseDone := indexOfTimeline(timeline, "in:response.done", 0); firstResponseDone <= cancelIndex {
 		t.Fatalf("cancel did not win before first response terminality: %v", timeline)
 	}
 
 	appendAudio := audioPayloadsFromOutbound(outbound)
-	if len(appendAudio) != 2 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 {
-		t.Fatalf("active scheduled input payloads = %v, want two non-empty append payloads", audioLengths(appendAudio))
+	if len(appendAudio) != 3 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 || len(appendAudio[2]) == 0 {
+		t.Fatalf("active scheduled input payloads = %v, want three non-empty append payloads", audioLengths(appendAudio))
 	}
 	observedMu.Lock()
 	observedCopy := append([]messages.StreamMessage(nil), observed...)
 	observedMu.Unlock()
-	seenReplacement, seenStale := false, false
+	seenReplacement, seenThird, seenStale := false, false, false
 	for _, msg := range observedCopy {
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok || value == nil {
@@ -193,12 +200,17 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 		switch string(value.Content) {
 		case string([]byte{2, 0, 22, 0}):
 			seenReplacement = true
+		case string([]byte{3, 0, 23, 0}):
+			seenThird = true
 		case "cancel-stale":
 			seenStale = true
 		}
 	}
 	if !seenReplacement {
 		t.Fatalf("replacement response audio was not observed; stream=%#v", observedCopy)
+	}
+	if !seenThird {
+		t.Fatalf("third scheduled response audio was not observed; stream=%#v", observedCopy)
 	}
 	if seenStale {
 		t.Fatalf("stale post-cancel provider audio crossed the stream boundary; stream=%#v", observedCopy)
