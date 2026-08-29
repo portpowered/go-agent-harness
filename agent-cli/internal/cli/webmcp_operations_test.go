@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -204,6 +206,83 @@ func TestWebMCPDirectDefaultSelectionDoesNotChooseAConvenientTab(t *testing.T) {
 	if len(broker.selectCalls) != 0 {
 		t.Fatalf("context selected a tab without an explicit selector: %+v", broker.selectCalls)
 	}
+}
+
+func TestWebMCPDirectNoEligibleTabUsesC0DetailsInHumanAndJSONModes(t *testing.T) {
+	browserID := randomizedWebMCPTestID(t, "browser-")
+	targetID := randomizedWebMCPTestID(t, "target-")
+	candidate := webmcp.BrowserCandidate{
+		ID:       webmcp.BrowserID(browserID),
+		Source:   webmcp.DiscoverySourceExplicit,
+		Product:  "Chrome/Test",
+		Protocol: "1.3",
+		Loopback: true,
+	}
+	ineligible := webmcp.Target{
+		BrowserID:         candidate.ID,
+		ID:                webmcp.TargetID(targetID),
+		Type:              "page",
+		Title:             "Blank page",
+		URL:               "about:blank",
+		EligibilityReason: "internal_url",
+	}
+
+	for _, testCase := range []struct {
+		name string
+		json bool
+	}{
+		{name: "json", json: true},
+		{name: "human"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			broker := &directCommandBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    []webmcp.Target{ineligible},
+			}
+			args := []string{"select", "--browser", browserID}
+			if testCase.json {
+				args = append(args, "--json")
+			}
+			result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), args...)
+			if result.err == nil {
+				t.Fatal("select unexpectedly succeeded for an ineligible page")
+			}
+			if len(broker.selectCalls) != 0 {
+				t.Fatalf("ineligible page was selected: %+v", broker.selectCalls)
+			}
+
+			if testCase.json {
+				envelope := decodeDirectEnvelope(t, result.stdout)
+				if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorNoEligibleTab) {
+					t.Fatalf("no-eligible envelope = %+v", envelope)
+				}
+				if envelope.Error.Details["browser_id"] != browserID || envelope.Error.Details["candidate_count"] != float64(1) {
+					t.Fatalf("no-eligible details = %#v", envelope.Error.Details)
+				}
+				filters, ok := envelope.Error.Details["filters"].(map[string]any)
+				if !ok || filters["eligible_only"] != true || filters["include_zero_tool_pages"] != true {
+					t.Fatalf("effective filters = %#v", envelope.Error.Details["filters"])
+				}
+			} else if !strings.Contains(result.stdout, "Error: no_eligible_tab") {
+				t.Fatalf("human no-eligible output = %q", result.stdout)
+			}
+			if strings.Contains(result.stdout, "about:blank") || strings.Contains(result.stdout, targetID) {
+				t.Fatalf("no-eligible output exposed page data: %q", result.stdout)
+			}
+			if broker.closeCalls != 1 {
+				t.Fatalf("broker close calls = %d, want one", broker.closeCalls)
+			}
+		})
+	}
+}
+
+func randomizedWebMCPTestID(t *testing.T, prefix string) string {
+	t.Helper()
+	value := make([]byte, 6)
+	if _, err := cryptorand.Read(value); err != nil {
+		t.Fatalf("randomize WebMCP test ID: %v", err)
+	}
+	return prefix + hex.EncodeToString(value)
 }
 
 func TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations(t *testing.T) {

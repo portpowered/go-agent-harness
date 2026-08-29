@@ -1051,11 +1051,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		sort.SliceStable(matches, func(i, j int) bool { return matches[i].ID < matches[j].ID })
 		switch {
 		case len(matches) == 0:
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{
-				"browser_id":      browserID,
-				"filters":         map[string]any{"origin": browser.Selection.Origin},
-				"candidate_count": 0,
-			})
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "")
 		case browser.Selection.AutoSelect == config.BrowserAutoSelectPersisted:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser target selection is not current", map[string]any{
 				"browser_id":          browserID,
@@ -1086,10 +1082,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 	}
 
 	if target == nil {
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{
-			"browser_id":      browserID,
-			"candidate_count": 0,
-		})
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "")
 	}
 	if stored != nil {
 		if stored.EndpointID != "" && stored.EndpointID != string(candidate.ID) {
@@ -1112,11 +1105,7 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, err
 	}
 	if target.Type != "" && !strings.EqualFold(target.Type, "page") {
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target is not a page", map[string]any{
-			"browser_id": browserID,
-			"target_id":  targetID,
-			"reason":     "not_page",
-		})
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "not_page")
 	}
 	if !target.Eligible {
 		if strings.EqualFold(target.EligibilityReason, "unsupported_webmcp") {
@@ -1126,19 +1115,10 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 				"required_capability": "webmcp",
 			})
 		}
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target is not eligible for WebMCP", map[string]any{
-			"browser_id": browserID,
-			"target_id":  targetID,
-			"reason":     boundedDirectReason(target.EligibilityReason),
-		})
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), boundedDirectReason(target.EligibilityReason))
 	}
 	if browser.Selection.Origin != "" && safeOrigin(target.Origin) != safeOrigin(browser.Selection.Origin) {
-		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "the selected target does not match the requested origin", map[string]any{
-			"browser_id":      browserID,
-			"target_id":       string(target.ID),
-			"filters":         map[string]any{"origin": safeOrigin(browser.Selection.Origin)},
-			"candidate_count": 0,
-		})
+		return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "origin_mismatch")
 	}
 	return candidate, *target, stored, nil
 }
