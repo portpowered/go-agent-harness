@@ -471,9 +471,6 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				if recordDirPath == "" {
 					return fmt.Errorf("--audio-in-turn requires --record-dir")
 				}
-				if len(c.imagePaths) > 0 {
-					return fmt.Errorf("--audio-in-turn cannot be combined with --image")
-				}
 			}
 			if len(audioInterrupts) == 0 && strings.TrimSpace(audioInterruptTool) != "" {
 				return fmt.Errorf("--audio-interrupt-on-tool requires --audio-interrupt")
@@ -543,6 +540,22 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				},
 			}
 			if len(audioInTurns) > 0 {
+				if len(c.imagePaths) > 0 {
+					return services.RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+						sessionContext,
+						cmd.OutOrStdout(),
+						services.SessionImageRunOptions{
+							SessionRunOptions: sessionOptions,
+							ImagePaths:        append([]string(nil), c.imagePaths...),
+						},
+						recordDirPath,
+						audioOutPath,
+						maxDuration,
+						seed,
+						audioInTurns,
+						c.askFlags.SystemPrompt,
+					)
+				}
 				return services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
 					sessionContext,
 					cmd.OutOrStdout(),

@@ -421,6 +421,9 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 		if err != nil {
 			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, err)
 		}
+		if len(pcm) == 0 {
+			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, emptySessionAudioInput(path))
+		}
 		inputs = append(inputs, ScheduledAudioInput{
 			AfterCompletedTurns: index,
 			PCM:                 pcm,

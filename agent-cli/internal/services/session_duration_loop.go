@@ -327,6 +327,11 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 				return result, fmt.Errorf("send session message: %w", err)
 			}
 			opts.observer.noteUserTextInput(opts.Prompt)
+			if opts.awaitFirstTurn != nil {
+				if err := awaitSessionFirstTurn(ctx, opts.awaitFirstTurn); err != nil {
+					return result, fmt.Errorf("send session first turn: %w", err)
+				}
+			}
 		}
 		if opts.CloseAfterOpen && opts.Prompt == "" && !result.closeSent {
 			result.closeAfterOpenPending = true

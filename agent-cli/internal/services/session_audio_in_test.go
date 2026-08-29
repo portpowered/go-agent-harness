@@ -200,6 +200,21 @@ func TestRunSessionWithAudioInputRejectsEmptySourceBeforeCommit(t *testing.T) {
 	}
 }
 
+func TestPrepareSessionAudioInputsRejectsEmptyScheduledFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.raw")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatalf("write empty scheduled audio fixture: %v", err)
+	}
+
+	inputs, err := services.PrepareSessionAudioInputs([]string{path})
+	if err == nil || !errors.Is(err, services.ErrSessionAudioInputEmpty) {
+		t.Fatalf("empty scheduled audio = inputs:%v err:%v, want ErrSessionAudioInputEmpty", inputs, err)
+	}
+	if !strings.Contains(err.Error(), "turn 1") || !strings.Contains(err.Error(), "no audio frames") {
+		t.Fatalf("empty scheduled audio error = %v, want turn and no-frame context", err)
+	}
+}
+
 func TestSessionCommandAudioInputConflictUsesOwnerRegisteredDeviceFlag(t *testing.T) {
 	validPath := filepath.Join(t.TempDir(), "valid.raw")
 	if err := os.WriteFile(validPath, pcm16Bytes([]int16{1}), 0o600); err != nil {

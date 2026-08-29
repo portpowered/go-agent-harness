@@ -30,6 +30,7 @@ type cliLiveRecordDirServer struct {
 type cliLiveOutbound struct {
 	typeName string
 	audio    []byte
+	payload  []byte
 }
 
 func newCLILiveRecordDirServer(providerError bool) *cliLiveRecordDirServer {
@@ -126,7 +127,7 @@ func (s *cliLiveRecordDirServer) snapshots() ([]string, []cliLiveOutbound, int) 
 	timeline := append([]string(nil), s.timeline...)
 	outbound := make([]cliLiveOutbound, len(s.outbound))
 	for index, event := range s.outbound {
-		outbound[index] = cliLiveOutbound{typeName: event.typeName, audio: append([]byte(nil), event.audio...)}
+		outbound[index] = cliLiveOutbound{typeName: event.typeName, audio: append([]byte(nil), event.audio...), payload: append([]byte(nil), event.payload...)}
 	}
 	return timeline, outbound, s.dialCount
 }
@@ -173,7 +174,7 @@ func (c *cliLiveRecordDirConn) WriteMessage(_ int, payload []byte) error {
 
 	c.server.mu.Lock()
 	c.server.timeline = append(c.server.timeline, "out:"+envelope.Type)
-	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio})
+	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio, payload: append([]byte(nil), payload...)})
 	if envelope.Type == "response.create" {
 		c.server.nextTurn++
 		turn := c.server.nextTurn
@@ -323,7 +324,7 @@ func (s *cliLiveScheduledBoundaryServer) snapshots() ([]string, []cliLiveOutboun
 	timeline := append([]string(nil), s.timeline...)
 	outbound := make([]cliLiveOutbound, len(s.outbound))
 	for index, event := range s.outbound {
-		outbound[index] = cliLiveOutbound{typeName: event.typeName, audio: append([]byte(nil), event.audio...)}
+		outbound[index] = cliLiveOutbound{typeName: event.typeName, audio: append([]byte(nil), event.audio...), payload: append([]byte(nil), event.payload...)}
 	}
 	return timeline, outbound, append([]string(nil), s.providerErrors...), s.dialCount, s.serverVADEnabled
 }
@@ -422,7 +423,7 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 	var responseAccepted bool
 	c.server.mu.Lock()
 	c.server.timeline = append(c.server.timeline, "out:"+envelope.Type)
-	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio})
+	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio, payload: append([]byte(nil), payload...)})
 	switch envelope.Type {
 	case "session.update":
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))

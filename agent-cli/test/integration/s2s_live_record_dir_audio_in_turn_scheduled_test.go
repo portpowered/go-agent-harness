@@ -246,6 +246,117 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsGroundingAndTools(t 
 	}
 }
 
+// TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn proves
+// the shipped CLI composition for --image plus repeated --audio-in-turn. The
+// image item must be queued before the first audio append without its own
+// response request, and the second scheduled turn must not receive another
+// image item or overtake the first terminal response.
+func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *testing.T) {
+	server := newCLILiveScheduledBoundaryServer(false)
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIScheduledBoundaryAgent(t, server)
+	imagePath := readImageFixturePath(t)
+	secondImagePath := filepath.Join(filepath.Dir(imagePath), "fixture.jpeg")
+	if _, err := os.Stat(secondImagePath); err != nil {
+		t.Fatalf("second image fixture: %v", err)
+	}
+	recordDir := filepath.Join(t.TempDir(), "image-scheduled-recording")
+	firstAudio := locateCLIFixture(t, "multiturn_turn1.wav")
+	secondAudio := locateCLIFixture(t, "multiturn_turn2.wav")
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record-dir", recordDir,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--system-prompt", "none",
+		"--max-duration", "10s",
+		"--image", imagePath,
+		"--image", secondImagePath,
+		"--audio-in-turn", firstAudio,
+		"--audio-in-turn", secondAudio,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		timeline, outbound, providerErrors, _, _ := server.snapshots()
+		t.Fatalf("execute image-plus-scheduled command: %v; provider errors=%v; timeline=%v; outbound=%v", err, providerErrors, timeline, audioLengthsFromOutbound(outbound))
+	}
+
+	timeline, outbound, providerErrors, dialCount, serverVADEnabled := server.snapshots()
+	if dialCount != 1 || serverVADEnabled || len(providerErrors) != 0 {
+		t.Fatalf("image scheduled provider state = dials:%d server_vad:%t errors:%v timeline=%v; want one clean client-owned session", dialCount, serverVADEnabled, providerErrors, timeline)
+	}
+	if countTimeline(timeline, "out:conversation.item.create") != 1 {
+		t.Fatalf("image item count = %d, want exactly one first-turn item: %v", countTimeline(timeline, "out:conversation.item.create"), timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 ||
+		countTimeline(timeline, "out:input_audio_buffer.commit") != 2 ||
+		countTimeline(timeline, "out:response.create") != 2 ||
+		countTimeline(timeline, "in:response.done") != 2 ||
+		countTimeline(timeline, "in:response.output_audio.delta") != 2 {
+		t.Fatalf("image scheduled lifecycle = %v, want two complete audio/output turns", timeline)
+	}
+	imageIndex := indexOfTimeline(timeline, "out:conversation.item.create", 0)
+	firstAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 0)
+	firstResponse := indexOfTimeline(timeline, "out:response.create", 0)
+	firstDone := indexOfTimeline(timeline, "in:response.done", 0)
+	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
+	if imageIndex < 0 || firstAppend < 0 || firstResponse < 0 || firstDone < 0 || secondAppend < 0 ||
+		!(imageIndex < firstAppend && firstAppend < firstResponse && firstResponse < firstDone && firstDone < secondAppend) {
+		t.Fatalf("image scheduled wire order = %v, want image < first append < response.create < response.done < second append", timeline)
+	}
+
+	var imageItems []struct {
+		Item struct {
+			Type    string `json:"type"`
+			Role    string `json:"role"`
+			Content []struct {
+				Type     string `json:"type"`
+				ImageURL string `json:"image_url"`
+			} `json:"content"`
+		} `json:"item"`
+	}
+	for _, event := range outbound {
+		if event.typeName != "conversation.item.create" {
+			continue
+		}
+		var payload struct {
+			Item struct {
+				Type    string `json:"type"`
+				Role    string `json:"role"`
+				Content []struct {
+					Type     string `json:"type"`
+					ImageURL string `json:"image_url"`
+				} `json:"content"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal(event.payload, &payload); err != nil {
+			t.Fatalf("decode first-turn image item: %v", err)
+		}
+		imageItems = append(imageItems, payload)
+	}
+	if len(imageItems) != 1 {
+		t.Fatalf("decoded image items = %d, want one", len(imageItems))
+	}
+	item := imageItems[0].Item
+	if item.Type != "message" || item.Role != "user" || len(item.Content) != 2 {
+		t.Fatalf("first-turn image item = %#v, want one user message with two image parts", item)
+	}
+	for index, wantMIME := range []string{"data:image/png;", "data:image/jpeg;"} {
+		part := item.Content[index]
+		if part.Type != "input_image" || !strings.HasPrefix(part.ImageURL, wantMIME) {
+			t.Fatalf("first-turn image part %d = %#v, want input_image with %q URL", index, part, wantMIME)
+		}
+	}
+	assertCLILiveRecordingBundle(t, recordDir, 2)
+}
+
 func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) {
 	t.Helper()
 	for turn := 0; turn < turns; turn++ {
