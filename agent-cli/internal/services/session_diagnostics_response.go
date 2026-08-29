@@ -39,49 +39,79 @@ func (o *sessionProgressObserver) pendingScheduledContinuationIndex() (int, bool
 	if o == nil {
 		return 0, false
 	}
-	var providerResponseID string
+	continuationIndex := -1
 	o.toolStateMu.Lock()
 	for _, state := range o.toolContinuations {
 		if state == nil || !state.resultAccepted || !state.continuationRequested || !state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
 			continue
 		}
-		providerResponseID = strings.TrimSpace(state.responseID)
-		break
+		providerResponseID := strings.TrimSpace(state.responseID)
+		index, ok := o.scheduledResponseIndexForContinuation(providerResponseID)
+		if !ok || (continuationIndex >= 0 && index >= continuationIndex) {
+			continue
+		}
+		continuationIndex = index
 	}
 	o.toolStateMu.Unlock()
+	return continuationIndex, continuationIndex >= 0
+}
 
+func (o *sessionProgressObserver) scheduledResponseIndexForContinuation(id string) (int, bool) {
+	if o == nil {
+		return 0, false
+	}
 	o.ensureScheduledResponseState()
-	if providerResponseID != "" {
-		if index, ok := o.scheduledResponseByID[providerResponseID]; ok {
-			return index, true
-		}
+	id = strings.TrimSpace(id)
+	if id != "" {
+		index, ok := o.scheduledResponseByID[id]
+		return index, ok && index >= 0 && index < len(o.scheduledResponses)
 	}
 	if o.logicalScheduledResponseSet {
 		return o.logicalScheduledResponseIndex, true
 	}
+	if o.activeScheduledResponseSet {
+		return o.activeScheduledResponseIndex, true
+	}
 	return 0, false
 }
 
-func (o *sessionProgressObserver) bindScheduledResponseID(index int, id string) {
+func (o *sessionProgressObserver) bindScheduledResponseID(index int, id string) bool {
 	if o == nil || index < 0 || index >= len(o.scheduledResponses) {
-		return
+		return false
 	}
 	o.ensureScheduledResponseState()
 	id = strings.TrimSpace(id)
+	if id != "" {
+		if existing, ok := o.scheduledResponseByID[id]; ok && existing != index {
+			// A provider response ID is an ownership key, not a reusable slot
+			// label. Refuse to transfer it to a later scheduled lifecycle.
+			return false
+		}
+	}
 	o.scheduledResponses[index].bound = true
 	if id != "" {
 		o.scheduledResponseByID[id] = index
 	}
+	return true
 }
 
-func (o *sessionProgressObserver) setActiveScheduledResponse(index int) {
+func (o *sessionProgressObserver) setActiveScheduledResponseWithID(index int, id string) bool {
 	if o == nil || index < 0 || index >= len(o.scheduledResponses) {
-		return
+		return false
+	}
+	id = strings.TrimSpace(id)
+	if id != "" {
+		if existing, ok := o.scheduledResponseByID[id]; ok && existing != index {
+			return false
+		}
 	}
 	o.activeScheduledResponseIndex = index
+	o.activeScheduledResponseID = id
 	o.activeScheduledResponseSet = true
 	o.logicalScheduledResponseIndex = index
+	o.logicalScheduledResponseID = id
 	o.logicalScheduledResponseSet = true
+	return true
 }
 
 // bindNextScheduledResponse associates a new provider response boundary with
@@ -95,8 +125,10 @@ func (o *sessionProgressObserver) bindNextScheduledResponse(id string) (int, boo
 	id = strings.TrimSpace(id)
 	if id != "" {
 		if index, ok := o.scheduledResponseByID[id]; ok {
-			o.setActiveScheduledResponse(index)
-			return index, true
+			if o.setActiveScheduledResponseWithID(index, id) {
+				return index, true
+			}
+			return 0, false
 		}
 	}
 	for o.nextScheduledResponse < len(o.scheduledResponses) && o.scheduledResponses[o.nextScheduledResponse].bound {
@@ -106,9 +138,10 @@ func (o *sessionProgressObserver) bindNextScheduledResponse(id string) (int, boo
 		return 0, false
 	}
 	index := o.nextScheduledResponse
+	if !o.bindScheduledResponseID(index, id) || !o.setActiveScheduledResponseWithID(index, id) {
+		return 0, false
+	}
 	o.nextScheduledResponse++
-	o.bindScheduledResponseID(index, id)
-	o.setActiveScheduledResponse(index)
 	return index, true
 }
 
@@ -123,9 +156,37 @@ func (o *sessionProgressObserver) bindScheduledContinuation(index int, id string
 			return false
 		}
 	}
-	o.bindScheduledResponseID(index, id)
-	o.setActiveScheduledResponse(index)
+	if !o.bindScheduledResponseID(index, id) || !o.setActiveScheduledResponseWithID(index, id) {
+		return false
+	}
 	return true
+}
+
+// bindPendingToolContinuations attaches only the accepted calls whose
+// originating provider response belongs to index. A tool result is emitted by
+// the loop as a separate RoleTool stream, so response-wide fallback here would
+// allow a later tool envelope to steal the continuation from its owner.
+func (o *sessionProgressObserver) bindPendingToolContinuations(index int, id string) {
+	if o == nil {
+		return
+	}
+	id = strings.TrimSpace(id)
+	o.toolStateMu.Lock()
+	defer o.toolStateMu.Unlock()
+	o.ensureToolStateLocked()
+	for _, state := range o.toolContinuations {
+		if state == nil || !state.resultAccepted || !state.continuationRequested || !state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
+			continue
+		}
+		ownerIndex, ok := o.scheduledResponseIndexForContinuation(state.responseID)
+		if ok && ownerIndex == index {
+			state.continuationScheduledIndex = index
+			state.continuationScheduledSet = true
+			if id != "" {
+				state.continuationResponseID = id
+			}
+		}
+	}
 }
 
 func (o *sessionProgressObserver) scheduledResponseIndex(id string) (int, bool) {
@@ -138,6 +199,11 @@ func (o *sessionProgressObserver) scheduledResponseIndex(id string) (int, bool) 
 		if index, ok := o.scheduledResponseByID[id]; ok {
 			return index, true
 		}
+		// An identified terminal with no matching owner cannot fall back to
+		// whichever lifecycle happens to be active. It may be a new terminal-only
+		// response, in which case noteScheduledResponseDisposition will bind it
+		// explicitly to the next slot.
+		return 0, false
 	}
 	if o.activeScheduledResponseSet {
 		return o.activeScheduledResponseIndex, true
@@ -157,6 +223,9 @@ func (o *sessionProgressObserver) noteScheduledResponseDisposition(id string, di
 	}
 	index, ok := o.scheduledResponseIndex(id)
 	if !ok {
+		if !o.canBindUnidentifiedScheduledResponse(id) {
+			return
+		}
 		_, ok = o.bindNextScheduledResponse(id)
 		if !ok {
 			return
@@ -173,27 +242,77 @@ func (o *sessionProgressObserver) noteScheduledResponseDisposition(id string, di
 	if !lifecycle.bound {
 		return
 	}
+	if !o.scheduledResponseOwnerMatches(index, id) {
+		// A late terminal from an earlier provider response can still resolve to
+		// this logical lifecycle through the historical ID map. It must not
+		// complete a newer continuation that now owns that lifecycle.
+		return
+	}
 	if lifecycle.disposition != scheduledAudioResponsePending {
 		// A cancelled provider response and its later continuation share one
 		// scheduled lifecycle. The continuation terminal reaches this method
 		// with the same logical index after the cancellation already resolved the
 		// lifecycle, so clear the temporary active mapping even though the
 		// terminal disposition itself is not duplicated.
-		if o.logicalScheduledResponseSet && o.logicalScheduledResponseIndex == index {
-			o.logicalScheduledResponseSet = false
-		}
-		if o.activeScheduledResponseSet && o.activeScheduledResponseIndex == index {
-			o.activeScheduledResponseSet = false
-		}
+		o.clearScheduledResponseOwner(index, id)
 		return
 	}
 	lifecycle.disposition = disposition
 	o.completedScheduled++
-	if o.logicalScheduledResponseSet && o.logicalScheduledResponseIndex == index {
-		o.logicalScheduledResponseSet = false
+	o.clearScheduledResponseOwner(index, id)
+}
+
+func (o *sessionProgressObserver) canBindUnidentifiedScheduledResponse(id string) bool {
+	if o == nil || strings.TrimSpace(id) == "" {
+		return true
+	}
+	id = strings.TrimSpace(id)
+	if o.activeScheduledResponseSet && o.activeScheduledResponseID != "" && o.activeScheduledResponseID != id {
+		return false
+	}
+	return !o.logicalScheduledResponseSet || o.logicalScheduledResponseID == "" || o.logicalScheduledResponseID == id
+}
+
+func (o *sessionProgressObserver) scheduledResponseOwnerMatches(index int, id string) bool {
+	if o == nil {
+		return false
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return o.activeScheduledResponseSet && o.activeScheduledResponseIndex == index && o.activeScheduledResponseID == ""
 	}
 	if o.activeScheduledResponseSet && o.activeScheduledResponseIndex == index {
+		return o.activeScheduledResponseID == id
+	}
+	if o.logicalScheduledResponseSet && o.logicalScheduledResponseIndex == index {
+		return o.logicalScheduledResponseID == id
+	}
+	return true
+}
+
+// clearScheduledResponseOwner clears only the owner that supplied the
+// disposition. Historical IDs remain mapped to the lifecycle, but they cannot
+// erase a newer active/logical response ID for that same lifecycle.
+func (o *sessionProgressObserver) clearScheduledResponseOwner(index int, id string) {
+	if o == nil {
+		return
+	}
+	id = strings.TrimSpace(id)
+	o.clearActiveScheduledResponseOwner(index, id)
+	if o.logicalScheduledResponseSet && o.logicalScheduledResponseIndex == index && o.logicalScheduledResponseID == id {
+		o.logicalScheduledResponseSet = false
+		o.logicalScheduledResponseID = ""
+	}
+}
+
+func (o *sessionProgressObserver) clearActiveScheduledResponseOwner(index int, id string) {
+	if o == nil {
+		return
+	}
+	id = strings.TrimSpace(id)
+	if o.activeScheduledResponseSet && o.activeScheduledResponseIndex == index && o.activeScheduledResponseID == id {
 		o.activeScheduledResponseSet = false
+		o.activeScheduledResponseID = ""
 	}
 }
 
@@ -251,13 +370,19 @@ func (o *sessionProgressObserver) beginObservedResponse(id string) bool {
 	o.activeResponse = true
 	o.activeResponseID = id
 	o.resetObservedResponseState()
-	if id != "" {
+	// Unscheduled tool sessions do not have a scheduled lifecycle to bind
+	// against. Preserve the response-ID association used by the ordinary
+	// continuation path so their pending calls can still observe the next
+	// provider response.
+	if id != "" && len(o.scheduledResponses) == 0 {
 		o.toolStateMu.Lock()
 		o.ensureToolStateLocked()
 		for _, state := range o.toolContinuations {
-			if state != nil && state.resultAccepted && state.continuationRequested && state.providerCallObserved && state.toolResponseComplete && state.continuationResponseID == "" {
-				state.continuationResponseID = id
+			if state == nil || !state.resultAccepted || !state.continuationRequested ||
+				!state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
+				continue
 			}
+			state.continuationResponseID = id
 		}
 		o.toolStateMu.Unlock()
 	}
@@ -289,18 +414,31 @@ func (o *sessionProgressObserver) adoptObservedResponseID(id string) bool {
 	if _, retired := o.retiredResponseIDs[id]; retired {
 		return false
 	}
-	o.activeResponseID = id
 	if o.activeScheduledResponseSet {
-		o.bindScheduledResponseID(o.activeScheduledResponseIndex, id)
-	}
-	o.toolStateMu.Lock()
-	o.ensureToolStateLocked()
-	for _, state := range o.toolContinuations {
-		if state != nil && state.resultAccepted && state.continuationRequested && state.providerCallObserved && state.toolResponseComplete && state.continuationResponseID == "" {
-			state.continuationResponseID = id
+		if !o.bindScheduledResponseID(o.activeScheduledResponseIndex, id) {
+			return false
 		}
 	}
-	o.toolStateMu.Unlock()
+	o.activeResponseID = id
+	if o.activeScheduledResponseSet {
+		o.setActiveScheduledResponseWithID(o.activeScheduledResponseIndex, id)
+		o.bindPendingToolContinuations(o.activeScheduledResponseIndex, id)
+	} else if len(o.scheduledResponses) == 0 {
+		// Unscheduled tool sessions can first learn the provider response ID at
+		// the terminal event. Keep their pending continuation associated with
+		// that adopted ID just as beginObservedResponse does for identified
+		// response.created events.
+		o.toolStateMu.Lock()
+		o.ensureToolStateLocked()
+		for _, state := range o.toolContinuations {
+			if state == nil || !state.resultAccepted || !state.continuationRequested ||
+				!state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
+				continue
+			}
+			state.continuationResponseID = id
+		}
+		o.toolStateMu.Unlock()
+	}
 	return true
 }
 
@@ -366,7 +504,9 @@ func (o *sessionProgressObserver) finishObservedResponse(id string) {
 	}
 	o.activeResponse = false
 	o.activeResponseID = ""
-	o.activeScheduledResponseSet = false
+	if o.activeScheduledResponseSet {
+		o.clearActiveScheduledResponseOwner(o.activeScheduledResponseIndex, id)
+	}
 }
 
 func (o *sessionProgressObserver) responseEventBelongsToActive(id string) bool {
@@ -405,8 +545,11 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 	if strings.TrimSpace(name) != "" {
 		state.toolName = name
 	}
-	if strings.TrimSpace(responseID) != "" {
-		state.responseID = strings.TrimSpace(responseID)
+	if normalizedResponseID := strings.TrimSpace(responseID); normalizedResponseID != "" && (state.responseID == "" || state.responseID == normalizedResponseID) {
+		// Keep the first provider response identity for a call. A duplicate or
+		// late event with a different identity must not move an accepted result
+		// to another scheduled lifecycle.
+		state.responseID = normalizedResponseID
 	}
 	state.providerCallObserved = true
 	state.resultAccepted = accepted
@@ -435,6 +578,62 @@ func continuationStateBelongsToResponse(state *toolContinuationState, responseID
 	return owner == responseID
 }
 
+func (o *sessionProgressObserver) continuationStateBelongsToObservedResponse(state *toolContinuationState, responseID string) bool {
+	if continuationStateBelongsToResponse(state, responseID) {
+		return true
+	}
+	if o == nil || state == nil || strings.TrimSpace(responseID) != "" || !state.continuationScheduledSet {
+		return false
+	}
+	return o.activeResponse && o.activeResponseID == "" && o.activeScheduledResponseSet && o.activeScheduledResponseIndex == state.continuationScheduledIndex
+}
+
+func (o *sessionProgressObserver) continuationOwnerMatchesObservedResponse(state *toolContinuationState, responseID string) bool {
+	if o == nil || state == nil {
+		return false
+	}
+	if responseID = strings.TrimSpace(responseID); responseID != "" {
+		return state.continuationResponseID == responseID
+	}
+	return state.continuationScheduledSet && o.activeResponse && o.activeResponseID == "" && o.activeScheduledResponseSet && o.activeScheduledResponseIndex == state.continuationScheduledIndex
+}
+
+// recordContinuationTerminalLocked records the terminal boundary for an
+// accepted tool result's follow-on response. A continuation may itself emit a
+// new tool call, so actionable tool output is valid continuation output even
+// though the response is still a tool turn for the newly emitted call.
+func recordContinuationTerminalLocked(state *toolContinuationState, terminal *messages.MessageEndValue, outputObserved bool) bool {
+	if state == nil || !state.toolResponseComplete {
+		return false
+	}
+	if !state.continuationTerminalSeen {
+		state.continuationTerminalSeen = true
+		if terminal != nil {
+			state.continuationStatus = normalizeContinuationStatus(terminal.Status)
+			state.continuationStatusDetails = sanitizeContinuationDetail(terminal.StatusDetails)
+			state.continuationTerminalReason = terminal.TerminalReason
+		}
+		state.continuationOutputObserved = outputObserved
+		status := normalizeContinuationStatus(state.continuationStatus)
+		reason := state.continuationTerminalReason
+		terminalFailed := !state.continuationOutputObserved || (status != "" && status != "completed") || (reason != "" && reason != messages.TerminalReasonProviderAuthoredCompletion && reason != messages.TerminalReasonLoopSynthesizedCompletion)
+		if terminalFailed && state.continuationStatusDetails == "" && reason != "" && !state.continuationOutputObserved {
+			state.continuationStatusDetails = "assistant continuation produced no observable output"
+		}
+		if terminalFailed && state.continuationStatusDetails == "" && reason != "" {
+			state.continuationStatusDetails = "terminal reason=" + string(reason)
+		}
+		if terminalFailed {
+			state.continuationFailureObserved = true
+		}
+	}
+	if continuationCanCompleteLocked(state) {
+		state.continuationComplete = true
+		return true
+	}
+	return state.resultAccepted && state.continuationRequested
+}
+
 // observeProviderMessageEndForResponse applies terminal accounting only to
 // tool state owned by responseID. This prevents a late terminal from an older
 // response from completing a replacement response or its continuation.
@@ -450,13 +649,25 @@ func (o *sessionProgressObserver) observeProviderMessageEndForResponse(role mess
 	continuationChanged := false
 	if toolTurn {
 		for _, state := range o.toolContinuations {
-			if continuationStateBelongsToResponse(state, responseID) && state.providerCallObserved && !state.toolResponseComplete {
+			if o.continuationStateBelongsToObservedResponse(state, responseID) && state.providerCallObserved && !state.toolResponseComplete {
 				state.toolResponseComplete = true
+			}
+		}
+		// A continuation response may itself emit the next tool call. Its
+		// MESSAGE.END is still the predecessor continuation's terminal boundary;
+		// the new call is the observable output that makes that continuation
+		// complete.
+		for _, state := range o.toolContinuations {
+			if state == nil || !o.continuationOwnerMatchesObservedResponse(state, responseID) || state.continuationComplete {
+				continue
+			}
+			if recordContinuationTerminalLocked(state, terminal, o.assistantOutputObserved || o.responseActionableTool) {
+				continuationChanged = true
 			}
 		}
 	} else if role != messages.RoleTool {
 		for _, state := range o.toolContinuations {
-			if !continuationStateBelongsToResponse(state, responseID) || !state.toolResponseComplete || state.continuationComplete {
+			if !o.continuationStateBelongsToObservedResponse(state, responseID) || !state.toolResponseComplete || state.continuationComplete {
 				continue
 			}
 			if duplicateEnd && !state.continuationRequested {
@@ -465,29 +676,7 @@ func (o *sessionProgressObserver) observeProviderMessageEndForResponse(role mess
 				// function-call response, not evidence of an empty continuation.
 				continue
 			}
-			if !state.continuationTerminalSeen {
-				state.continuationTerminalSeen = true
-				if terminal != nil {
-					state.continuationStatus = normalizeContinuationStatus(terminal.Status)
-					state.continuationStatusDetails = sanitizeContinuationDetail(terminal.StatusDetails)
-					state.continuationTerminalReason = terminal.TerminalReason
-				}
-				state.continuationOutputObserved = o.assistantOutputObserved
-				status := normalizeContinuationStatus(state.continuationStatus)
-				reason := state.continuationTerminalReason
-				terminalFailed := !state.continuationOutputObserved || (status != "" && status != "completed") || (reason != "" && reason != messages.TerminalReasonProviderAuthoredCompletion && reason != messages.TerminalReasonLoopSynthesizedCompletion)
-				if terminalFailed && state.continuationStatusDetails == "" && reason != "" && !state.continuationOutputObserved {
-					state.continuationStatusDetails = "assistant continuation produced no observable output"
-				}
-				if terminalFailed && state.continuationStatusDetails == "" && reason != "" {
-					state.continuationStatusDetails = "terminal reason=" + string(reason)
-				}
-				if terminalFailed {
-					state.continuationFailureObserved = true
-				}
-			}
-			if continuationCanCompleteLocked(state) {
-				state.continuationComplete = true
+			if recordContinuationTerminalLocked(state, terminal, o.assistantOutputObserved) {
 				continuationChanged = true
 			} else if state.resultAccepted && state.continuationRequested {
 				// A terminal failure or empty response is a state transition too;

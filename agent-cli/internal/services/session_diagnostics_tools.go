@@ -16,6 +16,8 @@ type toolContinuationState struct {
 	toolResponseComplete        bool
 	continuationRequested       bool
 	continuationResponseID      string
+	continuationScheduledIndex  int
+	continuationScheduledSet    bool
 	continuationTerminalSeen    bool
 	continuationStatus          string
 	continuationStatusDetails   string

@@ -214,8 +214,10 @@ type sessionProgressObserver struct {
 	scheduledResponseByID         map[string]int
 	nextScheduledResponse         int
 	activeScheduledResponseIndex  int
+	activeScheduledResponseID     string
 	activeScheduledResponseSet    bool
 	logicalScheduledResponseIndex int
+	logicalScheduledResponseID    string
 	logicalScheduledResponseSet   bool
 	counters                      audioTurnCounters
 	totals                        audioTurnCounters
