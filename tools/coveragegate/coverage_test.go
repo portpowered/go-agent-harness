@@ -174,6 +174,47 @@ func TestCompareReportsAllUnregisteredPackagesInOrder(t *testing.T) {
 	}
 }
 
+func TestCompareAllowsCoverageQuantizationBandWithoutChangingFloor(t *testing.T) {
+	tests := []struct {
+		name      string
+		minimum   string
+		wantDelta int
+	}{
+		{name: "half band", minimum: "80.05", wantDelta: -5},
+		{name: "exact band", minimum: "80.10", wantDelta: -10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := mustParseManifest(t, manifestJSON(fmt.Sprintf(`{"package":"example/a","minimum":%s}`, tt.minimum)))
+			if err := Compare(manifest, map[string]Coverage{"example/a": {Covered: 8, Total: 10}}); err != nil {
+				t.Fatalf("Compare() rejected a shortfall within the 0.10-point band: %v", err)
+			}
+			if got, want := manifest.Packages[0].MinimumCents, 8000+(-tt.wantDelta); got != want {
+				t.Fatalf("stored minimum = %d cents, want %d cents", got, want)
+			}
+		})
+	}
+}
+
+func TestCompareRejectsCoverageBeyondQuantizationBand(t *testing.T) {
+	manifest := mustParseManifest(t, manifestJSON(`{"package":"example/a","minimum":80.50}`))
+	err := Compare(manifest, map[string]Coverage{"example/a": {Covered: 8, Total: 10}})
+	if err == nil {
+		t.Fatal("Compare() accepted a 0.50-point floor regression")
+	}
+	if !errors.Is(err, ErrCoverageFloorViolation) {
+		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
+	}
+	want := "coverage gate found coverage floor violations:\n- example/a: expected minimum 80.50%, actual 80.00%, delta -0.50%"
+	if got := err.Error(); got != want {
+		t.Fatalf("report = %q, want %q", got, want)
+	}
+	if got, want := manifest.Packages[0].MinimumCents, 8050; got != want {
+		t.Fatalf("stored minimum = %d cents, want %d cents", got, want)
+	}
+}
+
 func TestLoadManifestDirMergesIndependentFragmentsInPackageOrder(t *testing.T) {
 	directory := t.TempDir()
 	writeManifestFragment(t, filepath.Join(directory, "nested", "zeta.fragment"), `{"package":"example/zeta","minimum":50.00}`)

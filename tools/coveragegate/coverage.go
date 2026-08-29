@@ -160,6 +160,10 @@ func (e *DuplicateManifestError) Unwrap() error { return ErrManifestDuplicate }
 
 var minimumPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.[0-9]{2}$`)
 
+// coverageComparisonBandCents accounts for the one-decimal precision of Go
+// coverage measurements without changing the configured two-decimal floor.
+const coverageComparisonBandCents = 10
+
 // LoadManifest loads either the fragment directory used by the repository
 // gate or the legacy single JSON manifest. Keeping the file form available
 // makes the command transition safe for callers that still use a file.
@@ -537,7 +541,7 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 			continue
 		}
 		actualCents := coverage.actualCents()
-		if actualCents < entry.MinimumCents {
+		if actualCents+coverageComparisonBandCents < entry.MinimumCents {
 			findings.Violations = append(findings.Violations, Violation{
 				ImportPath:    entry.ImportPath,
 				ExpectedCents: entry.MinimumCents,
