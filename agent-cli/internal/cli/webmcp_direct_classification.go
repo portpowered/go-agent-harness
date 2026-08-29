@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"net"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -34,6 +36,49 @@ func directNoEligibleTabError(browserID string, browser config.BrowserConfig, ca
 		details["reason"] = boundedDirectReason(reason)
 	}
 	return webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", details)
+}
+
+func discoverDirectBrowsers(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig, browserID string) ([]webmcp.BrowserCandidate, error) {
+	candidates, err := discoverDirectCandidates(ctx, broker, browser)
+	if err != nil {
+		return nil, err
+	}
+	if browserID != "" {
+		for _, candidate := range candidates {
+			if string(candidate.ID) == browserID {
+				return []webmcp.BrowserCandidate{candidate}, nil
+			}
+		}
+		return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the selected browser is no longer current", map[string]any{
+			"browser_id":          browserID,
+			"target_id":           "",
+			"selected_generation": uint64(0),
+			"reason":              "browser_not_found",
+		})
+	}
+	return candidates, nil
+}
+
+func discoverDirectCandidates(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) ([]webmcp.BrowserCandidate, error) {
+	if broker == nil {
+		return nil, webmcpRuntimeUnavailableError("discovery")
+	}
+	candidates, err := broker.Discover(ctx, webmcp.DiscoverOptions{
+		ExplicitOnly:     browser.Connection.CDPURL != "" || browser.Connection.WSEndpoint != "",
+		AllowProcessScan: browser.Connection.AllowProcessScan,
+		AllowRemoteCDP:   browser.Connection.AllowRemoteCDP,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+	if len(candidates) == 0 {
+		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
+			"endpoint_kind": endpointKindFor(browser),
+			"source":        string(webmcp.DiscoverySourceConfigured),
+		})
+	}
+	return candidates, nil
 }
 
 // directEndpointAuthority returns only the normalized endpoint authority used

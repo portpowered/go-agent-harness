@@ -891,49 +891,6 @@ func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) conf
 	return overrides
 }
 
-func discoverDirectBrowsers(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig, browserID string) ([]webmcp.BrowserCandidate, error) {
-	candidates, err := discoverDirectCandidates(ctx, broker, browser)
-	if err != nil {
-		return nil, err
-	}
-	if browserID != "" {
-		for _, candidate := range candidates {
-			if string(candidate.ID) == browserID {
-				return []webmcp.BrowserCandidate{candidate}, nil
-			}
-		}
-		return nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the selected browser is no longer current", map[string]any{
-			"browser_id":          browserID,
-			"target_id":           "",
-			"selected_generation": uint64(0),
-			"reason":              "browser_not_found",
-		})
-	}
-	return candidates, nil
-}
-
-func discoverDirectCandidates(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) ([]webmcp.BrowserCandidate, error) {
-	if broker == nil {
-		return nil, webmcpRuntimeUnavailableError("discovery")
-	}
-	candidates, err := broker.Discover(ctx, webmcp.DiscoverOptions{
-		ExplicitOnly:     browser.Connection.CDPURL != "" || browser.Connection.WSEndpoint != "",
-		AllowProcessScan: browser.Connection.AllowProcessScan,
-		AllowRemoteCDP:   browser.Connection.AllowRemoteCDP,
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
-	if len(candidates) == 0 {
-		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
-			"endpoint_kind": endpointKindFor(browser),
-			"source":        string(webmcp.DiscoverySourceConfigured),
-		})
-	}
-	return candidates, nil
-}
-
 func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
 	browserID := browser.Selection.Browser
 	targetID := browser.Selection.Tab
@@ -1161,10 +1118,6 @@ func boundedDirectReason(value string) string {
 		}
 	}
 	return value
-}
-
-func stalePersistedSelectionError(browserID, targetID, reason string, cause error) error {
-	return stalePersistedSelectionErrorAtGeneration(browserID, targetID, 0, reason, cause)
 }
 
 func stalePersistedSelectionErrorAtGeneration(browserID, targetID string, generation uint64, reason string, cause error) error {
