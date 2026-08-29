@@ -637,9 +637,20 @@ func extractChromeArchive(archivePath, destination string) error {
 }
 
 func launchPinnedChrome(ctx context.Context, pinned pinnedChrome, fixtureURL string) (*runningChrome, error) {
+	return launchPinnedChromeAtPort(ctx, pinned, fixtureURL, 0)
+}
+
+// launchPinnedChromeAtPort keeps the normal O0 launch shape when port is zero
+// and permits the recovery suite to deliberately reuse the old browser's
+// loopback port after that browser has exited. The caller supplies only a
+// pinned executable and a temporary profile owned by this test package.
+func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureURL string, port int) (*runningChrome, error) {
 	profileDir := filepath.Join(pinned.WorkDir, "profile")
 	if err := os.Mkdir(profileDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create isolated Chrome profile: %w", err)
+	}
+	if port < 0 || port > 65535 {
+		return nil, fmt.Errorf("Chrome debugging port is invalid: %d", port)
 	}
 	args := []string{
 		"--headless=new",
@@ -651,7 +662,7 @@ func launchPinnedChrome(ctx context.Context, pinned pinnedChrome, fixtureURL str
 		"--no-default-browser-check",
 		"--no-first-run",
 		"--remote-debugging-address=127.0.0.1",
-		"--remote-debugging-port=0",
+		fmt.Sprintf("--remote-debugging-port=%d", port),
 		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
 		"--user-data-dir=" + profileDir,
 		fixtureURL,
@@ -735,6 +746,24 @@ func (p *runningChrome) Close() error {
 		}
 		if p.closeErr == nil {
 			p.closeErr = p.waitErr
+		}
+	})
+	return p.closeErr
+}
+
+func (p *runningChrome) Kill() error {
+	p.closeOnce.Do(func() {
+		if p.cmd == nil || p.cmd.Process == nil {
+			return
+		}
+		if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			p.closeErr = err
+			return
+		}
+		select {
+		case <-p.done:
+		case <-time.After(10 * time.Second):
+			p.closeErr = errors.New("Chrome did not exit after kill")
 		}
 	})
 	return p.closeErr
@@ -1142,13 +1171,15 @@ func detachExternalIntegrationTarget(targetContext context.Context, cancelTarget
 		detachErr = cdpTarget.DetachFromTarget().WithSessionID(targetClient.SessionID).Do(cdp.WithExecutor(detachContext, client.Browser))
 		cancelDetach()
 	}
-	// Clear the target before cancellation; chromedp otherwise follows a
+	// Clear the protocol IDs before cancellation; chromedp otherwise follows a
 	// target-context cancellation with Target.closeTarget in this pinned
-	// version. The test client is never allowed to close the external page.
+	// version. Keep the pointer until cancelTarget returns because chromedp's
+	// cleanup goroutine reads it without synchronization. The test client is
+	// never allowed to close the external page.
 	targetClient.SessionID = ""
 	targetClient.TargetID = ""
-	client.Target = nil
 	cancelTarget()
+	client.Target = nil
 	return detachErr
 }
 
