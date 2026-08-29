@@ -153,11 +153,97 @@ func TestTopologyStageGatesCanBeReleased(t *testing.T) {
 	if attached.session == nil {
 		t.Fatal("attach gate returned nil session")
 	}
-	if err := attached.session.EnableWebMCP(context.Background()); err != nil {
+	session := attached.session.(*ScriptedTargetSession)
+	session.BlockEnableWebMCP()
+	enableDone := make(chan error, 1)
+	enableCursor := runtime.OperationCursor()
+	go func() { enableDone <- session.EnableWebMCP(context.Background()) }()
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationEnableWebMCP, enableCursor); err != nil {
+		t.Fatalf("wait for enable admission: %v", err)
+	}
+	session.UnblockEnableWebMCP()
+	if err := <-enableDone; err != nil {
 		t.Fatalf("enable WebMCP: %v", err)
 	}
-	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationEnableAcknowledged); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationEnableAcknowledged, enableCursor); err != nil {
 		t.Fatalf("wait for enable acknowledgement: %v", err)
+	}
+}
+
+func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
+	tests := []struct {
+		name string
+		gate func(*ScriptedBrowserHandle)
+		kind OperationKind
+		run  func(context.Context, *ScriptedBrowserRuntime, *ScriptedBrowserHandle) <-chan error
+	}{
+		{
+			name: "open",
+			gate: func(handle *ScriptedBrowserHandle) { handle.BlockOpen() },
+			kind: OperationOpen,
+			run: func(ctx context.Context, runtime *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
+				done := make(chan error, 1)
+				go func() {
+					_, err := runtime.Open(ctx, handle.Candidate())
+					done <- err
+				}()
+				return done
+			},
+		},
+		{
+			name: "activate",
+			gate: func(handle *ScriptedBrowserHandle) { handle.BlockActivate() },
+			kind: OperationActivate,
+			run: func(ctx context.Context, _ *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
+				done := make(chan error, 1)
+				go func() { done <- handle.Activate(ctx, "tab-a") }()
+				return done
+			},
+		},
+		{
+			name: "attach",
+			gate: func(handle *ScriptedBrowserHandle) { handle.BlockAttach() },
+			kind: OperationAttach,
+			run: func(ctx context.Context, _ *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
+				done := make(chan error, 1)
+				go func() {
+					_, err := handle.Attach(ctx, "tab-a", webmcp.TargetOwnershipExternal)
+					done <- err
+				}()
+				return done
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
+			runtime := NewScriptedBrowserRuntime(BrowserConfig{
+				Candidate: candidate,
+				Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"})},
+			})
+			defer func() { _ = runtime.Close() }()
+			handleValue, err := runtime.Open(context.Background(), candidate)
+			if err != nil {
+				t.Fatalf("open browser: %v", err)
+			}
+			handle := handleValue.(*ScriptedBrowserHandle)
+			test.gate(handle)
+			done := test.run(context.Background(), runtime, handle)
+			if _, err := runtime.WaitForOperationAdmitted(testContext(t), test.kind); err != nil {
+				t.Fatalf("wait for %s admission: %v", test.kind, err)
+			}
+			_ = handle.Disconnect("transport_lost")
+			select {
+			case err := <-done:
+				var classified *webmcp.ClassifiedError
+				if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
+					t.Fatalf("%s error = %v, want browser_disconnected", test.kind, err)
+				}
+			case <-testContext(t).Done():
+				t.Fatalf("%s did not release after disconnect", test.kind)
+			}
+		})
 	}
 }
 
