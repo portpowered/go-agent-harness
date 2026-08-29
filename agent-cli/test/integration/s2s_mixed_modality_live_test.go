@@ -7,6 +7,7 @@
 package integration
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -97,7 +98,7 @@ func TestLiveMixedModalityScheduledAudioWithImage(t *testing.T) {
 		t.Fatalf("scheduled live transcript count = %d, want at least two", len(observation.transcripts))
 	}
 	assertMixedModalityGrounding(t, observation.transcripts[:1], run.stdout)
-	assertCLILiveRecordingBundle(t, run.recordDir, len(audioPaths))
+	assertMixedModalityLiveRecordingBundle(t, run.recordDir, len(audioPaths))
 	retainMixedModalityLiveArtifacts(t, run, "scheduled")
 	logMixedModalityLiveEvidence(t, run.capture, observation, imagePath, "scheduled")
 }
@@ -351,6 +352,73 @@ func assertMixedModalityGrounding(t *testing.T, transcripts []string, cliOutput 
 	for _, term := range []string{"red", "square", "blue", "diagonal"} {
 		if !strings.Contains(transcript, term) || !strings.Contains(output, term) {
 			t.Fatalf("mixed-modality live output missing grounded %q (transcript=%q cli_output=%q)", term, strings.Join(transcripts, " "), cliOutput)
+		}
+	}
+}
+
+// assertMixedModalityLiveRecordingBundle checks the durable per-turn proof
+// without assuming that a live provider emits one output file per response.
+// Realtime output is chunked, so the manifest may contain several output PCM
+// artifacts for one turn; session-log entries carry the turn-level boundary.
+func assertMixedModalityLiveRecordingBundle(t *testing.T, destination string, turns int) {
+	t.Helper()
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read mixed-modality recording manifest: %v", err)
+	}
+	var manifest struct {
+		Artifacts []struct {
+			Path string `json:"path"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode mixed-modality recording manifest: %v", err)
+	}
+	inputArtifacts, outputArtifacts := make([]string, 0, turns), make([]string, 0)
+	for _, artifact := range manifest.Artifacts {
+		switch {
+		case strings.HasPrefix(artifact.Path, "audio/in-"):
+			inputArtifacts = append(inputArtifacts, artifact.Path)
+		case strings.HasPrefix(artifact.Path, "audio/out-"):
+			outputArtifacts = append(outputArtifacts, artifact.Path)
+		}
+	}
+	if len(inputArtifacts) != turns || len(outputArtifacts) == 0 {
+		t.Fatalf("mixed-modality recording audio artifacts = input:%d output:%d, want %d inputs and non-empty output", len(inputArtifacts), len(outputArtifacts), turns)
+	}
+	for _, artifactPath := range append(inputArtifacts, outputArtifacts...) {
+		data, err := os.ReadFile(filepath.Join(destination, artifactPath))
+		if err != nil {
+			t.Fatalf("read mixed-modality audio artifact %q: %v", artifactPath, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("mixed-modality audio artifact %q is empty", artifactPath)
+		}
+	}
+
+	logFile, err := os.Open(filepath.Join(destination, "session-log.jsonl"))
+	if err != nil {
+		t.Fatalf("open mixed-modality session log: %v", err)
+	}
+	defer logFile.Close()
+	entries := make([]cliLiveRecordingEntry, 0, turns)
+	scanner := bufio.NewScanner(logFile)
+	for scanner.Scan() {
+		var entry cliLiveRecordingEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("decode mixed-modality session log entry: %v", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("read mixed-modality session log: %v", err)
+	}
+	if len(entries) != turns {
+		t.Fatalf("mixed-modality session log entries = %d, want %d", len(entries), turns)
+	}
+	for index, entry := range entries {
+		if entry.TurnIndex != index+1 || !entry.Input.Committed || entry.Input.AudioBytes == 0 || !entry.Response.Complete || entry.Response.AudioBytes == 0 {
+			t.Fatalf("mixed-modality session log entry %d lacks committed input and completed output audio: %#v", index+1, entry)
 		}
 	}
 }
