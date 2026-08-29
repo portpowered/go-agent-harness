@@ -38,6 +38,7 @@ func (b *StatefulBroker) advanceGenerationLocked(selected *brokerSession, genera
 		close(selected.catalogSignal)
 	}
 	selected.catalogSignal = make(chan struct{})
+	signalCatalogUpdateLocked(selected)
 	selected.context.CatalogReady = false
 	selected.context.CatalogEvidence = ""
 	selected.context.Ready = false

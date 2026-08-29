@@ -10,8 +10,8 @@ import (
 
 // waitForInitialCatalog gives the browser a bounded opportunity to deliver
 // affirmative page-tool evidence triggered by WebMCP.enable. A timeout is a
-// diagnostic failure: an empty catalog is valid only when the page explicitly
-// proves that its catalog is ready.
+// diagnostic failure, not a session-lifecycle transition: the caller may
+// retry while this connected target continues consuming events.
 func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *brokerSession) error {
 	if selected == nil {
 		return nil
@@ -19,40 +19,104 @@ func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *br
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	b.mu.Lock()
-	if selected.context.CatalogReady {
-		b.mu.Unlock()
-		return nil
+	wait := initialCatalogWait
+	if b != nil && b.catalogWait > 0 {
+		wait = b.catalogWait
 	}
-	signal := selected.catalogSignal
-	loopDone := selected.loopDone
-	b.mu.Unlock()
-	timer := time.NewTimer(initialCatalogWait)
+	timerFactory := TimerFactory(wallTimerFactory{})
+	if b != nil && b.timers != nil {
+		timerFactory = b.timers
+	}
+	timer := timerFactory.NewTimer(wait)
 	defer timer.Stop()
-	select {
-	case <-signal:
-		return nil
-	case <-loopDone:
-		if err := selected.session.Err(); err != nil {
-			var classifiedErr *ClassifiedError
-			if errors.As(err, &classifiedErr) && classifiedErr != nil {
-				switch classifiedErr.Code {
-				case ErrorBrowserDisconnected, ErrorTargetDetached:
-					return err
+	for {
+		b.mu.Lock()
+		if b.selected != selected || !selected.active || !selected.context.Connected {
+			failure := sessionLifecycleFailure(selected)
+			if failure == nil {
+				failure = staleSelectionForSession(selected, "selection_not_connected")
+			}
+			b.mu.Unlock()
+			return failure
+		}
+		if selected.context.CatalogReady {
+			b.mu.Unlock()
+			return nil
+		}
+		if selected.catalogError != nil {
+			err := catalogInvalidErrorLocked(selected)
+			b.mu.Unlock()
+			return err
+		}
+		signal := selected.catalogSignal
+		update := selected.catalogUpdate
+		loopDone := selected.loopDone
+		b.mu.Unlock()
+
+		select {
+		case <-signal:
+			// A readiness signal can also be closed while a generation is
+			// being fenced. Re-read the state instead of treating every close
+			// as proof for the current document.
+			continue
+		case <-update:
+			// Reconcile invalid, removed, or generation-changing catalog
+			// observations before deciding whether the wait is complete.
+			continue
+		case <-loopDone:
+			b.flushSession(selected)
+			b.mu.Lock()
+			if selected.context.CatalogReady && selected.active && selected.context.Connected {
+				b.mu.Unlock()
+				return nil
+			}
+			if err := catalogInvalidErrorLocked(selected); err != nil {
+				b.mu.Unlock()
+				return err
+			}
+			failure := sessionLifecycleFailure(selected)
+			b.mu.Unlock()
+			if failure != nil {
+				var classifiedErr *ClassifiedError
+				if errors.As(failure, &classifiedErr) && classifiedErr != nil {
+					switch classifiedErr.Code {
+					case ErrorBrowserDisconnected, ErrorTargetDetached:
+						return failure
+					}
 				}
 			}
+			return b.catalogEvidenceError(selected, "session_ended")
+		case <-ctx.Done():
+			if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
+				return failure
+			}
+			return ctx.Err()
+		case <-timer.C():
+			// Events already queued at the deadline win over the timer. This
+			// final flush also makes a simultaneous late toolsAdded event
+			// deterministic for callers racing the first retry.
+			b.flushSession(selected)
+			b.mu.Lock()
+			if selected.context.CatalogReady && selected.active && selected.context.Connected {
+				b.mu.Unlock()
+				return nil
+			}
+			if err := catalogInvalidErrorLocked(selected); err != nil {
+				b.mu.Unlock()
+				return err
+			}
+			failure := sessionLifecycleFailure(selected)
+			b.mu.Unlock()
+			if failure != nil {
+				if lifecycle, ok := lifecycleClassifiedError(failure); ok {
+					return lifecycle
+				}
+			}
+			if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
+				return failure
+			}
+			return b.catalogEvidenceError(selected, "deadline_exceeded")
 		}
-		return b.catalogEvidenceError(selected, "session_ended")
-	case <-ctx.Done():
-		if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
-			return failure
-		}
-		return ctx.Err()
-	case <-timer.C:
-		if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
-			return failure
-		}
-		return b.catalogEvidenceError(selected, "deadline_exceeded")
 	}
 }
 
@@ -120,7 +184,31 @@ func (b *StatefulBroker) markCatalogReadyLocked(selected *brokerSession, evidenc
 	if selected.context.CatalogEvidence == "" {
 		selected.context.CatalogEvidence = evidence
 	}
+	signalCatalogUpdateLocked(selected)
 	b.updateReadinessLocked(selected)
+}
+
+func signalCatalogUpdateLocked(selected *brokerSession) {
+	if selected == nil {
+		return
+	}
+	if selected.catalogUpdate == nil {
+		selected.catalogUpdate = make(chan struct{})
+		return
+	}
+	close(selected.catalogUpdate)
+	selected.catalogUpdate = make(chan struct{})
+}
+
+func catalogInvalidErrorLocked(selected *brokerSession) error {
+	if selected == nil || selected.catalogError == nil {
+		return nil
+	}
+	return classified(ErrorBrowserProtocol, "the page catalog is invalid", map[string]any{
+		"phase":       "catalog",
+		"protocol":    "webmcp",
+		"reason_code": "invalid_descriptor",
+	}, selected.catalogError)
 }
 
 func (b *StatefulBroker) catalogEvidenceError(selected *brokerSession, reason string) error {
@@ -130,7 +218,7 @@ func (b *StatefulBroker) catalogEvidenceError(selected *brokerSession, reason st
 		"webmcp_domain":   "supported",
 		"page_tools":      "unverified",
 		"catalog":         "unverified",
-		"deadline_ms":     int(initialCatalogWait / time.Millisecond),
+		"deadline_ms":     int(b.catalogWait / time.Millisecond),
 		"evidence_needed": "affirmative page producer/catalog-ready observation",
 		"reason":          reason,
 	}
@@ -141,7 +229,14 @@ func (b *StatefulBroker) catalogEvidenceError(selected *brokerSession, reason st
 		details["generation"] = selected.context.Generation
 		b.mu.Unlock()
 	}
-	return classified(ErrorBrowserProtocol, "the WebMCP domain is supported, but the selected page did not provide affirmative page-tool catalog evidence before the diagnostic deadline", details, nil)
+	err := classified(ErrorBrowserProtocol, "the WebMCP domain is supported, but the selected page did not provide affirmative page-tool catalog evidence before the diagnostic deadline", details, nil)
+	if reason == "deadline_exceeded" {
+		var classifiedErr *ClassifiedError
+		if errors.As(err, &classifiedErr) {
+			classifiedErr.Retryable = true
+		}
+	}
+	return err
 }
 
 func isCatalogEvidenceError(err error) bool {
@@ -243,17 +338,23 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 			return ToolCatalogSnapshot{}, targetAttachError(TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err)
 		}
 	}
+	// A selection may have returned a retryable catalog deadline before the
+	// page published its producer. Keep later list calls event-driven and
+	// bounded instead of treating the current empty catalog as a success.
+	if err := b.waitForInitialCatalog(ctx, selected); err != nil {
+		if failure := b.promoteBrowserLoss(selected, TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "catalog", err); failure != nil {
+			return ToolCatalogSnapshot{}, failure
+		}
+		return ToolCatalogSnapshot{}, err
+	}
+	b.flushSession(selected)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected != selected || !selected.active || !selected.context.Connected {
 		return ToolCatalogSnapshot{}, selectionStateErrorLocked(selected, "lifecycle", "selection_changed")
 	}
 	if selected.catalogError != nil {
-		return ToolCatalogSnapshot{}, classified(ErrorBrowserProtocol, "the page catalog is invalid", map[string]any{
-			"phase":       "catalog",
-			"protocol":    "webmcp",
-			"reason_code": "invalid_descriptor",
-		}, selected.catalogError)
+		return ToolCatalogSnapshot{}, catalogInvalidErrorLocked(selected)
 	}
 	tools := make([]ToolDescriptor, 0, len(selected.catalog))
 	for _, descriptor := range selected.catalog {

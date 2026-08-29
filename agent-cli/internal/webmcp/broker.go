@@ -48,6 +48,9 @@ type BrokerOptions struct {
 	// CloseTimeout bounds each browser session, handle, and worker shutdown
 	// step. Zero uses DefaultBrokerCloseTimeout.
 	CloseTimeout time.Duration
+	// CatalogWait bounds each attempt to observe affirmative page-tool
+	// catalog evidence. Zero uses the one-second diagnostic default.
+	CatalogWait time.Duration
 }
 
 // StatefulBroker owns selection, page catalog, generation, and session-local
@@ -68,6 +71,7 @@ type StatefulBroker struct {
 	maxResultBytes    int
 	invocationTimeout time.Duration
 	closeTimeout      time.Duration
+	catalogWait       time.Duration
 
 	browsers map[BrowserID]*browserState
 	selected *brokerSession
@@ -139,6 +143,10 @@ type brokerSession struct {
 	// the selected session's event loop, never by a second Events consumer.
 	directCancellations map[InvocationID]*directCancellation
 	catalogSignal       chan struct{}
+	// catalogUpdate wakes catalog waiters for any current-generation catalog
+	// observation, including invalid evidence that must take precedence over a
+	// later timeout. It is replaced after every notification.
+	catalogUpdate chan struct{}
 	// lastBrowserEventSequence is the producer sequence most recently
 	// reconciled for this target session. Browser events are delivered through
 	// one target-local stream, so an older or duplicated sequence is a late
@@ -226,6 +234,10 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	if closeTimeout <= 0 {
 		closeTimeout = DefaultBrokerCloseTimeout
 	}
+	catalogWait := options.CatalogWait
+	if catalogWait <= 0 {
+		catalogWait = initialCatalogWait
+	}
 	return &StatefulBroker{
 		runtime:             options.Runtime,
 		discoverer:          options.Discoverer,
@@ -240,6 +252,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		maxResultBytes:      maxResultBytes,
 		invocationTimeout:   invocationTimeout,
 		closeTimeout:        closeTimeout,
+		catalogWait:         catalogWait,
 		browsers:            make(map[BrowserID]*browserState),
 		refs:                make(map[ToolRef]refRecord),
 		retired:             make(map[ToolRef]struct{}),
@@ -510,6 +523,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		observedInvocations: make(map[InvocationID]observedInvocation),
 		directCancellations: make(map[InvocationID]*directCancellation),
 		catalogSignal:       make(chan struct{}),
+		catalogUpdate:       make(chan struct{}),
 	}
 	if page.CatalogReady {
 		close(newSession.catalogSignal)
@@ -552,11 +566,15 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 			_ = session.Close()
 			return PageContext{}, failure
 		}
-		b.invalidateSession(newSession, "catalog_wait_canceled")
-		_ = session.Close()
+		// A catalog deadline is an operation result, not a lifecycle
+		// transition. Keep the connected selection and its event consumer
+		// alive so a later toolsAdded/catalog-ready event can recover it.
 		if isCatalogEvidenceError(err) {
+			b.flushSession(newSession)
 			return PageContext{}, err
 		}
+		b.invalidateSession(newSession, "catalog_wait_canceled")
+		_ = session.Close()
 		return PageContext{}, targetAttachError(selector, "catalog", err)
 	}
 	b.flushSession(newSession)
@@ -571,7 +589,6 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		return PageContext{}, failure
 	}
 	b.updateReadinessLocked(newSession)
-	newSession.context.Ready = true
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
 	if options.Activate {
@@ -1000,6 +1017,7 @@ func (b *StatefulBroker) applyToolsAddedLocked(selected *brokerSession, event Br
 	if event.Generation != 0 && event.Generation < selected.context.Generation {
 		return
 	}
+	signalCatalogUpdateLocked(selected)
 	changed := false
 	affirmative := false
 	for _, input := range event.Tools {
@@ -1050,6 +1068,7 @@ func (b *StatefulBroker) applyToolsRemovedLocked(selected *brokerSession, event 
 	if event.Generation != 0 && event.Generation < selected.context.Generation {
 		return
 	}
+	signalCatalogUpdateLocked(selected)
 	changed := false
 	for _, name := range event.RemovedToolNames {
 		if event.FrameID != "" {
