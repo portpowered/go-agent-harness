@@ -662,3 +662,10 @@ func isInternalURL(rawURL string) bool {
 }
 
 var _ webmcp.BrowserHandle = (*handle)(nil)
+
+// Disconnected implements webmcp.BrowserHandleHealth: it reports whether this
+// handle's browser transport has been lost. The flag is sticky by design; a
+// caller that needs the endpoint again must open a fresh handle.
+func (h *handle) Disconnected() bool {
+	return h.isDisconnected()
+}

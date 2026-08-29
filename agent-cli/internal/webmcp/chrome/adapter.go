@@ -68,7 +68,16 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 	// context and may issue Browser.close while a remote browser is still
 	// owned by the caller. Keep the websocket connection under a plain client
 	// context instead; canceling it only closes this adapter's connection.
-	allocatorContext, cancelAllocator := context.WithCancel(ctx)
+	//
+	// The connection's LIFETIME must not inherit the opener's cancellation:
+	// a handle is cached by the broker and outlives the command or tool call
+	// that first dialed it. Binding the allocator to the caller's ctx made a
+	// bounded first call (session tool invocation, bootstrap) tear down the
+	// websocket when it returned, permanently poisoning the cached handle
+	// while the browser stayed healthy. The caller's ctx bounds only the dial;
+	// after a successful open, the connection is owned by the handle and ends
+	// at handle.Close.
+	allocatorContext, cancelAllocator := context.WithCancel(context.WithoutCancel(ctx))
 	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
 	browserData := chromedp.FromContext(browserContext)
 	if browserData == nil || browserData.Allocator == nil {
@@ -77,8 +86,25 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 		return nil, classifiedOpenError(candidate, errors.New("invalid browser context"))
 	}
 
+	dialDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			cancelAllocator()
+		case <-dialDone:
+		}
+	}()
 	browser, err := chromedp.NewBrowser(allocatorContext, endpoint)
+	close(dialDone)
 	if err != nil {
+		cancelBrowser()
+		cancelAllocator()
+		return nil, classifiedOpenError(candidate, err)
+	}
+	if err := contextError(ctx); err != nil {
+		// The dial raced the caller's cancellation; the watcher above may have
+		// already canceled the allocator. Fail deterministically instead of
+		// returning a handle whose connection may be mid-teardown.
 		cancelBrowser()
 		cancelAllocator()
 		return nil, classifiedOpenError(candidate, err)

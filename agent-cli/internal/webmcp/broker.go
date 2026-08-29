@@ -737,8 +737,18 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 	}
 	if state.handle != nil {
 		handle := state.handle
+		health, probeable := handle.(BrowserHandleHealth)
+		if !probeable || !health.Disconnected() {
+			b.mu.Unlock()
+			return handle, nil
+		}
+		// The cached handle observed transport loss. The endpoint itself may be
+		// healthy (or freshly restarted), so discard the dead handle and dial
+		// again instead of failing every later selection against it.
+		state.handle = nil
 		b.mu.Unlock()
-		return handle, nil
+		_ = handle.Close()
+		b.mu.Lock()
 	}
 	runtime := b.runtime
 	b.mu.Unlock()
