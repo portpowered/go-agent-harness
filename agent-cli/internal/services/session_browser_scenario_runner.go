@@ -1197,10 +1197,6 @@ func browserConversationOracleForStep(oracles []BrowserConversationOracleSnapsho
 	return match
 }
 
-func browserConversationCompletedInvokeForStep(calls []BrowserConversationBrokerCall, stepID string) bool {
-	return browserConversationTerminalInvokeForStep(calls, stepID) != nil
-}
-
 func browserConversationTerminalInvokeForStep(calls []BrowserConversationBrokerCall, stepID string) *BrowserConversationBrokerCall {
 	for _, call := range calls {
 		if call.StepID == stepID &&
