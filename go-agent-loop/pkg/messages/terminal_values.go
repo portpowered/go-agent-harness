@@ -94,12 +94,18 @@ type MessageEndValue struct {
 	// Status is commonly "completed", "failed", "cancelled", or
 	// "incomplete". StatusDetails contains only compact, provider-sanitized
 	// detail text; it is never a raw provider JSON object.
-	Status             string              `json:"status,omitempty"`
-	StatusDetails      string              `json:"status_details,omitempty"`
-	TerminalReason     TerminalReason      `json:"terminal_reason,omitempty"`
-	TerminalProvenance TerminalProvenance  `json:"terminal_provenance,omitempty"`
-	OutputState        TerminalOutputState `json:"output_state,omitempty"`
-	TerminalSource     TerminalSource      `json:"terminal_source,omitempty"`
+	Status        string `json:"status,omitempty"`
+	StatusDetails string `json:"status_details,omitempty"`
+	// ProviderErrorCode and ProviderErrorMessage are the explicitly classifiable
+	// parts of a provider response failure. Adapters must trim and bound these
+	// values before they cross this provider-neutral contract. StatusDetails is
+	// retained for the compact, human-readable legacy detail representation.
+	ProviderErrorCode    string              `json:"provider_error_code,omitempty"`
+	ProviderErrorMessage string              `json:"provider_error_message,omitempty"`
+	TerminalReason       TerminalReason      `json:"terminal_reason,omitempty"`
+	TerminalProvenance   TerminalProvenance  `json:"terminal_provenance,omitempty"`
+	OutputState          TerminalOutputState `json:"output_state,omitempty"`
+	TerminalSource       TerminalSource      `json:"terminal_source,omitempty"`
 }
 
 func (*MessageEndValue) streamMessageValue() {}

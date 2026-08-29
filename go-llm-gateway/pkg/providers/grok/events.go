@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -27,6 +29,7 @@ const (
 	grokSessionEventResponseAudioTranscriptDone  models.SessionEventType = "response.audio_transcript.done"
 	grokSessionEventResponseTextDelta            models.SessionEventType = "response.text.delta"
 	grokSessionEventResponseTextDone             models.SessionEventType = "response.text.done"
+	grokMaxStatusDetailBytes                                             = 256
 )
 
 // MarshalJSON produces a flat JSON object with "type" plus any Extra fields.
@@ -226,6 +229,8 @@ func grokResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndValue 
 	value := messages.NewMessageEndValue(messages.TokenUsage{})
 	value.Status = status
 	value.StatusDetails = grokResponseDoneStatusDetails(data)
+	value.ProviderErrorCode = grokResponseDoneErrorCode(data)
+	value.ProviderErrorMessage = grokResponseDoneErrorMessage(data)
 	if status == "" {
 		return value
 	}
@@ -249,7 +254,7 @@ func grokResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndValue 
 func grokResponseDoneStatusDetails(data json.RawMessage) string {
 	parts := make([]string, 0, 4)
 	appendField := func(label string, paths ...string) {
-		value := strings.TrimSpace(firstGrokStringField(data, paths...))
+		value := boundedGrokStatusDetail(firstGrokStringField(data, paths...))
 		if value == "" {
 			return
 		}
@@ -262,9 +267,47 @@ func grokResponseDoneStatusDetails(data json.RawMessage) string {
 	}
 	appendField("reason", "response.status_details.reason", "status_details.reason")
 	appendField("type", "response.status_details.type", "status_details.type")
-	appendField("code", "response.status_details.code", "status_details.code", "response.status_details.error.code", "status_details.error.code")
-	appendField("message", "response.status_details.message", "status_details.message", "response.status_details.error.message", "status_details.error.message")
+	appendField("code", "response.status_details.error.code", "status_details.error.code", "response.status_details.code", "status_details.code")
+	appendField("message", "response.status_details.error.message", "status_details.error.message", "response.status_details.message", "status_details.message")
 	return strings.Join(parts, ", ")
+}
+
+func grokResponseDoneErrorCode(data json.RawMessage) string {
+	return boundedGrokStatusDetail(firstGrokStringField(
+		data,
+		"response.status_details.error.code",
+		"status_details.error.code",
+		"response.status_details.code",
+		"status_details.code",
+	))
+}
+
+func grokResponseDoneErrorMessage(data json.RawMessage) string {
+	return boundedGrokStatusDetail(firstGrokStringField(
+		data,
+		"response.status_details.error.message",
+		"status_details.error.message",
+		"response.status_details.message",
+		"status_details.message",
+	))
+}
+
+func boundedGrokStatusDetail(value string) string {
+	value = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, value)
+	value = strings.Join(strings.Fields(value), " ")
+	if len(value) <= grokMaxStatusDetailBytes {
+		return value
+	}
+	value = value[:grokMaxStatusDetailBytes]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
 }
 
 // translateOutbound converts an agent loop StreamMessage into a SessionEvent

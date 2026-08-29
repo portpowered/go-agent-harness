@@ -110,6 +110,46 @@ func TestRealtimeInboundMessagesResponseDonePreservesFailureStatus(t *testing.T)
 	if !strings.Contains(value.StatusDetails, "reason=max_output_tokens") || !strings.Contains(value.StatusDetails, "message=response exceeded the model limit") {
 		t.Fatalf("response.done details = %q, want bounded reason and message", value.StatusDetails)
 	}
+	if value.ProviderErrorCode != "too_many_tokens" || value.ProviderErrorMessage != "response exceeded the model limit" {
+		t.Fatalf("response.done provider error metadata = code %q message %q", value.ProviderErrorCode, value.ProviderErrorMessage)
+	}
+}
+
+func TestRealtimeInboundMessagesResponseDoneBoundsProviderErrorMessage(t *testing.T) {
+	message := strings.Repeat("provider detail ", 40)
+	raw, err := json.Marshal(map[string]any{
+		"type": "response.done",
+		"response": map[string]any{
+			"status": "FAILED",
+			"status_details": map[string]any{
+				"error": map[string]any{
+					"code":    "rate_limit_exceeded",
+					"message": message,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal response.done: %v", err)
+	}
+
+	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventResponseDone, Data: raw})
+	value, ok := got[0].Value.(*messages.MessageEndValue)
+	if !ok || value == nil {
+		t.Fatalf("response.done value = %#v, want *MessageEndValue", got[0].Value)
+	}
+	if value.Status != "failed" {
+		t.Fatalf("normalized response status = %q, want failed", value.Status)
+	}
+	if value.ProviderErrorCode != "rate_limit_exceeded" {
+		t.Fatalf("provider error code = %q, want rate_limit_exceeded", value.ProviderErrorCode)
+	}
+	if len(value.ProviderErrorMessage) > realtimeMaxStatusDetailBytes {
+		t.Fatalf("provider error message length = %d, want <= %d", len(value.ProviderErrorMessage), realtimeMaxStatusDetailBytes)
+	}
+	if strings.Contains(value.ProviderErrorMessage, "secret-token") {
+		t.Fatal("provider error message exposed an unrelated credential field")
+	}
 }
 
 func TestRealtimeInboundMessagesResponseDonePreservesCompletedStatus(t *testing.T) {
