@@ -118,15 +118,17 @@ type BrowserConversationCancellationEvidence struct {
 // preserves the external-tab ownership boundary. BrowserClosed and
 // TargetClosed should remain false for an externally owned fixture.
 type BrowserConversationLifecycleEvidence struct {
-	Outcome           BrowserConversationLifecycleOutcome `json:"outcome"`
-	SessionStarted    bool                                `json:"session_started"`
-	SessionTerminated bool                                `json:"session_terminated"`
-	Detached          bool                                `json:"detached"`
-	DetachCount       int                                 `json:"detach_count"`
-	BrowserClosed     bool                                `json:"browser_closed"`
-	TargetClosed      bool                                `json:"target_closed"`
-	ExternalTabAlive  bool                                `json:"external_tab_alive"`
-	Error             string                              `json:"error,omitempty"`
+	Outcome                   BrowserConversationLifecycleOutcome `json:"outcome"`
+	SessionStarted            bool                                `json:"session_started"`
+	SessionTerminated         bool                                `json:"session_terminated"`
+	Detached                  bool                                `json:"detached"`
+	DetachCount               int                                 `json:"detach_count"`
+	BrowserClosed             bool                                `json:"browser_closed"`
+	TargetClosed              bool                                `json:"target_closed"`
+	ExternalTabAlive          bool                                `json:"external_tab_alive"`
+	ExternalTabResponsive     bool                                `json:"external_tab_responsive"`
+	ExternalTabAllowsMutation bool                                `json:"external_tab_allows_mutation"`
+	Error                     string                              `json:"error,omitempty"`
 }
 
 // BrowserConversationValidatorCheck is one rubric item returned by the
