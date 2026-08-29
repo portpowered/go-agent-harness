@@ -189,17 +189,17 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 		return err
 	}
 
-	primaryCleanupNames := uniqueNonEmptyStrings(c.APIKeyEnv)
-	defer cleanupCustomerSimulationEnvironment(primaryCleanupNames)
+	// Register cleanup for both credential variables before resolving either
+	// credential. This covers failures where the primary key is absent but a
+	// separately configured validator key was already exported by the caller.
+	credentialEnvNames := uniqueNonEmptyStrings(c.APIKeyEnv, c.ValidatorAPIKeyEnv)
+	defer cleanupCustomerSimulationEnvironment(credentialEnvNames)
 	apiKey, _, err := readCustomerSimulationCredential(c.APIKeyEnv, c.SecretFile)
 	if err != nil {
 		return err
 	}
-	// Credential cleanup is registered before resolution so even an empty or
-	// unreadable setup cannot leave a caller-provided environment variable behind.
 	validatorAPIKey := apiKey
 	if c.ValidatorAPIKeyEnv != c.APIKeyEnv || c.ValidatorSecretFile != c.SecretFile {
-		defer cleanupCustomerSimulationEnvironment(uniqueNonEmptyStrings(c.ValidatorAPIKeyEnv))
 		validatorAPIKey, _, err = readCustomerSimulationCredential(c.ValidatorAPIKeyEnv, c.ValidatorSecretFile)
 		if err != nil {
 			return err
@@ -232,7 +232,7 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 		BinaryPath: binaryPath, RunRoot: c.RunRoot, Provider: c.Provider, Model: c.Model, BaseURL: c.BaseURL, APIKey: apiKey, SystemPrompt: c.SystemPrompt,
 		Runs: runs, Validator: validator, ValidatorTimeout: c.ValidatorTimeout, MaxDuration: c.MaxDuration, FrameDuration: c.FrameDuration, SilenceDuration: c.SilenceDuration, ShutdownGrace: c.ShutdownGrace,
 	})
-	if writeErr := writeCustomerSimulationReport(cmd, c.ReportPath, result); writeErr != nil {
+	if writeErr := writeCustomerSimulationReport(cmd, c.ReportPath, result, apiKey, validatorAPIKey); writeErr != nil {
 		return writeErr
 	}
 	passed := 0
@@ -242,10 +242,64 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 		}
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "customer-simulation: %d/%d validator verdicts WORKED; evidence root %s\n", passed, len(result.Runs), result.Root)
-	if runErr != nil {
-		return runErr
+	resultErr := validateCustomerSimulationCommandResult(result, scenarios)
+	if runErr != nil || resultErr != nil {
+		return errors.Join(runErr, resultErr)
 	}
 	return nil
+}
+
+// validateCustomerSimulationCommandResult is the CLI's final fail-closed
+// boundary. The production runner already returns an aggregate error, but the
+// command must also reject incomplete or contradictory results from any
+// runner implementation before it reports success to an operator.
+func validateCustomerSimulationCommandResult(result probe.CustomerSimulationSuiteResult, scenarios []probe.CustomerScenario) error {
+	var failures []error
+	if strings.TrimSpace(result.Root) == "" {
+		failures = append(failures, errors.New("customer simulation result has no evidence root"))
+	}
+	if len(result.Runs) != len(scenarios) {
+		failures = append(failures, fmt.Errorf("customer simulation returned %d run results, want %d", len(result.Runs), len(scenarios)))
+	}
+	expected := make(map[string]probe.CustomerScenario, len(scenarios))
+	for _, scenario := range scenarios {
+		expected[scenario.ID] = scenario
+	}
+	seen := make(map[string]struct{}, len(result.Runs))
+	for index, run := range result.Runs {
+		label := fmt.Sprintf("customer simulation result %d", index+1)
+		if strings.TrimSpace(run.RunID) == "" {
+			failures = append(failures, fmt.Errorf("%s has no run ID", label))
+		}
+		scenario, ok := expected[run.ScenarioID]
+		if !ok {
+			failures = append(failures, fmt.Errorf("%s identifies unexpected scenario %q", label, run.ScenarioID))
+			continue
+		}
+		if _, duplicate := seen[run.ScenarioID]; duplicate {
+			failures = append(failures, fmt.Errorf("scenario %q appears more than once in the result", run.ScenarioID))
+		}
+		seen[run.ScenarioID] = struct{}{}
+		if run.Family != scenario.Family || run.Termination != scenario.Termination {
+			failures = append(failures, fmt.Errorf("scenario %q returned contradictory family or termination facts", run.ScenarioID))
+		}
+		if strings.TrimSpace(run.BundleRoot) == "" || strings.TrimSpace(run.RecordRoot) == "" || strings.TrimSpace(run.WorkspaceRoot) == "" {
+			failures = append(failures, fmt.Errorf("scenario %q is incomplete: evidence, record, and workspace roots are required", run.ScenarioID))
+		}
+		if !run.Mechanical.Pass || !run.Validator.Mechanical.Pass || !run.Validator.Pass() {
+			status := string(run.Validator.Status)
+			if status == "" {
+				status = "missing"
+			}
+			failures = append(failures, fmt.Errorf("scenario %q did not produce an accepted WORKED verdict (status %s)", run.ScenarioID, status))
+		}
+	}
+	for _, scenario := range scenarios {
+		if _, ok := seen[scenario.ID]; !ok {
+			failures = append(failures, fmt.Errorf("selected scenario %q has no result", scenario.ID))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func customerSimulationSelectors(raw []string) []string {
@@ -336,13 +390,16 @@ func resolveCustomerSimulationAudioPaths(root string, scenario probe.CustomerSce
 	paths := make([]string, len(script))
 	for index, turn := range script {
 		candidates := make([]string, 0, 12)
-		for _, extension := range []string{".wav", ".pcm", ".raw"} {
-			candidates = append(candidates,
-				filepath.Join(root, scenario.ID, turn.ActionID+extension),
-				filepath.Join(root, scenario.ID, fmt.Sprintf("%02d%s", index+1, extension)),
-				filepath.Join(root, scenario.ID+"-"+turn.ActionID+extension),
-				filepath.Join(root, turn.ActionID+extension),
-			)
+		bases := []string{
+			filepath.Join(root, scenario.ID, turn.ActionID),
+			filepath.Join(root, scenario.ID, fmt.Sprintf("%02d", index+1)),
+			filepath.Join(root, scenario.ID+"-"+turn.ActionID),
+			filepath.Join(root, turn.ActionID),
+		}
+		for _, base := range bases {
+			for _, extension := range []string{".wav", ".pcm", ".raw"} {
+				candidates = append(candidates, base+extension)
+			}
 		}
 		found := ""
 		for _, candidate := range candidates {
@@ -478,10 +535,15 @@ func buildCustomerSimulationValidator(providerName, model, baseURL, apiKey strin
 	return probe.GatewayCustomerSimulationValidator{Gateway: gw, Model: model}, nil
 }
 
-func writeCustomerSimulationReport(cmd *cobra.Command, reportPath string, result probe.CustomerSimulationSuiteResult) error {
+func writeCustomerSimulationReport(cmd *cobra.Command, reportPath string, result probe.CustomerSimulationSuiteResult, secrets ...string) error {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode customer simulation report: %w", err)
+	}
+	for _, secret := range secrets {
+		if secret = strings.TrimSpace(secret); secret != "" {
+			data = bytes.ReplaceAll(data, []byte(secret), []byte("<redacted>"))
+		}
 	}
 	data = append(data, '\n')
 	if strings.TrimSpace(reportPath) == "" {

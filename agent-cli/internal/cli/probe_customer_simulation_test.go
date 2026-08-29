@@ -44,7 +44,16 @@ func TestCustomerSimulationCommandResolvesAudioAndKeepsCredentialOutOfReport(t *
 	}))
 	command.SetRunner(func(_ context.Context, options probe.CustomerSimulationSuiteOptions) (probe.CustomerSimulationSuiteResult, error) {
 		received = options
-		return probe.CustomerSimulationSuiteResult{Root: "/tmp/customer-simulation-test-root"}, nil
+		return probe.CustomerSimulationSuiteResult{
+			Root: "/tmp/customer-simulation-test-root",
+			Runs: []probe.CustomerSimulationRunResult{{
+				RunID: "family-a-iterative-project-001", ScenarioID: probe.FamilyAScenarioID, Family: probe.ScenarioFamilyA, Termination: probe.TerminationNatural,
+				BundleRoot: "/tmp/customer-simulation-test-root/evidence", RecordRoot: "/tmp/customer-simulation-test-root/record", WorkspaceRoot: "/tmp/customer-simulation-test-root/workspace",
+				Mechanical: probe.MechanicalVerdict{Pass: true},
+				Validator:  probe.CustomerSimulationValidatorResult{Status: probe.ValidatorStatusWorked, Accepted: true, Mechanical: probe.MechanicalVerdict{Pass: true}, Verdict: probe.ValidatorVerdict{Verdict: probe.ValidatorWorked}},
+				Error:      secret,
+			}},
+		}, nil
 	})
 	root := command.Generate()
 	root.SetOut(&bytes.Buffer{})
@@ -74,6 +83,68 @@ func TestCustomerSimulationCommandResolvesAudioAndKeepsCredentialOutOfReport(t *
 	}
 	if _, ok := os.LookupEnv(envName); ok {
 		t.Fatalf("credential environment %s remained set after command", envName)
+	}
+}
+
+func TestCustomerSimulationCommandRejectsNonPassingResultWithNilRunnerError(t *testing.T) {
+	temp := t.TempDir()
+	binaryPath := filepath.Join(temp, "agent")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write binary: %v", err)
+	}
+	audioPath := filepath.Join(temp, "turn.pcm")
+	if err := os.WriteFile(audioPath, []byte{1, 0, 2, 0}, 0o600); err != nil {
+		t.Fatalf("write audio: %v", err)
+	}
+	const envName = "CUSTOMER_SIMULATION_NONPASSING_KEY"
+	t.Setenv(envName, "test-key")
+
+	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
+	command.SetValidator(probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, _ probe.CustomerSimulationValidatorRequest) ([]byte, error) {
+		return nil, nil
+	}))
+	command.SetRunner(func(_ context.Context, options probe.CustomerSimulationSuiteOptions) (probe.CustomerSimulationSuiteResult, error) {
+		return probe.CustomerSimulationSuiteResult{
+			Root: "/tmp/customer-simulation-test-root",
+			Runs: []probe.CustomerSimulationRunResult{{
+				RunID: "family-a-iterative-project-001", ScenarioID: probe.FamilyAScenarioID, Family: probe.ScenarioFamilyA, Termination: probe.TerminationNatural,
+				BundleRoot: "/tmp/customer-simulation-test-root/evidence", RecordRoot: "/tmp/customer-simulation-test-root/record", WorkspaceRoot: "/tmp/customer-simulation-test-root/workspace",
+				Mechanical: probe.MechanicalVerdict{Pass: false},
+				Validator:  probe.CustomerSimulationValidatorResult{Status: probe.ValidatorStatusBroken, Verdict: probe.ValidatorVerdict{Verdict: probe.ValidatorBroken}},
+			}},
+		}, nil
+	})
+	root := command.Generate()
+	root.SetArgs([]string{
+		"--live", "--family", "A", "--binary", binaryPath,
+		"--audio", audioPath, "--audio", audioPath, "--audio", audioPath, "--audio", audioPath,
+		"--api-key-env", envName, "--secret-file", filepath.Join(temp, "missing-secret"),
+	})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "accepted WORKED") {
+		t.Fatalf("Execute error = %v, want non-passing result failure", err)
+	}
+}
+
+func TestCustomerSimulationCommandCleansValidatorCredentialOnPrimaryFailure(t *testing.T) {
+	const primaryEnv = "CUSTOMER_SIMULATION_PRIMARY_MISSING_KEY"
+	const validatorEnv = "CUSTOMER_SIMULATION_VALIDATOR_LEFTOVER_KEY"
+	_ = os.Unsetenv(primaryEnv)
+	t.Setenv(validatorEnv, "validator-secret")
+
+	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
+	root := command.Generate()
+	root.SetArgs([]string{
+		"--live", "--family", "A", "--binary", os.Args[0],
+		"--api-key-env", primaryEnv, "--validator-api-key-env", validatorEnv,
+		"--secret-file", filepath.Join(t.TempDir(), "missing-primary"),
+		"--validator-secret-file", filepath.Join(t.TempDir(), "missing-validator"),
+	})
+	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "credentials are required") {
+		t.Fatalf("Execute error = %v, want missing-primary-credential failure", err)
+	}
+	if _, ok := os.LookupEnv(validatorEnv); ok {
+		t.Fatalf("validator credential environment %s remained set after early failure", validatorEnv)
 	}
 }
 

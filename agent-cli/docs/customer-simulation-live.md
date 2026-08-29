@@ -37,6 +37,11 @@ OS temporary directory. To retain a named root, pass a fresh directory outside
 the checkout with `--run-root /tmp/customer-simulation-run`; existing scenario
 directories are never overwritten.
 
+The child deadline is bounded by both `--max-duration` and the selected
+scenario's declared deadline; the smaller value wins. Reports are written
+before a non-zero result is returned, so BROKEN, incomplete, and unavailable
+runs remain reviewable.
+
 The audio directory accepts any of these layouts, in this order of preference:
 
 ```text

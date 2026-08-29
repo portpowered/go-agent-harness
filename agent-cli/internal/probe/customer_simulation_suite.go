@@ -376,6 +376,10 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 	if spec.Scenario.Termination == TerminationSIGINT {
 		terminationBytes = 1
 	}
+	maxDuration := options.MaxDuration
+	if maxDuration <= 0 || (spec.Scenario.Deadline > 0 && spec.Scenario.Deadline < maxDuration) {
+		maxDuration = spec.Scenario.Deadline
+	}
 	duplexResult, processErr := RunDuplexSession(ctx, DuplexSessionConfig{
 		BinaryPath:                  options.BinaryPath,
 		RecordDir:                   recordRoot,
@@ -386,7 +390,7 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 		BaseURL:                     options.BaseURL,
 		APIKey:                      options.APIKey,
 		SystemPrompt:                options.SystemPrompt,
-		MaxDuration:                 options.MaxDuration,
+		MaxDuration:                 maxDuration,
 		FrameDuration:               options.FrameDuration,
 		Segments:                    segments,
 		Termination:                 spec.Scenario.Termination,
