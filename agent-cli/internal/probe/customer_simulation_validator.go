@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -512,12 +513,17 @@ func (a GatewayCustomerSimulationValidator) ValidateCustomerSimulation(ctx conte
 // cannot accidentally ask the validator to judge a still-running or
 // partially-written product session.
 func RunFinalizedCustomerSimulationValidator(ctx context.Context, root string, agent CustomerSimulationValidatorAgent, timeout time.Duration) (CustomerSimulationValidatorResult, error) {
-	manifest, err := VerifyCustomerEvidenceBundle(root)
+	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict("validator", err), Error: safeValidatorFailureDetail(fmt.Errorf("%w: %v", ErrValidatorFinalization, err))}
 		return result, fmt.Errorf("%w: %v", ErrValidatorFinalization, err)
 	}
-	input, err := readFinalizedCustomerSimulationValidatorInput(root, manifest)
+	manifest, err := VerifyCustomerEvidenceBundle(absRoot)
+	if err != nil {
+		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict("validator", err), Error: safeValidatorFailureDetail(fmt.Errorf("%w: %v", ErrValidatorFinalization, err))}
+		return result, fmt.Errorf("%w: %v", ErrValidatorFinalization, err)
+	}
+	input, err := readFinalizedCustomerSimulationValidatorInput(absRoot, manifest)
 	if err != nil {
 		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict(firstValidatorFailureTurn(input), err), Mechanical: input.Mechanical, Error: safeValidatorFailureDetail(fmt.Errorf("%w: %v", ErrValidatorEvidenceMismatch, err))}
 		return result, fmt.Errorf("%w: %v", ErrValidatorEvidenceMismatch, err)
