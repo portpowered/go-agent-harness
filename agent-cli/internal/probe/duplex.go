@@ -458,7 +458,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		waitDone <- child.Wait()
 	}()
 
-	waitErr, processWaitOK, pumpsJoined := waitForDuplexChild(runCtx, closeStdin, terminate, waitDone, &pumps, &terminationWG, cancelRun, normalized.ShutdownGrace)
+	processWaitOK, pumpsJoined, waitErr := waitForDuplexChild(runCtx, closeStdin, terminate, waitDone, &pumps, &terminationWG, cancelRun, normalized.ShutdownGrace)
 
 	result.Duration = time.Since(startedAt)
 	result.ExitCode = duplexExitCode(child, waitErr)
@@ -550,7 +550,7 @@ func waitForDuplexChild(
 	terminationWG *sync.WaitGroup,
 	cancelRun context.CancelFunc,
 	shutdownGrace time.Duration,
-) (waitErr error, processWaitOK, pumpsJoined bool) {
+) (processWaitOK, pumpsJoined bool, waitErr error) {
 	// A pipe write or a segment gate cannot be left waiting after cancellation.
 	// Closing stdin unblocks an in-flight write, and killing the process group
 	// closes inherited stdout/stderr descriptors held by descendants.
@@ -571,7 +571,7 @@ func waitForDuplexChild(
 	case waitErr = <-waitDone:
 		processWaitOK = true
 	case <-runCtx.Done():
-		waitErr, processWaitOK = waitForDuplexProcess(waitDone, shutdownGrace, terminate)
+		processWaitOK, waitErr = waitForDuplexProcess(waitDone, shutdownGrace, terminate)
 	}
 
 	// The process may exit before the script has delivered every segment. Close
@@ -595,7 +595,7 @@ func waitForDuplexChild(
 	case <-time.After(shutdownGrace):
 	}
 	terminationWG.Wait()
-	return waitErr, processWaitOK, pumpsJoined
+	return processWaitOK, pumpsJoined, waitErr
 }
 
 // RunDuplexSession is the convenient function form for callers that do not
@@ -1097,12 +1097,12 @@ func writeDuplexAll(destination io.Writer, data []byte) error {
 	return nil
 }
 
-func waitForDuplexProcess(waitDone <-chan error, grace time.Duration, terminate func() error) (error, bool) {
+func waitForDuplexProcess(waitDone <-chan error, grace time.Duration, terminate func() error) (bool, error) {
 	timer := time.NewTimer(grace)
 	defer timer.Stop()
 	select {
 	case err := <-waitDone:
-		return err, true
+		return true, err
 	case <-timer.C:
 		_ = terminate()
 	}
@@ -1110,9 +1110,9 @@ func waitForDuplexProcess(waitDone <-chan error, grace time.Duration, terminate 
 	defer timer.Stop()
 	select {
 	case err := <-waitDone:
-		return err, true
+		return true, err
 	case <-timer.C:
-		return fmt.Errorf("%w after %s", ErrDuplexChildSurvivedDeadline, grace), false
+		return false, fmt.Errorf("%w after %s", ErrDuplexChildSurvivedDeadline, grace)
 	}
 }
 

@@ -367,7 +367,7 @@ func customerSimulationRunSpecs(scenarios []probe.CustomerScenario, audioPaths [
 		}
 	}
 	if hasFamilyE && patienceRepromptAudioPath == "" {
-		return nil, errors.New("Family E requires --patience-reprompt-audio with a natural check-in recording")
+		return nil, errors.New("family E requires --patience-reprompt-audio with a natural check-in recording")
 	}
 	if !hasFamilyE && patienceRepromptAudioPath != "" {
 		return nil, errors.New("--patience-reprompt-audio is only valid when Family E is selected")

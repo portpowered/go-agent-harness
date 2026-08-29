@@ -31,7 +31,7 @@ const (
 // suite builder through the shipped child for a response that completes before
 // the customer needs to check in.
 func TestShippedSessionProcessFamilyEPatienceNormal(t *testing.T) {
-	run, runErr, observation := runFamilyEShipped(t, familyEShippedNormal)
+	run, observation, runErr := runFamilyEShipped(t, familyEShippedNormal)
 	if runErr != nil {
 		t.Fatalf("normal Family E run: %v", runErr)
 	}
@@ -53,7 +53,7 @@ func TestShippedSessionProcessFamilyEPatienceNormal(t *testing.T) {
 // runtime or provider adapter directly; all coordination is through the
 // shipped PCM boundaries and observable stdout.
 func TestShippedSessionProcessFamilyEPatienceRecovery(t *testing.T) {
-	run, runErr, observation := runFamilyEShipped(t, familyEShippedRecovery)
+	run, observation, runErr := runFamilyEShipped(t, familyEShippedRecovery)
 	if runErr != nil {
 		t.Fatalf("recovery Family E run: %v", runErr)
 	}
@@ -78,7 +78,7 @@ func TestShippedSessionProcessFamilyEPatienceRecovery(t *testing.T) {
 // bounded re-prompt the fixture stays silent, so the production controller
 // must report dead air and the bundle must contain no fabricated completion.
 func TestShippedSessionProcessFamilyEPatienceInitialOutputThenStall(t *testing.T) {
-	run, runErr, observation := runFamilyEShipped(t, familyEShippedDeadAir)
+	run, observation, runErr := runFamilyEShipped(t, familyEShippedDeadAir)
 	if runErr == nil {
 		t.Fatal("stalled Family E run error = nil, want dead-air failure")
 	}
@@ -98,7 +98,7 @@ func TestShippedSessionProcessFamilyEPatienceInitialOutputThenStall(t *testing.T
 	}
 }
 
-func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSimulationRunResult, error, familyEProviderObservation) {
+func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSimulationRunResult, familyEProviderObservation, error) {
 	t.Helper()
 	scenario := familyEShippedScenario()
 	fixture := newFamilyEProviderFixture(scenario, mode)
@@ -137,7 +137,7 @@ func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSim
 	if len(result.Runs) != 1 {
 		t.Fatalf("Family E run count = %d, want one", len(result.Runs))
 	}
-	return result.Runs[0], runErr, observation
+	return result.Runs[0], observation, runErr
 }
 
 func familyEShippedScenario() probe.CustomerScenario {
