@@ -125,6 +125,30 @@ type BrowserConversationRecoveryEvidence struct {
 	Passed                   bool                `json:"passed"`
 }
 
+// BrowserConversationCorrectionEvidence preserves both the original and
+// correcting customer intents alongside their independently observed state
+// transitions. The invocation and assistant fields are evidence, not claims
+// inferred from either transcript.
+type BrowserConversationCorrectionEvidence struct {
+	StepID                        string              `json:"step_id"`
+	TargetStepID                  string              `json:"target_step_id"`
+	TargetUtterance               string              `json:"target_utterance"`
+	CorrectionUtterance           string              `json:"correction_utterance"`
+	OriginalBefore                json.RawMessage     `json:"original_before,omitempty"`
+	OriginalAfter                 json.RawMessage     `json:"original_after,omitempty"`
+	CorrectionBefore              json.RawMessage     `json:"correction_before,omitempty"`
+	CorrectionAfter               json.RawMessage     `json:"correction_after,omitempty"`
+	OriginalInvocationID          webmcp.InvocationID `json:"original_invocation_id,omitempty"`
+	CorrectionInvocationID        webmcp.InvocationID `json:"correction_invocation_id,omitempty"`
+	OriginalToolName              string              `json:"original_tool_name,omitempty"`
+	CorrectionToolName            string              `json:"correction_tool_name,omitempty"`
+	OriginalInvocationCompleted   bool                `json:"original_invocation_completed"`
+	CorrectionInvocationCompleted bool                `json:"correction_invocation_completed"`
+	OriginalAssistantText         string              `json:"original_assistant_text,omitempty"`
+	CorrectionAssistantText       string              `json:"correction_assistant_text,omitempty"`
+	Passed                        bool                `json:"passed"`
+}
+
 // BrowserConversationOracleSnapshot is an independent fixture-state reading.
 // It is not derived from assistant speech or a broker result envelope.
 type BrowserConversationOracleSnapshot struct {
@@ -199,6 +223,7 @@ type BrowserConversationResult struct {
 	Turns        []BrowserConversationTurn               `json:"turns,omitempty"`
 	BrokerCalls  []BrowserConversationBrokerCall         `json:"broker_calls,omitempty"`
 	Oracles      []BrowserConversationOracleSnapshot     `json:"oracle_snapshots,omitempty"`
+	Corrections  []BrowserConversationCorrectionEvidence `json:"corrections,omitempty"`
 	Recovery     []BrowserConversationRecoveryEvidence   `json:"recovery,omitempty"`
 	Cancellation BrowserConversationCancellationEvidence `json:"cancellation"`
 	Lifecycle    BrowserConversationLifecycleEvidence    `json:"lifecycle"`
@@ -237,6 +262,31 @@ func (r BrowserConversationResult) Validate() error {
 		}
 		if call.Terminal && !browserConversationInvocationStateTerminal(call.State) {
 			return browserConversationResultError(path+".state", "terminal calls require a terminal invocation state")
+		}
+	}
+	for index, correction := range r.Corrections {
+		path := fmt.Sprintf("corrections[%d]", index)
+		if strings.TrimSpace(correction.StepID) == "" || strings.TrimSpace(correction.TargetStepID) == "" {
+			return browserConversationResultError(path, "requires step_id and target_step_id")
+		}
+		if strings.TrimSpace(correction.TargetUtterance) == "" || strings.TrimSpace(correction.CorrectionUtterance) == "" {
+			return browserConversationResultError(path, "requires target and correction utterances")
+		}
+		for _, state := range []struct {
+			name string
+			raw  json.RawMessage
+		}{
+			{name: "original_before", raw: correction.OriginalBefore},
+			{name: "original_after", raw: correction.OriginalAfter},
+			{name: "correction_before", raw: correction.CorrectionBefore},
+			{name: "correction_after", raw: correction.CorrectionAfter},
+		} {
+			if len(state.raw) == 0 {
+				continue
+			}
+			if err := validateJSONObject(path+"."+state.name, state.raw); err != nil {
+				return err
+			}
 		}
 	}
 	for index, recovery := range r.Recovery {
@@ -295,6 +345,7 @@ type BrowserConversationRun struct {
 	hasMechanical   bool
 	hasValidator    bool
 	hasRecovery     bool
+	hasCorrections  bool
 }
 
 // NewBrowserConversationRun validates the full scenario before creating the
@@ -463,6 +514,50 @@ func (r *BrowserConversationRun) RecordRecovery(evidence []BrowserConversationRe
 	}
 	r.hasRecovery = true
 	r.result.Recovery = cloneBrowserConversationRecoveries(evidence)
+	return nil
+}
+
+// RecordCorrections records derived correction evidence once. The underlying
+// turns, broker calls, and oracle snapshots remain the source of truth.
+func (r *BrowserConversationRun) RecordCorrections(evidence []BrowserConversationCorrectionEvidence) error {
+	if r == nil {
+		return errors.New("browser conversation run is nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.ensureMutableLocked(); err != nil {
+		return err
+	}
+	if r.hasCorrections {
+		return ErrBrowserConversationDuplicateObservation
+	}
+	for index, correction := range evidence {
+		path := fmt.Sprintf("corrections[%d]", index)
+		if strings.TrimSpace(correction.StepID) == "" || strings.TrimSpace(correction.TargetStepID) == "" {
+			return browserConversationObservationError(path, "requires step_id and target_step_id")
+		}
+		if strings.TrimSpace(correction.TargetUtterance) == "" || strings.TrimSpace(correction.CorrectionUtterance) == "" {
+			return browserConversationObservationError(path, "requires target and correction utterances")
+		}
+		for _, state := range []struct {
+			name string
+			raw  json.RawMessage
+		}{
+			{name: "original_before", raw: correction.OriginalBefore},
+			{name: "original_after", raw: correction.OriginalAfter},
+			{name: "correction_before", raw: correction.CorrectionBefore},
+			{name: "correction_after", raw: correction.CorrectionAfter},
+		} {
+			if len(state.raw) == 0 {
+				continue
+			}
+			if err := validateJSONObject("correction."+state.name, state.raw); err != nil {
+				return err
+			}
+		}
+	}
+	r.hasCorrections = true
+	r.result.Corrections = cloneBrowserConversationCorrections(evidence)
 	return nil
 }
 
@@ -714,6 +809,7 @@ func cloneBrowserConversationResult(result BrowserConversationResult) BrowserCon
 	for index, snapshot := range result.Oracles {
 		clone.Oracles[index] = cloneBrowserConversationOracleSnapshot(snapshot)
 	}
+	clone.Corrections = cloneBrowserConversationCorrections(result.Corrections)
 	clone.Recovery = cloneBrowserConversationRecoveries(result.Recovery)
 	clone.Mechanical = cloneBrowserConversationMechanicalEvaluation(result.Mechanical)
 	clone.Validator = cloneBrowserConversationValidatorVerdict(result.Validator)
@@ -739,6 +835,21 @@ func cloneBrowserConversationRecoveries(recoveries []BrowserConversationRecovery
 	for index, recovery := range recoveries {
 		clone[index] = recovery
 		clone[index].RelistedToolRefs = append([]webmcp.ToolRef(nil), recovery.RelistedToolRefs...)
+	}
+	return clone
+}
+
+func cloneBrowserConversationCorrections(corrections []BrowserConversationCorrectionEvidence) []BrowserConversationCorrectionEvidence {
+	if corrections == nil {
+		return nil
+	}
+	clone := make([]BrowserConversationCorrectionEvidence, len(corrections))
+	for index, correction := range corrections {
+		clone[index] = correction
+		clone[index].OriginalBefore = append(json.RawMessage(nil), correction.OriginalBefore...)
+		clone[index].OriginalAfter = append(json.RawMessage(nil), correction.OriginalAfter...)
+		clone[index].CorrectionBefore = append(json.RawMessage(nil), correction.CorrectionBefore...)
+		clone[index].CorrectionAfter = append(json.RawMessage(nil), correction.CorrectionAfter...)
 	}
 	return clone
 }

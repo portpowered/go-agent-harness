@@ -538,6 +538,11 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 		lifecycle.Error = safeBrowserConversationError(rootErr)
 	}
 	provisional := run.Snapshot()
+	corrections := deriveBrowserConversationCorrections(scenario, provisional)
+	if err := run.RecordCorrections(corrections); err != nil {
+		addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", err))
+	}
+	provisional = run.Snapshot()
 	recoveries := deriveBrowserConversationRecovery(scenario, provisional)
 	if err := run.RecordRecovery(recoveries); err != nil {
 		addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", err))
@@ -1134,6 +1139,7 @@ func evaluateBrowserConversation(scenario BrowserConversationScenario, result Br
 			}
 		}
 	}
+	failures = append(failures, browserConversationCorrectionFailures(scenario, result)...)
 	failures = append(failures, browserConversationRecoveryFailures(scenario, result)...)
 	post := browserConversationOracleForStep(result.Oracles, "", BrowserConversationOraclePostSession)
 	if post == nil {
@@ -1202,7 +1208,8 @@ func browserConversationTerminalInvokeForStep(calls []BrowserConversationBrokerC
 		if call.StepID == stepID &&
 			call.Operation == BrowserConversationInvoke &&
 			call.Terminal &&
-			call.State == webmcp.InvocationCompleted {
+			call.State == webmcp.InvocationCompleted &&
+			call.ErrorCode == "" {
 			candidate := call
 			return &candidate
 		}

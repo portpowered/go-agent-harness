@@ -278,11 +278,17 @@ func (s BrowserConversationScenario) Validate() error {
 				return err
 			}
 		}
+		if step.ExpectedState != nil && step.Correction != nil {
+			return browserScenarioError(path+".correction", "must not be combined with expected_state")
+		}
 		if err := validateNavigation(s.Fixture, path+".navigation", step.Navigation); err != nil {
 			return err
 		}
 		if err := validateCorrection(s, index, path+".correction", step.Correction); err != nil {
 			return err
+		}
+		if step.Correction != nil {
+			stateTransitions++
 		}
 		if err := validateInterrupt(path+".interrupt", step.Interrupt); err != nil {
 			return err
@@ -462,7 +468,26 @@ func validateCorrection(scenario BrowserConversationScenario, index int, path st
 	}
 	for earlier := 0; earlier < index; earlier++ {
 		if scenario.Steps[earlier].ID == correction.TargetStepID {
-			return validateStateTransition(scenario.Fixture, path+".expected_state", correction.ExpectedState)
+			if err := validateStateTransition(scenario.Fixture, path+".expected_state", correction.ExpectedState); err != nil {
+				return err
+			}
+			targetTransition := browserConversationExpectedState(&scenario.Steps[earlier])
+			if targetTransition == nil {
+				return browserScenarioError(path+".target_step_id", "must reference an earlier step with an expected_state transition")
+			}
+			if targetTransition.PageID != correction.ExpectedState.PageID {
+				return browserScenarioError(path+".expected_state.page_id", "must match target step %q page %q", correction.TargetStepID, targetTransition.PageID)
+			}
+			if browserConversationJSONEqual(targetTransition.Before, targetTransition.After) {
+				return browserScenarioError(path+".target_step_id", "must reference a state-changing transition")
+			}
+			if !browserConversationJSONEqual(targetTransition.After, correction.ExpectedState.Before) {
+				return browserScenarioError(path+".expected_state.before", "must match target step %q after state", correction.TargetStepID)
+			}
+			if browserConversationJSONEqual(correction.ExpectedState.Before, correction.ExpectedState.After) {
+				return browserScenarioError(path+".expected_state", "must describe a state-changing correction")
+			}
+			return nil
 		}
 	}
 	return browserScenarioError(path+".target_step_id", "must reference an earlier step")

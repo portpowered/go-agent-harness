@@ -64,8 +64,15 @@ func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
 	}) {
 		return
 	}
+	if !t.Run("spoken_correction_oracle", func(t *testing.T) {
+		caseContext, caseCancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer caseCancel()
+		testRecoverySpokenCorrection(t, caseContext, pinned)
+	}) {
+		return
+	}
 
-	t.Log("WEBMCP_CHROME_RECOVERY_PASS cases=3 exit=0 output=redacted")
+	t.Log("WEBMCP_CHROME_RECOVERY_PASS cases=4 exit=0 output=redacted")
 }
 
 type recoveryDiscoverer struct {
@@ -450,6 +457,82 @@ func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinne
 		t.Fatalf("final storm terminal = state=%s code=%s valid_output=%t", freshTerminal.State, freshTerminal.ErrorCode, json.Valid(freshTerminal.Output))
 	}
 	t.Logf("case=navigation_storm cycles=%d generations=%v terminal=%s refs_retired=%d target_preserved=true", len(generations), generations, freshTerminal.State, len(retiredRefs))
+}
+
+func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	fixture := newFixtureServer()
+	t.Cleanup(fixture.Close)
+	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+
+	// The two requests model the original customer intent followed by an
+	// explicit spoken correction. The HTTP fixture oracle is independent from
+	// the broker result and the final CDP read happens after target detach.
+	originalMessage := "blue"
+	original, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: selection.initialComplete.Ref,
+		Input:   recoveryInput(originalMessage),
+		Reason:  "customer_initial_request",
+	})
+	if err != nil || original.State != webmcp.InvocationDispatched {
+		t.Fatalf("admit original correction scenario action: state=%s err=%v", original.State, err)
+	}
+	originalEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, original.InvocationID)
+	if err != nil {
+		t.Fatalf("wait original correction scenario terminal event: %v", err)
+	}
+	originalTerminal, err := selection.broker.WaitInvocation(ctx, original.InvocationID)
+	if err != nil {
+		t.Fatalf("wait original correction scenario terminal result: %v", err)
+	}
+	if originalTerminal.State != webmcp.InvocationCompleted || originalTerminal.ErrorCode != "" || originalEvent.State != webmcp.InvocationCompleted {
+		t.Fatalf("original correction scenario terminal = state=%s code=%s event_state=%s", originalTerminal.State, originalTerminal.ErrorCode, originalEvent.State)
+	}
+	originalOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Value == "completed:"+originalMessage && oracle.VisibleText == "completed:"+originalMessage && !oracle.Pending
+	})
+	if err != nil {
+		t.Fatalf("wait original independent correction oracle: %v", err)
+	}
+
+	correctionMessage := "unset"
+	corrected, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: selection.initialComplete.Ref,
+		Input:   recoveryInput(correctionMessage),
+		Reason:  "customer_spoken_correction",
+	})
+	if err != nil || corrected.State != webmcp.InvocationDispatched {
+		t.Fatalf("admit spoken correction action: state=%s err=%v", corrected.State, err)
+	}
+	correctedEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, corrected.InvocationID)
+	if err != nil {
+		t.Fatalf("wait spoken correction terminal event: %v", err)
+	}
+	correctedTerminal, err := selection.broker.WaitInvocation(ctx, corrected.InvocationID)
+	if err != nil {
+		t.Fatalf("wait spoken correction terminal result: %v", err)
+	}
+	if correctedTerminal.State != webmcp.InvocationCompleted || correctedTerminal.ErrorCode != "" || correctedEvent.State != webmcp.InvocationCompleted {
+		t.Fatalf("spoken correction terminal = state=%s code=%s event_state=%s", correctedTerminal.State, correctedTerminal.ErrorCode, correctedEvent.State)
+	}
+	correctedOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Value == "completed:"+correctionMessage && oracle.VisibleText == "completed:"+correctionMessage && !oracle.Pending
+	})
+	if err != nil {
+		t.Fatalf("wait corrected independent oracle: %v", err)
+	}
+	if correctedOracle.Value == originalOracle.Value {
+		t.Fatalf("correction oracle did not change: original=%+v corrected=%+v", originalOracle, correctedOracle)
+	}
+
+	if err := selection.broker.Close(); err != nil {
+		t.Fatalf("detach external correction target: %v", err)
+	}
+	afterDetach, err := inspectExternalTarget(ctx, selection.browser.endpoint(), string(selection.target.ID))
+	if err != nil {
+		t.Fatalf("probe corrected target after detach: %v", err)
+	}
+	assertPageStateMatchesOracle(t, afterDetach, correctedOracle)
+	t.Logf("case=spoken_correction customer_original=%q customer_correction=%q original_terminal=%s correction_terminal=%s original_oracle=%q corrected_oracle=%q detach_survived=true", originalMessage, correctionMessage, originalTerminal.State, correctedTerminal.State, originalOracle.Value, correctedOracle.Value)
 }
 
 func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedChrome) {
