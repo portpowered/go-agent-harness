@@ -249,6 +249,11 @@ func TestSessionProgressObserverActiveResponseReleasesOnlyFollowingTurn(t *testi
 	if len(probe.audio) != 2 || string(probe.audio[1]) != string([]byte{2}) {
 		t.Fatalf("active-response dispatch = %#v, want only second turn", probe.audio)
 	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("second response"),
+	})
 
 	// The active response boundary only releases the immediately following
 	// input. The third turn remains ordered behind the second response.
@@ -293,6 +298,11 @@ func TestSessionProgressObserverTerminalResponseWinsBeforeActiveDispatch(t *test
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageStart,
 		Value: messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("response"),
 	})
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
@@ -351,6 +361,12 @@ func TestSessionProgressObserverFirstScheduledOffsetWaitsForPromptResponse(t *te
 	if len(probe.audio) != 0 {
 		t.Fatalf("first scheduled input crossed active prompt boundary: %#v", probe.audio)
 	}
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeTextDelta,
+		ResponseID: "resp-prompt",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewTextDeltaValue("prompt response"),
+	})
 
 	observer.observe(messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
@@ -398,6 +414,7 @@ func TestSessionProgressObserverResponseIdentityRejectsOutOfOrderTerminal(t *tes
 	if !observer.activeResponse || observer.activeResponseID != "resp-current" || observer.turnsCompleted != 0 {
 		t.Fatalf("late old terminal changed lifecycle: active=%t id=%q turns=%d", observer.activeResponse, observer.activeResponseID, observer.turnsCompleted)
 	}
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, ResponseID: "resp-current", Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("current response")})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp-current", Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	if observer.activeResponse || observer.turnsCompleted != 1 {
 		t.Fatalf("current terminal lifecycle = active:%t turns:%d, want inactive/1", observer.activeResponse, observer.turnsCompleted)
@@ -410,6 +427,11 @@ func TestSessionProgressObserverScheduledAudioCountsOnlyItsOwnCompletedTurns(t *
 
 	// A prompt/seed response belongs to the session, not to the scheduled
 	// sequence. The first dispatched input establishes the schedule baseline.
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("prompt response"),
+	})
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
@@ -432,6 +454,11 @@ func TestSessionProgressObserverScheduledAudioCountsOnlyItsOwnCompletedTurns(t *
 			Type:  messages.StreamTypeMessageStart,
 			Role:  messages.RoleAssistant,
 			Value: messages.NewMessageStartValue(),
+		})
+		observer.observe(messages.StreamMessage{
+			Type:  messages.StreamTypeTextDelta,
+			Role:  messages.RoleAssistant,
+			Value: messages.NewTextDeltaValue("scheduled response"),
 		})
 		observer.observe(messages.StreamMessage{
 			Type:  messages.StreamTypeMessageEnd,
@@ -467,6 +494,11 @@ func TestScheduledAudioCompletionErrorCarriesCountsAndDiagnosticFields(t *testin
 	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
 		t.Fatalf("dispatch scheduled input: %v", err)
 	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("response"),
+	})
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
