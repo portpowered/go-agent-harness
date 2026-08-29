@@ -423,3 +423,5 @@ test-hermetic: ## Run all Go tests with CGO disabled and the microphone stub.
 			(cd "$$module" && CGO_ENABLED=0 $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout"); \
 		fi; \
 	done
+
+prepush: fmt vet test-hermetic typecheck ## Run the deterministic pre-push validation gate.

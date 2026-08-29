@@ -439,6 +439,7 @@ const (
 	ArtifactKindMechanicalVerdict     ArtifactKind = "mechanical_verdict"
 	ArtifactKindValidatorInput        ArtifactKind = "validator_input"
 	ArtifactKindValidatorVerdict      ArtifactKind = "validator_verdict"
+	ArtifactKindCorrectionEvidence    ArtifactKind = "correction_evidence"
 	ArtifactKindMixedModalEvidence    ArtifactKind = "mixed_modal_evidence"
 	ArtifactKindTerminationEvidence   ArtifactKind = "termination_evidence"
 	ArtifactKindPatienceEvidence      ArtifactKind = "patience_evidence"
@@ -446,7 +447,7 @@ const (
 
 func (k ArtifactKind) valid() bool {
 	switch k {
-	case ArtifactKindScenario, ArtifactKindCustomerTranscript, ArtifactKindProductTranscript, ArtifactKindAudioTurnEvents, ArtifactKindProductRecordDir, ArtifactKindToolObservations, ArtifactKindFilesystemCheckpoints, ArtifactKindProcessFacts, ArtifactKindMechanicalVerdict, ArtifactKindValidatorInput, ArtifactKindValidatorVerdict, ArtifactKindMixedModalEvidence, ArtifactKindTerminationEvidence, ArtifactKindPatienceEvidence:
+	case ArtifactKindScenario, ArtifactKindCustomerTranscript, ArtifactKindProductTranscript, ArtifactKindAudioTurnEvents, ArtifactKindProductRecordDir, ArtifactKindToolObservations, ArtifactKindFilesystemCheckpoints, ArtifactKindProcessFacts, ArtifactKindMechanicalVerdict, ArtifactKindValidatorInput, ArtifactKindValidatorVerdict, ArtifactKindCorrectionEvidence, ArtifactKindMixedModalEvidence, ArtifactKindTerminationEvidence, ArtifactKindPatienceEvidence:
 		return true
 	}
 	return false
