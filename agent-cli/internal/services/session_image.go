@@ -268,7 +268,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 	if opts.TextSeed.Present {
 		output := &sessionTextOutput{writer: out}
 		if opts.MaxDuration == 0 || plan.loop.AudioIn != nil {
-			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value, audioOut: output}
+			plan.inferencer = &sessionTextSeedInferencer{inner: plan.inferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
 			return errors.Join(plan.run(ctx, output), output.errorValue())
 		}
 		durationCtx, err := prepareSessionDurationArtifacts(ctx)
@@ -277,7 +277,7 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 		}
 		admission := newSessionDurationAdmission()
 		admittedInferencer := &sessionDurationAdmissionInferencer{inner: plan.inferencer, admission: admission, closeDone: make(chan struct{})}
-		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value, audioOut: output}
+		plan.inferencer = &sessionTextSeedInferencer{inner: admittedInferencer, wirePrompt: wirePrompt, value: opts.TextSeed.Value}
 		err = runSessionDurationPlanWithAdmission(durationCtx, output, plan, opts.MaxDuration, realSessionDurationClock{}, admittedInferencer)
 		return errors.Join(err, output.errorValue())
 	}

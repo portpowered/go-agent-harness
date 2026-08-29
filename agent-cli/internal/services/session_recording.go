@@ -337,7 +337,6 @@ func runSessionWithRecordingDirectory(
 				inner:      plan.inferencer,
 				wirePrompt: wirePrompt,
 				value:      seed.Value,
-				audioOut:   textOutput,
 			}
 		}
 	}

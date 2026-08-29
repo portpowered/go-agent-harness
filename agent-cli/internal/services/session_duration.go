@@ -152,7 +152,6 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 			inner:      plan.inferencer,
 			wirePrompt: wirePrompt,
 			value:      seed.Value,
-			audioOut:   output,
 		}
 	}
 	admittedInferencer := &sessionDurationAdmissionInferencer{

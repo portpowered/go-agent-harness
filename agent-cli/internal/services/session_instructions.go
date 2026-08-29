@@ -98,7 +98,6 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 						inner:      plan.inferencer,
 						wirePrompt: wirePrompt,
 						value:      seed.Value,
-						audioOut:   output,
 					}
 				}
 				return errors.Join(plan.run(ctx, output), output.errorValue())
@@ -119,7 +118,6 @@ func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.
 					inner:      plan.inferencer,
 					wirePrompt: wirePrompt,
 					value:      seed.Value,
-					audioOut:   output,
 				}
 			}
 			if admittedInner != nil {
