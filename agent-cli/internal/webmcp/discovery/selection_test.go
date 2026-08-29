@@ -122,6 +122,42 @@ func TestSelectTargetActivatesOnlyWhenRequestedAndEmitsSelection(t *testing.T) {
 	}
 }
 
+func TestSelectTargetKeepsReadySelectionWhenActivationFails(t *testing.T) {
+	browser := BrowserCandidate{ID: "browser-headless", Source: SourceConfigured, Loopback: true}
+	descriptor := targetDescriptor("raw-tab", "Headless page", "https://headless.test/page", 1)
+	activator := &selectionActivator{err: errors.New("foreground activation rejected by headless Chrome")}
+	service := New(Options{
+		Activator: activator,
+		TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+			return []TargetDescriptor{descriptor}, nil
+		}),
+		TargetAttacher: TargetAttacherFunc(func(context.Context, BrowserCandidate, Target) (TargetDetacher, error) {
+			return &selectionDetacher{}, nil
+		}),
+	})
+	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
+
+	selected, err := service.Select(context.Background(), TargetSelectionRequest{
+		Browser:   browser,
+		BrowserID: browser.ID,
+		TargetID:  targetID,
+		Activate:  true,
+		Reason:    "headless_activation_regression",
+	})
+	if err != nil {
+		t.Fatalf("selection with live activation failure: %v", err)
+	}
+	if selected.BrowserID != browser.ID || selected.TargetID != targetID || !selected.Context().Connected || !selected.Context().Ready {
+		t.Fatalf("selected context = %#v, want exact ready selection", selected.Context())
+	}
+	if activator.calls != 1 || len(activator.ids) != 1 || activator.ids[0] != targetID {
+		t.Fatalf("activation calls/targets = %d/%v, want one exact target", activator.calls, activator.ids)
+	}
+	if current, ok := service.Selected(); !ok || current.TargetID != targetID || !current.Context().Connected || !current.Context().Ready {
+		t.Fatalf("current selection = %#v ok=%v, want retained ready selection", current.Context(), ok)
+	}
+}
+
 func TestSelectTargetUsesDetachOnlyExternalHandle(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-lifecycle", Source: SourceConfigured, Loopback: true}
 	descriptors := []TargetDescriptor{

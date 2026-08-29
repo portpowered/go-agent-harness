@@ -136,6 +136,30 @@ func (b *StatefulBroker) browserDisconnectedLocked(selected *brokerSession, phas
 }
 
 func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector TargetSelector, phase string, cause error) error {
+	return b.promoteBrowserLossWithPredicate(selected, selector, phase, cause, isBrowserEndpointLossError)
+}
+
+// promoteActivationLoss is intentionally stricter than the general browser
+// loss classifier. Target activation is an ancillary foreground operation;
+// an adapter can reject it while the attached WebMCP session remains healthy.
+// Only an explicit classified loss, a closed transport sentinel, or a
+// classified endpoint failure may promote that operation to browser loss.
+func (b *StatefulBroker) promoteActivationLoss(selected *brokerSession, selector TargetSelector, phase string, cause error) error {
+	return b.promoteBrowserLossWithPredicate(selected, selector, phase, cause, isExplicitBrowserLossError)
+}
+
+func isExplicitBrowserLossError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errorContainsCode(err, ErrorBrowserDisconnected) ||
+		errorContainsCode(err, ErrorEndpointNotFound) ||
+		errorContainsCode(err, ErrorEndpointUnreachable) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, net.ErrClosed)
+}
+
+func (b *StatefulBroker) promoteBrowserLossWithPredicate(selected *brokerSession, selector TargetSelector, phase string, cause error, isLoss func(error) bool) error {
 	if selected != nil && selector.BrowserID != "" && selected.context.Key.BrowserID != selector.BrowserID {
 		selected = nil
 	}
@@ -151,7 +175,7 @@ func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector Ta
 			}
 		}
 		b.mu.Unlock()
-		if !isBrowserEndpointLossError(cause) {
+		if !isLoss(cause) {
 			return nil
 		}
 		selected.dispatchMu.Lock()
@@ -163,7 +187,7 @@ func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector Ta
 		}
 		return b.browserDisconnectedLocked(selected, phase, cause)
 	}
-	if !isBrowserEndpointLossError(cause) {
+	if !isLoss(cause) {
 		return nil
 	}
 	known := false

@@ -435,10 +435,15 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 				if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
 					return PageContext{}, err
 				}
-				if failure := b.promoteBrowserLoss(current, selector, "activate", err); failure != nil {
+				if failure := b.promoteActivationLoss(current, selector, "activate", err); failure != nil {
 					return PageContext{}, failure
 				}
-				return PageContext{}, staleSelectionError(selector.BrowserID, selector.TargetID, contextValue.Generation, "activation_failed")
+				// Foreground activation is ancillary to the already-ready target
+				// session. A live browser may reject the operation (notably in
+				// headless mode) without making the exact WebMCP selection unusable.
+			}
+			if failure := b.selectedStateError(current, "activate", "selection_not_connected"); failure != nil {
+				return PageContext{}, failure
 			}
 		}
 		return contextValue, nil
@@ -477,14 +482,6 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	if target.BrowserID == "" {
 		target.BrowserID = candidate.ID
-	}
-	if options.Activate {
-		if err := handle.Activate(ctx, selector.TargetID); err != nil {
-			if failure := b.promoteBrowserLoss(current, selector, "activate", err); failure != nil {
-				return PageContext{}, failure
-			}
-			return PageContext{}, targetAttachError(selector, "activate", err)
-		}
 	}
 	session, err := handle.Attach(ctx, selector.TargetID, b.ownershipValue())
 	if err != nil {
@@ -577,6 +574,21 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	newSession.context.Ready = true
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
+	if options.Activate {
+		if err := handle.Activate(ctx, selector.TargetID); err != nil {
+			if failure := b.promoteActivationLoss(newSession, selector, "activate", err); failure != nil {
+				_ = session.Close()
+				return PageContext{}, failure
+			}
+			// Foreground activation is best effort once exact attachment and
+			// catalog readiness have succeeded. Check the session after the
+			// operation so a concurrent target/browser loss still wins.
+		}
+		if failure := b.selectedStateError(newSession, "activate", "selection_not_connected"); failure != nil {
+			_ = session.Close()
+			return PageContext{}, failure
+		}
+	}
 	return page, nil
 }
 

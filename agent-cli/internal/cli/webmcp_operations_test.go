@@ -1160,6 +1160,42 @@ func TestWebMCPDirectPreservesExternallyOwnedTarget(t *testing.T) {
 	}
 }
 
+func TestWebMCPDirectActivateClassifiesLiveOperationFailure(t *testing.T) {
+	configDir := writeDirectConfig(t, "")
+	_, target, candidate, _ := directFixture()
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+		Candidate:     candidate,
+		ActivateError: errors.New("foreground activation rejected by headless Chrome"),
+		Targets: []testkit.TargetConfig{
+			testkit.NewTargetConfig(target),
+		},
+	})
+	browser := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:    runtime,
+		Discoverer: directDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}},
+	})
+
+	result := executeDirectCommand(t, configDir, nil, directFactory(browser), "activate", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
+	if result.err == nil {
+		t.Fatal("activate unexpectedly succeeded")
+	}
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorTargetAttachFailed) {
+		t.Fatalf("live activation failure envelope = %+v, error = %v", envelope, result.err)
+	}
+	if envelope.Error.Details["browser_id"] != string(candidate.ID) || envelope.Error.Details["target_id"] != string(target.ID) || envelope.Error.Details["phase"] != "activate" {
+		t.Fatalf("live activation failure details = %#v, want exact activation identity", envelope.Error.Details)
+	}
+	if _, exists := envelope.Error.Details["reconnect_required"]; exists {
+		t.Fatalf("live activation failure requested reconnect: %#v", envelope.Error.Details)
+	}
+	for _, operation := range runtime.Operations() {
+		if operation.Kind == testkit.OperationAttach || operation.Kind == testkit.OperationEnableWebMCP || operation.Kind == testkit.OperationEnableAcknowledged {
+			t.Fatalf("activation-only command initialized WebMCP: %#v", runtime.Operations())
+		}
+	}
+}
+
 func TestWebMCPDirectClassifiesBrokerFailures(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
@@ -1444,10 +1480,13 @@ func TestWebMCPDirectSelectBrowserDeathAtEveryStage(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				configDir := writeDirectConfig(t, "")
 				store := NewFileWebMCPSelectionStore(configDir)
-				page, target, candidate, _ := directFixture()
+				page, target, candidate, tool := directFixture()
 				sessionOptions := []testkit.ScriptedTargetSessionOption{testkit.WithContext(page)}
 				if testCase.blockEnable {
 					sessionOptions = append(sessionOptions, testkit.WithBlockedEnable())
+				}
+				if testCase.activate {
+					sessionOptions = append(sessionOptions, testkit.WithInitialCatalog(tool))
 				}
 				runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
 					Candidate: candidate,
