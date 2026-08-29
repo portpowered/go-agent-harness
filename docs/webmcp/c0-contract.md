@@ -361,6 +361,28 @@ detach, page navigation, browser disconnect, and event-stream loss retain their
 distinct existing C0 codes. Direct cancellation never copies page output into
 the error details.
 
+### 2.1 Pinned stock-Chrome cancellation measurement
+
+The opt-in production-binary regression uses a fresh temporary profile and
+Chrome-assigned loopback debugging port with
+`WebMCP,WebMCPTesting,DevToolsWebMCPSupport`, `DeclarativeWebmcp`, and
+experimental Web Platform features enabled. On the locked Chrome for Testing
+`152.0.7977.64` (`1669021`) build on 2026-08-28, the controlled pending tool
+produced this bounded sequence: invoke receipt → fresh-process cancel →
+`status: "canceled"`, `phase: "terminal"`, `outcome: "confirmed_canceled"`;
+the original invoke returned `invocation_canceled`, the independent fixture
+oracle observed cancellation, and a recovery invoke completed.
+
+The delayed declarative `toolautosubmit` fixture produced the measured
+limitation: the fresh cancel result was non-zero `invocation_failed` with
+`outcome: "cancellation_unconfirmed"`, `cancel_phase: "cancel_dispatched"`,
+`terminal_observed: false`, and `side_effect_unknown: true` while the fixture
+oracle was still pending at the bounded observation point. This is an honest
+result for that pinned build and fixture, not proof of cancellation or a
+general claim about every declarative page. Callers MUST treat it as uncertain
+and MUST NOT use `cancel_requested` as terminal confirmation. The subsequent
+recovery invoke completed without profile repair or reselection.
+
 ## 3. Supersession and rationale
 
 This section is part of the contract because it records why the boundary is

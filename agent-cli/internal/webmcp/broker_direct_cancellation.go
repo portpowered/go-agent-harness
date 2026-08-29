@@ -125,21 +125,20 @@ func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request Dir
 	// half-dispatched outcome.
 	if err := session.CancelWebMCP(ctx, request.InvocationID); err != nil {
 		b.mu.Lock()
+		observation, observed := takeDirectCancellationObservation(operation)
+		if !observed {
+			// The CDP command was attempted even when the browser rejected it.
+			// Keep the operation in the dispatched phase so an unconfirmed
+			// result cannot be mistaken for a pre-dispatch validation failure.
+			operation.phase = directCancellationDispatched
+		}
 		b.finishDirectCancellationLocked(operation)
 		b.mu.Unlock()
 		selected.dispatchMu.Unlock()
-		var classifiedErr *ClassifiedError
-		if errors.As(err, &classifiedErr) && classifiedErr != nil {
-			return err
+		if observed {
+			return directCancellationResult(operation, observation)
 		}
-		return classified(ErrorInvocationFailed, "the browser rejected the direct cancellation request", map[string]any{
-			"browser_id":          string(request.Target.BrowserID),
-			"target_id":           string(request.Target.TargetID),
-			"invocation_id":       string(request.InvocationID),
-			"phase":               "cancel",
-			"cancel_phase":        string(operation.phase),
-			"side_effect_unknown": true,
-		}, err)
+		return directCancellationDispatchFailure(operation, err)
 	}
 	b.mu.Lock()
 	operation.phase = directCancellationDispatched
@@ -322,6 +321,24 @@ func directCancellationWasCanceled(observation directCancellationObservation) bo
 func directCancellationUnconfirmedError(operation *directCancellation, cause error, outcome string) error {
 	details := directCancellationDetails(operation, "", outcome)
 	return classified(ErrorInvocationFailed, "the browser did not provide a correlated terminal cancellation result", details, cause)
+}
+
+func directCancellationDispatchFailure(operation *directCancellation, cause error) error {
+	// Lifecycle failures retain their dedicated C0 classifications. A caller
+	// context failure also keeps its meaning. The adapter's explicit cancel
+	// protocol rejection is otherwise represented as invocation_canceled, but
+	// that only describes the failed command—not a confirmed page invocation
+	// cancellation—so convert it to bounded, non-retryable uncertainty here.
+	var classifiedErr *ClassifiedError
+	if errors.As(cause, &classifiedErr) && classifiedErr != nil {
+		if _, lifecycle := lifecycleClassifiedError(classifiedErr); lifecycle {
+			return cause
+		}
+		if classifiedErr.Code != ErrorInvocationCanceled || classifiedErr.Details["cancel_source"] == "caller" {
+			return cause
+		}
+	}
+	return directCancellationUnconfirmedError(operation, cause, "cancellation_unconfirmed")
 }
 
 func directCancellationLifecycleError(operation *directCancellation, eventType BrowserEventType, reason, errorCode string) error {

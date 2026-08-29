@@ -30,6 +30,17 @@
                toolparamdescription="The message that keeps the invocation pending.">
       </label>
     </form>
+
+    <form id="slow-form"
+          toolname="webmcp_lane_d_slow_autosubmit"
+          tooltitle="Slow declarative Lane D invocation"
+          tooldescription="Complete after a bounded delay so cancellation behavior is observable."
+          toolautosubmit>
+      <label>Message
+        <input name="message" type="text" value=""
+               toolparamdescription="The message to record after the delayed response.">
+      </label>
+    </form>
   </main>
   <script>
     (() => {
@@ -43,6 +54,7 @@
 
       const ready = document.querySelector("#ready");
       const visible = document.querySelector("#state");
+      const slowDelayMilliseconds = 1500;
 
       const render = () => {
         ready.textContent = state.ready ? "ready" : "starting";
@@ -69,6 +81,33 @@
         const message = String(data.get("message") || "");
         const toolName = String(form.getAttribute("toolname") || "");
         state.invocations.push(toolName + ":" + message);
+
+        if (toolName === "webmcp_lane_d_slow_autosubmit") {
+          state.pending = true;
+          state.value = "pending:" + message;
+          render();
+          publishOracle();
+          if (typeof event.respondWith === "function") {
+            event.preventDefault();
+            event.respondWith(new Promise((resolve) => {
+              window.setTimeout(() => {
+                state.pending = false;
+                state.value = "completed:" + message;
+                state.invocations.push("completed:" + toolName + ":" + message);
+                render();
+                publishOracle();
+                resolve({
+                  greeting: "hello",
+                  message,
+                  number: 9007199254740993
+                });
+              }, slowDelayMilliseconds);
+            }));
+          } else {
+            event.preventDefault();
+          }
+          return;
+        }
 
         if (toolName === "webmcp_lane_d_pending") {
           state.pending = true;
@@ -138,6 +177,7 @@
 
       document.querySelector("#complete-form").addEventListener("submit", submit);
       document.querySelector("#pending-form").addEventListener("submit", submit);
+      document.querySelector("#slow-form").addEventListener("submit", submit);
       registerCancellationTool().then(() => {
         state.ready = true;
         render();

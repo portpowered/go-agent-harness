@@ -584,8 +584,11 @@ Two-process flow:
 
 The receipt is on stderr and the one final cancel result is on stdout. The
 result is successful only after the exact target reports terminal Canceled.
-Completed or Error is a non-retryable completed-anyway result, while a missing
-terminal or lifecycle loss is classified with side_effect_unknown.`,
+Completed or Error is a non-retryable completed-anyway result. A missing
+terminal is a non-retryable cancellation_unconfirmed result with
+side_effect_unknown; lifecycle loss retains its distinct classification. A
+declarative autosubmit page may therefore remain uncertain after dispatch;
+cancel_requested is never terminal confirmation.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

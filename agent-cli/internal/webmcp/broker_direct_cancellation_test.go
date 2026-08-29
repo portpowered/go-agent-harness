@@ -88,6 +88,45 @@ func TestStatefulBrokerDirectCancelClassifiesTerminalAfterDispatch(t *testing.T)
 	}
 }
 
+func TestStatefulBrokerDirectCancelClassifiesExplicitProtocolRejectionAsUnconfirmed(t *testing.T) {
+	cause := errors.New("cancel protocol rejected with secret transport details")
+	rejection := webmcp.NewClassifiedError(webmcp.ErrorInvocationCanceled, "the browser rejected cancellation", map[string]any{
+		"browser_id":          "browser-direct-cancel",
+		"target_id":           "tab-a",
+		"invocation_id":       "browser-receipt-rejected",
+		"cancel_source":       "explicit",
+		"phase":               "cancel",
+		"reason_code":         "protocol_error",
+		"side_effect_unknown": true,
+	})
+	rejection.Cause = cause
+	original, fresh, _, session, ref := newDirectCancellationFixture(t, false, rejection)
+	session.BlockInvocations()
+	dispatched, err := original.Invoke(context.Background(), webmcp.InvokeRequest{
+		ToolRef: ref,
+		Input:   []byte(`{"step":1}`),
+	})
+	if err != nil {
+		t.Fatalf(`invoke: %v`, err)
+	}
+	if _, err := session.WaitForInvocationAdmission(context.Background()); err != nil {
+		t.Fatalf(`observe target invocation: %v`, err)
+	}
+
+	classified := requireDirectCancellationError(t, fresh.CancelDirect(context.Background(), webmcp.DirectCancelRequest{
+		Target:       webmcp.TargetSelector{BrowserID: `browser-direct-cancel`, TargetID: `tab-a`},
+		InvocationID: dispatched.BrowserInvocationID,
+	}), webmcp.ErrorInvocationFailed)
+	if classified.Retryable || classified.Details[`outcome`] != `cancellation_unconfirmed` ||
+		classified.Details[`cancel_phase`] != `cancel_dispatched` ||
+		classified.Details[`terminal_observed`] != false || classified.Details[`side_effect_unknown`] != true {
+		t.Fatalf(`protocol rejection classification = code:%s retryable:%t details:%#v`, classified.Code, classified.Retryable, classified.Details)
+	}
+	if strings.Contains(classified.Error(), `secret transport details`) || strings.Contains(fmt.Sprint(classified.Details), `secret transport details`) {
+		t.Fatalf(`protocol rejection leaked transport detail: %v %#v`, classified.Message, classified.Details)
+	}
+}
+
 func TestStatefulBrokerDirectCancelRequiresExactTerminalAndBoundsLateEvent(t *testing.T) {
 	original, fresh, runtime, session, ref := newDirectCancellationFixture(t, false)
 	session.BlockInvocations()
@@ -195,20 +234,26 @@ func TestStatefulBrokerDirectCancelSeparatesNavigationAndDisconnect(t *testing.T
 	}
 }
 
-func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool) (*webmcp.StatefulBroker, *webmcp.StatefulBroker, *testkit.ScriptedBrowserRuntime, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
+func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, cancelErrors ...error) (*webmcp.StatefulBroker, *webmcp.StatefulBroker, *testkit.ScriptedBrowserRuntime, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
 	t.Helper()
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: `browser-direct-cancel`, Loopback: true}
+	targetOptions := []testkit.ScriptedTargetSessionOption{
+		testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: `test_fixture`}),
+		testkit.WithInitialCatalog(pageTool(`write_state`, `frame-1`, `{}`)),
+		testkit.WithCancellationResponse(emitCancellationResponse),
+	}
+	if len(cancelErrors) > 0 && cancelErrors[0] != nil {
+		targetOptions = append(targetOptions, testkit.WithCancelError(cancelErrors[0]))
+	}
 	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
 		testkit.RuntimeOptions{Clock: clock, IDs: ids},
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: `tab-a`, Type: `page`},
-				testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: `test_fixture`}),
-				testkit.WithInitialCatalog(pageTool(`write_state`, `frame-1`, `{}`)),
-				testkit.WithCancellationResponse(emitCancellationResponse),
+				targetOptions...,
 			)},
 		},
 	)
