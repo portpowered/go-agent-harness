@@ -23,14 +23,6 @@ type sessionRecordingRunnerInferencer struct {
 	sessions                 []*sessionRecordingRunnerSession
 }
 
-func newSessionRecordingRunnerInferencer(events []messages.StreamMessage, waitForInput, waitForPrompt bool) *sessionRecordingRunnerInferencer {
-	return &sessionRecordingRunnerInferencer{
-		events:        append([]messages.StreamMessage(nil), events...),
-		waitForInput:  waitForInput,
-		waitForPrompt: waitForPrompt,
-	}
-}
-
 func newSessionRecordingRunnerInferencerAfterAudioEnd(events []messages.StreamMessage) *sessionRecordingRunnerInferencer {
 	return &sessionRecordingRunnerInferencer{
 		events:                   append([]messages.StreamMessage(nil), events...),

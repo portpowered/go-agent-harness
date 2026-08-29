@@ -44,6 +44,7 @@ import (
 const (
 	visionDescribeFixtureRelativePath = "s2s-e2e-vision-describe/s2s_e2e_vision_describe.session.json"
 	visionDescribeQuestionWAV         = "vision_describe_question.wav"
+	visionDescribeDeferredInstruction = "Use the attached image to answer the user's next spoken question."
 )
 
 // visionDescribeContentMarkers name the authored pixel facts of the
@@ -155,6 +156,12 @@ func buildVisionDescribeFixture(t *testing.T, transcript []string) string {
 					t.Fatalf("fixture first content part is not an image part: %s", record.Payload)
 				}
 				part["image_url"] = dataURL
+				item["content"] = append([]any{
+					map[string]any{
+						"type": "input_text",
+						"text": visionDescribeDeferredInstruction,
+					},
+				}, content...)
 			})
 		case "input_audio_buffer.append":
 			for _, frame := range frames {

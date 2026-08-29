@@ -34,8 +34,9 @@ import (
 // The subsystem is a no-op outside DuplexSession; turn-based modes never send
 // to a session sink.
 type ToolResultForwarder struct {
-	sessionEvents chan<- messages.StreamMessage
-	logger        logging.Logger
+	sessionEvents       chan<- messages.StreamMessage
+	enqueueSessionEvent func(context.Context, messages.StreamMessage) error
+	logger              logging.Logger
 
 	forwarded map[string]struct{}
 }
@@ -45,6 +46,18 @@ func NewToolResultForwarder(sessionEvents chan<- messages.StreamMessage, logger 
 		sessionEvents: sessionEvents,
 		logger:        logger,
 		forwarded:     make(map[string]struct{}),
+	}
+}
+
+// NewToolResultForwarderWithEnqueuer routes tool results through the model
+// runner's serialized session-input path. This keeps an internal tool result
+// from overtaking a public audio end-of-turn event that is waiting for its
+// preceding audio frame to reach the provider.
+func NewToolResultForwarderWithEnqueuer(enqueue func(context.Context, messages.StreamMessage) error, logger logging.Logger) *ToolResultForwarder {
+	return &ToolResultForwarder{
+		enqueueSessionEvent: enqueue,
+		logger:              logger,
+		forwarded:           make(map[string]struct{}),
 	}
 }
 
@@ -58,7 +71,7 @@ func (f *ToolResultForwarder) TickGroup() TickGroup {
 // Execute implements [Subsystem]. It forwards every not-yet-delivered tool
 // result from the current tick's inputs to the session sink.
 func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState) error {
-	if curr.Mode != state.DuplexSession || f.sessionEvents == nil {
+	if curr.Mode != state.DuplexSession || (f.sessionEvents == nil && f.enqueueSessionEvent == nil) {
 		return nil
 	}
 	if len(curr.Inputs.ToolOutputMessage) == 0 {
@@ -92,10 +105,8 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 			Type:  messages.StreamTypeToolCallEnd,
 			Value: messages.NewToolCallEndValue(callID, resolveToolName(curr.History.ConversationBuffer, msg), serializedToolOutput(msg)),
 		}
-		select {
-		case f.sessionEvents <- streamMsg:
-		case <-ctx.Done():
-			return ctx.Err()
+		if err := f.sendSessionEvent(ctx, streamMsg); err != nil {
+			return err
 		}
 		f.forwarded[callID] = struct{}{}
 		delivered = true
@@ -105,17 +116,27 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 		// TOOLCALL.END only carries the correlated function_call_output item.
 		// Keep response creation as a distinct, single batch boundary so
 		// parallel tool results cannot create one provider response per call.
-		select {
-		case f.sessionEvents <- messages.StreamMessage{
+		if err := f.sendSessionEvent(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCreate,
 			Value: messages.NewResponseCreateValue(),
-		}:
-		case <-ctx.Done():
-			return ctx.Err()
+		}); err != nil {
+			return err
 		}
 		f.logInfo("tool result forwarder: requested one grounded continuation")
 	}
 	return nil
+}
+
+func (f *ToolResultForwarder) sendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	if f.enqueueSessionEvent != nil {
+		return f.enqueueSessionEvent(ctx, msg)
+	}
+	select {
+	case f.sessionEvents <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func toolResultsContainImage(results []messages.Message) bool {

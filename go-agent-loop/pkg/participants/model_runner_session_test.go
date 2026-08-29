@@ -248,6 +248,41 @@ func TestSessionModelRunner_SendsSessionUpdateOnSessionCreated(t *testing.T) {
 	}
 }
 
+func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ap := NewActiveParticipant(messages.Model, runner)
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	if err := runner.EnqueueSessionAudioInput(ctx, []byte{1, 2, 3}); err != nil {
+		t.Fatalf("EnqueueSessionAudioInput: %v", err)
+	}
+	eventErrCh := make(chan error, 1)
+	go func() {
+		eventErrCh <- runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+			Type:  messages.StreamTypeMessageEnd,
+			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+	}()
+
+	first := waitForSentMessage(t, ctx, session)
+	second := waitForSentMessage(t, ctx, session)
+	if first.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("first outbound type = %s, want %s", first.Type, messages.StreamTypeAudioDelta)
+	}
+	if second.Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeMessageEnd)
+	}
+	if err := <-eventErrCh; err != nil {
+		t.Fatalf("EnqueueSessionEvent: %v", err)
+	}
+}
+
 func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)

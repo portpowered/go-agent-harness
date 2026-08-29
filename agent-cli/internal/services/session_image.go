@@ -190,6 +190,10 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 		}
 	}()
 
+	// The finite source sends MESSAGE.END after its final frame. Disable
+	// provider-side turn detection before planning the live runtime so that
+	// this path owns the single commit and response boundary.
+	opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
 	if err != nil {
 		return err
@@ -198,6 +202,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	plan.loop.AudioIn = audioSource
 	plan.loop.MaxDuration = opts.MaxDuration
 	plan.loop.RequireAssistantResponse = true
+	plan.loop.RequireTerminalAssistantResponse = true
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
@@ -284,6 +289,9 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 		return errors.Join(err, output.errorValue())
 	}
 	if opts.MaxDuration == 0 {
+		return plan.run(ctx, out)
+	}
+	if plan.loop.AudioIn != nil {
 		return plan.run(ctx, out)
 	}
 	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
@@ -416,6 +424,12 @@ func configuredModelSupportsImageInput(model *config.ModelInfo) bool {
 
 const sessionImageOnlyPrompt = "\x00agent-session-image-turn\x00"
 
+// sessionImageDeferredInstruction gives a deferred image item useful context
+// before the separately committed spoken user item arrives. Realtime accepts
+// image-only user items, but the explicit same-item instruction keeps the
+// image's purpose visible to the model when no text seed was supplied.
+const sessionImageDeferredInstruction = "Use the attached image to answer the user's next spoken question."
+
 type sessionImageInferencer struct {
 	inner messages.SessionInferencer
 	parts []messages.ImagePart
@@ -475,6 +489,9 @@ func (s *sessionImageSession) Send(ctx context.Context, msg messages.StreamMessa
 		text := value.Content
 		if text == sessionImageOnlyPrompt {
 			text = ""
+			if s.deferResponse {
+				text = sessionImageDeferredInstruction
+			}
 		}
 		sent := sendSessionImageTurn(ctx, s.Session, text, parts, !s.deferResponse)
 		s.signalFirstTurn(sent)

@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"strings"
 	"sync"
@@ -25,6 +26,14 @@ type ModelRunner struct {
 	// such as MESSAGE.END (input_audio_buffer.commit + response.create on the
 	// OpenAI Realtime wire).
 	UserEventInbox chan messages.StreamMessage
+
+	// sessionInputMu establishes a FIFO boundary for the public session input
+	// helpers. A control event sent after audio must not enter the event inbox
+	// until the earlier audio has reached the provider.
+	sessionInputMu    sync.Mutex
+	audioInputMu      sync.Mutex
+	audioInputPending int
+	audioInputDrained chan struct{}
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
@@ -124,6 +133,87 @@ func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, co
 	}
 }
 
+// EnqueueSessionAudioInput queues raw PCM for the session and records it as
+// pending until the session runner forwards it to the provider. The pending
+// state lets EnqueueSessionEvent preserve ordering across the two input
+// channels without changing the legacy exported channels used by callers and
+// tests.
+func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
+	if r == nil || r.UserAudioInbox == nil {
+		return fmt.Errorf("EnqueueSessionAudioInput: not in session mode")
+	}
+
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	r.markAudioInputPending()
+	select {
+	case r.UserAudioInbox <- pcm:
+		return nil
+	case <-ctx.Done():
+		r.completeAudioInput()
+		return ctx.Err()
+	}
+}
+
+// EnqueueSessionEvent queues a control-plane event after all audio enqueued by
+// an earlier EnqueueSessionAudioInput call has been forwarded to the provider.
+func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	if r == nil || r.UserEventInbox == nil {
+		return fmt.Errorf("EnqueueSessionEvent: not in session mode")
+	}
+
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	if err := r.waitForAudioInput(ctx); err != nil {
+		return err
+	}
+	select {
+	case r.UserEventInbox <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (r *ModelRunner) markAudioInputPending() {
+	r.audioInputMu.Lock()
+	defer r.audioInputMu.Unlock()
+	if r.audioInputPending == 0 {
+		r.audioInputDrained = make(chan struct{})
+	}
+	r.audioInputPending++
+}
+
+func (r *ModelRunner) completeAudioInput() {
+	r.audioInputMu.Lock()
+	defer r.audioInputMu.Unlock()
+	if r.audioInputPending == 0 {
+		return
+	}
+	r.audioInputPending--
+	if r.audioInputPending == 0 {
+		close(r.audioInputDrained)
+		r.audioInputDrained = nil
+	}
+}
+
+func (r *ModelRunner) waitForAudioInput(ctx context.Context) error {
+	for {
+		r.audioInputMu.Lock()
+		pending := r.audioInputPending
+		drained := r.audioInputDrained
+		r.audioInputMu.Unlock()
+		if pending == 0 {
+			return nil
+		}
+		select {
+		case <-drained:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // CancelCurrentExecution cancels the per-execution context for the inference
 // that is currently in flight. The runner's outer goroutine continues running and
 // will block on the next Inbox.ReadBlocking call; only the active request is failed.
@@ -198,6 +288,7 @@ func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session me
 }
 
 func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) error {
+	defer r.completeAudioInput()
 	state.ensureMaps()
 	// Barge-in: new user audio while the current model response is still
 	// non-terminal. The response-created-before-first-audio state is

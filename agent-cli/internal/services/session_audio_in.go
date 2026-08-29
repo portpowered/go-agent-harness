@@ -162,6 +162,14 @@ func (e *SessionAudioInputError) Unwrap() error {
 	return errors.Join(sessionAudioInputKindError(e.Kind), e.Err)
 }
 
+func emptySessionAudioInput(path string) error {
+	return &SessionAudioInputError{
+		Kind: SessionAudioInputEmpty,
+		Path: path,
+		Err:  fmt.Errorf("no audio frames were sent; refusing to commit an empty user turn: %w", ErrSessionAudioInputEmpty),
+	}
+}
+
 func sessionAudioInputKindError(kind SessionAudioInputErrorKind) error {
 	switch kind {
 	case SessionAudioInputEmpty:
@@ -414,6 +422,9 @@ func prepareScheduledAudioInputs(paths []string) ([]ScheduledAudioInput, error) 
 		if err != nil {
 			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, err)
 		}
+		if len(pcm) == 0 {
+			return nil, fmt.Errorf("load audio turn %d from %q: %w", index+1, path, emptySessionAudioInput(path))
+		}
 		inputs = append(inputs, ScheduledAudioInput{
 			AfterCompletedTurns: index,
 			PCM:                 pcm,
@@ -608,6 +619,7 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 	start := time.Now()
 
 	frame := make([]int16, audio.FrameSize)
+	sentAudio := false
 	for frameIndex := 0; ; frameIndex++ {
 		if source.paced && frameIndex > 0 {
 			target := start.Add(time.Duration(frameIndex) * sessionAudioFrameDuration)
@@ -624,12 +636,18 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		clear(frame)
 		if err := source.source.ReadFrame(ctx, frame); err != nil {
 			if errors.Is(err, audio.ErrEndOfTurn) {
+				if !sentAudio {
+					return emptySessionAudioInput(source.path)
+				}
 				if endErr := sendSessionAudioEndOfTurn(ctx, loop, source); endErr != nil {
 					return endErr
 				}
 				continue
 			}
 			if errors.Is(err, io.EOF) {
+				if !sentAudio {
+					return emptySessionAudioInput(source.path)
+				}
 				return sendSessionAudioEndOfTurn(ctx, loop, source)
 			}
 			return &SessionAudioInputError{Kind: SessionAudioInputRead, Path: source.path, Err: err}
@@ -646,6 +664,7 @@ func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, sou
 		if err := send(ctx, pcm); err != nil {
 			return &SessionAudioInputError{Kind: SessionAudioInputSend, Path: source.path, Err: err}
 		}
+		sentAudio = true
 		source.runtime.audioInput(pcm)
 	}
 }

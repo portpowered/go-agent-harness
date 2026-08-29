@@ -124,6 +124,49 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	return runSessionWithRecordingDirectory(ctx, out, opts, directory, audioOutPath, maxDuration, seed, systemPrompt, true, nil)
 }
 
+// RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration
+// composes one ordered image turn with the repeatable finite spoken-turn path.
+// The image wrapper queues its complete user item without requesting a response;
+// the first scheduled audio input then supplies the response boundary, so the
+// image is consumed exactly once as part of scheduled turn one.
+func RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+	ctx context.Context,
+	out io.Writer,
+	opts SessionImageRunOptions,
+	directory string,
+	audioOutPath string,
+	maxDuration time.Duration,
+	seed SessionTextSeed,
+	audioPaths []string,
+	systemPrompt string,
+) (runErr error) {
+	if len(audioPaths) == 0 {
+		opts.AudioOutPath = audioOutPath
+		opts.MaxDuration = maxDuration
+		opts.TextSeed = seed
+		opts.SystemPrompt = systemPrompt
+		return RunSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory)
+	}
+	if err := ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(audioPaths)); err != nil {
+		return err
+	}
+	scheduled, err := prepareScheduledAudioInputs(audioPaths)
+	if err != nil {
+		return err
+	}
+	// Unlike the ordinary text-plus-scheduled-audio composition, the image
+	// wrapper deliberately defers its response. Keep scheduled turn one at
+	// AfterCompletedTurns=0 so its audio completes the image turn rather than
+	// waiting for a response that has not been requested.
+	opts.SessionRunOptions.AudioInputs = scheduled
+	opts.SessionRunOptions.WaitForClose = true
+	opts.AudioOutPath = audioOutPath
+	opts.MaxDuration = maxDuration
+	opts.TextSeed = seed
+	opts.SystemPrompt = systemPrompt
+	return runSessionWithImagesAndRecordingDirectory(ctx, out, opts, directory, nil)
+}
+
 // RunSessionWithImagesAndRecordingDirectory composes the image-turn wrapper
 // with the directory observer. The observer stays outside the image wrapper so
 // the provider still receives its optional SendMessage image turn while the
@@ -206,8 +249,9 @@ func runSessionWithImagesAndRecordingDirectory(
 				runErr = errors.Join(runErr, closeErr)
 			}
 		}()
+		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	}
-	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil)
+	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
 	if err != nil {
 		return err
 	}
@@ -220,6 +264,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		// response containing a tool call. Keep the session open through the
 		// tool result and the follow-up assistant response.
 		plan.loop.RequireAssistantResponse = true
+		plan.loop.RequireTerminalAssistantResponse = true
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
 	if plan.inferencer != nil {
