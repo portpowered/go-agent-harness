@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -18,8 +19,9 @@ const defaultSessionToolExecutionTimeout = 60 * time.Second
 // definitions: the wrapped executor remains the owner of tool lookup and
 // argument validation.
 type sessionToolExecutor struct {
-	inner   messages.ToolExecutor
-	timeout time.Duration
+	inner    messages.ToolExecutor
+	timeout  time.Duration
+	observer sessionToolLifecycleObserver
 }
 
 var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
@@ -37,16 +39,20 @@ var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
 // adapter guarantees only that the session itself continues after the deadline
 // and that a cooperative worker exits promptly once cancellation fires.
 func newSessionToolExecutor(inner messages.ToolExecutor) *sessionToolExecutor {
-	return newSessionToolExecutorWithTimeout(inner, 0)
+	return newSessionToolExecutorWithTimeoutAndObserver(inner, 0, nil)
 }
 
 // newSessionToolExecutorWithTimeout is the deterministic seam for tests; a
 // non-positive timeout selects the session default.
 func newSessionToolExecutorWithTimeout(inner messages.ToolExecutor, timeout time.Duration) *sessionToolExecutor {
+	return newSessionToolExecutorWithTimeoutAndObserver(inner, timeout, nil)
+}
+
+func newSessionToolExecutorWithTimeoutAndObserver(inner messages.ToolExecutor, timeout time.Duration, observer sessionToolLifecycleObserver) *sessionToolExecutor {
 	if timeout <= 0 {
 		timeout = defaultSessionToolExecutionTimeout
 	}
-	return &sessionToolExecutor{inner: inner, timeout: timeout}
+	return &sessionToolExecutor{inner: inner, timeout: timeout, observer: observer}
 }
 
 type sessionToolExecutionResult struct {
@@ -62,8 +68,24 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if e == nil || e.inner == nil {
+	if e == nil {
 		return sessionToolFailure(call, errors.New("session tool executor is not configured")), nil
+	}
+	if e.observer != nil {
+		e.observer.observeToolCall(call)
+	}
+	finish := func(response messages.ToolCallResponse, failed bool) (messages.ToolCallResponse, error) {
+		// The provider's call identity is authoritative even if an injected
+		// executor omits or changes the response metadata.
+		response.ToolCallID = call.ID
+		response.Name = call.Name
+		if e.observer != nil {
+			e.observer.observeToolResult(call, response, failed)
+		}
+		return response, nil
+	}
+	if e.inner == nil {
+		return finish(sessionToolFailure(call, errors.New("session tool executor is not configured")), true)
 	}
 
 	execCtx, cancel := context.WithTimeout(ctx, e.timeout)
@@ -78,16 +100,26 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
-			return sessionToolFailure(call, result.err), nil
+			return finish(sessionToolFailure(call, result.err), true)
 		}
-		// The provider's call identity is authoritative even if an injected
-		// executor omits or changes the response metadata.
-		result.response.ToolCallID = call.ID
-		result.response.Name = call.Name
-		return result.response, nil
+		return finish(result.response, sessionToolResponseFailed(result.response.Content))
 	case <-execCtx.Done():
-		return sessionToolFailure(call, sessionToolContextFailure(execCtx.Err())), nil
+		return finish(sessionToolFailure(call, sessionToolContextFailure(execCtx.Err())), true)
 	}
+}
+
+// sessionToolResponseFailed recognizes the structured WebMCP failure envelope
+// while retaining the generic executor contract: a non-WebMCP result is
+// considered complete unless the executor returned a Go error.
+func sessionToolResponseFailed(content string) bool {
+	var envelope struct {
+		Version string `json:"version"`
+		OK      *bool  `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(content), &envelope); err != nil {
+		return false
+	}
+	return envelope.Version == "webmcp.tool-result.v1" && envelope.OK != nil && !*envelope.OK
 }
 
 // invokeSessionTool runs exactly one inner invocation and confines panic

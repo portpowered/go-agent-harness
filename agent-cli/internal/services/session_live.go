@@ -112,6 +112,11 @@ type sessionLoopOptions struct {
 	// consumed delta stream; nil keeps runtime behavior unchanged.
 	observer *sessionProgressObserver
 
+	// toolLifecycleObserver records the exact call/result boundary owned by the
+	// composed session executor. It is separate from the provider progress
+	// observer because provider tool-call frames are requests, not executions.
+	toolLifecycleObserver sessionToolLifecycleObserver
+
 	// ToolExecutor is the composed session tool executor. When non-nil it is
 	// wrapped once by newSessionToolExecutor and handed to
 	// agentloop.WithToolExecutor so provider-originated realtime tool calls
@@ -198,7 +203,7 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeout(opts.ToolExecutor, opts.ToolExecutionTimeout)))
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeoutAndObserver(opts.ToolExecutor, opts.ToolExecutionTimeout, opts.toolLifecycleObserver)))
 	} else {
 		loopOpts = append(loopOpts, agentloop.WithToolExecutionDisabled())
 	}
