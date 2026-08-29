@@ -288,15 +288,73 @@ func TestLoadManifestDirReportsMalformedFragmentPath(t *testing.T) {
 	}
 }
 
-func TestKnownGoodManifestAndProfiles(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "coverage-manifest.json"))
+func TestRepositoryFragmentCatalogMatchesPreMigrationBaseline(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "pre-migration-coverage-manifest.json"))
 	if err != nil {
-		t.Fatalf("read committed manifest: %v", err)
+		t.Fatalf("read pre-migration baseline: %v", err)
 	}
-	manifest, err := ParseManifest(data)
+	want, err := ParseManifest(data)
 	if err != nil {
 		t.Fatalf("ParseManifest() error = %v", err)
 	}
+	got := mustLoadRepositoryManifest(t)
+	if len(got.Packages) != len(want.Packages) {
+		t.Fatalf("registered package count = %d, want %d", len(got.Packages), len(want.Packages))
+	}
+	for i := range want.Packages {
+		if got.Packages[i] != want.Packages[i] {
+			t.Fatalf("package registration %d = %#v, want %#v", i, got.Packages[i], want.Packages[i])
+		}
+	}
+}
+
+func TestRepositoryFragmentCatalogPreservesCoverageEnforcement(t *testing.T) {
+	manifest := mustLoadRepositoryManifest(t)
+	measurements := allPackagesMeasured(manifest)
+	if err := Compare(manifest, measurements); err != nil {
+		t.Fatalf("non-regressing repository measurements rejected: %v", err)
+	}
+
+	withUnregistered := cloneMeasurements(measurements)
+	const unregisteredPackage = "github.com/portpowered/go-agent-harness/new/package"
+	withUnregistered[unregisteredPackage] = Coverage{Covered: 1, Total: 1}
+	err := Compare(manifest, withUnregistered)
+	if !errors.Is(err, ErrUnregisteredPackage) {
+		t.Fatalf("errors.Is(%v, ErrUnregisteredPackage) = false", err)
+	}
+	if !strings.Contains(err.Error(), unregisteredPackage) {
+		t.Fatalf("unregistered-package report = %q, want %q", err, unregisteredPackage)
+	}
+
+	const targetPackage = "github.com/portpowered/go-agent-harness/agent-cli/internal/agent"
+	withoutMeasurement := cloneMeasurements(measurements)
+	delete(withoutMeasurement, targetPackage)
+	err = Compare(manifest, withoutMeasurement)
+	if !errors.Is(err, ErrMissingCoverage) {
+		t.Fatalf("errors.Is(%v, ErrMissingCoverage) = false", err)
+	}
+	if !strings.Contains(err.Error(), targetPackage) {
+		t.Fatalf("missing-coverage report = %q, want %q", err, targetPackage)
+	}
+
+	withRegression := cloneMeasurements(measurements)
+	withRegression[targetPackage] = Coverage{Covered: 397, Total: 1000}
+	err = Compare(manifest, withRegression)
+	if !errors.Is(err, ErrCoverageFloorViolation) {
+		t.Fatalf("errors.Is(%v, ErrCoverageFloorViolation) = false", err)
+	}
+	var findings *FindingsError
+	if !errors.As(err, &findings) {
+		t.Fatalf("coverage regression error %T does not expose FindingsError", err)
+	}
+	wantViolation := Violation{ImportPath: targetPackage, ExpectedCents: 4020, ActualCents: 3970, DeltaCents: -50}
+	if len(findings.Violations) != 1 || findings.Violations[0] != wantViolation {
+		t.Fatalf("coverage violations = %#v, want %#v", findings.Violations, []Violation{wantViolation})
+	}
+}
+
+func TestKnownGoodManifestAndProfiles(t *testing.T) {
+	manifest := mustLoadRepositoryManifest(t)
 	if len(manifest.Packages) == 0 {
 		t.Fatal("manifest contains no packages")
 	}
@@ -347,11 +405,9 @@ func TestReadProfilesAggregatesPackages(t *testing.T) {
 
 func TestCommandFailureExitsNonZero(t *testing.T) {
 	directory := t.TempDir()
-	manifestPath := filepath.Join(directory, "manifest.json")
+	manifestPath := filepath.Join(directory, "manifest")
 	profilePath := filepath.Join(directory, "profile.out")
-	if err := os.WriteFile(manifestPath, []byte(manifestJSON(`{"package":"example/a","minimum":80.00}`)), 0o600); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
+	writeManifestFragment(t, filepath.Join(manifestPath, "example-a.json"), `{"package":"example/a","minimum":80.00}`)
 	if err := os.WriteFile(profilePath, []byte("mode: set\nexample/a/a.go:1.1,1.2 10 0\n"), 0o600); err != nil {
 		t.Fatalf("write profile: %v", err)
 	}
@@ -370,6 +426,31 @@ func TestCommandFailureExitsNonZero(t *testing.T) {
 	if !strings.Contains(string(output), "example/a: expected minimum 80.00%, actual 0.00%, delta -80.00%") {
 		t.Fatalf("command output = %q, want actionable floor diagnostic", output)
 	}
+}
+
+func mustLoadRepositoryManifest(t *testing.T) Manifest {
+	t.Helper()
+	manifest, err := LoadManifestDir(filepath.Join("..", "..", "coverage-manifest"))
+	if err != nil {
+		t.Fatalf("LoadManifestDir() error = %v", err)
+	}
+	return manifest
+}
+
+func allPackagesMeasured(manifest Manifest) map[string]Coverage {
+	measurements := make(map[string]Coverage, len(manifest.Packages))
+	for _, entry := range manifest.Packages {
+		measurements[entry.ImportPath] = Coverage{Covered: 1, Total: 1}
+	}
+	return measurements
+}
+
+func cloneMeasurements(measurements map[string]Coverage) map[string]Coverage {
+	clone := make(map[string]Coverage, len(measurements))
+	for packagePath, coverage := range measurements {
+		clone[packagePath] = coverage
+	}
+	return clone
 }
 
 func manifestJSON(entry string) string {

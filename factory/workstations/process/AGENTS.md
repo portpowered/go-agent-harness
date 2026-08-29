@@ -48,9 +48,9 @@ You are an autonomous coding agent working on a software project.
   `make staticcheck && make lint && make vet && make typecheck && make test`
   (or the closest Makefile equivalents), plus these two checks that dominated
   wasted cycles: (1) every NEW Go package must be registered in
-  coverage-manifest.json or the coverage gate fails; (2) if you added
+  coverage-manifest/ or the coverage gate fails; (2) if you added
   significant untested code to an existing package, check its coverage floor
-  in coverage-manifest.json — CI enforces per-package minimums and a 2-4%
+  in coverage-manifest/ — CI enforces per-package minimums and a 2-4%
   drop fails the build; write the tests before pushing, not after CI tells
   you. A first push that fails CI on staticcheck/lint/coverage-manifest is a
   process defect, not a discovery.

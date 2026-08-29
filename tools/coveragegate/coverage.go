@@ -31,7 +31,8 @@ var (
 	ErrCoverageFloorViolation   = errors.New("measured coverage is below its minimum")
 )
 
-// Manifest is the validated, hand-maintained coverage registration set.
+// Manifest is the validated coverage registration set loaded from the legacy
+// document or from one-package registration fragments.
 type Manifest struct {
 	Packages []PackageEntry
 }
