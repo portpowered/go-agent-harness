@@ -397,38 +397,6 @@ func continuationTerminalFailureLocked(state *toolContinuationState) bool {
 	return !state.continuationOutputObserved
 }
 
-// observeProviderToolCallStart records a provider tool call as soon as its
-// correlated ID is available. A provider can terminate between TOOLCALL.START
-// and TOOLCALL.END; retaining that partial request prevents cancellation or
-// transport close from looking like a clean session.
-func (o *sessionProgressObserver) observeProviderToolCallStart(callID, name string) {
-	if o == nil || strings.TrimSpace(callID) == "" {
-		return
-	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	o.ensureToolStateLocked()
-	if !o.toolResultsEnabled {
-		return
-	}
-	_, accepted := o.acceptedToolCalls[callID]
-	state := o.toolContinuations[callID]
-	if state == nil {
-		state = &toolContinuationState{}
-		o.toolContinuations[callID] = state
-	}
-	if strings.TrimSpace(name) != "" {
-		state.toolName = name
-	}
-	state.providerCallObserved = true
-	state.resultAccepted = accepted
-	o.providerToolCallSeen = true
-	if accepted {
-		return
-	}
-	o.unresolvedToolCalls[callID] = struct{}{}
-}
-
 // observeProviderToolCall records the completed provider tool-call obligation.
 // Empty IDs are deliberately ignored because they cannot be correlated with a
 // later result.
