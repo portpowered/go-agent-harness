@@ -8,6 +8,7 @@ GO_TEST_TIMEOUT ?= 120s
 AGENT_CLI_INTEGRATION_TIMEOUT ?= 180s
 AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
+COVERAGE_MANIFEST_DIR ?= coverage-manifest
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
@@ -233,7 +234,7 @@ coverage: ## Write per-module coverage profiles under coverage/.
 		fi; \
 	done; \
 	echo "==> coverage gate"; \
-	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest ../../coverage-manifest.json ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \

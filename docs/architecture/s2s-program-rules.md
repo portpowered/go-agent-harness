@@ -247,7 +247,7 @@ in your PR and stop — do not edit it.
 | Surface | Owner lane |
 |---|---|
 | `Makefile` (`test-hermetic` target only), `.github/workflows/ci.yml`, `docs/architecture/testing-tiers.md` | `s2s-b1-hermetic-test-target` |
-| `tools/coveragegate/**`, `coverage-manifest.json` | `s2s-b1-coverage-manifest-gate` |
+| `tools/coveragegate/**`, `coverage-manifest/**` | `s2s-b1-coverage-manifest-gate` |
 | `tools/timingate/**`, `Makefile` (`test-budget` target only) | `s2s-b1-wallclock-budget-gate` |
 | `.golangci.yml`, `docs/architecture/size-baselines.md` | `s2s-b1-file-and-func-size-lint` |
 | `agent-cli/internal/wire/**` | `s2s-b1-wire-composition-boundary` (`s2s-b1-*`), then extended — never redesigned — by `s2s-b2-wire-ports-transport`, `s2s-b2-wire-ports-audio`, `s2s-b2-wire-mock-injection` |
