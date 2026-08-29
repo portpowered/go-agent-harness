@@ -576,9 +576,9 @@ func TestLiveRecordRuntimeAudioInCompletesRoundTrip(t *testing.T) {
 	if len(sessionUpdate.Tools) != len(toolDefinitions) {
 		t.Fatalf("streamed-audio advertised tools = %#v, want %#v", sessionUpdate.Tools, toolDefinitions)
 	}
-	for index, definition := range toolDefinitions {
-		if sessionUpdate.Tools[index].Name != definition.Name {
-			t.Fatalf("streamed-audio tool %d = %#v, want %q", index, sessionUpdate.Tools[index], definition.Name)
+	for index, wantName := range []string{"exec", "read_file"} {
+		if sessionUpdate.Tools[index].Name != wantName {
+			t.Fatalf("streamed-audio tool %d = %#v, want %q", index, sessionUpdate.Tools[index], wantName)
 		}
 	}
 	info, statErr := os.Stat(outputPath)
@@ -688,9 +688,9 @@ func TestLiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose(t *
 	if len(advertisedTools) != len(toolDefinitions) {
 		t.Fatalf("scheduled advertised tools = %#v, want %#v", advertisedTools, toolDefinitions)
 	}
-	for index, definition := range toolDefinitions {
-		if advertisedTools[index].Name != definition.Name {
-			t.Fatalf("scheduled tool %d = %#v, want %q", index, advertisedTools[index], definition.Name)
+	for index, wantName := range []string{"exec", "read_file"} {
+		if advertisedTools[index].Name != wantName {
+			t.Fatalf("scheduled tool %d = %#v, want %q", index, advertisedTools[index], wantName)
 		}
 	}
 	if detection := input["turn_detection"]; string(detection) != "null" {

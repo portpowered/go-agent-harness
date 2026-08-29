@@ -232,6 +232,49 @@ func TestEnsureAgentsMD_ReconcilesAvailableToolsSection(t *testing.T) {
 	})
 }
 
+func TestGenerateAgentsMD_CanonicalizesToolAndParameterOrder(t *testing.T) {
+	workspaceDir := filepath.Join("<workspace>", "canonical")
+	first := []messages.ToolDefinition{
+		{
+			Name:        "zeta",
+			Description: "last",
+			Parameters: []messages.ToolParameter{
+				{Name: "z", Type: "string"},
+				{Name: "a", Type: "boolean"},
+			},
+		},
+		{Name: "alpha", Description: "first"},
+	}
+	second := []messages.ToolDefinition{
+		{Name: "alpha", Description: "first"},
+		{
+			Name:        "zeta",
+			Description: "last",
+			Parameters: []messages.ToolParameter{
+				{Name: "a", Type: "boolean"},
+				{Name: "z", Type: "string"},
+			},
+		},
+	}
+
+	gotFirst := generateAgentsMD(workspaceDir, first)
+	gotSecond := generateAgentsMD(workspaceDir, second)
+	if gotFirst != gotSecond {
+		t.Fatalf("equivalent tool compositions generated different AGENTS.md bytes")
+	}
+
+	alphaIndex := strings.Index(gotFirst, "### `alpha`")
+	zetaIndex := strings.Index(gotFirst, "### `zeta`")
+	if alphaIndex < 0 || zetaIndex < 0 || alphaIndex > zetaIndex {
+		t.Fatalf("tool headings are not canonical: alpha=%d zeta=%d", alphaIndex, zetaIndex)
+	}
+	aIndex := strings.Index(gotFirst, "| `a` | boolean")
+	zIndex := strings.Index(gotFirst, "| `z` | string")
+	if aIndex < 0 || zIndex < 0 || aIndex > zIndex {
+		t.Fatalf("parameter rows are not canonical: a=%d z=%d", aIndex, zIndex)
+	}
+}
+
 func representativeToolDefinitions() []messages.ToolDefinition {
 	return []messages.ToolDefinition{
 		{

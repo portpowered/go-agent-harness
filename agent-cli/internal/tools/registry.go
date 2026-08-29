@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -255,8 +256,8 @@ func (r *ToolRegistry) GetDefinitions() []map[string]any {
 	defer r.mu.RUnlock()
 
 	definitions := make([]map[string]any, 0, len(r.tools))
-	for _, tool := range r.tools {
-		definitions = append(definitions, ToolToSchema(tool))
+	for _, name := range sortedRegistryToolNames(r.tools) {
+		definitions = append(definitions, ToolToSchema(r.tools[name]))
 	}
 	return definitions
 }
@@ -270,6 +271,7 @@ func (r *ToolRegistry) List() []string {
 	for name := range r.tools {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -287,8 +289,18 @@ func (r *ToolRegistry) GetSummaries() []string {
 	defer r.mu.RUnlock()
 
 	summaries := make([]string, 0, len(r.tools))
-	for _, tool := range r.tools {
+	for _, name := range sortedRegistryToolNames(r.tools) {
+		tool := r.tools[name]
 		summaries = append(summaries, fmt.Sprintf("- `%s` - %s", tool.Name(), tool.Description()))
 	}
 	return summaries
+}
+
+func sortedRegistryToolNames(registry map[string]Tool) []string {
+	names := make([]string, 0, len(registry))
+	for name := range registry {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

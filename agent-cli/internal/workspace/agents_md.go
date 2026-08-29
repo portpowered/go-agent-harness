@@ -164,6 +164,7 @@ func generateAgentsMD(workspaceDir string, toolDefs []messages.ToolDefinition) s
 
 func renderAvailableToolsSection(toolDefs []messages.ToolDefinition) string {
 	var sb strings.Builder
+	toolDefs = messages.CanonicalToolDefinitions(toolDefs)
 
 	fmt.Fprintln(&sb, availableToolsHeading)
 	fmt.Fprintln(&sb)

@@ -84,9 +84,10 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 			if len(request.Config.Tools) != len(toolDefinitions) {
 				t.Fatalf("provider tools = %#v, want %#v", request.Config.Tools, toolDefinitions)
 			}
-			for index, definition := range toolDefinitions {
-				if request.Config.Tools[index].Name != definition.Name {
-					t.Fatalf("provider tool %d = %#v, want %q", index, request.Config.Tools[index], definition.Name)
+			wantToolNames := []string{"exec", "read_file"}
+			for index, wantName := range wantToolNames {
+				if request.Config.Tools[index].Name != wantName {
+					t.Fatalf("provider tool %d = %#v, want %q", index, request.Config.Tools[index], wantName)
 				}
 			}
 		})
