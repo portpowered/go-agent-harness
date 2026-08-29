@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig, model string) (models.SessionEvent, error) {
+	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
 	if p.realtimeLegacySessionUpdate {
 		return buildLegacyRealtimeSessionUpdate(config, model, p.clientOwnsAudioTurnBoundaries)
 	}
@@ -39,6 +41,7 @@ func (p *OpenAIProvider) buildRealtimeSessionUpdate(config models.SessionConfig,
 }
 
 func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string, disableTurnDetection bool) (models.SessionEvent, error) {
+	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
 	update := map[string]any{
 		"model": model,
 	}
@@ -135,6 +138,7 @@ func realtimeAudioFormat(format models.AudioFormat, rate models.SampleRate) map[
 }
 
 func realtimeToolsToParams(tools []models.ToolDefinition) []map[string]any {
+	tools = messages.CanonicalToolDefinitions(tools)
 	params := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
 		params = append(params, map[string]any{

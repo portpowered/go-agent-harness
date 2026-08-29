@@ -115,10 +115,7 @@ func (*SessionUpdateValue) streamMessageValue() {}
 
 // NewSessionUpdateValue returns a SESSION.UPDATE value from a SessionUpdateConfig.
 func NewSessionUpdateValue(cfg *SessionUpdateConfig) *SessionUpdateValue {
-	tools := append([]ToolDefinition(nil), cfg.Tools...)
-	for i := range tools {
-		tools[i].Parameters = append([]ToolParameter(nil), cfg.Tools[i].Parameters...)
-	}
+	tools := CanonicalToolDefinitions(cfg.Tools)
 	return &SessionUpdateValue{
 		Type:         "session_update",
 		Instructions: cfg.Instructions,

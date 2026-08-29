@@ -124,6 +124,29 @@ func TestReplayMismatchError_MatchesReplayMismatchOnly(t *testing.T) {
 	}
 }
 
+func TestReplayPayloadDivergenceError_RendersStructuredDetails(t *testing.T) {
+	detail := NewReplayPayloadDivergenceError(
+		"JSON pointer /item/content/0/text",
+		`"expected text"`,
+		`"actual text"`,
+	)
+	if got, want := detail.Error(), `JSON pointer /item/content/0/text: expected "expected text", actual "actual text"`; got != want {
+		t.Fatalf("divergence error = %q, want %q", got, want)
+	}
+
+	err := NewReplayMismatchError("recorded event", "actual event", detail)
+	if !errors.Is(err, ErrReplayMismatch) {
+		t.Fatal("wrapped divergence should retain replay mismatch classification")
+	}
+	var divergence *ReplayPayloadDivergenceError
+	if !errors.As(err, &divergence) {
+		t.Fatal("wrapped divergence should expose structured details")
+	}
+	if divergence.Location != "JSON pointer /item/content/0/text" {
+		t.Fatalf("divergence location = %q, want JSON pointer /item/content/0/text", divergence.Location)
+	}
+}
+
 func TestReplayIncompleteError_MatchesReplayIncompleteOnly(t *testing.T) {
 	err := fmt.Errorf("fixture failed: %w", NewReplayIncompleteError("remaining event", "session close", nil))
 

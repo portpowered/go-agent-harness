@@ -1,6 +1,8 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -84,10 +86,80 @@ func TestLivePlannerFamiliesUseOneGroundingComposition(t *testing.T) {
 			if len(request.Config.Tools) != len(toolDefinitions) {
 				t.Fatalf("provider tools = %#v, want %#v", request.Config.Tools, toolDefinitions)
 			}
-			for index, definition := range toolDefinitions {
-				if request.Config.Tools[index].Name != definition.Name {
-					t.Fatalf("provider tool %d = %#v, want %q", index, request.Config.Tools[index], definition.Name)
+			wantToolNames := []string{"exec", "read_file"}
+			for index, wantName := range wantToolNames {
+				if request.Config.Tools[index].Name != wantName {
+					t.Fatalf("provider tool %d = %#v, want %q", index, request.Config.Tools[index], wantName)
 				}
+			}
+		})
+	}
+}
+
+func TestIndependentSessionCompositionsProduceIdenticalInstructionsAndProviderUpdate(t *testing.T) {
+	toolDefinitions := [][]messages.ToolDefinition{
+		{
+			{Name: "read_file", Description: "Read a UTF-8 file.", Parameters: []messages.ToolParameter{{Name: "path", Type: "string", Required: true}}},
+			{Name: "exec", Description: "Execute a command.", Parameters: []messages.ToolParameter{{Name: "command", Type: "string", Required: true}}},
+		},
+		{
+			{Name: "exec", Description: "Execute a command.", Parameters: []messages.ToolParameter{{Name: "command", Type: "string", Required: true}}},
+			{Name: "read_file", Description: "Read a UTF-8 file.", Parameters: []messages.ToolParameter{{Name: "path", Type: "string", Required: true}}},
+		},
+	}
+	labels := []string{"registration order one", "registration order two"}
+	var wantInstructions []byte
+	var wantProviderUpdate []byte
+
+	for index, definitions := range toolDefinitions {
+		t.Run(labels[index], func(t *testing.T) {
+			configDir := t.TempDir()
+			writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
+			conn := &replayHandshakeRecordingConn{}
+			opts := SessionRunOptions{
+				RecordPath:      filepath.Join(t.TempDir(), "session.json"),
+				Provider:        config.ProviderOpenAI,
+				Model:           openAIRealtimeDefaultModel,
+				APIKey:          "test-key",
+				ConfigDir:       configDir,
+				ToolExecutor:    &messages.DefaultToolExecutor{},
+				ToolDefinitions: definitions,
+				WebSocketDialer: &replayHandshakeRecordingDialer{conn: conn},
+			}
+
+			plan, err := planSessionWithResolvedInstructions(opts, "customer instructions")
+			if err != nil {
+				t.Fatalf("build planner: %v", err)
+			}
+
+			request := sessionRequestFromPlanner(t, plan.inferencer)
+			instructions := []byte(request.Config.Instructions)
+			session, err := plan.inferencer.ConnectSession(context.Background())
+			if err != nil {
+				t.Fatalf("connect composed provider session: %v", err)
+			}
+			defer func() { _ = session.Close() }()
+
+			conn.mu.Lock()
+			writes := make([][]byte, len(conn.writes))
+			for writeIndex := range conn.writes {
+				writes[writeIndex] = append([]byte(nil), conn.writes[writeIndex]...)
+			}
+			conn.mu.Unlock()
+			if len(writes) != 1 {
+				t.Fatalf("provider writes = %d, want exactly initial session.update: %s", len(writes), writes)
+			}
+
+			if index == 0 {
+				wantInstructions = instructions
+				wantProviderUpdate = writes[0]
+				return
+			}
+			if !bytes.Equal(instructions, wantInstructions) {
+				t.Fatalf("independent composed instructions differ:\nfirst=%s\nsecond=%s", wantInstructions, instructions)
+			}
+			if !bytes.Equal(writes[0], wantProviderUpdate) {
+				t.Fatalf("independent provider session.update bytes differ:\nfirst=%s\nsecond=%s", wantProviderUpdate, writes[0])
 			}
 		})
 	}

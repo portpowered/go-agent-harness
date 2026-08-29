@@ -239,13 +239,16 @@ func (e *ReplayMismatchError) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
+	var message string
 	if e.Expected != "" || e.Actual != "" {
-		return fmt.Sprintf("replay mismatch: expected %s, actual %s", e.Expected, e.Actual)
+		message = fmt.Sprintf("replay mismatch: expected %s, actual %s", e.Expected, e.Actual)
+	} else {
+		message = "replay mismatch"
 	}
 	if e.Err != nil {
-		return "replay mismatch: " + e.Err.Error()
+		return message + ": " + e.Err.Error()
 	}
-	return "replay mismatch"
+	return message
 }
 
 // Unwrap returns the lower-level replay mismatch cause.
@@ -268,6 +271,34 @@ func NewReplayMismatchError(expected, actual string, err error) error {
 		Expected: expected,
 		Actual:   actual,
 		Err:      err,
+	}
+}
+
+// ReplayPayloadDivergenceError identifies the first location where two
+// replay payloads differ. Location is either an RFC 6901-style JSON pointer
+// or a zero-based byte offset when the payloads cannot be compared as JSON.
+// The excerpts are already bounded and escaped for safe operator output.
+type ReplayPayloadDivergenceError struct {
+	Location        string
+	ExpectedExcerpt string
+	ActualExcerpt   string
+}
+
+// Error returns the bounded, operator-readable payload divergence.
+func (e *ReplayPayloadDivergenceError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("%s: expected %s, actual %s", e.Location, e.ExpectedExcerpt, e.ActualExcerpt)
+}
+
+// NewReplayPayloadDivergenceError creates a structured payload divergence
+// detail for wrapping in a ReplayMismatchError.
+func NewReplayPayloadDivergenceError(location, expectedExcerpt, actualExcerpt string) error {
+	return &ReplayPayloadDivergenceError{
+		Location:        location,
+		ExpectedExcerpt: expectedExcerpt,
+		ActualExcerpt:   actualExcerpt,
 	}
 }
 

@@ -3,6 +3,7 @@ package openai
 import (
 	"encoding/base64"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
@@ -198,6 +199,7 @@ func audioFormatFromMediaType(mediaType string) string {
 
 // toolsToParams converts gateway tool definitions to OpenAI tool params.
 func toolsToParams(tools []models.ToolDefinition) []chatTool {
+	tools = messages.CanonicalToolDefinitions(tools)
 	params := make([]chatTool, 0, len(tools))
 	for _, tool := range tools {
 		params = append(params, chatTool{

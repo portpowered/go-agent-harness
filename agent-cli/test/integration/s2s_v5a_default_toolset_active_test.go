@@ -65,13 +65,13 @@ func TestSessionCommand_DefaultToolSetActive_DisabledSleepRejectsSuccess(t *test
 	if !errors.As(err, &replayErr) {
 		t.Fatalf("disabled sleep error = %v, want typed replay mismatch", err)
 	}
-	if !strings.Contains(replayErr.Expected, "outbound payload for conversation.item.create at sequence 9") {
+	if replayErr.Expected != `event type "conversation.item.create" at sequence 9` {
 		t.Fatalf("disabled sleep expected evidence = %q, want exact tool-result slot", replayErr.Expected)
 	}
-	if replayErr.Actual != "conversation.item.create" {
+	if replayErr.Actual != `event type "conversation.item.create" at sequence 9` {
 		t.Fatalf("disabled sleep actual evidence = %q, want provider result event type", replayErr.Actual)
 	}
-	if replayErr.Err == nil || !strings.Contains(replayErr.Err.Error(), "does not match actual outbound event") {
+	if replayErr.Err == nil || !strings.Contains(replayErr.Err.Error(), "JSON pointer /item/output") {
 		t.Fatalf("disabled sleep mismatch cause = %v, want expected-versus-actual payload evidence", replayErr.Err)
 	}
 	if strings.Contains(output, "Sleep tool result reinjected.") {

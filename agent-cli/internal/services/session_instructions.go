@@ -201,6 +201,7 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 	// provider construction. The tool definitions in opts are the same snapshot
 	// that the runtime planner passes to the provider, so the grounding contract
 	// cannot drift from the advertised tool surface.
+	opts.ToolDefinitions = messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	instructions = composeSessionInstructions(opts, instructions)
 	planFactory := defaultSessionRuntimeFactory
 	useInitialProviderInstructions := instructions != "" && opts.SessionInferencer == nil
@@ -313,6 +314,7 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sess
 // resolveSessionInstructions delegates prompt selection, AGENTS.md creation,
 // and path-or-literal precedence to the existing ask-path Executor contract.
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
+	toolDefinitions := messages.CanonicalToolDefinitions(opts.ToolDefinitions)
 	cfg := &agent.Config{
 		SystemPrompt:        systemPrompt,
 		NoSystemInformation: true,
@@ -323,7 +325,7 @@ func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (st
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
-	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), opts.ToolDefinitions)
+	instructions, err := executor.LoadSystemPrompt(cfg, storage.WorkspaceDir(), toolDefinitions)
 	if err != nil {
 		return "", fmt.Errorf("resolve session instructions: %w", err)
 	}
@@ -370,15 +372,7 @@ func newSessionInstructionsInferencer(inner messages.SessionInferencer, instruct
 }
 
 func cloneSessionToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	if len(definitions) == 0 {
-		return nil
-	}
-	cloned := make([]messages.ToolDefinition, len(definitions))
-	for index, definition := range definitions {
-		cloned[index] = definition
-		cloned[index].Parameters = append([]messages.ToolParameter(nil), definition.Parameters...)
-	}
-	return cloned
+	return messages.CanonicalToolDefinitions(definitions)
 }
 
 func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {

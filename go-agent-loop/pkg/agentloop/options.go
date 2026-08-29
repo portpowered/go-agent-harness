@@ -109,7 +109,7 @@ func WithToolExecutionDisabled() Option {
 // when tool execution is enabled.
 func WithTools(tools []messages.ToolDefinition) Option {
 	return func(c *AgentLoopConfig) {
-		c.Tools = tools
+		c.Tools = messages.CanonicalToolDefinitions(tools)
 	}
 }
 

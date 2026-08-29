@@ -58,8 +58,8 @@ func TestComposeToolSurfaceRoutesExactNamesAndTextualizesBrokerResult(t *testing
 	if err != nil {
 		t.Fatalf("ComposeToolSurface: %v", err)
 	}
-	if len(surface.Definitions) != 2 || surface.Definitions[0].Name != "static_tool" || surface.Definitions[1].Name != "broker_tool" {
-		t.Fatalf("definitions = %#v, want static then broker", surface.Definitions)
+	if len(surface.Definitions) != 2 || surface.Definitions[0].Name != "broker_tool" || surface.Definitions[1].Name != "static_tool" {
+		t.Fatalf("definitions = %#v, want canonical broker then static order", surface.Definitions)
 	}
 
 	staticResponse, err := surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "static-call", Name: "static_tool"})

@@ -110,6 +110,7 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 
 // buildSessionUpdate constructs the initial session.update event from SessionConfig.
 func buildSessionUpdate(config models.SessionConfig) (models.SessionEvent, error) {
+	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
 	update := map[string]any{
 		"model": config.Model,
 	}

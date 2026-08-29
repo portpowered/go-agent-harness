@@ -90,18 +90,11 @@ func orderedRoomToolDefinitions(definitions []messages.ToolDefinition, names []s
 			ordered = append(ordered, definition)
 		}
 	}
-	return ordered
+	return messages.CanonicalToolDefinitions(ordered)
 }
 
 func cloneRoomToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	if len(definitions) == 0 {
-		return nil
-	}
-	cloned := make([]messages.ToolDefinition, len(definitions))
-	for index, definition := range definitions {
-		cloned[index] = cloneRoomToolDefinition(definition)
-	}
-	return cloned
+	return messages.CanonicalToolDefinitions(definitions)
 }
 
 func cloneRoomToolDefinition(definition messages.ToolDefinition) messages.ToolDefinition {

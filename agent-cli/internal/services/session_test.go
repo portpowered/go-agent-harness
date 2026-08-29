@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -277,8 +278,8 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 			if cfg.Model != "gpt-realtime" {
 				t.Fatalf("OpenAI replay model = %q, want gpt-realtime", cfg.Model)
 			}
-			if dialer != replayDialer {
-				t.Fatal("OpenAI replay runtime did not inject the replay dialer into the provider seam")
+			if _, ok := dialer.(*replayInitialSessionUpdateDialer); !ok {
+				t.Fatalf("OpenAI replay runtime did not wrap the replay dialer for the captured handshake: %T", dialer)
 			}
 			return &scriptedSessionInferencer{}, nil
 		},
@@ -305,7 +306,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 	}
 }
 
-func TestPlanSessionRuntime_OpenAIReplayUsesToolDefinitionsOnlyWhenCaptureAdvertisesTools(t *testing.T) {
+func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDefinitions(t *testing.T) {
 	definition := messages.ToolDefinition{
 		Name:        "exec",
 		Description: "execute a command",
@@ -319,17 +320,14 @@ func TestPlanSessionRuntime_OpenAIReplayUsesToolDefinitionsOnlyWhenCaptureAdvert
 	cases := []struct {
 		name          string
 		sessionUpdate string
-		wantProvider  int
 	}{
 		{
 			name:          "historical capture without tools",
 			sessionUpdate: `{"type":"session.update","session":{"model":"gpt-realtime"}}`,
-			wantProvider:  0,
 		},
 		{
 			name:          "strict capture with tools",
 			sessionUpdate: `{"type":"session.update","session":{"model":"gpt-realtime","tools":[]}}`,
-			wantProvider:  1,
 		},
 	}
 
@@ -359,13 +357,151 @@ func TestPlanSessionRuntime_OpenAIReplayUsesToolDefinitionsOnlyWhenCaptureAdvert
 			if err != nil {
 				t.Fatalf("planSessionRuntimeWithFactory: %v", err)
 			}
-			if len(gotProviderDefinitions) != tc.wantProvider {
-				t.Fatalf("provider tool definitions = %#v, want %d definitions", gotProviderDefinitions, tc.wantProvider)
+			if len(gotProviderDefinitions) != 0 {
+				t.Fatalf("provider tool definitions = %#v, want no live definitions to be composed", gotProviderDefinitions)
 			}
 			if len(plan.loop.ToolDefinitions) != 1 {
 				t.Fatalf("replay loop tool definitions = %#v, want selected definition retained for loop execution", plan.loop.ToolDefinitions)
 			}
 		})
+	}
+}
+
+func TestLoadReplaySessionConfigurationPreservesCapturedProviderFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "openai-replay.session.json")
+	expected := `{"type":"session.update","session":{"type":"realtime","model":"gpt-realtime","output_modalities":["audio","text"],"instructions":"recorded instructions","audio":{"input":{"format":{"type":"audio/pcm","rate":24000},"turn_detection":null},"output":{"format":{"type":"audio/pcm","rate":24000},"voice":"marin"}},"tools":[{"type":"function","name":"recorded_tool","description":"recorded schema","parameters":{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}}]}}`
+	writeSessionCapture(t, path, gwtesting.SessionCapture{
+		Version: gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{
+			Name:  sessionProviderOpenAI,
+			Model: "live-model-metadata-must-not-win",
+		},
+		Records: []gwtesting.CapturedSessionEvent{
+			{
+				Sequence:    7,
+				Direction:   gwtesting.DirectionClientToServer,
+				Type:        sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+				Payload:     json.RawMessage(expected),
+			},
+		},
+	})
+
+	got, err := loadReplaySessionConfiguration(path)
+	if err != nil {
+		t.Fatalf("loadReplaySessionConfiguration: %v", err)
+	}
+	if got.model != "gpt-realtime" {
+		t.Fatalf("captured model = %q, want gpt-realtime", got.model)
+	}
+	var gotValue, expectedValue any
+	if err := json.Unmarshal(got.payload, &gotValue); err != nil {
+		t.Fatalf("captured initial payload is invalid JSON: %v", err)
+	}
+	if err := json.Unmarshal([]byte(expected), &expectedValue); err != nil {
+		t.Fatalf("expected initial payload is invalid JSON: %v", err)
+	}
+	if !reflect.DeepEqual(gotValue, expectedValue) {
+		t.Fatalf("captured initial payload changed:\n got: %s\nwant: %s", got.payload, expected)
+	}
+}
+
+func TestLoadReplaySessionConfigurationRejectsMissingOrMalformedHandshake(t *testing.T) {
+	tests := []struct {
+		name       string
+		records    []gwtesting.CapturedSessionEvent
+		wantReason string
+	}{
+		{
+			name:       "missing session update",
+			wantReason: "missing initial outbound session.update configuration",
+		},
+		{
+			name: "missing payload",
+			records: []gwtesting.CapturedSessionEvent{{
+				Sequence: 3, Direction: gwtesting.DirectionClientToServer, Type: sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			}},
+			wantReason: "has no payload",
+		},
+		{
+			name: "malformed payload",
+			records: []gwtesting.CapturedSessionEvent{{
+				Sequence: 4, Direction: gwtesting.DirectionClientToServer, Type: sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`"malformed"`),
+			}},
+			wantReason: "decode initial outbound session.update",
+		},
+		{
+			name: "missing session object",
+			records: []gwtesting.CapturedSessionEvent{{
+				Sequence: 5, Direction: gwtesting.DirectionClientToServer, Type: sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"session.update"}`),
+			}},
+			wantReason: "missing the session configuration",
+		},
+		{
+			name: "non-string model",
+			records: []gwtesting.CapturedSessionEvent{{
+				Sequence: 6, Direction: gwtesting.DirectionClientToServer, Type: sessionUpdateEventType,
+				PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"session.update","session":{"model":42}}`),
+			}},
+			wantReason: "session.model at sequence 6 must be a string",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "replay.session.json")
+			writeSessionCapture(t, path, gwtesting.SessionCapture{
+				Version:  gwtesting.SessionCaptureVersion,
+				Provider: gwtesting.SessionProviderMetadata{Name: sessionProviderOpenAI, Model: "gpt-realtime"},
+				Records:  test.records,
+			})
+
+			_, err := loadReplaySessionConfiguration(path)
+			if err == nil {
+				t.Fatal("loadReplaySessionConfiguration unexpectedly succeeded")
+			}
+			if !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), test.wantReason) {
+				t.Fatalf("error = %v, want path and %q", err, test.wantReason)
+			}
+		})
+	}
+}
+
+func TestReplayInitialSessionUpdateDialerReplacesOnlyProviderHandshake(t *testing.T) {
+	innerConn := &replayHandshakeRecordingConn{}
+	inner := &replayHandshakeRecordingDialer{conn: innerConn}
+	expected := []byte(`{"type":"session.update","session":{"model":"recorded","instructions":"captured"}}`)
+	dialer := newReplayInitialSessionUpdateDialer(inner, replaySessionConfiguration{payload: expected})
+
+	conn, err := dialer.Dial("wss://replay.invalid", map[string]string{"Authorization": "Bearer replay"})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"session.update","session":{"model":"live"}}`)); err != nil {
+		t.Fatalf("first WriteMessage: %v", err)
+	}
+	later := []byte(`{"type":"response.create"}`)
+	if err := conn.WriteMessage(1, later); err != nil {
+		t.Fatalf("second WriteMessage: %v", err)
+	}
+
+	innerConn.mu.Lock()
+	writes := make([][]byte, len(innerConn.writes))
+	for index := range innerConn.writes {
+		writes[index] = append([]byte(nil), innerConn.writes[index]...)
+	}
+	innerConn.mu.Unlock()
+	if len(writes) != 2 {
+		t.Fatalf("inner writes = %d, want 2", len(writes))
+	}
+	if !bytes.Equal(writes[0], expected) {
+		t.Fatalf("initial write = %s, want captured payload %s", writes[0], expected)
+	}
+	if !bytes.Equal(writes[1], later) {
+		t.Fatalf("later write = %s, want unchanged payload %s", writes[1], later)
 	}
 }
 
@@ -944,6 +1080,32 @@ type stubRuntimeDialer struct {
 func (d *stubRuntimeDialer) Dial(string, map[string]string) (transport.Conn, error) {
 	return nil, errors.New("unexpected dial")
 }
+
+type replayHandshakeRecordingDialer struct {
+	conn *replayHandshakeRecordingConn
+}
+
+func (d *replayHandshakeRecordingDialer) Dial(string, map[string]string) (transport.Conn, error) {
+	return d.conn, nil
+}
+
+type replayHandshakeRecordingConn struct {
+	mu     sync.Mutex
+	writes [][]byte
+}
+
+func (c *replayHandshakeRecordingConn) ReadMessage() (int, []byte, error) {
+	return 0, nil, io.EOF
+}
+
+func (c *replayHandshakeRecordingConn) WriteMessage(_ int, payload []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.writes = append(c.writes, append([]byte(nil), payload...))
+	return nil
+}
+
+func (c *replayHandshakeRecordingConn) Close() error { return nil }
 
 type stubRecordingDialer struct {
 	stubRuntimeDialer

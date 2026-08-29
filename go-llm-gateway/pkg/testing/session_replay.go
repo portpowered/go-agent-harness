@@ -1,7 +1,6 @@
 package testing
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -195,8 +194,8 @@ func (r *SessionReplayer) SendWithOutcome(ctx context.Context, msg messages.Stre
 	}
 	if err := compareCapturedStreamMessage(expected, msg); err != nil {
 		mismatchErr := newReplayMismatchError(
-			fmt.Sprintf("outbound payload for %s at sequence %d", expected.Type, expected.Sequence),
-			string(msg.Type),
+			replayEventDescription(expected.Sequence, expected.Type),
+			replayEventDescription(expected.Sequence, string(msg.Type)),
 			err,
 		)
 		r.failLocked(SessionReplayDiverged, mismatchErr)
@@ -444,9 +443,6 @@ func deserializeStreamMessage(evt CapturedSessionEvent) (messages.StreamMessage,
 }
 
 func compareCapturedStreamMessage(expected CapturedSessionEvent, actual messages.StreamMessage) error {
-	if expected.Type != "" && expected.Type != string(actual.Type) {
-		return fmt.Errorf("expected outbound type %s, got %s", expected.Type, actual.Type)
-	}
 	expectedPayload := expected.Payload
 	if len(expectedPayload) == 0 {
 		expectedPayload = expected.Data
@@ -462,30 +458,13 @@ func compareCapturedStreamMessage(expected CapturedSessionEvent, actual messages
 	if err != nil {
 		return fmt.Errorf("marshal outbound event %s: %w", actual.Type, err)
 	}
-	if !jsonEqual(expectedPayload, actualPayload) {
-		return fmt.Errorf("expected outbound payload for %s does not match sent payload type %s", expected.Type, actual.Type)
+	if err := compareReplayPayloads(expectedPayload, actualPayload); err != nil {
+		return err
+	}
+	if expected.Type != "" && expected.Type != string(actual.Type) {
+		return fmt.Errorf("expected event type %q, got %q", expected.Type, actual.Type)
 	}
 	return nil
-}
-
-func jsonEqual(a, b []byte) bool {
-	var av any
-	var bv any
-	if err := json.Unmarshal(a, &av); err != nil {
-		return bytes.Equal(a, b)
-	}
-	if err := json.Unmarshal(b, &bv); err != nil {
-		return bytes.Equal(a, b)
-	}
-	aj, err := json.Marshal(av)
-	if err != nil {
-		return bytes.Equal(a, b)
-	}
-	bj, err := json.Marshal(bv)
-	if err != nil {
-		return bytes.Equal(a, b)
-	}
-	return bytes.Equal(aj, bj)
 }
 
 func decodeSessionCaptureEvents(data []byte) ([]CapturedSessionEvent, error) {

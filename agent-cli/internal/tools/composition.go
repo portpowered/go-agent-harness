@@ -69,6 +69,7 @@ func ComposeToolSurface(
 	definitions := make([]messages.ToolDefinition, 0, len(staticDefinitions)+len(brokerDefinitions))
 	definitions = append(definitions, cloneToolDefinitions(staticDefinitions)...)
 	definitions = append(definitions, cloneToolDefinitions(brokerDefinitions)...)
+	definitions = messages.CanonicalToolDefinitions(definitions)
 
 	routes := make(map[string]toolRoute, len(definitions))
 	for _, definition := range staticDefinitions {
@@ -200,18 +201,7 @@ func preflightDefinitionNames(namespace string, definitions []messages.ToolDefin
 }
 
 func cloneToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	if len(definitions) == 0 {
-		return nil
-	}
-	cloned := make([]messages.ToolDefinition, len(definitions))
-	copy(cloned, definitions)
-	for index := range cloned {
-		if definitions[index].Parameters == nil {
-			continue
-		}
-		cloned[index].Parameters = append([]messages.ToolParameter(nil), definitions[index].Parameters...)
-	}
-	return cloned
+	return messages.CanonicalToolDefinitions(definitions)
 }
 
 func isNilToolExecutor(executor messages.ToolExecutor) bool {

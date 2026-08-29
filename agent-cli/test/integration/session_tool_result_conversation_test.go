@@ -512,7 +512,8 @@ func TestSessionToolCallConversationDifferentResultFailsReflection(t *testing.T)
 	}
 	if !strings.Contains(runErr.Error(), "replay session capture") ||
 		!strings.Contains(runErr.Error(), "replay mismatch") ||
-		!strings.Contains(runErr.Error(), "expected outbound payload for conversation.item.create") {
+		!strings.Contains(runErr.Error(), `expected event type "conversation.item.create" at sequence 101`) ||
+		!strings.Contains(runErr.Error(), "JSON pointer /item/output") {
 		t.Fatalf("control failure %q is not the deterministic replay divergence at the function_call_output frame", runErr)
 	}
 	if elapsed > 9*time.Second {

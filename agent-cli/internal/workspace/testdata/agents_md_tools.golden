@@ -21,8 +21,8 @@ Write text to a UTF-8 workspace file.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `path` | string | yes | Workspace-relative path. |
 | `content` | string | no | Bytes to write. |
+| `path` | string | yes | Workspace-relative path. |
 
 <!-- END AGENT CLI MANAGED AVAILABLE TOOLS -->
 

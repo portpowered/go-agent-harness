@@ -75,10 +75,7 @@ func WithSessionInstructions(instructions string) SessionOption {
 // mutate their input after configuring the inferencer.
 func WithSessionTools(tools []models.ToolDefinition) SessionOption {
 	return func(si *SessionGatewayInferencer) {
-		si.request.Config.Tools = append([]models.ToolDefinition(nil), tools...)
-		for i := range si.request.Config.Tools {
-			si.request.Config.Tools[i].Parameters = append([]models.ToolParameter(nil), tools[i].Parameters...)
-		}
+		si.request.Config.Tools = messages.CanonicalToolDefinitions(tools)
 	}
 }
 
@@ -113,10 +110,7 @@ func cloneSessionRequest(req SessionRequest) SessionRequest {
 
 func cloneSessionConfig(config models.SessionConfig) models.SessionConfig {
 	config.Modalities = append([]models.SessionModality(nil), config.Modalities...)
-	config.Tools = append([]models.ToolDefinition(nil), config.Tools...)
-	for i := range config.Tools {
-		config.Tools[i].Parameters = append([]models.ToolParameter(nil), config.Tools[i].Parameters...)
-	}
+	config.Tools = messages.CanonicalToolDefinitions(config.Tools)
 	if config.TurnDetection != nil {
 		turnDetection := *config.TurnDetection
 		if turnDetection.CreateResponse != nil {

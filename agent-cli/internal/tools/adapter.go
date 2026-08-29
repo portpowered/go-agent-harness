@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -95,7 +96,7 @@ func (r *ToolRegistry) ToAgentLoopDefs() []messages.ToolDefinition {
 			Parameters:  convertParameters(tool.Parameters()),
 		})
 	}
-	return defs
+	return messages.CanonicalToolDefinitions(defs)
 }
 
 // convertParameters converts a JSON Schema parameters map to a flat list of ToolParameter.
@@ -118,8 +119,15 @@ func convertParameters(schema map[string]any) []messages.ToolParameter {
 		}
 	}
 
+	names := make([]string, 0, len(props))
+	for name := range props {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	params := make([]messages.ToolParameter, 0, len(props))
-	for name, propRaw := range props {
+	for _, name := range names {
+		propRaw := props[name]
 		prop, ok := propRaw.(map[string]any)
 		if !ok {
 			continue
