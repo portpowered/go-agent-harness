@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -160,6 +161,129 @@ browser:
 		if !strings.Contains(human, want) {
 			t.Fatalf("human output missing %q:\n%s", want, human)
 		}
+	}
+}
+
+func TestWebMCPDoctorUnselectedTargetIsNotReadyAndLeavesPageToolsUnchecked(t *testing.T) {
+	browserID := randomizedWebMCPTestID(t, "browser-")
+	targetID := randomizedWebMCPTestID(t, "target-")
+	candidate := webmcp.BrowserCandidate{
+		ID:       webmcp.BrowserID(browserID),
+		Product:  "Chrome/Test",
+		Protocol: "1.3",
+		HTTPURL:  "http://127.0.0.1:9222",
+		Loopback: true,
+	}
+	target := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        webmcp.TargetID(targetID),
+		Type:      "page",
+		Origin:    "https://fixture.test",
+		Eligible:  true,
+	}
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
+browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: http://127.0.0.1:9222
+  selection:
+    browser: %q
+`, browserID))
+
+	for _, testCase := range []struct {
+		name string
+		json bool
+	}{
+		{name: "json", json: true},
+		{name: "human"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			broker := &doctorStubBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    []webmcp.Target{target},
+			}
+			factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+				return WebMCPDoctorRuntime{Broker: broker}, nil
+			}
+			args := []string{}
+			if testCase.json {
+				args = append(args, "--json")
+			}
+			root, stdout, stderr := executeDoctorCommand(t, configDir, factory, args...)
+			if err := root.ExecuteContext(context.Background()); err != nil {
+				t.Fatalf("doctor: %v", err)
+			}
+			if stderr.String() != "" {
+				t.Fatalf("doctor stderr = %q", stderr.String())
+			}
+			if broker.closeCalls != 1 {
+				t.Fatalf("cleanup calls = %d, want one", broker.closeCalls)
+			}
+
+			if testCase.json {
+				report := decodeDoctorReport(t, stdout.String())
+				assertUnselectedDoctorReport(t, report, browserID, targetID)
+				return
+			}
+			human := stdout.String()
+			for _, want := range []string{
+				"WebMCP doctor: not_ready",
+				"Page tools:      not_checked",
+				"Selected page:   none",
+				"Endpoint is ready, but page tools are unverified",
+				"agent webmcp tabs",
+				"agent webmcp select",
+			} {
+				if !strings.Contains(human, want) {
+					t.Fatalf("human output missing %q:\n%s", want, human)
+				}
+			}
+			if strings.Contains(human, "Page tools:      ready") || strings.Contains(human, "WebMCP doctor: ready") {
+				t.Fatalf("human output claimed readiness:\n%s", human)
+			}
+		})
+	}
+}
+
+func assertUnselectedDoctorReport(t *testing.T, report WebMCPDoctorReport, browserID, targetID string) {
+	t.Helper()
+	if report.Status != doctorStatusNotReady || report.Error != nil {
+		t.Fatalf("unselected report status/error = %s/%+v, want not_ready/nil", report.Status, report.Error)
+	}
+	if report.PageTools != "not_checked" || report.Catalog.Ready || report.Catalog.ToolCountKnown || report.Catalog.Evidence != "not_checked" {
+		t.Fatalf("unselected page-tool state = page_tools:%q catalog:%+v, want unchecked/not ready", report.PageTools, report.Catalog)
+	}
+	if report.WebMCP != "not_checked" || report.WebMCPDomain != "not_checked" {
+		t.Fatalf("unselected domain state = webmcp:%q domain:%q, want not_checked", report.WebMCP, report.WebMCPDomain)
+	}
+	if report.SelectedPage != nil {
+		t.Fatalf("unselected report selected page = %+v", report.SelectedPage)
+	}
+	if len(report.Browsers) != 1 || report.Browsers[0].ID != browserID {
+		t.Fatalf("unselected browsers = %+v", report.Browsers)
+	}
+	if len(report.Targets) != 1 || report.Targets[0].TargetID != targetID || !report.Targets[0].Eligible {
+		t.Fatalf("unselected targets = %+v", report.Targets)
+	}
+	if endpoint := doctorCheckByName(report, "endpoint"); endpoint.Status != doctorCheckPass {
+		t.Fatalf("endpoint check = %+v, want pass", endpoint)
+	}
+	if discovery := doctorCheckByName(report, "discovery"); discovery.Status != doctorCheckPass {
+		t.Fatalf("discovery check = %+v, want pass", discovery)
+	}
+	if selection := doctorCheckByName(report, "selection"); selection.Status != doctorCheckWarn || selection.Details["selection_required"] != true {
+		t.Fatalf("selection check = %+v, want actionable warning", selection)
+	}
+	if webmcpCheck := doctorCheckByName(report, "webmcp"); webmcpCheck.Status != doctorCheckSkipped {
+		t.Fatalf("webmcp check = %+v, want skipped", webmcpCheck)
+	}
+	if catalog := doctorCheckByName(report, "catalog"); catalog.Status != doctorCheckSkipped {
+		t.Fatalf("catalog check = %+v, want skipped", catalog)
+	}
+	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "Endpoint is ready, but page tools are unverified") || !strings.Contains(report.Warnings[0], "agent webmcp select") {
+		t.Fatalf("unselected warnings = %v, want endpoint/page-tool guidance", report.Warnings)
 	}
 }
 

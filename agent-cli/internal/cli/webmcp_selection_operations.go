@@ -38,14 +38,15 @@ func (c *WebMCPOperationsCommand) selectDirectTarget(ctx context.Context, cmd *c
 	}
 	if browser.Selection.Persist {
 		if err := c.saveDirectSelection(WebMCPSelection{
-			Version:          WebMCPSelectionVersion,
-			EndpointID:       string(candidate.ID),
-			BrowserID:        string(page.Key.BrowserID),
-			TargetID:         string(page.Key.TargetID),
-			Origin:           safeOrigin(page.Origin),
-			ContinuityMarker: target.ContinuityMarker,
-			Generation:       page.Generation,
-			SelectedAt:       time.Now().UTC(),
+			Version:           WebMCPSelectionVersion,
+			EndpointID:        string(candidate.ID),
+			BrowserID:         string(page.Key.BrowserID),
+			BrowserInstanceID: candidate.BrowserInstanceID,
+			TargetID:          string(page.Key.TargetID),
+			Origin:            safeOrigin(page.Origin),
+			ContinuityMarker:  target.ContinuityMarker,
+			Generation:        page.Generation,
+			SelectedAt:        time.Now().UTC(),
 		}); err != nil {
 			return nil, fmt.Errorf("persist WebMCP selection: %w", err)
 		}

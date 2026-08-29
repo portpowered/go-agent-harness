@@ -498,11 +498,25 @@ func diagnoseWebMCPDoctorRuntime(ctx context.Context, browser config.BrowserConf
 		return selectErr
 	}
 	if warning != "" {
-		report.addWarning(warning)
-		report.setCheck("selection", doctorCheckWarn, "No target was selected; endpoint and eligible-page readiness are still reported.", map[string]any{"selected": false})
-		report.setCheck("webmcp", doctorCheckSkipped, "Select an eligible target to probe WebMCP.enable.", nil)
-		report.setCheck("catalog", doctorCheckSkipped, "Select an eligible target to probe catalog readiness.", nil)
-		report.Status = doctorStatusReady
+		report.PageTools = "not_checked"
+		report.Catalog = WebMCPDoctorCatalog{Evidence: "not_checked"}
+		report.addWarning("Endpoint is ready, but page tools are unverified; select a tab before checking them: " + warning)
+		report.setCheck("selection", doctorCheckWarn, "No target was selected; endpoint is ready, but page tools are unverified until an exact tab is selected.", map[string]any{
+			"selected":           false,
+			"page_tools":         "not_checked",
+			"selection_required": true,
+			"selection_action":   "agent webmcp tabs then agent webmcp select",
+		})
+		report.setCheck("webmcp", doctorCheckSkipped, "Select an eligible target to probe WebMCP.enable.", map[string]any{
+			"domain":     "not_checked",
+			"page_tools": "not_checked",
+		})
+		report.setCheck("catalog", doctorCheckSkipped, "Page tools are unverified until a target is selected and checked.", map[string]any{
+			"catalog":          "not_checked",
+			"page_tools":       "not_checked",
+			"selection_action": "agent webmcp select",
+		})
+		report.Status = doctorStatusNotReady
 		return nil
 	}
 	if selectedTarget == nil {
