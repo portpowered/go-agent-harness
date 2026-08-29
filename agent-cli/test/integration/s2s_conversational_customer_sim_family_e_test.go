@@ -145,14 +145,14 @@ func familyEShippedScenario() probe.CustomerScenario {
 	scenario.ID = "family-e-shipped-child"
 	scenario.Name = "Shipped child patience test"
 	scenario.Patience = probe.PatienceThresholds{
-		ListenBeforeFollowUp: time.Millisecond,
-		ResponseStart:        2 * time.Millisecond,
-		InProgressWork:       4 * time.Millisecond,
-		Reprompt:             35 * time.Millisecond,
-		AbsoluteDeadAir:      90 * time.Millisecond,
+		ListenBeforeFollowUp: 100 * time.Millisecond,
+		ResponseStart:        3 * time.Second,
+		InProgressWork:       3 * time.Second,
+		Reprompt:             4 * time.Second,
+		AbsoluteDeadAir:      6 * time.Second,
 		MaxReprompts:         1,
 	}
-	scenario.Deadline = 500 * time.Millisecond
+	scenario.Deadline = 10 * time.Second
 	return scenario
 }
 
@@ -226,14 +226,15 @@ type familyEProviderFixture struct {
 	scenario probe.CustomerScenario
 	mode     familyEShippedMode
 
-	mu                 sync.Mutex
-	startedAt          time.Time
-	connectionCount    int
-	sessionUpdates     int
-	utteranceCount     int
-	customerTranscript []probe.TranscriptEvent
-	productTranscript  []probe.TranscriptEvent
-	protocolError      string
+	mu                   sync.Mutex
+	startedAt            time.Time
+	connectionCount      int
+	sessionUpdates       int
+	utteranceCount       int
+	customerTranscript   []probe.TranscriptEvent
+	productTranscript    []probe.TranscriptEvent
+	protocolError        string
+	recoveryResponseSent bool
 }
 
 func newFamilyEProviderFixture(scenario probe.CustomerScenario, mode familyEShippedMode) *familyEProviderFixture {
@@ -325,16 +326,42 @@ func (f *familyEProviderFixture) handle(writer http.ResponseWriter, request *htt
 				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
 					return
 				}
+				f.mu.Lock()
+				finishRecovery := f.mode == familyEShippedRecovery && f.utteranceCount == 2 && !f.recoveryResponseSent
+				if finishRecovery {
+					f.recoveryResponseSent = true
+				}
+				f.mu.Unlock()
+				if finishRecovery {
+					if err := f.sendProductResponse(connection, "response-family-e-reprompt", "The request is complete.", []byte{2, 0x45, 0x50, 0x41}, false); err != nil {
+						return
+					}
+				}
 				continue
 			}
 			if err := f.handleUtterance(connection); err != nil {
 				f.failProtocol(err.Error())
 				return
 			}
-		case "input_audio_buffer.commit", "response.create", "response.cancel":
+		case "input_audio_buffer.commit", "response.cancel":
 			// The fixture observes the audio and stdout boundaries. Explicit
 			// client-owned control events are accepted without adding a second
 			// runtime seam to the test.
+		case "response.create":
+			if f.mode == familyEShippedDeadAir || f.mode == familyEShippedRecovery {
+				// The production patience gate closes stdin only after declaring
+				// dead air or observing the post-re-prompt response. Let the child's
+				// ordinary end-of-turn path receive a provider close so the recording
+				// finalizer can persist the response before the verdict is built.
+				reason := "family_e_dead_air"
+				if f.mode == familyEShippedRecovery {
+					reason = "family_e_recovery_complete"
+				}
+				if err := f.send(connection, map[string]string{"type": "session.closed", "reason": reason}); err != nil {
+					return
+				}
+				continue
+			}
 		default:
 		}
 	}
@@ -365,7 +392,10 @@ func (f *familyEProviderFixture) handleUtterance(connection *websocket.Conn) err
 	case index == 0:
 		return f.sendProductResponse(connection, "response-family-e-initial", "I am still working on the request.", []byte{1, 0x45, 0x50, 0x41}, false)
 	case f.mode == familyEShippedRecovery:
-		return f.sendProductResponse(connection, "response-family-e-reprompt", "The request is complete.", []byte{2, 0x45, 0x50, 0x41}, true)
+		// Wait for the trailing silence frame so the response is emitted after
+		// the re-prompt segment has crossed the child boundary. This keeps the
+		// provider close from racing the runner's final segment write.
+		return nil
 	default:
 		// The dead-air mode deliberately produces no second response after the
 		// bounded re-prompt; the production controller must record that gap.

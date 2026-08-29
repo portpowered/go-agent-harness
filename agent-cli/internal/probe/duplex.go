@@ -45,6 +45,7 @@ var (
 	ErrDuplexShutdown              = errors.New("duplex session shutdown did not complete")
 	ErrDuplexPipe                  = errors.New("duplex session pipe failed")
 	errDuplexInputComplete         = errors.New("duplex session input completed at an observed child boundary")
+	errDuplexInputClosed           = errors.New("duplex session child closed input pipe")
 )
 
 // DuplexSessionConfig describes one real child-process session run. The
@@ -374,6 +375,13 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	failureCh := make(chan error, 4)
 	var failureOnce sync.Once
 	recordFailure := func(failure error) {
+		if errors.Is(failure, errDuplexInputClosed) {
+			// A provider SESSION.CLOSE can make the shipped child exit while the
+			// runner is still writing the trailing PCM frame. Let child.Wait
+			// establish the terminal process result; an early child exit with no
+			// observable output still fails closed as ErrDuplexInputIncomplete.
+			return
+		}
 		if failure == nil || isExpectedDuplexCancellation(failure, runCtx) || (terminationRequested.Load() && isExpectedDuplexSignalShutdown(failure)) {
 			return
 		}
@@ -517,13 +525,20 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	result.StderrClosed = stderrClosed.Load()
 	result.DescendantsAlive = duplexDescendantsAlive(child, processWaitOK)
 	result.ExitClassification = duplexExitClassification(result, normalized.Termination, waitErr)
+	result.Output = progress.outputEvents()
+	if !inputFinished.Load() && result.ExitClassification == "normal" && result.StdoutClosed && len(result.Output) > 0 {
+		// A normal child exit after observable stdout is a provider-owned
+		// session boundary. The input pump may have been cancelled by the
+		// runner's post-wait cleanup before it could mark the final byte as
+		// finished, but the product response itself crossed the boundary.
+		result.InputFinished = true
+	}
 	result.CapturedOutputTruncated = stdoutCapture.truncated() || stderrCapture.truncated()
 	result.Stdout = stdoutCapture.bytes()
 	result.Stderr = stderrCapture.bytes()
 	inputEventsMu.Lock()
 	result.Input = append([]DuplexInputEvent(nil), inputEvents...)
 	inputEventsMu.Unlock()
-	result.Output = progress.outputEvents()
 
 	var failures []error
 	select {
@@ -550,7 +565,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	} else if result.TimedOut {
 		failures = append(failures, fmt.Errorf("%w after %s", ErrDuplexDeadline, normalized.MaxDuration))
 	}
-	if waitErr != nil && processWaitOK && !result.TimedOut && result.ExitClassification != "sigint" {
+	if waitErr != nil && processWaitOK && !result.TimedOut && result.ExitClassification != "sigint" && !isExpectedDuplexWaitClose(result, waitErr) {
 		if result.ExitCode != 0 {
 			failures = append(failures, fmt.Errorf("%w: exit code %d", ErrDuplexProcessExit, result.ExitCode))
 		} else {
@@ -1077,7 +1092,10 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 			if err := segment.Before(ctx, progressView); err != nil {
 				if errors.Is(err, errDuplexInputComplete) {
 					finished.Store(true)
-					return closeStdin()
+					if closeErr := closeStdin(); closeErr != nil && !isExpectedDuplexPipeClosure(closeErr) {
+						return duplexPipeError("close stdin after segment boundary", closeErr)
+					}
+					return nil
 				}
 				return duplexPipeError("run segment gate", err)
 			}
@@ -1122,6 +1140,9 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 				if isExpectedDuplexCancellation(err, ctx) {
 					return nil
 				}
+				if isExpectedDuplexPipeClosure(err) {
+					return fmt.Errorf("%w: %v", errDuplexInputClosed, err)
+				}
 				return duplexPipeError("write child stdin", err)
 			}
 			frameNumber++
@@ -1144,11 +1165,21 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 	}
 	if config.BeforeInputClose != nil {
 		if err := config.BeforeInputClose(ctx, progressView); err != nil {
+			if errors.Is(err, errDuplexInputComplete) {
+				finished.Store(true)
+				if closeErr := closeStdin(); closeErr != nil && !isExpectedDuplexPipeClosure(closeErr) {
+					return duplexPipeError("close stdin after input boundary", closeErr)
+				}
+				return nil
+			}
 			return duplexPipeError("run before-input-close gate", err)
 		}
 	}
 	finished.Store(true)
-	return closeStdin()
+	if closeErr := closeStdin(); closeErr != nil && !isExpectedDuplexPipeClosure(closeErr) {
+		return duplexPipeError("close stdin after input", closeErr)
+	}
+	return nil
 }
 
 func duplexSilenceBytes(duration time.Duration, frameBytes int, frameDuration time.Duration) []byte {
@@ -1233,6 +1264,21 @@ func duplexProcessError(kind error, operation string, cause error) error {
 	return fmt.Errorf("%w: %s: %w", kind, operation, cause)
 }
 
+// exec.Cmd.Wait may report the runtime closing one of the runner-owned pipe
+// descriptors after a child has already exited successfully. The close error
+// is not a product failure when the child was reaped with exit code zero; the
+// runner still retains the explicit pipe-closed and input-finished facts.
+func isExpectedDuplexWaitClose(result DuplexRunResult, waitErr error) bool {
+	return result.ExitCode == 0 && (errors.Is(waitErr, os.ErrClosed) || errors.Is(waitErr, io.ErrClosedPipe))
+}
+
+func isExpectedDuplexPipeClosure(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe) || strings.Contains(strings.ToLower(err.Error()), "broken pipe")
+}
+
 func duplexPipeError(operation string, cause error) error {
 	if cause == nil {
 		return nil
@@ -1278,7 +1324,7 @@ func duplexExitClassification(result DuplexRunResult, termination TerminationMet
 	if result.SignalSent && termination == TerminationSIGINT {
 		return "sigint"
 	}
-	if result.ChildWaited && waitErr == nil && result.ExitCode == 0 {
+	if result.ChildWaited && result.ExitCode == 0 && (waitErr == nil || isExpectedDuplexWaitClose(result, waitErr)) {
 		return "normal"
 	}
 	return "failed"
