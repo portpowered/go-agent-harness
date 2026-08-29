@@ -10,7 +10,8 @@ import (
 )
 
 func classifiedOpenError(candidate webmcp.BrowserCandidate, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
 	}
 	return &webmcp.ClassifiedError{
@@ -27,7 +28,8 @@ func classifiedOpenError(candidate webmcp.BrowserCandidate, cause error) error {
 }
 
 func classifiedHandleError(candidate webmcp.BrowserCandidate, code webmcp.ErrorCode, phase string, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
 	}
 	if code == "" {
@@ -46,7 +48,8 @@ func classifiedHandleError(candidate webmcp.BrowserCandidate, code webmcp.ErrorC
 }
 
 func classifiedTargetError(candidate webmcp.BrowserCandidate, targetID webmcp.TargetID, phase string, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
 	}
 	return &webmcp.ClassifiedError{
@@ -64,11 +67,15 @@ func classifiedTargetError(candidate webmcp.BrowserCandidate, targetID webmcp.Ta
 }
 
 func classifySessionError(session *targetSession, fallback webmcp.ErrorCode, phase string, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
 	}
 	if classified := sessionLifecycleError(session); classified != nil {
 		return classified
+	}
+	if session != nil && session.handle != nil && session.handle.isDisconnected() {
+		return browserDisconnectedError(session.Context(), phase, cause)
 	}
 	page := session.Context()
 	code := fallback
@@ -96,11 +103,15 @@ func classifySessionError(session *targetSession, fallback webmcp.ErrorCode, pha
 // command reached Chrome before returning an error, so callers must not retry
 // the operation transparently.
 func classifyInvocationError(session *targetSession, invocationID, phase string, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
 	}
 	if classified := sessionLifecycleError(session); classified != nil {
 		return classified
+	}
+	if session != nil && session.handle != nil && session.handle.isDisconnected() {
+		return browserDisconnectedError(session.Context(), phase, cause)
 	}
 
 	page := session.Context()
@@ -136,11 +147,17 @@ func classifyInvocationError(session *targetSession, invocationID, phase string,
 // interrupted cancel command is deliberately non-retryable and retains the
 // possibility that the invocation is still running or has already completed.
 func classifyCancellationError(session *targetSession, invocationID string, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
 	}
 	if classified := sessionLifecycleError(session); classified != nil {
 		return classified
+	}
+	if session != nil && session.handle != nil && session.handle.isDisconnected() {
+		failure := browserDisconnectedError(session.Context(), "cancel", cause)
+		failure.(*webmcp.ClassifiedError).Details["invocation_id"] = invocationID
+		return failure
 	}
 
 	page := session.Context()
@@ -182,8 +199,12 @@ func sessionLifecycleError(session *targetSession) *webmcp.ClassifiedError {
 }
 
 func classifyTargetCleanupError(session *targetSession, phase string, cause error) error {
-	if classified, ok := cause.(*webmcp.ClassifiedError); ok {
+	var classified *webmcp.ClassifiedError
+	if errors.As(cause, &classified) && classified != nil {
 		return classified
+	}
+	if session != nil && session.handle != nil && session.handle.isDisconnected() {
+		return browserDisconnectedError(session.Context(), phase, cause)
 	}
 	page := session.Context()
 	return &webmcp.ClassifiedError{
@@ -195,6 +216,21 @@ func classifyTargetCleanupError(session *targetSession, phase string, cause erro
 			"target_id":   string(page.Key.TargetID),
 			"phase":       phase,
 			"reason_code": safeReason(cause),
+		},
+		Cause: cause,
+	}
+}
+
+func browserDisconnectedError(page webmcp.PageContext, phase string, cause error) error {
+	return &webmcp.ClassifiedError{
+		Code:      webmcp.ErrorBrowserDisconnected,
+		Message:   webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected),
+		Retryable: false,
+		Details: map[string]any{
+			"browser_id":         string(page.Key.BrowserID),
+			"target_id":          string(page.Key.TargetID),
+			"phase":              phase,
+			"reconnect_required": true,
 		},
 		Cause: cause,
 	}

@@ -19,6 +19,7 @@ var (
 	ErrTargetAlreadyAttached       = errors.New("webmcp testkit: target already attached")
 	ErrInvocationAlreadyReleased   = errors.New("webmcp testkit: invocation already released")
 	ErrCancellationNotAcknowledged = errors.New("webmcp testkit: cancellation not acknowledged")
+	ErrGenerationExhausted         = errors.New("webmcp testkit: page generation exhausted")
 )
 
 // OperationKind identifies an observable fake-runtime operation. It aliases
@@ -36,6 +37,7 @@ const (
 	OperationDetach      OperationKind = "detach_target"
 	OperationCloseHandle OperationKind = "close_browser"
 	OperationDisconnect  OperationKind = "disconnect_browser"
+	OperationReplace     OperationKind = "replace_browser"
 )
 
 // Operation is a race-safe snapshot of one fake-runtime command. Input and
@@ -50,6 +52,7 @@ type Operation struct {
 	ToolName                 string
 	InvocationID             webmcp.InvocationID
 	Ownership                webmcp.TargetOwnership
+	Generation               uint64
 	Input                    json.RawMessage
 	Arguments                json.RawMessage
 	Reason                   string
@@ -62,6 +65,7 @@ type InvocationRecord struct {
 	ID                       webmcp.InvocationID
 	BrowserID                webmcp.BrowserID
 	TargetID                 webmcp.TargetID
+	Generation               uint64
 	FrameID                  webmcp.FrameID
 	ToolName                 string
 	Input                    json.RawMessage
@@ -105,6 +109,7 @@ func NewTargetConfig(target webmcp.Target, options ...ScriptedTargetSessionOptio
 type ScriptedTargetSessionOptions struct {
 	Context                  webmcp.PageContext
 	EventBuffer              int
+	BlockEnable              bool
 	EnableEvents             []webmcp.BrowserEvent
 	InitialCatalog           []webmcp.ToolDescriptor
 	EnableError              error
@@ -117,6 +122,12 @@ type ScriptedTargetSessionOptions struct {
 	EmitCancellationResponse *bool
 	IDs                      webmcp.IDSource
 	Clock                    webmcp.Clock
+}
+
+// WithBlockedEnable prevents EnableWebMCP from completing until the test
+// explicitly calls UnblockEnableWebMCP or disconnects the browser.
+func WithBlockedEnable() ScriptedTargetSessionOption {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.BlockEnable = true })
 }
 
 func WithEventBuffer(size int) ScriptedTargetSessionOption {
@@ -181,22 +192,27 @@ func WithIDs(ids webmcp.IDSource) ScriptedTargetSessionOption {
 }
 
 type ScriptedBrowserRuntime struct {
-	mu       sync.Mutex
-	browsers map[webmcp.BrowserID]*ScriptedBrowserHandle
-	handles  map[*ScriptedBrowserHandle]struct{}
-	closed   bool
+	mu        sync.Mutex
+	browsers  map[webmcp.BrowserID]*ScriptedBrowserHandle
+	handles   map[*ScriptedBrowserHandle]struct{}
+	active    map[webmcp.BrowserID]bool
+	endpoints map[string]webmcp.BrowserID
+	sessions  map[string]*ScriptedTargetSession
+	closed    bool
 
 	operationMu      sync.Mutex
 	operations       []Operation
 	nextOperation    uint64
 	operationChanges chan struct{}
 
-	eventMu   sync.Mutex
-	nextEvent uint64
-	ids       webmcp.IDSource
-	clock     webmcp.Clock
-	closeDone chan struct{}
-	closeErr  error
+	eventMu         sync.Mutex
+	nextEvent       uint64
+	publishedEvents []PublishedEvent
+	eventChanges    chan struct{}
+	ids             webmcp.IDSource
+	clock           webmcp.Clock
+	closeDone       chan struct{}
+	closeErr        error
 }
 
 func NewScriptedBrowserRuntime(configs ...BrowserConfig) *ScriptedBrowserRuntime {
@@ -215,7 +231,11 @@ func NewScriptedBrowserRuntimeWithOptions(options RuntimeOptions, configs ...Bro
 	runtime := &ScriptedBrowserRuntime{
 		browsers:         make(map[webmcp.BrowserID]*ScriptedBrowserHandle),
 		handles:          make(map[*ScriptedBrowserHandle]struct{}),
+		active:           make(map[webmcp.BrowserID]bool),
+		endpoints:        make(map[string]webmcp.BrowserID),
+		sessions:         make(map[string]*ScriptedTargetSession),
 		operationChanges: make(chan struct{}),
+		eventChanges:     make(chan struct{}),
 		ids:              ids,
 		clock:            clock,
 		closeDone:        make(chan struct{}),
@@ -242,8 +262,17 @@ func (r *ScriptedBrowserRuntime) AddBrowser(config BrowserConfig) error {
 	if _, exists := r.browsers[config.Candidate.ID]; exists {
 		return fmt.Errorf("%w: browser %q already exists", ErrInvalidBrowserConfig, config.Candidate.ID)
 	}
+	if endpoint := browserEndpointKey(config.Candidate); endpoint != "" {
+		if owner, exists := r.endpoints[endpoint]; exists && r.active[owner] {
+			return fmt.Errorf("%w: endpoint is already owned by browser %q", ErrInvalidBrowserConfig, owner)
+		}
+	}
 	handle := newScriptedBrowserHandle(r, config)
 	r.browsers[config.Candidate.ID] = handle
+	r.active[config.Candidate.ID] = true
+	if endpoint := browserEndpointKey(config.Candidate); endpoint != "" {
+		r.endpoints[endpoint] = config.Candidate.ID
+	}
 	return nil
 }
 
@@ -268,8 +297,17 @@ func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.Brow
 		handle = template.newClient()
 		r.handles[handle] = struct{}{}
 	}
+	active := ok && r.active[candidate.ID]
 	r.mu.Unlock()
-	if !ok {
+	if !ok || !active {
+		if ok {
+			if handleClosed, disconnected := handle.state(); handleClosed {
+				return nil, webmcp.ErrClosed
+			} else if disconnected {
+				return nil, disconnectedError(candidate.ID, "", "open", "browser_disconnected")
+			}
+			return nil, disconnectedError(candidate.ID, "", "open", "browser_replaced")
+		}
 		return nil, fmt.Errorf("%w: %s", webmcp.ErrBrowserNotFound, candidate.ID)
 	}
 	r.record(Operation{Kind: OperationOpen, BrowserID: candidate.ID})
@@ -355,15 +393,12 @@ func (r *ScriptedBrowserRuntime) record(operation Operation) {
 	r.operationMu.Unlock()
 }
 
-func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browserID webmcp.BrowserID, targetID webmcp.TargetID) webmcp.BrowserEvent {
-	r.eventMu.Lock()
-	defer r.eventMu.Unlock()
-	r.nextEvent++
+func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browserID webmcp.BrowserID, targetID webmcp.TargetID, generation, sequence uint64) webmcp.BrowserEvent {
 	if event.Version == "" {
 		event.Version = webmcp.BrowserEventsVersion
 	}
 	if event.Sequence == 0 {
-		event.Sequence = r.nextEvent
+		event.Sequence = sequence
 	}
 	if event.At.IsZero() {
 		event.At = r.clock.Now()
@@ -374,6 +409,9 @@ func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browse
 	if event.TargetID == "" {
 		event.TargetID = targetID
 	}
+	if event.Generation == 0 {
+		event.Generation = generation
+	}
 	event.Tools = cloneTools(event.Tools)
 	event.RemovedToolNames = append([]string(nil), event.RemovedToolNames...)
 	event.Input = cloneBytes(event.Input)
@@ -383,11 +421,13 @@ func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browse
 
 func newScriptedBrowserHandle(runtime *ScriptedBrowserRuntime, config BrowserConfig) *ScriptedBrowserHandle {
 	handle := &ScriptedBrowserHandle{
-		runtime:   runtime,
-		candidate: cloneCandidate(config.Candidate),
-		targets:   make(map[webmcp.TargetID]*scriptedTargetEntry, len(config.Targets)),
-		sessions:  make(map[webmcp.TargetID]*ScriptedTargetSession),
-		closeDone: make(chan struct{}),
+		runtime:        runtime,
+		candidate:      cloneCandidate(config.Candidate),
+		targets:        make(map[webmcp.TargetID]*scriptedTargetEntry, len(config.Targets)),
+		sessions:       make(map[webmcp.TargetID]*ScriptedTargetSession),
+		control:        &scriptedBrowserControl{listChanges: make(chan struct{})},
+		closeDone:      make(chan struct{}),
+		disconnectDone: make(chan struct{}),
 	}
 	for _, target := range config.Targets {
 		if target.Target.ID == "" {
@@ -413,11 +453,13 @@ func newScriptedBrowserHandle(runtime *ScriptedBrowserRuntime, config BrowserCon
 
 func (h *ScriptedBrowserHandle) newClient() *ScriptedBrowserHandle {
 	return &ScriptedBrowserHandle{
-		runtime:   h.runtime,
-		candidate: cloneCandidate(h.candidate),
-		targets:   h.targets,
-		sessions:  make(map[webmcp.TargetID]*ScriptedTargetSession),
-		closeDone: make(chan struct{}),
+		runtime:        h.runtime,
+		candidate:      cloneCandidate(h.candidate),
+		targets:        h.targets,
+		sessions:       make(map[webmcp.TargetID]*ScriptedTargetSession),
+		control:        h.control,
+		closeDone:      make(chan struct{}),
+		disconnectDone: make(chan struct{}),
 	}
 }
 
@@ -427,17 +469,32 @@ type scriptedTargetEntry struct {
 	config   TargetConfig
 	removed  bool
 	sessions map[*ScriptedTargetSession]struct{}
+	// lastSession keeps an externally-owned retired session inspectable after
+	// transport loss. A new Attach still wins through h.sessions, while the
+	// retained pointer lets recovery tests inject late events explicitly.
+	lastSession *ScriptedTargetSession
+}
+
+type scriptedBrowserControl struct {
+	mu           sync.Mutex
+	listBlocked  bool
+	listChanges  chan struct{}
+	disconnected bool
 }
 
 type ScriptedBrowserHandle struct {
-	runtime   *ScriptedBrowserRuntime
-	mu        sync.Mutex
-	candidate webmcp.BrowserCandidate
-	targets   map[webmcp.TargetID]*scriptedTargetEntry
-	sessions  map[webmcp.TargetID]*ScriptedTargetSession
-	closed    bool
-	closeErr  error
-	closeDone chan struct{}
+	runtime        *ScriptedBrowserRuntime
+	mu             sync.Mutex
+	candidate      webmcp.BrowserCandidate
+	targets        map[webmcp.TargetID]*scriptedTargetEntry
+	sessions       map[webmcp.TargetID]*ScriptedTargetSession
+	closed         bool
+	closeErr       error
+	closeDone      chan struct{}
+	disconnected   bool
+	disconnectErr  error
+	disconnectDone chan struct{}
+	control        *scriptedBrowserControl
 }
 
 func (h *ScriptedBrowserHandle) Candidate() webmcp.BrowserCandidate {
@@ -455,6 +512,52 @@ func (h *ScriptedBrowserHandle) ListTargets(ctx context.Context) ([]webmcp.Targe
 		h.mu.Unlock()
 		return nil, webmcp.ErrClosed
 	}
+	if h.disconnected {
+		err := disconnectedError(h.candidate.ID, "", "list_targets", "browser_disconnected")
+		h.mu.Unlock()
+		return nil, err
+	}
+	disconnectDone := h.disconnectDone
+	closeDone := h.closeDone
+	candidateID := h.candidate.ID
+	control := h.control
+	h.mu.Unlock()
+	control.mu.Lock()
+	blocked := control.listBlocked
+	listChanges := control.listChanges
+	controlDisconnected := control.disconnected
+	control.mu.Unlock()
+	if controlDisconnected {
+		return nil, disconnectedError(candidateID, "", "list_targets", "browser_disconnected")
+	}
+	h.runtime.record(Operation{Kind: OperationListTargets, BrowserID: candidateID})
+	if blocked {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-listChanges:
+		case <-disconnectDone:
+			return nil, disconnectedError(candidateID, "", "list_targets", "browser_disconnected")
+		case <-closeDone:
+			return nil, webmcp.ErrClosed
+		}
+	}
+	control.mu.Lock()
+	controlDisconnected = control.disconnected
+	control.mu.Unlock()
+	if controlDisconnected {
+		return nil, disconnectedError(candidateID, "", "list_targets", "browser_disconnected")
+	}
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return nil, webmcp.ErrClosed
+	}
+	if h.disconnected {
+		err := disconnectedError(h.candidate.ID, "", "list_targets", "browser_disconnected")
+		h.mu.Unlock()
+		return nil, err
+	}
 	targets := make([]webmcp.Target, 0, len(h.targets))
 	for _, entry := range h.targets {
 		entry.mu.Lock()
@@ -465,7 +568,6 @@ func (h *ScriptedBrowserHandle) ListTargets(ctx context.Context) ([]webmcp.Targe
 	}
 	h.mu.Unlock()
 	sort.Slice(targets, func(i, j int) bool { return targets[i].ID < targets[j].ID })
-	h.runtime.record(Operation{Kind: OperationListTargets, BrowserID: h.candidate.ID})
 	return targets, nil
 }
 
@@ -477,6 +579,11 @@ func (h *ScriptedBrowserHandle) Activate(ctx context.Context, targetID webmcp.Ta
 	if h.closed {
 		h.mu.Unlock()
 		return webmcp.ErrClosed
+	}
+	if h.disconnected {
+		err := disconnectedError(h.candidate.ID, targetID, "activate", "browser_disconnected")
+		h.mu.Unlock()
+		return err
 	}
 	if _, ok := h.targets[targetID]; !ok {
 		h.mu.Unlock()
@@ -498,6 +605,11 @@ func (h *ScriptedBrowserHandle) Attach(ctx context.Context, targetID webmcp.Targ
 	if h.closed {
 		h.mu.Unlock()
 		return nil, webmcp.ErrClosed
+	}
+	if h.disconnected {
+		err := disconnectedError(h.candidate.ID, targetID, "attach", "browser_disconnected")
+		h.mu.Unlock()
+		return nil, err
 	}
 	entry, ok := h.targets[targetID]
 	if !ok {
@@ -542,12 +654,14 @@ func (h *ScriptedBrowserHandle) Attach(ctx context.Context, targetID webmcp.Targ
 	session := newScriptedTargetSession(h, entry, entry.target, page, ownership, entry.config.Session)
 	h.sessions[targetID] = session
 	entry.sessions[session] = struct{}{}
+	entry.lastSession = session
 	entry.target.Attached = true
 	entry.mu.Unlock()
 	h.mu.Unlock()
+	h.runtime.registerSession(session)
 
-	h.runtime.record(Operation{Kind: OperationAttach, BrowserID: h.candidate.ID, TargetID: targetID, Ownership: ownership})
-	_ = session.emitLocal(webmcp.BrowserEvent{Type: webmcp.EventTargetAttached})
+	h.runtime.record(Operation{Kind: OperationAttach, BrowserID: h.candidate.ID, TargetID: targetID, Generation: page.Generation, Ownership: ownership})
+	_ = session.emitLocal(webmcp.BrowserEvent{Type: webmcp.EventTargetAttached, Generation: page.Generation})
 	return session, nil
 }
 
@@ -568,6 +682,7 @@ func (h *ScriptedBrowserHandle) Close() error {
 		sessions = append(sessions, session)
 	}
 	h.mu.Unlock()
+	h.runtime.retireHandle(h)
 
 	var joined error
 	for _, session := range sessions {
@@ -590,11 +705,13 @@ func (h *ScriptedBrowserHandle) sessionClosed(session *ScriptedTargetSession) {
 	entry := session.entry
 	entry.mu.Lock()
 	delete(entry.sessions, session)
+	entry.lastSession = session
 	entry.target.Attached = len(entry.sessions) > 0
-	if session.ownership == webmcp.TargetOwnershipHarnessOwned {
+	if session.removeTargetOnClose || session.ownership == webmcp.TargetOwnershipHarnessOwned {
 		entry.removed = true
 	}
 	entry.mu.Unlock()
+	h.runtime.unregisterSession(session)
 }
 
 func (h *ScriptedBrowserHandle) TargetSession(targetID webmcp.TargetID) *ScriptedTargetSession {
@@ -615,7 +732,7 @@ func (h *ScriptedBrowserHandle) TargetSession(targetID webmcp.TargetID) *Scripte
 	for session := range entry.sessions {
 		return session
 	}
-	return nil
+	return entry.lastSession
 }
 
 type ScriptedTargetSession struct {
@@ -628,19 +745,26 @@ type ScriptedTargetSession struct {
 	ownership webmcp.TargetOwnership
 	options   ScriptedTargetSessionOptions
 
-	events chan webmcp.BrowserEvent
-	done   chan struct{}
-	change chan struct{}
+	events          chan webmcp.BrowserEvent
+	done            chan struct{}
+	change          chan struct{}
+	enableChanges   chan struct{}
+	terminalChanges chan struct{}
 
-	closed      bool
-	closedState atomic.Bool
-	closeErr    error
-	closeResult error
-	blocked     bool
-	tools       map[string]webmcp.ToolDescriptor
-	invokes     map[webmcp.InvocationID]*InvocationRecord
-	order       []webmcp.InvocationID
-	observed    map[webmcp.InvocationID]bool
+	closed              bool
+	closedState         atomic.Bool
+	closeErr            error
+	closeResult         error
+	removeTargetOnClose bool
+	blocked             bool
+	enableBlocked       bool
+	sequence            uint64
+	tools               map[string]webmcp.ToolDescriptor
+	invokes             map[webmcp.InvocationID]*InvocationRecord
+	order               []webmcp.InvocationID
+	observed            map[webmcp.InvocationID]bool
+	terminalObserved    map[webmcp.InvocationID]TerminalObservation
+	terminalHistory     []TerminalObservation
 }
 
 func newScriptedTargetSession(handle *ScriptedBrowserHandle, entry *scriptedTargetEntry, target webmcp.Target, page webmcp.PageContext, ownership webmcp.TargetOwnership, options ScriptedTargetSessionOptions) *ScriptedTargetSession {
@@ -663,19 +787,23 @@ func newScriptedTargetSession(handle *ScriptedBrowserHandle, entry *scriptedTarg
 		options.AutoResponseStatus = "Completed"
 	}
 	session := &ScriptedTargetSession{
-		handle:    handle,
-		runtime:   handle.runtime,
-		entry:     entry,
-		target:    cloneTarget(target),
-		context:   page,
-		ownership: ownership,
-		options:   options,
-		events:    make(chan webmcp.BrowserEvent, options.EventBuffer),
-		done:      make(chan struct{}),
-		change:    make(chan struct{}),
-		tools:     make(map[string]webmcp.ToolDescriptor),
-		invokes:   make(map[webmcp.InvocationID]*InvocationRecord),
-		observed:  make(map[webmcp.InvocationID]bool),
+		handle:           handle,
+		runtime:          handle.runtime,
+		entry:            entry,
+		target:           cloneTarget(target),
+		context:          page,
+		ownership:        ownership,
+		options:          options,
+		events:           make(chan webmcp.BrowserEvent, options.EventBuffer),
+		done:             make(chan struct{}),
+		change:           make(chan struct{}),
+		enableChanges:    make(chan struct{}),
+		terminalChanges:  make(chan struct{}),
+		tools:            make(map[string]webmcp.ToolDescriptor),
+		invokes:          make(map[webmcp.InvocationID]*InvocationRecord),
+		observed:         make(map[webmcp.InvocationID]bool),
+		enableBlocked:    options.BlockEnable,
+		terminalObserved: make(map[webmcp.InvocationID]TerminalObservation),
 	}
 	for _, tool := range options.InitialCatalog {
 		session.tools[toolKey(tool.FrameID, tool.Name)] = cloneTool(tool)
@@ -712,6 +840,9 @@ func (s *ScriptedTargetSession) Err() error {
 }
 
 func (s *ScriptedTargetSession) EnableWebMCP(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -721,11 +852,38 @@ func (s *ScriptedTargetSession) EnableWebMCP(ctx context.Context) error {
 		return webmcp.ErrClosed
 	}
 	err := s.options.EnableError
+	blocked := s.enableBlocked
+	enableChanges := s.enableChanges
+	done := s.done
+	generation := s.context.Generation
 	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	s.runtime.record(Operation{Kind: OperationEnableWebMCP, BrowserID: s.target.BrowserID, TargetID: s.target.ID})
+	s.runtime.record(Operation{Kind: OperationEnableWebMCP, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Generation: generation})
+	if blocked {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-enableChanges:
+		case <-done:
+			err := s.Err()
+			if err != nil {
+				return err
+			}
+			return webmcp.ErrClosed
+		}
+	}
+	s.mu.Lock()
+	if s.closed {
+		err := s.closeErr
+		s.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		return webmcp.ErrClosed
+	}
+	s.mu.Unlock()
 
 	events := append([]webmcp.BrowserEvent(nil), s.options.EnableEvents...)
 	if len(events) == 0 && len(s.options.InitialCatalog) > 0 {
@@ -782,13 +940,14 @@ func (s *ScriptedTargetSession) invokeWebMCPWithID(ctx context.Context, id webmc
 		return "", fmt.Errorf("webmcp testkit: invocation %q already exists", id)
 	}
 	record := &InvocationRecord{
-		ID:        id,
-		BrowserID: s.target.BrowserID,
-		TargetID:  s.target.ID,
-		FrameID:   frameID,
-		ToolName:  toolName,
-		Input:     cloneBytes(input),
-		State:     webmcp.InvocationDispatched,
+		ID:         id,
+		BrowserID:  s.target.BrowserID,
+		TargetID:   s.target.ID,
+		Generation: s.context.Generation,
+		FrameID:    frameID,
+		ToolName:   toolName,
+		Input:      cloneBytes(input),
+		State:      webmcp.InvocationDispatched,
 	}
 	s.invokes[id] = record
 	s.order = append(s.order, id)
@@ -797,19 +956,21 @@ func (s *ScriptedTargetSession) invokeWebMCPWithID(ctx context.Context, id webmc
 	autoRespond := s.options.AutoRespond && !blocked
 	autoStatus := s.options.AutoResponseStatus
 	autoOutput := cloneBytes(s.options.AutoResponseOutput)
+	generation := record.Generation
 	s.mu.Unlock()
 
 	s.runtime.record(Operation{
 		Kind:         OperationInvoke,
 		BrowserID:    s.target.BrowserID,
 		TargetID:     s.target.ID,
+		Generation:   generation,
 		FrameID:      frameID,
 		ToolName:     toolName,
 		InvocationID: id,
 		Input:        input,
 		Arguments:    input,
 	})
-	if err := s.emit(webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, FrameID: frameID, ToolName: toolName, InvocationID: id, Input: input}); err != nil {
+	if err := s.emit(webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, FrameID: frameID, ToolName: toolName, InvocationID: id, Input: input, Generation: generation}); err != nil {
 		return id, err
 	}
 	if autoRespond {
@@ -849,6 +1010,7 @@ func (s *ScriptedTargetSession) CancelWebMCP(ctx context.Context, id webmcp.Invo
 	record.CancellationAcknowledged = acknowledged
 	record.Terminal = acknowledged
 	record.State = webmcp.InvocationCanceled
+	generation := record.Generation
 	owner.notifyLocked()
 	owner.mu.Unlock()
 
@@ -856,6 +1018,7 @@ func (s *ScriptedTargetSession) CancelWebMCP(ctx context.Context, id webmcp.Invo
 		Kind:                     OperationCancel,
 		BrowserID:                s.target.BrowserID,
 		TargetID:                 s.target.ID,
+		Generation:               generation,
 		InvocationID:             id,
 		Reason:                   "cancel",
 		CancellationAcknowledged: acknowledged,
@@ -865,6 +1028,9 @@ func (s *ScriptedTargetSession) CancelWebMCP(ctx context.Context, id webmcp.Invo
 	}
 	if emitResponse {
 		return owner.EmitToolResponse(id, "Canceled", nil)
+	}
+	if acknowledged {
+		s.markTerminalObserved(id, PublishedEvent{})
 	}
 	return nil
 }
@@ -941,225 +1107,6 @@ func (s *ScriptedTargetSession) SetCancellationResponse(enabled bool) {
 	s.mu.Unlock()
 }
 
-func (s *ScriptedTargetSession) ReleaseInvocation(id webmcp.InvocationID, output json.RawMessage) error {
-	return s.EmitToolResponse(id, "Completed", output)
-}
-
-func (s *ScriptedTargetSession) ReleaseNextInvocation(output json.RawMessage) (webmcp.InvocationID, error) {
-	s.mu.Lock()
-	for _, id := range s.order {
-		record := s.invokes[id]
-		if record != nil && !record.Terminal {
-			s.mu.Unlock()
-			return id, s.ReleaseInvocation(id, output)
-		}
-	}
-	s.mu.Unlock()
-	return "", webmcp.ErrInvocationNotFound
-}
-
-// EmitToolResponse deliberately permits a response after cancellation or a
-// previous response. The broker must treat that event as bounded late
-// reconciliation rather than a second delivery.
-func (s *ScriptedTargetSession) EmitToolResponse(id webmcp.InvocationID, status string, output json.RawMessage) error {
-	s.mu.Lock()
-	record := s.invokes[id]
-	if record == nil {
-		s.mu.Unlock()
-		return fmt.Errorf("%w: %s", webmcp.ErrInvocationNotFound, id)
-	}
-	record.Status = status
-	if !record.Terminal || status == "Completed" {
-		record.Output = cloneBytes(output)
-		if status == "Completed" {
-			record.State = webmcp.InvocationCompleted
-		} else if status == "Canceled" || status == "Cancelled" {
-			record.State = webmcp.InvocationCanceled
-		}
-		record.Terminal = true
-	}
-	s.notifyLocked()
-	s.mu.Unlock()
-	return s.emit(webmcp.BrowserEvent{Type: webmcp.EventToolResponded, InvocationID: id, Status: status, Output: output})
-}
-
-func (s *ScriptedTargetSession) WaitForInvocation(ctx context.Context) (InvocationRecord, error) {
-	for {
-		s.mu.Lock()
-		for _, id := range s.order {
-			if s.observed[id] {
-				continue
-			}
-			record := cloneInvocationRecord(*s.invokes[id])
-			s.observed[id] = true
-			s.mu.Unlock()
-			return record, nil
-		}
-		if s.closed {
-			s.mu.Unlock()
-			return InvocationRecord{}, webmcp.ErrClosed
-		}
-		changes := s.change
-		s.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return InvocationRecord{}, ctx.Err()
-		case <-changes:
-		}
-	}
-}
-
-func (s *ScriptedTargetSession) Invocation(id webmcp.InvocationID) (InvocationRecord, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.invokes[id]
-	if !ok {
-		return InvocationRecord{}, false
-	}
-	return cloneInvocationRecord(*record), true
-}
-
-func (s *ScriptedTargetSession) Invocations() []InvocationRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	records := make([]InvocationRecord, 0, len(s.order))
-	for _, id := range s.order {
-		records = append(records, cloneInvocationRecord(*s.invokes[id]))
-	}
-	return records
-}
-
-func (s *ScriptedTargetSession) PendingInvocations() []InvocationRecord {
-	records := s.Invocations()
-	pending := records[:0]
-	for _, record := range records {
-		if !record.Terminal {
-			pending = append(pending, record)
-		}
-	}
-	return pending
-}
-
-func (s *ScriptedTargetSession) Catalog() []webmcp.ToolDescriptor {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tools := make([]webmcp.ToolDescriptor, 0, len(s.tools))
-	for _, tool := range s.tools {
-		tools = append(tools, cloneTool(tool))
-	}
-	sort.Slice(tools, func(i, j int) bool {
-		if tools[i].FrameID != tools[j].FrameID {
-			return tools[i].FrameID < tools[j].FrameID
-		}
-		return tools[i].Name < tools[j].Name
-	})
-	return tools
-}
-
-func (s *ScriptedTargetSession) Emit(event webmcp.BrowserEvent) error {
-	if event.Type == webmcp.EventToolsAdded {
-		return s.emitToolsAdded(event, event.Tools...)
-	}
-	if event.Type == webmcp.EventToolsRemoved {
-		return s.emitToolsRemoved(event, event.FrameID, event.RemovedToolNames...)
-	}
-	return s.emit(event)
-}
-
-func (s *ScriptedTargetSession) EmitToolsAdded(tools ...webmcp.ToolDescriptor) error {
-	return s.emitToolsAdded(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded}, tools...)
-}
-
-func (s *ScriptedTargetSession) emitToolsAdded(event webmcp.BrowserEvent, tools ...webmcp.ToolDescriptor) error {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return webmcp.ErrClosed
-	}
-	cloned := cloneTools(tools)
-	for i := range cloned {
-		if cloned[i].BrowserID == "" {
-			cloned[i].BrowserID = s.target.BrowserID
-		}
-		if cloned[i].TargetID == "" {
-			cloned[i].TargetID = s.target.ID
-		}
-		if cloned[i].Generation == 0 {
-			cloned[i].Generation = event.Generation
-			if cloned[i].Generation == 0 {
-				cloned[i].Generation = s.context.Generation
-			}
-		}
-		s.tools[toolKey(cloned[i].FrameID, cloned[i].Name)] = cloneTool(cloned[i])
-	}
-	s.mu.Unlock()
-	event.Type = webmcp.EventToolsAdded
-	event.Tools = cloned
-	return s.emit(event)
-}
-
-func (s *ScriptedTargetSession) EmitToolsRemoved(frameID webmcp.FrameID, names ...string) error {
-	return s.emitToolsRemoved(webmcp.BrowserEvent{Type: webmcp.EventToolsRemoved}, frameID, names...)
-}
-
-func (s *ScriptedTargetSession) emitToolsRemoved(event webmcp.BrowserEvent, frameID webmcp.FrameID, names ...string) error {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return webmcp.ErrClosed
-	}
-	for _, name := range names {
-		delete(s.tools, toolKey(frameID, name))
-	}
-	s.mu.Unlock()
-	event.Type = webmcp.EventToolsRemoved
-	event.FrameID = frameID
-	event.RemovedToolNames = append([]string(nil), names...)
-	return s.emit(event)
-}
-
-// Navigate advances the page generation and emits a lifecycle event. URL and
-// origin are optional; an empty value leaves the previous value unchanged.
-func (s *ScriptedTargetSession) Navigate(url, origin string) error {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return webmcp.ErrClosed
-	}
-	previous := s.context.Generation
-	s.context.Generation++
-	if s.context.Generation == 0 {
-		s.context.Generation = 1
-	}
-	if url != "" {
-		s.context.URL = url
-	}
-	if origin != "" {
-		s.context.Origin = origin
-	}
-	s.context.Ready = false
-	s.tools = make(map[string]webmcp.ToolDescriptor)
-	current := s.context.Generation
-	s.mu.Unlock()
-	return s.emit(webmcp.BrowserEvent{Type: webmcp.EventPageNavigated, PreviousGeneration: previous, Generation: current, Reason: "navigation"})
-}
-
-func (s *ScriptedTargetSession) EmitNavigation(url, origin string) error {
-	return s.Navigate(url, origin)
-}
-
-func (s *ScriptedTargetSession) Detach(reason string) error {
-	return s.terminate(webmcp.EventTargetDetached, reason, webmcp.ErrClosed)
-}
-
-func (s *ScriptedTargetSession) Disconnect(reason string) error {
-	return s.terminate(webmcp.EventBrowserDisconnected, reason, fmt.Errorf("webmcp testkit: browser disconnected: %s", reason))
-}
-
-func (s *ScriptedTargetSession) EmitTargetDetached(reason string) error { return s.Detach(reason) }
-
-func (s *ScriptedTargetSession) EmitDisconnected(reason string) error { return s.Disconnect(reason) }
-
 func (s *ScriptedTargetSession) Close() error {
 	s.mu.Lock()
 	if s.closed {
@@ -1176,6 +1123,10 @@ func (s *ScriptedTargetSession) Close() error {
 }
 
 func (s *ScriptedTargetSession) terminate(eventType webmcp.BrowserEventType, reason string, terminalErr error) error {
+	return s.terminateWithOptions(eventType, reason, terminalErr, eventType == webmcp.EventTargetDetached && s.Ownership() == webmcp.TargetOwnershipHarnessOwned, false)
+}
+
+func (s *ScriptedTargetSession) terminateWithOptions(eventType webmcp.BrowserEventType, reason string, terminalErr error, removeTarget, explicitTargetClose bool) error {
 	s.mu.Lock()
 	if s.closed {
 		err := s.closeResult
@@ -1185,27 +1136,43 @@ func (s *ScriptedTargetSession) terminate(eventType webmcp.BrowserEventType, rea
 	s.closed = true
 	s.closedState.Store(true)
 	s.closeErr = terminalErr
+	s.context.Connected = false
+	s.context.Ready = false
+	s.removeTargetOnClose = removeTarget
+	orphaned := make([]webmcp.InvocationID, 0)
 	for _, record := range s.invokes {
 		if record.Terminal {
 			continue
 		}
 		record.State = webmcp.InvocationOrphaned
 		record.Terminal = true
+		orphaned = append(orphaned, record.ID)
 	}
 	s.notifyLocked()
 	if eventType == webmcp.EventTargetDetached {
-		if s.ownership == webmcp.TargetOwnershipHarnessOwned {
-			s.runtime.record(Operation{Kind: OperationCloseTarget, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Ownership: s.ownership})
+		if explicitTargetClose || s.ownership == webmcp.TargetOwnershipHarnessOwned {
+			s.runtime.record(Operation{Kind: OperationCloseTarget, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Generation: s.context.Generation, Ownership: s.ownership, Reason: reason})
 		} else {
-			s.runtime.record(Operation{Kind: OperationDetach, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Ownership: s.ownership})
+			s.runtime.record(Operation{Kind: OperationDetach, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Generation: s.context.Generation, Ownership: s.ownership, Reason: reason})
 		}
 	}
-	eventErr := s.emitLocalLocked(webmcp.BrowserEvent{Type: eventType, Reason: reason})
+	event := webmcp.BrowserEvent{Type: eventType, Reason: reason}
+	if eventType == webmcp.EventBrowserDisconnected {
+		event.ErrorCode = string(webmcp.ErrorBrowserDisconnected)
+	} else if eventType == webmcp.EventTargetDetached {
+		event.ErrorCode = string(webmcp.ErrorTargetDetached)
+	}
+	published, eventErr := s.emitPublishedLocked(event, true)
 	s.closeResult = eventErr
 	s.handle.sessionClosed(s)
 	close(s.events)
-	close(s.done)
 	s.mu.Unlock()
+	if eventErr == nil {
+		for _, id := range orphaned {
+			s.markTerminalObserved(id, published)
+		}
+	}
+	close(s.done)
 	if eventErr != nil {
 		return eventErr
 	}
@@ -1222,11 +1189,22 @@ func (s *ScriptedTargetSession) emit(event webmcp.BrowserEvent) error {
 }
 
 func (s *ScriptedTargetSession) emitLocked(event webmcp.BrowserEvent) error {
-	if event.Generation == 0 {
-		event.Generation = s.context.Generation
+	_, err := s.emitPublishedLocked(event, false)
+	return err
+}
+
+// emitPublishedLocked publishes a shared browser event, or a local terminal
+// lifecycle event when terminal is true. The variadic form keeps the helper
+// compatible with older testkit callers that did not need the terminal flag.
+func (s *ScriptedTargetSession) emitPublishedLocked(event webmcp.BrowserEvent, terminal ...bool) (PublishedEvent, error) {
+	if len(terminal) > 0 && terminal[0] {
+		return s.emitLocalPublishedLocked(event, true)
 	}
-	decorated := s.runtime.decorateEvent(event, s.target.BrowserID, s.target.ID)
-	return s.entry.broadcast(decorated)
+	decorated := s.decorateProducedEventLocked(event)
+	if err := s.entry.broadcast(decorated); err != nil {
+		return PublishedEvent{}, err
+	}
+	return s.runtime.publishEvent(decorated), nil
 }
 
 func (s *ScriptedTargetSession) emitLocal(event webmcp.BrowserEvent) error {
@@ -1235,19 +1213,31 @@ func (s *ScriptedTargetSession) emitLocal(event webmcp.BrowserEvent) error {
 	if s.closed {
 		return webmcp.ErrClosed
 	}
-	return s.emitLocalLocked(event)
+	_, err := s.emitLocalPublishedLocked(event, false)
+	return err
 }
 
-func (s *ScriptedTargetSession) emitLocalLocked(event webmcp.BrowserEvent) error {
-	if event.Generation == 0 {
-		event.Generation = s.context.Generation
-	}
-	decorated := s.runtime.decorateEvent(event, s.target.BrowserID, s.target.ID)
+func (s *ScriptedTargetSession) emitLocalPublishedLocked(event webmcp.BrowserEvent, terminal bool) (PublishedEvent, error) {
+	decorated := s.decorateProducedEventLocked(event)
 	select {
 	case s.events <- decorated:
-		return nil
+		return s.runtime.publishEvent(decorated), nil
 	default:
-		return webmcp.ErrEventBufferFull
+		if !terminal {
+			return PublishedEvent{}, webmcp.ErrEventBufferFull
+		}
+	}
+	// Terminal lifecycle events must remain observable even when a test has
+	// intentionally filled the bounded event buffer.
+	select {
+	case <-s.events:
+	default:
+	}
+	select {
+	case s.events <- decorated:
+		return s.runtime.publishEvent(decorated), nil
+	default:
+		return PublishedEvent{}, webmcp.ErrEventBufferFull
 	}
 }
 

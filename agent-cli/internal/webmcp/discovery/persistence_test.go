@@ -322,6 +322,93 @@ func TestExplicitReconnectSelectionOverridesPersistedTarget(t *testing.T) {
 	}
 }
 
+func TestExplicitReconnectAfterLossReplacesPersistedSelectionAcrossTwoCycles(t *testing.T) {
+	store := NewMemorySelectionStore()
+	descriptors := []TargetDescriptor{
+		persistenceDescriptor("raw-a", "A", "https://recover.test/a", "document-a", 1),
+		persistenceDescriptor("raw-b", "B", "https://recover.test/b", "document-b", 1),
+	}
+	service := persistenceService(store, &descriptors, nil)
+	browser := persistenceBrowser()
+	firstID := persistedTargetID("raw-a")
+	secondID := persistedTargetID("raw-b")
+	initial, err := service.SelectTarget(context.Background(), browser, firstID)
+	if err != nil {
+		t.Fatalf("initial selection: %v", err)
+	}
+
+	if _, err := service.HandleDisconnect(context.Background(), DisconnectEvent{
+		BrowserID: browser.ID,
+		TargetID:  firstID,
+		Phase:     "transport",
+	}); err == nil {
+		t.Fatal("first disconnect returned nil")
+	}
+	if selected, ok := service.Selected(); !ok || selected.Context().Connected {
+		t.Fatalf("selection after first loss = %#v ok=%v, want disconnected", selected.Context(), ok)
+	}
+
+	inputs, probe := persistenceInputs()
+	service = New(Options{
+		SelectionStore: store,
+		IDMapper:       persistenceBrowserIDMapper{id: browser.ID},
+		WebSocketProbe: probe,
+		TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
+			return append([]TargetDescriptor(nil), descriptors...), nil
+		}),
+		Clock: selectionClock{now: time.Date(2026, 8, 28, 13, 0, 0, 0, time.UTC)},
+	})
+	firstReconnect, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{
+		BrowserID:  browser.ID,
+		TargetID:   secondID,
+		AutoSelect: AutoSelectPersisted,
+		Reason:     "explicit_after_loss",
+	})
+	if err != nil {
+		t.Fatalf("first explicit reconnect: %v", err)
+	}
+	if firstReconnect.TargetID != secondID || firstReconnect.Title != "B" || !firstReconnect.Context().Connected || !firstReconnect.Context().Ready {
+		t.Fatalf("first reconnect = %#v context=%#v, want clean B selection", firstReconnect, firstReconnect.Context())
+	}
+	record, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load first reconnect record: %v", err)
+	}
+	if record.TargetID != secondID || record.Generation != firstReconnect.Generation || store.Writes() != 2 {
+		t.Fatalf("first reconnect persistence = %#v writes=%d, want replacement record", record, store.Writes())
+	}
+
+	if _, err := service.HandleDisconnect(context.Background(), DisconnectEvent{
+		BrowserID: browser.ID,
+		TargetID:  secondID,
+		Phase:     "transport",
+	}); err == nil {
+		t.Fatal("second disconnect returned nil")
+	}
+	secondReconnect, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{
+		BrowserID:  browser.ID,
+		TargetID:   firstID,
+		AutoSelect: AutoSelectPersisted,
+		Reason:     "explicit_after_second_loss",
+	})
+	if err != nil {
+		t.Fatalf("second explicit reconnect: %v", err)
+	}
+	if secondReconnect.TargetID != firstID || secondReconnect.Title != "A" || !secondReconnect.Context().Connected || !secondReconnect.Context().Ready {
+		t.Fatalf("second reconnect = %#v context=%#v, want clean A selection", secondReconnect, secondReconnect.Context())
+	}
+	record, err = store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load second reconnect record: %v", err)
+	}
+	if record.TargetID != firstID || record.Generation != secondReconnect.Generation || store.Writes() != 3 {
+		t.Fatalf("second reconnect persistence = %#v writes=%d, want latest explicit record", record, store.Writes())
+	}
+	if record.TargetID == initial.TargetID && firstReconnect.TargetID == initial.TargetID {
+		t.Fatal("explicit reconnect never replaced the initial persisted target")
+	}
+}
+
 func TestAutoSelectionModesAreFailClosedAndPersistenceCanBeDisabled(t *testing.T) {
 	store := NewMemorySelectionStore()
 	descriptors := []TargetDescriptor{

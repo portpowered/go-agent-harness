@@ -869,7 +869,7 @@ func doctorVersion(ctx context.Context, runtime WebMCPDoctorRuntime, candidate w
 		return version, err, true
 	}
 	if candidate.Product != "" || candidate.Protocol != "" {
-		return webmcp.BrowserVersion{Browser: candidate.Product, ProtocolVersion: candidate.Protocol, WebSocketDebuggerURL: candidate.BrowserWSURL}, nil, true
+		return webmcp.BrowserVersion{Browser: candidate.Product, ProtocolVersion: candidate.Protocol, WebSocketDebuggerURL: candidate.BrowserWSURL, BrowserInstanceID: candidate.BrowserInstanceID}, nil, true
 	}
 	return webmcp.BrowserVersion{}, nil, false
 }

@@ -5,7 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -39,6 +42,35 @@ func addressClass(candidate BrowserCandidate) string {
 	return "non_loopback"
 }
 
+func browserCandidateEndpointIdentity(candidate BrowserCandidate) (string, string) {
+	for _, raw := range []string{candidate.BrowserWSURL, candidate.HTTPURL} {
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || parsed == nil || parsed.Hostname() == "" {
+			continue
+		}
+		host := strings.ToLower(parsed.Hostname())
+		port := parsed.Port()
+		address := host + "\x00" + port
+		identity := strings.Join([]string{strings.ToLower(parsed.Scheme), host, port}, "\x00")
+		if instanceID := strings.TrimSpace(candidate.BrowserInstanceID); instanceID != "" {
+			identity += "\x00instance\x00" + instanceID
+		} else {
+			identity += "\x00path\x00" + parsed.EscapedPath()
+		}
+		return address, identity
+	}
+	return "", ""
+}
+
+func browserCandidatesReplaced(previous, current BrowserCandidate) bool {
+	previousAddress, previousIdentity := browserCandidateEndpointIdentity(previous)
+	currentAddress, currentIdentity := browserCandidateEndpointIdentity(current)
+	if previousAddress == "" || currentAddress == "" || previousAddress != currentAddress {
+		return false
+	}
+	return previous.ID != current.ID || previousIdentity != currentIdentity
+}
+
 func contextError(ctx context.Context) error {
 	if ctx == nil {
 		return nil
@@ -49,6 +81,72 @@ func contextError(ctx context.Context) error {
 	default:
 		return nil
 	}
+}
+
+// lifecycleClassifiedError preserves the two transport/lifecycle outcomes
+// whose meaning would be lost if an adapter error were wrapped as a generic
+// selection or invocation failure.
+func lifecycleClassifiedError(err error) (*ClassifiedError, bool) {
+	var classified *ClassifiedError
+	if !errors.As(err, &classified) || classified == nil {
+		return nil, false
+	}
+	switch classified.Code {
+	case ErrorBrowserDisconnected, ErrorTargetDetached:
+		return classified, true
+	default:
+		return nil, false
+	}
+}
+
+func sessionLifecycleFailure(selected *brokerSession) error {
+	if selected == nil || selected.session == nil {
+		return nil
+	}
+	if selected.lifecycleFailure != nil {
+		return selected.lifecycleFailure
+	}
+	if failure, ok := lifecycleClassifiedError(selected.session.Err()); ok {
+		return failure
+	}
+	return nil
+}
+
+func targetSessionLifecycleFailure(selected *brokerSession) error {
+	if selected == nil || selected.session == nil {
+		return nil
+	}
+	if failure, ok := lifecycleClassifiedError(selected.session.Err()); ok {
+		return failure
+	}
+	return nil
+}
+
+func rememberLifecycleFailureLocked(selected *brokerSession, code ErrorCode, reason string) {
+	if selected == nil || selected.lifecycleFailure != nil {
+		return
+	}
+	if failure := targetSessionLifecycleFailure(selected); failure != nil {
+		selected.lifecycleFailure = failure
+		return
+	}
+	switch code {
+	case ErrorBrowserDisconnected:
+		selected.lifecycleFailure = classified(ErrorBrowserDisconnected, DefaultErrorMessage(ErrorBrowserDisconnected), map[string]any{
+			"browser_id":         string(selected.context.Key.BrowserID),
+			"target_id":          string(selected.context.Key.TargetID),
+			"phase":              "lifecycle",
+			"reconnect_required": true,
+		}, nil)
+	}
+}
+
+func classifiedDetails(err error) map[string]any {
+	var classified *ClassifiedError
+	if !errors.As(err, &classified) || classified == nil {
+		return nil
+	}
+	return cloneDetails(classified.Details)
 }
 
 func cloneJSON(raw json.RawMessage) json.RawMessage {

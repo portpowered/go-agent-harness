@@ -348,15 +348,16 @@ func (p *productionWebMCPComposition) coreCandidateForLane(ctx context.Context, 
 		return webmcp.BrowserCandidate{}, err
 	}
 	candidate := webmcp.BrowserCandidate{
-		ID:           webmcp.BrowserID(laneCandidate.ID),
-		Source:       productionDiscoverySource(laneCandidate.Source),
-		Product:      laneCandidate.Product,
-		Protocol:     laneCandidate.Protocol,
-		Loopback:     laneCandidate.Loopback,
-		Explicit:     laneCandidate.Source == discovery.SourceExplicitCDPHTTP || laneCandidate.Source == discovery.SourceExplicitBrowserWS,
-		HTTPURL:      productionHTTPTransportURL(endpoint.CDPURL),
-		BrowserWSURL: productionWSTransportURL(endpoint.BrowserWSEndpoint),
-		UserDataDir:  p.browser.Connection.UserDataDir,
+		ID:                webmcp.BrowserID(laneCandidate.ID),
+		Source:            productionDiscoverySource(laneCandidate.Source),
+		Product:           laneCandidate.Product,
+		Protocol:          laneCandidate.Protocol,
+		BrowserInstanceID: laneCandidate.BrowserInstanceID,
+		Loopback:          laneCandidate.Loopback,
+		Explicit:          laneCandidate.Source == discovery.SourceExplicitCDPHTTP || laneCandidate.Source == discovery.SourceExplicitBrowserWS,
+		HTTPURL:           productionHTTPTransportURL(endpoint.CDPURL),
+		BrowserWSURL:      productionWSTransportURL(endpoint.BrowserWSEndpoint),
+		UserDataDir:       p.browser.Connection.UserDataDir,
 	}
 	p.mu.Lock()
 	p.coreCandidates[laneCandidate.ID] = candidate
@@ -383,11 +384,12 @@ func (p *productionWebMCPComposition) enrichCoreCandidate(ctx context.Context, c
 	// Discover. Reconstruct only its public identity and use configured source
 	// values for the transport; never enumerate a replacement browser.
 	laneCandidate = discovery.BrowserCandidate{
-		ID:       string(candidate.ID),
-		Source:   discovery.SourceConfigured,
-		Product:  candidate.Product,
-		Protocol: candidate.Protocol,
-		Loopback: candidate.Loopback,
+		ID:                string(candidate.ID),
+		Source:            discovery.SourceConfigured,
+		Product:           candidate.Product,
+		Protocol:          candidate.Protocol,
+		BrowserInstanceID: candidate.BrowserInstanceID,
+		Loopback:          candidate.Loopback,
 	}
 	return p.coreCandidateForLane(ctx, laneCandidate)
 }
@@ -458,11 +460,12 @@ func (p *productionWebMCPComposition) laneCandidateForCore(candidate webmcp.Brow
 	}
 	p.mu.Unlock()
 	return discovery.BrowserCandidate{
-		ID:       string(candidate.ID),
-		Source:   discovery.SourceConfigured,
-		Product:  candidate.Product,
-		Protocol: candidate.Protocol,
-		Loopback: candidate.Loopback,
+		ID:                string(candidate.ID),
+		Source:            discovery.SourceConfigured,
+		Product:           candidate.Product,
+		Protocol:          candidate.Protocol,
+		BrowserInstanceID: candidate.BrowserInstanceID,
+		Loopback:          candidate.Loopback,
 	}
 }
 
@@ -775,6 +778,7 @@ func (c *productionWebMCPCatalog) Version(ctx context.Context, candidate webmcp.
 		Browser:              enriched.Product,
 		ProtocolVersion:      enriched.Protocol,
 		WebSocketDebuggerURL: enriched.BrowserWSURL,
+		BrowserInstanceID:    enriched.BrowserInstanceID,
 	}, nil
 }
 
@@ -1201,21 +1205,12 @@ func (p *productionWebMCPComposition) rememberVersionEndpoint(requestURL *url.UR
 	if err != nil || parsed.Host == "" || parsed.Path == "" {
 		return
 	}
-	identity := discovery.BrowserIdentity{
-		Scheme: strings.ToLower(parsed.Scheme),
-		Host:   strings.ToLower(parsed.Hostname()),
-		Port:   parsed.Port(),
-		Path:   parsed.EscapedPath(),
-	}
-	if identity.Scheme != "ws" && identity.Scheme != "wss" {
+	if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
 		return
 	}
-	publicID := ""
-	if p.idMapper != nil {
-		publicID = p.idMapper.BrowserID(identity)
-	}
-	if !productionOpaqueID(publicID) {
-		publicID = discovery.HashIDMapper{}.BrowserID(identity)
+	publicID, ok := discovery.BrowserIDForVersion(p.idMapper, version)
+	if !ok || !productionOpaqueID(publicID) {
+		return
 	}
 	requestCopy := *requestURL
 	requestCopy.RawQuery = ""
@@ -1245,14 +1240,15 @@ func (s productionCLISelectionStore) Load(ctx context.Context) (discovery.Persis
 		return discovery.PersistedSelection{}, discovery.ErrSelectionNotFound
 	}
 	return discovery.PersistedSelection{
-		Version:          uint(selection.Version),
-		EndpointID:       selection.EndpointID,
-		BrowserID:        selection.BrowserID,
-		TargetID:         selection.TargetID,
-		Origin:           selection.Origin,
-		ContinuityMarker: selection.ContinuityMarker,
-		Generation:       selection.Generation,
-		SelectedAt:       selection.SelectedAt,
+		Version:           uint(selection.Version),
+		EndpointID:        selection.EndpointID,
+		BrowserID:         selection.BrowserID,
+		BrowserInstanceID: selection.BrowserInstanceID,
+		TargetID:          selection.TargetID,
+		Origin:            selection.Origin,
+		ContinuityMarker:  selection.ContinuityMarker,
+		Generation:        selection.Generation,
+		SelectedAt:        selection.SelectedAt,
 	}, nil
 }
 
@@ -1264,14 +1260,15 @@ func (s productionCLISelectionStore) Save(ctx context.Context, record discovery.
 		return errors.New("WebMCP selection store is unavailable")
 	}
 	return s.store.Save(WebMCPSelection{
-		Version:          int(record.Version),
-		EndpointID:       record.EndpointID,
-		BrowserID:        record.BrowserID,
-		TargetID:         record.TargetID,
-		Origin:           record.Origin,
-		ContinuityMarker: record.ContinuityMarker,
-		Generation:       record.Generation,
-		SelectedAt:       record.SelectedAt,
+		Version:           int(record.Version),
+		EndpointID:        record.EndpointID,
+		BrowserID:         record.BrowserID,
+		BrowserInstanceID: record.BrowserInstanceID,
+		TargetID:          record.TargetID,
+		Origin:            record.Origin,
+		ContinuityMarker:  record.ContinuityMarker,
+		Generation:        record.Generation,
+		SelectedAt:        record.SelectedAt,
 	})
 }
 

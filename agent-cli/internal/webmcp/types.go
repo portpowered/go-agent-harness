@@ -30,18 +30,22 @@ type Diagnostic struct {
 // browser endpoint. Browser-specific protocol values stay at the adapter
 // boundary and are represented here only as neutral strings.
 type BrowserCandidate struct {
-	ID           BrowserID
-	Source       DiscoverySource
-	Product      string
-	Protocol     string
-	HTTPURL      string
-	BrowserWSURL string
-	UserDataDir  string
-	PID          int
-	Loopback     bool
-	Explicit     bool
-	HarnessOwned bool
-	Diagnostics  []Diagnostic
+	ID       BrowserID
+	Source   DiscoverySource
+	Product  string
+	Protocol string
+	// BrowserInstanceID is an opaque, normalized incarnation claim. It is
+	// safe to carry across the composition boundary but is never a raw
+	// endpoint, websocket path, or credential.
+	BrowserInstanceID string
+	HTTPURL           string
+	BrowserWSURL      string
+	UserDataDir       string
+	PID               int
+	Loopback          bool
+	Explicit          bool
+	HarnessOwned      bool
+	Diagnostics       []Diagnostic
 }
 
 // BrowserVersion is the small protocol version response consumed by the
@@ -50,6 +54,9 @@ type BrowserVersion struct {
 	Browser              string
 	ProtocolVersion      string
 	WebSocketDebuggerURL string
+	// BrowserInstanceID is optional protocol metadata supplied by a browser
+	// adapter or hermetic probe. Discovery hashes it before exposing it.
+	BrowserInstanceID string
 }
 
 // Target is a normalized browser target. Title and URL are display metadata;

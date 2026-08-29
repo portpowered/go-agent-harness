@@ -19,14 +19,15 @@ import (
 // redacted origin; endpoint credentials and websocket paths never cross this
 // boundary.
 type WebMCPSelection struct {
-	Version          int       `json:"version"`
-	EndpointID       string    `json:"endpoint_id"`
-	BrowserID        string    `json:"browser_id"`
-	TargetID         string    `json:"target_id"`
-	Origin           string    `json:"origin"`
-	ContinuityMarker string    `json:"continuity_marker,omitempty"`
-	Generation       uint64    `json:"generation,omitempty"`
-	SelectedAt       time.Time `json:"selected_at"`
+	Version           int       `json:"version"`
+	EndpointID        string    `json:"endpoint_id"`
+	BrowserID         string    `json:"browser_id"`
+	BrowserInstanceID string    `json:"browser_instance_id,omitempty"`
+	TargetID          string    `json:"target_id"`
+	Origin            string    `json:"origin"`
+	ContinuityMarker  string    `json:"continuity_marker,omitempty"`
+	Generation        uint64    `json:"generation,omitempty"`
+	SelectedAt        time.Time `json:"selected_at"`
 }
 
 // WebMCPSelectionStore persists and loads one opaque browser selection.
@@ -140,6 +141,9 @@ func validateWebMCPSelection(selection WebMCPSelection) error {
 	if selection.BrowserID == "" || selection.TargetID == "" {
 		return errors.New("WebMCP selection requires browser_id and target_id")
 	}
+	if selection.BrowserInstanceID != "" && !isNormalizedBrowserInstanceID(selection.BrowserInstanceID) {
+		return errors.New("WebMCP selection browser_instance_id is invalid")
+	}
 	if selection.Origin != "" {
 		selectionOrigin := safeOrigin(selection.Origin)
 		if selectionOrigin == "" {
@@ -150,4 +154,17 @@ func validateWebMCPSelection(selection WebMCPSelection) error {
 		return errors.New("WebMCP selection continuity marker is invalid")
 	}
 	return nil
+}
+
+func isNormalizedBrowserInstanceID(value string) bool {
+	const prefix = "incarnation-"
+	if len(value) != len(prefix)+24 || !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	for _, character := range value[len(prefix):] {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }

@@ -87,6 +87,7 @@ func (b *StatefulBroker) markCatalogReadyLocked(selected *brokerSession, evidenc
 		selected.context.CatalogReady = true
 		if selected.catalogSignal != nil {
 			close(selected.catalogSignal)
+			selected.catalogSignal = nil
 		}
 	}
 	if selected.context.CatalogEvidence == "" {

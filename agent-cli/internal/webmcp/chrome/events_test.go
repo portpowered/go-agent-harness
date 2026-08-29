@@ -372,6 +372,29 @@ func TestTargetDetachPublishesTerminalEventAndClosesLifecycleOnce(t *testing.T) 
 	}
 }
 
+func TestTargetDestroyedPublishesTargetClosureNotNavigation(t *testing.T) {
+	_, session, protocolTarget, _ := newLifecycleTestSession(t)
+	session.enqueueProtocolEvent(&cdpTarget.EventTargetDestroyed{TargetID: protocolTarget.TargetID})
+
+	terminal := nextBrowserEvent(t, session.Events())
+	if terminal.Type != webmcp.EventTargetDetached || terminal.ErrorCode != string(webmcp.ErrorTargetDetached) || terminal.Reason != "target_closed" {
+		t.Fatalf("destroyed terminal event = %+v, want target_closed target_detached semantics", terminal)
+	}
+	select {
+	case _, ok := <-session.Events():
+		if ok {
+			t.Fatal("destroyed session emitted an event after its terminal event")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("destroyed session event channel did not close")
+	}
+	select {
+	case <-session.Done():
+	case <-time.After(time.Second):
+		t.Fatal("destroyed session Done channel did not close")
+	}
+}
+
 func TestBrowserDisconnectPublishesTerminalEventAndClosesLifecycleOnce(t *testing.T) {
 	_, session, protocolTarget, cancelCount := newLifecycleTestSession(t)
 	session.transportLost()

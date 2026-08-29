@@ -1095,6 +1095,9 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		if stored.EndpointID != "" && stored.EndpointID != string(candidate.ID) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "endpoint_changed", nil)
 		}
+		if stored.BrowserInstanceID != "" && stored.BrowserInstanceID != candidate.BrowserInstanceID {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "browser_instance_changed", nil)
+		}
 		if stored.Origin != "" && safeOrigin(stored.Origin) != safeOrigin(target.Origin) {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, stalePersistedSelectionError(browserID, targetID, "origin_changed", nil)
 		}

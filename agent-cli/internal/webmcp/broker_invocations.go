@@ -356,15 +356,19 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	selected := invocation.selected
 	b.mu.Lock()
 	if invocation.terminalized {
-		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
+		var dispatchErr error
+		if ErrorCode(invocation.finalResult.ErrorCode) == ErrorBrowserDisconnected {
+			dispatchErr = browserDisconnectedErrorForSession(selected, "list_targets", sessionLifecycleFailure(selected))
+		}
+		b.reportDispatchLocked(invocation, invocation.finalResult, dispatchErr)
 		b.mu.Unlock()
 		return
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
 		err := selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
-		result := invocationFailureResult(invocation, InvocationError, errorCodeFor(err, ErrorStaleSelection), nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -372,8 +376,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	if !ok || !refCurrentLocked(selected, record) {
 		err := staleToolRefError(invocation.invocation.Tool.Ref, selected.context.Generation)
 		result := invocationFailureResult(invocation, InvocationError, ErrorStaleToolRef, nil)
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -387,33 +391,39 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	// target disappearing while an earlier invocation occupied the lane.
 	targets, err := handle.ListTargets(ctx)
 	if err != nil || !targetPresent(targets, descriptor.TargetID) {
+		failure := err
+		if failure == nil {
+			failure = staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
+		}
 		b.mu.Lock()
-		failure := staleSelectionError(descriptor.BrowserID, descriptor.TargetID, descriptor.Generation, "target_not_current")
-		code := ErrorStaleSelection
-		if err != nil && b.selected == selected {
-			if promoted := b.browserDisconnectedLocked(selected, "list_targets", err); promoted != nil {
+		failure = reconcileTargetLossLocked(invocation, failure)
+		if b.selected == selected && (isBrowserEndpointLossError(failure) || isBrowserDisconnectedTransportError(failure)) {
+			if promoted := b.browserDisconnectedLocked(selected, "list_targets", failure); promoted != nil {
 				failure = promoted
-				code = ErrorBrowserDisconnected
 			}
 		}
-		result := invocationFailureResult(invocation, InvocationError, code, nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, failure, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, failure)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
 
 	b.mu.Lock()
 	if invocation.terminalized {
-		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
+		var dispatchErr error
+		if ErrorCode(invocation.finalResult.ErrorCode) == ErrorBrowserDisconnected {
+			dispatchErr = browserDisconnectedErrorForSession(selected, "list_targets", sessionLifecycleFailure(selected))
+		}
+		b.reportDispatchLocked(invocation, invocation.finalResult, dispatchErr)
 		b.mu.Unlock()
 		return
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
 		err = selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
-		result := invocationFailureResult(invocation, InvocationError, errorCodeFor(err, ErrorStaleSelection), nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -421,8 +431,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	if !ok || !refCurrentLocked(selected, record) {
 		err = staleToolRefError(invocation.invocation.Tool.Ref, selected.context.Generation)
 		result := invocationFailureResult(invocation, InvocationError, ErrorStaleToolRef, nil)
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -431,28 +441,16 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	id, invokeErr := invokeWebMCP(ctx, session, invocation.invocation.ID, descriptor.FrameID, descriptor.Name, cloneJSON(invocation.invocation.Arguments))
 
 	b.mu.Lock()
+	invokeErr = reconcileTargetLossLocked(invocation, invokeErr)
 	if id == "" {
-		code := ErrorInvocationFailed
-		state := InvocationError
 		if b.selected == selected && (isBrowserEndpointLossError(invokeErr) || isBrowserDisconnectedTransportError(session.Err())) {
 			if failure := b.browserDisconnectedLocked(selected, "invoke", invokeErr); failure != nil {
-				result := invocationFailureResult(invocation, InvocationError, ErrorBrowserDisconnected, nil)
-				b.finishInvocationLocked(invocation, result)
-				b.reportDispatchLocked(invocation, result, failure)
-				b.mu.Unlock()
-				return
+				invokeErr = failure
 			}
 		}
-		if errors.Is(invokeErr, context.Canceled) {
-			code = ErrorInvocationCanceled
-			state = InvocationCanceled
-		} else if errors.Is(invokeErr, context.DeadlineExceeded) {
-			code = ErrorInvocationTimedOut
-			state = InvocationTimedOut
-		}
-		result := invocationFailureResult(invocation, state, code, nil)
-		b.finishInvocationLocked(invocation, result)
+		result := invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
 		b.reportDispatchLocked(invocation, result, invokeErr)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -464,8 +462,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 			"phase":               "correlation",
 			"side_effect_unknown": true,
 		})
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -476,8 +474,8 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 			"phase":               "correlation",
 			"side_effect_unknown": true,
 		})
-		b.finishInvocationLocked(invocation, result)
 		b.reportDispatchLocked(invocation, result, err)
+		b.finishInvocationLocked(invocation, result)
 		b.mu.Unlock()
 		return
 	}
@@ -501,15 +499,16 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 		invocation.finalResult.BrowserInvocationID = id
 		result = cloneInvokeResult(invocation.finalResult)
 	}
+	var dispatchErr error
 	if invokeErr != nil && !invocation.terminalized {
-		result = invocationFailureResult(invocation, InvocationError, ErrorInvocationFailed, map[string]any{
-			"invocation_id":       string(invocation.invocation.ID),
-			"phase":               "invoke",
-			"side_effect_unknown": true,
-		})
+		result = invocationFailureResultForError(invocation, invokeErr, ErrorInvocationFailed)
+		dispatchErr = invokeErr
+		b.reportDispatchLocked(invocation, result, dispatchErr)
 		b.finishInvocationLocked(invocation, result)
+		b.mu.Unlock()
+		return
 	}
-	b.reportDispatchLocked(invocation, result, nil)
+	b.reportDispatchLocked(invocation, result, dispatchErr)
 	b.mu.Unlock()
 }
 
@@ -979,7 +978,16 @@ func (b *StatefulBroker) finishInvocationLocked(invocation *brokerInvocation, re
 		b.recordBrowserTerminalIDLocked(invocation.browserID)
 	}
 	if !invocation.reported {
-		b.reportDispatchLocked(invocation, invocation.finalResult, nil)
+		var dispatchErr error
+		if invocation.browserID == "" {
+			switch ErrorCode(result.ErrorCode) {
+			case ErrorBrowserDisconnected:
+				dispatchErr = browserDisconnectedErrorForSession(invocation.selected, "list_targets", sessionLifecycleFailure(invocation.selected))
+			case ErrorTargetDetached, ErrorPageNavigated, ErrorInvocationOrphaned:
+				dispatchErr = classified(ErrorCode(result.ErrorCode), DefaultErrorMessage(ErrorCode(result.ErrorCode)), result.ErrorDetails, nil)
+			}
+		}
+		b.reportDispatchLocked(invocation, invocation.finalResult, dispatchErr)
 	}
 	close(invocation.terminal)
 	b.emitLocked(BrokerEvent{
@@ -1057,7 +1065,7 @@ func (b *StatefulBroker) trimTerminalResultsLocked() {
 	}
 }
 
-func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvocation, state InvocationState, code ErrorCode, reason string) {
+func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvocation, state InvocationState, code ErrorCode, reason string, previousGeneration uint64) {
 	var details map[string]any
 	switch code {
 	case ErrorTargetDetached:
@@ -1072,9 +1080,11 @@ func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvoc
 		}
 	case ErrorPageNavigated:
 		currentGeneration := invocation.selected.context.Generation
-		previousGeneration := invocation.invocation.Tool.Generation
-		if previousGeneration >= currentGeneration && currentGeneration > 0 {
-			previousGeneration = currentGeneration - 1
+		if previousGeneration == 0 {
+			previousGeneration = invocation.invocation.Tool.Generation
+			if previousGeneration >= currentGeneration && currentGeneration > 0 {
+				previousGeneration = currentGeneration - 1
+			}
 		}
 		details = map[string]any{
 			"browser_id":          string(invocation.invocation.Tool.BrowserID),
@@ -1107,25 +1117,29 @@ func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvoc
 	b.finishInvocationLocked(invocation, invocationFailureResult(invocation, state, code, details))
 }
 
-func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSession, code ErrorCode, reason string) {
+func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSession, code ErrorCode, reason string, transitionPrevious ...uint64) {
 	state := InvocationError
 	if code == ErrorInvocationOrphaned {
 		state = InvocationOrphaned
 	}
+	previousGeneration := uint64(0)
+	if len(transitionPrevious) > 0 {
+		previousGeneration = transitionPrevious[0]
+	}
 	if selected.current != nil && !selected.current.terminalized {
-		b.finishLifecycleInvocationLocked(selected.current, state, code, reason)
+		b.finishLifecycleInvocationLocked(selected.current, state, code, reason, previousGeneration)
 	}
 	for _, invocation := range selected.queue {
 		if invocation == nil || invocation.terminalized {
 			continue
 		}
-		b.finishLifecycleInvocationLocked(invocation, state, code, reason)
+		b.finishLifecycleInvocationLocked(invocation, state, code, reason, previousGeneration)
 	}
 	for _, invocation := range b.invocations {
 		if invocation.selected != selected || invocation.terminalized {
 			continue
 		}
-		b.finishLifecycleInvocationLocked(invocation, state, code, reason)
+		b.finishLifecycleInvocationLocked(invocation, state, code, reason, previousGeneration)
 	}
 	signalInvocationQueueLocked(selected)
 }

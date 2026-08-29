@@ -38,6 +38,9 @@ type handle struct {
 	closeErr  error
 	done      chan struct{}
 	closeOnce sync.Once
+
+	disconnected   bool
+	disconnectDone chan struct{}
 }
 
 type targetContextOps struct {
@@ -93,6 +96,9 @@ func (h *handle) resolvedTargetContextOps() targetContextOps {
 func (h *handle) executor() cdp.Executor {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.disconnected {
+		return nil
+	}
 	if h.browserExecutor != nil {
 		return h.browserExecutor
 	}
@@ -114,18 +120,35 @@ func (h *handle) ListTargets(ctx context.Context) ([]webmcp.Target, error) {
 		h.mu.Unlock()
 		return nil, webmcp.ErrClosed
 	}
+	if h.disconnected {
+		err := browserDisconnectedError(webmcp.PageContext{Key: webmcp.PageKey{BrowserID: h.candidate.ID}}, "list_targets", nil)
+		h.mu.Unlock()
+		return nil, err
+	}
 	h.mu.Unlock()
+	commandContext, releaseContext := h.operationContext(ctx)
+	defer releaseContext()
 
-	if targets, err := h.listTargetsHTTP(ctx); err == nil {
+	if targets, err := h.listTargetsHTTP(commandContext); err == nil {
 		h.mu.Lock()
 		closed := h.closed
+		disconnected := h.disconnected
 		h.mu.Unlock()
 		if closed {
 			return nil, webmcp.ErrClosed
 		}
+		if disconnected {
+			return nil, h.disconnectError("", "list_targets", nil)
+		}
 		return targets, nil
 	} else if !errors.Is(err, errHTTPUnavailable) {
+		if h.isDisconnected() {
+			return nil, h.disconnectError("", "list_targets", err)
+		}
 		return nil, err
+	}
+	if h.isDisconnected() {
+		return nil, h.disconnectError("", "list_targets", nil)
 	}
 
 	h.mu.Lock()
@@ -137,12 +160,21 @@ func (h *handle) ListTargets(ctx context.Context) ([]webmcp.Target, error) {
 	}
 	executor := h.executor()
 	if executor == nil {
+		if h.isDisconnected() {
+			return nil, h.disconnectError("", "list_targets", nil)
+		}
 		return nil, classifiedHandleError(candidate, webmcp.ErrorBrowserDisconnected, "list_targets", errors.New("browser connection is unavailable"))
 	}
 
-	infos, err := target.GetTargets().Do(cdp.WithExecutor(ctx, executor))
+	infos, err := target.GetTargets().Do(cdp.WithExecutor(commandContext, executor))
 	if err != nil {
+		if h.isDisconnected() {
+			return nil, h.disconnectError("", "list_targets", err)
+		}
 		return nil, classifiedHandleError(candidate, webmcp.ErrorBrowserDisconnected, "list_targets", err)
+	}
+	if h.isDisconnected() {
+		return nil, h.disconnectError("", "list_targets", nil)
 	}
 	result := make([]webmcp.Target, 0, len(infos))
 	for _, info := range infos {
@@ -170,17 +202,32 @@ func (h *handle) Activate(ctx context.Context, targetID webmcp.TargetID) error {
 	}
 	h.mu.Lock()
 	closed := h.closed
+	disconnected := h.disconnected
 	candidate := h.candidate
 	h.mu.Unlock()
 	if closed {
 		return webmcp.ErrClosed
 	}
+	if disconnected {
+		return h.disconnectError(targetID, "activate", nil)
+	}
 	executor := h.executor()
 	if executor == nil {
+		if h.isDisconnected() {
+			return h.disconnectError(targetID, "activate", nil)
+		}
 		return classifiedTargetError(candidate, targetID, "activate", errors.New("browser connection is unavailable"))
 	}
-	if err := target.ActivateTarget(target.ID(targetID)).Do(cdp.WithExecutor(ctx, executor)); err != nil {
+	commandContext, releaseContext := h.operationContext(ctx)
+	defer releaseContext()
+	if err := target.ActivateTarget(target.ID(targetID)).Do(cdp.WithExecutor(commandContext, executor)); err != nil {
+		if h.isDisconnected() {
+			return h.disconnectError(targetID, "activate", err)
+		}
 		return classifiedTargetError(candidate, targetID, "activate", err)
+	}
+	if h.isDisconnected() {
+		return h.disconnectError(targetID, "activate", nil)
 	}
 	return nil
 }
@@ -218,10 +265,14 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 
 	h.mu.Lock()
 	closed := h.closed
+	disconnected := h.disconnected
 	parent := h.browserContext
 	h.mu.Unlock()
 	if closed {
 		return nil, webmcp.ErrClosed
+	}
+	if disconnected {
+		return nil, browserDisconnectedError(webmcp.PageContext{Key: webmcp.PageKey{BrowserID: h.candidate.ID, TargetID: targetID}}, "attach", nil)
 	}
 	ops := h.resolvedTargetContextOps()
 	if ops.newContext == nil || parent == nil && !hasCustomTargetContext(h) {
@@ -240,18 +291,22 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
 
 	// chromedp starts the target event reader with the context supplied to its
-	// first Run call. Keep that reader tied to the persistent target context;
-	// canceling a short-lived attach timeout here would stop every later target
-	// command from receiving a response. The caller's parent context remains
-	// the lifetime bound for this attached target, while individual operations
-	// use handle.timeout below.
-	err = ops.run(targetContext, chromedp.ActionFunc(func(context.Context) error { return nil }))
+	// first Run call. Keep that reader alive for the target session, while still
+	// binding it to the handle's disconnect signal. Do not call the returned
+	// release function here: doing so would cancel the reader immediately after
+	// attach and make every later target command time out. The target context
+	// and handle lifecycle cancel the bound context after attach.
+	attachContext, _ := h.bindDisconnect(targetContext)
+	err = ops.run(attachContext, chromedp.ActionFunc(func(context.Context) error { return nil }))
 	protocolTarget := ops.target(targetContext)
 	session.setProtocolTarget(protocolTarget)
 	if err != nil {
 		cleanupErr := session.abortOpen()
 		if cleanupErr != nil {
 			err = errors.Join(err, cleanupErr)
+		}
+		if h.isDisconnected() {
+			return nil, h.disconnectError(targetID, "attach", err)
 		}
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", err)
 	}
@@ -262,13 +317,22 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 		if cleanupErr != nil {
 			attachErr = errors.Join(attachErr, cleanupErr)
 		}
+		if h.isDisconnected() {
+			return nil, h.disconnectError(targetID, "attach", attachErr)
+		}
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", attachErr)
 	}
 	session.publishAttached()
 
 	h.mu.Lock()
-	if h.closed {
+	closed = h.closed
+	disconnected = h.disconnected
+	if closed || disconnected {
 		h.mu.Unlock()
+		if disconnected {
+			session.transportLost()
+			return nil, h.disconnectError(targetID, "attach", nil)
+		}
 		_ = session.Close()
 		return nil, webmcp.ErrClosed
 	}
@@ -328,6 +392,89 @@ func (h *handle) Close() error {
 	return h.closeErr
 }
 
+func (h *handle) isDisconnected() bool {
+	if h == nil {
+		return true
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.disconnected
+}
+
+func (h *handle) disconnectError(targetID webmcp.TargetID, phase string, cause error) error {
+	if h == nil {
+		return webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected), map[string]any{
+			"phase":              phase,
+			"reconnect_required": true,
+		})
+	}
+	h.mu.Lock()
+	page := webmcp.PageContext{Key: webmcp.PageKey{BrowserID: h.candidate.ID, TargetID: targetID}}
+	h.mu.Unlock()
+	return browserDisconnectedError(page, phase, cause)
+}
+
+func (h *handle) disconnectSignalLocked() chan struct{} {
+	if h.disconnectDone == nil {
+		h.disconnectDone = make(chan struct{})
+		if h.disconnected {
+			close(h.disconnectDone)
+		}
+	}
+	return h.disconnectDone
+}
+
+// bindDisconnect makes a long-lived target operation observe browser loss
+// without tying its lifetime to a short command timeout.
+func (h *handle) bindDisconnect(ctx context.Context) (context.Context, func()) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if h == nil {
+		return ctx, func() {}
+	}
+	h.mu.Lock()
+	disconnectDone := h.disconnectSignalLocked()
+	done := h.done
+	disconnected := h.disconnected
+	h.mu.Unlock()
+	bound, cancel := context.WithCancel(ctx)
+	if disconnected {
+		cancel()
+		return bound, cancel
+	}
+	stop := make(chan struct{})
+	go func() {
+		select {
+		case <-disconnectDone:
+			cancel()
+		case <-done:
+			cancel()
+		case <-stop:
+		case <-bound.Done():
+		}
+	}()
+	return bound, func() {
+		close(stop)
+		cancel()
+	}
+}
+
+// operationContext applies the configured command bound and the browser
+// disconnect signal to one handle-level operation.
+func (h *handle) operationContext(ctx context.Context) (context.Context, func()) {
+	bound, release := h.bindDisconnect(ctx)
+	timeout := h.timeout()
+	if timeout <= 0 {
+		return bound, release
+	}
+	commandContext, cancel := context.WithTimeout(bound, timeout)
+	return commandContext, func() {
+		cancel()
+		release()
+	}
+}
+
 func (h *handle) unregister(session *targetSession) {
 	h.mu.Lock()
 	delete(h.sessions, session)
@@ -335,19 +482,41 @@ func (h *handle) unregister(session *targetSession) {
 }
 
 func (h *handle) watchBrowserConnection() {
-	select {
-	case <-h.done:
+	if h == nil {
 		return
-	case <-h.browser.LostConnection:
-		h.mu.Lock()
-		sessions := make([]*targetSession, 0, len(h.sessions))
-		for session := range h.sessions {
-			sessions = append(sessions, session)
-		}
-		h.mu.Unlock()
-		for _, session := range sessions {
-			session.transportLost()
-		}
+	}
+	h.mu.Lock()
+	browser := h.browser
+	done := h.done
+	h.mu.Unlock()
+	if browser == nil {
+		return
+	}
+	select {
+	case <-done:
+		return
+	case <-browser.LostConnection:
+		h.markTransportLost()
+	}
+}
+
+func (h *handle) markTransportLost() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	disconnectDone := h.disconnectSignalLocked()
+	if !h.disconnected {
+		h.disconnected = true
+		close(disconnectDone)
+	}
+	sessions := make([]*targetSession, 0, len(h.sessions))
+	for session := range h.sessions {
+		sessions = append(sessions, session)
+	}
+	h.mu.Unlock()
+	for _, session := range sessions {
+		session.transportLost()
 	}
 }
 
@@ -377,6 +546,9 @@ func (h *handle) listTargetsHTTP(ctx context.Context) ([]webmcp.Target, error) {
 	}
 	response, err := client.Do(request)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		return nil, errHTTPUnavailable
 	}
 	defer response.Body.Close()

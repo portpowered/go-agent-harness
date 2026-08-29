@@ -106,6 +106,10 @@ type brokerSession struct {
 	invalidatedReason string
 	catalog           map[catalogKey]ToolDescriptor
 	catalogError      error
+	// lifecycleFailure is retained from the first terminal lifecycle signal so
+	// selection-dependent calls keep the event's C0 classification even when a
+	// neutral TargetSession does not expose the same error through Err().
+	lifecycleFailure error
 
 	// dispatchMu establishes a linearization point between the final ref
 	// check and a page command. Lifecycle/catalog events wait for it before
@@ -127,6 +131,11 @@ type brokerSession struct {
 	// lifecycle events without claiming ownership of their result.
 	observedInvocations map[InvocationID]observedInvocation
 	catalogSignal       chan struct{}
+	// lastBrowserEventSequence is the producer sequence most recently
+	// reconciled for this target session. Browser events are delivered through
+	// one target-local stream, so an older or duplicated sequence is a late
+	// observation and must not mutate current catalog or lifecycle state.
+	lastBrowserEventSequence uint64
 }
 
 type catalogKey struct {
@@ -232,13 +241,6 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	}
 }
 
-// NewStatefulBroker is a descriptive constructor alias.
-func NewStatefulBroker(options BrokerOptions) *StatefulBroker { return NewBroker(options) }
-
-// New is a concise constructor alias for callers that use the package as a
-// broker implementation rather than only as a contract package.
-func New(options BrokerOptions) *StatefulBroker { return NewBroker(options) }
-
 // NewBrokerWithRuntime is a convenience constructor for small tests and
 // adapters that already have their runtime and discoverer separated.
 func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, options ...BrokerOptions) *StatefulBroker {
@@ -284,20 +286,22 @@ func (b *StatefulBroker) Discover(ctx context.Context, options DiscoverOptions) 
 	if err != nil {
 		return nil, err
 	}
-	filtered := make([]BrowserCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
+	allCandidates := cloneBrowserCandidates(candidates)
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return nil, ErrClosed
+	}
+	cleanups, replaced := b.reconcileBrowserReplacementsLocked(allCandidates)
+	filtered := make([]BrowserCandidate, 0, len(allCandidates))
+	for _, candidate := range allCandidates {
 		if options.BrowserID != "" && candidate.ID != options.BrowserID {
 			continue
 		}
-		filtered = append(filtered, cloneBrowserCandidate(candidate))
+		filtered = append(filtered, candidate)
 	}
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].ID < filtered[j].ID })
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closed {
-		return nil, ErrClosed
-	}
-	for _, candidate := range filtered {
+	for _, candidate := range allCandidates {
 		state := b.browsers[candidate.ID]
 		if state == nil {
 			state = &browserState{}
@@ -305,10 +309,20 @@ func (b *StatefulBroker) Discover(ctx context.Context, options DiscoverOptions) 
 		}
 		state.candidate = candidate
 	}
+	var failure error
 	if options.BrowserID != "" && len(filtered) == 0 {
-		return nil, classified(ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
-			"browser_id": string(options.BrowserID),
-		}, ErrBrowserNotFound)
+		if _, wasReplaced := replaced[options.BrowserID]; wasReplaced {
+			failure = staleSelectionError(options.BrowserID, "", 0, "browser_replaced")
+		} else {
+			failure = classified(ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
+				"browser_id": string(options.BrowserID),
+			}, ErrBrowserNotFound)
+		}
+	}
+	b.mu.Unlock()
+	closeBrowserReplacementCleanups(cleanups)
+	if failure != nil {
+		return nil, failure
 	}
 	return cloneBrowserCandidates(filtered), nil
 }
@@ -343,6 +357,9 @@ func (b *StatefulBroker) ListTargets(ctx context.Context, selector BrowserSelect
 	}
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
+		if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+			return nil, err
+		}
 		if failure := b.promoteBrowserLoss(b.selectedForBrowser(candidate.ID), TargetSelector{BrowserID: candidate.ID}, "list_targets", err); failure != nil {
 			return nil, failure
 		}
@@ -401,6 +418,9 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		}
 		if options.Activate {
 			if err := handle.Activate(ctx, selector.TargetID); err != nil {
+				if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+					return PageContext{}, err
+				}
 				if failure := b.promoteBrowserLoss(current, selector, "activate", err); failure != nil {
 					return PageContext{}, failure
 				}
@@ -432,7 +452,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
-		if failure := b.promoteBrowserLoss(current, selector, "list_targets", err); failure != nil {
+		if failure := b.promoteBrowserLoss(current, TargetSelector{BrowserID: selector.BrowserID}, "list_targets", err); failure != nil {
 			return PageContext{}, failure
 		}
 		return PageContext{}, targetAttachError(selector, "list_targets", err)
@@ -481,6 +501,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	if page.CatalogReady {
 		close(newSession.catalogSignal)
+		newSession.catalogSignal = nil
 	}
 
 	b.mu.Lock()
@@ -528,9 +549,17 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	b.flushSession(newSession)
 	b.mu.Lock()
-	if b.selected == newSession && newSession.active {
-		b.updateReadinessLocked(newSession)
+	if b.selected != newSession || !newSession.active || !newSession.context.Connected {
+		failure := sessionLifecycleFailure(newSession)
+		if failure == nil {
+			failure = staleSelectionForSession(newSession, "selection_not_connected")
+		}
+		b.mu.Unlock()
+		_ = session.Close()
+		return PageContext{}, failure
 	}
+	b.updateReadinessLocked(newSession)
+	newSession.context.Ready = true
 	page = clonePageContext(newSession.context)
 	b.mu.Unlock()
 	return page, nil
@@ -694,6 +723,9 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 	}
 	handle, err := runtime.Open(ctx, candidate)
 	if err != nil {
+		if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+			return nil, err
+		}
 		return nil, classified(ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
 			"endpoint_kind": "runtime",
 			"address_class": addressClass(candidate),
@@ -741,6 +773,12 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 	}
 	if event.TargetID != "" && event.TargetID != selected.context.Key.TargetID {
 		return
+	}
+	if event.Sequence != 0 {
+		if event.Sequence <= selected.lastBrowserEventSequence {
+			return
+		}
+		selected.lastBrowserEventSequence = event.Sequence
 	}
 	switch event.Type {
 	case EventTargetAttached:
@@ -1011,48 +1049,6 @@ func (b *StatefulBroker) applyCatalogReadyLocked(selected *brokerSession, event 
 	b.markCatalogReadyLocked(selected, "page_producer")
 }
 
-func (b *StatefulBroker) applyGenerationChangeLocked(selected *brokerSession, event BrowserEvent, reason string) {
-	next := event.Generation
-	if next <= selected.context.Generation {
-		next = selected.context.Generation + 1
-		if next == 0 {
-			next = selected.context.Generation
-		}
-	}
-	b.advanceGenerationLocked(selected, next, reason)
-	contextValue := selected.session.Context()
-	if contextValue.Key.BrowserID == "" {
-		contextValue.Key.BrowserID = selected.context.Key.BrowserID
-	}
-	if contextValue.Key.TargetID == "" {
-		contextValue.Key.TargetID = selected.context.Key.TargetID
-	}
-	contextValue.Generation = selected.context.Generation
-	contextValue.Connected = true
-	contextValue.WebMCPDomainSupported = selected.context.WebMCPDomainSupported || contextValue.WebMCPDomainSupported
-	contextValue.CatalogReady = false
-	contextValue.CatalogEvidence = ""
-	contextValue.Ready = false
-	if contextValue.SelectedAt.IsZero() {
-		contextValue.SelectedAt = selected.context.SelectedAt
-	}
-	selected.context = contextValue
-}
-
-func (b *StatefulBroker) advanceGenerationLocked(selected *brokerSession, generation uint64, reason string) {
-	if generation <= selected.context.Generation {
-		return
-	}
-	selected.context.Generation = generation
-	b.terminalizeSessionInvocationsLocked(selected, ErrorPageNavigated, reason)
-	b.retireCatalogLocked(selected)
-	selected.context.CatalogReady = false
-	selected.context.CatalogEvidence = ""
-	selected.catalogSignal = make(chan struct{})
-	selected.context.Ready = false
-	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: generation, Reason: reason})
-}
-
 func (b *StatefulBroker) invalidateSession(selected *brokerSession, reason string) {
 	selected.dispatchMu.Lock()
 	defer selected.dispatchMu.Unlock()
@@ -1064,7 +1060,13 @@ func (b *StatefulBroker) invalidateSession(selected *brokerSession, reason strin
 }
 
 func (b *StatefulBroker) invalidateSessionLocked(selected *brokerSession, reason string) {
-	b.invalidateSessionWithCodeLocked(selected, lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned), reason)
+	code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
+	if failure := sessionLifecycleFailure(selected); failure != nil {
+		if classified, ok := lifecycleClassifiedError(failure); ok {
+			code = classified.Code
+		}
+	}
+	b.invalidateSessionWithCodeLocked(selected, code, reason)
 }
 
 func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession, code ErrorCode, reason string) {
@@ -1084,6 +1086,7 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	if !selected.active {
 		return
 	}
+	rememberLifecycleFailureLocked(selected, code, reason)
 	b.terminalizeSessionInvocationsLocked(selected, code, reason)
 	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)
@@ -1092,7 +1095,12 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	selected.context.CatalogReady = false
 	selected.context.CatalogEvidence = ""
 	selected.context.Ready = false
-	b.emitLocked(BrokerEvent{Type: BrokerEventGenerationChanged, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
+	if reason == "" {
+		reason = "session_closed"
+	}
+	// A target detach or browser loss retires the selected session; it does not
+	// create a new document generation. Keep this on the session lifecycle
+	// channel so consumers cannot mistake teardown for navigation.
 	b.emitLocked(BrokerEvent{Type: BrokerEventSessionClosed, BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID, Generation: selected.context.Generation, Reason: reason})
 }
 
@@ -1102,11 +1110,18 @@ func (b *StatefulBroker) markSessionEnded(selected *brokerSession, reason string
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected == selected && selected.active {
-		code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
-		if code == ErrorInvocationOrphaned && isBrowserDisconnectedTransportError(selected.session.Err()) {
-			code = ErrorBrowserDisconnected
+		if failure := sessionLifecycleFailure(selected); failure != nil {
+			if classified, ok := lifecycleClassifiedError(failure); ok {
+				b.invalidateSessionWithCodeLocked(selected, classified.Code, reason)
+				return
+			}
 		}
-		b.invalidateSessionWithCodeLocked(selected, code, reason)
+		code := lifecycleInvocationErrorCode(reason, ErrorInvocationOrphaned)
+		if code != ErrorInvocationOrphaned || isBrowserDisconnectedTransportError(selected.session.Err()) {
+			b.invalidateSessionWithCodeLocked(selected, code, reason)
+			return
+		}
+		b.invalidateSessionLocked(selected, reason)
 	}
 }
 
@@ -1201,22 +1216,6 @@ func staleSelectionError(browserID BrowserID, targetID TargetID, generation uint
 		"selected_generation": generation,
 		"reason":              reason,
 	}, ErrStaleSelection)
-}
-
-func staleSelectionForSession(selected *brokerSession, reason string) error {
-	if selected == nil {
-		return staleSelectionError("", "", 0, reason)
-	}
-	return staleSelectionError(selected.context.Key.BrowserID, selected.context.Key.TargetID, selected.context.Generation, reason)
-}
-
-func targetAttachError(selector TargetSelector, phase string, cause error) error {
-	return classified(ErrorTargetAttachFailed, "the selected browser target could not be initialized", map[string]any{
-		"browser_id":  string(selector.BrowserID),
-		"target_id":   string(selector.TargetID),
-		"phase":       phase,
-		"reason_code": "attach_failed",
-	}, cause)
 }
 
 func classified(code ErrorCode, message string, details map[string]any, cause error) error {

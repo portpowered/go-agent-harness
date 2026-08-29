@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ const defaultProbeTimeout = 5 * time.Second
 var (
 	protocolVersionPattern = regexp.MustCompile(`^([0-9]+)\.([0-9]+)$`)
 	publicIDPattern        = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+	incarnationIDPattern   = regexp.MustCompile(`^incarnation-[0-9a-f]{24}$`)
 )
 
 // Options supplies the side-effect seams for Service. Nil seams use safe
@@ -96,6 +98,8 @@ type Service struct {
 	selection          *Selection
 	disconnected       map[string]browserDisconnectState
 	lifecycleSeen      map[string]struct{}
+	retiredBrowsers    map[string]struct{}
+	pendingReleases    []*TargetHandle
 	selectionStore     selectionStoreAdapter
 	persistenceError   error
 	persistenceEnabled bool
@@ -189,6 +193,7 @@ func New(options Options) *Service {
 		targets:            make(map[string]map[string]targetState),
 		browsers:           make(map[string]BrowserCandidate),
 		lifecycleSeen:      make(map[string]struct{}),
+		retiredBrowsers:    make(map[string]struct{}),
 		disconnected:       make(map[string]browserDisconnectState),
 		selectionStore:     selectionStore,
 		persistenceError:   persistenceError,
@@ -207,7 +212,7 @@ func (s *Service) Browser(browserID string) (BrowserCandidate, bool) {
 		return BrowserCandidate{}, false
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer s.unlockDiscovery()
 	candidate, ok := s.browsers[strings.TrimSpace(browserID)]
 	return candidate, ok
 }
@@ -237,7 +242,7 @@ func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (Browse
 		ctx = context.Background()
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer s.unlockDiscovery()
 
 	s.emit(EventDiscoveryStarted, "", map[string]any{
 		"source_plan": []string{
@@ -502,8 +507,11 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 	}
 	candidate, failure := s.candidateFromVersion(version, source, kind, parsed, allowRemote, true)
 	if candidate.ID != "" {
+		identity, _ := browserIdentityFromVersion(version, nil)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
-			httpURL: targetListBaseURL(parsed),
+			httpURL:     targetListBaseURL(parsed),
+			addressKey:  browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port()),
+			identityKey: browserIdentityKey(identity),
 		})
 	}
 	return candidate, failure
@@ -531,8 +539,11 @@ func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source
 	}
 	candidate, failure := s.candidateFromVersion(version, source, kind, normalized.url, allowRemote, false)
 	if candidate.ID != "" {
+		identity, _ := browserIdentityFromVersion(version, normalized.url)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
-			browserWS: normalized.url.String(),
+			browserWS:   normalized.url.String(),
+			addressKey:  browserAddressKey(normalized.url.Scheme, normalized.url.Hostname(), normalized.url.Port()),
+			identityKey: browserIdentityKey(identity),
 		})
 	}
 	return candidate, failure
@@ -566,18 +577,28 @@ func (s *Service) candidateFromVersion(version BrowserVersion, source Source, ki
 		return BrowserCandidate{}, newRemoteEndpointDenied(kind)
 	}
 	identity := BrowserIdentity{
-		Scheme: normalized.url.Scheme,
-		Host:   normalized.url.Hostname(),
-		Port:   normalized.url.Port(),
-		Path:   normalized.url.EscapedPath(),
+		Scheme:            normalized.url.Scheme,
+		Host:              normalized.url.Hostname(),
+		Port:              normalized.url.Port(),
+		Path:              normalized.url.EscapedPath(),
+		BrowserInstanceID: browserInstanceMetadata(version),
 	}
-	publicID := normalizePublicID(s.idMapper.BrowserID(identity), identity)
+	publicID := browserIDForIdentity(s.idMapper, identity)
+	instanceID := browserIdentityClaim(identity)
+	oldID := s.replacedBrowserIDLocked(identity, publicID)
+	if oldID != "" && oldID == publicID {
+		publicID = browserReplacementID(publicID, instanceID)
+	}
 	candidate := BrowserCandidate{
-		ID:       publicID,
-		Source:   source,
-		Product:  product,
-		Protocol: protocol,
-		Loopback: normalized.loopback,
+		ID:                publicID,
+		Source:            source,
+		Product:           product,
+		Protocol:          protocol,
+		BrowserInstanceID: instanceID,
+		Loopback:          normalized.loopback,
+	}
+	if oldID != "" {
+		s.retireReplacedBrowserLocked(oldID)
 	}
 	s.browsers[candidate.ID] = candidate
 	s.emit(EventEndpointVersion, candidate.ID, map[string]any{
@@ -586,6 +607,178 @@ func (s *Service) candidateFromVersion(version BrowserVersion, source Source, ki
 		"source":   string(source),
 	})
 	return candidate, nil
+}
+
+// unlockDiscovery releases any target handles retired while a discovery pass
+// held Service.mu. Detach callbacks are external code and must not run while
+// the service lock is held.
+func (s *Service) unlockDiscovery() {
+	if s == nil {
+		return
+	}
+	releases := append([]*TargetHandle(nil), s.pendingReleases...)
+	s.pendingReleases = nil
+	s.mu.Unlock()
+	for _, handle := range releases {
+		if handle != nil {
+			_ = handle.Close()
+		}
+	}
+}
+
+func browserInstanceMetadata(version BrowserVersion) string {
+	for _, value := range []string{version.BrowserInstanceID, version.IncarnationID} {
+		value = strings.TrimSpace(value)
+		if value == "" || len(value) > 256 || hasControl(value) || strings.ContainsAny(value, "/?#") || strings.Contains(value, "://") {
+			continue
+		}
+		return value
+	}
+	return ""
+}
+
+func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *parseURLFailure) {
+	wsRaw := strings.TrimSpace(version.WebSocketDebuggerURL)
+	if wsRaw == "" && fallback != nil {
+		wsRaw = fallback.String()
+	}
+	normalized, failure := parseBrowserWebSocketURL(wsRaw)
+	if failure != nil {
+		return BrowserIdentity{}, failure
+	}
+	return BrowserIdentity{
+		Scheme:            normalized.url.Scheme,
+		Host:              normalized.url.Hostname(),
+		Port:              normalized.url.Port(),
+		Path:              normalized.url.EscapedPath(),
+		BrowserInstanceID: browserInstanceMetadata(version),
+	}, nil
+}
+
+func browserIdentityClaim(identity BrowserIdentity) string {
+	marker := identity.BrowserInstanceID
+	if marker == "" {
+		// Chrome's browser websocket path is the protocol-level incarnation
+		// marker when no adapter-specific instance ID is available.
+		marker = identity.Path
+	}
+	digest := sha256.Sum256([]byte(marker))
+	return "incarnation-" + hex.EncodeToString(digest[:12])
+}
+
+// BrowserIDForIdentity derives the same opaque browser ID used by discovery.
+// It is provided for composition adapters that need to associate a transport
+// response with a normalized candidate without exposing the endpoint.
+func BrowserIDForIdentity(mapper IDMapper, identity BrowserIdentity) string {
+	return browserIDForIdentity(mapper, identity)
+}
+
+func browserIDForIdentity(mapper IDMapper, identity BrowserIdentity) string {
+	if mapper == nil {
+		mapper = HashIDMapper{}
+	}
+	baseIdentity := identity
+	if identity.BrowserInstanceID != "" {
+		// An explicit incarnation claim is stronger than the websocket path;
+		// keep the public ID stable if routing changes within one instance.
+		baseIdentity.Path = ""
+	}
+	publicID := normalizePublicID(mapper.BrowserID(baseIdentity), baseIdentity)
+	if identity.BrowserInstanceID != "" {
+		publicID = browserInstanceScopedID(publicID, browserIdentityClaim(identity))
+	}
+	return publicID
+}
+
+// BrowserIDForVersion derives a candidate ID from a protocol version
+// response. The boolean is false when the response has no valid browser
+// websocket identity.
+func BrowserIDForVersion(mapper IDMapper, version BrowserVersion) (string, bool) {
+	identity, failure := browserIdentityFromVersion(version, nil)
+	if failure != nil {
+		return "", false
+	}
+	return browserIDForIdentity(mapper, identity), true
+}
+
+func normalizedBrowserInstanceID(browser BrowserCandidate) string {
+	value := strings.TrimSpace(browser.BrowserInstanceID)
+	if value == "" {
+		return ""
+	}
+	if incarnationIDPattern.MatchString(value) {
+		return value
+	}
+	if len(value) > 256 || hasControl(value) || strings.ContainsAny(value, "/?#") || strings.Contains(value, "://") {
+		return ""
+	}
+	return browserIdentityClaim(BrowserIdentity{BrowserInstanceID: value})
+}
+
+func browserInstanceScopedID(publicID, instanceID string) string {
+	digest := sha256.Sum256([]byte("browser-instance\x00" + publicID + "\x00" + instanceID))
+	return "browser-" + hex.EncodeToString(digest[:12])
+}
+
+func browserReplacementID(publicID, instanceID string) string {
+	digest := sha256.Sum256([]byte("browser-replacement\x00" + publicID + "\x00" + instanceID))
+	return "browser-" + hex.EncodeToString(digest[:12])
+}
+
+func (s *Service) replacedBrowserIDLocked(identity BrowserIdentity, publicID string) string {
+	address := browserAddressKey(identity.Scheme, identity.Host, identity.Port)
+	identityKey := browserIdentityKey(identity)
+	if endpoint, ok := s.endpoints[publicID]; ok && endpoint.identityKey != "" && endpoint.identityKey != identityKey {
+		return publicID
+	}
+	ids := make([]string, 0, len(s.endpoints))
+	for browserID, endpoint := range s.endpoints {
+		if browserID == publicID || endpointAddressKey(endpoint) == address {
+			if endpoint.identityKey != "" && endpoint.identityKey != identityKey {
+				ids = append(ids, browserID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	sort.Strings(ids)
+	return ids[0]
+}
+
+func (s *Service) retireReplacedBrowserLocked(browserID string) {
+	if browserID == "" {
+		return
+	}
+	if s.retiredBrowsers == nil {
+		s.retiredBrowsers = make(map[string]struct{})
+	}
+	s.retiredBrowsers[browserID] = struct{}{}
+	delete(s.endpoints, browserID)
+	delete(s.browsers, browserID)
+	if targetStates := s.targets[browserID]; targetStates != nil {
+		for targetID, state := range targetStates {
+			state.closed = true
+			state.target.Eligible = false
+			state.target.EligibilityReason = "browser_replaced"
+			targetStates[targetID] = state
+		}
+	}
+	if s.selection == nil || s.selection.BrowserID != browserID {
+		return
+	}
+	selection := *s.selection
+	ownership := string(TargetOwnershipExternal)
+	if selection.Handle != nil {
+		ownership = string(selection.Handle.Ownership())
+		s.pendingReleases = append(s.pendingReleases, selection.Handle)
+	}
+	s.selection = nil
+	s.emitTarget(EventTargetDetached, selection.BrowserID, selection.TargetID, selection.Generation, map[string]any{
+		"generation":     selection.Generation,
+		"reason":         "browser_replaced",
+		"ownership_mode": ownership,
+	})
 }
 
 type parseURLFailure struct{ reason string }

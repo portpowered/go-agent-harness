@@ -492,8 +492,10 @@ func (s *targetSession) run(ctx context.Context, action chromedp.Action) error {
 	if runner == nil {
 		runner = chromedp.Run
 	}
-	err := runner(commandContext, action)
+	boundContext, releaseDisconnect := s.handle.bindDisconnect(commandContext)
+	err := runner(boundContext, action)
 	close(watchDone)
+	releaseDisconnect()
 	cancelCommand()
 	return err
 }
@@ -545,6 +547,12 @@ func (s *targetSession) Close() error {
 	cleanupErr := s.cleanupTarget()
 	s.mu.Lock()
 	s.closeErr = cleanupErr
+	if cleanupErr != nil && s.err == nil {
+		var classified *webmcp.ClassifiedError
+		if errors.As(cleanupErr, &classified) && classified != nil && classified.Code == webmcp.ErrorBrowserDisconnected {
+			s.err = classified
+		}
+	}
 	s.mu.Unlock()
 	s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventSessionClosed, Reason: "closed"})
 	s.handle.unregister(s)
@@ -568,6 +576,12 @@ func (s *targetSession) abortOpen() error {
 	cleanupErr := s.cleanupTarget()
 	s.mu.Lock()
 	s.closeErr = cleanupErr
+	if cleanupErr != nil && s.err == nil {
+		var classified *webmcp.ClassifiedError
+		if errors.As(cleanupErr, &classified) && classified != nil && classified.Code == webmcp.ErrorBrowserDisconnected {
+			s.err = classified
+		}
+	}
 	s.mu.Unlock()
 	s.closeLifecycle(webmcp.BrowserEvent{Type: webmcp.EventSessionClosed, Reason: "attach_failed"})
 	s.handle.unregister(s)
@@ -625,39 +639,53 @@ func (s *targetSession) cleanupTarget() error {
 	}
 
 	executor := handle.executor()
+	if handle.isDisconnected() {
+		s.cancelClientTarget(targetValue)
+		return nil
+	}
 	var joined error
 	if sessionID != "" {
 		if executor == nil {
+			if handle.isDisconnected() {
+				s.cancelClientTarget(targetValue)
+				return nil
+			}
 			joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", errors.New("browser connection is unavailable")))
 		} else {
-			detachContext, cancel := context.WithTimeout(context.Background(), handle.timeout())
+			detachContext, release := handle.operationContext(context.Background())
 			err := cdpTarget.DetachFromTarget().WithSessionID(sessionID).Do(cdp.WithExecutor(detachContext, executor))
-			cancel()
+			release()
 			if err != nil {
 				joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", err))
 			}
 		}
 	}
 	if ownership == webmcp.TargetOwnershipHarnessOwned && targetID != "" {
+		if handle.isDisconnected() {
+			s.cancelClientTarget(targetValue)
+			return joined
+		}
 		if executor == nil {
+			if handle.isDisconnected() {
+				s.cancelClientTarget(targetValue)
+				return joined
+			}
 			joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", errors.New("browser connection is unavailable")))
 		} else {
-			closeContext, cancel := context.WithTimeout(context.Background(), handle.timeout())
+			closeContext, release := handle.operationContext(context.Background())
 			err := cdpTarget.CloseTarget(targetID).Do(cdp.WithExecutor(closeContext, executor))
-			cancel()
+			release()
 			if err != nil {
 				joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", err))
 			}
 		}
 	}
 
-	// Clear both the IDs and the Context.Target reference only after protocol
-	// cleanup. This prevents chromedp's cancellation goroutine from observing
-	// an attached target and issuing its own Target.closeTarget.
-	s.clearClientTarget(targetValue)
-	if s.cancelTarget != nil {
-		s.cancelTarget()
-	}
+	// Clear the protocol IDs before cancellation so chromedp's cleanup
+	// goroutine cannot issue a second detach/close. Keep the Context.Target
+	// pointer until cancelTarget returns; chromedp v0.16.0 reads that pointer
+	// from its cleanup goroutine without synchronization.
+	s.cancelClientTarget(targetValue)
 	return joined
 }
 
@@ -673,6 +701,22 @@ func (s *targetSession) clearClientTarget(targetValue *chromedp.Target) {
 	}
 }
 
+func (s *targetSession) cancelClientTarget(targetValue *chromedp.Target) {
+	if targetValue == nil {
+		if data := chromedp.FromContext(s.targetContext); data != nil {
+			targetValue = data.Target
+		}
+	}
+	if targetValue != nil {
+		targetValue.SessionID = ""
+		targetValue.TargetID = ""
+	}
+	if s.cancelTarget != nil {
+		s.cancelTarget()
+	}
+	s.clearClientTarget(targetValue)
+}
+
 func (s *targetSession) transportLost() {
 	if !s.beginFinish(true) {
 		return
@@ -682,6 +726,7 @@ func (s *targetSession) transportLost() {
 	s.closed = true
 	targetValue := s.protocolTarget
 	s.page.Connected = false
+	s.page.Ready = false
 	s.err = webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected), map[string]any{
 		"browser_id":         s.page.Key.BrowserID,
 		"target_id":          s.page.Key.TargetID,
@@ -690,10 +735,7 @@ func (s *targetSession) transportLost() {
 	})
 	s.mu.Unlock()
 	s.stopProtocolRouter()
-	s.clearClientTarget(targetValue)
-	if s.cancelTarget != nil {
-		s.cancelTarget()
-	}
+	s.cancelClientTarget(targetValue)
 	s.closeLifecycle(webmcp.BrowserEvent{
 		Type:      webmcp.EventBrowserDisconnected,
 		ErrorCode: string(webmcp.ErrorBrowserDisconnected),
@@ -719,10 +761,7 @@ func (s *targetSession) finishFromProtocol(event webmcp.BrowserEvent) {
 		"reason":     event.Reason,
 	})
 	s.mu.Unlock()
-	s.clearClientTarget(targetValue)
-	if s.cancelTarget != nil {
-		s.cancelTarget()
-	}
+	s.cancelClientTarget(targetValue)
 	event.ErrorCode = string(webmcp.ErrorTargetDetached)
 	s.closeLifecycle(event)
 	s.handle.unregister(s)

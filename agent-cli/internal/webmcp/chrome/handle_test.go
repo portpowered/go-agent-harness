@@ -220,6 +220,54 @@ func TestAttachUsesCallerTargetIDAndNormalizedTargetMetadata(t *testing.T) {
 	}
 }
 
+func TestAttachKeepsTargetReaderAliveUntilTransportLoss(t *testing.T) {
+	handle := testHandle(&recordingExecutor{})
+	readerContext := make(chan context.Context, 1)
+	protocolTarget := &chromedp.Target{SessionID: "session-reader", TargetID: "target-reader"}
+	handle.targetOps = targetContextOps{
+		newContext: func(context.Context, target.ID) (context.Context, context.CancelFunc) {
+			return context.WithCancel(context.Background())
+		},
+		listen: func(context.Context, func(any)) {},
+		run: func(ctx context.Context, _ ...chromedp.Action) error {
+			readerContext <- ctx
+			return nil
+		},
+		target: func(context.Context) *chromedp.Target { return protocolTarget },
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/json/list" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`[{"id":"target-reader","type":"page","title":"Reader","url":"https://example.test/reader","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-reader"}]`))
+	}))
+	defer server.Close()
+	handle.candidate.HTTPURL = server.URL
+
+	session, err := handle.Attach(context.Background(), "target-reader", webmcp.TargetOwnershipExternal)
+	if err != nil {
+		t.Fatalf("attach target reader: %v", err)
+	}
+	select {
+	case ctx := <-readerContext:
+		select {
+		case <-ctx.Done():
+			t.Fatal("target reader context was canceled when Attach returned")
+		default:
+		}
+	case <-time.After(time.Second):
+		t.Fatal("target reader context was not captured")
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("close target after reader assertion: %v", err)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatalf("close handle after reader assertion: %v", err)
+	}
+}
+
 func TestAttachFailureCleansUpPartialExternalAttachmentWithoutCloseTarget(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
