@@ -91,9 +91,10 @@ func NewSessionToolCapabilitiesFactory(
 		}
 		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
 		return SessionToolCapabilities{
-			Executor:    surface.Executor,
-			Definitions: surface.Definitions,
-			Close:       capabilityCoordinator.Close,
+			Executor:     surface.Executor,
+			Definitions:  surface.Definitions,
+			BrowserWatch: broker.Watch,
+			Close:        capabilityCoordinator.Close,
 		}, nil
 	}
 }

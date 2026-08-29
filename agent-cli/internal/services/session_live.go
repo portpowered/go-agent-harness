@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 )
 
 const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
@@ -150,6 +151,11 @@ type sessionLoopOptions struct {
 	// scheduled audio. Runtime planning always supplies a non-zero value;
 	// direct loop callers treat the zero value as completion-gated.
 	ScheduledAudioDispatch ScheduledAudioDispatchPolicy
+	// AudioInterruptions is the run-scoped channel for event-driven customer
+	// audio. Inputs are sent through AgentLoop.SendAudioInput and their optional
+	// MESSAGE.END boundary is sent through AgentLoop.SendSessionEvent, preserving
+	// the normal provider ordering and barge-in behavior.
+	AudioInterruptions <-chan ScheduledAudioInput
 
 	// RequireSessionUpdated makes scheduled audio wait for the current
 	// connection's initial SESSION.UPDATED acknowledgement before dispatch.
@@ -465,9 +471,29 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	// error, or max-duration expiry may end the session.
 	awaitingResponse := opts.AudioIn == nil
 	done := opts.Done
+	audioInterruptions := opts.AudioInterruptions
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	for {
 		select {
+		case input, ok := <-audioInterruptions:
+			if !ok {
+				audioInterruptions = nil
+				continue
+			}
+			if len(input.PCM) == 0 {
+				return errors.Join(errors.New("event-driven audio input is empty"), stopAndDrain())
+			}
+			if err := loop.SendAudioInput(runCtx, input.PCM); err != nil {
+				return errors.Join(fmt.Errorf("send event-driven audio input: %w", err), stopAndDrain())
+			}
+			if opts.observer != nil {
+				opts.observer.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
+			}
+			if input.EndOfTurn {
+				if err := loop.SendSessionEvent(runCtx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+					return errors.Join(fmt.Errorf("send event-driven audio input end-of-turn: %w", err), stopAndDrain())
+				}
+			}
 		case <-toolLifecycleEvents:
 			// A tool lifecycle transition can make the next scheduled audio
 			// input eligible without producing a provider delta. Re-run the
@@ -538,10 +564,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if awaitingResponse {
 				return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
 			}
-			if stopErr != nil {
-				return stopErr
-			}
-			return ctx.Err()
+			return sessionRunTerminationError(ctx, stopErr)
 		case <-observedInferencer.Done():
 			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond, opts.observer)
 			stopErr := stopAndDrain()

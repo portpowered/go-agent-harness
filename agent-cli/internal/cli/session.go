@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/session"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/spf13/cobra"
@@ -26,6 +28,10 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// BrowserWatch exposes the already-owned broker observation stream to an
+	// opt-in live session input boundary. It is nil for non-browser capability
+	// sets; callers must use the returned context to stop the watch.
+	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
 	// Close transfers ownership of any capability resources to the session
 	// coordinator. Nil means this capability has no closeable resources.
 	Close func() error
@@ -367,6 +373,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	var audioIn string
 	var audioInTurns []string
 	var audioInTurnBarge bool
+	var audioInterrupts []string
+	var audioInterruptTool string
 	var audioInDevice audio.DeviceID
 	var audioOutDevice audio.DeviceID
 	browserFlags := flags.NewBrowserFlags()
@@ -414,7 +422,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			if selectedTransport == SessionTransportWebRTC {
 				return &SessionWebRTCUnavailableError{}
 			}
-			hasSessionMode := c.askFlags.RecordCapturePath != "" || c.askFlags.ReplayCapturePath != "" || recordDirPath != "" || len(audioInTurns) > 0
+			hasSessionMode := c.askFlags.RecordCapturePath != "" || c.askFlags.ReplayCapturePath != "" || recordDirPath != "" || len(audioInTurns) > 0 || len(audioInterrupts) > 0
 			var loadedConfig *config.Config
 			// Resolve browser flags before admission so invalid values fail without
 			// touching a provider or browser. The explicit capability flag is the
@@ -467,9 +475,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					return fmt.Errorf("--audio-in-turn cannot be combined with --image")
 				}
 			}
+			if len(audioInterrupts) == 0 && strings.TrimSpace(audioInterruptTool) != "" {
+				return fmt.Errorf("--audio-interrupt-on-tool requires --audio-interrupt")
+			}
 			toolExecutor := c.toolExecutorOverride
 			var toolDefinitions []messages.ToolDefinition
 			var capabilityClose func() error
+			var browserWatch func(context.Context) <-chan webmcp.BrokerEvent
 			if c.sessionToolCapabilities != nil {
 				if loadedConfig == nil {
 					loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
@@ -483,10 +495,15 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				}
 				toolExecutor = capabilities.Executor
 				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+				browserWatch = capabilities.BrowserWatch
 				if capabilities.Close != nil {
 					capabilityCoordinator := services.NewSessionCapabilityCoordinator(capabilities.Close)
 					capabilityClose = capabilityCoordinator.Close
 				}
+			}
+			audioInterruptions, capabilityClose, err := prepareSessionAudioInterruptions(cmd, audioInterrupts, audioInterruptTool, browserWatch, capabilityClose)
+			if err != nil {
+				return err
 			}
 			sessionOptions := services.SessionRunOptions{
 				RecordPath:          c.askFlags.RecordCapturePath,
@@ -506,6 +523,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				SessionInferencer:   c.sessionInferencerOverride,
 				ToolExecutor:        toolExecutor,
 				ToolDefinitions:     toolDefinitions,
+				AudioInterruptions:  audioInterruptions,
 				CapabilityClose:     capabilityClose,
 				LoadedConfig:        loadedConfig,
 				BrowserToolsEnabled: browserConfigEnablesTools(loadedConfig),
@@ -607,6 +625,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
 	cmd.Flags().StringArrayVar(&audioInTurns, "audio-in-turn", nil, "Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)")
 	cmd.Flags().BoolVar(&audioInTurnBarge, "audio-in-turn-barge", false, "Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated")
+	cmd.Flags().StringArrayVar(&audioInterrupts, "audio-interrupt", nil, "Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)")
+	cmd.Flags().StringVar(&audioInterruptTool, "audio-interrupt-on-tool", "", "With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one")
 	cmd.Flags().StringVar(&audioInDevice, services.SessionAudioInDeviceFlag, "", "Capture RTC audio from a registry device ID; empty or default selects the input default")
 	cmd.Flags().StringVar(&audioOutPath, "audio-out", "", "Write assistant PCM16 audio to a .wav/.pcm/.raw path or - for stdout")
 	cmd.Flags().StringVar(&audioOutDevice, services.SessionAudioOutDeviceFlag, "", "Play RTC audio to a registry device ID; empty or default selects the output default")
@@ -618,6 +638,46 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	registerSessionBrowserFlags(cmd, browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
 	return cmd
+}
+
+func prepareSessionAudioInterruptions(
+	cmd *cobra.Command,
+	audioInterrupts []string,
+	audioInterruptTool string,
+	browserWatch func(context.Context) <-chan webmcp.BrokerEvent,
+	capabilityClose func() error,
+) (<-chan services.ScheduledAudioInput, func() error, error) {
+	if len(audioInterrupts) == 0 {
+		return nil, capabilityClose, nil
+	}
+	if browserWatch == nil {
+		if capabilityClose != nil {
+			_ = capabilityClose()
+		}
+		return nil, nil, errors.New("--audio-interrupt requires an enabled WebMCP session capability")
+	}
+	interruptInputs, err := services.PrepareSessionAudioInputs(audioInterrupts)
+	if err != nil {
+		if capabilityClose != nil {
+			_ = capabilityClose()
+		}
+		return nil, nil, fmt.Errorf("prepare --audio-interrupt: %w", err)
+	}
+	interruptContext, stopInterruptions := context.WithCancel(cmd.Context())
+	interruptions, _ := services.StartSessionAudioInterruptionsOnBrowserTool(
+		interruptContext,
+		browserWatch(interruptContext),
+		audioInterruptTool,
+		interruptInputs,
+	)
+	previousClose := capabilityClose
+	return interruptions, func() error {
+		stopInterruptions()
+		if previousClose != nil {
+			return previousClose()
+		}
+		return nil
+	}, nil
 }
 
 func validateSessionSignaling(transport, signaling string, provided bool) error {

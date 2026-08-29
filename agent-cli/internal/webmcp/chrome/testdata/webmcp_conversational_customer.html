@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP conversational customer fixture</title>
+</head>
+<body>
+  <main>
+    <h1 id="page-title">WebMCP conversational customer fixture</h1>
+    <p id="ready">starting</p>
+    <p>Page: <strong id="page">starting</strong></p>
+    <p>State: <strong id="state">starting</strong></p>
+
+    <form id="label-form"
+          toolname="webmcp_customer_set_label"
+          tooltitle="Set customer label"
+          tooldescription="Set the label on the customer home page."
+          toolautosubmit>
+      <label>Value
+        <input name="value" type="text" value="unset"
+               toolparamdescription="The new label value.">
+      </label>
+    </form>
+
+    <form id="theme-form"
+          toolname="webmcp_customer_set_theme"
+          tooltitle="Set customer theme"
+          tooldescription="Set the theme on the customer home page."
+          toolautosubmit>
+      <label>Value
+        <input name="value" type="text" value="default"
+               toolparamdescription="The new theme value.">
+      </label>
+    </form>
+
+    <form id="priority-form"
+          toolname="webmcp_customer_set_priority"
+          tooltitle="Set customer priority"
+          tooldescription="Set the priority on the customer settings page."
+          toolautosubmit>
+      <label>Value
+        <input name="value" type="text" value="normal"
+               toolparamdescription="The new priority value.">
+      </label>
+    </form>
+
+    <form id="pending-form"
+          toolname="webmcp_customer_pending"
+          tooltitle="Hold customer request"
+          tooldescription="Hold an invocation open until the customer cancels it.">
+      <label>Value
+        <input name="value" type="text" value="hold"
+               toolparamdescription="The value associated with the pending request.">
+      </label>
+    </form>
+  </main>
+  <script>
+    (() => {
+      const page = location.pathname.endsWith("/settings") ? "settings" : "home";
+      const state = {
+        page,
+        ready: false,
+        label: "unset",
+        theme: "default",
+        priority: "normal",
+        pending: false,
+        invocations: []
+      };
+      window.__webmcpConversationalCustomer = state;
+
+      if (page === "settings") {
+        document.querySelector("#label-form").remove();
+        document.querySelector("#theme-form").remove();
+      } else {
+        document.querySelector("#priority-form").remove();
+      }
+
+      const ready = document.querySelector("#ready");
+      const pageText = document.querySelector("#page");
+      const visible = document.querySelector("#state");
+
+      const render = () => {
+        ready.textContent = state.ready ? "ready" : "starting";
+        pageText.textContent = state.page;
+        visible.textContent = page === "settings"
+          ? state.priority
+          : state.label + "/" + state.theme;
+      };
+
+      const publishOracle = () => {
+        fetch("/__test/conversational-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            page: state.page,
+            ready: state.ready,
+            label: state.label,
+            theme: state.theme,
+            priority: state.priority,
+            pending: state.pending,
+            visibleText: visible.textContent || "",
+            invocations: state.invocations.slice()
+          })
+        }).catch(() => {});
+      };
+
+      const submit = (event) => {
+        const form = event.currentTarget;
+        const data = new FormData(form);
+        const value = String(data.get("value") || "");
+        const toolName = String(form.getAttribute("toolname") || "");
+        state.invocations.push(toolName + ":" + value);
+
+        if (toolName === "webmcp_customer_pending") {
+          state.pending = true;
+          render();
+          publishOracle();
+          event.preventDefault();
+          if (typeof event.respondWith === "function") {
+            event.respondWith(new Promise(() => {}));
+          }
+          return;
+        }
+
+        state.pending = false;
+        if (toolName === "webmcp_customer_set_label") state.label = value;
+        if (toolName === "webmcp_customer_set_theme") state.theme = value;
+        if (toolName === "webmcp_customer_set_priority") state.priority = value;
+        render();
+        publishOracle();
+        event.preventDefault();
+        if (typeof event.respondWith === "function") {
+          event.respondWith(Promise.resolve({ page, value, visibleText: visible.textContent }));
+        }
+      };
+
+      const recordCancellation = (event) => {
+        const toolName = String(event.toolName || "");
+        state.invocations.push("canceled:" + toolName);
+        state.pending = false;
+        render();
+        publishOracle();
+      };
+
+      const registerCancellationTool = async () => {
+        const modelContext = document.modelContext || navigator.modelContext;
+        if (!modelContext || typeof modelContext.registerTool !== "function") {
+          throw new Error("imperative WebMCP registration is unavailable");
+        }
+        await modelContext.registerTool({
+          name: "webmcp_customer_cancel",
+          title: "Cancel customer request",
+          description: "Hold an imperative request open until it is canceled.",
+          inputSchema: {
+            type: "object",
+            properties: { value: { type: "string", description: "The pending value." } },
+            required: ["value"],
+            additionalProperties: false
+          },
+          execute: async (input) => {
+            const value = String(input && input.value || "");
+            state.invocations.push("webmcp_customer_cancel:" + value);
+            state.pending = true;
+            render();
+            publishOracle();
+            return new Promise(() => {});
+          }
+        });
+      };
+
+      const restoreOracleState = async () => {
+        try {
+          const response = await fetch("/__test/conversational-state");
+          if (!response.ok) return;
+          const previous = await response.json();
+          for (const key of ["label", "theme", "priority", "invocations"]) {
+            if (previous[key] !== undefined) state[key] = key === "invocations"
+              ? Array.isArray(previous[key]) ? previous[key].map((value) => String(value)) : []
+              : String(previous[key]);
+          }
+          state.pending = false;
+          state.page = page;
+          render();
+        } catch (_) {
+          // The first page has no prior oracle; its defaults are the baseline.
+        }
+      };
+
+      window.addEventListener("toolcancel", recordCancellation);
+      window.addEventListener("toolcanceled", recordCancellation);
+      document.querySelectorAll("form").forEach((form) => form.addEventListener("submit", submit));
+      render();
+      restoreOracleState().then(() => registerCancellationTool()).then(() => {
+        state.ready = true;
+        render();
+        publishOracle();
+      }, (error) => {
+        state.invocations.push("registration_error:" + String(error));
+        state.ready = true;
+        render();
+        publishOracle();
+      });
+    })();
+  </script>
+</body>
+</html>

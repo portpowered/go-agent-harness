@@ -161,6 +161,7 @@ type observedInvocation struct {
 	targetID   TargetID
 	generation uint64
 	toolRef    ToolRef
+	toolName   string
 }
 
 // ToolRefBinding is the complete semantic identity protected by a session-
@@ -858,6 +859,7 @@ func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession,
 	}
 	if descriptor, ok := observedToolDescriptorLocked(selected, event, generation); ok {
 		observed.toolRef = descriptor.Ref
+		observed.toolName = descriptor.Name
 	}
 	selected.observedInvocations[event.InvocationID] = observed
 	b.emitLocked(BrokerEvent{
@@ -867,6 +869,7 @@ func (b *StatefulBroker) observeBrowserInvocationLocked(selected *brokerSession,
 		Generation:   observed.generation,
 		InvocationID: event.InvocationID,
 		ToolRef:      observed.toolRef,
+		ToolName:     observed.toolName,
 		State:        InvocationDispatched,
 		Reason:       "browser_observed",
 	})
@@ -915,6 +918,7 @@ func (b *StatefulBroker) emitObservedBrowserTerminalLocked(observed observedInvo
 		Generation:   observed.generation,
 		InvocationID: id,
 		ToolRef:      observed.toolRef,
+		ToolName:     observed.toolName,
 		State:        state,
 		Reason:       reason,
 	})

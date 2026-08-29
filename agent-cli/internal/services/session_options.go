@@ -249,6 +249,11 @@ type SessionRunOptions struct {
 	// repeated --audio-in-turn inputs. False preserves the completion-gated
 	// serialized policy.
 	AudioInTurnBarge bool
+	// AudioInterruptions delivers event-driven customer audio through the same
+	// duplex loop as scheduled inputs. The browser conversation runner uses it
+	// for overlap audio that must be admitted only after an in-flight browser
+	// invocation is observed; it is intentionally not a second audio loop.
+	AudioInterruptions <-chan ScheduledAudioInput
 	// ClientOwnsAudioTurnBoundaries requests an explicit client-owned realtime
 	// audio turn contract for a finite --audio-in source. The source sends the
 	// MESSAGE.END boundary itself; provider VAD must not auto-commit the same

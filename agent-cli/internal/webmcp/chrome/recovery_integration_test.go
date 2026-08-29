@@ -64,8 +64,22 @@ func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
 	}) {
 		return
 	}
+	if !t.Run("in_flight_cancellation_external_tab", func(t *testing.T) {
+		caseContext, caseCancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer caseCancel()
+		testRecoveryInFlightCancellation(t, caseContext, pinned)
+	}) {
+		return
+	}
+	if !t.Run("spoken_correction_oracle", func(t *testing.T) {
+		caseContext, caseCancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer caseCancel()
+		testRecoverySpokenCorrection(t, caseContext, pinned)
+	}) {
+		return
+	}
 
-	t.Log("WEBMCP_CHROME_RECOVERY_PASS cases=3 exit=0 output=redacted")
+	t.Log("WEBMCP_CHROME_RECOVERY_PASS cases=5 exit=0 output=redacted")
 }
 
 type recoveryDiscoverer struct {
@@ -452,6 +466,157 @@ func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinne
 	t.Logf("case=navigation_storm cycles=%d generations=%v terminal=%s refs_retired=%d target_preserved=true", len(generations), generations, freshTerminal.State, len(retiredRefs))
 }
 
+func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	fixture := newFixtureServer()
+	t.Cleanup(fixture.Close)
+	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+
+	// The two requests model the original customer intent followed by an
+	// explicit spoken correction. The HTTP fixture oracle is independent from
+	// the broker result and the final CDP read happens after target detach.
+	originalMessage := "blue"
+	original, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: selection.initialComplete.Ref,
+		Input:   recoveryInput(originalMessage),
+		Reason:  "customer_initial_request",
+	})
+	if err != nil || original.State != webmcp.InvocationDispatched {
+		t.Fatalf("admit original correction scenario action: state=%s err=%v", original.State, err)
+	}
+	originalEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, original.InvocationID)
+	if err != nil {
+		t.Fatalf("wait original correction scenario terminal event: %v", err)
+	}
+	originalTerminal, err := selection.broker.WaitInvocation(ctx, original.InvocationID)
+	if err != nil {
+		t.Fatalf("wait original correction scenario terminal result: %v", err)
+	}
+	if originalTerminal.State != webmcp.InvocationCompleted || originalTerminal.ErrorCode != "" || originalEvent.State != webmcp.InvocationCompleted {
+		t.Fatalf("original correction scenario terminal = state=%s code=%s event_state=%s", originalTerminal.State, originalTerminal.ErrorCode, originalEvent.State)
+	}
+	originalOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Value == "completed:"+originalMessage && oracle.VisibleText == "completed:"+originalMessage && !oracle.Pending
+	})
+	if err != nil {
+		t.Fatalf("wait original independent correction oracle: %v", err)
+	}
+
+	correctionMessage := "unset"
+	corrected, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: selection.initialComplete.Ref,
+		Input:   recoveryInput(correctionMessage),
+		Reason:  "customer_spoken_correction",
+	})
+	if err != nil || corrected.State != webmcp.InvocationDispatched {
+		t.Fatalf("admit spoken correction action: state=%s err=%v", corrected.State, err)
+	}
+	correctedEvent, err := waitForRecoveryTerminalEvent(ctx, selection.watch, corrected.InvocationID)
+	if err != nil {
+		t.Fatalf("wait spoken correction terminal event: %v", err)
+	}
+	correctedTerminal, err := selection.broker.WaitInvocation(ctx, corrected.InvocationID)
+	if err != nil {
+		t.Fatalf("wait spoken correction terminal result: %v", err)
+	}
+	if correctedTerminal.State != webmcp.InvocationCompleted || correctedTerminal.ErrorCode != "" || correctedEvent.State != webmcp.InvocationCompleted {
+		t.Fatalf("spoken correction terminal = state=%s code=%s event_state=%s", correctedTerminal.State, correctedTerminal.ErrorCode, correctedEvent.State)
+	}
+	correctedOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Value == "completed:"+correctionMessage && oracle.VisibleText == "completed:"+correctionMessage && !oracle.Pending
+	})
+	if err != nil {
+		t.Fatalf("wait corrected independent oracle: %v", err)
+	}
+	if correctedOracle.Value == originalOracle.Value {
+		t.Fatalf("correction oracle did not change: original=%+v corrected=%+v", originalOracle, correctedOracle)
+	}
+
+	if err := selection.broker.Close(); err != nil {
+		t.Fatalf("detach external correction target: %v", err)
+	}
+	afterDetach, err := inspectExternalTarget(ctx, selection.browser.endpoint(), string(selection.target.ID))
+	if err != nil {
+		t.Fatalf("probe corrected target after detach: %v", err)
+	}
+	assertPageStateMatchesOracle(t, afterDetach, correctedOracle)
+	t.Logf("case=spoken_correction customer_original=%q customer_correction=%q original_terminal=%s correction_terminal=%s original_oracle=%q corrected_oracle=%q detach_survived=true", originalMessage, correctionMessage, originalTerminal.State, correctedTerminal.State, originalOracle.Value, correctedOracle.Value)
+}
+
+func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	fixture := newFixtureServer()
+	t.Cleanup(fixture.Close)
+	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+
+	// The invocation-created broker event is the synchronization point. No
+	// timer is used to guess when the page-side operation became cancellable.
+	admitted, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: selection.initialCancel.Ref,
+		Input:   recoveryInput("overlap"),
+	})
+	if err != nil || admitted.State != webmcp.InvocationDispatched || admitted.InvocationID == "" {
+		t.Fatalf("admit in-flight cancellation call: state=%s id=%s err=%v", admitted.State, admitted.InvocationID, err)
+	}
+	created, err := waitForRecoveryInvocationCreated(ctx, selection.watch, admitted.InvocationID)
+	if err != nil {
+		t.Fatalf("wait for observed in-flight invocation: %v", err)
+	}
+	if created.State != webmcp.InvocationQueued || created.InvocationID != admitted.InvocationID {
+		t.Fatalf("created invocation = %+v, want queued identity %s", created, admitted.InvocationID)
+	}
+	// The created event is queued by the broker contract. The pending page
+	// oracle below is the synchronization point that proves the browser-side
+	// operation is now in flight before the exact cancellation request.
+	beforeCancel, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Pending && oracle.Value == "pending:overlap"
+	})
+	if err != nil {
+		t.Fatalf("wait for in-flight page oracle: %v", err)
+	}
+
+	if err := selection.broker.Cancel(ctx, webmcp.CancelRequest{
+		InvocationID: admitted.InvocationID,
+		Reason:       "customer interruption",
+	}); err != nil {
+		t.Fatalf("cancel exact in-flight invocation: %v", err)
+	}
+	terminal, err := selection.broker.WaitInvocation(ctx, admitted.InvocationID)
+	if err != nil {
+		t.Fatalf("wait for canceled in-flight invocation: %v", err)
+	}
+	if terminal.InvocationID != admitted.InvocationID || terminal.State != webmcp.InvocationCanceled || terminal.ErrorCode != string(webmcp.ErrorInvocationCanceled) {
+		t.Fatalf("canceled terminal = %+v, want exact canceled disposition", terminal)
+	}
+	afterCancel, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		for _, invocation := range oracle.Invocations {
+			if invocation == "canceled:"+cancelToolName {
+				return true
+			}
+		}
+		return false
+	})
+	if err != nil {
+		t.Fatalf("wait for page cancellation observation: %v", err)
+	}
+	if afterCancel.Value != beforeCancel.Value || !afterCancel.Pending {
+		t.Fatalf("page oracle after cancellation = %+v, want preserved pending value %q", afterCancel, beforeCancel.Value)
+	}
+
+	if err := selection.broker.Close(); err != nil {
+		t.Fatalf("detach external target after cancellation: %v", err)
+	}
+	if err := mutateExternalTarget(ctx, selection.browser.endpoint(), string(selection.target.ID), "post-detach-probe"); err != nil {
+		t.Fatalf("mutate external target after detach: %v", err)
+	}
+	afterDetach, err := inspectExternalTarget(ctx, selection.browser.endpoint(), string(selection.target.ID))
+	if err != nil {
+		t.Fatalf("read external target after detach: %v", err)
+	}
+	if !afterDetach.Ready || afterDetach.Value != "post-detach-probe" || afterDetach.VisibleText != "post-detach-probe" {
+		t.Fatalf("post-detach page state = %+v, want responsive mutation", afterDetach)
+	}
+	t.Logf("case=in_flight_cancellation_external_tab invocation=%s observed_state=%q terminal=%s after_cancel=%q detached_target=%s post_detach_mutation=%q", admitted.InvocationID, beforeCancel.Value, terminal.State, afterCancel.Value, selection.target.ID, afterDetach.Value)
+}
+
 func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedChrome) {
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
@@ -595,6 +760,22 @@ func waitForRecoveryTerminalEvent(ctx context.Context, events <-chan webmcp.Brok
 	}
 }
 
+func waitForRecoveryInvocationCreated(ctx context.Context, events <-chan webmcp.BrokerEvent, invocationID webmcp.InvocationID) (webmcp.BrokerEvent, error) {
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return webmcp.BrokerEvent{}, errors.New("broker watch closed before invocation-created event")
+			}
+			if event.Type == webmcp.BrokerEventInvocationCreated && event.InvocationID == invocationID {
+				return event, nil
+			}
+		case <-ctx.Done():
+			return webmcp.BrokerEvent{}, ctx.Err()
+		}
+	}
+}
+
 func drainRecoveryEvents(events <-chan webmcp.BrokerEvent) []webmcp.BrokerEvent {
 	var result []webmcp.BrokerEvent
 	for {
@@ -698,6 +879,40 @@ func navigateRecoveryTarget(ctx context.Context, endpoint string, targetID webmc
 	}()
 	if err := chromedp.Run(targetContext, chromedp.Navigate(destination), chromedp.WaitReady("#ready")); err != nil {
 		return fmt.Errorf("navigate target: %w", err)
+	}
+	return nil
+}
+
+func mutateExternalTarget(ctx context.Context, endpoint, targetID, value string) (err error) {
+	rootContext, cancelRoot := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelRoot()
+	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
+	defer cancelAllocator()
+	targetContext, cancelTarget := chromedp.NewContext(allocatorContext, chromedp.WithTargetID(cdpTarget.ID(targetID)))
+	defer func() {
+		cleanupErr := detachExternalIntegrationTarget(targetContext, cancelTarget)
+		if err == nil && cleanupErr != nil {
+			err = cleanupErr
+		}
+	}()
+	encodedValue, marshalErr := json.Marshal(value)
+	if marshalErr != nil {
+		return fmt.Errorf("encode post-detach probe value: %w", marshalErr)
+	}
+	expression := `(() => {
+  const state = window.__webmcpLaneD;
+  if (!state) return false;
+  state.value = ` + string(encodedValue) + `;
+  const visible = document.querySelector("#state");
+  if (visible) visible.textContent = state.value;
+  return state.value;
+})()`
+	var mutated string
+	if err := chromedp.Run(targetContext, chromedp.WaitReady("#state"), chromedp.Evaluate(expression, &mutated)); err != nil {
+		return fmt.Errorf("mutate external target: %w", err)
+	}
+	if mutated != value {
+		return fmt.Errorf("post-detach probe mutation returned %q, want %q", mutated, value)
 	}
 	return nil
 }

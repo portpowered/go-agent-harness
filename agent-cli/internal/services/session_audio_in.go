@@ -14,10 +14,76 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
+
+// PrepareSessionAudioInputs loads a finite set of audio files using the same
+// decoder and PCM contract as --audio-in-turn. The returned inputs are ready
+// for an event-driven interruption source; no provider or browser is touched.
+func PrepareSessionAudioInputs(paths []string) ([]ScheduledAudioInput, error) {
+	return prepareScheduledAudioInputs(paths)
+}
+
+// StartSessionAudioInterruptionsOnBrowserInvocation creates the shared-loop
+// interruption source used by the live conversational acceptance runner. The
+// first observed dispatched browser invocation releases the finite audio
+// inputs, so overlap is synchronized to a semantic browser event rather than a
+// wall-clock delay. The returned stop function is idempotent in effect and
+// should be called when the owning session boundary closes.
+func StartSessionAudioInterruptionsOnBrowserInvocation(
+	parent context.Context,
+	events <-chan webmcp.BrokerEvent,
+	inputs []ScheduledAudioInput,
+) (<-chan ScheduledAudioInput, func()) {
+	return StartSessionAudioInterruptionsOnBrowserTool(parent, events, "", inputs)
+}
+
+// StartSessionAudioInterruptionsOnBrowserTool is the tool-specific form of
+// StartSessionAudioInterruptionsOnBrowserInvocation. An empty toolName keeps
+// the first-invocation behavior; otherwise only a matching dispatched browser
+// invocation releases the finite interruption audio.
+func StartSessionAudioInterruptionsOnBrowserTool(
+	parent context.Context,
+	events <-chan webmcp.BrokerEvent,
+	toolName string,
+	inputs []ScheduledAudioInput,
+) (<-chan ScheduledAudioInput, func()) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	out := make(chan ScheduledAudioInput, len(inputs))
+	cloned := cloneScheduledAudioInputs(inputs)
+	go func() {
+		defer close(out)
+		defer cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
+				if event.Type != webmcp.BrokerEventInvocationCreated || event.State != webmcp.InvocationDispatched || (toolName != "" && event.ToolName != toolName) {
+					continue
+				}
+				for _, input := range cloned {
+					select {
+					case out <- input:
+					case <-ctx.Done():
+						return
+					}
+				}
+				return
+			}
+		}
+	}()
+	return out, cancel
+}
 
 // SessionAudioInput carries the command-line presence bit separately from the
 // value so --audio-in= can be rejected instead of treated as an omitted flag.
