@@ -42,6 +42,15 @@ You are an autonomous coding agent working on a software project.
   tracks them from an old base, `git rm` them during your next rebase.
 - Read the Codebase Patterns section in progress.txt before starting
 - PRE-PUSH LOCAL GATE: Run `make prepush`.
+- LIVE-RUN COST POLICY (2026-08-29: ~$5 of provider credits were exhausted in
+  ~30h of undisciplined live validation, blocking ALL live evidence): prefer
+  REPLAYING golden captures (record/replay is deterministic since #279) over
+  fresh live runs; when a live run is genuinely required use
+  `gpt-realtime-2.1-mini` (never full gpt-realtime unless the lane brief says
+  so), terse-output system prompts ("confirm in five words or fewer" unless
+  long speech IS the test target), `--max-duration 30s`, and the minimum run
+  count your acceptance bar names. Always `--record` live runs and keep the
+  capture so the next validation can replay it for free.
 - When adding or revising tests, prefer observable runtime, API, CLI, UI, or
   emitted-event assertions.
 - Do not add meta tests that scan source files, validate docs link topology, inspect asset bundle internals, or enforce
