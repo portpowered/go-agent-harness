@@ -840,7 +840,7 @@ func TestWebMCPDirectCancelRehydratesExactSelectionWithoutLocalRegistry(t *testi
 	envelope := requireDirectSuccess(t, result)
 	var data WebMCPDirectCancelData
 	decodeDirectData(t, envelope.Data, &data)
-	if data.InvocationID != "browser-invocation-9" || data.Status != "cancel_requested" {
+	if data.InvocationID != "browser-invocation-9" || data.Status != "canceled" || data.Phase != "terminal" || data.Outcome != "confirmed_canceled" {
 		t.Fatalf("cancel data = %+v", data)
 	}
 	if got := broker.directCancelRequest; got.Target != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) || got.InvocationID != "browser-invocation-9" {
@@ -910,6 +910,93 @@ func TestWebMCPDirectCancelClassifiesBrowserRejection(t *testing.T) {
 	}
 	if strings.Contains(result.stdout, "credential=secret") || strings.Contains(result.stderr, "credential=secret") {
 		t.Fatalf("browser rejection leaked raw error: stdout=%q stderr=%q", result.stdout, result.stderr)
+	}
+}
+
+func TestWebMCPDirectCancelWritesBoundedTerminalOutcome(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		details map[string]any
+	}{
+		{
+			name:    `completed_anyway`,
+			message: `the browser invocation completed despite the cancellation request`,
+			details: map[string]any{
+				`browser_id`:          `browser-a`,
+				`target_id`:           `tab-a`,
+				`invocation_id`:       `browser-invocation-9`,
+				`phase`:               `cancel`,
+				`cancel_phase`:        `cancel_dispatched`,
+				`outcome`:             `completed_anyway`,
+				`terminal_observed`:   true,
+				`side_effect_unknown`: true,
+				`terminal_event`:      `tool_responded`,
+			},
+		},
+		{
+			name:    `cancellation_unconfirmed`,
+			message: `the browser did not provide a correlated terminal cancellation result`,
+			details: map[string]any{
+				`browser_id`:          `browser-a`,
+				`target_id`:           `tab-a`,
+				`invocation_id`:       `browser-invocation-9`,
+				`phase`:               `cancel`,
+				`cancel_phase`:        `cancel_dispatched`,
+				`outcome`:             `cancellation_unconfirmed`,
+				`terminal_observed`:   false,
+				`side_effect_unknown`: true,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configDir := writeDirectConfig(t, ``)
+			store := NewFileWebMCPSelectionStore(configDir)
+			page, target, candidate, _ := directFixture()
+			if err := store.Save(WebMCPSelection{
+				Version:    WebMCPSelectionVersion,
+				EndpointID: string(candidate.ID),
+				BrowserID:  string(candidate.ID),
+				TargetID:   string(target.ID),
+				Origin:     target.Origin,
+			}); err != nil {
+				t.Fatalf(`seed persisted selection: %v`, err)
+			}
+			base := &directCommandBroker{
+				candidates: []webmcp.BrowserCandidate{candidate},
+				targets:    []webmcp.Target{target},
+				selected:   page,
+			}
+			broker := &directCancelCommandBroker{
+				directCommandBroker: base,
+				directCancelErr: webmcp.NewClassifiedError(
+					webmcp.ErrorInvocationFailed,
+					test.message,
+					test.details,
+				),
+			}
+
+			result := executeDirectCommand(t, configDir, store, directFactory(broker), `cancel`, `--invocation`, `browser-invocation-9`, `--json`)
+			if result.err == nil {
+				t.Fatal(`bounded terminal failure unexpectedly succeeded`)
+			}
+			envelope := decodeDirectEnvelope(t, result.stdout)
+			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvocationFailed) {
+				t.Fatalf(`bounded terminal failure envelope = %+v`, envelope)
+			}
+			if envelope.Error.Message != test.message {
+				t.Fatalf(`bounded terminal failure message = %q, want %q`, envelope.Error.Message, test.message)
+			}
+			if envelope.Error.Details[`outcome`] != test.details[`outcome`] ||
+				envelope.Error.Details[`terminal_observed`] != test.details[`terminal_observed`] ||
+				envelope.Error.Details[`side_effect_unknown`] != true {
+				t.Fatalf(`bounded terminal failure details = %#v`, envelope.Error.Details)
+			}
+			if strings.Contains(result.stdout, `page-output`) || strings.Contains(result.stdout, `page-error-output`) {
+				t.Fatalf(`bounded terminal failure exposed page output: %q`, result.stdout)
+			}
+		})
 	}
 }
 

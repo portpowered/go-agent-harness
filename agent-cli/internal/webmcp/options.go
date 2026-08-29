@@ -17,6 +17,12 @@ const DefaultMaxResultBytes = 262144
 // coordinator may apply a tighter context deadline for one call.
 const DefaultInvocationTimeout = 30 * time.Second
 
+// DefaultDirectCancellationTimeout bounds the wait for a browser terminal
+// event after a direct cancellation command has been dispatched. A missing
+// terminal is an uncertain, non-retryable outcome; it must never leave a
+// fresh cancel process waiting indefinitely.
+const DefaultDirectCancellationTimeout = 5 * time.Second
+
 const (
 	CancelOnInterruptNever    = "never"
 	CancelOnInterruptReadOnly = "read-only"

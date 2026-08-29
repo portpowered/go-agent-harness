@@ -44,6 +44,7 @@ const (
 	completeToolName = "webmcp_lane_d_complete"
 	pendingToolName  = "webmcp_lane_d_pending"
 	cancelToolName   = "webmcp_lane_d_cancel"
+	slowToolName     = "webmcp_lane_d_slow_autosubmit"
 )
 
 // The fixture is deliberately local and self-contained. It is only acquired
@@ -324,7 +325,8 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 		Loopback:     true,
 		Explicit:     true,
 	}
-	adapter := NewRuntime(WithEventBuffer(128), WithCommandTimeout(20*time.Second))
+	wire := &wireTraceRecorder{}
+	adapter := NewRuntime(WithEventBuffer(128), WithCommandTimeout(20*time.Second), WithWireTraceSink(wire))
 
 	neutralVersion, err := adapter.Version(ctx, candidate)
 	if err != nil {
@@ -478,6 +480,27 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 	if canceled.Status != "Canceled" || canceled.ErrorCode != string(webmcp.ErrorInvocationCanceled) {
 		t.Fatalf("canceled response = %+v, want Canceled invocation semantics", canceled)
 	}
+	traces := wire.snapshot()
+	var cancelTrace *webmcp.WebMCPWireTrace
+	for index := range traces {
+		trace := &traces[index]
+		if trace.Method == webmcp.WebMCPCancelInvocationMethod && trace.InvocationID == pendingID {
+			cancelTrace = trace
+			break
+		}
+	}
+	if cancelTrace == nil || cancelTrace.BrowserID != candidate.ID || cancelTrace.TargetID != selectedTarget.ID || cancelTrace.TargetSessionID == "" || cancelTrace.Phase != webmcp.WebMCPWirePhaseBeforeDispatch || !cancelTrace.ListenerReady {
+		t.Fatalf("cancel wire trace = %+v, want exact ready target/session before dispatch", cancelTrace)
+	}
+	traceJSON, err := json.Marshal(cancelTrace)
+	if err != nil {
+		t.Fatalf("marshal cancel wire trace: %v", err)
+	}
+	for _, forbidden := range []string{"endpoint", "credential", "input", "output", "ws://", "https://"} {
+		if bytes.Contains(traceJSON, []byte(forbidden)) {
+			t.Fatalf("cancel wire trace contains forbidden %q: %s", forbidden, traceJSON)
+		}
+	}
 	pendingOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Value == "pending:hold" && oracle.VisibleText == "pending:hold"
 	})
@@ -534,6 +557,7 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 	}
 	assertPageStateMatchesOracle(t, afterReattach, pendingOracle)
 
+	t.Logf("WEBMCP_WIRE_CANCEL_PASS chrome=%s revision=%s browser=%s target=%s target_session=%s method=%s invocation=%s phase=%s listener_ready=%t", lockedChromeVersion, lockedChromeRevision, cancelTrace.BrowserID, cancelTrace.TargetID, cancelTrace.TargetSessionID, cancelTrace.Method, cancelTrace.InvocationID, cancelTrace.Phase, cancelTrace.ListenerReady)
 	t.Logf("WEBMCP_INTEGRATION_PASS chrome=%s revision=%s platform=%s target=%s listener_before_enable=true completed=%s/%s canceled=%s/%s state_after_detach=%q state_after_reattach=%q", lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, selectedTarget.ID, completedID, completed.Status, pendingID, canceled.Status, afterDetach.VisibleText, afterReattach.VisibleText)
 	_ = initialOracle
 	_ = completedOracle
@@ -802,6 +826,8 @@ func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureU
 		"--remote-debugging-address=127.0.0.1",
 		fmt.Sprintf("--remote-debugging-port=%d", port),
 		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+		"--enable-blink-features=DeclarativeWebmcp",
+		"--enable-experimental-web-platform-features",
 		"--user-data-dir=" + profileDir,
 		fixtureURL,
 	}

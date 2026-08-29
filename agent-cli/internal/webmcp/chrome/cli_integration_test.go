@@ -42,7 +42,8 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	browser, err := launchPinnedChrome(ctx, pinned, fixture.URL())
+	fixtureURL := fixture.URL()
+	browser, err := launchPinnedChrome(ctx, pinned, fixtureURL)
 	if err != nil {
 		t.Fatalf("launch locked Chrome for Testing: %v", err)
 	}
@@ -133,8 +134,8 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 	for _, tool := range toolsData.Tools {
 		toolRefs[tool.Name] = tool.Ref
 	}
-	if toolRefs[cancelToolName] == "" || toolRefs[completeToolName] == "" {
-		t.Fatalf("pinned Chrome tools omitted cancellation/recovery tools: %+v", toolsData)
+	if toolRefs[cancelToolName] == "" || toolRefs[completeToolName] == "" || toolRefs[slowToolName] == "" {
+		t.Fatalf("pinned Chrome tools omitted cancellation, recovery, or slow declarative tools: %+v", toolsData)
 	}
 
 	invoke := startCLIChromeIntegrationProcess(t, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRefs[cancelToolName], "--input-json", `{"message":"live-hold"}`, "--timeout", "30s", "--json")
@@ -165,10 +166,12 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 	var cancelData struct {
 		InvocationID string `json:"invocation_id"`
 		Status       string `json:"status"`
+		Phase        string `json:"phase"`
+		Outcome      string `json:"outcome"`
 	}
 	cancelEnvelope := requireCLIChromeIntegrationSuccess(t, cancelProcess)
 	decodeCLIChromeIntegrationData(t, cancelEnvelope.Data, &cancelData)
-	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != "cancel_requested" {
+	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != "canceled" || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
 		t.Fatalf("pinned Chrome cancel result = %+v", cancelData)
 	}
 
@@ -197,6 +200,134 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 		t.Fatalf("wait for pinned Chrome cancellation event: %v", err)
 	}
 
+	// The slow form is declarative and has toolautosubmit. Its timer makes the
+	// browser's behavior observable: Chrome may cancel it, report completion
+	// anyway, or fail to provide a correlated terminal event. The test accepts
+	// each documented classification, but never treats dispatch alone as
+	// success.
+	const slowMessage = "declarative-hold"
+	slowInvoke := startCLIChromeIntegrationProcess(t, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRefs[slowToolName], "--input-json", `{"message":"`+slowMessage+`"}`, "--timeout", "10s", "--json")
+	slowInvokeFinished := false
+	defer func() {
+		if !slowInvokeFinished {
+			slowInvoke.stop()
+		}
+	}()
+	var slowReceipt cliChromeIntegrationReceipt
+	select {
+	case line := <-slowInvoke.stderr.firstLine:
+		if err := json.Unmarshal([]byte(line), &slowReceipt); err != nil {
+			t.Fatalf("decode pinned Chrome slow declarative dispatch receipt: %v; stderr=%q", err, line)
+		}
+	case <-ctx.Done():
+		t.Fatalf("wait for pinned Chrome slow declarative dispatch receipt: %v", ctx.Err())
+	case <-time.After(10 * time.Second):
+		t.Fatal("pinned Chrome slow declarative invoke did not emit a dispatch receipt")
+	}
+	if slowReceipt.InvocationID == "" || slowReceipt.ToolRef != toolRefs[slowToolName] || slowReceipt.State != string(webmcp.InvocationDispatched) {
+		t.Fatalf("pinned Chrome slow declarative dispatch receipt = %+v", slowReceipt)
+	}
+	if _, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Pending && oracle.Value == "pending:"+slowMessage && hasFixtureInvocation(oracle, slowToolName+":"+slowMessage)
+	}); err != nil {
+		t.Fatalf("wait for pinned Chrome slow declarative pending page state: %v", err)
+	}
+
+	declarativeCancel := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "cancel", "--invocation", slowReceipt.InvocationID, "--timeout", "8s", "--json")
+	declarativeEnvelope := decodeCLIChromeIntegrationEnvelope(t, declarativeCancel.stdout)
+	declarativeOutcome := ""
+	declarativeTerminalObserved := false
+	var declarativeOracle fixtureOracle
+	switch {
+	case declarativeEnvelope.OK:
+		var data struct {
+			InvocationID string `json:"invocation_id"`
+			Status       string `json:"status"`
+			Phase        string `json:"phase"`
+			Outcome      string `json:"outcome"`
+		}
+		decodeCLIChromeIntegrationData(t, declarativeEnvelope.Data, &data)
+		if declarativeCancel.err != nil || data.InvocationID != slowReceipt.InvocationID || data.Status != "canceled" || data.Phase != "terminal" || data.Outcome != "confirmed_canceled" {
+			t.Fatalf("pinned Chrome declarative cancel success = %+v err=%v", data, declarativeCancel.err)
+		}
+		declarativeOutcome = data.Outcome
+		if err := slowInvoke.Wait(); err == nil {
+			t.Fatalf("slow declarative invoke completed after confirmed cancellation: stdout=%s", slowInvoke.stdout.String())
+		}
+		slowInvokeFinished = true
+		slowEnvelope := decodeCLIChromeIntegrationEnvelope(t, slowInvoke.stdout.String())
+		if slowEnvelope.OK || slowEnvelope.Error == nil || slowEnvelope.Error.Code != string(webmcp.ErrorInvocationCanceled) || slowEnvelope.Error.Details["invocation_id"] != slowReceipt.InvocationID {
+			t.Fatalf("pinned Chrome slow declarative canceled invoke = %+v", slowEnvelope)
+		}
+		declarativeOracle, err = waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+			return hasFixtureInvocation(oracle, "canceled:"+slowToolName) || hasFixtureInvocation(oracle, "completed:"+slowToolName+":"+slowMessage)
+		})
+		if err != nil {
+			t.Fatalf("wait for pinned Chrome slow declarative terminal oracle: %v", err)
+		}
+		declarativeTerminalObserved = true
+	case !declarativeEnvelope.OK && declarativeEnvelope.Error != nil:
+		if declarativeCancel.err == nil || declarativeEnvelope.Error.Code != string(webmcp.ErrorInvocationFailed) || declarativeEnvelope.Error.Retryable || declarativeEnvelope.Error.Details["invocation_id"] != slowReceipt.InvocationID || declarativeEnvelope.Error.Details["cancel_phase"] != "cancel_dispatched" || declarativeEnvelope.Error.Details["side_effect_unknown"] != true {
+			t.Fatalf("pinned Chrome declarative cancel classification = %+v err=%v", declarativeEnvelope.Error, declarativeCancel.err)
+		}
+		var ok bool
+		declarativeOutcome, ok = declarativeEnvelope.Error.Details["outcome"].(string)
+		if !ok || (declarativeOutcome != "completed_anyway" && declarativeOutcome != "cancellation_unconfirmed") {
+			t.Fatalf("pinned Chrome declarative cancel outcome = %#v", declarativeEnvelope.Error.Details["outcome"])
+		}
+		if observed, ok := declarativeEnvelope.Error.Details["terminal_observed"].(bool); ok {
+			declarativeTerminalObserved = observed
+		}
+		switch declarativeOutcome {
+		case "completed_anyway":
+			if err := slowInvoke.Wait(); err != nil {
+				t.Fatalf("slow declarative invoke after completed-anyway classification: %v; stdout=%s stderr=%s", err, slowInvoke.stdout.String(), slowInvoke.stderr.String())
+			}
+			slowInvokeFinished = true
+			slowEnvelope := decodeCLIChromeIntegrationEnvelope(t, slowInvoke.stdout.String())
+			if !slowEnvelope.OK {
+				t.Fatalf("slow declarative invoke did not report its observed completion: %+v", slowEnvelope.Error)
+			}
+			var slowData struct {
+				Status string          `json:"status"`
+				Output json.RawMessage `json:"output"`
+			}
+			decodeCLIChromeIntegrationData(t, slowEnvelope.Data, &slowData)
+			if slowData.Status != string(webmcp.InvocationCompleted) {
+				t.Fatalf("slow declarative invocation status = %q, want completed", slowData.Status)
+			}
+			declarativeOracle, err = waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+				return oracle.Value == "completed:"+slowMessage && !oracle.Pending && hasFixtureInvocation(oracle, "completed:"+slowToolName+":"+slowMessage)
+			})
+			if err != nil {
+				t.Fatalf("wait for completed-anyway declarative oracle: %v", err)
+			}
+		case "cancellation_unconfirmed":
+			declarativeOracle, err = readFixtureOracle(ctx, fixture.StateURL())
+			if err != nil {
+				t.Fatalf("read cancellation-unconfirmed declarative oracle: %v", err)
+			}
+			slowInvoke.stop()
+			slowInvokeFinished = true
+		}
+	default:
+		t.Fatalf("pinned Chrome declarative cancel returned malformed envelope: %+v err=%v", declarativeEnvelope, declarativeCancel.err)
+	}
+	if declarativeCancel.err == nil && declarativeCancel.stderr != "" {
+		t.Fatalf("pinned Chrome declarative cancel wrote unexpected stderr = %q", declarativeCancel.stderr)
+	}
+	for _, forbidden := range []string{fixtureURL, slowMessage, "endpoint", "credential", "secret"} {
+		if strings.Contains(declarativeCancel.stderr, forbidden) {
+			t.Fatalf("pinned Chrome declarative cancel stderr leaked %q: %q", forbidden, declarativeCancel.stderr)
+		}
+	}
+	if declarativeOutcome == "" {
+		t.Fatal("pinned Chrome declarative cancellation produced no outcome")
+	}
+	if !declarativeTerminalObserved && declarativeOutcome != "cancellation_unconfirmed" {
+		t.Fatalf("pinned Chrome declarative outcome was not correlated: outcome=%q terminal_observed=%t", declarativeOutcome, declarativeTerminalObserved)
+	}
+
 	recovered := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRefs[completeToolName], "--input-json", `{"message":"recovered"}`, "--timeout", "30s", "--json")
 	recoveredEnvelope := requireCLIChromeIntegrationSuccess(t, recovered)
 	var recoveredData struct {
@@ -215,7 +346,7 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 		t.Fatalf("pinned Chrome recovery output = %+v", recoveredOutput)
 	}
 
-	t.Logf("WEBMCP_DIRECT_CLI_INTEGRATION_PASS chrome=%s revision=%s browser=%s target=%s receipt=%s cancel=%s recovery=%s", lockedChromeVersion, lockedChromeRevision, browserID, targetID, receipt.InvocationID, cancelData.Status, recoveredData.Status)
+	t.Logf("WEBMCP_DIRECT_CLI_INTEGRATION_PASS chrome=%s revision=%s browser=%s target=%s controlled_receipt=%s controlled_cancel=%s controlled_oracle=canceled declarative_receipt=%s declarative_outcome=%s declarative_terminal_observed=%t declarative_oracle_pending=%t recovery=%s", lockedChromeVersion, lockedChromeRevision, browserID, targetID, receipt.InvocationID, cancelData.Outcome, slowReceipt.InvocationID, declarativeOutcome, declarativeTerminalObserved, declarativeOracle.Pending, recoveredData.Status)
 }
 
 // TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome is the live replay of
@@ -463,6 +594,16 @@ func runCLIChromeIntegrationCommand(t *testing.T, binary, configDir string, args
 
 func (p *cliChromeIntegrationProcess) Wait() error {
 	return p.command.Wait()
+}
+
+func (p *cliChromeIntegrationProcess) stop() {
+	if p == nil || p.command == nil {
+		return
+	}
+	if p.command.Process != nil {
+		_ = p.command.Process.Kill()
+	}
+	_ = p.Wait()
 }
 
 type cliChromeIntegrationBuffer struct {

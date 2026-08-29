@@ -3,6 +3,8 @@ package chrome
 import (
 	"net/http"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 const (
@@ -16,6 +18,7 @@ type RuntimeOptions struct {
 	EventBuffer    int
 	CommandTimeout time.Duration
 	HTTPClient     *http.Client
+	WireTrace      webmcp.WireTraceSink
 }
 
 // Option customizes a Runtime.
@@ -41,6 +44,17 @@ func WithHTTPClient(client *http.Client) Option {
 	return func(options *RuntimeOptions) {
 		if client != nil {
 			options.HTTPClient = client
+		}
+	}
+}
+
+// WithWireTraceSink records safe target/session and CDP method evidence at
+// the command boundary. The sink never receives endpoint, input, or output
+// values from the adapter.
+func WithWireTraceSink(sink webmcp.WireTraceSink) Option {
+	return func(options *RuntimeOptions) {
+		if sink != nil {
+			options.WireTrace = sink
 		}
 	}
 }

@@ -1925,9 +1925,13 @@ agent webmcp cancel --invocation "$(jq -r .invocation_id < invoke.receipt)" --js
 
 `cancel` rehydrates only that exact persisted target (or an explicitly
 provided `--browser` and `--tab`). It does not search for or fall back to a
-different target. Cancellation is a browser request and does not claim that a
-page side effect was rolled back; stale selection or browser rejection is a
-classified non-zero result.
+different target. Cancellation is sent to the exact target and is successful
+only after the same target reports terminal `Canceled` for the receipt ID. A
+`Completed` or `Error` terminal is a non-retryable
+`completed_anyway` result; a missing terminal is a bounded
+`cancellation_unconfirmed` result with `side_effect_unknown`.
+Stale selection, lifecycle loss, or browser rejection remains a classified
+non-zero result, and no outcome claims that a page side effect was rolled back.
 
 If the user sends the first SIGINT after dispatch, `invoke` stops its normal
 wait and requests cancellation with an independent bounded 2-second

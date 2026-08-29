@@ -31,6 +31,7 @@ type handle struct {
 	httpClient      *http.Client
 	commandTimeout  time.Duration
 	eventBuffer     int
+	wireTrace       webmcp.WireTraceSink
 	sessions        map[*targetSession]struct{}
 	targetOps       targetContextOps
 
@@ -289,6 +290,10 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	session.runAction = ops.run
 	ops.listen(targetContext, session.enqueueProtocolEvent)
 	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
+	// Both target and browser lifecycle listeners must be installed before the
+	// first target command starts the chromedp event reader. Direct cancellation
+	// uses this readiness bit in its sanitized wire trace.
+	session.markListenerReady()
 
 	// chromedp starts the target event reader with the context supplied to its
 	// first Run call. Keep that reader alive for the target session, while still

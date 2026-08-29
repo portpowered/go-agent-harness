@@ -99,7 +99,7 @@ browser:
 	}
 	var cancelData WebMCPDirectCancelData
 	decodeDirectData(t, cancelEnvelope.Data, &cancelData)
-	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != "cancel_requested" {
+	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != "canceled" || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
 		t.Fatalf("cross-process cancel data = %+v", cancelData)
 	}
 	if cancel.stderr.String() != "" {
@@ -610,10 +610,14 @@ func (s *osProcessWebMCPFixtureSession) CancelWebMCP(ctx context.Context, invoca
 		return err
 	}
 	var response map[string]string
-	return s.runtime.doJSON(ctx, http.MethodPost, "/fixture/cancel", osProcessFixtureCancelRequest{
+	if err := s.runtime.doJSON(ctx, http.MethodPost, "/fixture/cancel", osProcessFixtureCancelRequest{
 		TargetID:     string(s.page.Key.TargetID),
 		InvocationID: string(invocationID),
-	}, &response)
+	}, &response); err != nil {
+		return err
+	}
+	go s.watchInvocation(invocationID)
+	return nil
 }
 
 func (s *osProcessWebMCPFixtureSession) watchInvocation(invocationID webmcp.InvocationID) {

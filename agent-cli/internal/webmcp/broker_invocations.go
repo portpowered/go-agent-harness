@@ -641,63 +641,6 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 	return nil
 }
 
-func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request DirectCancelRequest) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := contextError(ctx); err != nil {
-		return err
-	}
-	if request.InvocationID == "" {
-		return classified(ErrorInvalidToolInput, "the browser invocation ID is required", map[string]any{
-			"issues": []ToolResultIssue{{Path: "/invocation_id", Code: "required"}},
-		}, ErrInvalidToolInput)
-	}
-	if request.Target.BrowserID == "" || request.Target.TargetID == "" {
-		return staleSelectionError(request.Target.BrowserID, request.Target.TargetID, 0, "exact_browser_and_target_required")
-	}
-	if b == nil {
-		return ErrClosed
-	}
-
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return ErrClosed
-	}
-	selected := b.selected
-	if selected == nil || !selected.active || !selected.context.Connected {
-		err := staleSelectionForSession(selected, "selection_not_connected")
-		b.mu.Unlock()
-		return err
-	}
-	if selected.context.Key.BrowserID != request.Target.BrowserID || selected.context.Key.TargetID != request.Target.TargetID {
-		err := staleSelectionError(request.Target.BrowserID, request.Target.TargetID, selected.context.Generation, "exact_target_not_selected")
-		b.mu.Unlock()
-		return err
-	}
-	session := selected.session
-	b.mu.Unlock()
-
-	if session == nil {
-		return targetAttachError(request.Target, "cancel", ErrClosed)
-	}
-	if err := session.CancelWebMCP(ctx, request.InvocationID); err != nil {
-		var classifiedErr *ClassifiedError
-		if errors.As(err, &classifiedErr) && classifiedErr != nil {
-			return err
-		}
-		return classified(ErrorInvocationFailed, "the browser rejected the direct cancellation request", map[string]any{
-			"browser_id":          string(request.Target.BrowserID),
-			"target_id":           string(request.Target.TargetID),
-			"invocation_id":       string(request.InvocationID),
-			"phase":               "cancel",
-			"side_effect_unknown": true,
-		}, err)
-	}
-	return nil
-}
-
 func (b *StatefulBroker) cancelOnInterruptAllowsLocked(invocation *brokerInvocation) bool {
 	switch b.cancelOnInterrupt {
 	case CancelOnInterruptNever:

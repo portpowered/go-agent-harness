@@ -61,7 +61,8 @@ type Broker interface {
 // DirectCanceller is an optional broker extension for a fresh direct CLI
 // process. It cancels only the supplied browser invocation ID against the
 // already exact-selected target and does not consult the local invocation
-// registry.
+// registry. A nil return means the exact target session emitted a correlated
+// terminal Canceled event; protocol acceptance alone is not success.
 type DirectCanceller interface {
 	CancelDirect(context.Context, DirectCancelRequest) error
 }

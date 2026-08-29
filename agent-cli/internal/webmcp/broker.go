@@ -130,6 +130,10 @@ type brokerSession struct {
 	// DevTools clients, so a watch command can report external invocation
 	// lifecycle events without claiming ownership of their result.
 	observedInvocations map[InvocationID]observedInvocation
+	// directCancellations are fresh-process reconciliation waiters. They are
+	// keyed by the browser protocol invocation ID and are fulfilled only by
+	// the selected session's event loop, never by a second Events consumer.
+	directCancellations map[InvocationID]*directCancellation
 	catalogSignal       chan struct{}
 	// lastBrowserEventSequence is the producer sequence most recently
 	// reconciled for this target session. Browser events are delivered through
@@ -497,6 +501,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		queueStop:           make(chan struct{}),
 		queueWorkerDone:     make(chan struct{}),
 		observedInvocations: make(map[InvocationID]observedInvocation),
+		directCancellations: make(map[InvocationID]*directCancellation),
 		catalogSignal:       make(chan struct{}),
 	}
 	if page.CatalogReady {
@@ -780,6 +785,11 @@ func (b *StatefulBroker) applyBrowserEvent(selected *brokerSession, event Browse
 		}
 		selected.lastBrowserEventSequence = event.Sequence
 	}
+	// Direct cancellation has to observe the same target-local stream as the
+	// normal invocation coordinator. Register this before the ordinary
+	// reconciliation switch so a fresh cancel process can prove its exact
+	// terminal outcome without consuming or synthesizing a browser event.
+	b.observeDirectCancellationLocked(selected, event)
 	switch event.Type {
 	case EventTargetAttached:
 		selected.context.Connected = true

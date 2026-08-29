@@ -76,3 +76,32 @@ jobs:
 
       - name: Run hermetic test pipeline
         run: make test-hermetic
+
+  webmcp-chrome:
+    name: CI (WebMCP Chrome)
+    # The locked WebMCP Chrome artifact is mac-arm64. Keep this behavioral
+    # check required alongside the hermetic jobs so skipped opt-in coverage
+    # cannot make a pull request appear complete.
+    runs-on: macos-14
+    timeout-minutes: 20
+    env:
+      WEBMCP_CLI_CHROME_INTEGRATION: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+
+      - name: Run production-binary cross-process cancellation acceptance
+        working-directory: agent-cli
+        run: go test ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v

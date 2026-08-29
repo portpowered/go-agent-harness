@@ -95,6 +95,7 @@ func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (
 		httpClient:      r.options.HTTPClient,
 		commandTimeout:  r.options.CommandTimeout,
 		eventBuffer:     r.options.EventBuffer,
+		wireTrace:       r.options.WireTrace,
 		sessions:        make(map[*targetSession]struct{}),
 		done:            make(chan struct{}),
 		disconnectDone:  make(chan struct{}),
