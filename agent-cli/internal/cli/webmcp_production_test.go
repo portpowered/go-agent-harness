@@ -117,6 +117,44 @@ browser:
 	}
 }
 
+func TestProductionWebMCPSessionRebasesRawGenerationForPersistedSelection(t *testing.T) {
+	runtime := &productionFakeRuntime{}
+	raw := &productionFakeSession{
+		runtime: runtime,
+		page: webmcp.PageContext{
+			Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "target-a"},
+			Generation: 1,
+			Connected:  true,
+		},
+		tool: webmcp.ToolDescriptor{
+			Name:        "read_state",
+			FrameID:     "frame-a",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	sessionValue, err := newProductionWebMCPSession(raw, webmcp.Target{
+		BrowserID:  "browser-a",
+		ID:         "target-a",
+		Generation: 7,
+	})
+	if err != nil {
+		t.Fatalf("construct production session: %v", err)
+	}
+	defer func() { _ = sessionValue.Close() }()
+
+	if err := sessionValue.EnableWebMCP(context.Background()); err != nil {
+		t.Fatalf("enable production session: %v", err)
+	}
+	select {
+	case event := <-sessionValue.Events():
+		if event.Type != webmcp.EventToolsAdded || event.Generation != 7 || len(event.Tools) != 1 || event.Tools[0].Generation != 7 {
+			t.Fatalf("rebased production event = %+v, want generation seven", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for rebased production catalog event")
+	}
+}
+
 func TestProductionWebMCPCLIFreshTabsReferenceSurvivesIncarnationChurn(t *testing.T) {
 	var server *httptest.Server
 	var mu sync.Mutex

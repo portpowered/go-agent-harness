@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -163,6 +164,9 @@ func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testin
 func TestSessionBrowserBrokerRestoresPersistedSelectionBeforeFirstToolCall(t *testing.T) {
 	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
 	defer server.Close()
+	runtime.mu.Lock()
+	runtime.targets[0].Generation = 1
+	runtime.mu.Unlock()
 
 	browserConfig := config.DefaultBrowserConfig()
 	browserConfig.Tools.Enabled = true
@@ -236,6 +240,32 @@ func TestSessionBrowserBrokerRestoresPersistedSelectionBeforeFirstToolCall(t *te
 	}
 	if status := initializer.SessionCapabilityStatus(); status.State != SessionCapabilityReady || status.Err != nil {
 		t.Fatalf("final capability status = %+v, want ready", status)
+	}
+	toolsResponse, err := webmcpTools.NewBrokerToolSet(sessionBroker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "first-page-tools-call",
+		Name:      webmcp.ListToolsToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("first page tools call: %v", err)
+	}
+	toolsEnvelope, err := webmcp.UnmarshalToolResult([]byte(toolsResponse.Content))
+	if err != nil {
+		t.Fatalf("decode first page tools result: %v", err)
+	}
+	if !toolsEnvelope.OK {
+		t.Fatalf("first page tools result failed: %+v", toolsEnvelope.Error)
+	}
+	var catalog struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(toolsEnvelope.Data, &catalog); err != nil {
+		t.Fatalf("decode first page tools data: %v", err)
+	}
+	if len(catalog.Tools) != 1 || catalog.Tools[0].Name != "read_state" {
+		t.Fatalf("first page tools = %#v, want persisted target catalog", catalog.Tools)
 	}
 
 	// The first provider-facing operation was get_context. Internal bootstrap
@@ -434,6 +464,40 @@ func TestSessionBrowserBrokerCloseCancelsInitializationAndClosesOnce(t *testing.
 	}
 	if _, err := broker.Selected(context.Background()); !errors.Is(err, context.Canceled) && !errors.Is(err, webmcp.ErrClosed) {
 		t.Fatalf("post-cancel selection error = %v, want no dispatch after failed bootstrap", err)
+	}
+}
+
+func TestSessionBrowserBrokerSuccessfulInitializationRetainsBrowserContext(t *testing.T) {
+	base := &capabilityBroker{}
+	contextCanceled := make(chan struct{})
+	broker := &sessionBrowserBroker{
+		Broker:    base,
+		initDone:  make(chan struct{}),
+		initState: SessionCapabilityInitializing,
+		bootstrap: func(ctx context.Context) error {
+			go func() {
+				<-ctx.Done()
+				close(contextCanceled)
+			}()
+			return nil
+		},
+	}
+
+	if err := broker.InitializeSession(context.Background()); err != nil {
+		t.Fatalf("successful initialization: %v", err)
+	}
+	select {
+	case <-contextCanceled:
+		t.Fatal("successful initialization canceled the context used by browser resources")
+	default:
+	}
+	if err := broker.Close(); err != nil {
+		t.Fatalf("close after successful initialization: %v", err)
+	}
+	select {
+	case <-contextCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("broker close did not cancel the retained initialization context")
 	}
 }
 

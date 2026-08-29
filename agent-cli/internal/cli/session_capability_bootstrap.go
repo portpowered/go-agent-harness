@@ -259,10 +259,23 @@ func (b *sessionBrowserBroker) ensureInitialized(ctx context.Context) error {
 			b.initMu.Unlock()
 			return
 		}
-		initContext, cancel := context.WithCancel(ctx)
+		// The bootstrap context is also the parent of any request-scoped browser
+		// handles opened while restoring the selection. Keep its values, but do
+		// not make those long-lived handles children of the caller's cancellation
+		// once initialization succeeds. A small bridge still cancels an in-flight
+		// bootstrap when its caller goes away; broker Close owns the successful
+		// browser lifetime afterward.
+		initContext, cancel := context.WithCancel(context.WithoutCancel(ctx))
 		b.initCancel = cancel
 		bootstrap := b.bootstrap
 		b.initMu.Unlock()
+		go func() {
+			select {
+			case <-ctx.Done():
+				cancel()
+			case <-done:
+			}
+		}()
 		go b.runInitialization(initContext, cancel, bootstrap)
 	})
 
@@ -297,10 +310,14 @@ func (b *sessionBrowserBroker) runInitialization(ctx context.Context, cancel con
 	} else {
 		b.initState = SessionCapabilityFailed
 	}
-	b.initCancel = nil
 	close(b.initDone)
 	b.initMu.Unlock()
-	cancel()
+	// Do not cancel a successful initialization context here: the production
+	// browser handle and selected target session may still be using it. Close
+	// cancels this context after the provider/session lifecycle has finished.
+	if err != nil {
+		cancel()
+	}
 }
 
 func (b *sessionBrowserBroker) initializationError() error {
