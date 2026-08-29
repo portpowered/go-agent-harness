@@ -199,6 +199,71 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 	}
 }
 
+// TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries is
+// the production-path regression for the suite builder. It intentionally
+// runs through RunCustomerSimulationSuite rather than assembling the
+// correction ledger in the test, so response IDs, raw record timestamps, the
+// input gate, and the finalized validator bundle are all exercised together.
+func TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries(t *testing.T) {
+	scenario := loadFamilyBScenario(t)
+	fixture := newFamilyBProviderFixture(scenario)
+	defer fixture.Close()
+	fixture.SetStartedAt(time.Now())
+
+	validator := probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, request probe.CustomerSimulationValidatorRequest) ([]byte, error) {
+		if !request.Input.Mechanical.Pass {
+			return nil, fmt.Errorf("production Family B mechanical verdict failed: %+v", request.Input.Mechanical)
+		}
+		return json.Marshal(probe.ValidatorVerdict{
+			Verdict:      probe.ValidatorWorked,
+			Summary:      "The correction interrupted the recorded original response and the replacement was independently completed.",
+			EvidenceRefs: append([]string(nil), request.Input.EvidenceRefs...),
+		})
+	})
+
+	script := probe.FamilyBSpokenScript()
+	result, runErr := probe.RunCustomerSimulationSuite(context.Background(), probe.CustomerSimulationSuiteOptions{
+		BinaryPath: buildAgentBinary(t), RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime",
+		BaseURL: fixture.WebSocketURL(), APIKey: "hermetic-key", SystemPrompt: scenario.TextSeed,
+		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBFrame(2)}}},
+		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: 5 * time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
+	})
+	if runErr != nil {
+		t.Fatalf("RunCustomerSimulationSuite: %v", runErr)
+	}
+	if len(result.Runs) != 1 {
+		t.Fatalf("suite runs = %d, want 1", len(result.Runs))
+	}
+	run := result.Runs[0]
+	if !run.Mechanical.Pass || !run.Validator.Pass() {
+		t.Fatalf("suite Family B result = %+v, want mechanical and validator pass", run)
+	}
+
+	data, err := os.ReadFile(filepath.Join(run.BundleRoot, "events", "correction.json"))
+	if err != nil {
+		t.Fatalf("read correction evidence: %v", err)
+	}
+	var correction probe.CorrectionEvidence
+	if err := json.Unmarshal(data, &correction); err != nil {
+		t.Fatalf("decode correction evidence: %v", err)
+	}
+	if correction.OriginalResponseID != "response-original-output" {
+		t.Fatalf("original response ID = %q, want recorded active response ID", correction.OriginalResponseID)
+	}
+	if correction.OriginalResponseStatus != "cancelled" || correction.ReplacementResponseStatus != "completed" {
+		t.Fatalf("response statuses = %q/%q, want cancelled/completed", correction.OriginalResponseStatus, correction.ReplacementResponseStatus)
+	}
+	if !(correction.OriginalResponseStartedAt < correction.CorrectionStartedAt && correction.CorrectionStartedAt < correction.OriginalResponseEndedAt) {
+		t.Fatalf("correction timing = %+v, want correction inside original response interval", correction)
+	}
+	if !(correction.CancellationSentAt < correction.CorrectionStartedAt) {
+		t.Fatalf("cancellation timing = %+v, want cancellation before correction input", correction)
+	}
+	if _, err := probe.VerifyCustomerEvidenceBundle(run.BundleRoot); err != nil {
+		t.Fatalf("VerifyCustomerEvidenceBundle(%q): %v", run.BundleRoot, err)
+	}
+}
+
 func loadFamilyBScenario(t *testing.T) probe.CustomerScenario {
 	t.Helper()
 	path := filepath.Join(agentCLIRoot(t), "testdata", "customer-simulation", "family-b.scenario.json")

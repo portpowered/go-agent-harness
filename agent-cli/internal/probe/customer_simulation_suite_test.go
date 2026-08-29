@@ -169,3 +169,45 @@ func TestReadCustomerSimulationStreamCorrelatesCompleteToolMessage(t *testing.T)
 		t.Fatalf("tool observation = %+v, want completed result with positive duration", facts.tools[0])
 	}
 }
+
+func TestCustomerSimulationAudioEventsCorrelateMultipleReadsToRecordedResponses(t *testing.T) {
+	scenario := NewFamilyBScenario()
+	facts := customerSimulationRecordingFacts{responses: []customerSimulationResponse{
+		{ID: "response-original-output", Text: "Created draft/brief.md", AudioBytes: 4},
+		{ID: "response-replacement-output", Text: "Created final/brief.md", AudioBytes: 4},
+	}}
+	result := DuplexRunResult{Output: []DuplexOutputEvent{
+		{Bytes: 2, Total: 2, At: time.Millisecond},
+		{Bytes: 2, Total: 4, At: 2 * time.Millisecond},
+		{Bytes: 2, Total: 6, At: 3 * time.Millisecond},
+		{Bytes: 2, Total: 8, At: 4 * time.Millisecond},
+	}}
+
+	events := customerSimulationAudioEvents(scenario, result, DefaultDuplexFrameDuration, facts)
+	var output []AudioTurnEvent
+	for _, event := range events {
+		if event.Direction == "output" {
+			output = append(output, event)
+		}
+	}
+	if len(output) != 4 {
+		t.Fatalf("output audio events = %d, want one event per read", len(output))
+	}
+	wantTurns := []string{"turn-1", "turn-1", "turn-2", "turn-2"}
+	for index, event := range output {
+		if event.TurnID != wantTurns[index] {
+			t.Fatalf("output event %d = %+v, want recorded response turn %q", index, event, wantTurns[index])
+		}
+		if event.Kind != "product_speech" {
+			t.Fatalf("output event %d kind = %q, want product_speech", index, event.Kind)
+		}
+	}
+
+	crossing := customerSimulationAudioEvents(scenario, DuplexRunResult{Output: []DuplexOutputEvent{{Bytes: 6, Total: 6, At: 5 * time.Millisecond}}}, DefaultDuplexFrameDuration, customerSimulationRecordingFacts{responses: []customerSimulationResponse{
+		{ID: "response-original-output", Text: "draft", AudioBytes: 4},
+		{ID: "response-replacement-output", Text: "final", AudioBytes: 4},
+	}})
+	if len(crossing) != 2 || crossing[0].TurnID != "turn-1" || crossing[0].Bytes != 4 || crossing[1].TurnID != "turn-2" || crossing[1].Bytes != 2 {
+		t.Fatalf("one read crossing a response boundary = %+v, want 4 bytes on turn-1 and 2 bytes on turn-2", crossing)
+	}
+}

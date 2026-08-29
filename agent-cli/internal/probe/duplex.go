@@ -63,6 +63,11 @@ type DuplexSessionConfig struct {
 	SystemPrompt     string
 	MaxDuration      time.Duration
 
+	// OnStart runs after the runner has established its monotonic origin and
+	// before the child is started. It is intended for observers that need their
+	// timestamps to share the same origin as DuplexRunResult.
+	OnStart func(time.Time)
+
 	// FrameDuration controls pacing, not the product's PCM format. A caller
 	// can shorten it for hermetic tests while retaining incremental delivery.
 	FrameDuration time.Duration
@@ -73,6 +78,11 @@ type DuplexSessionConfig struct {
 	// ownership of the product-under-test seam.
 	AdditionalArgs []string
 	Segments       []DuplexAudioSegment
+
+	// BeforeInputClose runs after the final segment has been delivered and
+	// before stdin is closed. It is a gate-only observation hook: it may wait
+	// for already observable output, but it cannot inject another input frame.
+	BeforeInputClose DuplexSegmentGate
 
 	// Termination selects how the runner ends the child after the input
 	// script. The zero value is natural completion. SIGINT requires one of the
@@ -120,6 +130,7 @@ type DuplexInputEvent struct {
 	Frame     int           `json:"frame"`
 	Bytes     int           `json:"bytes"`
 	At        time.Duration `json:"at"`
+	Timestamp time.Time     `json:"timestamp"`
 	Silent    bool          `json:"silent"`
 	SHA256    string        `json:"sha256"`
 }
@@ -129,19 +140,22 @@ type DuplexInputEvent struct {
 // response-sized blob, so callers can prove that output was drained while
 // input was still being delivered.
 type DuplexOutputEvent struct {
-	Read  int           `json:"read"`
-	Bytes int           `json:"bytes"`
-	Total int64         `json:"total"`
-	At    time.Duration `json:"at"`
+	Read      int           `json:"read"`
+	Bytes     int           `json:"bytes"`
+	Total     int64         `json:"total"`
+	At        time.Duration `json:"at"`
+	Timestamp time.Time     `json:"timestamp"`
 }
 
 // DuplexProgressSnapshot is a point-in-time view available to segment gates.
 type DuplexProgressSnapshot struct {
+	At            time.Duration
 	InputBytes    int64
 	InputFrames   int
 	OutputBytes   int64
 	OutputReads   int
 	InputSegments int
+	OutputClosed  bool
 }
 
 // DuplexProgress exposes only observable stream progress to a segment gate.
@@ -179,6 +193,47 @@ func (p *DuplexProgress) WaitForOutputReads(ctx context.Context, minimum int) er
 		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
 	}
 	return p.state.waitForOutput(ctx, int64(minimum), true)
+}
+
+// Elapsed returns the runner's monotonic elapsed time at the instant of the
+// snapshot. Segment gates use this to drive event-based policies while the
+// child remains open.
+func (p *DuplexProgress) Elapsed() time.Duration {
+	if p == nil || p.state == nil {
+		return 0
+	}
+	return p.state.elapsed()
+}
+
+// OutputEvents returns a copy of every stdout read observed so far. The
+// events retain their process-relative timestamps so callers can correlate
+// incremental output with another event ledger without assuming one read is
+// one response.
+func (p *DuplexProgress) OutputEvents() []DuplexOutputEvent {
+	if p == nil || p.state == nil {
+		return nil
+	}
+	return p.state.outputEvents()
+}
+
+// WaitForChange blocks until the child produces another observed output read
+// or the stdout pump closes. It is the non-polling wake-up primitive used by
+// the patience controller while the input pump keeps the process alive.
+func (p *DuplexProgress) WaitForChange(ctx context.Context) error {
+	if p == nil || p.state == nil {
+		return fmt.Errorf("%w: progress is unavailable", ErrDuplexPipe)
+	}
+	return p.state.waitForChange(ctx)
+}
+
+// OutputClosed reports that the stdout pump has observed EOF or stopped after
+// cancellation. It is an observable terminal boundary, not a claim that the
+// child has been reaped.
+func (p *DuplexProgress) OutputClosed() bool {
+	if p == nil || p.state == nil {
+		return false
+	}
+	return p.state.outputIsClosed()
 }
 
 // DuplexRunResult contains process, pipe, and timing evidence. Stdout and
@@ -263,6 +318,9 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	}
 
 	startedAt := time.Now()
+	if normalized.OnStart != nil {
+		normalized.OnStart(startedAt)
+	}
 	if err := child.Start(); err != nil {
 		_ = stdin.Close()
 		return result, duplexProcessError(ErrDuplexProcessStart, "start child", err)
@@ -279,6 +337,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	defer deadline.Stop()
 
 	progress := newDuplexProgressState()
+	progress.setStartedAt(startedAt)
 	stdoutCapture := newDuplexCapture(normalized.MaxCapturedOutputBytes)
 	stderrCapture := newDuplexCapture(normalized.MaxCapturedOutputBytes)
 	var inputEventsMu sync.Mutex
@@ -330,6 +389,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		if err := pumpDuplexOutput(runCtx, stdout, normalized.Output, stdoutCapture, progress, startedAt, true); err != nil {
 			recordFailure(err)
 		}
+		progress.noteOutputClosed()
 		stdoutClosed.Store(true)
 	}()
 	go func() {
@@ -784,12 +844,14 @@ func duplexChildEnvironment(config normalizedDuplexConfig) []string {
 type duplexProgressState struct {
 	mu            sync.Mutex
 	changed       chan struct{}
+	startedAt     time.Time
 	inputBytes    int64
 	inputFrames   int
 	outputBytes   int64
 	outputReads   int
 	inputSegments int
 	output        []DuplexOutputEvent
+	outputClosed  bool
 }
 
 func newDuplexProgressState() *duplexProgressState {
@@ -800,12 +862,33 @@ func (s *duplexProgressState) snapshot() DuplexProgressSnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return DuplexProgressSnapshot{
+		At:            s.elapsedLocked(),
 		InputBytes:    s.inputBytes,
 		InputFrames:   s.inputFrames,
 		OutputBytes:   s.outputBytes,
 		OutputReads:   s.outputReads,
 		InputSegments: s.inputSegments,
+		OutputClosed:  s.outputClosed,
 	}
+}
+
+func (s *duplexProgressState) setStartedAt(startedAt time.Time) {
+	s.mu.Lock()
+	s.startedAt = startedAt
+	s.mu.Unlock()
+}
+
+func (s *duplexProgressState) elapsed() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.elapsedLocked()
+}
+
+func (s *duplexProgressState) elapsedLocked() time.Duration {
+	if s.startedAt.IsZero() {
+		return 0
+	}
+	return time.Since(s.startedAt)
 }
 
 func (s *duplexProgressState) noteInputSegment() {
@@ -867,6 +950,41 @@ func (s *duplexProgressState) outputEvents() []DuplexOutputEvent {
 	return append([]DuplexOutputEvent(nil), s.output...)
 }
 
+func (s *duplexProgressState) waitForChange(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.mu.Lock()
+	if s.outputClosed {
+		s.mu.Unlock()
+		return nil
+	}
+	changed := s.changed
+	s.mu.Unlock()
+	select {
+	case <-changed:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *duplexProgressState) noteOutputClosed() {
+	s.mu.Lock()
+	if !s.outputClosed {
+		s.outputClosed = true
+		close(s.changed)
+		s.changed = make(chan struct{})
+	}
+	s.mu.Unlock()
+}
+
+func (s *duplexProgressState) outputIsClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.outputClosed
+}
+
 type duplexCapture struct {
 	mu             sync.Mutex
 	limit          int64
@@ -917,7 +1035,8 @@ func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writ
 			data := append([]byte(nil), buffer[:count]...)
 			capture.append(data)
 			if observe {
-				progress.noteOutput(DuplexOutputEvent{Bytes: count, At: time.Since(startedAt)})
+				now := time.Now()
+				progress.noteOutput(DuplexOutputEvent{Bytes: count, At: now.Sub(startedAt), Timestamp: now})
 			}
 			if destination != nil {
 				if err := writeDuplexAll(destination, data); err != nil {
@@ -1002,11 +1121,13 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 			}
 			frameNumber++
 			hash := sha256.Sum256(frame)
+			now := time.Now()
 			event := DuplexInputEvent{
 				SegmentID: segment.ID,
 				Frame:     frameNumber,
 				Bytes:     len(frame),
-				At:        time.Since(startedAt),
+				At:        now.Sub(startedAt),
+				Timestamp: now,
 				Silent:    isDuplexSilence(frame),
 				SHA256:    hex.EncodeToString(hash[:]),
 			}
@@ -1014,6 +1135,11 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 			*events = append(*events, event)
 			eventsMu.Unlock()
 			progress.noteInput(frame)
+		}
+	}
+	if config.BeforeInputClose != nil {
+		if err := config.BeforeInputClose(ctx, progressView); err != nil {
+			return duplexPipeError("run before-input-close gate", err)
 		}
 	}
 	finished.Store(true)
