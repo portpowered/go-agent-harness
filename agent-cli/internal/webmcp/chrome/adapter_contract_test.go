@@ -41,6 +41,7 @@ func TestExportedChromeAPIDoesNotLeakProtocolTypes(t *testing.T) {
 	}
 	directory := filepath.Dir(sourceFile)
 	fileSet := token.NewFileSet()
+	//lint:ignore SA1019 parser.ParseDir is intentionally used to inspect source files without type checking.
 	parsed, err := parser.ParseDir(fileSet, directory, func(fileInfo os.FileInfo) bool {
 		return !strings.HasSuffix(fileInfo.Name(), "_test.go")
 	}, parser.SkipObjectResolution)
