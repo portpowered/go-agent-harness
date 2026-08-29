@@ -290,10 +290,13 @@ type sessionLoopMessageState struct {
 	closeAfterOpenPending bool
 }
 
-func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
+func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
 	promptProvided := opts.PromptProvided || opts.Prompt != ""
 	opts.observer.observe(msg)
 	if err := writeSessionReplayMessage(out, msg); err != nil {
+		return state, false, errors.Join(err, stopAndDrain())
+	}
+	if err := retryScheduledRateLimitedResponse(ctx, sessionDone, loop, opts.observer, msg); err != nil {
 		return state, false, errors.Join(err, stopAndDrain())
 	}
 	if msg.Type == messages.StreamTypeSessionOpen {
@@ -348,6 +351,53 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 		return state, true, stopAndDrain()
 	}
 	return state, false, nil
+}
+
+// retryScheduledRateLimitedResponse waits for and sends the one replacement
+// response requested by an eligible scheduled terminal. The wait and the
+// response request both use the session run context so cancellation cannot
+// leave a late RESPONSE.CREATE queued after shutdown wins the race.
+func retryScheduledRateLimitedResponse(ctx context.Context, sessionDone <-chan struct{}, loop *agentloop.AgentLoop, observer *sessionProgressObserver, msg messages.StreamMessage) error {
+	if observer == nil || loop == nil || msg.Type != messages.StreamTypeMessageEnd {
+		return nil
+	}
+	terminal, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || terminal == nil {
+		return nil
+	}
+	delay, retry := observer.claimScheduledRateLimitRetry(msg.ResponseID, terminal)
+	if !retry {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case <-sessionDone:
+			return context.Canceled
+		default:
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sessionDone:
+		return context.Canceled
+	}
+	select {
+	case <-sessionDone:
+		return context.Canceled
+	default:
+	}
+	if err := loop.SendSessionEvent(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}); err != nil {
+		return fmt.Errorf("send rate-limit retry response: %w", err)
+	}
+	return nil
 }
 
 // shouldDispatchScheduledAudioForMessage identifies stream boundaries that can
@@ -599,7 +649,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			cancel()
 			return sessionRunTerminationError(ctx, stopAndDrain())
 		case msg := <-loop.Deltas().Chan():
-			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, state, awaitingResponse, startAudio, stopAndDrain)
+			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, observedInferencer.Done(), out, loop, opts, msg, state, awaitingResponse, startAudio, stopAndDrain)
 			state = nextState
 			if msgErr != nil {
 				return msgErr

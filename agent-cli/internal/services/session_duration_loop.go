@@ -266,7 +266,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			if !ok {
 				return finish(durationExpired, nil)
 			}
-			result, msgErr := processDurationLoopMessage(runCtx, loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten, artifacts, terminalState)
+			result, msgErr := processDurationLoopMessage(runCtx, observedInferencer.Done(), loop, out, msg, opts, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten, artifacts, terminalState)
 			promptSent = result.promptSent
 			closeSent = result.closeSent
 			closeAfterOpenPending = result.closeAfterOpenPending
@@ -296,7 +296,7 @@ type sessionDurationMessageResult struct {
 	planned                 bool
 }
 
-func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState) (sessionDurationMessageResult, error) {
+func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}, loop *agentloop.AgentLoop, out io.Writer, msg messages.StreamMessage, opts sessionLoopOptions, durationExpired, promptSent, closeSent, closeAfterOpenPending, durationTerminalWritten bool, artifacts SessionDurationArtifactLifecycle, terminalState *sessionDurationTerminalState) (sessionDurationMessageResult, error) {
 	result := sessionDurationMessageResult{
 		promptSent:              promptSent,
 		closeSent:               closeSent,
@@ -317,6 +317,9 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	opts.observer.observe(msg)
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
+		return result, err
+	}
+	if err := retryScheduledRateLimitedResponse(ctx, sessionDone, loop, opts.observer, msg); err != nil {
 		return result, err
 	}
 	promptProvided := opts.PromptProvided || opts.Prompt != ""

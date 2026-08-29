@@ -2,6 +2,7 @@ package services
 
 import (
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -21,6 +22,11 @@ const (
 type scheduledAudioResponseLifecycle struct {
 	bound       bool
 	disposition scheduledAudioResponseDisposition
+	// retryUsed and retryPending are scoped to this dispatched logical input.
+	// A replacement response must never advance nextScheduledResponse or earn
+	// a second retry allowance.
+	retryUsed    bool
+	retryPending bool
 }
 
 func (o *sessionProgressObserver) ensureScheduledResponseState() {
@@ -54,6 +60,77 @@ func (o *sessionProgressObserver) pendingScheduledContinuationIndex() (int, bool
 	}
 	o.toolStateMu.Unlock()
 	return continuationIndex, continuationIndex >= 0
+}
+
+// pendingScheduledRateLimitRetryIndex identifies the scheduled logical turn
+// whose first eligible rate-limit terminal is waiting for its replacement
+// response. It is checked before ordinary continuation ownership so a retry
+// response cannot consume the next scheduled lifecycle.
+func (o *sessionProgressObserver) pendingScheduledRateLimitRetryIndex() (int, bool) {
+	if o == nil {
+		return 0, false
+	}
+	for index := range o.scheduledResponses {
+		if o.scheduledResponses[index].bound && o.scheduledResponses[index].retryPending {
+			return index, true
+		}
+	}
+	return 0, false
+}
+
+// bindScheduledResponseBoundary associates a newly opened provider response
+// with its logical scheduled owner. A pending retry takes precedence over a
+// tool continuation and both take precedence over the next input slot.
+func (o *sessionProgressObserver) bindScheduledResponseBoundary(id string) {
+	if o == nil {
+		return
+	}
+	if retryIndex, retry := o.pendingScheduledRateLimitRetryIndex(); retry {
+		o.bindScheduledRateLimitRetry(retryIndex, id)
+		return
+	}
+	if continuationIndex, continuation := o.pendingScheduledContinuationIndex(); continuation {
+		if o.bindScheduledContinuation(continuationIndex, id) {
+			o.bindPendingToolContinuations(continuationIndex, id)
+		}
+		return
+	}
+	o.bindNextScheduledResponse(id)
+}
+
+// bindScheduledTerminalOnly handles a legacy terminal-only boundary. Such a
+// boundary cannot prove tool-continuation ownership, but a pending retry still
+// has an explicit logical owner and must be preferred over the next slot. The
+// retry path starts a fresh observed response; the ordinary path preserves the
+// output ledger accumulated before the terminal-only event.
+func (o *sessionProgressObserver) bindScheduledTerminalOnly(id string) {
+	if o == nil {
+		return
+	}
+	if retryIndex, retry := o.pendingScheduledRateLimitRetryIndex(); retry {
+		o.beginObservedResponse("")
+		o.bindScheduledRateLimitRetry(retryIndex, id)
+		return
+	}
+	o.bindNextScheduledResponse(id)
+}
+
+func (o *sessionProgressObserver) rememberRateLimitRetryCandidate(responseID, lifecycleID string, terminal *messages.MessageEndValue) {
+	if o == nil {
+		return
+	}
+	o.retryCandidateSet = false
+	o.retryCandidateID = ""
+	if _, eligible := rateLimitRetryDecision(terminal); !eligible {
+		return
+	}
+	index, ok := o.scheduledResponseIndex(lifecycleID)
+	if !ok {
+		return
+	}
+	o.retryCandidateIndex = index
+	o.retryCandidateSet = true
+	o.retryCandidateID = strings.TrimSpace(responseID)
 }
 
 func (o *sessionProgressObserver) scheduledResponseIndexForContinuation(id string) (int, bool) {
@@ -162,6 +239,88 @@ func (o *sessionProgressObserver) bindScheduledContinuation(index int, id string
 	return true
 }
 
+// bindScheduledRateLimitRetry binds a replacement response to the lifecycle
+// that armed the retry. Unlike bindNextScheduledResponse it does not advance
+// the next scheduled slot. A failed continuation may have retained provider
+// terminal state, so clear only that response's terminal ledger while keeping
+// the accepted tool result and its one continuation request intact.
+func (o *sessionProgressObserver) bindScheduledRateLimitRetry(index int, id string) bool {
+	if o == nil || index < 0 || index >= len(o.scheduledResponses) {
+		return false
+	}
+	lifecycle := &o.scheduledResponses[index]
+	if !lifecycle.bound || !lifecycle.retryPending {
+		return false
+	}
+	if !o.bindScheduledResponseID(index, id) || !o.setActiveScheduledResponseWithID(index, id) {
+		return false
+	}
+	lifecycle.retryPending = false
+	o.toolStateMu.Lock()
+	for _, state := range o.toolContinuations {
+		if state == nil || !state.continuationScheduledSet || state.continuationScheduledIndex != index {
+			continue
+		}
+		state.continuationResponseID = strings.TrimSpace(id)
+		state.continuationTerminalSeen = false
+		state.continuationStatus = ""
+		state.continuationStatusDetails = ""
+		state.continuationTerminalReason = ""
+		state.continuationOutputObserved = false
+		state.continuationFailureObserved = false
+		state.continuationComplete = false
+	}
+	o.toolStateMu.Unlock()
+	return true
+}
+
+// claimScheduledRateLimitRetry consumes the one retry allowance for the
+// scheduled lifecycle identified by responseID. The lifecycle remains
+// pending until a replacement response is admitted or the run terminates.
+func (o *sessionProgressObserver) claimScheduledRateLimitRetry(responseID string, terminal *messages.MessageEndValue) (time.Duration, bool) {
+	if o == nil {
+		return 0, false
+	}
+	delay, eligible := rateLimitRetryDecision(terminal)
+	if !eligible {
+		return 0, false
+	}
+	index, ok := o.scheduledResponseIndex(responseID)
+	if !ok && o.retryCandidateSet && strings.TrimSpace(responseID) == o.retryCandidateID {
+		index = o.retryCandidateIndex
+		ok = index >= 0 && index < len(o.scheduledResponses)
+	}
+	if !ok || index < 0 || index >= len(o.scheduledResponses) {
+		return 0, false
+	}
+	lifecycle := &o.scheduledResponses[index]
+	if !lifecycle.bound || lifecycle.disposition != scheduledAudioResponsePending || lifecycle.retryUsed {
+		return 0, false
+	}
+	lifecycle.retryUsed = true
+	lifecycle.retryPending = true
+	o.retryCandidateSet = false
+	o.retryCandidateID = ""
+	// The failed continuation is deliberately not terminal while its retry is
+	// pending. Keep the accepted result and request ownership, but clear the
+	// failed response's admission ledger so the replacement can complete it.
+	o.toolStateMu.Lock()
+	for _, state := range o.toolContinuations {
+		if state == nil || !state.continuationScheduledSet || state.continuationScheduledIndex != index {
+			continue
+		}
+		state.continuationTerminalSeen = false
+		state.continuationStatus = ""
+		state.continuationStatusDetails = ""
+		state.continuationTerminalReason = ""
+		state.continuationOutputObserved = false
+		state.continuationFailureObserved = false
+		state.continuationComplete = false
+	}
+	o.toolStateMu.Unlock()
+	return delay, true
+}
+
 // bindPendingToolContinuations attaches only the accepted calls whose
 // originating provider response belongs to index. A tool result is emitted by
 // the loop as a separate RoleTool stream, so response-wide fallback here would
@@ -258,6 +417,8 @@ func (o *sessionProgressObserver) noteScheduledResponseDisposition(id string, di
 		return
 	}
 	lifecycle.disposition = disposition
+	lifecycle.retryPending = false
+	lifecycle.retryUsed = false
 	o.completedScheduled++
 	o.clearScheduledResponseOwner(index, id)
 }

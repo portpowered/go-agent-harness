@@ -221,9 +221,16 @@ type sessionProgressObserver struct {
 	logicalScheduledResponseIndex int
 	logicalScheduledResponseID    string
 	logicalScheduledResponseSet   bool
-	counters                      audioTurnCounters
-	totals                        audioTurnCounters
-	pendingInputs                 []ScheduledAudioInput
+	// retryCandidate retains the scheduled owner of the most recent eligible
+	// terminal until the session runner decides whether to wait and retry. It
+	// is needed for legacy transports whose MESSAGE.END omits response_id and
+	// whose normal response cleanup clears the active/logical owner.
+	retryCandidateIndex int
+	retryCandidateSet   bool
+	retryCandidateID    string
+	counters            audioTurnCounters
+	totals              audioTurnCounters
+	pendingInputs       []ScheduledAudioInput
 
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}

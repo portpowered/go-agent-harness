@@ -121,6 +121,9 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, 
 		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {
 			return false
 		}
+		if opts.CloseAfterScheduledAudio && opts.observer != nil && !opts.observer.scheduledAudioComplete() {
+			return false
+		}
 		return true
 	case messages.StreamTypeTextEnd:
 		if opts.observer != nil && opts.observer.hasToolLifecycleObligation() {

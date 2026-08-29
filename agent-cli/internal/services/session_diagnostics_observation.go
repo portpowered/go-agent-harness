@@ -30,19 +30,12 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		// (MESSAGE.START) or the compatible audio-only start through its
 		// terminal MESSAGE.END. Use the envelope type as the source of truth so
 		// a provider with an empty value still participates in scheduling.
-		continuationIndex, continuation := o.pendingScheduledContinuationIndex()
 		newResponseBoundary = o.beginObservedResponse(msgResponseID)
 		if !o.responseEventBelongsToActive(msgResponseID) {
 			return
 		}
 		if newResponseBoundary && msg.Role != messages.RoleTool {
-			if continuation {
-				if o.bindScheduledContinuation(continuationIndex, msgResponseID) {
-					o.bindPendingToolContinuations(continuationIndex, msgResponseID)
-				}
-			} else {
-				o.bindNextScheduledResponse(msgResponseID)
-			}
+			o.bindScheduledResponseBoundary(msgResponseID)
 		}
 	case messages.StreamTypeMessageEnd:
 		// A terminal event is allowed to advance state only for the active
@@ -55,22 +48,15 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			return
 		}
 		if !o.activeResponse && msgResponseID != "" {
-			continuationIndex, continuation := o.pendingScheduledContinuationIndex()
 			newResponseBoundary = o.beginObservedResponse(msgResponseID)
 			if newResponseBoundary {
-				if continuation {
-					if o.bindScheduledContinuation(continuationIndex, msgResponseID) {
-						o.bindPendingToolContinuations(continuationIndex, msgResponseID)
-					}
-				} else {
-					o.bindNextScheduledResponse(msgResponseID)
-				}
+				o.bindScheduledResponseBoundary(msgResponseID)
 			}
 		} else if !o.activeResponse {
 			// A legacy provider may expose only the terminal boundary. Bind it to
 			// the next dispatched scheduled input when one is available; an
 			// unrelated prompt/session terminal has no slot to consume.
-			o.bindNextScheduledResponse("")
+			o.bindScheduledTerminalOnly("")
 		}
 		if responseLifecycleID == "" {
 			responseLifecycleID = o.activeResponseID
@@ -243,10 +229,11 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
 		candidate := o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
+		o.rememberRateLimitRetryCandidate(msgResponseID, responseLifecycleID, v)
 		// A cancelled response can have output queued before the cancellation
 		// boundary. It is still an interrupted lifecycle disposition, never a
 		// normal assistant turn, and must not satisfy output admission.
-		admitted := !cancelled && candidate && outputPresent
+		admitted := !cancelled && candidate && outputPresent && messageEndCanAdmit(v)
 		if admitted && o.turnAdmission != nil {
 			admitted = o.turnAdmission(msg)
 		}
@@ -269,6 +256,23 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
 	}
+}
+
+// messageEndCanAdmit keeps provider-authored failures from earning a turn
+// credit even when a provider delivered partial output before response.done.
+// Empty status and legacy provider-authored completion remain admissible.
+func messageEndCanAdmit(value *messages.MessageEndValue) bool {
+	if value == nil {
+		return false
+	}
+	status := normalizeTerminalStatus(value.Status)
+	if status != "" && status != "completed" {
+		return false
+	}
+	if value.TerminalReason != "" && value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion && value.TerminalReason != messages.TerminalReasonLoopSynthesizedCompletion {
+		return false
+	}
+	return true
 }
 
 // accountToolRoleMessage preserves output accounting for the ToolRunner's
