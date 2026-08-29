@@ -111,6 +111,28 @@ func TestWriteStreamEventJSON_RefusalEvent(t *testing.T) {
 	}
 }
 
+func TestWriteStreamEventJSON_PreservesResponseID(t *testing.T) {
+	msg := messages.StreamMessage{
+		Type:       messages.StreamTypeAudioDelta,
+		ResponseID: "resp-json",
+		Value:      messages.NewAudioDeltaValue([]byte{1, 2}),
+	}
+
+	var buf bytes.Buffer
+	if err := WriteStreamEventJSON(&buf, msg); err != nil {
+		t.Fatalf("WriteStreamEventJSON: %v", err)
+	}
+	var event struct {
+		ResponseID string `json:"responseId"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &event); err != nil {
+		t.Fatalf("unmarshal stream event: %v", err)
+	}
+	if event.ResponseID != msg.ResponseID {
+		t.Fatalf("response ID = %q, want %q", event.ResponseID, msg.ResponseID)
+	}
+}
+
 func TestWriteStreamEventJSON_RefusalNotMixedWithTextEvents(t *testing.T) {
 	// Verify that text and refusal events produce separate NDJSON lines with distinct types.
 	events := []messages.StreamMessage{

@@ -387,6 +387,70 @@ func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.
 	}
 }
 
+func TestSessionModelRunner_ResponseIdentityRejectsLateTerminalAndOutput(t *testing.T) {
+	runner := NewSessionModelRunner(nil, 16, nil)
+	session := newRecordingSession()
+	state := newSessionResponseState()
+	ctx := context.Background()
+
+	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-old",
+		Value:      messages.NewMessageStartValue(),
+	}, state)
+	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-current",
+		Value:      messages.NewMessageStartValue(),
+	}, state)
+
+	if !state.responseInFlight || state.currentResponseID != "resp-current" {
+		t.Fatalf("replacement response state = in_flight:%t id:%q, want current response active", state.responseInFlight, state.currentResponseID)
+	}
+	if ended := runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-old",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}, state); ended {
+		t.Fatal("late old response terminal was accepted as the current response")
+	}
+	if !state.responseInFlight || state.currentResponseID != "resp-current" {
+		t.Fatalf("late terminal changed response state = in_flight:%t id:%q", state.responseInFlight, state.currentResponseID)
+	}
+
+	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeTextDelta,
+		ResponseID: "resp-old",
+		Value:      messages.NewTextDeltaValue("stale"),
+	}, state)
+	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeTextDelta,
+		ResponseID: "resp-current",
+		Value:      messages.NewTextDeltaValue("current"),
+	}, state)
+
+	var textValues []string
+	for {
+		msg, ok := runner.DeltaOutbox.Read()
+		if !ok {
+			break
+		}
+		if value, ok := msg.Value.(*messages.TextDeltaValue); ok {
+			textValues = append(textValues, value.Content)
+		}
+	}
+	if len(textValues) != 1 || textValues[0] != "current" {
+		t.Fatalf("forwarded text after late old response events = %#v, want [current]", textValues)
+	}
+	if ended := runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-current",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}, state); !ended {
+		t.Fatal("current response terminal was not accepted")
+	}
+}
+
 func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T) {
 	tests := []struct {
 		name             string

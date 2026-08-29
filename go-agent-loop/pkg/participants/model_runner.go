@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -81,6 +82,38 @@ type sessionRunState struct {
 	pendingSendErrors    []messages.StreamMessage
 	awaitingContinuation bool
 	suppressContinuation bool
+	currentResponseID    string
+	cancelledResponseIDs map[string]struct{}
+	retiredResponseIDs   map[string]struct{}
+	terminalResponseIDs  map[string]struct{}
+}
+
+// sessionResponseState is retained as an alias for the identity-aware helper
+// methods; all session lifecycle fields remain owned by one persistent state.
+type sessionResponseState = sessionRunState
+
+func newSessionResponseState() *sessionResponseState {
+	return &sessionResponseState{
+		cancelledResponseIDs: make(map[string]struct{}),
+		retiredResponseIDs:   make(map[string]struct{}),
+		terminalResponseIDs:  make(map[string]struct{}),
+	}
+}
+
+func responseID(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func (s *sessionRunState) ensureMaps() {
+	if s.cancelledResponseIDs == nil {
+		s.cancelledResponseIDs = make(map[string]struct{})
+	}
+	if s.retiredResponseIDs == nil {
+		s.retiredResponseIDs = make(map[string]struct{})
+	}
+	if s.terminalResponseIDs == nil {
+		s.terminalResponseIDs = make(map[string]struct{})
+	}
 }
 
 func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRunner {
@@ -150,6 +183,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 	defer func() { _ = session.Close() }()
 
 	state := sessionRunState{}
+	state.ensureMaps()
 
 	for {
 		// Observe already-queued provider lifecycle messages before admitting
@@ -216,7 +250,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 			// preflight but before this select chose the audio branch. Observe
 			// those messages once more before evaluating barge-in state.
 			r.forwardPendingSessionMessages(ctx, session, &state)
-			if err := r.forwardSessionAudio(ctx, session, pcm, &state.responseInFlight, &state.responseCancelSent); err != nil {
+			if err := r.forwardSessionAudioWithState(ctx, session, pcm, &state); err != nil {
 				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 				return err
 			}
@@ -237,7 +271,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				continue
 			}
 			r.forwardPendingSessionMessages(ctx, session, &state)
-			if err := r.drainSessionAudio(ctx, session, &state.responseInFlight, &state.responseCancelSent); err != nil {
+			if err := r.drainSessionAudioWithState(ctx, session, &state); err != nil {
 				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 				return err
 			}
@@ -281,6 +315,7 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 // transport turn. It returns whether it forwarded anything and whether either
 // user inbox was closed.
 func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, state *sessionRunState) (handled, closed bool, audioErr error) {
+	state.ensureMaps()
 	for {
 		if r.forwardPendingSessionMessages(ctx, session, state) {
 			handled = true
@@ -291,7 +326,7 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 			if !ok {
 				return true, true, nil
 			}
-			if err := r.forwardSessionAudio(ctx, session, pcm, &state.responseInFlight, &state.responseCancelSent); err != nil {
+			if err := r.forwardSessionAudioWithState(ctx, session, pcm, state); err != nil {
 				return true, false, err
 			}
 			handled = true
@@ -309,7 +344,7 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 				handled = true
 				continue
 			}
-			if err := r.drainSessionAudio(ctx, session, &state.responseInFlight, &state.responseCancelSent); err != nil {
+			if err := r.drainSessionAudioWithState(ctx, session, state); err != nil {
 				return true, false, err
 			}
 			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred {
@@ -355,31 +390,23 @@ func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session me
 		state.awaitingContinuation = false
 		r.sessionToolContinuation = sessionToolContinuationNone
 	}
-	state.responseInFlight, state.responseCancelSent, state.sessionClosed, state.hasOutput, state.responseCompleted = r.forwardSessionMessage(
-		ctx,
-		session,
-		msg,
-		state.responseInFlight,
-		state.responseCancelSent,
-		state.sessionClosed,
-		state.hasOutput,
-		state.responseCompleted,
-	)
-	if msg.Type == messages.StreamTypeMessageEnd && state.awaitingContinuation {
+	messageEnded := r.forwardSessionMessageWithState(ctx, session, msg, state)
+	if messageEnded && state.awaitingContinuation {
 		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 		state.pendingSendErrors = nil
 		state.awaitingContinuation = false
 	}
 }
 
-func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) error {
+func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session messages.Session, state *sessionResponseState) error {
+	state.ensureMaps()
 	for {
 		select {
 		case pcm, ok := <-r.UserAudioInbox:
 			if !ok {
 				return nil
 			}
-			if err := r.forwardSessionAudio(ctx, session, pcm, responseInFlight, responseCancelSent); err != nil {
+			if err := r.forwardSessionAudioWithState(ctx, session, pcm, state); err != nil {
 				return err
 			}
 		default:
@@ -388,13 +415,28 @@ func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Se
 	}
 }
 
-func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) error {
+func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) error {
+	state := newSessionResponseState()
+	state.responseInFlight = responseInFlight != nil && *responseInFlight
+	state.responseCancelSent = responseCancelSent != nil && *responseCancelSent
+	err := r.drainSessionAudioWithState(ctx, session, state)
+	if responseInFlight != nil {
+		*responseInFlight = state.responseInFlight
+	}
+	if responseCancelSent != nil {
+		*responseCancelSent = state.responseCancelSent
+	}
+	return err
+}
+
+func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) error {
+	state.ensureMaps()
 	// Barge-in: new user audio while the current model response is still
 	// non-terminal. The response-created-before-first-audio state is
 	// intentionally included: provider response creation and its first output
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
-	if *responseInFlight && !*responseCancelSent && hasPCM16Signal(pcm) {
+	if state.responseInFlight && !state.responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
@@ -405,7 +447,10 @@ func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.
 		// Keep the response in flight until its terminal MESSAGE.END arrives,
 		// but never send a second cancel for more audio belonging to the same
 		// response.
-		*responseCancelSent = true
+		state.responseCancelSent = true
+		if state.currentResponseID != "" {
+			state.cancelledResponseIDs[state.currentResponseID] = struct{}{}
+		}
 	}
 	// Forward the user audio to the inference provider.
 	audioOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
@@ -416,6 +461,20 @@ func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.
 		return sessionAudioSendError("audio", audioOutcome)
 	}
 	return nil
+}
+
+func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) error {
+	state := newSessionResponseState()
+	state.responseInFlight = responseInFlight != nil && *responseInFlight
+	state.responseCancelSent = responseCancelSent != nil && *responseCancelSent
+	err := r.forwardSessionAudioWithState(ctx, session, pcm, state)
+	if responseInFlight != nil {
+		*responseInFlight = state.responseInFlight
+	}
+	if responseCancelSent != nil {
+		*responseCancelSent = state.responseCancelSent
+	}
+	return err
 }
 
 func sessionAudioSendError(operation string, outcome messages.SessionSendOutcome) error {
@@ -476,64 +535,76 @@ func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failure
 	}
 }
 
-func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session messages.Session, msg messages.StreamMessage, responseInFlight bool, responseCancelSent bool, sessionClosed bool, hasOutput bool, responseCompleted bool) (bool, bool, bool, bool, bool) {
+// forwardSessionMessageWithState forwards one provider event and updates the
+// identity-aware response lifecycle. The return value is true only when this
+// event is the terminal MESSAGE.END for the currently owned response.
+func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
+	state.ensureMaps()
+	msgID := responseID(msg.ResponseID)
+	messageEndOwned := false
+
 	// Track the provider response lifecycle for barge-in detection. A response
 	// is live from MESSAGE.START through MESSAGE.END; audio start/end alone do
-	// not define its terminal boundary.
+	// not define its terminal boundary. When a provider starts a replacement
+	// response before the older one has drained, the older response is retired
+	// and can no longer mutate the current lifecycle.
 	switch msg.Type {
-	case messages.StreamTypeMessageStart:
-		// hasOutput and responseCompleted describe the current response, not
-		// the lifetime of the persistent session. Reset them at each response
-		// boundary so a later disconnect is classified from the latest turn.
-		hasOutput = false
-		responseCompleted = false
-		responseInFlight = true
-		responseCancelSent = false
-	case messages.StreamTypeAudioStart:
-		// Some compatible sessions omit MESSAGE.START around an audio stream;
-		// AUDIO.START is still enough to establish a live response for the
-		// existing session contract.
-		if !responseInFlight {
-			responseCancelSent = false
+	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+		if beginSessionResponse(state, msgID) {
+			state.hasOutput = false
+			state.responseCompleted = false
+			state.responseCancelSent = false
+			state.responseInFlight = true
 		}
-		responseInFlight = true
 	case messages.StreamTypeMessageEnd:
-		responseInFlight = false
-		if responseCancelSent {
-			// Realtime providers normally acknowledge RESPONSE.CANCEL with a
-			// response.done event. Preserve that wire boundary so the next
-			// input can proceed, but mark it as interrupted rather than a
-			// normally completed assistant turn.
-			if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
-				outputState := messages.TerminalOutputNone
-				if hasOutput {
-					outputState = messages.TerminalOutputPartial
-				}
-				msg.Value = messages.NewMessageEndValueWithTerminal(
-					value.Usage,
-					messages.TerminalReasonPartialOutput,
-					messages.TerminalProvenanceLoop,
-					outputState,
-				)
+		if ownsSessionResponseEnd(state, msgID) {
+			ownedID := msgID
+			if ownedID == "" {
+				ownedID = state.currentResponseID
 			}
-			responseCompleted = false
-		} else {
-			responseCompleted = true
+			state.responseInFlight = false
+			if state.responseCancelSent {
+				// Realtime providers normally acknowledge RESPONSE.CANCEL with a
+				// response.done event. Preserve that wire boundary so the next
+				// input can proceed, but mark it as interrupted rather than a
+				// normally completed assistant turn.
+				if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
+					outputState := messages.TerminalOutputNone
+					if state.hasOutput {
+						outputState = messages.TerminalOutputPartial
+					}
+					msg.Value = messages.NewMessageEndValueWithTerminal(
+						value.Usage,
+						messages.TerminalReasonPartialOutput,
+						messages.TerminalProvenanceLoop,
+						outputState,
+					)
+				}
+				state.responseCompleted = false
+			} else {
+				state.responseCompleted = true
+			}
+			if ownedID != "" {
+				state.terminalResponseIDs[ownedID] = struct{}{}
+			}
+			state.currentResponseID = ""
+			messageEndOwned = true
 		}
 	case messages.StreamTypeSessionClose:
-		sessionClosed = true
+		state.sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)
 	}
 	// A provider may have already queued output when RESPONSE.CANCEL reaches
 	// it. The wire adapter cannot retract those frames, but they must not cross
 	// the customer-facing session boundary after the local cancellation. Keep
 	// MESSAGE.END so the cancelled response can still close and the next turn
-	// can be admitted.
-	if responseCancelSent && isCustomerOutputDelta(msg) {
-		return responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted
+	// can be admitted. An identified event is admitted only for its current
+	// response owner; an old terminal event cannot clear a replacement.
+	if staleSessionCustomerOutput(state, msg) {
+		return messageEndOwned
 	}
 	if isOutputDelta(msg) {
-		hasOutput = true
+		state.hasOutput = true
 	}
 	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
 	// session parameters (model, instructions, modalities) if set.
@@ -544,7 +615,84 @@ func (r *ModelRunner) forwardSessionMessage(ctx context.Context, session message
 		})
 	}
 	r.DeltaOutbox.Write(ctx, msg)
-	return responseInFlight, responseCancelSent, sessionClosed, hasOutput, responseCompleted
+	return messageEndOwned
+}
+
+func beginSessionResponse(state *sessionResponseState, msgID string) bool {
+	if msgID != "" {
+		if _, retired := state.retiredResponseIDs[msgID]; retired {
+			return false
+		}
+		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
+			return false
+		}
+	}
+	if state.responseInFlight {
+		if state.currentResponseID == msgID {
+			// Duplicate starts for the same response must not reset cancellation
+			// or output state.
+			return false
+		}
+		if state.currentResponseID != "" && msgID == "" {
+			// An untagged start cannot claim an identified response.
+			return false
+		}
+		if state.currentResponseID != "" && msgID != state.currentResponseID {
+			state.retiredResponseIDs[state.currentResponseID] = struct{}{}
+		}
+	}
+	state.currentResponseID = msgID
+	return true
+}
+
+func ownsSessionResponseEnd(state *sessionResponseState, msgID string) bool {
+	if msgID != "" {
+		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
+			return false
+		}
+		if _, retired := state.retiredResponseIDs[msgID]; retired {
+			return false
+		}
+		if _, cancelled := state.cancelledResponseIDs[msgID]; cancelled && state.currentResponseID != msgID {
+			return false
+		}
+		if state.responseInFlight {
+			return msgID == "" || state.currentResponseID == msgID
+		}
+		// A response.done without response.created is accepted once for
+		// compatibility with providers that omit the opening event.
+		return !state.responseCompleted
+	}
+	if state.responseInFlight {
+		// Compatible providers may omit response_id on response.done. The
+		// sole active identified response owns that terminal event unless a
+		// non-empty competing ID is supplied.
+		return true
+	}
+	return !state.responseCompleted
+}
+
+func staleSessionCustomerOutput(state *sessionResponseState, msg messages.StreamMessage) bool {
+	if !isCustomerOutputDelta(msg) {
+		return false
+	}
+	msgID := responseID(msg.ResponseID)
+	if msgID != "" {
+		if _, cancelled := state.cancelledResponseIDs[msgID]; cancelled {
+			return true
+		}
+		if _, retired := state.retiredResponseIDs[msgID]; retired {
+			return true
+		}
+		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
+			return true
+		}
+		if state.currentResponseID != "" && state.currentResponseID != msgID {
+			return true
+		}
+		return false
+	}
+	return state.responseCancelSent
 }
 
 func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMessage {

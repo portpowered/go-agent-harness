@@ -223,6 +223,9 @@ type sessionProgressObserver struct {
 	requireSessionUpdated  bool
 	scheduledAudioDispatch ScheduledAudioDispatchPolicy
 	activeResponse         bool
+	activeResponseID       string
+	completedResponseIDs   map[string]struct{}
+	retiredResponseIDs     map[string]struct{}
 	turnsCompleted         int
 	scheduledInputs        int
 	dispatchedInputs       int
@@ -276,10 +279,12 @@ type sessionProgressObserver struct {
 
 type toolContinuationState struct {
 	toolName                    string
+	responseID                  string
 	providerCallObserved        bool
 	resultAccepted              bool
 	toolResponseComplete        bool
 	continuationRequested       bool
+	continuationResponseID      string
 	continuationTerminalSeen    bool
 	continuationStatus          string
 	continuationStatusDetails   string
@@ -309,6 +314,8 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		toolResultRejections: make(map[string]messages.SessionSendStatus),
 		toolLifecycleCh:      make(chan struct{}, 1),
 		toolContinuations:    make(map[string]*toolContinuationState),
+		completedResponseIDs: make(map[string]struct{}),
+		retiredResponseIDs:   make(map[string]struct{}),
 	}
 }
 
@@ -433,10 +440,7 @@ func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEn
 }
 
 func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name string) {
-	if o == nil || strings.TrimSpace(callID) == "" {
-		return
-	}
-	o.observeProviderToolCallStart(callID, name)
+	o.observeProviderToolCallWithIDForResponse(callID, name, "")
 }
 
 // noteToolResultAccepted resolves exactly one provider call after the
@@ -571,15 +575,15 @@ func (o *sessionProgressObserver) observeBufferedProviderToolLifecycle(deltas []
 		switch v := msg.Value.(type) {
 		case *messages.ToolCallStartValue:
 			if v != nil {
-				o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+				o.observeProviderToolCallStartForResponse(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name, msg.ResponseID)
 			}
 		case *messages.ToolCallDeltaValue:
 			if v != nil {
-				o.observeProviderToolCallStart(strings.TrimSpace(msg.ToolCallId), "")
+				o.observeProviderToolCallStartForResponse(strings.TrimSpace(msg.ToolCallId), "", msg.ResponseID)
 			}
 		case *messages.ToolCallEndValue:
 			if v != nil {
-				o.observeProviderToolCallWithID(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+				o.observeProviderToolCallWithIDForResponse(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name, msg.ResponseID)
 			}
 		}
 	}
@@ -842,21 +846,52 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
+	msgResponseID := strings.TrimSpace(msg.ResponseID)
+	responseLifecycleID := msgResponseID
+	newResponseBoundary := false
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		// The normalized provider boundary is active from response creation
 		// (MESSAGE.START) or the compatible audio-only start through its
 		// terminal MESSAGE.END. Use the envelope type as the source of truth so
 		// a provider with an empty value still participates in scheduling.
-		o.activeResponse = true
-	case messages.StreamTypeMessageEnd, messages.StreamTypeSessionClose:
+		newResponseBoundary = o.beginObservedResponse(msgResponseID)
+		if !o.responseEventBelongsToActive(msgResponseID) {
+			return
+		}
+	case messages.StreamTypeMessageEnd:
+		// A terminal event is allowed to advance state only for the active
+		// response owner. A late terminal for a previous response remains
+		// observable through the stream observer but cannot complete a turn.
+		if !o.ownsObservedResponseEnd(msgResponseID) {
+			return
+		}
+		if !o.activeResponse && msgResponseID != "" {
+			newResponseBoundary = o.beginObservedResponse(msgResponseID)
+		}
+		if responseLifecycleID == "" {
+			responseLifecycleID = o.activeResponseID
+		}
+	case messages.StreamTypeSessionClose:
 		o.activeResponse = false
+		o.activeResponseID = ""
+	default:
+		if responseScopedStreamType(msg.Type) && !o.responseEventBelongsToActive(msgResponseID) {
+			return
+		}
+	}
+	if responseLifecycleID == "" {
+		responseLifecycleID = o.activeResponseID
 	}
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen:
 		o.sawSessionOpen = true
 		o.sessionID = ""
 		o.activeResponse = false
+		o.activeResponseID = ""
+		o.completedResponseIDs = make(map[string]struct{})
+		o.retiredResponseIDs = make(map[string]struct{})
+		o.resetObservedResponseState()
 		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
 			o.sessionID = v.SessionID
 		}
@@ -881,19 +916,18 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.SessionOpenValue:
 		o.sawSessionOpen = true
 	case *messages.MessageStartValue:
-		o.toolStateMu.Lock()
-		o.resetResponseOutputLocked()
-		o.assistantResponseDone = false
-		o.assistantOutputObserved = false
-		o.toolCallInTurn = false
-		o.messageEndSeen = false
-		o.toolStateMu.Unlock()
+		if newResponseBoundary {
+			o.resetObservedResponseState()
+		}
 	case *messages.TextStartValue, *messages.AudioStartValue, *messages.ReasoningStartValue,
 		*messages.ImageStartValue, *messages.VideoStartValue, *messages.FileStartValue,
 		*messages.EmbeddingStartValue, *messages.TranscriptStartValue:
 		// Compatible providers may omit MESSAGE.START between persistent
 		// responses. Any content-start boundary is enough to distinguish a new
 		// response from a duplicate MESSAGE.END for the previous one.
+		if newResponseBoundary {
+			o.resetObservedResponseState()
+		}
 		o.toolStateMu.Lock()
 		if o.messageEndSeen || o.assistantResponseDone {
 			o.assistantOutputObserved = false
@@ -957,7 +991,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		}
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallStartValue:
-		o.observeProviderToolCallStart(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name)
+		o.observeProviderToolCallStartForResponse(firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId), v.Name, responseLifecycleID)
 		o.toolDeltaSeen = false
 		o.toolStateMu.Lock()
 		o.beginResponseContentLocked()
@@ -965,7 +999,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolCallInTurn = o.toolResultsEnabled
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallDeltaValue:
-		o.observeProviderToolCallStart(strings.TrimSpace(msg.ToolCallId), "")
+		o.observeProviderToolCallStartForResponse(strings.TrimSpace(msg.ToolCallId), "", responseLifecycleID)
 		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
 		o.toolDeltaSeen = true
 		o.toolStateMu.Lock()
@@ -975,7 +1009,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.toolStateMu.Unlock()
 	case *messages.ToolCallEndValue:
 		callID := firstNonBlankToolCallID(v.ToolCallID, msg.ToolCallId)
-		o.observeProviderToolCallWithID(callID, v.Name)
+		o.observeProviderToolCallWithIDForResponse(callID, v.Name, responseLifecycleID)
 		if !o.toolResultsEnabledForObservation() {
 			o.emitToolCallRecord(v)
 		}
@@ -1002,7 +1036,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.noteProviderUsage(v.Usage)
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
-		candidate := o.observeProviderMessageEnd(msg.Role, v, outputPresent)
+		candidate := o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
 		admitted := candidate && outputPresent
 		if admitted && o.turnAdmission != nil {
 			admitted = o.turnAdmission(msg)
@@ -1017,16 +1051,15 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 				o.admittedTurnObserver(msg)
 			}
 		}
-		o.activeResponse = false
+		o.finishObservedResponse(responseLifecycleID)
 	case *messages.ErrorValue:
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
 		o.activeResponse = false
+		o.activeResponseID = ""
 	}
 }
-
-
 
 func (o *sessionProgressObserver) captureFailureFromError(v *messages.ErrorValue) {
 	if o.failure != nil || v == nil || v.IsNonTerminal() {

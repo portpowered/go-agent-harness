@@ -142,6 +142,10 @@ type StreamMessage struct {
 
 	Role       Role
 	ToolCallId string
+	// ResponseID identifies the provider response that owns this message. It
+	// lets session consumers ignore a late terminal or output event from an
+	// older response after a replacement response has started.
+	ResponseID string `json:"response_id,omitempty"`
 	Value      StreamMessageValue
 
 	// Ordering: global consistency for retries and interrupts (see ORDERING.md).

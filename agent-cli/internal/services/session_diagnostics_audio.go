@@ -89,6 +89,12 @@ func (o *sessionProgressObserver) scheduledAudioInputDue(input ScheduledAudioInp
 	if o == nil || input.AfterCompletedTurns <= o.turnsCompleted {
 		return true
 	}
+	// A prompt or seed response may be active before any scheduled input has
+	// been dispatched. Do not let active-response scheduling bypass that
+	// initial turn boundary.
+	if o.dispatchedInputs == 0 {
+		return false
+	}
 	return o.scheduledAudioDispatch == ScheduledAudioDispatchActiveResponse &&
 		o.activeResponse && input.AfterCompletedTurns <= o.turnsCompleted+1
 }

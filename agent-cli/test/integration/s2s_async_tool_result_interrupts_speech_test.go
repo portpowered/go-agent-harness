@@ -1354,6 +1354,15 @@ func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	if err := validateAsyncCollisionProviderResult(run.outbound); err != nil {
 		t.Fatal(err)
 	}
+	cancelCount := 0
+	for _, event := range run.outbound {
+		if event.Type == "response.cancel" {
+			cancelCount++
+		}
+	}
+	if cancelCount != 0 {
+		t.Fatalf("completion-gated async tool continuation emitted %d response.cancel events, want none: %v", cancelCount, summarizeAsyncCollisionOutbound(run.outbound))
+	}
 	t.Logf("provider-facing result delivered exactly once for %q", asyncCollisionCallID)
 }
 

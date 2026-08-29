@@ -243,7 +243,11 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 	}
 	serverEvent("response.output_audio.delta", string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_result_conversation","status":"completed"}}`)
+	finalResponseID := "resp_tool_result_conversation"
+	if includeToolCall {
+		finalResponseID = "resp_tool_result_conversation_reply"
+	}
+	serverEvent("response.done", `{"type":"response.done","response":{"id":"`+finalResponseID+`","status":"completed"}}`)
 
 	baseCapture.Session.ID = "sess_tool_result_conversation"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic

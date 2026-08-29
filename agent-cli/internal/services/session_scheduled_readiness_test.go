@@ -334,6 +334,76 @@ func TestSessionProgressObserverCompletionGatedIgnoresActiveResponse(t *testing.
 	}
 }
 
+func TestSessionProgressObserverFirstScheduledOffsetWaitsForPromptResponse(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduledAudioDispatch = ScheduledAudioDispatchActiveResponse
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 1, PCM: []byte{1}, EndOfTurn: true}})
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-prompt",
+		Value:      messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch while prompt response is active: %v", err)
+	}
+	if len(probe.audio) != 0 {
+		t.Fatalf("first scheduled input crossed active prompt boundary: %#v", probe.audio)
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-prompt",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch after prompt response: %v", err)
+	}
+	if len(probe.audio) != 1 || string(probe.audio[0]) != string([]byte{1}) {
+		t.Fatalf("first scheduled input after prompt = %#v, want one [1] frame", probe.audio)
+	}
+}
+
+func TestSessionProgressObserverResponseIdentityRejectsOutOfOrderTerminal(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduledAudioDispatch = ScheduledAudioDispatchActiveResponse
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+		{AfterCompletedTurns: 2, PCM: []byte{3}, EndOfTurn: true},
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first scheduled input: %v", err)
+	}
+
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "resp-old", Value: messages.NewMessageStartValue()})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch while first response is active: %v", err)
+	}
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "resp-current", Value: messages.NewMessageStartValue()})
+	if observer.activeResponseID != "resp-current" {
+		t.Fatalf("active response ID = %q, want resp-current", observer.activeResponseID)
+	}
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch while replacement response is active: %v", err)
+	}
+	if len(probe.audio) != 2 {
+		t.Fatalf("active-response dispatches = %#v, want first two inputs", probe.audio)
+	}
+
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp-old", Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	if !observer.activeResponse || observer.activeResponseID != "resp-current" || observer.turnsCompleted != 0 {
+		t.Fatalf("late old terminal changed lifecycle: active=%t id=%q turns=%d", observer.activeResponse, observer.activeResponseID, observer.turnsCompleted)
+	}
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp-current", Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	if observer.activeResponse || observer.turnsCompleted != 1 {
+		t.Fatalf("current terminal lifecycle = active:%t turns:%d, want inactive/1", observer.activeResponse, observer.turnsCompleted)
+	}
+}
+
 func TestSessionProgressObserverScheduledAudioCountsOnlyItsOwnCompletedTurns(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	probe := &scheduledInputDispatchProbe{}

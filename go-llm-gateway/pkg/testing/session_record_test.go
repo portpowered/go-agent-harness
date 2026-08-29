@@ -144,6 +144,25 @@ func TestSessionRecorder_CapturesEventsInOrder(t *testing.T) {
 	}
 }
 
+func TestMarshalStreamMessage_RoundTripsResponseID(t *testing.T) {
+	want := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-round-trip",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	raw, err := MarshalStreamMessage(want)
+	if err != nil {
+		t.Fatalf("marshal stream message: %v", err)
+	}
+	got, err := UnmarshalStreamMessage(raw)
+	if err != nil {
+		t.Fatalf("unmarshal stream message: %v", err)
+	}
+	if got.ResponseID != want.ResponseID {
+		t.Fatalf("response ID = %q, want %q; raw=%s", got.ResponseID, want.ResponseID, raw)
+	}
+}
+
 func TestSessionRecorder_FlushToFile(t *testing.T) {
 	fake := newFakeSession()
 	rec := NewSessionRecorder(fake, WithSessionCaptureProvider("grok", "grok-realtime"), WithSessionCaptureID("session-123"))

@@ -15,6 +15,7 @@ type streamEventJSON struct {
 	Index      int             `json:"index,omitempty"`
 	Role       string          `json:"role,omitempty"`
 	ToolCallID string          `json:"toolCallId,omitempty"`
+	ResponseID string          `json:"responseId,omitempty"`
 	Value      json.RawMessage `json:"value,omitempty"`
 }
 
@@ -55,6 +56,7 @@ func WriteStreamEventJSON(w io.Writer, msg messages.StreamMessage) error {
 		Index:      msg.ActorProvidedIndex,
 		Role:       string(msg.Role),
 		ToolCallID: msg.ToolCallId,
+		ResponseID: msg.ResponseID,
 	}
 	if msg.Value != nil {
 		valueBytes, err := json.Marshal(msg.Value)
