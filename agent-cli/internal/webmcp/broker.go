@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	defaultBrokerWatchBuffer = 64
-	maxToolRefMintAttempts   = 64
-	initialCatalogWait       = time.Second
+	defaultBrokerWatchBuffer  = 64
+	maxToolRefMintAttempts    = 64
+	initialCatalogWait        = time.Second
+	initialCatalogLoadingWait = 5 * time.Second
 )
 
 // BrokerOptions supplies the browser-neutral seams used by StatefulBroker.
@@ -51,27 +52,32 @@ type BrokerOptions struct {
 	// CatalogWait bounds each attempt to observe affirmative page-tool
 	// catalog evidence. Zero uses the one-second diagnostic default.
 	CatalogWait time.Duration
+	// LoadingCatalogWait bounds the first catalog-evidence attempt when the
+	// selected document explicitly reports document.readyState=loading. Zero
+	// uses a bounded five-second allowance; later retries use CatalogWait.
+	LoadingCatalogWait time.Duration
 }
 
 // StatefulBroker owns selection, page catalog, generation, and session-local
 // ToolRef state. Browser calls happen outside the broker mutex; all catalog
 // and reference transitions are reconciled back through that mutex.
 type StatefulBroker struct {
-	mu                sync.Mutex
-	runtime           BrowserRuntime
-	discoverer        BrowserDiscoverer
-	ids               IDSource
-	toolRefFactory    ToolRefFactory
-	clock             Clock
-	timers            TimerFactory
-	cancelOnInterrupt string
-	ownership         TargetOwnership
-	watchBuffer       int
-	maxInputBytes     int
-	maxResultBytes    int
-	invocationTimeout time.Duration
-	closeTimeout      time.Duration
-	catalogWait       time.Duration
+	mu                 sync.Mutex
+	runtime            BrowserRuntime
+	discoverer         BrowserDiscoverer
+	ids                IDSource
+	toolRefFactory     ToolRefFactory
+	clock              Clock
+	timers             TimerFactory
+	cancelOnInterrupt  string
+	ownership          TargetOwnership
+	watchBuffer        int
+	maxInputBytes      int
+	maxResultBytes     int
+	invocationTimeout  time.Duration
+	closeTimeout       time.Duration
+	catalogWait        time.Duration
+	loadingCatalogWait time.Duration
 
 	browsers map[BrowserID]*browserState
 	selected *brokerSession
@@ -238,6 +244,10 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	if catalogWait <= 0 {
 		catalogWait = initialCatalogWait
 	}
+	loadingCatalogWait := options.LoadingCatalogWait
+	if loadingCatalogWait <= 0 {
+		loadingCatalogWait = initialCatalogLoadingWait
+	}
 	return &StatefulBroker{
 		runtime:             options.Runtime,
 		discoverer:          options.Discoverer,
@@ -253,6 +263,7 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 		invocationTimeout:   invocationTimeout,
 		closeTimeout:        closeTimeout,
 		catalogWait:         catalogWait,
+		loadingCatalogWait:  loadingCatalogWait,
 		browsers:            make(map[BrowserID]*browserState),
 		refs:                make(map[ToolRef]refRecord),
 		retired:             make(map[ToolRef]struct{}),

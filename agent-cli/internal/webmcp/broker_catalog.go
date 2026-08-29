@@ -182,6 +182,13 @@ func normalizePageContext(page PageContext, browserID BrowserID, target Target) 
 	if page.Generation == 0 {
 		page.Generation = 1
 	}
+	if page.DocumentReadyState == "" {
+		page.DocumentReadyState = target.DocumentReadyState
+	}
+	if !page.DocumentLoadingKnown && target.DocumentLoadingKnown {
+		page.DocumentLoading = target.DocumentLoading
+		page.DocumentLoadingKnown = true
+	}
 	page.Connected = true
 	return page
 }

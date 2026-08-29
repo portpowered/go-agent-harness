@@ -180,6 +180,9 @@ type Target struct {
 	PageToolsReady        bool   `json:"page_tools_ready"`
 	PageToolsKnown        bool   `json:"page_tools_known"`
 	PageToolsEvidence     string `json:"page_tools_evidence,omitempty"`
+	DocumentReadyState    string `json:"document_ready_state,omitempty"`
+	DocumentLoading       bool   `json:"document_loading"`
+	DocumentLoadingKnown  bool   `json:"document_loading_known"`
 	ToolCount             int    `json:"tool_count"`
 	ToolCountKnown        bool   `json:"tool_count_known"`
 	Eligible              bool   `json:"eligible"`
@@ -195,11 +198,14 @@ type TargetCapabilities struct {
 	ToolCountKnown bool
 	// DomainSupported/DomainKnown are the explicit form of WebMCP. The
 	// legacy WebMCP field remains accepted for existing probes.
-	DomainSupported   bool
-	DomainKnown       bool
-	PageToolsReady    bool
-	PageToolsKnown    bool
-	PageToolsEvidence string
+	DomainSupported      bool
+	DomainKnown          bool
+	PageToolsReady       bool
+	PageToolsKnown       bool
+	PageToolsEvidence    string
+	DocumentReadyState   string
+	DocumentLoading      bool
+	DocumentLoadingKnown bool
 }
 
 // TargetCapabilityProbe verifies the capability that /json/list cannot
@@ -431,6 +437,9 @@ func (s Selection) Context() PageContext {
 		PageToolsReady:        s.Target.PageToolsReady,
 		PageToolsKnown:        s.Target.PageToolsKnown,
 		PageToolsEvidence:     s.Target.PageToolsEvidence,
+		DocumentReadyState:    s.Target.DocumentReadyState,
+		DocumentLoading:       s.Target.DocumentLoading,
+		DocumentLoadingKnown:  s.Target.DocumentLoadingKnown,
 		Ready:                 ready,
 	}
 }
@@ -449,6 +458,9 @@ type PageContext struct {
 	PageToolsReady        bool      `json:"page_tools_ready"`
 	PageToolsKnown        bool      `json:"page_tools_known"`
 	PageToolsEvidence     string    `json:"page_tools_evidence,omitempty"`
+	DocumentReadyState    string    `json:"document_ready_state,omitempty"`
+	DocumentLoading       bool      `json:"document_loading"`
+	DocumentLoadingKnown  bool      `json:"document_loading_known"`
 	Ready                 bool      `json:"ready"`
 	SelectedAt            time.Time `json:"selected_at"`
 }

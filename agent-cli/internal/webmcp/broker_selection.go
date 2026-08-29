@@ -9,10 +9,14 @@ import (
 )
 
 // waitForInitialCatalog gives the browser a bounded opportunity to deliver
-// affirmative page-tool evidence triggered by WebMCP.enable. A timeout is a
-// diagnostic failure, not a session-lifecycle transition: the caller may
-// retry while this connected target continues consuming events.
+// affirmative page-tool evidence triggered by WebMCP.enable. A loading
+// document receives the separate first-attach allowance; a timeout is a
+// diagnostic failure, not a session-lifecycle transition.
 func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *brokerSession) error {
+	return b.waitForCatalog(ctx, selected, true)
+}
+
+func (b *StatefulBroker) waitForCatalog(ctx context.Context, selected *brokerSession, initial bool) error {
 	if selected == nil {
 		return nil
 	}
@@ -22,6 +26,15 @@ func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *br
 	wait := initialCatalogWait
 	if b != nil && b.catalogWait > 0 {
 		wait = b.catalogWait
+	}
+	loading := false
+	if b != nil {
+		b.mu.Lock()
+		loading = selected.context.DocumentLoadingKnown && selected.context.DocumentLoading
+		b.mu.Unlock()
+	}
+	if initial && b != nil && b.loadingCatalogWait > wait && loading {
+		wait = b.loadingCatalogWait
 	}
 	timerFactory := TimerFactory(wallTimerFactory{})
 	if b != nil && b.timers != nil {
@@ -85,7 +98,7 @@ func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *br
 					}
 				}
 			}
-			return b.catalogEvidenceError(selected, "session_ended")
+			return b.catalogEvidenceError(selected, "session_ended", wait)
 		case <-ctx.Done():
 			if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
 				return failure
@@ -115,7 +128,7 @@ func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *br
 			if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
 				return failure
 			}
-			return b.catalogEvidenceError(selected, "deadline_exceeded")
+			return b.catalogEvidenceError(selected, "deadline_exceeded", wait)
 		}
 	}
 }
@@ -155,6 +168,9 @@ func (b *StatefulBroker) syncSessionReadiness(selected *brokerSession) {
 	// It is deliberately recorded independently from page-tool/catalog
 	// readiness, which still requires an affirmative page observation.
 	selected.context.WebMCPDomainSupported = true
+	selected.context.DocumentReadyState = page.DocumentReadyState
+	selected.context.DocumentLoading = page.DocumentLoading
+	selected.context.DocumentLoadingKnown = page.DocumentLoadingKnown
 	if page.CatalogReady {
 		b.markCatalogReadyLocked(selected, page.CatalogEvidence)
 	}
@@ -211,14 +227,17 @@ func catalogInvalidErrorLocked(selected *brokerSession) error {
 	}, selected.catalogError)
 }
 
-func (b *StatefulBroker) catalogEvidenceError(selected *brokerSession, reason string) error {
+func (b *StatefulBroker) catalogEvidenceError(selected *brokerSession, reason string, wait time.Duration) error {
+	if wait <= 0 {
+		wait = initialCatalogWait
+	}
 	details := map[string]any{
 		"phase":           "catalog",
 		"reason_code":     "page_tools_unverified",
 		"webmcp_domain":   "supported",
 		"page_tools":      "unverified",
 		"catalog":         "unverified",
-		"deadline_ms":     int(b.catalogWait / time.Millisecond),
+		"deadline_ms":     int(wait / time.Millisecond),
 		"evidence_needed": "affirmative page producer/catalog-ready observation",
 		"reason":          reason,
 	}
@@ -281,7 +300,7 @@ func (b *StatefulBroker) SelectedWithRefresh(ctx context.Context, refresh bool) 
 		}
 		b.flushSession(selected)
 		b.syncSessionReadiness(selected)
-		if err := b.waitForInitialCatalog(ctx, selected); err != nil {
+		if err := b.waitForCatalog(ctx, selected, false); err != nil {
 			if failure := b.promoteBrowserLoss(selected, TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err); failure != nil {
 				return PageContext{}, failure
 			}
@@ -328,7 +347,7 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 		}
 		b.flushSession(selected)
 		b.syncSessionReadiness(selected)
-		if err := b.waitForInitialCatalog(ctx, selected); err != nil {
+		if err := b.waitForCatalog(ctx, selected, false); err != nil {
 			if failure := b.promoteBrowserLoss(selected, TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "refresh", err); failure != nil {
 				return ToolCatalogSnapshot{}, failure
 			}
@@ -341,7 +360,7 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 	// A selection may have returned a retryable catalog deadline before the
 	// page published its producer. Keep later list calls event-driven and
 	// bounded instead of treating the current empty catalog as a success.
-	if err := b.waitForInitialCatalog(ctx, selected); err != nil {
+	if err := b.waitForCatalog(ctx, selected, false); err != nil {
 		if failure := b.promoteBrowserLoss(selected, TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "catalog", err); failure != nil {
 			return ToolCatalogSnapshot{}, failure
 		}

@@ -2,6 +2,7 @@ package chrome
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -103,6 +104,107 @@ func TestWebMCPEnablePublishesExplicitEmptyCatalogEvidence(t *testing.T) {
 	event := nextBrowserEvent(t, session.Events())
 	if event.Type != webmcp.EventCatalogReady || !event.CatalogReady || !event.ToolCountKnown || event.ToolCount != 0 {
 		t.Fatalf("catalog event = %+v, want explicit empty catalog evidence", event)
+	}
+}
+
+func TestWebMCPEnableReportsDocumentReadinessWithoutPageData(t *testing.T) {
+	tests := []struct {
+		name            string
+		readyState      string
+		loading         bool
+		loadingKnown    bool
+		producerPresent bool
+	}{
+		{
+			name:            "loading_without_producer",
+			readyState:      webmcp.DocumentReadyStateLoading,
+			loading:         true,
+			loadingKnown:    true,
+			producerPresent: false,
+		},
+		{
+			name:            "loading_empty_catalog_is_not_ready",
+			readyState:      webmcp.DocumentReadyStateLoading,
+			loading:         true,
+			loadingKnown:    true,
+			producerPresent: true,
+		},
+		{
+			name:            "complete_without_producer",
+			readyState:      webmcp.DocumentReadyStateComplete,
+			loading:         false,
+			loadingKnown:    true,
+			producerPresent: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseExecutor := &recordingExecutor{}
+			protocolExecutor := &callbackExecutor{base: baseExecutor}
+			probeResult, err := json.Marshal(map[string]any{
+				"producer_present":       test.producerPresent,
+				"catalog_ready":          test.producerPresent,
+				"tool_count":             0,
+				"document_ready_state":   test.readyState,
+				"document_loading":       test.loading,
+				"document_loading_known": test.loadingKnown,
+			})
+			if err != nil {
+				t.Fatalf("marshal probe result: %v", err)
+			}
+			protocolExecutor.onResult = func(method string, result any) {
+				if method != runtime.CommandEvaluate {
+					return
+				}
+				returns, ok := result.(*runtime.EvaluateReturns)
+				if !ok {
+					t.Fatalf("Runtime.evaluate result = %T, want *runtime.EvaluateReturns", result)
+				}
+				returns.Result = &runtime.RemoteObject{Value: jsontext.Value(probeResult)}
+			}
+			handle := testHandle(baseExecutor)
+			handle.browserExecutor = protocolExecutor
+			targetContext, rawCancel := chromedp.NewContext(context.Background())
+			protocolTarget := &chromedp.Target{
+				SessionID: cdpTarget.SessionID("session-readiness-" + test.name),
+				TargetID:  cdpTarget.ID("target-readiness-" + test.name),
+			}
+			chromedp.FromContext(targetContext).Target = protocolTarget
+			session := newTargetSession(handle, targetContext, rawCancel, webmcp.Target{
+				BrowserID: handle.candidate.ID,
+				ID:        webmcp.TargetID(protocolTarget.TargetID),
+				Type:      "page",
+				URL:       "https://example.test/readiness/" + test.name,
+			}, webmcp.TargetOwnershipExternal)
+			session.setProtocolTarget(protocolTarget)
+			session.runAction = func(ctx context.Context, actions ...chromedp.Action) error {
+				actionContext := cdp.WithExecutor(ctx, protocolExecutor)
+				for _, action := range actions {
+					if err := action.Do(actionContext); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			handle.sessions[session] = struct{}{}
+			defer func() {
+				if err := session.Close(); err != nil {
+					t.Errorf("close readiness session: %v", err)
+				}
+			}()
+
+			if err := session.EnableWebMCP(context.Background()); err != nil {
+				t.Fatalf("enable WebMCP: %v", err)
+			}
+			page := session.Context()
+			if page.DocumentReadyState != test.readyState || page.DocumentLoading != test.loading || page.DocumentLoadingKnown != test.loadingKnown {
+				t.Fatalf("document readiness = %+v, want state=%q loading=%t known=%t", page, test.readyState, test.loading, test.loadingKnown)
+			}
+			if page.CatalogReady || page.Ready {
+				t.Fatalf("page readiness = %+v, want no catalog readiness from producer-less probe", page)
+			}
+		})
 	}
 }
 

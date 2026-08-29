@@ -109,6 +109,13 @@ func (s *productionTargetSession) Context() webmcp.PageContext {
 	if s.target.Generation > 0 {
 		page.Generation = s.target.Generation
 	}
+	if page.DocumentReadyState == "" {
+		page.DocumentReadyState = s.target.DocumentReadyState
+	}
+	if !page.DocumentLoadingKnown && s.target.DocumentLoadingKnown {
+		page.DocumentLoading = s.target.DocumentLoading
+		page.DocumentLoadingKnown = true
+	}
 	return page
 }
 

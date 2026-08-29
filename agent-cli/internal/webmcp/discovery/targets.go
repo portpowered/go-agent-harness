@@ -529,6 +529,9 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 		target.PageToolsReady = capabilities.PageToolsReady
 		target.PageToolsKnown = capabilities.PageToolsKnown
 		target.PageToolsEvidence = strings.TrimSpace(capabilities.PageToolsEvidence)
+		target.DocumentReadyState = strings.TrimSpace(capabilities.DocumentReadyState)
+		target.DocumentLoading = capabilities.DocumentLoading
+		target.DocumentLoadingKnown = capabilities.DocumentLoadingKnown
 		if capabilities.ToolCount >= 0 {
 			target.ToolCount = capabilities.ToolCount
 			target.ToolCountKnown = capabilities.ToolCountKnown || capabilities.ToolCount >= 0
@@ -807,6 +810,9 @@ func targetSnapshotPayload(snapshot TargetSnapshot) map[string]any {
 			"page_tools_ready":        target.PageToolsReady,
 			"page_tools_known":        target.PageToolsKnown,
 			"page_tools_evidence":     target.PageToolsEvidence,
+			"document_ready_state":    target.DocumentReadyState,
+			"document_loading":        target.DocumentLoading,
+			"document_loading_known":  target.DocumentLoadingKnown,
 			"tool_count":              target.ToolCount,
 			"eligible":                target.Eligible,
 		})
