@@ -267,6 +267,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		plan.loop.RequireTerminalAssistantResponse = true
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
+	plan.loop.toolLifecycleObserver = recording
 	if plan.inferencer != nil {
 		plan.inferencer = &sessionDirectoryRecordingInferencer{
 			inner:     plan.inferencer,
@@ -349,6 +350,7 @@ func runSessionWithRecordingDirectory(
 	}
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
+	plan.loop.toolLifecycleObserver = recording
 	if plan.inferencer != nil {
 		plan.inferencer = &sessionDirectoryRecordingInferencer{
 			inner:     plan.inferencer,
@@ -565,6 +567,7 @@ type sessionDirectoryRecording struct {
 	clock       *platformclock.Deterministic
 	metadata    transcript.RecordingMetadata
 	writeFile   transcript.RecordingWriteFile
+	credentials []string
 
 	mu           sync.Mutex
 	eventMu      sync.Mutex
@@ -597,7 +600,39 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 			Model:     sessionRecordingModel(opts, plan),
 			ClockBase: base.Format(time.RFC3339Nano),
 		},
+		credentials: sessionRecordingCredentials(opts, plan),
 	}
+}
+
+func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {
+	var credentials []string
+	appendCredential := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		for _, existing := range credentials {
+			if existing == value {
+				return
+			}
+		}
+		credentials = append(credentials, value)
+	}
+	appendCredential(opts.APIKey)
+	if opts.LoadedConfig == nil {
+		return credentials
+	}
+	switch strings.ToLower(strings.TrimSpace(plan.provider)) {
+	case sessionProviderGrok:
+		if opts.LoadedConfig.Model.Grok != nil {
+			appendCredential(opts.LoadedConfig.Model.Grok.APIKey)
+		}
+	case sessionProviderOpenAI:
+		if opts.LoadedConfig.Model.OpenAI != nil {
+			appendCredential(opts.LoadedConfig.Model.OpenAI.APIKey)
+		}
+	}
+	return credentials
 }
 
 func sessionRecordingModel(opts SessionRunOptions, plan sessionRuntimePlan) string {
@@ -791,6 +826,24 @@ func (r *sessionDirectoryRecording) observe(msg messages.StreamMessage, outbound
 	r.observePayload(msg, payload, sessionRecordingAudio(msg), err, outbound)
 }
 
+func (r *sessionDirectoryRecording) observeToolCall(call messages.ToolCall) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.conversation.observeToolCall(call)
+	r.mu.Unlock()
+}
+
+func (r *sessionDirectoryRecording) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.conversation.observeToolResult(call, response, failed)
+	r.mu.Unlock()
+}
+
 func (r *sessionDirectoryRecording) observePayload(msg messages.StreamMessage, payload, audio []byte, err error, outbound bool) {
 	r.eventMu.Lock()
 	defer r.eventMu.Unlock()
@@ -916,6 +969,7 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			OutputSegments:   copySessionRecordingSegments(r.output),
 			SessionLog:       sessionLog,
 			Metadata:         r.metadata,
+			Credentials:      append([]string(nil), r.credentials...),
 			Terminal:         cloneSessionRecordingTerminalSummary(r.terminal),
 			WriteFile:        r.writeFile,
 		}
@@ -944,3 +998,4 @@ func copySessionRecordingSegments(segments [][]byte) [][]byte {
 var _ messages.SessionInferencer = (*sessionDirectoryRecordingInferencer)(nil)
 var _ messages.Session = (*sessionDirectoryRecordingSession)(nil)
 var _ messages.SessionSendOutcomeSender = (*sessionDirectoryRecordingSession)(nil)
+var _ sessionToolLifecycleObserver = (*sessionDirectoryRecording)(nil)

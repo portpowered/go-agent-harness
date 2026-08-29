@@ -55,28 +55,40 @@ func (c *productionWebMCPCatalog) ListTargets(ctx context.Context, candidate web
 }
 
 type productionTargetSession struct {
-	raw       webmcp.TargetSession
-	target    webmcp.Target
-	events    chan webmcp.BrowserEvent
-	done      chan struct{}
-	stop      chan struct{}
-	flush     chan chan struct{}
-	stopOnce  sync.Once
-	closeOnce sync.Once
-	closeErr  error
+	raw              webmcp.TargetSession
+	target           webmcp.Target
+	rawGeneration    uint64
+	publicGeneration uint64
+	events           chan webmcp.BrowserEvent
+	done             chan struct{}
+	stop             chan struct{}
+	flush            chan chan struct{}
+	stopOnce         sync.Once
+	closeOnce        sync.Once
+	closeErr         error
 }
 
 func newProductionWebMCPSession(raw webmcp.TargetSession, target webmcp.Target) (webmcp.TargetSession, error) {
 	if raw == nil {
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorTargetAttachFailed, "the selected browser target could not be initialized", nil)
 	}
+	rawGeneration := raw.Context().Generation
+	if rawGeneration == 0 {
+		rawGeneration = 1
+	}
+	publicGeneration := target.Generation
+	if publicGeneration == 0 {
+		publicGeneration = rawGeneration
+	}
 	session := &productionTargetSession{
-		raw:    raw,
-		target: target,
-		events: make(chan webmcp.BrowserEvent, 128),
-		done:   make(chan struct{}),
-		stop:   make(chan struct{}),
-		flush:  make(chan chan struct{}),
+		raw:              raw,
+		target:           target,
+		rawGeneration:    rawGeneration,
+		publicGeneration: publicGeneration,
+		events:           make(chan webmcp.BrowserEvent, 128),
+		done:             make(chan struct{}),
+		stop:             make(chan struct{}),
+		flush:            make(chan chan struct{}),
 	}
 	go session.forwardEvents()
 	return session, nil
@@ -211,13 +223,20 @@ func (s *productionTargetSession) forwardEvent(event webmcp.BrowserEvent) bool {
 	event.BrowserID = s.target.BrowserID
 	event.TargetID = s.target.ID
 	if event.Generation == 0 {
-		event.Generation = s.target.Generation
+		event.Generation = s.publicGeneration
+	} else {
+		event.Generation = s.publicGenerationForRawGeneration(event.Generation)
+	}
+	if event.PreviousGeneration != 0 {
+		event.PreviousGeneration = s.publicGenerationForRawGeneration(event.PreviousGeneration)
 	}
 	for index := range event.Tools {
 		event.Tools[index].BrowserID = s.target.BrowserID
 		event.Tools[index].TargetID = s.target.ID
 		if event.Tools[index].Generation == 0 {
 			event.Tools[index].Generation = event.Generation
+		} else {
+			event.Tools[index].Generation = s.publicGenerationForRawGeneration(event.Tools[index].Generation)
 		}
 	}
 	select {
@@ -226,4 +245,22 @@ func (s *productionTargetSession) forwardEvent(event webmcp.BrowserEvent) bool {
 	case <-s.stop:
 		return false
 	}
+}
+
+// publicGenerationForRawGeneration rebases the Chrome adapter's session-local
+// document counter onto the discovery generation carried by the persisted
+// selection. A newly attached Chrome target starts its neutral counter at one,
+// while a reconnect may intentionally resume at a later public generation.
+func (s *productionTargetSession) publicGenerationForRawGeneration(rawGeneration uint64) uint64 {
+	if s == nil || rawGeneration == 0 || s.rawGeneration == 0 {
+		return rawGeneration
+	}
+	if rawGeneration < s.rawGeneration {
+		return rawGeneration
+	}
+	delta := rawGeneration - s.rawGeneration
+	if delta > ^uint64(0)-s.publicGeneration {
+		return ^uint64(0)
+	}
+	return s.publicGeneration + delta
 }

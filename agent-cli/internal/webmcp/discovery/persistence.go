@@ -888,7 +888,11 @@ func (s *Service) reconnectPersisted(ctx context.Context, inputs ConnectionInput
 		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "endpoint_changed")
 	}
 	if persisted.BrowserInstanceID != "" && normalizedBrowserInstanceID(browser) != persisted.BrowserInstanceID {
-		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "browser_instance_changed")
+		// The public browser locator is intentionally stable across fresh
+		// services. A changed incarnation therefore reaches this branch instead
+		// of looking like a missing browser ID; the persisted selection is still
+		// stale because its exact browser instance is gone.
+		return Selection{}, newStaleSelection(persisted.BrowserID, persisted.TargetID, persisted.Generation, "browser_missing_after_reconnect")
 	}
 
 	s.mu.Lock()
@@ -1048,12 +1052,16 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 	}
 	if options.Activate && s.activator != nil {
 		if activateErr := s.activator.Activate(ctx, browser, target); activateErr != nil {
-			if handle != nil {
-				_ = handle.Close()
-			}
 			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
-			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
-			return Selection{}, nil, failure
+			if failure.Code == CodeBrowserDisconnected {
+				if handle != nil {
+					_ = handle.Close()
+				}
+				s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
+				return Selection{}, nil, failure
+			}
+			// Foreground activation is ancillary. Keep the exact reconnect
+			// selection when the browser remains reachable and attachable.
 		}
 	}
 	if selectedAt.IsZero() {

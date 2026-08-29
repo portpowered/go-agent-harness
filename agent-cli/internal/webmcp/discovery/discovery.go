@@ -677,17 +677,15 @@ func browserIDForIdentity(mapper IDMapper, identity BrowserIdentity) string {
 	if mapper == nil {
 		mapper = HashIDMapper{}
 	}
-	baseIdentity := identity
-	if identity.BrowserInstanceID != "" {
-		// An explicit incarnation claim is stronger than the websocket path;
-		// keep the public ID stable if routing changes within one instance.
-		baseIdentity.Path = ""
-	}
-	publicID := normalizePublicID(mapper.BrowserID(baseIdentity), baseIdentity)
-	if identity.BrowserInstanceID != "" {
-		publicID = browserInstanceScopedID(publicID, browserIdentityClaim(identity))
-	}
-	return publicID
+	// BrowserInstanceID is a continuity claim, not part of the public
+	// selector. It may be supplied by an adapter that has process-local
+	// bookkeeping, and including it here would make a reference emitted by
+	// `tabs` unusable by the next process. Keep the stable endpoint identity
+	// (including the browser websocket path when available) as the locator;
+	// persisted reconnects compare the separate BrowserInstanceID claim.
+	stableIdentity := identity
+	stableIdentity.BrowserInstanceID = ""
+	return normalizePublicID(mapper.BrowserID(stableIdentity), stableIdentity)
 }
 
 // BrowserIDForVersion derives a candidate ID from a protocol version
@@ -713,11 +711,6 @@ func normalizedBrowserInstanceID(browser BrowserCandidate) string {
 		return ""
 	}
 	return browserIdentityClaim(BrowserIdentity{BrowserInstanceID: value})
-}
-
-func browserInstanceScopedID(publicID, instanceID string) string {
-	digest := sha256.Sum256([]byte("browser-instance\x00" + publicID + "\x00" + instanceID))
-	return "browser-" + hex.EncodeToString(digest[:12])
 }
 
 func browserReplacementID(publicID, instanceID string) string {

@@ -28,6 +28,14 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// Initialize is called synchronously after capability construction and
+	// before the session provider can issue a browser tool call. Implementations
+	// retain a classified failed state in the executor when initialization
+	// returns an error, so a stale selection is observable instead of becoming
+	// an identity-free selection_not_connected result.
+	Initialize func(context.Context) error
+	// Status reports the explicit lifecycle state of an optional capability.
+	Status func() SessionCapabilityStatus
 	// BrowserWatch exposes the already-owned broker observation stream to an
 	// opt-in live session input boundary. It is nil for non-browser capability
 	// sets; callers must use the returned context to stop the watch.
@@ -35,6 +43,31 @@ type SessionToolCapabilities struct {
 	// Close transfers ownership of any capability resources to the session
 	// coordinator. Nil means this capability has no closeable resources.
 	Close func() error
+}
+
+// SessionCapabilityState is the lifecycle state of a request-scoped session
+// capability. Browser capabilities begin initializing, then become ready or
+// retain a classified failure for every subsequent tool call.
+type SessionCapabilityState string
+
+const (
+	SessionCapabilityInitializing SessionCapabilityState = "initializing"
+	SessionCapabilityReady        SessionCapabilityState = "ready"
+	SessionCapabilityFailed       SessionCapabilityState = "failed"
+)
+
+// SessionCapabilityStatus is a read-only snapshot of capability setup.
+type SessionCapabilityStatus struct {
+	State SessionCapabilityState
+	Err   error
+}
+
+// SessionCapabilityInitializer is the optional lifecycle seam exposed by a
+// browser-backed capability set. It is deliberately separate from the frozen
+// messages.ToolExecutor interface.
+type SessionCapabilityInitializer interface {
+	InitializeSession(context.Context) error
+	SessionCapabilityStatus() SessionCapabilityStatus
 }
 
 // SessionToolCapabilitiesFactory builds the session tool surface from the
@@ -360,6 +393,14 @@ func (c *SessionCommand) SetSessionRTCRuntimeFactory(factory services.SessionRTC
 }
 
 // Generate returns the cobra command for the session group.
+// sessionCommandLongHelp is the session command long help, hoisted out of
+// Generate to keep the constructor within the function-length gate.
+const sessionCommandLongHelp = "Run a bidirectional session inference capture or replay a session capture file.\n" +
+	"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
+	"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
+	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
+	"Session history management remains available through the show, list, and delete subcommands."
+
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
 	var voice string
@@ -382,12 +423,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
-		Long: "Run a bidirectional session inference capture or replay a session capture file.\n" +
-			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
-			"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
-			"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
-			"Session history management remains available through the show, list, and delete subcommands.",
-		Args: cobra.ArbitraryArgs,
+		Long:  sessionCommandLongHelp,
+		Args:  cobra.ArbitraryArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
 			return services.ValidateOpenAIRealtimeVoice(voice)
 		},
@@ -489,6 +526,13 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				capabilities, err := c.sessionToolCapabilities(loadedConfig)
 				if err != nil {
 					return fmt.Errorf("configure session tools: %w", err)
+				}
+				if capabilities.Initialize != nil {
+					// Initialization is deliberately completed before the provider
+					// receives the executor. A failed initializer remains represented by
+					// the broker's classified failed state, allowing the session to keep
+					// static tools while refusing every browser dispatch.
+					_ = capabilities.Initialize(sessionContext)
 				}
 				toolExecutor = capabilities.Executor
 				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)

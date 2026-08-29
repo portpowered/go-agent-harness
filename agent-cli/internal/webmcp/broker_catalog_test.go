@@ -13,6 +13,111 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 )
 
+func TestStatefulBrokerKeepsExactSelectionUsableWhenActivationFails(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-headless", Product: "Chrome/Test", Loopback: true}
+	target := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        "tab-headless",
+		Type:      "page",
+		Title:     "Headless page",
+		URL:       "https://fixture.test/headless",
+		Origin:    "https://fixture.test",
+	}
+	activationErr := errors.New("foreground activation rejected by headless Chrome")
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+		Candidate:     candidate,
+		ActivateError: activationErr,
+		Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			target,
+			testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
+		)},
+	})
+	defer func() { _ = runtime.Close() }()
+
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:    runtime,
+		Discoverer: staticDiscoverer{candidate},
+	})
+	defer func() { _ = broker.Close() }()
+
+	selected, err := broker.SelectWithOptions(context.Background(), webmcp.TargetSelector{
+		BrowserID: candidate.ID,
+		TargetID:  target.ID,
+	}, webmcp.SelectOptions{Activate: true})
+	if err != nil {
+		t.Fatalf("selection with live activation failure: %v", err)
+	}
+	if selected.Key.BrowserID != candidate.ID || selected.Key.TargetID != target.ID ||
+		!selected.Connected || !selected.Ready || !selected.CatalogReady || selected.Generation == 0 {
+		t.Fatalf("selected context = %#v, want exact connected ready selection", selected)
+	}
+	if _, err := broker.Selected(context.Background()); err != nil {
+		t.Fatalf("selected context after activation failure: %v", err)
+	}
+	tools, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
+	if err != nil {
+		t.Fatalf("list tools after activation failure: %v", err)
+	}
+	if len(tools.Tools) != 1 || tools.Tools[0].Name != "read_state" {
+		t.Fatalf("catalog after activation failure = %#v", tools.Tools)
+	}
+
+	var operations []testkit.OperationKind
+	for _, operation := range runtime.Operations() {
+		operations = append(operations, operation.Kind)
+	}
+	positions := make(map[testkit.OperationKind]int, len(operations))
+	for index, operation := range operations {
+		if _, exists := positions[operation]; !exists {
+			positions[operation] = index
+		}
+	}
+	for _, kind := range []testkit.OperationKind{testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationEnableAcknowledged, testkit.OperationActivate} {
+		if _, ok := positions[kind]; !ok {
+			t.Fatalf("operations = %#v, missing %s", operations, kind)
+		}
+	}
+	if positions[testkit.OperationAttach] > positions[testkit.OperationActivate] || positions[testkit.OperationEnableAcknowledged] > positions[testkit.OperationActivate] {
+		t.Fatalf("operations = %#v, activation must follow attach and catalog readiness", operations)
+	}
+}
+
+func TestStatefulBrokerActivateReportsLiveOperationFailureWithoutReconnect(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-activate-only", Product: "Chrome/Test", Loopback: true}
+	target := webmcp.Target{BrowserID: candidate.ID, ID: "tab-activate-only", Type: "page"}
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+		Candidate:     candidate,
+		ActivateError: errors.New("activation operation rejected"),
+		Targets:       []testkit.TargetConfig{testkit.NewTargetConfig(target)},
+	})
+	defer func() { _ = runtime.Close() }()
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:    runtime,
+		Discoverer: staticDiscoverer{candidate},
+	})
+	defer func() { _ = broker.Close() }()
+
+	err := broker.Activate(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID})
+	if err == nil {
+		t.Fatal("activate unexpectedly succeeded")
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified.Code != webmcp.ErrorTargetAttachFailed {
+		t.Fatalf("activate error = %v (%T), want target_attach_failed", err, err)
+	}
+	if classified.Details["browser_id"] != string(candidate.ID) || classified.Details["target_id"] != string(target.ID) || classified.Details["phase"] != "activate" {
+		t.Fatalf("activate error details = %#v, want exact activation identity", classified.Details)
+	}
+	if _, exists := classified.Details["reconnect_required"]; exists {
+		t.Fatalf("live activation failure incorrectly requested reconnect: %#v", classified.Details)
+	}
+	for _, operation := range runtime.Operations() {
+		if operation.Kind == testkit.OperationAttach || operation.Kind == testkit.OperationEnableWebMCP || operation.Kind == testkit.OperationEnableAcknowledged {
+			t.Fatalf("activation-only command initialized WebMCP: %#v", runtime.Operations())
+		}
+	}
+}
+
 func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()

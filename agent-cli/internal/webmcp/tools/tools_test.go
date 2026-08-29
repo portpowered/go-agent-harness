@@ -3,11 +3,13 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -264,6 +266,95 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 	}
 }
 
+func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-headless", Product: "Chrome/Test", Loopback: true}
+	target := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        "tab-headless",
+		Type:      "page",
+		Title:     "Headless page",
+		URL:       "https://fixture.test/headless",
+		Origin:    "https://fixture.test",
+	}
+	tool := webmcp.ToolDescriptor{
+		Name:        "read_state",
+		Description: "Read fixture state",
+		InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		FrameID:     "frame-1",
+		Origin:      target.Origin,
+	}
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+		Candidate:     candidate,
+		ActivateError: errors.New("foreground activation rejected by headless Chrome"),
+		Targets: []testkit.TargetConfig{
+			testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool)),
+		},
+	})
+	defer func() { _ = runtime.Close() }()
+	browser := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:    runtime,
+		Discoverer: staticToolTestDiscoverer{candidate: candidate},
+	})
+	defer func() { _ = browser.Close() }()
+	executor := NewExecutor(browser)
+
+	selected, err := executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "call-select-headless",
+		Name:      webmcp.SelectTabToolName,
+		Arguments: `{"browser_id":"browser-headless","target_id":"tab-headless","activate":true}`,
+	})
+	if err != nil {
+		t.Fatalf("select tab after activation failure: %v", err)
+	}
+	selectionEnvelope, err := webmcp.UnmarshalToolResult([]byte(selected.Content))
+	if err != nil {
+		t.Fatalf("decode selection envelope: %v", err)
+	}
+	if !selectionEnvelope.OK {
+		t.Fatalf("selection envelope = %#v, want success", selectionEnvelope)
+	}
+	var selectionData struct {
+		BrowserID webmcp.BrowserID `json:"browser_id"`
+		TargetID  webmcp.TargetID  `json:"target_id"`
+		Connected bool             `json:"connected"`
+		Ready     bool             `json:"ready"`
+	}
+	if err := json.Unmarshal(selectionEnvelope.Data, &selectionData); err != nil {
+		t.Fatalf("decode selection data: %v", err)
+	}
+	if selectionData.BrowserID != candidate.ID || selectionData.TargetID != target.ID || !selectionData.Connected || !selectionData.Ready {
+		t.Fatalf("selection data = %#v, want exact connected ready selection", selectionData)
+	}
+
+	listed, err := executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "call-list-tools-headless",
+		Name:      webmcp.ListToolsToolName,
+		Arguments: `{"include_schemas":true}`,
+	})
+	if err != nil {
+		t.Fatalf("list tools after activation failure: %v", err)
+	}
+	listEnvelope, err := webmcp.UnmarshalToolResult([]byte(listed.Content))
+	if err != nil {
+		t.Fatalf("decode list-tools envelope: %v", err)
+	}
+	if !listEnvelope.OK {
+		t.Fatalf("list-tools envelope = %#v, want success", listEnvelope)
+	}
+	var data struct {
+		Generation uint64 `json:"generation"`
+		Tools      []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(listEnvelope.Data, &data); err != nil {
+		t.Fatalf("decode list-tools data: %v", err)
+	}
+	if data.Generation == 0 || len(data.Tools) != 1 || data.Tools[0].Name != tool.Name {
+		t.Fatalf("list-tools data = %#v, want ready catalog", data)
+	}
+}
+
 func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
 	broker := &recordingBroker{selected: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1}}
 	set := NewToolSet(broker)
@@ -376,6 +467,14 @@ func mustRawJSON(t *testing.T, value any) []byte {
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+type staticToolTestDiscoverer struct {
+	candidate webmcp.BrowserCandidate
+}
+
+func (d staticToolTestDiscoverer) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
+	return []webmcp.BrowserCandidate{d.candidate}, nil
+}
 
 func mapKeysInContractOrder(name string, properties map[string]any) []string {
 	orders := map[string][]string{

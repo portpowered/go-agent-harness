@@ -580,6 +580,12 @@ func (h *ScriptedBrowserHandle) Activate(ctx context.Context, targetID webmcp.Ta
 	if controlDisconnected {
 		return disconnectedError(candidateID, targetID, "activate", "browser_disconnected")
 	}
+	h.mu.Lock()
+	activateErr := h.activateError
+	h.mu.Unlock()
+	if activateErr != nil {
+		return activateErr
+	}
 	if blocked {
 		select {
 		case <-ctx.Done():

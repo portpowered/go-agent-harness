@@ -197,6 +197,9 @@ func resolveSessionBrowserConfig(globalFlags *flags.GlobalFlags, cmd *cobra.Comm
 	}
 	resolved := *loaded
 	resolved.Browser = resolvedBrowser
+	// Keep the command's config-directory override attached to this resolved
+	// snapshot so request-scoped browser persistence follows the same -C path.
+	resolved.ConfigDir = configDir
 	return &resolved, nil
 }
 

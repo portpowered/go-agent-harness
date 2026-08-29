@@ -920,6 +920,18 @@ func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) conf
 func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, broker webmcp.Broker, browser config.BrowserConfig) (webmcp.BrowserCandidate, webmcp.Target, *WebMCPSelection, error) {
 	browserID := browser.Selection.Browser
 	targetID := browser.Selection.Tab
+	if refBrowserID, refTargetID, composite := splitCompositeTargetRef(targetID); composite {
+		if browserID != "" && browserID != refBrowserID {
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "the target reference names a different browser than the explicit browser selector", map[string]any{
+				"browser_id":          normalizeDirectOpaqueID(browserID),
+				"target_id":           normalizeDirectOpaqueID(refTargetID),
+				"selected_generation": uint64(0),
+				"reason":              "selector_browser_mismatch",
+			})
+		}
+		browserID = refBrowserID
+		targetID = refTargetID
+	}
 	stored := (*WebMCPSelection)(nil)
 
 	// Explicit command selectors take precedence over both config and the

@@ -153,13 +153,18 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	}
 	if request.Activate && s.activator != nil {
 		if activateErr := s.activator.Activate(ctx, browser, target); activateErr != nil {
-			if handle != nil {
-				_ = handle.Close()
-			}
 			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
-			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
-			s.mu.Unlock()
-			return Selection{}, failure
+			if failure.Code == CodeBrowserDisconnected {
+				if handle != nil {
+					_ = handle.Close()
+				}
+				s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
+				s.mu.Unlock()
+				return Selection{}, failure
+			}
+			// Foreground activation is ancillary. A live target can reject
+			// activation (for example, in headless mode) while remaining a
+			// valid connected WebMCP selection.
 		}
 	}
 

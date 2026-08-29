@@ -36,6 +36,11 @@ type Config struct {
 	// Browser settings never activate a model session by themselves; the
 	// session command owns that admission decision.
 	Browser BrowserConfig `koanf:"browser" yaml:"browser"`
+	// ConfigDir is runtime metadata supplied by the command that loaded this
+	// snapshot. It is intentionally excluded from persisted configuration; the
+	// session capability factory uses it to bind selection persistence to the
+	// same -C directory as the effective browser configuration.
+	ConfigDir string `koanf:"-" yaml:"-" json:"-"`
 }
 
 const (

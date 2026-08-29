@@ -134,6 +134,37 @@ func TestDiscoverHTTPVersionNormalizesAndRedacts(t *testing.T) {
 	}
 }
 
+func TestBrowserSelectorIDIgnoresEphemeralIncarnationMetadata(t *testing.T) {
+	const browserWebSocket = "ws://127.0.0.1:9222/devtools/browser/stable"
+	first, ok := BrowserIDForVersion(HashIDMapper{}, BrowserVersion{
+		Browser:              "Chrome/151",
+		ProtocolVersion:      "1.3",
+		WebSocketDebuggerURL: browserWebSocket,
+		BrowserInstanceID:    "process-one",
+	})
+	if !ok {
+		t.Fatal("first browser version did not produce an ID")
+	}
+	second, ok := BrowserIDForVersion(HashIDMapper{}, BrowserVersion{
+		Browser:              "Chrome/151",
+		ProtocolVersion:      "1.3",
+		WebSocketDebuggerURL: browserWebSocket,
+		BrowserInstanceID:    "process-two",
+	})
+	if !ok {
+		t.Fatal("second browser version did not produce an ID")
+	}
+	if first != second {
+		t.Fatalf("browser selector IDs changed with process-local incarnation: first=%q second=%q", first, second)
+	}
+
+	firstTarget := HashTargetIDMapper{}.TargetID(TargetIdentity{BrowserID: first, RawID: "raw-tab"})
+	secondTarget := HashTargetIDMapper{}.TargetID(TargetIdentity{BrowserID: second, RawID: "raw-tab"})
+	if firstTarget != secondTarget {
+		t.Fatalf("target selector ID changed with process-local incarnation: first=%q second=%q", firstTarget, secondTarget)
+	}
+}
+
 func TestBrowserCatalogLookupIsExactAndSorted(t *testing.T) {
 	service := &Service{browsers: map[string]BrowserCandidate{
 		"browser-b": {ID: "browser-b", Product: "Beta"},

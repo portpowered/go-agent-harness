@@ -4,9 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+const (
+	sessionToolEventTypeCall   = "tool_call"
+	sessionToolEventTypeResult = "tool_result"
+	sessionToolEventStatusDone = "completed"
+	sessionToolEventStatusFail = "failed"
+
+	// Tool arguments and flat results are kept as strings so protocol-native
+	// envelopes (including webmcp.tool-result.v1) remain one JSON string value
+	// in session-log.jsonl. The bound prevents a provider or tool from making a
+	// session log unshareably large; the recording bundle still applies its
+	// normal credential redaction pass afterwards.
+	maxSessionToolEventValueBytes = 64 * 1024
+)
+
+// sessionToolLifecycleObserver is the shared execution-boundary hook used by
+// a directory recording. It intentionally observes tool calls where the
+// composed executor runs, rather than provider debug frames, so each observed
+// invocation has exactly one corresponding result.
+type sessionToolLifecycleObserver interface {
+	observeToolCall(messages.ToolCall)
+	observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
+}
 
 // The conversation log turns the raw both-side frame transcript of a session
 // recording into an ordered, machine-readable per-turn summary: what the user
@@ -34,9 +58,66 @@ type sessionConversationTurnResponse struct {
 // sessionConversationLogEntry is one JSONL line of session-log.jsonl. Field
 // order is pinned by declaration so logs diff cleanly across runs.
 type sessionConversationLogEntry struct {
-	TurnIndex int                             `json:"turn_index"`
-	Input     sessionConversationTurnInput    `json:"input"`
-	Response  sessionConversationTurnResponse `json:"response"`
+	TurnIndex  int                             `json:"turn_index"`
+	Input      sessionConversationTurnInput    `json:"input"`
+	Response   sessionConversationTurnResponse `json:"response"`
+	ToolEvents []sessionConversationToolEvent  `json:"tool_events,omitempty"`
+}
+
+// sessionConversationToolEvent is the durable, per-session ordered lifecycle
+// record. Calls and results use type-specific JSON fields so an empty result
+// still carries an explicit content value while call entries never advertise a
+// result status.
+type sessionConversationToolEvent struct {
+	Sequence   uint64
+	Type       string
+	ToolCallID string
+	ToolName   string
+	Arguments  string
+	Status     string
+	Content    string
+}
+
+func (e sessionConversationToolEvent) MarshalJSON() ([]byte, error) {
+	switch e.Type {
+	case sessionToolEventTypeCall:
+		return json.Marshal(struct {
+			Sequence   uint64 `json:"sequence"`
+			Type       string `json:"type"`
+			ToolCallID string `json:"tool_call_id"`
+			ToolName   string `json:"tool_name"`
+			Arguments  string `json:"arguments"`
+		}{
+			Sequence: e.Sequence, Type: e.Type, ToolCallID: e.ToolCallID,
+			ToolName: e.ToolName, Arguments: e.Arguments,
+		})
+	case sessionToolEventTypeResult:
+		return json.Marshal(struct {
+			Sequence   uint64 `json:"sequence"`
+			Type       string `json:"type"`
+			ToolCallID string `json:"tool_call_id"`
+			ToolName   string `json:"tool_name"`
+			Status     string `json:"status"`
+			Content    string `json:"content"`
+		}{
+			Sequence: e.Sequence, Type: e.Type, ToolCallID: e.ToolCallID,
+			ToolName: e.ToolName, Status: e.Status, Content: e.Content,
+		})
+	default:
+		return json.Marshal(struct {
+			Sequence   uint64 `json:"sequence"`
+			Type       string `json:"type"`
+			ToolCallID string `json:"tool_call_id"`
+			ToolName   string `json:"tool_name"`
+			Arguments  string `json:"arguments,omitempty"`
+			Status     string `json:"status,omitempty"`
+			Content    string `json:"content,omitempty"`
+		}{
+			Sequence: e.Sequence, Type: e.Type, ToolCallID: e.ToolCallID,
+			ToolName: e.ToolName, Arguments: e.Arguments, Status: e.Status,
+			Content: e.Content,
+		})
+	}
 }
 
 // sessionConversationTurn accumulates stream observations for the turn in
@@ -53,21 +134,57 @@ type sessionConversationTurn struct {
 	outputAudioBytes uint64
 	outputSegments   []string
 	complete         bool
+	toolEvents       []sessionConversationToolEvent
+	toolCallMessage  bool
 }
 
 // observed reports whether any conversational content was recorded for the
 // turn; empty bracket turns (for example a bare session handshake) are not
 // logged at all.
 func (t *sessionConversationTurn) observed() bool {
-	return t.inputText != "" || t.inputTranscript.Len() > 0 || t.inputFullText != "" || t.inputAudioBytes > 0 || t.responseDeltas.Len() > 0 || t.responseFullText != "" || t.outputAudioBytes > 0
+	return t.inputText != "" || t.inputTranscript.Len() > 0 || t.inputFullText != "" || t.inputAudioBytes > 0 || t.responseDeltas.Len() > 0 || t.responseFullText != "" || t.outputAudioBytes > 0 || len(t.toolEvents) > 0
 }
 
 // sessionConversationCollector reduces observed stream messages into ordered
 // turn entries. A turn closes when the assistant MESSAGE.END crosses the
 // recorder; anything observed afterwards starts the next turn.
 type sessionConversationCollector struct {
-	closed  []sessionConversationTurn
-	current sessionConversationTurn
+	closed           []sessionConversationTurn
+	current          sessionConversationTurn
+	nextToolSequence uint64
+}
+
+func (c *sessionConversationCollector) observeToolCall(call messages.ToolCall) {
+	if c == nil {
+		return
+	}
+	c.nextToolSequence++
+	c.current.toolEvents = append(c.current.toolEvents, sessionConversationToolEvent{
+		Sequence:   c.nextToolSequence,
+		Type:       sessionToolEventTypeCall,
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		Arguments:  boundSessionToolEventValue(call.Arguments),
+	})
+}
+
+func (c *sessionConversationCollector) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
+	if c == nil {
+		return
+	}
+	c.nextToolSequence++
+	status := sessionToolEventStatusDone
+	if failed {
+		status = sessionToolEventStatusFail
+	}
+	c.current.toolEvents = append(c.current.toolEvents, sessionConversationToolEvent{
+		Sequence:   c.nextToolSequence,
+		Type:       sessionToolEventTypeResult,
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		Status:     status,
+		Content:    boundSessionToolEventValue(response.Content),
+	})
 }
 
 func (c *sessionConversationCollector) closeTurn() {
@@ -132,6 +249,13 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 				turn.responseFullText = transcript.FullText
 			}
 		}
+	case messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd:
+		if !outbound {
+			// A provider tool-call MESSAGE.END is an intermediate assistant
+			// boundary. Keep this turn open so the execution-boundary result and
+			// its later continuation remain correlated with the spoken turn.
+			turn.toolCallMessage = true
+		}
 	case messages.StreamTypeMessageEnd:
 		if outbound {
 			// End-of-turn control plane: commit plus response.create on the
@@ -139,6 +263,10 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 			// the carrier of meaning here. The user side of this turn is now
 			// complete.
 			turn.inputCommitted = true
+			return
+		}
+		if turn.toolCallMessage {
+			turn.toolCallMessage = false
 			return
 		}
 		c.closeTurn()
@@ -179,9 +307,22 @@ func (c *sessionConversationCollector) entries() []sessionConversationLogEntry {
 				AudioBytes:    turn.outputAudioBytes,
 				AudioSegments: turn.outputSegments,
 			},
+			ToolEvents: append([]sessionConversationToolEvent(nil), turn.toolEvents...),
 		})
 	}
 	return log
+}
+
+func boundSessionToolEventValue(value string) string {
+	if len(value) <= maxSessionToolEventValueBytes {
+		return value
+	}
+	const suffix = "...[truncated]"
+	limit := maxSessionToolEventValueBytes - len(suffix)
+	for limit > 0 && !utf8.ValidString(value[:limit]) {
+		limit--
+	}
+	return value[:limit] + suffix
 }
 
 // sessionConversationLogJSON renders the collector snapshot as JSONL bytes.

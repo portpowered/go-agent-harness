@@ -117,6 +117,130 @@ browser:
 	}
 }
 
+func TestProductionWebMCPSessionRebasesRawGenerationForPersistedSelection(t *testing.T) {
+	runtime := &productionFakeRuntime{}
+	raw := &productionFakeSession{
+		runtime: runtime,
+		page: webmcp.PageContext{
+			Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "target-a"},
+			Generation: 1,
+			Connected:  true,
+		},
+		tool: webmcp.ToolDescriptor{
+			Name:        "read_state",
+			FrameID:     "frame-a",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	sessionValue, err := newProductionWebMCPSession(raw, webmcp.Target{
+		BrowserID:  "browser-a",
+		ID:         "target-a",
+		Generation: 7,
+	})
+	if err != nil {
+		t.Fatalf("construct production session: %v", err)
+	}
+	defer func() { _ = sessionValue.Close() }()
+
+	if err := sessionValue.EnableWebMCP(context.Background()); err != nil {
+		t.Fatalf("enable production session: %v", err)
+	}
+	select {
+	case event := <-sessionValue.Events():
+		if event.Type != webmcp.EventToolsAdded || event.Generation != 7 || len(event.Tools) != 1 || event.Tools[0].Generation != 7 {
+			t.Fatalf("rebased production event = %+v, want generation seven", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for rebased production catalog event")
+	}
+}
+
+func TestProductionWebMCPCLIFreshTabsReferenceSurvivesIncarnationChurn(t *testing.T) {
+	var server *httptest.Server
+	var mu sync.Mutex
+	versionCalls := 0
+	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/json/version" {
+			http.NotFound(writer, request)
+			return
+		}
+		mu.Lock()
+		versionCalls++
+		instance := fmt.Sprintf("process-local-%d", versionCalls)
+		mu.Unlock()
+		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/stable"
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
+	}))
+	t.Cleanup(server.Close)
+
+	runtime := &productionFakeRuntime{
+		targets: []webmcp.Target{{
+			ID:               "raw-tab",
+			Type:             "page",
+			Title:            "Fresh-process fixture",
+			URL:              "https://fixture.test/page",
+			Origin:           "https://fixture.test",
+			WebSocketURL:     "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/page/raw-tab",
+			ContinuityMarker: "document-a",
+		}},
+		tool: webmcp.ToolDescriptor{
+			Name:        "read_state",
+			Description: "Read the fixture state.",
+			FrameID:     "frame-1",
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		},
+	}
+
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
+browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: %q
+  selection:
+    persist: true
+`, server.URL+"/json/version"))
+	newFactory := func() WebMCPDoctorFactory {
+		return NewProductionWebMCPDoctorFactory(
+			WithWebMCPProductionRuntime(runtime),
+			WithWebMCPProductionHTTPClient(server.Client()),
+		)
+	}
+
+	tabs := executeShippedWebMCPCommand(t, configDir, newFactory(), "tabs", "--eligible", "--json")
+	tabsEnvelope := requireDirectSuccess(t, tabs)
+	var tabsData WebMCPDirectTabsData
+	decodeDirectData(t, tabsEnvelope.Data, &tabsData)
+	if len(tabsData.Tabs) != 1 || tabsData.Tabs[0].BrowserID == "" || tabsData.Tabs[0].TargetID == "" || !tabsData.Tabs[0].Eligible {
+		t.Fatalf("fresh-process tabs = %+v", tabsData)
+	}
+	listed := tabsData.Tabs[0]
+
+	selected := executeShippedWebMCPCommand(t, configDir, newFactory(), "select", "--tab", listed.TargetID, "--json")
+	selectionEnvelope := requireDirectSuccess(t, selected)
+	var selectedData WebMCPDirectContext
+	decodeDirectData(t, selectionEnvelope.Data, &selectedData)
+	if selectedData.BrowserID != listed.BrowserID || selectedData.TargetID != listed.TargetID ||
+		!selectedData.Connected || !selectedData.Ready || !selectedData.CatalogReady || selectedData.Generation == 0 || selectedData.ToolCount != 1 {
+		t.Fatalf("fresh-process selection = %+v, listed=%+v", selectedData, listed)
+	}
+	selection, err := NewFileWebMCPSelectionStore(configDir).Load()
+	if err != nil {
+		t.Fatalf("load fresh-process selection: %v", err)
+	}
+	if selection.BrowserID != listed.BrowserID || selection.TargetID != listed.TargetID || selection.Generation == 0 || selection.Origin != listed.Origin || selection.ContinuityMarker == "" {
+		t.Fatalf("persisted fresh-process selection = %+v, listed=%+v", selection, listed)
+	}
+	mu.Lock()
+	gotVersionCalls := versionCalls
+	mu.Unlock()
+	if gotVersionCalls != 2 {
+		t.Fatalf("version calls = %d, want one discovery per CLI process", gotVersionCalls)
+	}
+}
+
 func TestDefaultWebMCPDirectFactoryUsesProductionDiscovery(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

@@ -84,6 +84,11 @@ type RuntimeOptions struct {
 type BrowserConfig struct {
 	Candidate webmcp.BrowserCandidate
 	Targets   []TargetConfig
+	// ActivateError is an operation-only foreground activation failure. It
+	// deliberately does not affect endpoint reachability, target attachment,
+	// or the WebMCP session so tests can distinguish ancillary activation from
+	// browser transport loss.
+	ActivateError error
 }
 
 func NewBrowserConfig(candidate webmcp.BrowserCandidate, targets ...TargetConfig) BrowserConfig {
@@ -448,10 +453,11 @@ func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browse
 
 func newScriptedBrowserHandle(runtime *ScriptedBrowserRuntime, config BrowserConfig) *ScriptedBrowserHandle {
 	handle := &ScriptedBrowserHandle{
-		runtime:   runtime,
-		candidate: cloneCandidate(config.Candidate),
-		targets:   make(map[webmcp.TargetID]*scriptedTargetEntry, len(config.Targets)),
-		sessions:  make(map[webmcp.TargetID]*ScriptedTargetSession),
+		runtime:       runtime,
+		candidate:     cloneCandidate(config.Candidate),
+		activateError: config.ActivateError,
+		targets:       make(map[webmcp.TargetID]*scriptedTargetEntry, len(config.Targets)),
+		sessions:      make(map[webmcp.TargetID]*ScriptedTargetSession),
 		control: &scriptedBrowserControl{
 			openChanges:     make(chan struct{}),
 			listChanges:     make(chan struct{}),
@@ -487,6 +493,7 @@ func (h *ScriptedBrowserHandle) newClient() *ScriptedBrowserHandle {
 	return &ScriptedBrowserHandle{
 		runtime:        h.runtime,
 		candidate:      cloneCandidate(h.candidate),
+		activateError:  h.activateError,
 		targets:        h.targets,
 		sessions:       make(map[webmcp.TargetID]*ScriptedTargetSession),
 		control:        h.control,
@@ -524,6 +531,7 @@ type ScriptedBrowserHandle struct {
 	runtime        *ScriptedBrowserRuntime
 	mu             sync.Mutex
 	candidate      webmcp.BrowserCandidate
+	activateError  error
 	targets        map[webmcp.TargetID]*scriptedTargetEntry
 	sessions       map[webmcp.TargetID]*ScriptedTargetSession
 	closed         bool
