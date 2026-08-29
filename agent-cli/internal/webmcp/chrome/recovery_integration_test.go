@@ -560,9 +560,12 @@ func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned 
 	if err != nil {
 		t.Fatalf("wait for observed in-flight invocation: %v", err)
 	}
-	if created.State != webmcp.InvocationDispatched || created.InvocationID != admitted.InvocationID {
-		t.Fatalf("created invocation = %+v, want dispatched identity %s", created, admitted.InvocationID)
+	if created.State != webmcp.InvocationQueued || created.InvocationID != admitted.InvocationID {
+		t.Fatalf("created invocation = %+v, want queued identity %s", created, admitted.InvocationID)
 	}
+	// The created event is queued by the broker contract. The pending page
+	// oracle below is the synchronization point that proves the browser-side
+	// operation is now in flight before the exact cancellation request.
 	beforeCancel, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Ready && oracle.Pending && oracle.Value == "pending:overlap"
 	})
