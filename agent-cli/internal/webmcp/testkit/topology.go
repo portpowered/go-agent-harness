@@ -655,12 +655,6 @@ func (h *ScriptedBrowserHandle) DestroyTarget(ctx context.Context, targetID webm
 	return h.CloseTarget(ctx, targetID)
 }
 
-func (s *ScriptedTargetSession) shouldRemoveTarget() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.removeTargetOnClose
-}
-
 func (s *ScriptedTargetSession) emitPublished(event webmcp.BrowserEvent) (PublishedEvent, error) {
 	if s == nil {
 		return PublishedEvent{}, webmcp.ErrClosed
