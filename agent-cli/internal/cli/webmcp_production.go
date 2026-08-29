@@ -282,6 +282,9 @@ func (p *productionWebMCPComposition) probeTarget(ctx context.Context, lane disc
 		capabilities.PageToolsReady = page.CatalogReady
 		capabilities.PageToolsKnown = page.CatalogReady
 		capabilities.PageToolsEvidence = page.CatalogEvidence
+		capabilities.DocumentReadyState = page.DocumentReadyState
+		capabilities.DocumentLoading = page.DocumentLoading
+		capabilities.DocumentLoadingKnown = page.DocumentLoadingKnown
 		for {
 			select {
 			case event, ok := <-session.Events():

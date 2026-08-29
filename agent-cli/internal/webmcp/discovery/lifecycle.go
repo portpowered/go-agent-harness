@@ -442,6 +442,9 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 		target.PageToolsReady = capabilities.PageToolsReady
 		target.PageToolsKnown = capabilities.PageToolsKnown
 		target.PageToolsEvidence = capabilities.PageToolsEvidence
+		target.DocumentReadyState = capabilities.DocumentReadyState
+		target.DocumentLoading = capabilities.DocumentLoading
+		target.DocumentLoadingKnown = capabilities.DocumentLoadingKnown
 		if event.Capabilities.ToolCount >= 0 {
 			target.ToolCount = event.Capabilities.ToolCount
 			target.ToolCountKnown = event.Capabilities.ToolCountKnown || event.Capabilities.ToolCount >= 0
@@ -558,6 +561,9 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 		target.PageToolsReady = capabilities.PageToolsReady
 		target.PageToolsKnown = capabilities.PageToolsKnown
 		target.PageToolsEvidence = capabilities.PageToolsEvidence
+		target.DocumentReadyState = capabilities.DocumentReadyState
+		target.DocumentLoading = capabilities.DocumentLoading
+		target.DocumentLoadingKnown = capabilities.DocumentLoadingKnown
 		if capabilities.ToolCount >= 0 {
 			target.ToolCount = capabilities.ToolCount
 			target.ToolCountKnown = capabilities.ToolCountKnown || capabilities.ToolCount >= 0

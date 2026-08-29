@@ -814,23 +814,7 @@ func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureU
 	if port < 0 || port > 65535 {
 		return nil, fmt.Errorf("Chrome debugging port is invalid: %d", port)
 	}
-	args := []string{
-		"--headless=new",
-		"--disable-gpu",
-		"--disable-background-networking",
-		"--disable-component-update",
-		"--disable-extensions",
-		"--disable-sync",
-		"--no-default-browser-check",
-		"--no-first-run",
-		"--remote-debugging-address=127.0.0.1",
-		fmt.Sprintf("--remote-debugging-port=%d", port),
-		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
-		"--enable-blink-features=DeclarativeWebmcp",
-		"--enable-experimental-web-platform-features",
-		"--user-data-dir=" + profileDir,
-		fixtureURL,
-	}
+	args := pinnedChromeLaunchFlags(profileDir, fixtureURL, port)
 	cmd := exec.Command(pinned.Executable, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -861,6 +845,26 @@ func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureU
 	case <-ctx.Done():
 		_ = running.Close()
 		return nil, fmt.Errorf("wait for Chrome DevTools endpoint: %w (stdout=%q stderr=%q)", ctx.Err(), strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
+	}
+}
+
+func pinnedChromeLaunchFlags(profileDir, fixtureURL string, port int) []string {
+	return []string{
+		"--headless=new",
+		"--disable-gpu",
+		"--disable-background-networking",
+		"--disable-component-update",
+		"--disable-extensions",
+		"--disable-sync",
+		"--no-default-browser-check",
+		"--no-first-run",
+		"--remote-debugging-address=127.0.0.1",
+		fmt.Sprintf("--remote-debugging-port=%d", port),
+		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
+		"--enable-blink-features=DeclarativeWebmcp",
+		"--enable-experimental-web-platform-features",
+		"--user-data-dir=" + profileDir,
+		fixtureURL,
 	}
 }
 

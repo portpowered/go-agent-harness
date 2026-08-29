@@ -31,6 +31,9 @@ func productionNeutralTarget(browserID webmcp.BrowserID, target discovery.Target
 		PageToolsReady:        target.PageToolsReady,
 		PageToolsKnown:        target.PageToolsKnown,
 		PageToolsEvidence:     target.PageToolsEvidence,
+		DocumentReadyState:    target.DocumentReadyState,
+		DocumentLoading:       target.DocumentLoading,
+		DocumentLoadingKnown:  target.DocumentLoadingKnown,
 	}
 }
 

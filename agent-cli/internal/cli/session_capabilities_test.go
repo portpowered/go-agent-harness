@@ -673,9 +673,11 @@ func isStableBrokerName(name string) bool {
 }
 
 type capabilityBroker struct {
-	selected   webmcp.PageContext
-	closeErr   error
-	closeCalls int
+	selected    webmcp.PageContext
+	selectErr   error
+	selectCalls int
+	closeErr    error
+	closeCalls  int
 }
 
 func (b *capabilityBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
@@ -687,7 +689,8 @@ func (b *capabilityBroker) ListTargets(context.Context, webmcp.BrowserSelector) 
 }
 
 func (b *capabilityBroker) Select(context.Context, webmcp.TargetSelector) (webmcp.PageContext, error) {
-	return b.selected, nil
+	b.selectCalls++
+	return b.selected, b.selectErr
 }
 
 func (b *capabilityBroker) Selected(context.Context) (webmcp.PageContext, error) {

@@ -45,6 +45,8 @@ type WebMCPWireTrace struct {
 const (
 	WebMCPWireTraceVersion        = "webmcp.wire-trace.v1"
 	WebMCPWirePhaseBeforeDispatch = "before_dispatch"
+	WebMCPEnableMethod            = "WebMCP.enable"
+	WebMCPInvokeToolMethod        = "WebMCP.invokeTool"
 	WebMCPCancelInvocationMethod  = "WebMCP.cancelInvocation"
 )
 
@@ -119,8 +121,14 @@ type Target struct {
 	PageToolsReady        bool
 	PageToolsKnown        bool
 	PageToolsEvidence     string
-	Eligible              bool
-	EligibilityReason     string
+	// DocumentReadyState is a bounded, side-effect-free page lifecycle
+	// observation. It is intentionally separate from page-tool readiness:
+	// loading and load-complete producer-less documents are both re-evaluable.
+	DocumentReadyState   string
+	DocumentLoading      bool
+	DocumentLoadingKnown bool
+	Eligible             bool
+	EligibilityReason    string
 }
 
 type PageKey struct {
@@ -140,9 +148,21 @@ type PageContext struct {
 	WebMCPDomainSupported bool
 	CatalogReady          bool
 	CatalogEvidence       string
-	Ready                 bool
-	SelectedAt            time.Time
+	// DocumentLoadingKnown makes a false DocumentLoading value an explicit
+	// load-complete observation rather than an unknown default.
+	DocumentReadyState   string
+	DocumentLoading      bool
+	DocumentLoadingKnown bool
+	Ready                bool
+	SelectedAt           time.Time
 }
+
+const (
+	DocumentReadyStateUnknown     = "unknown"
+	DocumentReadyStateLoading     = "loading"
+	DocumentReadyStateInteractive = "interactive"
+	DocumentReadyStateComplete    = "complete"
+)
 
 type ToolAnnotations struct {
 	ReadOnly         *bool

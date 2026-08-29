@@ -69,14 +69,17 @@ func newTargetSession(
 		cancelTarget:  cancelTarget,
 		ownership:     ownership,
 		page: webmcp.PageContext{
-			Key:        webmcp.PageKey{BrowserID: targetValue.BrowserID, TargetID: targetValue.ID},
-			Title:      targetValue.Title,
-			URL:        targetValue.URL,
-			Origin:     targetValue.Origin,
-			Generation: 1,
-			Connected:  false,
-			Ready:      false,
-			SelectedAt: time.Now(),
+			Key:                  webmcp.PageKey{BrowserID: targetValue.BrowserID, TargetID: targetValue.ID},
+			Title:                targetValue.Title,
+			URL:                  targetValue.URL,
+			Origin:               targetValue.Origin,
+			Generation:           1,
+			Connected:            false,
+			Ready:                false,
+			DocumentReadyState:   targetValue.DocumentReadyState,
+			DocumentLoading:      targetValue.DocumentLoading,
+			DocumentLoadingKnown: targetValue.DocumentLoadingKnown,
+			SelectedAt:           time.Now(),
 		},
 		protocolEvents: make(chan any, eventBuffer+1),
 		events:         make(chan webmcp.BrowserEvent, eventBuffer+1),
@@ -373,6 +376,7 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 		probeErr error
 	)
 	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		s.recordWireBeforeDispatch(webmcp.WebMCPEnableMethod, "")
 		if err := cdpWebMCP.Enable().Do(ctx); err != nil {
 			return err
 		}
@@ -387,7 +391,12 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.page.WebMCPDomainSupported = true
-	s.page.Ready = s.page.Connected && s.page.CatalogReady
+	if probeErr == nil {
+		s.page.DocumentReadyState = probe.DocumentReadyState
+		s.page.DocumentLoading = probe.DocumentLoading
+		s.page.DocumentLoadingKnown = probe.DocumentLoadingKnown
+	}
+	s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported && s.page.CatalogReady
 	s.mu.Unlock()
 	// WebMCP.enable proves that the browser-side domain is available, but it
 	// does not prove that this document has a page-tool producer. The probe is
@@ -433,6 +442,9 @@ func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
 	case webmcp.EventPageNavigated, webmcp.EventFrameNavigated:
 		s.page.CatalogReady = false
 		s.page.CatalogEvidence = ""
+		s.page.DocumentReadyState = webmcp.DocumentReadyStateUnknown
+		s.page.DocumentLoading = false
+		s.page.DocumentLoadingKnown = false
 	case webmcp.EventTargetDetached, webmcp.EventBrowserDisconnected, webmcp.EventSessionClosed:
 		s.page.Connected = false
 	}
@@ -456,6 +468,7 @@ func (s *targetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID
 	var invocationID string
 	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var err error
+		s.recordWireBeforeDispatch(webmcp.WebMCPInvokeToolMethod, "")
 		invocationID, err = cdpWebMCP.InvokeTool(cdp.FrameID(frameID), toolName, jsontext.Value(bytes.Clone(input))).Do(ctx)
 		return err
 	}))
