@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
@@ -16,9 +17,13 @@ import (
 type Engine struct {
 	subsystems []subsystems.Subsystem
 	state      *SharedState
-	mode       ExecutionMode
-	logger     logging.Logger
-	tickCount  int
+	// loopMu protects the mutable LoopState owned by the hot loop. Public
+	// snapshots take its read lock so history cannot be copied while a tick is
+	// appending or truncating the conversation buffers.
+	loopMu    sync.RWMutex
+	mode      ExecutionMode
+	logger    logging.Logger
+	tickCount int
 
 	// tickRate controls the minimum interval between ticks in the hot loop.
 	// Zero (default) means no delay — the loop runs as fast as possible.
@@ -191,6 +196,7 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 	}
 
 	if sendInitialInference {
+		e.loopMu.Lock()
 		// Send initial inference request seeded from current conversation history.
 		e.state.LoopState.History.ModelDeltaStartIndex = len(e.state.LoopState.History.ConversationDeltaBuffer)
 		e.state.LoopState.History.CurrentModelDeltaCount = 0
@@ -201,6 +207,7 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 			e.state.LoopState.History.CurrentPassID,
 			e.state.LoopState.InferenceDefaults,
 		))
+		e.loopMu.Unlock()
 	}
 
 	for {
@@ -226,6 +233,9 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 }
 
 func (e *Engine) Tick(ctx context.Context) error {
+	e.loopMu.Lock()
+	defer e.loopMu.Unlock()
+
 	err := e.ordering.ReadTick(ctx, e.state.LoopState)
 	if err != nil {
 		e.logError("engine: hot loop failed reading data buffer", err)
@@ -284,6 +294,9 @@ func (e *Engine) TickUntil(ctx context.Context, predicate func() bool, maxTicks 
 // TickState returns a read-only snapshot of the current engine state including
 // tick count and buffer occupancy. Safe to call between manual ticks.
 func (e *Engine) TickState() TickState {
+	e.loopMu.RLock()
+	defer e.loopMu.RUnlock()
+
 	ls := e.state.LoopState
 	return TickState{
 		TickCount:           e.tickCount,
@@ -308,12 +321,46 @@ func (e *Engine) executeWorldState(ctx context.Context, state *SharedState) erro
 }
 
 func (e *Engine) AddMessages(messages []messages.Message) {
+	e.loopMu.Lock()
+	defer e.loopMu.Unlock()
+
 	e.state.LoopState.History.ConversationBuffer = append(e.state.LoopState.History.ConversationBuffer, messages...)
 	// Populate ConversationDeltaBuffer so GetConversationDeltas reflects the full history.
 	e.state.LoopState.History.ConversationDeltaBuffer = append(
 		e.state.LoopState.History.ConversationDeltaBuffer,
 		mapMessagesToDeltas(messages)...,
 	)
+}
+
+// ConversationHistorySnapshot returns a synchronized copy of the conversation
+// history. The hot loop owns the backing slice and may replace or truncate it
+// between ticks, so callers must use this boundary instead of reading
+// State().LoopState.History directly while the engine is running.
+func (e *Engine) ConversationHistorySnapshot() []messages.Message {
+	e.loopMu.RLock()
+	defer e.loopMu.RUnlock()
+
+	return append([]messages.Message(nil), e.state.LoopState.History.ConversationBuffer...)
+}
+
+// ConversationDeltasSnapshot returns a synchronized copy of the conversation
+// delta history. The read lock establishes a causal boundary with the hot
+// loop's ordering update and prevents copying a slice while it is being
+// appended or truncated.
+func (e *Engine) ConversationDeltasSnapshot() []messages.StreamMessage {
+	e.loopMu.RLock()
+	defer e.loopMu.RUnlock()
+
+	return append([]messages.StreamMessage(nil), e.state.LoopState.History.ConversationDeltaBuffer...)
+}
+
+// InteractionStateSnapshot returns a copy of the normalized interaction state
+// at the same synchronization boundary as the conversation snapshots.
+func (e *Engine) InteractionStateSnapshot() messages.InteractionState {
+	e.loopMu.RLock()
+	defer e.loopMu.RUnlock()
+
+	return messages.CloneInteractionState(e.state.LoopState.Interaction)
 }
 
 func mapMessagesToDeltas(msgs []messages.Message) []messages.StreamMessage {
