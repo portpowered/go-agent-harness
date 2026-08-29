@@ -3,6 +3,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -35,16 +36,22 @@ func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error 
 			return nil
 		}
 		fields := sessionTerminalFields(v.Classification, v.TerminalReason, v.TerminalProvenance, v.OutputState)
+		wrapCause := func(message string) error {
+			if v.Err == nil {
+				return errors.New(message)
+			}
+			return fmt.Errorf("%s: %w", message, v.Err)
+		}
 		if v.Message != "" {
 			if fields != "" {
-				return fmt.Errorf("session error: %s [%s]", v.Message, fields)
+				return wrapCause(fmt.Sprintf("session error: %s [%s]", v.Message, fields))
 			}
-			return fmt.Errorf("session error: %s", v.Message)
+			return wrapCause(fmt.Sprintf("session error: %s", v.Message))
 		}
 		if fields != "" {
-			return fmt.Errorf("session error [%s]", fields)
+			return wrapCause(fmt.Sprintf("session error [%s]", fields))
 		}
-		return fmt.Errorf("session error")
+		return wrapCause("session error")
 	}
 	return nil
 }

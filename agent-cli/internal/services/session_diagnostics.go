@@ -17,6 +17,9 @@ const (
 	// SessionDiagnosticEventFailure is emitted exactly once per terminal
 	// session failure with the canonical failure field map.
 	SessionDiagnosticEventFailure = "session_failure"
+	// SessionDiagnosticEventTerminal is emitted exactly once for a clean
+	// terminal outcome that is not a failure, including CLI user cancellation.
+	SessionDiagnosticEventTerminal = "session_terminal"
 	// SessionDiagnosticEventTurn is emitted once per admitted assistant turn
 	// (a non-empty output response at MESSAGE.END) with per-turn input/output
 	// byte accounting.
@@ -81,6 +84,14 @@ const (
 	// continuations. Values are encoded as comma-separated call_id=value pairs.
 	SessionDiagnosticFieldPendingContinuationStatuses = "pending_continuation_statuses"
 	SessionDiagnosticFieldPendingContinuationDetails  = "pending_continuation_details"
+	// These fields describe obligations resolved as cancelled by an operator
+	// SIGINT. They are emitted on session_terminal, never as failure fields.
+	SessionDiagnosticFieldCancelledBy                      = "cancelled_by"
+	SessionDiagnosticFieldCancelledScheduledInputCount     = "cancelled_scheduled_input_count"
+	SessionDiagnosticFieldCancelledToolResultCount         = "cancelled_tool_result_count"
+	SessionDiagnosticFieldCancelledToolResultCallIDs       = "cancelled_tool_result_call_ids"
+	SessionDiagnosticFieldCancelledToolContinuationCount   = "cancelled_tool_continuation_count"
+	SessionDiagnosticFieldCancelledToolContinuationCallIDs = "cancelled_tool_continuation_call_ids"
 )
 
 const (
@@ -190,12 +201,13 @@ type sessionProgressObserver struct {
 	// an otherwise valid completed response. Returning false keeps the raw
 	// stream event observable but prevents it from advancing completed-turn
 	// state or evidence.
-	turnAdmission  func(messages.StreamMessage) bool
-	runtime        *sessionRuntimeObservationRecorder
-	provider       string
-	model          string
-	sawSessionOpen bool
-	sessionID      string
+	turnAdmission      func(messages.StreamMessage) bool
+	runtime            *sessionRuntimeObservationRecorder
+	cancellationIntent *SessionCancellationIntent
+	provider           string
+	model              string
+	sawSessionOpen     bool
+	sessionID          string
 	// sessionUpdated is scoped to the current SESSION.OPEN round trip. A
 	// subsequent SESSION.OPEN resets it so an acknowledgement from an older
 	// connection cannot release a new connection's scheduled input.
@@ -261,6 +273,9 @@ type sessionProgressObserver struct {
 	usageSeen       bool
 
 	failure *failureFacts
+	// userCancelled is set once by finish after the explicit SIGINT marker has
+	// proved that all observed causes were cancellation-only.
+	userCancelled bool
 
 	emitOnce    sync.Once
 	metricsOnce sync.Once

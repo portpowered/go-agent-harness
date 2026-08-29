@@ -16,6 +16,10 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		return
 	}
 	o.emitOnce.Do(func() {
+		if o.userCancelled {
+			o.emitUserCancelledTerminal()
+			return
+		}
 		completedScheduled, dispatchedInputs, scheduledInputs := o.scheduledAudioCounts()
 		scheduleIncomplete := o.scheduledAudioIncomplete()
 		unresolvedIDs := o.unresolvedToolCallIDs()
@@ -121,13 +125,71 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 	})
 }
 
+func (o *sessionProgressObserver) emitUserCancelledTerminal() {
+	if o == nil || o.sink == nil {
+		return
+	}
+	completedScheduled, dispatchedInputs, scheduledInputs := o.scheduledAudioCounts()
+	unresolvedIDs := o.unresolvedToolCallIDs()
+	pendingContinuationIDs := o.pendingToolContinuationCallIDs()
+	cancelledScheduled := scheduledInputs - completedScheduled
+	if cancelledScheduled < 0 {
+		cancelledScheduled = 0
+	}
+	fields := map[string]string{
+		fieldClassification:               SessionUserCancelledClassification,
+		fieldTerminalReason:               string(messages.TerminalReasonCancellation),
+		fieldTerminalProvenance:           string(messages.TerminalProvenanceCLI),
+		fieldOutputState:                  string(o.userCancellationOutputState()),
+		fieldProvider:                     o.provider,
+		fieldModel:                        o.model,
+		fieldTurnsCompleted:               strconv.Itoa(o.turnsCompleted),
+		SessionDiagnosticFieldCancelledBy: "user",
+	}
+	if scheduledInputs > 0 {
+		fields[SessionDiagnosticFieldScheduledInputCount] = strconv.Itoa(scheduledInputs)
+		fields[SessionDiagnosticFieldDispatchedInputCount] = strconv.Itoa(dispatchedInputs)
+		fields[SessionDiagnosticFieldCompletedTurnCount] = strconv.Itoa(completedScheduled)
+		fields[SessionDiagnosticFieldCancelledScheduledInputCount] = strconv.Itoa(cancelledScheduled)
+	}
+	if len(unresolvedIDs) > 0 {
+		fields[SessionDiagnosticFieldCancelledToolResultCount] = strconv.Itoa(len(unresolvedIDs))
+		fields[SessionDiagnosticFieldCancelledToolResultCallIDs] = strings.Join(unresolvedIDs, ", ")
+	}
+	if len(pendingContinuationIDs) > 0 {
+		fields[SessionDiagnosticFieldCancelledToolContinuationCount] = strconv.Itoa(len(pendingContinuationIDs))
+		fields[SessionDiagnosticFieldCancelledToolContinuationCallIDs] = strings.Join(pendingContinuationIDs, ", ")
+	}
+	o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{
+		Event:  SessionDiagnosticEventTerminal,
+		Fields: fields,
+	})
+}
+
+func (o *sessionProgressObserver) userCancellationOutputState() messages.TerminalOutputState {
+	if o == nil {
+		return messages.TerminalOutputNone
+	}
+	if o.turnsCompleted > 0 || o.totals.outAudio > 0 || o.totals.outText > 0 || o.responseOutputAudioBytes > 0 || o.responseOutputTextBytes > 0 || o.assistantOutputObserved {
+		return messages.TerminalOutputPartial
+	}
+	return messages.TerminalOutputNone
+}
+
 func (o *sessionProgressObserver) finish(err error) error {
 	if o == nil {
 		return err
 	}
-	err = withUnresolvedToolResults(err, o)
-	err = withPendingToolContinuations(err, o)
-	err = withPendingImageContinuations(err, o)
+	if sessionSIGINTCleanForObserver(err, o.cancellationIntent, o) {
+		o.userCancelled = true
+		o.failure = nil
+		err = nil
+	}
+	if !o.userCancelled {
+		err = withUnresolvedToolResults(err, o)
+		err = withPendingToolContinuations(err, o)
+		err = withPendingImageContinuations(err, o)
+	}
 	o.emitTerminal(err)
 	o.emitMetricsMatrix()
 	if o.runtime != nil {
