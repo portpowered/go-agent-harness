@@ -272,11 +272,13 @@ func (b *StatefulBroker) waitForDirectCancellation(ctx context.Context, operatio
 				return directCancellationResult(operation, observation)
 			}
 			var lifecycleCode string
+			b.mu.Lock()
 			if failure := sessionLifecycleFailure(operation.session); failure != nil {
 				if classified, ok := lifecycleClassifiedError(failure); ok {
 					lifecycleCode = string(classified.Code)
 				}
 			}
+			b.mu.Unlock()
 			return directCancellationLifecycleError(operation, EventSessionClosed, "session_done", lifecycleCode)
 		case <-b.closedCh:
 			if observation, ok := takeDirectCancellationObservation(operation); ok {
