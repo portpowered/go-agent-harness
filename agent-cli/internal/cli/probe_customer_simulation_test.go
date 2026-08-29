@@ -15,10 +15,51 @@ import (
 
 func TestCustomerSimulationCommandRequiresExplicitLiveOptIn(t *testing.T) {
 	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
+	if command.Model != "gpt-realtime-2.1-mini" {
+		t.Fatalf("default realtime model = %q, want cost-bounded gpt-realtime-2.1-mini", command.Model)
+	}
 	root := command.Generate()
 	root.SetArgs([]string{"--family", "A"})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "--live") {
 		t.Fatalf("Execute error = %v, want explicit --live guidance", err)
+	}
+}
+
+func TestCustomerSimulationRunSpecsLoadsFamilyERepromptAudioSeparately(t *testing.T) {
+	scenario := probe.NewFamilyEScenario()
+	temp := t.TempDir()
+	turnPath := filepath.Join(temp, "turn.pcm")
+	repromptPath := filepath.Join(temp, "check-in.pcm")
+	if err := os.WriteFile(turnPath, []byte{1, 0, 2, 0}, 0o600); err != nil {
+		t.Fatalf("write turn audio: %v", err)
+	}
+	if err := os.WriteFile(repromptPath, []byte{3, 0, 4, 0}, 0o600); err != nil {
+		t.Fatalf("write re-prompt audio: %v", err)
+	}
+
+	runs, err := customerSimulationRunSpecs([]probe.CustomerScenario{scenario}, []string{turnPath}, "", repromptPath)
+	if err != nil {
+		t.Fatalf("customerSimulationRunSpecs: %v", err)
+	}
+	if len(runs) != 1 || len(runs[0].Audio) != 1 || len(runs[0].PatienceRepromptAudio) != 4 {
+		t.Fatalf("Family E run audio = %+v, want one action recording plus separate four-byte re-prompt", runs)
+	}
+	if string(runs[0].PatienceRepromptAudio) != string([]byte{3, 0, 4, 0}) {
+		t.Fatalf("Family E re-prompt audio = %x, want 03000400", runs[0].PatienceRepromptAudio)
+	}
+}
+
+func TestCustomerSimulationRunSpecsRejectsMissingOrMisplacedFamilyERepromptAudio(t *testing.T) {
+	temp := t.TempDir()
+	audioPath := filepath.Join(temp, "turn.pcm")
+	if err := os.WriteFile(audioPath, []byte{1, 0}, 0o600); err != nil {
+		t.Fatalf("write audio: %v", err)
+	}
+	if _, err := customerSimulationRunSpecs([]probe.CustomerScenario{probe.NewFamilyEScenario()}, []string{audioPath}, ""); err == nil || !strings.Contains(err.Error(), "patience-reprompt-audio") {
+		t.Fatalf("missing Family E re-prompt error = %v, want explicit flag guidance", err)
+	}
+	if _, err := customerSimulationRunSpecs([]probe.CustomerScenario{probe.NewFamilyAScenario()}, make([]string, 4), "", audioPath); err == nil || !strings.Contains(err.Error(), "only valid") {
+		t.Fatalf("misplaced Family E re-prompt error = %v, want selection-specific failure", err)
 	}
 }
 

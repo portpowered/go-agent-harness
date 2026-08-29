@@ -44,6 +44,7 @@ var (
 	ErrDuplexChildSurvivedDeadline = errors.New("duplex session child survived its termination deadline")
 	ErrDuplexShutdown              = errors.New("duplex session shutdown did not complete")
 	ErrDuplexPipe                  = errors.New("duplex session pipe failed")
+	errDuplexInputComplete         = errors.New("duplex session input completed at an observed child boundary")
 )
 
 // DuplexSessionConfig describes one real child-process session run. The
@@ -1074,6 +1075,10 @@ func pumpDuplexInput(ctx context.Context, destination io.Writer, config normaliz
 		}
 		if segment.Before != nil {
 			if err := segment.Before(ctx, progressView); err != nil {
+				if errors.Is(err, errDuplexInputComplete) {
+					finished.Store(true)
+					return closeStdin()
+				}
 				return duplexPipeError("run segment gate", err)
 			}
 		}

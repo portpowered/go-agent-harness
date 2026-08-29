@@ -57,7 +57,20 @@ instead, with exactly one file per turn in scenario-selection order. The
 required set expands to Family A, Family B, Family D-SIGINT, and Family
 D-natural. `--family A` (or `B`, `C`, `D`, `D-SIGINT`, `D-NATURAL`, `E`) runs a
 specific built-in selection; `--scenario path.json` loads a versioned custom
-scenario.
+scenario. Family E requires one additional natural check-in recording, kept
+separate from the action turns so the re-prompt remains an observable second
+PCM segment:
+
+```bash
+./agent-cli/bin/agent probe customer-simulation \
+  --live --family E \
+  --audio-dir /absolute/path/to/customer-simulation-audio \
+  --patience-reprompt-audio /absolute/path/to/family-e-check-in.wav \
+  --report /tmp/customer-simulation-family-e-report.json
+```
+
+The default realtime model is the cost-bounded `gpt-realtime-2.1-mini`; pass
+`--model` explicitly when a different billed model is required.
 
 The output report contains only sanitized scenario identity, timing, process
 cleanup facts, action dispositions, mechanical findings, and the parsed

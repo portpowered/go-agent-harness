@@ -203,6 +203,34 @@ func TestCustomerSimulationAudioEventsCorrelateMultipleReadsToRecordedResponses(
 		}
 	}
 
+	continuationResult := DuplexRunResult{Output: []DuplexOutputEvent{
+		{Bytes: 2, Total: 2, At: time.Millisecond},
+		{Bytes: 2, Total: 4, At: 2 * time.Millisecond},
+		{Bytes: 2, Total: 6, At: 3 * time.Millisecond},
+		{Bytes: 2, Total: 8, At: 4 * time.Millisecond},
+	}}
+	withToolContinuations := customerSimulationAudioEvents(scenario, continuationResult, DefaultDuplexFrameDuration, customerSimulationRecordingFacts{responses: []customerSimulationResponse{
+		{ID: "response-original-tool-continuation", AudioBytes: 2},
+		{ID: "response-original-output", Text: "Created draft/brief.md", AudioBytes: 2},
+		{ID: "response-replacement-tool-continuation", AudioBytes: 2},
+		{ID: "response-replacement-output", Text: "Created final/brief.md", AudioBytes: 2},
+	}})
+	var continuationOutput []AudioTurnEvent
+	for _, event := range withToolContinuations {
+		if event.Direction == "output" {
+			continuationOutput = append(continuationOutput, event)
+		}
+	}
+	wantContinuationTurns := []string{"turn-1", "turn-1", "turn-2", "turn-2"}
+	if len(continuationOutput) != len(wantContinuationTurns) {
+		t.Fatalf("tool-continuation output events = %+v, want %d events", continuationOutput, len(wantContinuationTurns))
+	}
+	for index, event := range continuationOutput {
+		if event.TurnID != wantContinuationTurns[index] {
+			t.Fatalf("tool-continuation output event %d = %+v, want turn %q", index, event, wantContinuationTurns[index])
+		}
+	}
+
 	crossing := customerSimulationAudioEvents(scenario, DuplexRunResult{Output: []DuplexOutputEvent{{Bytes: 6, Total: 6, At: 5 * time.Millisecond}}}, DefaultDuplexFrameDuration, customerSimulationRecordingFacts{responses: []customerSimulationResponse{
 		{ID: "response-original-output", Text: "draft", AudioBytes: 4},
 		{ID: "response-replacement-output", Text: "final", AudioBytes: 4},

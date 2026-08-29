@@ -440,6 +440,10 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 		APIKey:           options.APIKey,
 		SystemPrompt:     options.SystemPrompt,
 		MaxDuration:      maxDuration,
+		// Patience and correction gates may need to keep the same provider
+		// session open after an otherwise terminal response, so all suite runs
+		// explicitly retain the shipped session until the provider closes it.
+		AdditionalArgs: []string{"--wait-for-close"},
 		OnStart: func(startedAt time.Time) {
 			if patienceController == nil {
 				return
@@ -637,8 +641,8 @@ func customerSimulationAudioEvents(scenario CustomerScenario, result DuplexRunRe
 
 		parts := customerSimulationOutputPartsForRanges(start, end, responseRanges)
 		if len(parts) == 0 {
-			if responseIndex, ok := customerSimulationResponseForOutputTimestamp(facts.responses, output.Timestamp); ok {
-				parts = []customerSimulationOutputPart{{TurnID: customerSimulationTurnID(scenario, responseIndex), Bytes: output.Bytes}}
+			if actionIndex, ok := customerSimulationResponseForOutputTimestamp(scenario, facts.responses, output.Timestamp); ok {
+				parts = []customerSimulationOutputPart{{TurnID: customerSimulationTurnID(scenario, actionIndex), Bytes: output.Bytes}}
 			} else {
 				parts = []customerSimulationOutputPart{{TurnID: "unattributed-output", Bytes: output.Bytes, Unattributed: true}}
 			}
@@ -671,16 +675,65 @@ type customerSimulationOutputPart struct {
 
 func customerSimulationResponseAudioRanges(scenario CustomerScenario, responses []customerSimulationResponse) []customerSimulationResponseAudioRange {
 	ranges := make([]customerSimulationResponseAudioRange, 0, len(responses))
+	turnIndices := customerSimulationResponseTurnIndices(scenario, responses)
 	var cursor int64
 	for index, response := range responses {
 		if response.AudioBytes <= 0 {
 			continue
 		}
 		end := cursor + int64(response.AudioBytes)
-		ranges = append(ranges, customerSimulationResponseAudioRange{TurnID: customerSimulationTurnID(scenario, index), Start: cursor, End: end})
+		actionIndex := 0
+		if index < len(turnIndices) {
+			actionIndex = turnIndices[index]
+		}
+		ranges = append(ranges, customerSimulationResponseAudioRange{TurnID: customerSimulationTurnID(scenario, actionIndex), Start: cursor, End: end})
 		cursor = end
 	}
 	return ranges
+}
+
+// customerSimulationResponseTurnIndices maps raw response boundaries to
+// action turns. Realtime tool continuations can be separate responses without
+// transcript text; they belong to the next spoken response boundary (or the
+// final spoken boundary), rather than shifting every later audio read to a
+// new action turn.
+func customerSimulationResponseTurnIndices(scenario CustomerScenario, responses []customerSimulationResponse) []int {
+	indices := make([]int, len(responses))
+	if len(scenario.Actions) == 0 {
+		return indices
+	}
+	textAction := make([]int, len(responses))
+	textCount := 0
+	for index, response := range responses {
+		if strings.TrimSpace(response.Text) != "" {
+			textAction[index] = textCount
+			textCount++
+		}
+	}
+	for index := range responses {
+		if strings.TrimSpace(responses[index].Text) != "" {
+			indices[index] = minInt(textAction[index], len(scenario.Actions)-1)
+			continue
+		}
+		nextText := -1
+		for candidate := index + 1; candidate < len(responses); candidate++ {
+			if strings.TrimSpace(responses[candidate].Text) != "" {
+				nextText = candidate
+				break
+			}
+		}
+		actionIndex := 0
+		if nextText >= 0 {
+			actionIndex = textAction[nextText]
+		} else if index > 0 {
+			actionIndex = textCount - 1
+		}
+		if actionIndex < 0 {
+			actionIndex = 0
+		}
+		indices[index] = minInt(actionIndex, len(scenario.Actions)-1)
+	}
+	return indices
 }
 
 func customerSimulationOutputPartsForRanges(start, end int64, ranges []customerSimulationResponseAudioRange) []customerSimulationOutputPart {
@@ -699,10 +752,11 @@ func customerSimulationOutputPartsForRanges(start, end int64, ranges []customerS
 	return parts
 }
 
-func customerSimulationResponseForOutputTimestamp(responses []customerSimulationResponse, timestamp time.Time) (int, bool) {
+func customerSimulationResponseForOutputTimestamp(scenario CustomerScenario, responses []customerSimulationResponse, timestamp time.Time) (int, bool) {
 	if timestamp.IsZero() {
 		return 0, false
 	}
+	turnIndices := customerSimulationResponseTurnIndices(scenario, responses)
 	for index, response := range responses {
 		if response.WallStart.IsZero() {
 			continue
@@ -711,7 +765,11 @@ func customerSimulationResponseForOutputTimestamp(responses []customerSimulation
 			continue
 		}
 		if response.WallEnd.IsZero() || !timestamp.After(response.WallEnd) {
-			return index, true
+			actionIndex := 0
+			if index < len(turnIndices) {
+				actionIndex = turnIndices[index]
+			}
+			return actionIndex, true
 		}
 	}
 	return 0, false
@@ -759,7 +817,13 @@ func waitForCustomerSimulationPatienceReprompt(
 			return err
 		}
 		if progress.OutputClosed() {
-			return completeCustomerSimulationPatience(controller)
+			if err := completeCustomerSimulationPatience(controller); err != nil {
+				return err
+			}
+			// A normal child boundary is a valid end to the one-turn patience
+			// conversation. Stop the not-yet-delivered re-prompt segment without
+			// misclassifying the intentionally short input script as premature EOF.
+			return errDuplexInputComplete
 		}
 		decision, err := controller.Decision()
 		if err != nil {
@@ -835,7 +899,7 @@ func observeCustomerSimulationOutput(controller *PatienceController, progress *D
 	}
 	for *outputIndex < len(events) {
 		event := events[*outputIndex]
-		*outputIndex++
+		*outputIndex = *outputIndex + 1
 		if event.Bytes <= 0 {
 			continue
 		}
@@ -895,6 +959,22 @@ func buildCustomerSimulationTranscripts(scenario CustomerScenario, script []Cust
 			at = customer[len(customer)-1].At
 		}
 		customer = append(customer, TranscriptEvent{ID: fmt.Sprintf("customer-%02d", index+1), TurnID: customerSimulationTurnID(scenario, index), Speaker: TranscriptCustomer, Text: turn.Text, At: at, Final: true})
+	}
+	if scenario.Family == ScenarioFamilyE {
+		for _, input := range result.Input {
+			if input.SegmentID != "patience-reprompt-1" {
+				continue
+			}
+			at := input.At
+			if len(customer) > 0 && at < customer[len(customer)-1].At {
+				at = customer[len(customer)-1].At
+			}
+			customer = append(customer, TranscriptEvent{
+				ID: "customer-patience-reprompt-1", TurnID: FamilyETurnID, Speaker: TranscriptCustomer,
+				Text: FamilyEReprompt(0), At: at, Final: true,
+			})
+			break
+		}
 	}
 
 	recordedResponses := make([]customerSimulationResponse, 0, len(facts.responses))
@@ -1235,9 +1315,10 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 	}
 	if len(streamFacts.responses) > 0 {
 		// The raw stream is authoritative for response identity, timing, audio
-		// ranges, and cancellation. session-log.jsonl is only a text fallback;
-		// it can contain tool continuations that do not line up one-for-one with
-		// the response boundaries needed by a correction ledger.
+		// ranges, and cancellation. session-log.jsonl is used only when the raw
+		// stream is unavailable; it can contain tool continuations that do not
+		// line up one-for-one with the response boundaries needed by a correction
+		// ledger.
 		facts.responses = streamFacts.responses
 	} else if len(sessionLogResponses) > 0 {
 		facts.responses = sessionLogResponses
@@ -1313,6 +1394,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 	pending := make(map[string]*customerSimulationTool)
 	responseIndex := 0
 	lastWallAt := base
+	lastAt := time.Duration(0)
 	flush := func(at time.Duration, wallAt time.Time, complete, cancelled bool) {
 		if current == nil {
 			return
@@ -1327,6 +1409,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		text.Reset()
 	}
 	for _, record := range records {
+		lastAt = record.at
 		if !record.wallAt.IsZero() {
 			lastWallAt = record.wallAt
 		}
@@ -1400,7 +1483,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		}
 	}
 	if current != nil {
-		flush(current.Start, lastWallAt, false, current.Cancelled)
+		flush(lastAt, lastWallAt, false, current.Cancelled)
 	}
 	toolIDs := make([]string, 0, len(pending))
 	for id := range pending {

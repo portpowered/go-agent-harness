@@ -27,7 +27,7 @@ import (
 
 const (
 	defaultCustomerSimulationProvider          = config.ProviderOpenAI
-	defaultCustomerSimulationModel             = "gpt-realtime"
+	defaultCustomerSimulationModel             = "gpt-realtime-2.1-mini"
 	defaultCustomerSimulationValidatorProvider = config.ProviderOpenAI
 	defaultCustomerSimulationValidatorModel    = "gpt-4o-mini"
 	defaultCustomerSimulationAPIKeyEnv         = "OPENAI_API_KEY"
@@ -42,20 +42,21 @@ type CustomerSimulationSuiteRunner func(context.Context, probe.CustomerSimulatio
 // CustomerSimulationCommand exposes one explicit opt-in command for the
 // billed, process-boundary customer simulation suite.
 type CustomerSimulationCommand struct {
-	Live          bool
-	Required      bool
-	Families      []string
-	ScenarioPaths []string
-	AudioPaths    []string
-	AudioDir      string
-	BinaryPath    string
-	RunRoot       string
-	Provider      string
-	Model         string
-	BaseURL       string
-	SystemPrompt  string
-	APIKeyEnv     string
-	SecretFile    string
+	Live                      bool
+	Required                  bool
+	Families                  []string
+	ScenarioPaths             []string
+	AudioPaths                []string
+	AudioDir                  string
+	PatienceRepromptAudioPath string
+	BinaryPath                string
+	RunRoot                   string
+	Provider                  string
+	Model                     string
+	BaseURL                   string
+	SystemPrompt              string
+	APIKeyEnv                 string
+	SecretFile                string
 
 	ValidatorProvider   string
 	ValidatorModel      string
@@ -118,6 +119,7 @@ func (c *CustomerSimulationCommand) Generate() *cobra.Command {
 		Short: "Run the opt-in conversational customer simulation suite",
 		Long: "Run selected A/B/C/D/E customer-simulation scenarios through the shipped agent binary. " +
 			"This is a billed live-provider command: it requires --live, an audio script, and credentials. " +
+			"Family E additionally requires a natural check-in recording via --patience-reprompt-audio. " +
 			"Every run is isolated outside the checkout and leaves a hash-verified evidence bundle plus a JSON report. " +
 			"The command exits non-zero for BROKEN, invalid, incomplete, inconclusive, or unavailable runs.",
 		Args:         cobra.ArbitraryArgs,
@@ -132,6 +134,7 @@ func (c *CustomerSimulationCommand) Generate() *cobra.Command {
 	cmd.Flags().StringArrayVar(&c.ScenarioPaths, "scenario", nil, "Load a versioned customer-simulation scenario JSON file (repeatable)")
 	cmd.Flags().StringArrayVar(&c.AudioPaths, "audio", nil, "Ordered 16 kHz PCM16/WAV customer turn audio (repeatable)")
 	cmd.Flags().StringVar(&c.AudioDir, "audio-dir", "", "Directory containing <scenario-id>/<action-id>.wav (or .pcm/.raw) turn files")
+	cmd.Flags().StringVar(&c.PatienceRepromptAudioPath, "patience-reprompt-audio", "", "Family E 16 kHz PCM16/WAV check-in recording sent after the patience threshold")
 	cmd.Flags().StringVar(&c.BinaryPath, "binary", "", "Shipped agent binary; if omitted, locate it or build a temporary copy")
 	cmd.Flags().StringVar(&c.RunRoot, "run-root", "", "Fresh evidence parent outside the checkout (default: an OS temporary directory)")
 	cmd.Flags().StringVar(&c.Provider, "provider", c.Provider, "Live realtime provider: openai or grok")
@@ -212,7 +215,7 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 	}
 	defer binaryCleanup()
 
-	runs, err := customerSimulationRunSpecs(scenarios, c.AudioPaths, c.AudioDir)
+	runs, err := customerSimulationRunSpecs(scenarios, c.AudioPaths, c.AudioDir, c.PatienceRepromptAudioPath)
 	if err != nil {
 		return err
 	}
@@ -345,9 +348,37 @@ func customerSimulationLoadScenarios(selectors, paths []string) ([]probe.Custome
 	return scenarios, nil
 }
 
-func customerSimulationRunSpecs(scenarios []probe.CustomerScenario, audioPaths []string, audioDir string) ([]probe.CustomerSimulationRunSpec, error) {
+func customerSimulationRunSpecs(scenarios []probe.CustomerScenario, audioPaths []string, audioDir string, patienceRepromptAudioPaths ...string) ([]probe.CustomerSimulationRunSpec, error) {
 	if len(audioPaths) > 0 && strings.TrimSpace(audioDir) != "" {
 		return nil, errors.New("--audio and --audio-dir cannot be combined")
+	}
+	if len(patienceRepromptAudioPaths) > 1 {
+		return nil, errors.New("only one --patience-reprompt-audio path is supported")
+	}
+	patienceRepromptAudioPath := ""
+	if len(patienceRepromptAudioPaths) == 1 {
+		patienceRepromptAudioPath = strings.TrimSpace(patienceRepromptAudioPaths[0])
+	}
+	hasFamilyE := false
+	for _, scenario := range scenarios {
+		if scenario.Family == probe.ScenarioFamilyE {
+			hasFamilyE = true
+			break
+		}
+	}
+	if hasFamilyE && patienceRepromptAudioPath == "" {
+		return nil, errors.New("Family E requires --patience-reprompt-audio with a natural check-in recording")
+	}
+	if !hasFamilyE && patienceRepromptAudioPath != "" {
+		return nil, errors.New("--patience-reprompt-audio is only valid when Family E is selected")
+	}
+	var patienceRepromptAudio []byte
+	if patienceRepromptAudioPath != "" {
+		data, err := readCustomerSimulationPCM16(patienceRepromptAudioPath)
+		if err != nil {
+			return nil, fmt.Errorf("load Family E patience re-prompt audio: %w", err)
+		}
+		patienceRepromptAudio = data
 	}
 	totalTurns := 0
 	for _, scenario := range scenarios {
@@ -381,7 +412,11 @@ func customerSimulationRunSpecs(scenarios []probe.CustomerScenario, audioPaths [
 			}
 			pcm[index] = data
 		}
-		runs = append(runs, probe.CustomerSimulationRunSpec{Scenario: scenario, Script: script, Audio: pcm})
+		spec := probe.CustomerSimulationRunSpec{Scenario: scenario, Script: script, Audio: pcm}
+		if scenario.Family == probe.ScenarioFamilyE {
+			spec.PatienceRepromptAudio = append([]byte(nil), patienceRepromptAudio...)
+		}
+		runs = append(runs, spec)
 	}
 	return runs, nil
 }
