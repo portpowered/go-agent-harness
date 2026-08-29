@@ -18,6 +18,7 @@ coverage.*
 profile.cov
 
 factory/scripts/__pycache__/
+.cache/go-tools/
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

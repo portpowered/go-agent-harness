@@ -13,13 +13,16 @@ COVERAGE_BASE ?= origin/main
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
+ANALYZER_TOOL_DIR ?= .cache/go-tools
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
 SESSIONS_RACE_TIMEOUT ?= 600s
 GOLANGCI_LINT_VERSION ?= v2.3.0
 STATICCHECK_VERSION ?= 2025.1.1
-GOLANGCI_LINT_INSTALL ?= go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-STATICCHECK_INSTALL ?= go install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
+GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+STATICCHECK_PACKAGE ?= honnef.co/go/tools/cmd/staticcheck
+GOLANGCI_LINT_INSTALL ?= go install $(GOLANGCI_LINT_PACKAGE)@$(GOLANGCI_LINT_VERSION)
+STATICCHECK_INSTALL ?= go install $(STATICCHECK_PACKAGE)@$(STATICCHECK_VERSION)
 GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@latest
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
@@ -32,13 +35,14 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\nOptional skip env vars:\n"
 	@printf "  %-18s %s\n" "SKIP_LINT=1" "Skip golangci-lint with a visible message."
 	@printf "  %-18s %s\n" "SKIP_STATICCHECK=1" "Skip staticcheck with a visible message."
+	@printf "  %-18s %s\n" "ANALYZER_TOOL_DIR=..." "Cache automatically installed pinned analyzers in this directory."
 	@printf "  %-18s %s\n" "COVERAGE_BASE=..." "Git ref used as the changed-package coverage comparison base."
 	@printf "\nOpt-in test env vars:\n"
 	@printf "  %-18s %s\n" "RUN_CUSTOMER_SESSIONS=1" "Acknowledge local-only private session sweep targets."
@@ -83,7 +87,9 @@ vet: ## Run go vet across all workspace modules.
 	for module in $(MODULES); do \
 		echo "==> vet $$module"; \
 		(cd "$$module" && $(GO) vet ./...); \
-	done
+	done; \
+	echo "==> vet tools/analyzergate"; \
+	(cd tools/analyzergate && GOWORK=off $(GO) vet ./...)
 
 lint: ## Run golangci-lint across all workspace modules.
 	@set -euo pipefail; \
@@ -91,15 +97,22 @@ lint: ## Run golangci-lint across all workspace modules.
 		echo "==> lint skipped via SKIP_LINT=1"; \
 		exit 0; \
 	fi; \
-	if ! command -v "$(GOLANGCI_LINT)" >/dev/null 2>&1; then \
-		echo "golangci-lint is required for 'make lint'."; \
-		echo "Install it with: $(GOLANGCI_LINT_INSTALL)"; \
-		echo "Or rerun with SKIP_LINT=1 to skip intentionally."; \
+	if ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
+		--tool golangci-lint \
+		--expected-version "$(GOLANGCI_LINT_VERSION)" \
+		--candidate "$(GOLANGCI_LINT)" \
+		--go "$(GO)" \
+		--install-package "$(GOLANGCI_LINT_PACKAGE)" \
+		--tool-dir "$(abspath $(ANALYZER_TOOL_DIR))" \
+		--working-dir "$(CURDIR)")"; then \
+		echo "golangci-lint resolution failed for pinned version $(GOLANGCI_LINT_VERSION)." >&2; \
+		echo "Install with: $(GOLANGCI_LINT_INSTALL)" >&2; \
 		exit 1; \
 	fi; \
+	echo "==> lint using $$analyzer (pinned $(GOLANGCI_LINT_VERSION))"; \
 	for module in $(MODULES); do \
 		echo "==> lint $$module"; \
-		(cd "$$module" && "$(GOLANGCI_LINT)" run ./...); \
+		(cd "$$module" && "$$analyzer" run ./...); \
 	done
 
 staticcheck: ## Run staticcheck across all workspace modules.
@@ -108,15 +121,22 @@ staticcheck: ## Run staticcheck across all workspace modules.
 		echo "==> staticcheck skipped via SKIP_STATICCHECK=1"; \
 		exit 0; \
 	fi; \
-	if ! command -v "$(STATICCHECK)" >/dev/null 2>&1; then \
-		echo "staticcheck is required for 'make staticcheck'."; \
-		echo "Install it with: $(STATICCHECK_INSTALL)"; \
-		echo "Or rerun with SKIP_STATICCHECK=1 to skip intentionally."; \
+	if ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
+		--tool staticcheck \
+		--expected-version "$(STATICCHECK_VERSION)" \
+		--candidate "$(STATICCHECK)" \
+		--go "$(GO)" \
+		--install-package "$(STATICCHECK_PACKAGE)" \
+		--tool-dir "$(abspath $(ANALYZER_TOOL_DIR))" \
+		--working-dir "$(CURDIR)")"; then \
+		echo "staticcheck resolution failed for pinned version $(STATICCHECK_VERSION)." >&2; \
+		echo "Install with: $(STATICCHECK_INSTALL)" >&2; \
 		exit 1; \
 	fi; \
+	echo "==> staticcheck using $$analyzer (pinned $(STATICCHECK_VERSION))"; \
 	for module in $(MODULES); do \
 		echo "==> staticcheck $$module"; \
-		(cd "$$module" && "$(STATICCHECK)" ./...); \
+		(cd "$$module" && "$$analyzer" ./...); \
 	done
 
 test: ## Run deterministic Go tests across all workspace modules.
@@ -134,7 +154,13 @@ test: ## Run deterministic Go tests across all workspace modules.
 		else \
 			(cd "$$module" && $(GO) test ./... -timeout "$$effective_timeout"); \
 		fi; \
-	done
+	done; \
+	$(MAKE) test-tools
+
+test-tools: ## Run tests for standalone repository helper modules.
+	@set -euo pipefail; \
+	echo "==> test tools/analyzergate"; \
+	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
@@ -214,7 +240,9 @@ build: ## Build the agent-cli binary and compile library packages.
 	echo "==> build go-agent-loop packages"; \
 	(cd go-agent-loop && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
 	echo "==> build go-llm-gateway packages"; \
-	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...)
+	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
+	echo "==> build tools/analyzergate"; \
+	(cd tools/analyzergate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...)
 
 typecheck: build ## Backward-compatible alias for root compile validation.
 
