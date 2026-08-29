@@ -31,7 +31,7 @@ const (
 	mixedModalityLiveMaxRun    = 60 * time.Second
 	mixedModalityLiveOptIn     = "AGENT_HARNESS_LIVE_MIXED_MODALITY"
 	mixedModalityLiveArtifact  = "AGENT_HARNESS_LIVE_MIXED_MODALITY_ARTIFACT_DIR"
-	mixedModalityLiveSystem    = "You are a terse visual assistant. Answer in five words or fewer. Use the supplied image for the first spoken question, and answer later spoken turns briefly."
+	mixedModalityLiveSystem    = "You are a terse visual assistant. Answer in five words or fewer. Use the supplied image for the first spoken question, answer later spoken turns briefly, and do not call tools."
 	mixedModalityLiveImageName = "red-square-blue-diagonal.png"
 )
 
@@ -117,6 +117,10 @@ func requireMixedModalityLiveOptIn(t *testing.T) string {
 func runMixedModalityLiveSession(t *testing.T, apiKey, imagePath string, audioPaths []string, scheduled bool) mixedModalityLiveRun {
 	t.Helper()
 	workDir := t.TempDir()
+	// This confirmation measures the image/audio boundary itself. Disable the
+	// default registry so a model cannot elect an unrelated tool continuation
+	// and make the response count exceed the supplied audio-turn count.
+	writeSessionToolConfig(t, workDir, false)
 	capturePath := filepath.Join(workDir, "mixed-modality.session.json")
 	recordDir := ""
 	if scheduled {

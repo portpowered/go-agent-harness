@@ -319,6 +319,7 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 			Content []struct {
 				Type     string `json:"type"`
 				ImageURL string `json:"image_url"`
+				Text     string `json:"text"`
 			} `json:"content"`
 		} `json:"item"`
 	}
@@ -333,6 +334,7 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 				Content []struct {
 					Type     string `json:"type"`
 					ImageURL string `json:"image_url"`
+					Text     string `json:"text"`
 				} `json:"content"`
 			} `json:"item"`
 		}
@@ -345,11 +347,29 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 		t.Fatalf("decoded image items = %d, want one", len(imageItems))
 	}
 	item := imageItems[0].Item
-	if item.Type != "message" || item.Role != "user" || len(item.Content) != 2 {
-		t.Fatalf("first-turn image item = %#v, want one user message with two image parts", item)
+	if item.Type != "message" || item.Role != "user" {
+		t.Fatalf("first-turn image item = %#v, want one user message", item)
+	}
+	imageParts := make([]struct {
+		Type     string `json:"type"`
+		ImageURL string `json:"image_url"`
+		Text     string `json:"text"`
+	}, 0, len(item.Content))
+	instructionCount := 0
+	for _, part := range item.Content {
+		if part.Type == "input_text" {
+			if strings.TrimSpace(part.Text) != "" {
+				instructionCount++
+			}
+			continue
+		}
+		imageParts = append(imageParts, part)
+	}
+	if instructionCount != 1 || len(imageParts) != 2 {
+		t.Fatalf("first-turn image content = %#v, want one context instruction and two image parts", item.Content)
 	}
 	for index, wantMIME := range []string{"data:image/png;", "data:image/jpeg;"} {
-		part := item.Content[index]
+		part := imageParts[index]
 		if part.Type != "input_image" || !strings.HasPrefix(part.ImageURL, wantMIME) {
 			t.Fatalf("first-turn image part %d = %#v, want input_image with %q URL", index, part, wantMIME)
 		}

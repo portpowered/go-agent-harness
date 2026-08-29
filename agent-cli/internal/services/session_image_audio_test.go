@@ -64,8 +64,8 @@ func TestSessionCommandImageAndAudioInputUsesSingleTurn(t *testing.T) {
 	if inferencer.connects != 1 || len(session.messages) != 1 {
 		t.Fatalf("connects/messages = %d/%d, want one connected image turn", inferencer.connects, len(session.messages))
 	}
-	if len(session.messages[0].ContentParts) != 1 {
-		t.Fatalf("image turn content parts = %d, want one image and no placeholder text", len(session.messages[0].ContentParts))
+	if len(session.messages[0].ContentParts) != 2 || !strings.Contains(session.messages[0].TextContent(), "attached image") {
+		t.Fatalf("image turn content = %#v, want one deferred-image instruction and one image", session.messages[0].ContentParts)
 	}
 	audioDeltas, messageEnds := 0, 0
 	for _, event := range session.events {
