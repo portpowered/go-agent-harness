@@ -95,10 +95,6 @@ func (o *sessionProgressObserver) bindScheduledResponseID(index int, id string) 
 	return true
 }
 
-func (o *sessionProgressObserver) setActiveScheduledResponse(index int) {
-	o.setActiveScheduledResponseWithID(index, "")
-}
-
 func (o *sessionProgressObserver) setActiveScheduledResponseWithID(index int, id string) bool {
 	if o == nil || index < 0 || index >= len(o.scheduledResponses) {
 		return false
