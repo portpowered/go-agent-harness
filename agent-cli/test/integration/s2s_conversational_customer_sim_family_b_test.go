@@ -302,29 +302,31 @@ type familyBProviderFixture struct {
 	upgrader websocket.Upgrader
 	scenario probe.CustomerScenario
 
-	mu                       sync.Mutex
-	startedAt                time.Time
-	connectionCount          int
-	sessionUpdates           int
-	functionCalls            []familyBFunctionCall
-	toolObservations         []probe.ToolObservation
-	customerTranscript       []probe.TranscriptEvent
-	productTranscript        []probe.TranscriptEvent
-	responseTerminalStatuses []string
-	protocolError            string
-	utteranceIndex           int
-	originalToolStarted      time.Duration
-	replacementToolStarted   time.Duration
-	originalOutputStarted    time.Duration
-	originalOutputEnded      time.Duration
-	replacementOutputStarted time.Duration
-	replacementOutputEnded   time.Duration
-	cancellationSent         time.Duration
-	correctionStarted        time.Duration
-	activeResponse           string
-	cancelPending            bool
-	originalResultSeen       bool
-	replacementResultSeen    bool
+	mu                        sync.Mutex
+	startedAt                 time.Time
+	connectionCount           int
+	sessionUpdates            int
+	functionCalls             []familyBFunctionCall
+	toolObservations          []probe.ToolObservation
+	customerTranscript        []probe.TranscriptEvent
+	productTranscript         []probe.TranscriptEvent
+	responseTerminalStatuses  []string
+	protocolError             string
+	utteranceIndex            int
+	originalToolStarted       time.Duration
+	replacementToolStarted    time.Duration
+	originalOutputStarted     time.Duration
+	originalOutputEnded       time.Duration
+	replacementOutputStarted  time.Duration
+	replacementOutputEnded    time.Duration
+	cancellationSent          time.Duration
+	cancellationEventRecorded bool
+	cancellationResponseID    string
+	correctionStarted         time.Duration
+	activeResponse            string
+	cancelPending             bool
+	originalResultSeen        bool
+	replacementResultSeen     bool
 }
 
 func newFamilyBProviderFixture(scenario probe.CustomerScenario) *familyBProviderFixture {
@@ -374,6 +376,8 @@ func (f *familyBProviderFixture) Snapshot() familyBProviderObservation {
 			OriginalResponseEndedAt:      f.originalOutputEnded,
 			ReplacementResponseStartedAt: f.replacementOutputStarted,
 			ReplacementResponseEndedAt:   f.replacementOutputEnded,
+			CancellationEventRecorded:    f.cancellationEventRecorded,
+			CancellationResponseID:       f.cancellationResponseID,
 			OriginalResponseStatus:       "cancelled",
 			ReplacementResponseStatus:    "completed",
 		},
@@ -455,6 +459,8 @@ func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *htt
 			f.mu.Lock()
 			f.cancelPending = true
 			f.cancellationSent = f.elapsedLocked()
+			f.cancellationEventRecorded = true
+			f.cancellationResponseID = f.activeResponse
 			f.mu.Unlock()
 		case "input_audio_buffer.commit", "response.create":
 			// The fixture models the two customer turns from the continuously
