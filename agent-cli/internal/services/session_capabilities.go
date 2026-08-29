@@ -4,12 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // ErrSessionCapabilityCleanupPanic identifies a capability cleanup hook that
 // panicked. Cleanup must not be able to bypass the remaining session
 // finalizers or crash the command process.
-var ErrSessionCapabilityCleanupPanic = errors.New("session capability cleanup panicked")
+var (
+	ErrSessionCapabilityCleanupPanic   = errors.New("session capability cleanup panicked")
+	ErrSessionCapabilityCleanupTimeout = errors.New("session capability cleanup timed out")
+)
+
+// DefaultSessionCapabilityCleanupTimeout bounds one transferred capability
+// cleanup hook. A non-cooperative browser adapter cannot be allowed to hold
+// provider and recording finalization forever; the hook's goroutine may still
+// finish later, but the session coordinator records the unresolved cleanup and
+// continues its ordered shutdown.
+const DefaultSessionCapabilityCleanupTimeout = 15 * time.Second
 
 // SessionCapabilityCoordinator owns the cleanup hook transferred from a
 // session capability factory. It runs cleanup functions in declaration order,
@@ -25,19 +36,31 @@ type SessionCapabilityCoordinator struct {
 	closed   bool
 	closeErr error
 	cleanups []func() error
+	timeout  time.Duration
 }
 
 // NewSessionCapabilityCoordinator creates an idempotent capability cleanup
 // owner. Nil cleanup functions are ignored, which lets callers preserve a
 // nil/no-resources capability without adding special branches to finalizers.
 func NewSessionCapabilityCoordinator(cleanups ...func() error) *SessionCapabilityCoordinator {
+	return NewSessionCapabilityCoordinatorWithTimeout(DefaultSessionCapabilityCleanupTimeout, cleanups...)
+}
+
+// NewSessionCapabilityCoordinatorWithTimeout creates an idempotent capability
+// cleanup owner with an explicit per-hook bound. It is useful for adapters
+// whose shutdown budget is known by the caller and for deterministic tests of
+// non-cooperative cleanup behavior. A non-positive timeout uses the default.
+func NewSessionCapabilityCoordinatorWithTimeout(timeout time.Duration, cleanups ...func() error) *SessionCapabilityCoordinator {
+	if timeout <= 0 {
+		timeout = DefaultSessionCapabilityCleanupTimeout
+	}
 	owned := make([]func() error, 0, len(cleanups))
 	for _, cleanup := range cleanups {
 		if cleanup != nil {
 			owned = append(owned, cleanup)
 		}
 	}
-	return &SessionCapabilityCoordinator{cleanups: owned}
+	return &SessionCapabilityCoordinator{cleanups: owned, timeout: timeout}
 }
 
 // Close attempts every transferred cleanup in order. A panic from one hook is
@@ -48,8 +71,8 @@ func (c *SessionCapabilityCoordinator) Close() error {
 	}
 	c.once.Do(func() {
 		var closeErrs []error
-		for _, cleanup := range c.cleanups {
-			if err := invokeSessionCapabilityCleanup(cleanup); err != nil {
+		for index, cleanup := range c.cleanups {
+			if err := invokeSessionCapabilityCleanupWithTimeout(cleanup, c.timeout, index); err != nil {
 				closeErrs = append(closeErrs, err)
 			}
 		}
@@ -85,6 +108,24 @@ func invokeSessionCapabilityCleanup(cleanup func() error) (err error) {
 		}
 	}()
 	return cleanup()
+}
+
+func invokeSessionCapabilityCleanupWithTimeout(cleanup func() error, timeout time.Duration, index int) error {
+	if timeout <= 0 {
+		timeout = DefaultSessionCapabilityCleanupTimeout
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- invokeSessionCapabilityCleanup(cleanup)
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("cleanup hook %d: %w after %s", index+1, ErrSessionCapabilityCleanupTimeout, timeout)
+	}
 }
 
 // prepareSessionCapabilityCoordinator converts a caller-provided hook into a

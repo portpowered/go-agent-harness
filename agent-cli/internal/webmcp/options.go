@@ -23,6 +23,11 @@ const DefaultInvocationTimeout = 30 * time.Second
 // fresh cancel process waiting indefinitely.
 const DefaultDirectCancellationTimeout = 5 * time.Second
 
+// DefaultBrokerCloseTimeout bounds each browser session, handle, and worker
+// shutdown step. A non-cooperative page or transport is reported as
+// unresolved instead of holding the session coordinator forever.
+const DefaultBrokerCloseTimeout = 15 * time.Second
+
 const (
 	CancelOnInterruptNever    = "never"
 	CancelOnInterruptReadOnly = "read-only"

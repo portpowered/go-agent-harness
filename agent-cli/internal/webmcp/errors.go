@@ -14,6 +14,8 @@ var (
 	ErrInvalidToolInput   = errors.New("webmcp: invalid tool input")
 	ErrStaleSelection     = errors.New("webmcp: stale selection")
 	ErrStaleToolRef       = errors.New("webmcp: stale tool ref")
+	ErrCloseTimeout       = errors.New("webmcp: close timed out")
+	ErrClosePanic         = errors.New("webmcp: close panicked")
 )
 
 // ErrorCode is the model-facing, stable WebMCP failure vocabulary.

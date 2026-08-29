@@ -77,9 +77,10 @@ func (s *BrokerToolSet) Definitions() []messages.ToolDefinition {
 	result := make([]messages.ToolDefinition, 0, len(s.definitions))
 	for _, definition := range s.definitions {
 		result = append(result, messages.ToolDefinition{
-			Name:        definition.Name,
-			Description: definition.Description,
-			Parameters:  flatParameters(definition.Parameters),
+			Name:             definition.Name,
+			Description:      definition.Description,
+			Parameters:       flatParameters(definition.Parameters),
+			ParametersClosed: true,
 		})
 	}
 	return result
@@ -288,7 +289,7 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 				"phase":      "select",
 			})
 		}
-		return webmcp.EncodeToolResult(contextDataFrom(selected), nil)
+		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
 
 	case webmcp.ListToolsToolName:
 		options := webmcp.ListToolsOptions{
@@ -315,6 +316,20 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 				"tool_ref": string(request.ToolRef),
 				"phase":    "invoke",
 			})
+		}
+		if invocationNeedsTerminalResult(result.State) {
+			if waiter, ok := s.broker.(webmcp.InvocationWaiter); ok {
+				invocationID := result.InvocationID
+				result, err = waiter.WaitInvocation(ctx, invocationID)
+				if err != nil {
+					return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
+						"invocation_id":       string(invocationID),
+						"tool_ref":            string(request.ToolRef),
+						"phase":               "result",
+						"side_effect_unknown": true,
+					})
+				}
+			}
 		}
 		if result.ErrorCode != "" || isFailedInvocationState(result.State) {
 			return invocationFailure(result, request.ToolRef)
@@ -659,6 +674,20 @@ func isFailedInvocationState(state webmcp.InvocationState) bool {
 	}
 }
 
+func invocationNeedsTerminalResult(state webmcp.InvocationState) bool {
+	switch state {
+	case webmcp.InvocationCompleted,
+		webmcp.InvocationError,
+		webmcp.InvocationCanceled,
+		webmcp.InvocationTimedOut,
+		webmcp.InvocationOrphaned,
+		webmcp.InvocationPolicyDenied:
+		return false
+	default:
+		return true
+	}
+}
+
 type contextData struct {
 	BrowserID  webmcp.BrowserID `json:"browser_id"`
 	TargetID   webmcp.TargetID  `json:"target_id"`
@@ -668,6 +697,14 @@ type contextData struct {
 	Generation uint64           `json:"generation"`
 	Connected  bool             `json:"connected"`
 	Ready      bool             `json:"ready"`
+}
+
+// selectionData makes the next model action explicit after a target is
+// selected. The page catalog remains dynamic, so callers must ask the broker
+// for current tool refs instead of guessing from the selection context.
+type selectionData struct {
+	contextData
+	NextStep string `json:"next_step"`
 }
 
 func contextDataFrom(context webmcp.PageContext) contextData {
@@ -680,6 +717,13 @@ func contextDataFrom(context webmcp.PageContext) contextData {
 		Generation: context.Generation,
 		Connected:  context.Connected,
 		Ready:      context.Ready,
+	}
+}
+
+func selectionDataFrom(context webmcp.PageContext) selectionData {
+	return selectionData{
+		contextData: contextDataFrom(context),
+		NextStep:    "selected; call webmcp_list_tools to obtain tool refs",
 	}
 }
 

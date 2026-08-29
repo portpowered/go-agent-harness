@@ -1169,7 +1169,7 @@ func (b *StatefulBroker) PendingInvocations() []Invocation {
 
 // WaitInvocation waits for one terminal broker result and consumes its
 // bounded terminal cache entry. Invoke itself remains non-blocking after
-// dispatch so the existing tool executor can preserve its current behavior.
+// dispatch; terminal-aware adapters wait here before returning a tool result.
 func (b *StatefulBroker) WaitInvocation(ctx context.Context, id InvocationID) (InvokeResult, error) {
 	if ctx == nil {
 		ctx = context.Background()

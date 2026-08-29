@@ -52,7 +52,7 @@ func TestPlanSessionRuntime_BrowserToolsUsesUnrecordedLiveRuntime(t *testing.T) 
 	if plan.capturePath != "" || plan.flushCapture != nil || plan.finalize != nil {
 		t.Fatalf("browser live plan unexpectedly owns capture lifecycle: %+v", plan)
 	}
-	if plan.inferencer == nil || plan.loop.CloseAfterOpen == false || plan.loop.AdvertiseToolDefinitions == false {
+	if plan.inferencer == nil || plan.loop.CloseAfterOpen == false || plan.loop.AdvertiseToolDefinitions {
 		t.Fatalf("browser live plan lifecycle = %+v", plan.loop)
 	}
 	if gotConfig.Model != "grok-browser-test" || gotConfig.APIKey != "test-key" || len(gotDefinitions) != 1 || gotDefinitions[0].Name != "browser_test" {

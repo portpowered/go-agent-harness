@@ -262,9 +262,10 @@ func AgentLoopDefinitions() []messages.ToolDefinition {
 			})
 		}
 		result = append(result, messages.ToolDefinition{
-			Name:        definition.Name,
-			Description: definition.Description,
-			Parameters:  parameters,
+			Name:             definition.Name,
+			Description:      definition.Description,
+			Parameters:       parameters,
+			ParametersClosed: true,
 		})
 	}
 	return result

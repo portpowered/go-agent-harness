@@ -67,6 +67,14 @@ type DirectCanceller interface {
 	CancelDirect(context.Context, DirectCancelRequest) error
 }
 
+// InvocationWaiter is an optional broker capability for callers that need the
+// terminal page result rather than the dispatch acknowledgement returned by
+// Broker.Invoke. Keeping it separate preserves the frozen Broker interface for
+// lightweight and legacy broker implementations.
+type InvocationWaiter interface {
+	WaitInvocation(context.Context, InvocationID) (InvokeResult, error)
+}
+
 // Clock is the minimum time seam required by broker state and deadline
 // handling. Implementations should return a stable timezone-normalized value
 // when deterministic replay is desired.

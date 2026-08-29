@@ -217,10 +217,14 @@ func toolsToParams(tools []models.ToolDefinition) []chatTool {
 // buildParameters converts tool parameters to OpenAI function parameters (JSON Schema).
 func buildParameters(tool models.ToolDefinition) map[string]interface{} {
 	if len(tool.Parameters) == 0 {
-		return map[string]interface{}{
+		parameters := map[string]interface{}{
 			"type":       "object",
 			"properties": map[string]interface{}{},
 		}
+		if tool.ParametersClosed {
+			parameters["additionalProperties"] = false
+		}
+		return parameters
 	}
 
 	properties := map[string]interface{}{}
@@ -234,11 +238,15 @@ func buildParameters(tool models.ToolDefinition) map[string]interface{} {
 			required = append(required, param.Name)
 		}
 	}
-	return map[string]interface{}{
+	parameters := map[string]interface{}{
 		"type":       "object",
 		"required":   required,
 		"properties": properties,
 	}
+	if tool.ParametersClosed {
+		parameters["additionalProperties"] = false
+	}
+	return parameters
 }
 
 // responseToMessage converts an OpenAI chat completion message to a gateway message.
