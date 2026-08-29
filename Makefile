@@ -242,7 +242,9 @@ build: ## Build the agent-cli binary and compile library packages.
 	echo "==> build go-llm-gateway packages"; \
 	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
 	echo "==> build tools/analyzergate"; \
-	(cd tools/analyzergate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...)
+	analyzer_build_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$analyzer_build_dir"' EXIT; \
+	(cd tools/analyzergate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o "$$analyzer_build_dir/analyzergate" .)
 
 typecheck: build ## Backward-compatible alias for root compile validation.
 
