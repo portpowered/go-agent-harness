@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -404,6 +405,170 @@ func TestRunAgentLoopSessionRetriesScheduledToolContinuationOnce(t *testing.T) {
 	}
 }
 
+func TestRunAgentLoopSessionStopsAfterConsecutiveRateLimitFailure(t *testing.T) {
+	const retryDelay = 30 * time.Millisecond
+
+	sink := &diagnosticRecordSink{}
+	session := newRateLimitRetrySession()
+	session.continuationFailures = []rateLimitRetryTerminal{
+		{code: rateLimitRetryCode, message: "Please try again in 0.03s", details: "reason=error, code=rate_limit_exceeded, message=Please try again in 0.03s"},
+		{code: rateLimitRetryCode, message: "Please try again in 0.03s", details: "reason=error, code=rate_limit_exceeded, message=Please try again in 0.03s"},
+	}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime-2.1-mini")
+	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
+	executor := &rateLimitRetryToolExecutor{}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+		CloseAfterScheduledAudio: true,
+		ToolExecutor:             executor,
+		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+		observer:                 observer,
+	})
+	elapsed := time.Since(started)
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("consecutive failure did not terminate promptly: %v; timeline=%v", err, session.timelineSnapshot())
+	}
+	if err == nil {
+		t.Fatal("consecutive rate-limit failure returned nil")
+	}
+	if elapsed < retryDelay || elapsed >= 250*time.Millisecond {
+		t.Fatalf("consecutive failure elapsed time = %s, want retry delay and bounded completion; timeline=%v", elapsed, session.timelineSnapshot())
+	}
+	if got := session.countSent(messages.StreamTypeResponseCreate); got != 2 {
+		t.Fatalf("response.create count = %d, want initial attempt plus exactly one replacement", got)
+	}
+	if got := session.countSent(messages.StreamTypeAudioDelta); got != 1 {
+		t.Fatalf("audio input count = %d, want one scheduled input", got)
+	}
+	if got := session.countSent(messages.StreamTypeToolCallEnd); got != 1 {
+		t.Fatalf("tool result count = %d, want exactly one result", got)
+	}
+	if calls := executor.callsSnapshot(); len(calls) != 1 {
+		t.Fatalf("tool executions = %#v, want exactly one execution", calls)
+	}
+	if observer.completedScheduled != 0 || observer.turnsCompleted != 0 {
+		t.Fatalf("failed scheduled credits = scheduled:%d turns:%d, want 0/0", observer.completedScheduled, observer.turnsCompleted)
+	}
+	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+		t.Fatalf("consecutive failure error = %v, want tool and scheduled lifecycle sentinels", err)
+	}
+	var continuationErr *SessionToolContinuationError
+	if !errors.As(err, &continuationErr) {
+		t.Fatalf("consecutive failure error = %v, want SessionToolContinuationError", err)
+	}
+	if continuationErr.ProviderStatuses["call-retry-once"] != "failed" || continuationErr.ProviderCodes["call-retry-once"] != rateLimitRetryCode {
+		t.Fatalf("consecutive failure provider metadata = statuses:%v codes:%v, want failed/%s", continuationErr.ProviderStatuses, continuationErr.ProviderCodes, rateLimitRetryCode)
+	}
+	if continuationErr.ProviderDetails["call-retry-once"] != "reason=error, code=rate_limit_exceeded, message=Please try again in 0.03s" {
+		t.Fatalf("consecutive failure provider details = %q", continuationErr.ProviderDetails["call-retry-once"])
+	}
+	if !strings.Contains(err.Error(), rateLimitRetryCode) {
+		t.Fatalf("consecutive failure error %q does not retain provider code", err)
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 || failures[0].Fields[SessionDiagnosticFieldPendingContinuationCodes] != "call-retry-once="+rateLimitRetryCode {
+		t.Fatalf("consecutive failure diagnostics = %#v, want one code-bearing record", failures)
+	}
+}
+
+func TestRunAgentLoopSessionDoesNotRetryNonRateLimitFailure(t *testing.T) {
+	const providerCode = "server_error"
+
+	session := newRateLimitRetrySession()
+	session.continuationFailures = []rateLimitRetryTerminal{{
+		code:    providerCode,
+		message: "provider failed without retry",
+		details: "reason=error, code=server_error, message=provider failed without retry",
+	}}
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
+	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true}})
+	executor := &rateLimitRetryToolExecutor{}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := runAgentLoopSession(ctx, io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+		CloseAfterScheduledAudio: true,
+		ToolExecutor:             executor,
+		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+		observer:                 observer,
+	})
+	elapsed := time.Since(started)
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("non-rate-limit failure did not terminate promptly: %v; timeline=%v", err, session.timelineSnapshot())
+	}
+	if err == nil {
+		t.Fatal("non-rate-limit failure returned nil")
+	}
+	if elapsed >= 250*time.Millisecond {
+		t.Fatalf("non-rate-limit failure waited for retry: elapsed=%s timeline=%v", elapsed, session.timelineSnapshot())
+	}
+	if got := session.countSent(messages.StreamTypeResponseCreate); got != 1 {
+		t.Fatalf("response.create count = %d, want no replacement", got)
+	}
+	if got := session.countSent(messages.StreamTypeAudioDelta); got != 1 || session.countSent(messages.StreamTypeToolCallEnd) != 1 {
+		t.Fatalf("non-rate-limit input/tool counts = audio:%d tool:%d, want 1/1", got, session.countSent(messages.StreamTypeToolCallEnd))
+	}
+	if observer.completedScheduled != 0 || observer.turnsCompleted != 0 {
+		t.Fatalf("non-rate-limit credits = scheduled:%d turns:%d, want 0/0", observer.completedScheduled, observer.turnsCompleted)
+	}
+	if !errors.Is(err, ErrSessionToolContinuationIncomplete) || !errors.Is(err, ErrSessionScheduledAudioIncomplete) {
+		t.Fatalf("non-rate-limit error = %v, want tool and scheduled lifecycle sentinels", err)
+	}
+	var continuationErr *SessionToolContinuationError
+	if !errors.As(err, &continuationErr) || continuationErr.ProviderCodes["call-retry-once"] != providerCode {
+		t.Fatalf("non-rate-limit provider metadata = %#v, want code %s", continuationErr, providerCode)
+	}
+}
+
+func TestScheduledFailureRetainsProviderMetadataWithoutRetry(t *testing.T) {
+	const providerCode = "server_error"
+
+	sink := &diagnosticRecordSink{}
+	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime-2.1-mini")
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true}})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch scheduled input: %v", err)
+	}
+	const responseID = "scheduled-failure"
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: responseID, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
+	terminal := &messages.MessageEndValue{
+		Type:                 "message_end",
+		Status:               "failed",
+		StatusDetails:        "reason=error, code=server_error, message=provider failed without retry",
+		ProviderErrorCode:    providerCode,
+		ProviderErrorMessage: "provider failed without retry",
+	}
+	terminalMessage := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Role: messages.RoleAssistant, Value: terminal}
+	observer.observe(terminalMessage)
+	if !observer.hasTerminalScheduledResponseFailure() || !shouldStopSessionLoop(terminalMessage, sessionLoopOptions{observer: observer, CloseAfterScheduledAudio: true}, false) {
+		t.Fatal("scheduled provider failure was not treated as terminal")
+	}
+	if delay, retry := observer.claimScheduledRateLimitRetry(responseID, terminal); retry || delay != 0 {
+		t.Fatalf("direct scheduled failure unexpectedly claimed retry = (%s, %t)", delay, retry)
+	}
+	err := scheduledAudioCompletionError(nil, sessionLoopOptions{CloseAfterScheduledAudio: true, observer: observer})
+	var incomplete *SessionScheduledAudioIncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("scheduled failure error = %v, want typed incomplete error", err)
+	}
+	if incomplete.ProviderStatus != "failed" || incomplete.ProviderErrorCode != providerCode || incomplete.ProviderDetails != terminal.StatusDetails {
+		t.Fatalf("scheduled provider metadata = %+v, want failed/%s/%q", incomplete, providerCode, terminal.StatusDetails)
+	}
+	if !strings.Contains(err.Error(), providerCode) || !strings.Contains(err.Error(), terminal.StatusDetails) {
+		t.Fatalf("scheduled failure error %q lost provider metadata", err)
+	}
+	if err = observer.finish(err); err == nil {
+		t.Fatal("observer finish erased scheduled failure")
+	}
+	failures := sink.events(SessionDiagnosticEventFailure)
+	if len(failures) != 1 || failures[0].Fields[fieldProviderErrorCode] != providerCode {
+		t.Fatalf("scheduled failure diagnostics = %#v, want provider code %s", failures, providerCode)
+	}
+}
+
 type rateLimitRetrySessionInferencer struct {
 	session *rateLimitRetrySession
 }
@@ -421,11 +586,19 @@ type rateLimitRetrySession struct {
 	done chan struct{}
 	once sync.Once
 
-	mu              sync.Mutex
-	sent            []messages.StreamMessage
-	timeline        []string
-	responseCreates int
-	initialSent     bool
+	mu                   sync.Mutex
+	sent                 []messages.StreamMessage
+	timeline             []string
+	responseCreates      int
+	initialSent          bool
+	continuationFailures []rateLimitRetryTerminal
+}
+
+type rateLimitRetryTerminal struct {
+	status  string
+	code    string
+	message string
+	details string
 }
 
 func newRateLimitRetrySession() *rateLimitRetrySession {
@@ -480,6 +653,25 @@ func (s *rateLimitRetrySession) emitSecondScheduledResponse() {
 }
 
 func (s *rateLimitRetrySession) emitResponseCreateResult(attempt int) {
+	if attempt <= len(s.continuationFailures) {
+		failure := s.continuationFailures[attempt-1]
+		if failure.status == "" {
+			failure.status = "failed"
+		}
+		responseID := "response-continuation-failed"
+		if attempt > 1 {
+			responseID += "-second"
+		}
+		s.emit(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()})
+		s.emit(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: &messages.MessageEndValue{
+			Type:                 "message_end",
+			Status:               failure.status,
+			StatusDetails:        failure.details,
+			ProviderErrorCode:    failure.code,
+			ProviderErrorMessage: failure.message,
+		}})
+		return
+	}
 	switch attempt {
 	case 1:
 		const responseID = "response-continuation-failed"

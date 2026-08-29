@@ -80,6 +80,7 @@ const (
 	// These fields retain bounded provider terminal context for pending
 	// continuations. Values are encoded as comma-separated call_id=value pairs.
 	SessionDiagnosticFieldPendingContinuationStatuses = "pending_continuation_statuses"
+	SessionDiagnosticFieldPendingContinuationCodes    = "pending_continuation_codes"
 	SessionDiagnosticFieldPendingContinuationDetails  = "pending_continuation_details"
 )
 

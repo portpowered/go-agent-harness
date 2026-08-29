@@ -229,6 +229,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
 		candidate := o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
+		o.noteScheduledResponseTerminal(responseLifecycleID, v)
 		o.rememberRateLimitRetryCandidate(msgResponseID, responseLifecycleID, v)
 		// A cancelled response can have output queued before the cancellation
 		// boundary. It is still an interrupted lifecycle disposition, never a

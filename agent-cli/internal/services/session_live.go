@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -21,21 +22,39 @@ const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 
 // SessionScheduledAudioIncompleteError carries the deterministic schedule
-// counts observed at a terminal boundary. It unwraps to
-// ErrSessionScheduledAudioIncomplete so callers can use errors.Is while still
-// retaining any provider, timeout, cancellation, or cleanup cause joined with
-// it.
+// counts observed at a terminal boundary. When a provider terminal caused the
+// incomplete lifecycle, its bounded status, error code, and detail are retained
+// as well. It unwraps to ErrSessionScheduledAudioIncomplete so callers can use
+// errors.Is while still retaining any provider, timeout, cancellation, or
+// cleanup cause joined with it.
 type SessionScheduledAudioIncompleteError struct {
-	Completed  int
-	Dispatched int
-	Scheduled  int
+	Completed         int
+	Dispatched        int
+	Scheduled         int
+	ProviderStatus    string
+	ProviderErrorCode string
+	ProviderDetails   string
 }
 
 func (e *SessionScheduledAudioIncompleteError) Error() string {
 	if e == nil {
 		return ErrSessionScheduledAudioIncomplete.Error()
 	}
-	return fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrSessionScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	message := fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrSessionScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	annotations := make([]string, 0, 3)
+	if status := strings.TrimSpace(e.ProviderStatus); status != "" {
+		annotations = append(annotations, "status="+status)
+	}
+	if code := strings.TrimSpace(e.ProviderErrorCode); code != "" {
+		annotations = append(annotations, "code="+code)
+	}
+	if detail := strings.TrimSpace(e.ProviderDetails); detail != "" {
+		annotations = append(annotations, "detail="+detail)
+	}
+	if len(annotations) > 0 {
+		message += " (" + strings.Join(annotations, "; ") + ")"
+	}
+	return message
 }
 
 func (e *SessionScheduledAudioIncompleteError) Unwrap() error {
@@ -265,10 +284,14 @@ func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
 		return err
 	}
 	completed, dispatched, scheduled := opts.observer.scheduledAudioCounts()
+	providerStatus, providerCode, providerDetails := opts.observer.scheduledAudioFailureMetadata()
 	incomplete := &SessionScheduledAudioIncompleteError{
-		Completed:  completed,
-		Dispatched: dispatched,
-		Scheduled:  scheduled,
+		Completed:         completed,
+		Dispatched:        dispatched,
+		Scheduled:         scheduled,
+		ProviderStatus:    providerStatus,
+		ProviderErrorCode: providerCode,
+		ProviderDetails:   providerDetails,
 	}
 	if err == nil {
 		return incomplete

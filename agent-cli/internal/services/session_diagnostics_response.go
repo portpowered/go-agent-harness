@@ -27,6 +27,14 @@ type scheduledAudioResponseLifecycle struct {
 	// a second retry allowance.
 	retryUsed    bool
 	retryPending bool
+	// terminalFailure retains the last provider-authored non-success terminal
+	// for this logical scheduled input. It is cleared when a replacement
+	// response opens, and is used to stop a run after retry exhaustion while
+	// preserving bounded provider context for the typed incomplete error.
+	terminalFailure       bool
+	terminalStatus        string
+	terminalErrorCode     string
+	terminalStatusDetails string
 }
 
 func (o *sessionProgressObserver) ensureScheduledResponseState() {
@@ -76,6 +84,75 @@ func (o *sessionProgressObserver) pendingScheduledRateLimitRetryIndex() (int, bo
 		}
 	}
 	return 0, false
+}
+
+// noteScheduledResponseTerminal retains bounded provider failure metadata on
+// the owning logical scheduled input. A retrying terminal is still a pending
+// lifecycle and is cleared by bindScheduledRateLimitRetry when its replacement
+// opens; a second failure remains here for honest terminal reporting.
+func (o *sessionProgressObserver) noteScheduledResponseTerminal(id string, terminal *messages.MessageEndValue) {
+	if o == nil || !scheduledResponseIsProviderFailure(terminal) {
+		return
+	}
+	index, ok := o.scheduledResponseIndex(id)
+	if !ok || index < 0 || index >= len(o.scheduledResponses) {
+		return
+	}
+	lifecycle := &o.scheduledResponses[index]
+	if !lifecycle.bound || lifecycle.disposition != scheduledAudioResponsePending {
+		return
+	}
+	lifecycle.terminalFailure = true
+	lifecycle.terminalStatus = normalizeTerminalStatus(terminal.Status)
+	lifecycle.terminalErrorCode = sanitizeContinuationDetail(providerTerminalErrorCode(terminal))
+	lifecycle.terminalStatusDetails = sanitizeContinuationDetail(terminal.StatusDetails)
+	if lifecycle.terminalStatusDetails == "" {
+		lifecycle.terminalStatusDetails = sanitizeContinuationDetail(providerTerminalErrorMessage(terminal))
+	}
+}
+
+func scheduledResponseIsProviderFailure(terminal *messages.MessageEndValue) bool {
+	if terminal == nil || isLocalResponseCancellation(terminal) || terminal.TerminalReason == messages.TerminalReasonCancellation {
+		return false
+	}
+	status := normalizeTerminalStatus(terminal.Status)
+	switch status {
+	case "", "completed":
+		return terminal.TerminalReason == messages.TerminalReasonTerminalFailure
+	case "cancelled", "canceled":
+		return false
+	default:
+		return true
+	}
+}
+
+func (o *sessionProgressObserver) hasTerminalScheduledResponseFailure() bool {
+	if o == nil {
+		return false
+	}
+	for _, lifecycle := range o.scheduledResponses {
+		if lifecycle.bound && lifecycle.disposition == scheduledAudioResponsePending && lifecycle.terminalFailure && !lifecycle.retryPending {
+			return true
+		}
+	}
+	return false
+}
+
+// scheduledAudioFailureMetadata returns the first pending scheduled lifecycle
+// with a provider-authored terminal failure. Scheduled inputs are dispatched in
+// order, so the index order is deterministic even when a provider delivers a
+// late terminal during shutdown.
+func (o *sessionProgressObserver) scheduledAudioFailureMetadata() (string, string, string) {
+	if o == nil {
+		return "", "", ""
+	}
+	for _, lifecycle := range o.scheduledResponses {
+		if !lifecycle.bound || lifecycle.disposition != scheduledAudioResponsePending || !lifecycle.terminalFailure || lifecycle.retryPending {
+			continue
+		}
+		return lifecycle.terminalStatus, lifecycle.terminalErrorCode, lifecycle.terminalStatusDetails
+	}
+	return "", "", ""
 }
 
 // bindScheduledResponseBoundary associates a newly opened provider response
@@ -256,6 +333,10 @@ func (o *sessionProgressObserver) bindScheduledRateLimitRetry(index int, id stri
 		return false
 	}
 	lifecycle.retryPending = false
+	lifecycle.terminalFailure = false
+	lifecycle.terminalStatus = ""
+	lifecycle.terminalErrorCode = ""
+	lifecycle.terminalStatusDetails = ""
 	o.toolStateMu.Lock()
 	for _, state := range o.toolContinuations {
 		if state == nil || !state.continuationScheduledSet || state.continuationScheduledIndex != index {
@@ -264,6 +345,7 @@ func (o *sessionProgressObserver) bindScheduledRateLimitRetry(index int, id stri
 		state.continuationResponseID = strings.TrimSpace(id)
 		state.continuationTerminalSeen = false
 		state.continuationStatus = ""
+		state.continuationErrorCode = ""
 		state.continuationStatusDetails = ""
 		state.continuationTerminalReason = ""
 		state.continuationOutputObserved = false
@@ -311,6 +393,7 @@ func (o *sessionProgressObserver) claimScheduledRateLimitRetry(responseID string
 		}
 		state.continuationTerminalSeen = false
 		state.continuationStatus = ""
+		state.continuationErrorCode = ""
 		state.continuationStatusDetails = ""
 		state.continuationTerminalReason = ""
 		state.continuationOutputObserved = false
@@ -419,6 +502,10 @@ func (o *sessionProgressObserver) noteScheduledResponseDisposition(id string, di
 	lifecycle.disposition = disposition
 	lifecycle.retryPending = false
 	lifecycle.retryUsed = false
+	lifecycle.terminalFailure = false
+	lifecycle.terminalStatus = ""
+	lifecycle.terminalErrorCode = ""
+	lifecycle.terminalStatusDetails = ""
 	o.completedScheduled++
 	o.clearScheduledResponseOwner(index, id)
 }
@@ -771,7 +858,11 @@ func recordContinuationTerminalLocked(state *toolContinuationState, terminal *me
 		state.continuationTerminalSeen = true
 		if terminal != nil {
 			state.continuationStatus = normalizeContinuationStatus(terminal.Status)
+			state.continuationErrorCode = sanitizeContinuationDetail(providerTerminalErrorCode(terminal))
 			state.continuationStatusDetails = sanitizeContinuationDetail(terminal.StatusDetails)
+			if state.continuationStatusDetails == "" {
+				state.continuationStatusDetails = sanitizeContinuationDetail(providerTerminalErrorMessage(terminal))
+			}
 			state.continuationTerminalReason = terminal.TerminalReason
 		}
 		state.continuationOutputObserved = outputObserved

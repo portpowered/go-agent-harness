@@ -134,13 +134,15 @@ func withUnresolvedToolResults(err error, observer *sessionProgressObserver) err
 
 // SessionImageContinuationError carries the read_image call IDs whose result
 // was accepted but whose post-tool model response did not complete with
-// observable output. ProviderStatuses and ProviderDetails retain bounded,
-// sanitized terminal context when the provider authored a failed response.
+// observable output. ProviderStatuses, ProviderCodes, and ProviderDetails
+// retain bounded, sanitized terminal context when the provider authored a
+// failed response.
 // It is deliberately separate from SessionUnresolvedToolResultsError:
 // provider acceptance is not conversation completion.
 type SessionImageContinuationError struct {
 	CallIDs          []string
 	ProviderStatuses map[string]string
+	ProviderCodes    map[string]string
 	ProviderDetails  map[string]string
 }
 
@@ -148,7 +150,7 @@ func (e *SessionImageContinuationError) Error() string {
 	if e == nil || len(e.CallIDs) == 0 {
 		return ErrSessionImageContinuationIncomplete.Error()
 	}
-	return fmt.Sprintf("image tool continuation was not completed for %d call(s): %s", len(e.CallIDs), formatContinuationFailureIDs(e.CallIDs, e.ProviderStatuses, e.ProviderDetails))
+	return fmt.Sprintf("image tool continuation was not completed for %d call(s): %s", len(e.CallIDs), formatContinuationFailureIDs(e.CallIDs, e.ProviderStatuses, e.ProviderCodes, e.ProviderDetails))
 }
 
 func (e *SessionImageContinuationError) Unwrap() error {
@@ -158,10 +160,12 @@ func (e *SessionImageContinuationError) Unwrap() error {
 // SessionToolContinuationError carries ordinary tool call IDs whose accepted
 // result still lacks a terminal model continuation. CallIDs is expected to be
 // sorted and deduplicated by the observer snapshot. ProviderStatuses and
-// ProviderDetails retain bounded, sanitized terminal context when available.
+// ProviderCodes and ProviderDetails retain bounded, sanitized terminal context
+// when available.
 type SessionToolContinuationError struct {
 	CallIDs          []string
 	ProviderStatuses map[string]string
+	ProviderCodes    map[string]string
 	ProviderDetails  map[string]string
 }
 
@@ -169,19 +173,22 @@ func (e *SessionToolContinuationError) Error() string {
 	if e == nil || len(e.CallIDs) == 0 {
 		return ErrSessionToolContinuationIncomplete.Error()
 	}
-	return fmt.Sprintf("tool continuation was not completed for %d call(s): %s", len(e.CallIDs), formatContinuationFailureIDs(e.CallIDs, e.ProviderStatuses, e.ProviderDetails))
+	return fmt.Sprintf("tool continuation was not completed for %d call(s): %s", len(e.CallIDs), formatContinuationFailureIDs(e.CallIDs, e.ProviderStatuses, e.ProviderCodes, e.ProviderDetails))
 }
 
 func (e *SessionToolContinuationError) Unwrap() error {
 	return ErrSessionToolContinuationIncomplete
 }
 
-func formatContinuationFailureIDs(ids []string, statuses, details map[string]string) string {
+func formatContinuationFailureIDs(ids []string, statuses, codes, details map[string]string) string {
 	formatted := make([]string, 0, len(ids))
 	for _, id := range ids {
-		annotations := make([]string, 0, 2)
+		annotations := make([]string, 0, 3)
 		if status := strings.TrimSpace(statuses[id]); status != "" {
 			annotations = append(annotations, "status="+status)
+		}
+		if code := strings.TrimSpace(codes[id]); code != "" {
+			annotations = append(annotations, "code="+code)
 		}
 		if detail := strings.TrimSpace(details[id]); detail != "" {
 			annotations = append(annotations, "detail="+detail)
@@ -219,7 +226,7 @@ func withPendingToolContinuations(err error, observer *sessionProgressObserver) 
 	if observer == nil {
 		return err
 	}
-	ids, statuses, details := observer.pendingNonImageToolContinuationSnapshot()
+	ids, statuses, codes, details := observer.pendingNonImageToolContinuationSnapshot()
 	if len(ids) == 0 {
 		return err
 	}
@@ -227,7 +234,7 @@ func withPendingToolContinuations(err error, observer *sessionProgressObserver) 
 	if errors.As(err, &existing) {
 		return err
 	}
-	continuation := &SessionToolContinuationError{CallIDs: ids, ProviderStatuses: statuses, ProviderDetails: details}
+	continuation := &SessionToolContinuationError{CallIDs: ids, ProviderStatuses: statuses, ProviderCodes: codes, ProviderDetails: details}
 	if err == nil {
 		return continuation
 	}
@@ -240,7 +247,7 @@ func withPendingImageContinuations(err error, observer *sessionProgressObserver)
 	if observer == nil {
 		return err
 	}
-	ids, statuses, details := observer.pendingImageContinuationSnapshot()
+	ids, statuses, codes, details := observer.pendingImageContinuationSnapshot()
 	if len(ids) == 0 {
 		return err
 	}
@@ -248,7 +255,7 @@ func withPendingImageContinuations(err error, observer *sessionProgressObserver)
 	if errors.As(err, &existing) {
 		return err
 	}
-	continuation := &SessionImageContinuationError{CallIDs: ids, ProviderStatuses: statuses, ProviderDetails: details}
+	continuation := &SessionImageContinuationError{CallIDs: ids, ProviderStatuses: statuses, ProviderCodes: codes, ProviderDetails: details}
 	if err == nil {
 		return continuation
 	}

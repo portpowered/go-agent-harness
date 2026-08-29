@@ -113,6 +113,7 @@ included in any field.
 | `failing_event` | Stream-event identity that authored the failure. | `ERROR`, `SESSION.CLOSE`, `SESSION.CONNECT` (dial-phase), `SESSION.RUN` (run/drain phase without a captured stream event) |
 | `provider_error_type` | Provider error type when the provider supplied one. Absent otherwise. | `invalid_api_key` |
 | `provider_error_code` | Provider error code when present. Absent otherwise. | `invalid_api_key` |
+| `pending_continuation_codes` | Bounded provider error codes for accepted tool continuations that remain incomplete, encoded as comma-separated `call_id=code` pairs. | `call-1=rate_limit_exceeded` |
 | `scheduled_input_count` | Total configured scheduled audio inputs for an incomplete scheduled run. | `3` |
 | `dispatched_input_count` | Scheduled inputs accepted by the session input boundary before termination. | `2` |
 | `completed_turn_count` | Scheduled inputs with an explicit terminal response disposition before termination, including an owned barge-in cancellation. Cancelled inputs are resolved here but do not emit `session_turn_completed`. | `2` |
@@ -122,7 +123,9 @@ An incomplete scheduled run also returns the typed
 `services.ErrSessionScheduledAudioIncomplete`. Its deterministic error text
 and exported `Completed`, `Dispatched`, and `Scheduled` fields preserve the
 same three counts even when a provider, timeout, cancellation, drain, or
-finalization error is joined with the schedule failure.
+finalization error is joined with the schedule failure. A provider-authored
+terminal also populates the typed error's bounded `ProviderStatus`,
+`ProviderErrorCode`, and `ProviderDetails` fields.
 
 For scheduled runs, the terminal `session_metrics` record carries the same
 `scheduled_input_count`, `dispatched_input_count`, and `completed_turn_count`

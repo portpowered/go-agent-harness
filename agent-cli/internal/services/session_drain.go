@@ -104,8 +104,10 @@ func drainSessionLoopMessagesUntilIdle(out io.Writer, loop *agentloop.AgentLoop,
 }
 
 func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions, closeSent bool) bool {
-	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil && opts.observer.hasTerminalToolContinuationFailure() {
-		return true
+	if msg.Type == messages.StreamTypeMessageEnd && opts.observer != nil {
+		if opts.observer.hasTerminalToolContinuationFailure() || opts.observer.hasTerminalScheduledResponseFailure() {
+			return true
+		}
 	}
 	if opts.CloseAfterOpen {
 		return closeSent && msg.Type == messages.StreamTypeSessionClose
