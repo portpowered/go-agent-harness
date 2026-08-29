@@ -92,10 +92,24 @@ func NewSessionToolCapabilitiesFactory(
 		if err != nil {
 			return closeFailedBroker(broker, fmt.Errorf("compose session tools: %w", err))
 		}
+		reservedNames := make([]string, 0, len(surface.Definitions))
+		for _, definition := range surface.Definitions {
+			reservedNames = append(reservedNames, definition.Name)
+		}
+		brokerSet.SetReservedToolNames(reservedNames)
 		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
 		capabilities := SessionToolCapabilities{
-			Executor:     surface.Executor,
-			Definitions:  surface.Definitions,
+			Executor:    surface.Executor,
+			Definitions: surface.Definitions,
+			// After the capability bootstrap has connected the broker, the
+			// connected page catalog is advertised as first-class session
+			// tools alongside the composed surface. Page-tool calls resolve
+			// against the live catalog at execution time, so the definition
+			// snapshot taken here is a steering surface, not a routing table.
+			RefreshDefinitions: func(ctx context.Context) []messages.ToolDefinition {
+				refreshed := append([]messages.ToolDefinition(nil), surface.Definitions...)
+				return append(refreshed, brokerSet.PageToolDefinitions(ctx)...)
+			},
 			BrowserWatch: broker.Watch,
 			Close:        capabilityCoordinator.Close,
 		}

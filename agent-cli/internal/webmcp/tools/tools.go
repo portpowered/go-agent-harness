@@ -8,6 +8,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -22,6 +23,9 @@ type BrokerToolSet struct {
 	definitions []webmcp.BrokerToolDefinition
 	tools       []cliTools.Tool
 	executor    *Executor
+
+	pageOnce sync.Once
+	page     *pageToolState
 }
 
 // ToolSet is the concise name used by composition callers.
@@ -208,7 +212,15 @@ func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (message
 
 	spec, ok := e.set.spec(call.Name)
 	if !ok {
-		encoded, err := invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
+		if e.set.broker == nil {
+			encoded, err := invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
+			if err != nil {
+				return response, err
+			}
+			response.Content = string(encoded)
+			return response, nil
+		}
+		encoded, err := e.set.executePageTool(ctx, call)
 		if err != nil {
 			return response, err
 		}
@@ -305,55 +317,11 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 		return webmcp.EncodeToolResult(catalogDataFrom(catalog, options.IncludeSchemas), nil)
 
 	case webmcp.InvokeToolName:
-		request := webmcp.InvokeRequest{
+		return s.invokeToolRef(ctx, webmcp.InvokeRequest{
 			ToolRef: webmcp.ToolRef(stringValue(args, "tool_ref")),
 			Input:   json.RawMessage(stringValue(args, "input_json")),
 			Reason:  stringValue(args, "reason"),
-		}
-		result, err := s.broker.Invoke(ctx, request)
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
-				"tool_ref": string(request.ToolRef),
-				"phase":    "invoke",
-			})
-		}
-		if invocationNeedsTerminalResult(result.State) {
-			if waiter, ok := s.broker.(webmcp.InvocationWaiter); ok {
-				invocationID := result.InvocationID
-				result, err = waiter.WaitInvocation(ctx, invocationID)
-				if err != nil {
-					return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
-						"invocation_id":       string(invocationID),
-						"tool_ref":            string(request.ToolRef),
-						"phase":               "result",
-						"side_effect_unknown": true,
-					})
-				}
-			}
-		}
-		if result.ErrorCode != "" || isFailedInvocationState(result.State) {
-			return invocationFailure(result, request.ToolRef)
-		}
-		output, err := compactJSONOrNull(result.Output)
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
-				"invocation_id":       string(result.InvocationID),
-				"tool_ref":            string(request.ToolRef),
-				"phase":               "result_serialization",
-				"page_error_code":     "invalid_json",
-				"side_effect_unknown": true,
-			})
-		}
-		status := string(result.State)
-		if status == "" {
-			status = string(webmcp.InvocationCompleted)
-		}
-		return webmcp.EncodeToolResult(invokeData{
-			InvocationID: result.InvocationID,
-			ToolRef:      request.ToolRef,
-			Status:       status,
-			Output:       output,
-		}, nil)
+		})
 
 	case webmcp.CancelToolName:
 		request := webmcp.CancelRequest{
@@ -939,4 +907,54 @@ func boolValueDefault(values map[string]any, name string, fallback bool) bool {
 		return fallback
 	}
 	return value
+}
+
+// invokeToolRef runs one page-tool invocation through the broker with the
+// frozen receipt/terminal-status semantics. It backs both the stable
+// webmcp_invoke tool and the first-class page-tool executors.
+func (s *BrokerToolSet) invokeToolRef(ctx context.Context, request webmcp.InvokeRequest) ([]byte, error) {
+	result, err := s.broker.Invoke(ctx, request)
+	if err != nil {
+		return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
+			"tool_ref": string(request.ToolRef),
+			"phase":    "invoke",
+		})
+	}
+	if invocationNeedsTerminalResult(result.State) {
+		if waiter, ok := s.broker.(webmcp.InvocationWaiter); ok {
+			invocationID := result.InvocationID
+			result, err = waiter.WaitInvocation(ctx, invocationID)
+			if err != nil {
+				return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
+					"invocation_id":       string(invocationID),
+					"tool_ref":            string(request.ToolRef),
+					"phase":               "result",
+					"side_effect_unknown": true,
+				})
+			}
+		}
+	}
+	if result.ErrorCode != "" || isFailedInvocationState(result.State) {
+		return invocationFailure(result, request.ToolRef)
+	}
+	output, err := compactJSONOrNull(result.Output)
+	if err != nil {
+		return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
+			"invocation_id":       string(result.InvocationID),
+			"tool_ref":            string(request.ToolRef),
+			"phase":               "result_serialization",
+			"page_error_code":     "invalid_json",
+			"side_effect_unknown": true,
+		})
+	}
+	status := string(result.State)
+	if status == "" {
+		status = string(webmcp.InvocationCompleted)
+	}
+	return webmcp.EncodeToolResult(invokeData{
+		InvocationID: result.InvocationID,
+		ToolRef:      request.ToolRef,
+		Status:       status,
+		Output:       output,
+	}, nil)
 }

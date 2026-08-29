@@ -28,6 +28,11 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// RefreshDefinitions returns the final definition list after Initialize
+	// has run: the composed static and stable broker definitions plus any
+	// first-class page tools read from the connected browser catalog. Nil
+	// means Definitions is already final.
+	RefreshDefinitions func(context.Context) []messages.ToolDefinition
 	// Initialize is called synchronously after capability construction and
 	// before the session provider can issue a browser tool call. Implementations
 	// retain a classified failed state in the executor when initialization
@@ -532,6 +537,9 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				}
 				toolExecutor = capabilities.Executor
 				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+				if capabilities.RefreshDefinitions != nil {
+					toolDefinitions = capabilities.RefreshDefinitions(sessionContext)
+				}
 				browserWatch = capabilities.BrowserWatch
 				if capabilities.Close != nil {
 					// The service entry point creates the single coordinator after

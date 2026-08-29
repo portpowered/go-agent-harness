@@ -676,6 +676,7 @@ type capabilityBroker struct {
 	selected    webmcp.PageContext
 	selectErr   error
 	selectCalls int
+	catalog     []webmcp.ToolDescriptor
 	closeErr    error
 	closeCalls  int
 }
@@ -698,7 +699,7 @@ func (b *capabilityBroker) Selected(context.Context) (webmcp.PageContext, error)
 }
 
 func (b *capabilityBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	return webmcp.ToolCatalogSnapshot{Context: b.selected, Generation: b.selected.Generation}, nil
+	return webmcp.ToolCatalogSnapshot{Context: b.selected, Generation: b.selected.Generation, Tools: append([]webmcp.ToolDescriptor(nil), b.catalog...)}, nil
 }
 
 func (b *capabilityBroker) Invoke(context.Context, webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
@@ -717,3 +718,56 @@ func (b *capabilityBroker) Close() error {
 }
 
 var _ webmcp.Broker = (*capabilityBroker)(nil)
+
+// TestSessionToolCapabilitiesRefreshAdvertisesFirstClassPageTools locks the
+// first-class page-tool surface: after the capability bootstrap, the
+// refreshed definition list contains every connected catalog tool under its
+// own name with the page's schema, alongside the static and stable broker
+// definitions - and a bare catalog-name call executes through the composed
+// surface instead of dead-ending.
+func TestSessionToolCapabilitiesRefreshAdvertisesFirstClassPageTools(t *testing.T) {
+	broker := &capabilityBroker{
+		selected: webmcp.PageContext{
+			Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"},
+			Generation: 1,
+			Connected:  true,
+			Ready:      true,
+		},
+		catalog: []webmcp.ToolDescriptor{{
+			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:cube-state"),
+			Name:        "get_cube_state",
+			Description: "Read the cube.",
+			InputSchema: []byte(`{"type":"object","properties":{},"additionalProperties":false}`),
+		}},
+	}
+	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
+		return broker, nil
+	})
+	capabilities, err := factory(browserCapabilityConfig(true))
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	if capabilities.RefreshDefinitions == nil {
+		t.Fatalf("browser-enabled capabilities lack RefreshDefinitions")
+	}
+	refreshed := capabilities.RefreshDefinitions(context.Background())
+	if len(refreshed) != len(capabilities.Definitions)+1 {
+		t.Fatalf("refreshed = %d definitions, want composed %d plus one page tool", len(refreshed), len(capabilities.Definitions))
+	}
+	last := refreshed[len(refreshed)-1]
+	if last.Name != "get_cube_state" || last.Description != "Read the cube." {
+		t.Fatalf("page definition = %+v, want first-class get_cube_state", last)
+	}
+
+	response, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "cube-call",
+		Name:      "get_cube_state",
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("bare catalog-name call must not dead-end: %v", err)
+	}
+	if _, err := webmcp.UnmarshalToolResult([]byte(response.Content)); err != nil {
+		t.Fatalf("page-tool response is not one WebMCP result envelope: %v; content=%s", err, response.Content)
+	}
+}

@@ -79,10 +79,23 @@ func ComposeToolSurface(
 		routes[definition.Name] = toolRoute{executor: brokerExecutor, broker: true}
 	}
 
+	composed := &composedToolExecutor{routes: routes}
+	if router, ok := brokerExecutor.(DynamicToolRouter); ok && router.ResolvesDynamicTools() {
+		composed.dynamicFallback = brokerExecutor
+	}
 	return ToolSurface{
-		Executor:    &composedToolExecutor{routes: routes},
+		Executor:    composed,
 		Definitions: definitions,
 	}, nil
+}
+
+// DynamicToolRouter is an optional broker-executor extension. An executor
+// that reports true routes tool names beyond its advertised definitions —
+// for example first-class page tools resolved against a live browser catalog
+// at call time — so the composed surface forwards unknown names to it
+// instead of failing with an invalid-composition dead-end.
+type DynamicToolRouter interface {
+	ResolvesDynamicTools() bool
 }
 
 // ValidateToolDefinitionNamespaces performs the side-effect-free portion of
@@ -131,7 +144,8 @@ type toolRoute struct {
 }
 
 type composedToolExecutor struct {
-	routes map[string]toolRoute
+	routes          map[string]toolRoute
+	dynamicFallback messages.ToolExecutor
 }
 
 var _ messages.ToolExecutor = (*composedToolExecutor)(nil)
@@ -143,7 +157,10 @@ func (e *composedToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 	}
 	route, ok := e.routes[call.Name]
 	if !ok || isNilToolExecutor(route.executor) {
-		return response, fmt.Errorf("%w: tool %q has no composed executor", ErrToolCompositionInvalid, call.Name)
+		if isNilToolExecutor(e.dynamicFallback) {
+			return response, fmt.Errorf("%w: tool %q has no composed executor", ErrToolCompositionInvalid, call.Name)
+		}
+		route = toolRoute{executor: e.dynamicFallback, broker: true}
 	}
 
 	response, err := route.executor.Execute(ctx, call)

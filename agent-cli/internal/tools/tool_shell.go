@@ -164,7 +164,7 @@ func (t *ExecTool) Name() string {
 }
 
 func (t *ExecTool) Description() string {
-	return "Execute a shell command and return its output. Use with caution."
+	return "Execute a shell command on the local machine and return its output. Use with caution. Only for real shell work: never for browser-page actions, which have their own directly callable page tools."
 }
 
 func (t *ExecTool) Parameters() map[string]any {
