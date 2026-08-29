@@ -26,17 +26,17 @@ var (
 type OperationKind = OperationType
 
 const (
-	OperationOpen        OperationKind = "open_browser"
-	OperationListTargets OperationKind = "list_targets"
-	OperationActivate    OperationKind = "activate_target"
+	OperationOpen               OperationKind = "open_browser"
+	OperationListTargets        OperationKind = "list_targets"
+	OperationActivate           OperationKind = "activate_target"
 	OperationAttach             OperationKind = "attach_target"
 	OperationEnableAcknowledged OperationKind = "enable_webmcp_acknowledged"
-	OperationInvoke      OperationKind = "invoke_tool"
-	OperationCancel      OperationKind = "cancel_invocation"
-	OperationDetach      OperationKind = "detach_target"
-	OperationCloseHandle OperationKind = "close_browser"
-	OperationDisconnect  OperationKind = "disconnect_browser"
-	OperationReplace     OperationKind = "replace_browser"
+	OperationInvoke             OperationKind = "invoke_tool"
+	OperationCancel             OperationKind = "cancel_invocation"
+	OperationDetach             OperationKind = "detach_target"
+	OperationCloseHandle        OperationKind = "close_browser"
+	OperationDisconnect         OperationKind = "disconnect_browser"
+	OperationReplace            OperationKind = "replace_browser"
 )
 
 // Operation is a race-safe snapshot of one fake-runtime command. Input and
@@ -448,10 +448,10 @@ func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browse
 
 func newScriptedBrowserHandle(runtime *ScriptedBrowserRuntime, config BrowserConfig) *ScriptedBrowserHandle {
 	handle := &ScriptedBrowserHandle{
-		runtime:        runtime,
-		candidate:      cloneCandidate(config.Candidate),
-		targets:        make(map[webmcp.TargetID]*scriptedTargetEntry, len(config.Targets)),
-		sessions:       make(map[webmcp.TargetID]*ScriptedTargetSession),
+		runtime:   runtime,
+		candidate: cloneCandidate(config.Candidate),
+		targets:   make(map[webmcp.TargetID]*scriptedTargetEntry, len(config.Targets)),
+		sessions:  make(map[webmcp.TargetID]*ScriptedTargetSession),
 		control: &scriptedBrowserControl{
 			openChanges:     make(chan struct{}),
 			listChanges:     make(chan struct{}),
