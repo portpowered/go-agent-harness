@@ -9,8 +9,34 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+type roomParticipantRunResult struct {
+	plan       *roomParticipantPlan
+	runtime    *roomParticipantRuntime
+	err        error
+	connected  bool
+	connectErr error
+}
+
+func defaultRoomSessionFactory(participant room.Participant, options SessionRunOptions) (messages.SessionInferencer, error) {
+	inferencer, _, err := NewLiveSessionInferencer(options, participant.SystemPrompt)
+	return inferencer, err
+}
+
+type roomParticipantDiagnosticSink struct {
+	participantID string
+	observer      RoomParticipantDiagnosticObserver
+}
+
+func (s roomParticipantDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
+	if s.observer == nil {
+		return
+	}
+	s.observer(s.participantID, record)
+}
 
 func runRoomParticipant(
 	roomCtx context.Context,
@@ -378,4 +404,65 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 		cleanupErr = errors.Join(cleanupErr, closeRoomMeshBounded(mesh, cleanup))
 	}
 	return cleanupErr
+}
+
+func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result roomParticipantRunResult, secrets []string, cleanup *roomCleanupWaiter) {
+	if result.runtime == nil || result.plan == nil {
+		return
+	}
+	if result.connectErr != nil {
+		result.runtime.lifecycle.markConnected(result.connectErr)
+	}
+	roomStopping := coordinator.isStopping()
+	_, _, sessionClosed, closeReason, terminalReason, _, _ := result.runtime.lifecycle.snapshot()
+	reason := classifyRoomParticipantTermination(roomStopping, result.err, result.connected, result.runtime.lifecycle.transportHasEnded(), sessionClosed, closeReason, terminalReason)
+	coordinator.finishParticipant(result.runtime, reason, result.err, secrets, mesh, cleanup)
+}
+
+func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, observer RoomParticipantAudioObserver, secrets []string) {
+	if runtime == nil || runtime.mixer == nil {
+		return
+	}
+	select {
+	case <-startGate:
+	case <-runtime.ctx.Done():
+		return
+	case <-ctx.Done():
+		return
+	}
+	var loop *agentloop.AgentLoop
+	select {
+	case loop = <-runtime.loopReady:
+	case <-runtime.ctx.Done():
+		return
+	case <-ctx.Done():
+		return
+	}
+	if loop == nil {
+		coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, errors.New("room session loop did not become ready"), secretsForPlan(runtime.plan)))
+		return
+	}
+	for {
+		frame, err := runtime.mixer.ReadFrame(runtime.ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
+				return
+			}
+			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read inbound mixer: %w", err), secrets))
+			return
+		}
+		if err := loop.SendAudioInput(runtime.ctx, frame); err != nil {
+			if runtime.ctx.Err() != nil || coordinator.isStopping() {
+				return
+			}
+			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
+			return
+		}
+		if observer != nil {
+			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), frame...)); err != nil {
+				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("observe mixed PCM: %w", err), secretsForPlan(runtime.plan)))
+				return
+			}
+		}
+	}
 }

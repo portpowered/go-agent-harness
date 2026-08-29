@@ -4,11 +4,419 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+const (
+	// DefaultRoomOutputDir is the deterministic evidence directory used by the
+	// room CLI when --out is omitted. It is resolved relative to the process's
+	// working directory and must still satisfy the empty-directory safety check.
+	DefaultRoomOutputDir = "room-run"
+
+	// Room lifecycle cleanup is deliberately finite. Provider/session contracts
+	// are expected to make Close and cancellation progress, but a diagnostic is
+	// preferable to making the room caller wait forever when an injected or
+	// third-party owner violates that contract.
+	roomCleanupTimeout   = time.Second
+	roomAdmissionTimeout = 5 * time.Second
+)
+
+type roomParticipantPlan struct {
+	manifest    room.Participant
+	options     SessionRunOptions
+	inferencer  messages.SessionInferencer
+	secret      string
+	tracker     *roomConnectTrackingInferencer
+	participant *roomParticipantRuntime
+}
+
+type roomParticipantRuntime struct {
+	plan            *roomParticipantPlan
+	ctx             context.Context
+	cancel          context.CancelFunc
+	loopReady       chan *agentloop.AgentLoop
+	participantDone chan struct{}
+	mixerDone       chan struct{}
+	observerDone    chan struct{}
+	observerOnce    sync.Once
+	mixer           *room.PCM16Mixer
+	lifecycle       *roomParticipantLifecycle
+}
+
+func (r *roomParticipantRuntime) markObserverDone() {
+	if r == nil || r.observerDone == nil {
+		return
+	}
+	r.observerOnce.Do(func() { close(r.observerDone) })
+}
+
+type roomCleanupWaiter struct {
+	timer *time.Timer
+}
+
+func (w *roomCleanupWaiter) start() {
+	if w == nil || w.timer != nil {
+		return
+	}
+	w.timer = time.NewTimer(roomCleanupTimeout)
+}
+
+func (w *roomCleanupWaiter) done() <-chan time.Time {
+	if w == nil || w.timer == nil {
+		return nil
+	}
+	return w.timer.C
+}
+
+func (w *roomCleanupWaiter) stop() {
+	if w == nil || w.timer == nil {
+		return
+	}
+	if !w.timer.Stop() {
+		select {
+		case <-w.timer.C:
+		default:
+		}
+	}
+	w.timer = nil
+}
+
+type roomLifecycleWorkError struct {
+	outstanding []string
+}
+
+func (e *roomLifecycleWorkError) Error() string {
+	if e == nil || len(e.outstanding) == 0 {
+		return "room lifecycle work did not complete"
+	}
+	return "room lifecycle work did not complete: " + strings.Join(e.outstanding, "; ")
+}
+
+func newRoomLifecycleWorkError(outstanding ...string) error {
+	seen := make(map[string]struct{}, len(outstanding))
+	ordered := make([]string, 0, len(outstanding))
+	for _, item := range outstanding {
+		if item == "" {
+			continue
+		}
+		if _, exists := seen[item]; exists {
+			continue
+		}
+		seen[item] = struct{}{}
+		ordered = append(ordered, item)
+	}
+	if len(ordered) == 0 {
+		return nil
+	}
+	sort.Strings(ordered)
+	return &roomLifecycleWorkError{outstanding: ordered}
+}
+
+func roomLifecycleWorkLabel(participantID, phase string) string {
+	if participantID == "" {
+		return phase
+	}
+	return fmt.Sprintf("participant %q phase %s", participantID, phase)
+}
+
+func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
+	if runtime == nil || runtime.plan == nil {
+		return []string{"participant runtime"}
+	}
+	id := runtime.plan.manifest.ID
+	outstanding := make([]string, 0, 6)
+	if runtime.plan.tracker == nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
+	} else if _, ready := runtime.plan.tracker.outcome(); !ready {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
+	}
+	if runtime.lifecycle == nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "lifecycle"))
+		return outstanding
+	}
+	created, closed, transportDone, closeErr := runtime.lifecycle.ownedSessionSnapshot()
+	if created && !closed {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close"))
+	}
+	if closeErr != nil {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.close.error"))
+	}
+	if created && !roomChannelClosed(transportDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "session.transport"))
+	}
+	if runtime.participantDone != nil && !roomChannelClosed(runtime.participantDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "participant.loop"))
+	}
+	if runtime.mixerDone != nil && !roomChannelClosed(runtime.mixerDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "mixer"))
+	}
+	if runtime.observerDone != nil && !roomChannelClosed(runtime.observerDone) {
+		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "observer"))
+	}
+	return outstanding
+}
+
+type roomParticipantLifecycle struct {
+	mu                   sync.Mutex
+	connected            bool
+	connectErr           error
+	sessionCreated       bool
+	ownedSessionClosed   bool
+	sessionCloseErr      error
+	sessionOpened        bool
+	sessionClosed        bool
+	transportEnded       bool
+	transportDone        <-chan struct{}
+	stateChanged         chan<- struct{}
+	roomStopping         bool
+	runDone              bool
+	closeReason          string
+	terminalReason       messages.TerminalReason
+	terminalKind         ParticipantTerminationReason
+	terminalErr          error
+	transportTerminalErr func() error
+	turns                int
+}
+
+func (l *roomParticipantLifecycle) markConnected(err error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.connected = err == nil
+	l.connectErr = err
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) signalLocked() {
+	if l == nil || l.stateChanged == nil {
+		return
+	}
+	select {
+	case l.stateChanged <- struct{}{}:
+	default:
+	}
+}
+
+func (l *roomParticipantLifecycle) markSessionCreated() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.sessionCreated = true
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) markOwnedSessionClosed(err error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.ownedSessionClosed = true
+	l.sessionCloseErr = err
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) markTerminalLocked(reason ParticipantTerminationReason, err error) {
+	if l.terminalKind != "" || reason == "" {
+		return
+	}
+	l.terminalKind = reason
+	l.terminalErr = err
+}
+
+func (l *roomParticipantLifecycle) observe(msg messages.StreamMessage) int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	switch msg.Type {
+	case messages.StreamTypeSessionOpen:
+		l.sessionOpened = true
+		l.signalLocked()
+	case messages.StreamTypeSessionClose:
+		l.sessionClosed = true
+		l.signalLocked()
+		if value, ok := msg.Value.(*messages.SessionCloseValue); ok && value != nil {
+			l.closeReason = value.Reason
+			l.terminalReason = value.TerminalReason
+			if l.terminalReason == "" && value.Reason == "provider_closed" {
+				l.terminalReason = messages.TerminalReasonProviderClose
+			}
+		}
+		if !l.roomStopping {
+			terminalErr := error(nil)
+			if l.transportTerminalErr != nil {
+				terminalErr = l.transportTerminalErr()
+			}
+			if terminalErr != nil && !roomCancellationOnly(terminalErr) {
+				l.markTerminalLocked(ParticipantTerminationError, terminalErr)
+			} else {
+				l.markTerminalLocked(classifyRoomSessionClose(l.closeReason, l.terminalReason), nil)
+			}
+		}
+	}
+	return l.turns
+}
+
+// observeAdmittedTurn advances room progress only after the shared session
+// observer has accepted a provider response as a completed turn. Raw
+// MESSAGE.END events are intentionally not sufficient: a provider can emit an
+// empty response boundary before producing any assistant output.
+func (l *roomParticipantLifecycle) observeAdmittedTurn() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	l.turns++
+	l.signalLocked()
+	turns := l.turns
+	l.mu.Unlock()
+	return turns
+}
+
+func (l *roomParticipantLifecycle) markTransportEndedWithError(terminalErr error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.transportEnded = true
+	l.signalLocked()
+	if !l.roomStopping {
+		if terminalErr != nil && !roomCancellationOnly(terminalErr) {
+			l.markTerminalLocked(ParticipantTerminationError, terminalErr)
+		} else {
+			l.markTerminalLocked(ParticipantTerminationDisconnected, nil)
+		}
+	}
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) setTransportDone(done <-chan struct{}, terminalError func() error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.transportDone = done
+	l.transportTerminalErr = terminalError
+	l.signalLocked()
+	l.mu.Unlock()
+	if roomChannelClosed(done) {
+		var terminalErr error
+		if terminalError != nil {
+			terminalErr = terminalError()
+		}
+		l.markTransportEndedWithError(terminalErr)
+	}
+}
+
+func (l *roomParticipantLifecycle) transportHasEnded() bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	ended := l.transportEnded
+	done := l.transportDone
+	terminalError := l.transportTerminalErr
+	l.mu.Unlock()
+	if ended || done == nil {
+		return ended
+	}
+	if roomChannelClosed(done) {
+		var terminalErr error
+		if terminalError != nil {
+			terminalErr = terminalError()
+		}
+		l.markTransportEndedWithError(terminalErr)
+		return true
+	}
+	return false
+}
+
+// markCoordinatorStopping records intentional room teardown before the
+// coordinator cancels participant contexts. A transport that is already done
+// at this boundary is causal; one that closes afterwards belongs to the
+// coordinator's teardown and must not be reported as a provider disconnect.
+func (l *roomParticipantLifecycle) markCoordinatorStopping() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if roomChannelClosed(l.transportDone) {
+		l.transportEnded = true
+		var terminalErr error
+		if l.transportTerminalErr != nil {
+			terminalErr = l.transportTerminalErr()
+		}
+		if terminalErr != nil && !roomCancellationOnly(terminalErr) {
+			l.markTerminalLocked(ParticipantTerminationError, terminalErr)
+		} else {
+			l.markTerminalLocked(ParticipantTerminationDisconnected, nil)
+		}
+	}
+	l.roomStopping = true
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) markRunDone(runErr error) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.runDone = true
+	l.signalLocked()
+	if runErr != nil && !roomCancellationOnly(runErr) {
+		l.markTerminalLocked(ParticipantTerminationError, runErr)
+	}
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) runHasFinished() bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.runDone
+}
+
+func (l *roomParticipantLifecycle) snapshot() (connected bool, sessionOpened bool, sessionClosed bool, closeReason string, terminalReason messages.TerminalReason, turns int, connectErr error) {
+	if l == nil {
+		return false, false, false, "", "", 0, nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.connected, l.sessionOpened, l.sessionClosed, l.closeReason, l.terminalReason, l.turns, l.connectErr
+}
+
+func (l *roomParticipantLifecycle) terminal() (ParticipantTerminationReason, error, bool) {
+	if l == nil {
+		return "", nil, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.terminalKind, l.terminalErr, l.terminalKind != ""
+}
+
+func (l *roomParticipantLifecycle) ownedSessionSnapshot() (created, closed bool, transportDone <-chan struct{}, closeErr error) {
+	if l == nil {
+		return false, false, nil, nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.sessionCreated, l.ownedSessionClosed, l.transportDone, l.sessionCloseErr
+}
 
 // roomTrackedSession makes the room's session owner explicit. The model
 // runner remains responsible for calling Close, while this decorator records

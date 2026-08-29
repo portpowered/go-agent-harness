@@ -1,0 +1,260 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+)
+
+func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions) ([]*roomParticipantPlan, []string, error) {
+	lookup := validation.LookupCredential
+	if lookup == nil {
+		lookup = os.LookupEnv
+	}
+	known := make(map[string]struct{}, len(opts.Manifest.Participants))
+	secrets := make([]string, 0, len(opts.Manifest.Participants))
+	for _, participant := range opts.Manifest.Participants {
+		known[participant.ID] = struct{}{}
+		if value, ok := lookup(participant.APIKeyEnv); ok && value != "" {
+			secrets = append(secrets, value)
+		}
+	}
+	for id := range opts.SessionInferencers {
+		if _, ok := known[id]; !ok {
+			return nil, secrets, fmt.Errorf("room session inferencer provided for unknown participant %q", id)
+		}
+	}
+	toolFactory := opts.ToolCapabilitiesFactory
+	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
+		defaultFactory, factoryErr := newDefaultRoomParticipantToolCapabilitiesFactory(opts.ConfigDir)
+		if factoryErr != nil {
+			return nil, secrets, fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, factoryErr)
+		}
+		toolFactory = defaultFactory
+	}
+
+	factory := opts.SessionFactory
+	if factory == nil {
+		factory = defaultRoomSessionFactory
+	}
+	plans := make([]*roomParticipantPlan, 0, len(opts.Manifest.Participants))
+	for _, participant := range opts.Manifest.Participants {
+		value, ok := lookup(participant.APIKeyEnv)
+		if !ok {
+			value = ""
+		}
+		sessionOptions := SessionRunOptions{
+			Provider:        participant.Provider,
+			Model:           participant.Model,
+			ModelProvided:   true,
+			APIKey:          value,
+			BaseURL:         opts.BaseURL,
+			ConfigDir:       opts.ConfigDir,
+			Prompt:          participant.OpeningPrompt,
+			Voice:           participant.Voice,
+			WebSocketDialer: opts.WebSocketDialer,
+			WaitForClose:    true,
+		}
+		if len(participant.Tools) > 0 {
+			if toolFactory == nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantToolsUnavailable, []string{value})
+			}
+			capabilities, capabilityErr := toolFactory(participant)
+			if capabilityErr != nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure participant tools: %w", capabilityErr), []string{value})
+			}
+			if capabilityErr := validateRoomParticipantToolCapabilities(participant, capabilities); capabilityErr != nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+			}
+			sessionOptions.ToolExecutor = capabilities.Executor
+			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(capabilities.Definitions)
+		}
+		if opts.WebSocketDialerFactory != nil {
+			sessionOptions.WebSocketDialer = opts.WebSocketDialerFactory(participant)
+		}
+		plan := &roomParticipantPlan{manifest: participant, options: sessionOptions, secret: value}
+		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {
+			if nilInterface(inferencer) {
+				return nil, secrets, roomParticipantFailure(participant.ID, errors.New("injected session inferencer is nil"), []string{value})
+			}
+			plan.inferencer = inferencer
+		} else {
+			inferencer, factoryErr := factory(participant, sessionOptions)
+			if factoryErr != nil {
+				return nil, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("construct live session: %w", factoryErr), []string{value})
+			}
+			if nilInterface(inferencer) {
+				return nil, secrets, roomParticipantFailure(participant.ID, errors.New("session factory returned a nil inferencer"), []string{value})
+			}
+			plan.inferencer = inferencer
+		}
+		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
+		plans = append(plans, plan)
+	}
+	return plans, secrets, nil
+}
+
+func awaitRoomParticipantConnections(
+	ctx context.Context,
+	coordinator *roomCoordinator,
+	plans []*roomParticipantPlan,
+	timer *time.Timer,
+	secrets []string,
+	outcomes <-chan roomConnectionOutcome,
+	cleanup *roomCleanupWaiter,
+) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if cleanup == nil {
+		cleanup = &roomCleanupWaiter{}
+	}
+	byTracker := make(map[*roomConnectTrackingInferencer]*roomParticipantPlan, len(plans))
+	for _, plan := range plans {
+		if plan != nil && plan.tracker != nil {
+			byTracker[plan.tracker] = plan
+		}
+	}
+	remaining := len(byTracker)
+	seen := make(map[*roomConnectTrackingInferencer]struct{}, remaining)
+	var firstErr error
+	ctxDone := ctx.Done()
+	timerDone := timerChannel(timer)
+	admissionTimer := time.NewTimer(roomAdmissionTimeout)
+	defer admissionTimer.Stop()
+	admissionDone := admissionTimer.C
+	roomDone := coordinator.done
+	for remaining > 0 {
+		select {
+		case outcome := <-outcomes:
+			plan, ok := byTracker[outcome.tracker]
+			if !ok {
+				continue
+			}
+			if _, alreadySeen := seen[outcome.tracker]; alreadySeen {
+				continue
+			}
+			seen[outcome.tracker] = struct{}{}
+			remaining--
+			if plan.participant != nil && plan.participant.lifecycle != nil {
+				plan.participant.lifecycle.markConnected(outcome.err)
+			}
+			if outcome.err != nil && firstErr == nil {
+				firstErr = roomParticipantFailure(plan.manifest.ID, fmt.Errorf("connect live session: %w", outcome.err), append(secretsForPlan(plan), secrets...))
+			}
+		case <-ctxDone:
+			// A cancellation must still drain all already-admitted connection
+			// attempts. Well-behaved inferencers observe the cancelled room
+			// context and publish their explicit context-cancelled outcome.
+			if firstErr != nil {
+				coordinator.fail(firstErr)
+			} else {
+				coordinator.stop(RoomTerminationStopped, nil)
+			}
+			ctxDone = nil
+		case <-timerDone:
+			if firstErr != nil {
+				coordinator.fail(firstErr)
+			} else {
+				coordinator.stop(RoomTerminationMaxDurationReached, nil)
+			}
+			timerDone = nil
+		case <-admissionDone:
+			if firstErr != nil {
+				coordinator.fail(firstErr)
+			} else {
+				outstanding := make([]string, 0, remaining)
+				for tracker, plan := range byTracker {
+					if _, alreadySeen := seen[tracker]; alreadySeen || plan == nil {
+						continue
+					}
+					outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "connect"))
+				}
+				coordinator.fail(newRoomLifecycleWorkError(outstanding...))
+			}
+			admissionDone = nil
+			cleanup.start()
+		case <-roomDone:
+			roomDone = nil
+			cleanup.start()
+		case <-cleanup.done():
+			outstanding := make([]string, 0, remaining)
+			for tracker, plan := range byTracker {
+				if _, alreadySeen := seen[tracker]; alreadySeen || plan == nil {
+					continue
+				}
+				outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "connect"))
+			}
+			for _, plan := range plans {
+				if plan != nil {
+					outstanding = append(outstanding, roomParticipantOutstandingWork(plan.participant)...)
+				}
+			}
+			return newRoomLifecycleWorkError(outstanding...)
+		}
+	}
+	if !admissionTimer.Stop() {
+		select {
+		case <-admissionTimer.C:
+		default:
+		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	if coordinator.isStopping() {
+		return nil
+	}
+	readinessTimer := time.NewTimer(roomAdmissionTimeout)
+	defer readinessTimer.Stop()
+	readinessDone := readinessTimer.C
+	for {
+		allOpened := true
+		for _, plan := range plans {
+			if plan == nil || plan.participant == nil {
+				continue
+			}
+			_, opened, closed, _, _, _, _ := plan.participant.lifecycle.snapshot()
+			if opened {
+				continue
+			}
+			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
+				return roomParticipantFailure(plan.manifest.ID, errors.New("session ended before SESSION.OPEN"), append(secretsForPlan(plan), secrets...))
+			}
+			allOpened = false
+		}
+		if allOpened {
+			return nil
+		}
+		select {
+		case <-coordinator.done:
+			if err := coordinator.roomError(); err != nil {
+				return err
+			}
+			return nil
+		case <-ctx.Done():
+			coordinator.stop(RoomTerminationStopped, nil)
+			return nil
+		case <-timerChannel(timer):
+			coordinator.stop(RoomTerminationMaxDurationReached, nil)
+			return nil
+		case <-readinessDone:
+			outstanding := make([]string, 0, len(plans))
+			for _, plan := range plans {
+				if plan == nil || plan.participant == nil {
+					continue
+				}
+				_, opened, _, _, _, _, _ := plan.participant.lifecycle.snapshot()
+				if !opened {
+					outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "session.open"))
+				}
+			}
+			return newRoomLifecycleWorkError(outstanding...)
+		case <-coordinator.progress:
+		}
+	}
+}
