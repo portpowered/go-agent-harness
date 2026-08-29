@@ -426,30 +426,18 @@ func (al *AgentLoop) GetState(ctx context.Context) (AgenticLoopState, error) {
 	rs := al.engine.State().GetRunState()
 	return AgenticLoopState{
 		RunState:    RunState(rs),
-		Interaction: messages.CloneInteractionState(al.engine.State().LoopState.Interaction),
+		Interaction: al.engine.InteractionStateSnapshot(),
 	}, nil
 }
 
 // GetConversationHistory returns a copy of the conversation buffer (full messages).
 func (al *AgentLoop) GetConversationHistory() []messages.Message {
-	buf := al.engine.State().LoopState.History.ConversationBuffer
-	if len(buf) == 0 {
-		return nil
-	}
-	out := make([]messages.Message, len(buf))
-	copy(out, buf)
-	return out
+	return al.engine.ConversationHistorySnapshot()
 }
 
 // GetConversationDeltas returns a copy of the conversation delta buffer (streaming deltas).
 func (al *AgentLoop) GetConversationDeltas() []messages.StreamMessage {
-	buf := al.engine.State().LoopState.History.ConversationDeltaBuffer
-	if len(buf) == 0 {
-		return nil
-	}
-	out := make([]messages.StreamMessage, len(buf))
-	copy(out, buf)
-	return out
+	return al.engine.ConversationDeltasSnapshot()
 }
 
 // SetInputs configures input sources for turn-taking mode.
