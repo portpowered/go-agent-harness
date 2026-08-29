@@ -143,16 +143,21 @@ func (c *audioInLifecycleConn) Close() error {
 // captured session.closed event. The session runner must close locally only
 // after the final scheduled response.
 type scheduledAudioLifecycleServer struct {
-	mu                    sync.Mutex
-	writes                []string
-	sessionUpdates        []json.RawMessage
-	responses             chan int
-	events                chan string
-	closed                chan struct{}
-	closeOnce             sync.Once
-	sessionCreated        chan struct{}
-	sessionUpdatedRelease chan struct{}
-	nextTurn              int
+	mu                      sync.Mutex
+	writes                  []string
+	sessionUpdates          []json.RawMessage
+	responses               chan int
+	events                  chan string
+	closed                  chan struct{}
+	closeOnce               sync.Once
+	sessionCreated          chan struct{}
+	sessionUpdatedRelease   chan struct{}
+	bargeIn                 bool
+	holdBargeResponseOutput bool
+	bargeResponseTurn       int
+	firstResponseCancel     chan struct{}
+	firstCancelOnce         sync.Once
+	nextTurn                int
 }
 
 func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
@@ -167,6 +172,24 @@ func newScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 func newDelayedScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
 	server := newScheduledAudioLifecycleServer()
 	server.sessionUpdatedRelease = make(chan struct{})
+	return server
+}
+
+func newBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
+	server := newScheduledAudioLifecycleServer()
+	// An unbuffered event path makes the active response boundary observable
+	// before the fixture waits for the cancellation owned by ModelRunner.
+	server.events = make(chan string)
+	server.bargeIn = true
+	server.bargeResponseTurn = 1
+	server.firstResponseCancel = make(chan struct{})
+	return server
+}
+
+func newPromptBargeInScheduledAudioLifecycleServer() *scheduledAudioLifecycleServer {
+	server := newBargeInScheduledAudioLifecycleServer()
+	server.bargeResponseTurn = 2
+	server.holdBargeResponseOutput = true
 	return server
 }
 
@@ -200,6 +223,24 @@ func (s *scheduledAudioLifecycleServer) Dial(_ string, _ map[string]string) (tra
 		for {
 			select {
 			case turn := <-s.responses:
+				if s.bargeIn && turn == s.bargeResponseTurn {
+					s.events <- `{"type":"input_audio_buffer.speech_started"}`
+					s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
+					s.events <- `{"type":"response.created","response":{"id":"resp_` + string(rune('0'+turn)) + `"}}`
+					if !s.holdBargeResponseOutput {
+						s.events <- `{"type":"response.output_audio.delta","delta":"AQID","format":"pcm16"}`
+					}
+					select {
+					case <-s.firstResponseCancel:
+						// This delta is deliberately stale. ModelRunner must suppress
+						// it after its accepted RESPONSE.CANCEL boundary.
+						s.events <- `{"type":"response.output_audio.delta","delta":"Y2FuY2VsLXN0YWxl","format":"pcm16"}`
+						s.events <- `{"type":"response.done","response":{"id":"resp_` + string(rune('0'+turn)) + `","status":"cancelled"}}`
+					case <-s.closed:
+						return
+					}
+					continue
+				}
 				audio := base64AudioForTurn(turn)
 				s.events <- `{"type":"input_audio_buffer.speech_started"}`
 				s.events <- `{"type":"input_audio_buffer.speech_stopped"}`
@@ -259,6 +300,9 @@ func (c *scheduledAudioLifecycleConn) WriteMessage(_ int, payload []byte) error 
 	c.server.writes = append(c.server.writes, envelope.Type)
 	if envelope.Type == "session.update" && len(envelope.Session) > 0 {
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
+	}
+	if envelope.Type == "response.cancel" && c.server.bargeIn {
+		c.server.firstCancelOnce.Do(func() { close(c.server.firstResponseCancel) })
 	}
 	if envelope.Type == "response.create" {
 		c.server.nextTurn++
@@ -777,7 +821,7 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 			t.Fatalf("three-turn empty-tool scheduled session error = %v", err)
 		}
 	case <-ctx.Done():
-		t.Fatalf("three-turn empty-tool scheduled session did not complete: %v", ctx.Err())
+		t.Fatalf("three-turn empty-tool scheduled session did not complete: %v; writes=%v", ctx.Err(), server.writesSnapshot())
 	}
 
 	writes := server.writesSnapshot()
@@ -864,6 +908,181 @@ func TestLiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult(t *te
 	}
 	if inputArtifacts != 3 || outputArtifacts != 3 {
 		t.Fatalf("finalized three-turn audio artifacts = input:%d output:%d, want 3 each", inputArtifacts, outputArtifacts)
+	}
+}
+
+func TestLiveRecordRuntimeScheduledAudioBargeInUsesActiveResponseBoundary(t *testing.T) {
+	server := newBargeInScheduledAudioLifecycleServer()
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+	var observed []messages.StreamMessage
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			ctx,
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:       recordPath,
+				Provider:         "openai",
+				Model:            "gpt-realtime",
+				APIKey:           "test-key",
+				ConfigDir:        t.TempDir(),
+				WebSocketDialer:  server,
+				AudioInTurnBarge: true,
+				StreamObserver: func(msg messages.StreamMessage) {
+					observed = append(observed, msg)
+				},
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath, audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("barge-in scheduled live-mode session error = %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("barge-in scheduled live-mode session did not complete: %v", ctx.Err())
+	}
+
+	writes := server.writesSnapshot()
+	if got := countWireEvent(writes, "response.cancel"); got != 1 {
+		t.Fatalf("scheduled barge-in cancellations = %d, want exactly one: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "input_audio_buffer.append"); got != 2 {
+		t.Fatalf("scheduled barge-in appends = %d, want one append group per turn: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "input_audio_buffer.commit"); got != 2 {
+		t.Fatalf("scheduled barge-in commits = %d, want one per turn: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "response.create"); got != 2 {
+		t.Fatalf("scheduled barge-in responses = %d, want one per turn: %v", got, writes)
+	}
+
+	cancelIndex := indexOfWireEvent(writes, "response.cancel", 0)
+	secondAppendIndex := indexOfWireEvent(writes, "input_audio_buffer.append", 1)
+	firstResponseIndex := indexOfWireEvent(writes, "IN:response.created", 0)
+	if firstResponseIndex < 0 || cancelIndex <= firstResponseIndex || cancelIndex >= secondAppendIndex {
+		t.Fatalf("scheduled barge-in wire order = %v, want response.created < response.cancel < second append", writes)
+	}
+
+	seenSecondAudio, seenStaleAudio := false, false
+	for _, msg := range observed {
+		if msg.Type != messages.StreamTypeAudioDelta {
+			continue
+		}
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || value == nil {
+			t.Fatalf("observed scheduled audio delta value = %T, want *AudioDeltaValue", msg.Value)
+		}
+		switch string(value.Content) {
+		case string([]byte{1, 2, 3}):
+			// The active boundary is response.created. Depending on which
+			// already-queued provider delta the model runner drains first, the
+			// first response's output may or may not cross before cancellation.
+		case string([]byte{2, 0, 12, 0}):
+			seenSecondAudio = true
+		case "cancel-stale":
+			seenStaleAudio = true
+		}
+	}
+	if !seenSecondAudio {
+		t.Fatalf("replacement response audio was not observed; stream=%#v", observed)
+	}
+	if seenStaleAudio {
+		t.Fatalf("stale provider audio crossed the cancellation boundary: %#v", observed)
+	}
+}
+
+func TestLiveRecordRuntimeScheduledAudioBargeInWaitsForPromptResponse(t *testing.T) {
+	server := newPromptBargeInScheduledAudioLifecycleServer()
+	defer server.closeOnce.Do(func() { close(server.closed) })
+	destination := filepath.Join(t.TempDir(), "recording")
+	recordPath := filepath.Join(t.TempDir(), "capture.json")
+	audioPath := committedSessionAudioInputWAVPath(t)
+	diagnostics := &scheduledTurnDiagnosticSink{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := make(chan error, 1)
+	go func() {
+		result <- services.RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+			ctx,
+			io.Discard,
+			services.SessionRunOptions{
+				RecordPath:       recordPath,
+				Provider:         "openai",
+				Model:            "gpt-realtime",
+				APIKey:           "test-key",
+				ConfigDir:        t.TempDir(),
+				WebSocketDialer:  server,
+				Prompt:           "initial prompt",
+				AudioInTurnBarge: true,
+				Diagnostics:      diagnostics,
+			},
+			destination,
+			"",
+			0,
+			services.SessionTextSeed{},
+			[]string{audioPath, audioPath},
+			"",
+		)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("prompt-seeded scheduled barge-in session error = %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("prompt-seeded scheduled barge-in session did not complete: writes=%v", server.writesSnapshot())
+	}
+
+	writes := server.writesSnapshot()
+	if got := countWireEvent(writes, "response.cancel"); got != 1 {
+		t.Fatalf("prompt-seeded scheduled cancellations = %d, want exactly one: %v", got, writes)
+	}
+	if got := countWireEvent(writes, "input_audio_buffer.append"); got != 2 {
+		t.Fatalf("prompt-seeded scheduled appends = %d, want two: %v", got, writes)
+	}
+	responseCreates := wireEventIndexes(writes, "response.create")
+	appends := wireEventIndexes(writes, "input_audio_buffer.append")
+	promptItem := indexOfWireEvent(writes, "conversation.item.create", 0)
+	initialDone := indexOfWireEvent(writes, "IN:response.done", 0)
+	cancelIndex := indexOfWireEvent(writes, "response.cancel", 0)
+	if len(responseCreates) != 3 || len(appends) != 2 || promptItem < 0 || initialDone < 0 ||
+		!(promptItem < responseCreates[0] && responseCreates[0] < initialDone && initialDone < appends[0] &&
+			appends[0] < responseCreates[1] && responseCreates[1] < cancelIndex && cancelIndex < appends[1]) {
+		t.Fatalf("prompt/seed scheduled wire order = %v, want prompt response before first append and cancellation only during second response", writes)
+	}
+
+	var terminalMetrics []services.SessionDiagnosticRecord
+	for _, record := range diagnostics.recordsSnapshot() {
+		if record.Event == services.SessionDiagnosticEventMetrics {
+			terminalMetrics = append(terminalMetrics, record)
+		}
+	}
+	if len(terminalMetrics) != 1 {
+		t.Fatalf("prompt/seed terminal metrics = %#v, want exactly one", terminalMetrics)
+	}
+	for field, want := range map[string]string{
+		services.SessionDiagnosticFieldCompletedTurnCount:   "2",
+		services.SessionDiagnosticFieldDispatchedInputCount: "2",
+		services.SessionDiagnosticFieldScheduledInputCount:  "2",
+	} {
+		if got := terminalMetrics[0].Fields[field]; got != want {
+			t.Fatalf("prompt/seed terminal metric %q = %q, want %q; fields=%v", field, got, want, terminalMetrics[0].Fields)
+		}
 	}
 }
 
@@ -1021,6 +1240,20 @@ func wireEventIndexes(writes []string, want string) []int {
 		}
 	}
 	return indexes
+}
+
+func indexOfWireEvent(writes []string, want string, occurrence int) int {
+	seen := 0
+	for index, writeType := range writes {
+		if writeType != want {
+			continue
+		}
+		if seen == occurrence {
+			return index
+		}
+		seen++
+	}
+	return -1
 }
 
 // TestLiveRecordRuntimeAudioInCancellationDuringAwaitSurfacesError proves a

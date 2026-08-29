@@ -102,30 +102,31 @@ func (f sessionRuntimeFactory) newOpenAISessionInferencerForTools(sessionCfg con
 }
 
 type sessionRuntimePlan struct {
-	mode                  sessionRuntimeMode
-	provider              string
-	model                 string
-	capturePath           string
-	loopOut               io.Writer
-	inferencer            messages.SessionInferencer
-	loop                  sessionLoopOptions
-	announce              string
-	flushCapture          func() error
-	finalize              func(context.Context, io.Writer) error
-	diagnostics           SessionDiagnosticSink
-	metricsRecorder       metrics.Recorder
-	streamObserver        SessionStreamObserver
-	audioInputs           []ScheduledAudioInput
-	clockSource           platformclock.Source
-	runtime               *sessionRuntimeObservationRecorder
-	rtcRuntime            SessionRTCRuntime
-	closeSession          func() error
-	selection             SessionRuntimeSelection
-	transport             string
-	signalingEndpoint     string
-	mediaSource           string
-	rtcDeviceRequest      RTCDeviceBindingRequest
-	capabilityCoordinator *SessionCapabilityCoordinator
+	mode                   sessionRuntimeMode
+	provider               string
+	model                  string
+	capturePath            string
+	loopOut                io.Writer
+	inferencer             messages.SessionInferencer
+	loop                   sessionLoopOptions
+	announce               string
+	flushCapture           func() error
+	finalize               func(context.Context, io.Writer) error
+	diagnostics            SessionDiagnosticSink
+	metricsRecorder        metrics.Recorder
+	streamObserver         SessionStreamObserver
+	audioInputs            []ScheduledAudioInput
+	scheduledAudioDispatch ScheduledAudioDispatchPolicy
+	clockSource            platformclock.Source
+	runtime                *sessionRuntimeObservationRecorder
+	rtcRuntime             SessionRTCRuntime
+	closeSession           func() error
+	selection              SessionRuntimeSelection
+	transport              string
+	signalingEndpoint      string
+	mediaSource            string
+	rtcDeviceRequest       RTCDeviceBindingRequest
+	capabilityCoordinator  *SessionCapabilityCoordinator
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
@@ -172,6 +173,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
+	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
 	obs.scheduleAudioInputs(p.audioInputs)
 	loop.observer = obs
 }
@@ -188,6 +190,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
 		}
 	}()
+	if err := ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(opts.AudioInputs)); err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	scheduledAudioDispatch := scheduledAudioDispatchPolicyForOptions(opts)
 
 	selection, err := resolveSessionRuntimeSelection(opts)
 	if err != nil {
@@ -205,6 +211,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.metricsRecorder = opts.MetricsRecorder
 	plan.streamObserver = opts.StreamObserver
 	plan.audioInputs = opts.AudioInputs
+	plan.scheduledAudioDispatch = scheduledAudioDispatch
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
@@ -219,6 +226,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// The per-invocation adapter deadline override crosses with the executor;
 	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
+	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
 	plan.selection = selection
 	plan.transport = selection.Transport
 	plan.signalingEndpoint = selection.SignalingEndpoint

@@ -67,6 +67,7 @@ func parseServerEvent(raw []byte) (models.SessionEvent, error) {
 // agent loop StreamMessages. This is the canonical inbound translation for
 // the Grok provider — consumers only see generic StreamMessage types.
 func translateInbound(event models.SessionEvent) []messages.StreamMessage {
+	responseID := responseEventID(event.Data)
 	switch event.Type {
 	case models.SessionEventSessionCreated:
 		// session.created from the server signals the session is established.
@@ -105,12 +106,12 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 			return nil
 		}
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(audioBytes)},
+			{Type: messages.StreamTypeAudioDelta, ResponseID: responseID, Value: messages.NewAudioDeltaValue(audioBytes)},
 		}
 
 	case models.SessionEventResponseOutputAudioDone, grokSessionEventResponseAudioDone:
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+			{Type: messages.StreamTypeAudioEnd, ResponseID: responseID, Value: messages.NewAudioEndValue()},
 		}
 
 	case models.SessionEventResponseOutputAudioTranscriptDelta, grokSessionEventResponseAudioTranscriptDelta:
@@ -119,13 +120,13 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 			return nil
 		}
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue(text)},
+			{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptDeltaValue(text)},
 		}
 
 	case models.SessionEventResponseOutputAudioTranscriptDone, grokSessionEventResponseAudioTranscriptDone:
 		text := extractStringField(event.Data, "transcript")
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue(text)},
+			{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptEndValue(text)},
 		}
 	case models.SessionEventConversationItemInputAudioTranscriptionDelta:
 		text := extractStringField(event.Data, "delta")
@@ -147,12 +148,12 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 			return nil
 		}
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)},
+			{Type: messages.StreamTypeTextDelta, ResponseID: responseID, Value: messages.NewTextDeltaValue(text)},
 		}
 
 	case models.SessionEventResponseTextDone, grokSessionEventResponseTextDone:
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue()},
+			{Type: messages.StreamTypeTextEnd, ResponseID: responseID, Value: messages.NewTextEndValue()},
 		}
 
 	case models.SessionEventResponseFunctionCallArgumentsDelta:
@@ -161,7 +162,7 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 			return nil
 		}
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeToolCallDelta, Value: messages.NewToolCallDeltaValue(partial)},
+			{Type: messages.StreamTypeToolCallDelta, ResponseID: responseID, Value: messages.NewToolCallDeltaValue(partial)},
 		}
 
 	case models.SessionEventResponseFunctionCallArgumentsDone:
@@ -169,17 +170,17 @@ func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 		name := extractStringField(event.Data, "name")
 		args := extractStringField(event.Data, "arguments")
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue(callID, name, args)},
+			{Type: messages.StreamTypeToolCallEnd, ResponseID: responseID, Value: messages.NewToolCallEndValue(callID, name, args)},
 		}
 
 	case models.SessionEventResponseCreated:
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeMessageStart, ResponseID: responseID, Value: messages.NewMessageStartValue()},
 		}
 
 	case models.SessionEventResponseDone:
 		return []messages.StreamMessage{
-			{Type: messages.StreamTypeMessageEnd, Value: grokResponseDoneMessageEnd(event.Data)},
+			{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Value: grokResponseDoneMessageEnd(event.Data)},
 		}
 
 	case models.SessionEventInputAudioBufferSpeechStarted:
@@ -278,6 +279,9 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		}
 		encoded := base64.StdEncoding.EncodeToString(v.Content)
 		return models.NewAudioBufferAppendEvent(encoded), true
+
+	case messages.StreamTypeResponseCancel:
+		return models.NewResponseCancelEvent(), true
 
 	case messages.StreamTypeMessageEnd:
 		// Commit audio buffer at the end of an audio message.
@@ -390,6 +394,13 @@ func firstGrokStringField(data json.RawMessage, paths ...string) string {
 		}
 	}
 	return ""
+}
+
+func responseEventID(data json.RawMessage) string {
+	if id := extractStringField(data, "response_id"); id != "" {
+		return id
+	}
+	return extractDottedStringField(data, "response.id")
 }
 
 // sessionErrorClassification refines the public classification for a Grok

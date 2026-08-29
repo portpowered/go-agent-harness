@@ -123,3 +123,31 @@ func TestRealtimeInboundMessagesResponseDonePreservesCompletedStatus(t *testing.
 		t.Fatalf("completed response metadata = status %q reason %q", value.Status, value.TerminalReason)
 	}
 }
+
+func TestRealtimeInboundMessages_PreservesResponseID(t *testing.T) {
+	tests := []struct {
+		name  string
+		type_ models.SessionEventType
+		raw   string
+		want  messages.StreamMessageType
+	}{
+		{name: "created", type_: models.SessionEventResponseCreated, raw: `{"response":{"id":"resp-created"}}`, want: messages.StreamTypeMessageStart},
+		{name: "audio", type_: models.SessionEventResponseOutputAudioDelta, raw: `{"response_id":"resp-audio","delta":"AQI=","format":"pcm16"}`, want: messages.StreamTypeAudioDelta},
+		{name: "tool", type_: models.SessionEventResponseFunctionCallArgumentsDone, raw: `{"response_id":"resp-tool","call_id":"call-1","name":"lookup","arguments":"{}"}`, want: messages.StreamTypeToolCallEnd},
+		{name: "done", type_: models.SessionEventResponseDone, raw: `{"response":{"id":"resp-done","status":"completed"}}`, want: messages.StreamTypeMessageEnd},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := realtimeInboundMessages(models.SessionEvent{Type: test.type_, Data: []byte(test.raw)})
+			if len(got) != 1 {
+				t.Fatalf("normalized messages = %d, want 1", len(got))
+			}
+			if got[0].Type != test.want {
+				t.Fatalf("normalized type = %q, want %q", got[0].Type, test.want)
+			}
+			if got[0].ResponseID == "" {
+				t.Fatalf("normalized response ID is empty: %#v", got[0])
+			}
+		})
+	}
+}

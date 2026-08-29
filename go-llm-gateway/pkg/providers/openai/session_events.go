@@ -33,6 +33,7 @@ func parseRealtimeServerEvent(raw []byte) (models.SessionEvent, error) {
 }
 
 func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage {
+	responseID := firstStringField(event.Data, "response_id", "response.id")
 	switch event.Type {
 	case models.SessionEventSessionCreated:
 		sessionID := firstStringField(event.Data, "session_id", "session.id", "id")
@@ -64,9 +65,9 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 			)},
 		}
 	case models.SessionEventResponseCreated:
-		return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID, Value: messages.NewMessageStartValue()}}
 	case models.SessionEventResponseDone:
-		return []messages.StreamMessage{{Type: messages.StreamTypeMessageEnd, Value: realtimeResponseDoneMessageEnd(event.Data)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Value: realtimeResponseDoneMessageEnd(event.Data)}}
 	case models.SessionEventResponseOutputItemAdded:
 		itemType := firstStringField(event.Data, "item.type")
 		if itemType != "function_call" {
@@ -77,6 +78,7 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		return []messages.StreamMessage{{
 			Type:       messages.StreamTypeToolCallStart,
 			ToolCallId: callID,
+			ResponseID: responseID,
 			Value:      messages.NewToolCallStartValue(callID, name),
 		}}
 	case models.SessionEventResponseTextDelta:
@@ -84,29 +86,30 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		if text == "" {
 			return nil
 		}
-		return []messages.StreamMessage{{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTextDelta, ResponseID: responseID, Value: messages.NewTextDeltaValue(text)}}
 	case models.SessionEventResponseTextDone:
-		return []messages.StreamMessage{{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue()}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTextEnd, ResponseID: responseID, Value: messages.NewTextEndValue()}}
 	case models.SessionEventResponseOutputAudioDelta:
 		audioBytes := realtimeAudioBytes(event.Data)
 		if audioBytes == nil {
 			return nil
 		}
 		return []messages.StreamMessage{{
-			Type:  messages.StreamTypeAudioDelta,
-			Value: messages.NewAudioDeltaValueWithMediaType(audioBytes, realtimeAudioMediaType(event.Data)),
+			Type:       messages.StreamTypeAudioDelta,
+			ResponseID: responseID,
+			Value:      messages.NewAudioDeltaValueWithMediaType(audioBytes, realtimeAudioMediaType(event.Data)),
 		}}
 	case models.SessionEventResponseOutputAudioDone:
-		return []messages.StreamMessage{{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeAudioEnd, ResponseID: responseID, Value: messages.NewAudioEndValue()}}
 	case models.SessionEventResponseOutputAudioTranscriptDelta:
 		text := firstStringField(event.Data, "delta")
 		if text == "" {
 			return nil
 		}
-		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptDeltaValue(text)}}
 	case models.SessionEventResponseOutputAudioTranscriptDone:
 		text := firstStringField(event.Data, "transcript")
-		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptEndValue(text)}}
 	case models.SessionEventConversationItemInputAudioTranscriptionDelta:
 		text := firstStringField(event.Data, "delta")
 		if text == "" {
@@ -125,6 +128,7 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		return []messages.StreamMessage{{
 			Type:       messages.StreamTypeToolCallDelta,
 			ToolCallId: callID,
+			ResponseID: responseID,
 			Value:      messages.NewToolCallDeltaValue(partial),
 		}}
 	case models.SessionEventResponseFunctionCallArgumentsDone:
@@ -134,6 +138,7 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 		return []messages.StreamMessage{{
 			Type:       messages.StreamTypeToolCallEnd,
 			ToolCallId: callID,
+			ResponseID: responseID,
 			Value:      messages.NewToolCallEndValue(callID, name, args),
 		}}
 	case models.SessionEventError:

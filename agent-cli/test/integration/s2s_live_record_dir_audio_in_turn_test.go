@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
@@ -76,6 +77,12 @@ func newCLILiveRecordDirCloseAfterTurnServer(turn int) *cliLiveRecordDirServer {
 	return server
 }
 
+func (s *cliLiveRecordDirServer) shutdown() {
+	if s == nil {
+		return
+	}
+	s.closeOnce.Do(func() { close(s.closed) })
+}
 func (s *cliLiveRecordDirServer) Dial(_ string, _ map[string]string) (transport.Conn, error) {
 	s.mu.Lock()
 	s.dialCount++
@@ -99,6 +106,18 @@ func (s *cliLiveRecordDirServer) serve() {
 			transcriptText := "response turn " + strconv.Itoa(turn)
 			audio := base64.StdEncoding.EncodeToString([]byte{byte(turn), 0, byte(turn + 10), 0})
 			s.sendEvent(`{"type":"response.created","response":{"id":"` + responseID + `"}}`)
+			if s.closeAfterTurn > 0 && turn == s.closeAfterTurn {
+				// Put the provider terminal event ahead of this response's
+				// terminal boundary. The session runner must drain the queued
+				// response but must not mistake the close for completion of any
+				// still-undispatched scheduled input.
+				s.sendEvent(`{"type":"session.closed","session_id":"sess_cli_live","reason":"scheduled_fixture_complete"}`)
+				s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
+				s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
+				s.sendEvent(`{"type":"response.output_audio.done"}`)
+				s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"completed"}}`)
+				return
+			}
 			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
 			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
 			s.sendEvent(`{"type":"response.output_audio.done"}`)
@@ -228,8 +247,11 @@ type cliLiveScheduledBoundaryServer struct {
 	sessionUpdateObserved chan struct{}
 	sessionCreatedOnce    sync.Once
 	releaseOnce           sync.Once
+	firstResponseCancel   chan struct{}
+	firstCancelOnce       sync.Once
 
 	serverVADEnabled    bool
+	bargeIn             bool
 	turnObserved        bool
 	turnHasAudio        bool
 	turnHasSpeech       bool
@@ -251,6 +273,13 @@ func newCLILiveScheduledBoundaryServer(delaySessionUpdated bool) *cliLiveSchedul
 	if delaySessionUpdated {
 		server.sessionUpdatedRelease = make(chan struct{})
 	}
+	return server
+}
+
+func newCLILiveBargeScheduledBoundaryServer() *cliLiveScheduledBoundaryServer {
+	server := newCLILiveScheduledBoundaryServer(false)
+	server.bargeIn = true
+	server.firstResponseCancel = make(chan struct{})
 	return server
 }
 
@@ -281,6 +310,22 @@ func (s *cliLiveScheduledBoundaryServer) serve() {
 			transcriptText := "response turn " + strconv.Itoa(turn)
 			audio := base64.StdEncoding.EncodeToString([]byte{byte(turn), 0, byte(turn + 20), 0})
 			s.sendEvent(`{"type":"response.created","response":{"id":"` + responseID + `"}}`)
+			if s.bargeIn && turn == 1 {
+				// Hold the first response open after its observable start. The
+				// scheduled second input must reach ModelRunner, which owns the
+				// cancellation, before this fixture publishes terminality.
+				s.sendEvent(`{"type":"response.output_audio.delta","response_id":"` + responseID + `","delta":"` + audio + `","format":"pcm16"}`)
+				select {
+				case <-s.firstResponseCancel:
+					// This delta is deliberately stale and must be suppressed by
+					// the customer-facing stream after the accepted cancellation.
+					s.sendEvent(`{"type":"response.output_audio.delta","response_id":"` + responseID + `","delta":"Y2FuY2VsLXN0YWxl","format":"pcm16"}`)
+					s.sendEvent(`{"type":"response.done","response":{"id":"` + responseID + `","status":"cancelled"}}`)
+				case <-s.closed:
+					return
+				}
+				continue
+			}
 			s.sendEvent(`{"type":"response.output_audio_transcript.done","transcript":"` + transcriptText + `"}`)
 			s.sendEvent(`{"type":"response.output_audio.delta","delta":"` + audio + `","format":"pcm16"}`)
 			s.sendEvent(`{"type":"response.output_audio.done"}`)
@@ -424,6 +469,10 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 		select {
 		case c.server.sessionUpdateObserved <- struct{}{}:
 		default:
+		}
+	case "response.cancel":
+		if c.server.bargeIn && c.server.firstResponseCancel != nil {
+			c.server.firstCancelOnce.Do(func() { close(c.server.firstResponseCancel) })
 		}
 	case "input_audio_buffer.append":
 		c.server.turnHasAudio = true
@@ -1121,8 +1170,91 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	assertCLILiveRecordingBundle(t, recordDir, 2)
 }
 
+func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
+	server := newCLILiveBargeScheduledBoundaryServer()
+	t.Cleanup(server.shutdown)
+	agentCLI := newCLIScheduledBoundaryAgent(t, server)
+
+	var observed []messages.StreamMessage
+	var observedMu sync.Mutex
+	agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
+		observedMu.Lock()
+		observed = append(observed, msg)
+		observedMu.Unlock()
+	})
+
+	recordDir := filepath.Join(t.TempDir(), "barge-recording")
+	args := scheduledBoundaryArgs(
+		t.TempDir(),
+		recordDir,
+		locateCLIFixture(t, "multiturn_turn1.wav"),
+		locateCLIFixture(t, "multiturn_turn2.wav"),
+	)
+	args = append(args, "--audio-in-turn-barge")
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs(args)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		timeline, outbound, _, _, _ := server.snapshots()
+		t.Fatalf("execute active scheduled command: %v; timeline=%v outbound=%v", err, timeline, audioLengthsFromOutbound(outbound))
+	}
+
+	timeline, outbound, providerErrors, dialCount, serverVAD := server.snapshots()
+	if dialCount != 1 || serverVAD || len(providerErrors) != 0 {
+		t.Fatalf("active scheduled provider state = dials:%d server_vad:%t errors:%v timeline=%v; want one client-owned clean session", dialCount, serverVAD, providerErrors, timeline)
+	}
+	if countTimeline(timeline, "out:input_audio_buffer.append") != 2 ||
+		countTimeline(timeline, "out:input_audio_buffer.commit") != 2 ||
+		countTimeline(timeline, "out:response.create") != 2 ||
+		countTimeline(timeline, "out:response.cancel") != 1 ||
+		countTimeline(timeline, "in:response.done") != 2 {
+		t.Fatalf("active scheduled lifecycle = %v, want two inputs/responses and one cancellation", timeline)
+	}
+	firstResponse := indexOfTimeline(timeline, "in:response.created", 0)
+	cancelIndex := indexOfTimeline(timeline, "out:response.cancel", 0)
+	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
+	if firstResponse < 0 || cancelIndex <= firstResponse || secondAppend <= cancelIndex {
+		t.Fatalf("active scheduled ordering = %v, want response.created < response.cancel < second append", timeline)
+	}
+	if firstResponseDone := indexOfTimeline(timeline, "in:response.done", 0); firstResponseDone <= cancelIndex {
+		t.Fatalf("cancel did not win before first response terminality: %v", timeline)
+	}
+
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	if len(appendAudio) != 2 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 {
+		t.Fatalf("active scheduled input payloads = %v, want two non-empty append payloads", audioLengths(appendAudio))
+	}
+	observedMu.Lock()
+	observedCopy := append([]messages.StreamMessage(nil), observed...)
+	observedMu.Unlock()
+	seenReplacement, seenStale := false, false
+	for _, msg := range observedCopy {
+		value, ok := msg.Value.(*messages.AudioDeltaValue)
+		if !ok || value == nil {
+			continue
+		}
+		switch string(value.Content) {
+		case string([]byte{2, 0, 22, 0}):
+			seenReplacement = true
+		case "cancel-stale":
+			seenStale = true
+		}
+	}
+	if !seenReplacement {
+		t.Fatalf("replacement response audio was not observed; stream=%#v", observedCopy)
+	}
+	if seenStale {
+		t.Fatalf("stale post-cancel provider audio crossed the stream boundary; stream=%#v", observedCopy)
+	}
+}
+
 func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
 	server := newCLILiveRecordDirCloseAfterTurnServer(2)
+	t.Cleanup(server.shutdown)
 	sessionInferencer, err := services.NewOpenAIRealtimeSessionInferencerWithOptions(
 		config.OpenAIConfig{APIKey: "test-key", Model: "gpt-realtime", BaseURL: "wss://hermetic.openai.test/v1/realtime"},
 		oaiprovider.WithWebSocketDialer(server),

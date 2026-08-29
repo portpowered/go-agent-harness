@@ -13,6 +13,7 @@ type streamMessageJSON struct {
 	Type               string          `json:"type"`
 	Role               string          `json:"role,omitempty"`
 	ToolCallId         string          `json:"tool_call_id,omitempty"`
+	ResponseID         string          `json:"response_id,omitempty"`
 	Value              json.RawMessage `json:"value,omitempty"`
 	GlobalIndex        int             `json:"global_index,omitempty"`
 	ActorProvidedID    string          `json:"actor_provided_id,omitempty"`
@@ -38,6 +39,7 @@ func MarshalStreamMessage(msg messages.StreamMessage) (json.RawMessage, error) {
 		Type:               string(msg.Type),
 		Role:               string(msg.Role),
 		ToolCallId:         msg.ToolCallId,
+		ResponseID:         msg.ResponseID,
 		Value:              valueBytes,
 		GlobalIndex:        msg.GlobalIndex,
 		ActorProvidedID:    msg.ActorProvidedID,
@@ -60,6 +62,7 @@ func UnmarshalStreamMessage(data json.RawMessage) (messages.StreamMessage, error
 		Type:               messages.StreamMessageType(raw.Type),
 		Role:               messages.Role(raw.Role),
 		ToolCallId:         raw.ToolCallId,
+		ResponseID:         raw.ResponseID,
 		GlobalIndex:        raw.GlobalIndex,
 		ActorProvidedID:    raw.ActorProvidedID,
 		ActorProvidedIndex: raw.ActorProvidedIndex,

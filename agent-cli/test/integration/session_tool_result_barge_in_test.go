@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -22,23 +23,29 @@ type sessionToolBargeInSession struct {
 	recv *messages.TypedBuffer[messages.StreamMessage]
 	done chan struct{}
 
-	closeOnce          sync.Once
-	resultAcceptedOnce sync.Once
-	continuationOnce   sync.Once
-	secondAudioOnce    sync.Once
+	closeOnce            sync.Once
+	firstResponseEndOnce sync.Once
+	resultAcceptedOnce   sync.Once
+	continuationOnce     sync.Once
+	secondAudioOnce      sync.Once
 
-	mu              sync.Mutex
-	responseCount   int
-	sent            []messages.StreamMessage
-	lifecycle       []string
-	resultAccepted  chan struct{}
-	secondAudioSent chan struct{}
+	mu                    sync.Mutex
+	bargeIn               bool
+	responseCount         int
+	toolResultAccepted    bool
+	secondResponsePending bool
+	continuationEmitted   bool
+	sent                  []messages.StreamMessage
+	lifecycle             []string
+	resultAccepted        chan struct{}
+	secondAudioSent       chan struct{}
 }
 
-func newSessionToolBargeInSession() *sessionToolBargeInSession {
+func newSessionToolBargeInSessionWithMode(bargeIn bool) *sessionToolBargeInSession {
 	return &sessionToolBargeInSession{
 		recv:            messages.NewTypedBuffer[messages.StreamMessage](64),
 		done:            make(chan struct{}),
+		bargeIn:         bargeIn,
 		resultAccepted:  make(chan struct{}),
 		secondAudioSent: make(chan struct{}),
 	}
@@ -72,22 +79,65 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 		s.mu.Lock()
 		s.responseCount++
 		response := s.responseCount
+		bargeIn := s.bargeIn
 		s.mu.Unlock()
 		switch response {
 		case 1:
 			s.emitFirstResponse()
 		case 2:
-			s.emitThirdResponse()
+			if bargeIn {
+				s.mu.Lock()
+				s.secondResponsePending = true
+				s.mu.Unlock()
+			} else {
+				s.emitThirdResponse()
+			}
 		}
 	case messages.StreamTypeResponseCreate:
 		// A requested continuation completes the first scheduled turn. The
 		// second scheduled input is not committed until this response reaches
 		// its terminal MESSAGE.END.
-		s.continuationOnce.Do(s.emitSecondResponse)
+		s.mu.Lock()
+		bargeIn := s.bargeIn
+		toolResultAccepted := s.toolResultAccepted
+		continuationEmitted := s.continuationEmitted
+		pendingSecondResponse := s.secondResponsePending
+		if bargeIn && !toolResultAccepted {
+			s.secondResponsePending = true
+			s.mu.Unlock()
+			return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+		}
+		if bargeIn && !continuationEmitted {
+			s.continuationEmitted = true
+			s.secondResponsePending = false
+		}
+		s.mu.Unlock()
+		if !bargeIn {
+			s.continuationOnce.Do(s.emitSecondResponse)
+			break
+		}
+		if !continuationEmitted {
+			s.emitSecondResponse()
+			if pendingSecondResponse {
+				s.emitThirdResponse()
+			}
+		}
+	case messages.StreamTypeResponseCancel:
+		s.mu.Lock()
+		bargeIn := s.bargeIn
+		s.mu.Unlock()
+		if bargeIn {
+			// Keep the provider response active until the client cancellation is
+			// observed, then terminate that response without emitting stale audio.
+			s.firstResponseEndOnce.Do(s.emitFirstResponseEnd)
+		}
 	case messages.StreamTypeToolCallEnd:
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
 		if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
 			s.resultAcceptedOnce.Do(func() {
+				s.mu.Lock()
+				s.toolResultAccepted = true
+				s.mu.Unlock()
 				s.recordLifecycle("result_accepted")
 				close(s.resultAccepted)
 			})
@@ -104,17 +154,28 @@ func sessionToolBargeInContextOutcome(err error) messages.SessionSendOutcome {
 }
 
 func (s *sessionToolBargeInSession) emitFirstResponse() {
-	for _, msg := range []messages.StreamMessage{
+	msgs := []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(sessionToolBargeInCallID, "slow_tool")},
 		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(sessionToolBargeInCallID, "slow_tool", `{"value":"wait"}`)},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
+	}
+	if !s.bargeIn {
+		msgs = append(msgs, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	}
+	for _, msg := range msgs {
 		s.recv.Write(context.Background(), msg)
 	}
+}
+
+func (s *sessionToolBargeInSession) emitFirstResponseEnd() {
+	s.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
 }
 
 func (s *sessionToolBargeInSession) emitSecondResponse() {
@@ -178,6 +239,7 @@ func (s *sessionToolBargeInSession) lifecycleSnapshot() []string {
 
 type sessionToolBargeInInferencer struct {
 	ready   chan struct{}
+	bargeIn bool
 	mu      sync.Mutex
 	session *sessionToolBargeInSession
 }
@@ -186,8 +248,12 @@ func newSessionToolBargeInInferencer() *sessionToolBargeInInferencer {
 	return &sessionToolBargeInInferencer{ready: make(chan struct{})}
 }
 
+func newActiveSessionToolBargeInInferencer() *sessionToolBargeInInferencer {
+	return &sessionToolBargeInInferencer{ready: make(chan struct{}), bargeIn: true}
+}
+
 func (i *sessionToolBargeInInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	session := newSessionToolBargeInSession()
+	session := newSessionToolBargeInSessionWithMode(i.bargeIn)
 	session.recv.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("session-tool-barge-in", "test"),
@@ -384,6 +450,11 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	if resultCount != 1 {
 		t.Fatalf("provider received %d correlated tool results, want exactly one", resultCount)
 	}
+	for _, msg := range session.sentSnapshot() {
+		if msg.Type == messages.StreamTypeResponseCancel {
+			t.Fatal("completion-gated scheduled tool continuation emitted RESPONSE.CANCEL")
+		}
+	}
 	observerMu.Lock()
 	closeCount := localSessionCloseCount
 	observerMu.Unlock()
@@ -393,6 +464,78 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	gotLifecycle := session.lifecycleSnapshot()
 	if len(gotLifecycle) != 3 || gotLifecycle[0] != "result_accepted" || gotLifecycle[1] != "second_audio_sent" || gotLifecycle[2] != "client_close" {
 		t.Fatalf("session lifecycle order = %v, want [result_accepted second_audio_sent client_close]", gotLifecycle)
+	}
+}
+
+func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *testing.T) {
+	inferencer := newActiveSessionToolBargeInInferencer()
+	executor := newSessionToolBargeInExecutor()
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+		executor,
+		&mockInferencer{response: "stateless inferencer should not be called"},
+		inferencer,
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+	rootCmd.SetArgs([]string{
+		"--config-dir", t.TempDir(),
+		"session",
+		"--record-dir", t.TempDir(),
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--system-prompt", "none",
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
+		"--audio-in-turn-barge",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() { runErr <- rootCmd.ExecuteContext(ctx) }()
+
+	waitSessionToolBargeInSignal(t, inferencer.ready, "active scheduled session connection")
+	session := inferencer.connectedSession()
+	if session == nil {
+		t.Fatal("active scheduled connected session was not retained")
+	}
+	waitSessionToolBargeInSignal(t, executor.started, "active scheduled slow tool executor to start")
+	close(executor.release)
+	waitSessionToolBargeInSignal(t, session.resultAccepted, "active scheduled correlated tool result acceptance")
+	waitSessionToolBargeInSignal(t, session.secondAudioSent, "active scheduled second audio dispatch")
+
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("active scheduled tool command returned an error: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("active scheduled tool command did not finish: %v", ctx.Err())
+	}
+
+	resultCount, cancelCount := 0, 0
+	for _, msg := range session.sentSnapshot() {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			value, ok := msg.Value.(*messages.ToolCallEndValue)
+			if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
+				resultCount++
+			}
+		case messages.StreamTypeResponseCancel:
+			cancelCount++
+		}
+	}
+	if resultCount != 1 {
+		t.Fatalf("active scheduled provider received %d correlated tool results, want exactly one", resultCount)
+	}
+	if cancelCount != 1 {
+		t.Fatalf("active scheduled provider received %d response cancellations, want exactly one", cancelCount)
 	}
 }
 

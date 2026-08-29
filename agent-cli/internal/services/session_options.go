@@ -34,6 +34,9 @@ const (
 )
 
 var (
+	// ErrSessionAudioInTurnBargeRequiresSequence identifies an opt-in barge-in
+	// request that does not provide the repeated-turn sequence it controls.
+	ErrSessionAudioInTurnBargeRequiresSequence = errors.New("--audio-in-turn-barge requires at least two --audio-in-turn values")
 	// ErrInvalidSessionRuntimeSelection identifies a malformed or incompatible
 	// transport/signaling/media selection at the service boundary.
 	ErrInvalidSessionRuntimeSelection = errors.New("invalid session runtime selection")
@@ -65,6 +68,57 @@ type SessionRuntimeSelection struct {
 	Transport         string
 	SignalingEndpoint string
 	MediaSource       string
+}
+
+// SessionAudioInTurnBargeError reports an invalid --audio-in-turn-barge
+// cardinality before session setup or provider connection.
+type SessionAudioInTurnBargeError struct {
+	TurnCount int
+}
+
+func (e *SessionAudioInTurnBargeError) Error() string {
+	if e == nil {
+		return ErrSessionAudioInTurnBargeRequiresSequence.Error()
+	}
+	return fmt.Sprintf("%s; got %d", ErrSessionAudioInTurnBargeRequiresSequence, e.TurnCount)
+}
+
+func (e *SessionAudioInTurnBargeError) Unwrap() error {
+	return ErrSessionAudioInTurnBargeRequiresSequence
+}
+
+// ValidateSessionAudioInTurnBarge validates the explicit scheduled-turn
+// policy before any provider or capability setup. The ordinary one-turn and
+// multi-turn paths remain valid when the opt-in is omitted.
+func ValidateSessionAudioInTurnBarge(enabled bool, turnCount int) error {
+	if !enabled || turnCount >= 2 {
+		return nil
+	}
+	if turnCount < 0 {
+		turnCount = 0
+	}
+	return &SessionAudioInTurnBargeError{TurnCount: turnCount}
+}
+
+// ScheduledAudioDispatchPolicy is the explicit policy selected for a finite
+// repeated audio-turn sequence. The zero value is intentionally not a policy;
+// planning always normalizes it to completion-gated behavior.
+type ScheduledAudioDispatchPolicy string
+
+const (
+	// ScheduledAudioDispatchCompletionGated preserves ordinary serialized
+	// --audio-in-turn behavior.
+	ScheduledAudioDispatchCompletionGated ScheduledAudioDispatchPolicy = "completion-gated"
+	// ScheduledAudioDispatchActiveResponse releases later scheduled turns when
+	// their identified prior response is active and non-terminal.
+	ScheduledAudioDispatchActiveResponse ScheduledAudioDispatchPolicy = "active-response"
+)
+
+func scheduledAudioDispatchPolicyForOptions(opts SessionRunOptions) ScheduledAudioDispatchPolicy {
+	if opts.AudioInTurnBarge {
+		return ScheduledAudioDispatchActiveResponse
+	}
+	return ScheduledAudioDispatchCompletionGated
 }
 
 // SessionRuntimeSelectionError reports all fields that made a selection
@@ -191,6 +245,10 @@ type SessionRunOptions struct {
 	// AudioInputs schedules user audio injections through the loop's existing
 	// audio-input seam, attributed to specific turns.
 	AudioInputs []ScheduledAudioInput
+	// AudioInTurnBarge selects the explicit active-response dispatch policy for
+	// repeated --audio-in-turn inputs. False preserves the completion-gated
+	// serialized policy.
+	AudioInTurnBarge bool
 	// ClientOwnsAudioTurnBoundaries requests an explicit client-owned realtime
 	// audio turn contract for a finite --audio-in source. The source sends the
 	// MESSAGE.END boundary itself; provider VAD must not auto-commit the same
