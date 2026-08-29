@@ -24,18 +24,19 @@ STATICCHECK_PACKAGE ?= honnef.co/go/tools/cmd/staticcheck
 GOLANGCI_LINT_INSTALL ?= go install $(GOLANGCI_LINT_PACKAGE)@$(GOLANGCI_LINT_VERSION)
 STATICCHECK_INSTALL ?= go install $(STATICCHECK_PACKAGE)@$(STATICCHECK_VERSION)
 GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@latest
+PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
-FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence
+FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target
 RELEASE_VERSION ?= v0.0.1
 RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
 GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -70,7 +71,7 @@ fmt: ## Validate Go formatting across all workspace modules without rewriting fi
 		if [ -n "$$output" ]; then \
 			echo "gofmt drift detected in $$module:"; \
 			echo "$$output"; \
-			echo "Run 'make fmt-fix' to rewrite files before rerunning 'make ci'."; \
+			echo "Run 'make fmt-fix' to rewrite files before rerunning 'make prepush'."; \
 			exit 1; \
 		fi; \
 	done
@@ -196,7 +197,7 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 			exit 1; \
 			;; \
 	esac; \
-	echo "==> test-factory-scripts executed $$test_count tests from both intended modules"; \
+	echo "==> test-factory-scripts executed $$test_count tests from configured modules"; \
 	if [ "$${FACTORY_TEST_CONTRACT_CHILD:-0}" = "0" ]; then \
 		echo "==> test-factory-scripts command contract"; \
 		FACTORY_TEST_CONTRACT_CHILD=1 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_factory_script_target; \
@@ -290,6 +291,9 @@ coverage-changed: ## Measure coverage floors only for packages owning changed Go
 		--module-dir ../../agent-cli \
 		--module-dir ../../go-agent-loop \
 		--module-dir ../../go-llm-gateway)
+
+prepush: ## Run the fail-fast, timed local pre-push gate.
+	@PREPUSH_MAKE="$(PREPUSH_MAKE)" scripts/prepush.sh
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
