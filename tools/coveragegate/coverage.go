@@ -301,11 +301,23 @@ func ParseManifest(data []byte) (Manifest, error) {
 	}
 
 	manifest := Manifest{Packages: make([]PackageEntry, 0, len(document.Packages))}
-	for _, rawEntry := range document.Packages {
+	seen := make(map[string]int, len(document.Packages))
+	for index, rawEntry := range document.Packages {
 		entry, err := parseEntry(rawEntry)
 		if err != nil {
 			return Manifest{}, err
 		}
+		if previousIndex, duplicate := seen[entry.ImportPath]; duplicate {
+			return Manifest{}, &ManifestError{
+				Kind:       ErrManifestDuplicate,
+				ImportPath: entry.ImportPath,
+				Message: fmt.Sprintf(
+					"coverage manifest contains duplicate package %q at entries %d and %d",
+					entry.ImportPath, previousIndex, index,
+				),
+			}
+		}
+		seen[entry.ImportPath] = index
 		if len(manifest.Packages) > 0 {
 			previous := manifest.Packages[len(manifest.Packages)-1].ImportPath
 			if entry.ImportPath <= previous {
@@ -565,10 +577,22 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 
 func validateManifest(manifest Manifest) error {
 	previous := ""
-	for _, entry := range manifest.Packages {
+	seen := make(map[string]int, len(manifest.Packages))
+	for index, entry := range manifest.Packages {
 		if strings.TrimSpace(entry.ImportPath) == "" {
 			return fmt.Errorf("%w: package import path is empty", ErrManifestInvalid)
 		}
+		if previousIndex, duplicate := seen[entry.ImportPath]; duplicate {
+			return &ManifestError{
+				Kind:       ErrManifestDuplicate,
+				ImportPath: entry.ImportPath,
+				Message: fmt.Sprintf(
+					"coverage manifest contains duplicate package %q at entries %d and %d",
+					entry.ImportPath, previousIndex, index,
+				),
+			}
+		}
+		seen[entry.ImportPath] = index
 		if entry.HasMinimum == entry.HasException {
 			if entry.HasMinimum {
 				return &ManifestError{

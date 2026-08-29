@@ -31,7 +31,7 @@ GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -235,6 +235,16 @@ coverage: ## Write per-module coverage profiles under coverage/.
 	done; \
 	echo "==> coverage gate"; \
 	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
+
+coverage-registration: ## Validate every workspace Go package is registered without running coverage.
+	@set -euo pipefail; \
+	echo "==> coverage-registration"; \
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
+		--validate-registration \
+		--manifest ../../coverage-manifest.json \
+		--module-dir ../../agent-cli \
+		--module-dir ../../go-agent-loop \
+		--module-dir ../../go-llm-gateway)
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
