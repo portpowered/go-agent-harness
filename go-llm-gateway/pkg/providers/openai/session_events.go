@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -17,6 +19,7 @@ const conversationItemCreateEvent = models.SessionEventType("conversation.item.c
 const (
 	realtimeInvalidRequestErrorType     = "invalid_request_error"
 	realtimeResponseCancelNotActiveCode = "response_cancel_not_active"
+	realtimeMaxStatusDetailBytes        = 256
 )
 
 func parseRealtimeServerEvent(raw []byte) (models.SessionEvent, error) {
@@ -185,6 +188,8 @@ func realtimeResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndVa
 	value := messages.NewMessageEndValue(messages.TokenUsage{})
 	value.Status = status
 	value.StatusDetails = realtimeResponseDoneStatusDetails(data)
+	value.ProviderErrorCode = realtimeResponseDoneErrorCode(data)
+	value.ProviderErrorMessage = realtimeResponseDoneErrorMessage(data)
 	if status == "" {
 		return value
 	}
@@ -214,7 +219,7 @@ func realtimeResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndVa
 func realtimeResponseDoneStatusDetails(data json.RawMessage) string {
 	parts := make([]string, 0, 4)
 	appendField := func(label string, paths ...string) {
-		value := strings.TrimSpace(firstStringField(data, paths...))
+		value := boundedRealtimeStatusDetail(firstStringField(data, paths...))
 		if value == "" {
 			return
 		}
@@ -227,9 +232,47 @@ func realtimeResponseDoneStatusDetails(data json.RawMessage) string {
 	}
 	appendField("reason", "response.status_details.reason", "status_details.reason")
 	appendField("type", "response.status_details.type", "status_details.type")
-	appendField("code", "response.status_details.code", "status_details.code", "response.status_details.error.code", "status_details.error.code")
-	appendField("message", "response.status_details.message", "status_details.message", "response.status_details.error.message", "status_details.error.message")
+	appendField("code", "response.status_details.error.code", "status_details.error.code", "response.status_details.code", "status_details.code")
+	appendField("message", "response.status_details.error.message", "status_details.error.message", "response.status_details.message", "status_details.message")
 	return strings.Join(parts, ", ")
+}
+
+func realtimeResponseDoneErrorCode(data json.RawMessage) string {
+	return boundedRealtimeStatusDetail(firstStringField(
+		data,
+		"response.status_details.error.code",
+		"status_details.error.code",
+		"response.status_details.code",
+		"status_details.code",
+	))
+}
+
+func realtimeResponseDoneErrorMessage(data json.RawMessage) string {
+	return boundedRealtimeStatusDetail(firstStringField(
+		data,
+		"response.status_details.error.message",
+		"status_details.error.message",
+		"response.status_details.message",
+		"status_details.message",
+	))
+}
+
+func boundedRealtimeStatusDetail(value string) string {
+	value = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, value)
+	value = strings.Join(strings.Fields(value), " ")
+	if len(value) <= realtimeMaxStatusDetailBytes {
+		return value
+	}
+	value = value[:realtimeMaxStatusDetailBytes]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
 }
 
 func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, bool) {

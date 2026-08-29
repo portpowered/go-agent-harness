@@ -25,17 +25,19 @@ pull-request gates.
 binary, replay fixtures, and test-owned child processes. The package therefore
 needs its own finite budget rather than inheriting the general package timeout.
 
-The selected default for the root-target contract is **180 seconds**. The
+The selected default for the root-target contract is **300 seconds**. The
 budget is based on the package's Go test elapsed time, which is the scope owned
 by `go test -timeout` and includes the shared `TestMain` setup. The fresh-main
 baseline at `66c3ff8` reached a maximum successful cold CI-shaped package
-duration of 110.788 seconds; the required safety calculation is
-`110.788 × 1.5 = 166.182 seconds`, rounded up to 180 seconds. The outer shell
+duration of 110.788 seconds; the package-only safety calculation is
+`110.788 × 1.5 = 166.182 seconds`, rounded up to 180 seconds. Root targets
+also run the complete `agent-cli` module with `go test ./...`, so the larger
+finite default leaves headroom for that target-wide invocation. The outer shell
 wall time includes compilation; it is measured separately when collecting
 evidence and does not change the package-level calculation.
 
 The root `Makefile` exposes this contract as
-`AGENT_CLI_INTEGRATION_TIMEOUT`, whose default is the finite `180s` value and
+`AGENT_CLI_INTEGRATION_TIMEOUT`, whose default is the finite `300s` value and
 whose effective value is printed by every affected target. The direct package
 paths in `make test-integration`, `make test-regressions`, and `make test-budget`
 use this setting for `agent-cli/test/integration`; `make coverage` and

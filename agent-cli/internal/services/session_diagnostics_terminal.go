@@ -26,6 +26,8 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		pendingContinuationIDs := o.pendingToolContinuationCallIDs()
 		pendingToolContinuationIDs := o.pendingNonImageToolContinuationCallIDs()
 		pendingImageContinuationIDs := o.pendingImageContinuationCallIDs()
+		continuationStatuses, continuationCodes, continuationDetails := o.pendingContinuationMetadata()
+		_, scheduledCode, _ := o.scheduledAudioFailureMetadata()
 		f := o.failure
 		if f == nil && len(unresolvedIDs) == 0 && len(pendingContinuationIDs) == 0 && !scheduleIncomplete {
 			if runErr == nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
@@ -91,8 +93,20 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 		if f.errorType != "" {
 			fields[fieldProviderErrorType] = f.errorType
 		}
-		if f.code != "" {
-			fields[fieldProviderErrorCode] = f.code
+		providerErrorCode := f.code
+		if providerErrorCode == "" {
+			providerErrorCode = scheduledCode
+		}
+		if providerErrorCode == "" {
+			for _, id := range pendingContinuationIDs {
+				if code := continuationCodes[id]; code != "" {
+					providerErrorCode = code
+					break
+				}
+			}
+		}
+		if providerErrorCode != "" {
+			fields[fieldProviderErrorCode] = providerErrorCode
 		}
 		if len(unresolvedIDs) > 0 {
 			fields[fieldUnresolvedToolResultCount] = strconv.Itoa(len(unresolvedIDs))
@@ -111,9 +125,11 @@ func (o *sessionProgressObserver) emitTerminal(runErr error) {
 			fields[SessionDiagnosticFieldDispatchedInputCount] = strconv.Itoa(dispatchedInputs)
 			fields[SessionDiagnosticFieldCompletedTurnCount] = strconv.Itoa(completedScheduled)
 		}
-		continuationStatuses, continuationDetails := o.pendingContinuationMetadata()
 		if formatted := formatContinuationMetadata(continuationStatuses); formatted != "" {
 			fields[SessionDiagnosticFieldPendingContinuationStatuses] = formatted
+		}
+		if formatted := formatContinuationMetadata(continuationCodes); formatted != "" {
+			fields[SessionDiagnosticFieldPendingContinuationCodes] = formatted
 		}
 		if formatted := formatContinuationMetadata(continuationDetails); formatted != "" {
 			fields[SessionDiagnosticFieldPendingContinuationDetails] = formatted

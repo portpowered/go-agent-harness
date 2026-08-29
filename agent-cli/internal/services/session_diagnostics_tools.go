@@ -20,6 +20,7 @@ type toolContinuationState struct {
 	continuationScheduledSet    bool
 	continuationTerminalSeen    bool
 	continuationStatus          string
+	continuationErrorCode       string
 	continuationStatusDetails   string
 	continuationTerminalReason  messages.TerminalReason
 	continuationOutputObserved  bool
@@ -398,13 +399,14 @@ func (o *sessionProgressObserver) pendingNonImageToolContinuationCallIDs() []str
 	return ids
 }
 
-func (o *sessionProgressObserver) pendingImageContinuationSnapshot() ([]string, map[string]string, map[string]string) {
+func (o *sessionProgressObserver) pendingImageContinuationSnapshot() ([]string, map[string]string, map[string]string, map[string]string) {
 	if o == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	o.toolStateMu.Lock()
 	ids := make([]string, 0, len(o.toolContinuations))
 	statuses := make(map[string]string)
+	codes := make(map[string]string)
 	details := make(map[string]string)
 	for id, state := range o.toolContinuations {
 		if state == nil || state.toolName != tools.ReadImageToolID || !state.resultAccepted || state.continuationComplete {
@@ -414,22 +416,26 @@ func (o *sessionProgressObserver) pendingImageContinuationSnapshot() ([]string, 
 		if state.continuationStatus != "" {
 			statuses[id] = state.continuationStatus
 		}
+		if state.continuationErrorCode != "" {
+			codes[id] = state.continuationErrorCode
+		}
 		if state.continuationStatusDetails != "" {
 			details[id] = state.continuationStatusDetails
 		}
 	}
 	o.toolStateMu.Unlock()
 	sort.Strings(ids)
-	return ids, statuses, details
+	return ids, statuses, codes, details
 }
 
-func (o *sessionProgressObserver) pendingNonImageToolContinuationSnapshot() ([]string, map[string]string, map[string]string) {
+func (o *sessionProgressObserver) pendingNonImageToolContinuationSnapshot() ([]string, map[string]string, map[string]string, map[string]string) {
 	if o == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	o.toolStateMu.Lock()
 	ids := make([]string, 0, len(o.toolContinuations))
 	statuses := make(map[string]string)
+	codes := make(map[string]string)
 	details := make(map[string]string)
 	for id, state := range o.toolContinuations {
 		if state == nil || state.toolName == tools.ReadImageToolID || !state.resultAccepted || state.continuationComplete {
@@ -439,25 +445,29 @@ func (o *sessionProgressObserver) pendingNonImageToolContinuationSnapshot() ([]s
 		if state.continuationStatus != "" {
 			statuses[id] = state.continuationStatus
 		}
+		if state.continuationErrorCode != "" {
+			codes[id] = state.continuationErrorCode
+		}
 		if state.continuationStatusDetails != "" {
 			details[id] = state.continuationStatusDetails
 		}
 	}
 	o.toolStateMu.Unlock()
 	sort.Strings(ids)
-	return ids, statuses, details
+	return ids, statuses, codes, details
 }
 
 // pendingContinuationMetadata returns deterministic provider context for all
 // accepted continuations still pending at terminal time. The diagnostic uses
 // the same call-ID correlation as the typed errors.
-func (o *sessionProgressObserver) pendingContinuationMetadata() (map[string]string, map[string]string) {
+func (o *sessionProgressObserver) pendingContinuationMetadata() (map[string]string, map[string]string, map[string]string) {
 	if o == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	o.toolStateMu.Lock()
 	defer o.toolStateMu.Unlock()
 	statuses := make(map[string]string)
+	codes := make(map[string]string)
 	details := make(map[string]string)
 	for id, state := range o.toolContinuations {
 		if state == nil || !state.resultAccepted || state.continuationComplete {
@@ -466,11 +476,14 @@ func (o *sessionProgressObserver) pendingContinuationMetadata() (map[string]stri
 		if state.continuationStatus != "" {
 			statuses[id] = state.continuationStatus
 		}
+		if state.continuationErrorCode != "" {
+			codes[id] = state.continuationErrorCode
+		}
 		if state.continuationStatusDetails != "" {
 			details[id] = state.continuationStatusDetails
 		}
 	}
-	return statuses, details
+	return statuses, codes, details
 }
 
 // unresolvedToolCallIDs returns a deterministic snapshot for lifecycle

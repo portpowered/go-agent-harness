@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -16,26 +17,46 @@ import (
 
 const sessionReplayDoneDrainIdleDelay = 25 * time.Millisecond
 
+var errSessionMaxDurationExpired = errors.New("session max duration expired")
+
 // ErrSessionScheduledAudioIncomplete identifies a live scheduled-audio run
 // that ended before every queued input received an assistant response.
 var ErrSessionScheduledAudioIncomplete = errors.New("scheduled audio session ended before all turns completed")
 
 // SessionScheduledAudioIncompleteError carries the deterministic schedule
-// counts observed at a terminal boundary. It unwraps to
-// ErrSessionScheduledAudioIncomplete so callers can use errors.Is while still
-// retaining any provider, timeout, cancellation, or cleanup cause joined with
-// it.
+// counts observed at a terminal boundary. When a provider terminal caused the
+// incomplete lifecycle, its bounded status, error code, and detail are retained
+// as well. It unwraps to ErrSessionScheduledAudioIncomplete so callers can use
+// errors.Is while still retaining any provider, timeout, cancellation, or
+// cleanup cause joined with it.
 type SessionScheduledAudioIncompleteError struct {
-	Completed  int
-	Dispatched int
-	Scheduled  int
+	Completed         int
+	Dispatched        int
+	Scheduled         int
+	ProviderStatus    string
+	ProviderErrorCode string
+	ProviderDetails   string
 }
 
 func (e *SessionScheduledAudioIncompleteError) Error() string {
 	if e == nil {
 		return ErrSessionScheduledAudioIncomplete.Error()
 	}
-	return fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrSessionScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	message := fmt.Sprintf("%s: completed=%d dispatched=%d scheduled=%d", ErrSessionScheduledAudioIncomplete, e.Completed, e.Dispatched, e.Scheduled)
+	annotations := make([]string, 0, 3)
+	if status := strings.TrimSpace(e.ProviderStatus); status != "" {
+		annotations = append(annotations, "status="+status)
+	}
+	if code := strings.TrimSpace(e.ProviderErrorCode); code != "" {
+		annotations = append(annotations, "code="+code)
+	}
+	if detail := strings.TrimSpace(e.ProviderDetails); detail != "" {
+		annotations = append(annotations, "detail="+detail)
+	}
+	if len(annotations) > 0 {
+		message += " (" + strings.Join(annotations, "; ") + ")"
+	}
+	return message
 }
 
 func (e *SessionScheduledAudioIncompleteError) Unwrap() error {
@@ -322,10 +343,14 @@ func scheduledAudioCompletionError(err error, opts sessionLoopOptions) error {
 		return err
 	}
 	completed, dispatched, scheduled := opts.observer.scheduledAudioCounts()
+	providerStatus, providerCode, providerDetails := opts.observer.scheduledAudioFailureMetadata()
 	incomplete := &SessionScheduledAudioIncompleteError{
-		Completed:  completed,
-		Dispatched: dispatched,
-		Scheduled:  scheduled,
+		Completed:         completed,
+		Dispatched:        dispatched,
+		Scheduled:         scheduled,
+		ProviderStatus:    providerStatus,
+		ProviderErrorCode: providerCode,
+		ProviderDetails:   providerDetails,
 	}
 	if err == nil {
 		return incomplete
@@ -347,10 +372,16 @@ type sessionLoopMessageState struct {
 	closeAfterOpenPending bool
 }
 
-func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
+func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
 	promptProvided := opts.PromptProvided || opts.Prompt != ""
 	opts.observer.observe(msg)
 	if err := writeSessionReplayMessage(out, msg); err != nil {
+		return state, false, errors.Join(err, stopAndDrain())
+	}
+	if err := retryScheduledRateLimitedResponse(ctx, sessionDone, deadline, loop, opts.observer, msg); err != nil {
+		if errors.Is(err, errSessionMaxDurationExpired) {
+			return state, true, stopAndDrain()
+		}
 		return state, false, errors.Join(err, stopAndDrain())
 	}
 	if msg.Type == messages.StreamTypeSessionOpen {
@@ -405,6 +436,65 @@ func handleSessionLoopMessage(ctx context.Context, out io.Writer, loop *agentloo
 		return state, true, stopAndDrain()
 	}
 	return state, false, nil
+}
+
+// retryScheduledRateLimitedResponse waits for and sends the one replacement
+// response requested by an eligible scheduled terminal. The wait and the
+// response request both use the session run context, while deadline is the
+// owning loop's MaxDuration signal. A deadline win is returned to the caller
+// so it can use its normal expiry/cleanup path before a replacement is queued.
+func retryScheduledRateLimitedResponse(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, loop *agentloop.AgentLoop, observer *sessionProgressObserver, msg messages.StreamMessage) error {
+	if observer == nil || loop == nil || msg.Type != messages.StreamTypeMessageEnd {
+		return nil
+	}
+	terminal, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || terminal == nil {
+		return nil
+	}
+	if sessionDurationTimerReady(deadline) {
+		return errSessionMaxDurationExpired
+	}
+	delay, retry := observer.claimScheduledRateLimitRetry(msg.ResponseID, terminal)
+	if !retry {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		if sessionDurationTimerReady(deadline) {
+			return errSessionMaxDurationExpired
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case <-sessionDone:
+			return context.Canceled
+		default:
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sessionDone:
+		return context.Canceled
+	case <-deadline:
+		return errSessionMaxDurationExpired
+	}
+	if sessionDurationTimerReady(deadline) {
+		return errSessionMaxDurationExpired
+	}
+	select {
+	case <-sessionDone:
+		return context.Canceled
+	default:
+	}
+	if err := loop.SendSessionEvent(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}); err != nil {
+		return fmt.Errorf("send rate-limit retry response: %w", err)
+	}
+	return nil
 }
 
 // shouldDispatchScheduledAudioForMessage identifies stream boundaries that can
@@ -656,7 +746,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			cancel()
 			return sessionRunTerminationError(ctx, stopAndDrain())
 		case msg := <-loop.Deltas().Chan():
-			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, out, loop, opts, msg, state, awaitingResponse, startAudio, stopAndDrain)
+			nextState, stopLoop, msgErr := handleSessionLoopMessage(runCtx, observedInferencer.Done(), timeout, out, loop, opts, msg, state, awaitingResponse, startAudio, stopAndDrain)
 			state = nextState
 			if msgErr != nil {
 				return msgErr

@@ -1,6 +1,8 @@
 package grok
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -44,5 +46,39 @@ func TestTranslateOutbound_ResponseCancelMapsToProviderEvent(t *testing.T) {
 	}
 	if event.Type != models.SessionEventResponseCancel {
 		t.Fatalf("provider event type = %q, want %q", event.Type, models.SessionEventResponseCancel)
+	}
+}
+
+func TestTranslateInbound_ResponseDonePreservesRetryMetadata(t *testing.T) {
+	message := "Please try again in 1.668s."
+	raw, err := json.Marshal(map[string]any{
+		"type": "response.done",
+		"response": map[string]any{
+			"status": " FAILED ",
+			"status_details": map[string]any{
+				"error": map[string]any{
+					"code":    "rate_limit_exceeded",
+					"message": message,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal response.done: %v", err)
+	}
+
+	got := translateInbound(models.SessionEvent{Type: models.SessionEventResponseDone, Data: raw})
+	if len(got) != 1 {
+		t.Fatalf("normalized messages = %d, want one", len(got))
+	}
+	value, ok := got[0].Value.(*messages.MessageEndValue)
+	if !ok || value == nil {
+		t.Fatalf("response.done value = %#v, want *MessageEndValue", got[0].Value)
+	}
+	if value.Status != "failed" || value.ProviderErrorCode != "rate_limit_exceeded" || value.ProviderErrorMessage != message {
+		t.Fatalf("response.done metadata = status %q code %q message %q", value.Status, value.ProviderErrorCode, value.ProviderErrorMessage)
+	}
+	if !strings.Contains(value.StatusDetails, "code=rate_limit_exceeded") || !strings.Contains(value.StatusDetails, "message="+message) {
+		t.Fatalf("response.done details = %q, want code and message", value.StatusDetails)
 	}
 }
