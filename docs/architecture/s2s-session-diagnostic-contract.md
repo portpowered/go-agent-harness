@@ -124,6 +124,10 @@ and exported `Completed`, `Dispatched`, and `Scheduled` fields preserve the
 same three counts even when a provider, timeout, cancellation, drain, or
 finalization error is joined with the schedule failure.
 
+For scheduled runs, the terminal `session_metrics` record carries the same
+`scheduled_input_count`, `dispatched_input_count`, and `completed_turn_count`
+fields so a clean close exposes the final schedule disposition counts too.
+
 ### `session_turn_completed` fields
 
 | Field | Meaning |
