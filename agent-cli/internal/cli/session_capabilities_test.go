@@ -2,14 +2,197 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-session", Product: "scripted", Loopback: true}
+	target := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        "tab-session",
+		Type:      "page",
+		Title:     "Session fixture",
+		URL:       "https://fixture.test/",
+		Origin:    "https://fixture.test",
+	}
+	pageTool := webmcp.ToolDescriptor{
+		Name:        "write_fixture",
+		Description: "Write a value to the session fixture.",
+		FrameID:     "frame-1",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"value":{"type":"number"}},"required":["value"],"additionalProperties":false}`),
+	}
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
+		testkit.NewTargetConfig(target,
+			testkit.WithInitialCatalog(pageTool),
+			testkit.WithAutoResponse(json.RawMessage(`{"mutated":true}`)),
+		),
+	))
+	laneCandidate := discovery.BrowserCandidate{
+		ID:       string(candidate.ID),
+		Source:   discovery.SourceConfigured,
+		Product:  candidate.Product,
+		Protocol: "1.3",
+		Loopback: true,
+	}
+	laneTarget := discovery.Target{
+		BrowserID:             string(candidate.ID),
+		ID:                    string(target.ID),
+		Type:                  target.Type,
+		Title:                 target.Title,
+		URL:                   target.URL,
+		Origin:                target.Origin,
+		Generation:            1,
+		WebSocketPresent:      true,
+		WebMCP:                true,
+		WebMCPKnown:           true,
+		WebMCPDomainSupported: true,
+		WebMCPDomainKnown:     true,
+		PageToolsReady:        true,
+		PageToolsKnown:        true,
+		ToolCount:             1,
+		ToolCountKnown:        true,
+		Eligible:              true,
+	}
+	browserConfig := config.DefaultBrowserConfig()
+	browserConfig.Tools.Enabled = true
+	browserConfig.Connection.CDPURL = "http://127.0.0.1:9222"
+	productionFactory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionDiscovery(sessionBrokerDiscovery{candidate: laneCandidate, target: laneTarget}),
+	)
+	broker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, productionFactory)
+	if err != nil {
+		t.Fatalf("construct session broker: %v", err)
+	}
+	defer func() { _ = broker.Close() }()
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
+		t.Fatalf("select session fixture: %v", err)
+	}
+
+	refresher, ok := broker.(interface {
+		SelectedWithRefresh(context.Context, bool) (webmcp.PageContext, error)
+	})
+	if !ok {
+		t.Fatal("session broker dropped SelectedWithRefresh")
+	}
+	selected, err := refresher.SelectedWithRefresh(context.Background(), false)
+	if err != nil || selected.Key.TargetID != target.ID {
+		t.Fatalf("selected session context = %#v, err=%v", selected, err)
+	}
+	if _, ok := broker.(interface {
+		SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
+	}); !ok {
+		t.Fatal("session broker dropped SelectWithOptions")
+	}
+
+	toolSet := webmcpTools.NewBrokerToolSet(broker)
+	listResponse, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "list-call",
+		Name:      webmcp.ListToolsToolName,
+		Arguments: `{"include_schemas":true}`,
+	})
+	if err != nil {
+		t.Fatalf("list session fixture tools: %v", err)
+	}
+	listEnvelope, err := webmcp.UnmarshalToolResult([]byte(listResponse.Content))
+	if err != nil {
+		t.Fatalf("decode list result: %v", err)
+	}
+	var catalog struct {
+		Tools []struct {
+			Ref  webmcp.ToolRef `json:"ref"`
+			Name string         `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(listEnvelope.Data, &catalog); err != nil {
+		t.Fatalf("decode list data: %v", err)
+	}
+	if len(catalog.Tools) != 1 || catalog.Tools[0].Name != pageTool.Name || catalog.Tools[0].Ref == "" {
+		t.Fatalf("session fixture catalog = %#v", catalog.Tools)
+	}
+
+	invokeResponse, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "invoke-call",
+		Name:      webmcp.InvokeToolName,
+		Arguments: `{"tool_ref":"` + string(catalog.Tools[0].Ref) + `","input_json":"{\"value\":7}","reason":"set the fixture value"}`,
+	})
+	if err != nil {
+		t.Fatalf("invoke session fixture tool: %v", err)
+	}
+	if invokeResponse.ToolCallID != "invoke-call" || invokeResponse.Name != webmcp.InvokeToolName || len(invokeResponse.ContentParts) != 0 {
+		t.Fatalf("session invocation response = %#v", invokeResponse)
+	}
+	invokeEnvelope, err := webmcp.UnmarshalToolResult([]byte(invokeResponse.Content))
+	if err != nil {
+		t.Fatalf("decode invoke result: %v", err)
+	}
+	var invokeData struct {
+		Status string          `json:"status"`
+		Output json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(invokeEnvelope.Data, &invokeData); err != nil {
+		t.Fatalf("decode invoke data: %v", err)
+	}
+	if !invokeEnvelope.OK || invokeData.Status != string(webmcp.InvocationCompleted) || string(invokeData.Output) != `{"mutated":true}` {
+		t.Fatalf("session invocation envelope = %#v data=%#v", invokeEnvelope, invokeData)
+	}
+
+	var mutations []testkit.Operation
+	for _, operation := range runtime.Operations() {
+		if operation.Kind == testkit.OperationInvoke {
+			mutations = append(mutations, operation)
+		}
+	}
+	if len(mutations) != 1 || mutations[0].ToolName != pageTool.Name || string(mutations[0].Input) != `{"value":7}` {
+		t.Fatalf("session fixture mutations = %#v, want one terminal write_fixture mutation", mutations)
+	}
+}
+
+type sessionBrokerDiscovery struct {
+	candidate discovery.BrowserCandidate
+	target    discovery.Target
+}
+
+func (d sessionBrokerDiscovery) DiscoverAll(context.Context, discovery.ConnectionInputs) ([]discovery.BrowserCandidate, error) {
+	return []discovery.BrowserCandidate{d.candidate}, nil
+}
+
+func (d sessionBrokerDiscovery) ListTargetSnapshot(context.Context, discovery.BrowserCandidate, ...discovery.TargetListOptions) (discovery.TargetSnapshot, error) {
+	return discovery.TargetSnapshot{
+		Browsers:       []discovery.BrowserCandidate{d.candidate},
+		Targets:        []discovery.Target{d.target},
+		CandidateCount: 1,
+		EligibleCount:  1,
+	}, nil
+}
+
+func (d sessionBrokerDiscovery) Select(_ context.Context, request discovery.TargetSelectionRequest) (discovery.Selection, error) {
+	return discovery.Selection{
+		BrowserID:  request.BrowserID,
+		TargetID:   request.TargetID,
+		Generation: d.target.Generation,
+		Target:     d.target,
+	}, nil
+}
+
+func (d sessionBrokerDiscovery) Selected() (discovery.Selection, bool) {
+	return discovery.Selection{BrowserID: d.candidate.ID, TargetID: d.target.ID, Generation: d.target.Generation, Target: d.target}, true
+}
+
+func (d sessionBrokerDiscovery) RefreshSelection(context.Context) (discovery.Selection, error) {
+	selection, _ := d.Selected()
+	return selection, nil
+}
 
 func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *testing.T) {
 	calls := 0

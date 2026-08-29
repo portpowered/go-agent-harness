@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -104,7 +105,14 @@ func NewSessionToolCapabilitiesFactory(
 // can retire both broker state and discovery resources through one idempotent
 // close hook.
 func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error) {
-	runtime, err := NewProductionWebMCPDoctorFactory()(browser)
+	return newSessionBrowserBrokerWithDoctorFactory(browser, NewProductionWebMCPDoctorFactory())
+}
+
+func newSessionBrowserBrokerWithDoctorFactory(browser config.BrowserConfig, factory WebMCPDoctorFactory) (webmcp.Broker, error) {
+	if factory == nil {
+		return nil, errors.New("construct WebMCP broker: doctor factory is nil")
+	}
+	runtime, err := factory(browser)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +144,66 @@ func (b *sessionBrowserBroker) Close() error {
 	})
 	return b.closeErr
 }
+
+// WaitInvocation forwards the terminal-result capability of the stateful
+// production broker. Embedding webmcp.Broker alone would expose only the
+// frozen base interface and make model-facing invoke calls return dispatch
+// acknowledgements instead of completed page results.
+func (b *sessionBrowserBroker) WaitInvocation(ctx context.Context, id webmcp.InvocationID) (webmcp.InvokeResult, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.InvokeResult{}, errors.New("WebMCP invocation waiter is unavailable")
+	}
+	waiter, ok := b.Broker.(webmcp.InvocationWaiter)
+	if !ok {
+		return webmcp.InvokeResult{}, errors.New("WebMCP broker does not support terminal invocation results")
+	}
+	return waiter.WaitInvocation(ctx, id)
+}
+
+// SelectedWithRefresh preserves the production broker's refresh extension;
+// older injected brokers retain the frozen Selected behavior.
+func (b *sessionBrowserBroker) SelectedWithRefresh(ctx context.Context, refresh bool) (webmcp.PageContext, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.PageContext{}, errors.New("WebMCP broker is unavailable")
+	}
+	if refresher, ok := b.Broker.(interface {
+		SelectedWithRefresh(context.Context, bool) (webmcp.PageContext, error)
+	}); ok {
+		return refresher.SelectedWithRefresh(ctx, refresh)
+	}
+	return b.Broker.Selected(ctx)
+}
+
+// SelectWithOptions preserves explicit target activation in the production
+// broker while retaining compatibility with a base-interface-only delegate.
+func (b *sessionBrowserBroker) SelectWithOptions(ctx context.Context, selector webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
+	if b == nil || b.Broker == nil {
+		return webmcp.PageContext{}, errors.New("WebMCP broker is unavailable")
+	}
+	if selectorWithOptions, ok := b.Broker.(interface {
+		SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error)
+	}); ok {
+		return selectorWithOptions.SelectWithOptions(ctx, selector, options)
+	}
+	return b.Broker.Select(ctx, selector)
+}
+
+// CancelDirect preserves the cross-process cancellation extension for the
+// direct CLI callers that receive the session's broker value.
+func (b *sessionBrowserBroker) CancelDirect(ctx context.Context, request webmcp.DirectCancelRequest) error {
+	if b == nil || b.Broker == nil {
+		return errors.New("WebMCP broker is unavailable")
+	}
+	if canceller, ok := b.Broker.(webmcp.DirectCanceller); ok {
+		return canceller.CancelDirect(ctx, request)
+	}
+	return errors.New("WebMCP broker does not support direct cancellation")
+}
+
+var (
+	_ webmcp.InvocationWaiter = (*sessionBrowserBroker)(nil)
+	_ webmcp.DirectCanceller  = (*sessionBrowserBroker)(nil)
+)
 
 func closeFailedBroker(broker webmcp.Broker, primary error) (SessionToolCapabilities, error) {
 	if broker == nil {
