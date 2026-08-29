@@ -192,6 +192,7 @@ func (b *StatefulBroker) markCatalogReadyLocked(selected *brokerSession, evidenc
 	selected.context.WebMCPDomainSupported = true
 	if !selected.context.CatalogReady {
 		selected.context.CatalogReady = true
+		selected.catalogEvidencePending = false
 		if selected.catalogSignal != nil {
 			close(selected.catalogSignal)
 			selected.catalogSignal = nil
@@ -359,12 +360,19 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 	}
 	// A selection may have returned a retryable catalog deadline before the
 	// page published its producer. Keep later list calls event-driven and
-	// bounded instead of treating the current empty catalog as a success.
-	if err := b.waitForCatalog(ctx, selected, false); err != nil {
-		if failure := b.promoteBrowserLoss(selected, TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "catalog", err); failure != nil {
-			return ToolCatalogSnapshot{}, failure
+	// bounded for that exact attachment. A page navigation starts a fresh
+	// document, where an empty catalog is a valid snapshot until new evidence
+	// arrives; the next catalog event still updates the same generation.
+	b.mu.Lock()
+	catalogEvidencePending := selected.catalogEvidencePending
+	b.mu.Unlock()
+	if catalogEvidencePending {
+		if err := b.waitForCatalog(ctx, selected, false); err != nil {
+			if failure := b.promoteBrowserLoss(selected, TargetSelector{BrowserID: selected.context.Key.BrowserID, TargetID: selected.context.Key.TargetID}, "catalog", err); failure != nil {
+				return ToolCatalogSnapshot{}, failure
+			}
+			return ToolCatalogSnapshot{}, err
 		}
-		return ToolCatalogSnapshot{}, err
 	}
 	b.flushSession(selected)
 	b.mu.Lock()

@@ -120,6 +120,12 @@ type brokerSession struct {
 	invalidatedReason string
 	catalog           map[catalogKey]ToolDescriptor
 	catalogError      error
+	// catalogEvidencePending is set only when the initial selection returned
+	// the retryable late-catalog result. A later list call must then wait for
+	// the same attachment to become ready. Navigation starts a fresh document;
+	// its empty catalog remains a valid snapshot until that document publishes
+	// its own catalog evidence.
+	catalogEvidencePending bool
 	// lifecycleFailure is retained from the first terminal lifecycle signal so
 	// selection-dependent calls keep the event's C0 classification even when a
 	// neutral TargetSession does not expose the same error through Err().
@@ -581,6 +587,11 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 		// transition. Keep the connected selection and its event consumer
 		// alive so a later toolsAdded/catalog-ready event can recover it.
 		if isCatalogEvidenceError(err) {
+			b.mu.Lock()
+			if b.selected == newSession && newSession.active {
+				newSession.catalogEvidencePending = true
+			}
+			b.mu.Unlock()
 			b.flushSession(newSession)
 			return PageContext{}, err
 		}
