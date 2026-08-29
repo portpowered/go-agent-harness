@@ -13,6 +13,13 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
+	// ToolRunner delivery is an internal bridge between the provider tool call
+	// and the next provider response. It is observable to callers, but it is
+	// not a provider response boundary and must not reset response output,
+	// consume a scheduled slot, or become the owner of a continuation.
+	if msg.Role == messages.RoleTool {
+		return
+	}
 	msgResponseID := strings.TrimSpace(msg.ResponseID)
 	responseLifecycleID := msgResponseID
 	newResponseBoundary := false
@@ -29,7 +36,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		}
 		if newResponseBoundary && msg.Role != messages.RoleTool {
 			if continuation {
-				o.bindScheduledContinuation(continuationIndex, msgResponseID)
+				if o.bindScheduledContinuation(continuationIndex, msgResponseID) {
+					o.bindPendingToolContinuations(continuationIndex, msgResponseID)
+				}
 			} else {
 				o.bindNextScheduledResponse(msgResponseID)
 			}
@@ -49,7 +58,9 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			newResponseBoundary = o.beginObservedResponse(msgResponseID)
 			if newResponseBoundary {
 				if continuation {
-					o.bindScheduledContinuation(continuationIndex, msgResponseID)
+					if o.bindScheduledContinuation(continuationIndex, msgResponseID) {
+						o.bindPendingToolContinuations(continuationIndex, msgResponseID)
+					}
 				} else {
 					o.bindNextScheduledResponse(msgResponseID)
 				}
