@@ -408,7 +408,10 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 				}(index)
 			}
 			if spec.Scenario.Family == ScenarioFamilyB && index == 1 {
-				segment.WaitForOutputBytes = 1
+				// The first provider response may be a tool-only continuation with
+				// its own audio marker. Require the recorded original response's
+				// four-byte PCM marker as well before admitting the correction.
+				segment.WaitForOutputBytes = 8
 			}
 			segments[index] = segment
 		}

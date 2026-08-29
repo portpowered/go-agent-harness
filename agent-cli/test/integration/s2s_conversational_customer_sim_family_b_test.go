@@ -77,7 +77,7 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 		AdditionalArgs:   []string{"--wait-for-close"},
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "original-request", PCM16: familyBFrame(1)},
-			{ID: "correction-request", PCM16: familyBFrame(2), WaitForOutputBytes: 4, Before: captureOriginal},
+			{ID: "correction-request", PCM16: familyBFrame(2), WaitForOutputBytes: 8, Before: captureOriginal},
 			{ID: "correction-silence", SilenceFor: 5 * time.Millisecond},
 		},
 	})
