@@ -27,7 +27,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		if !o.responseEventBelongsToActive(msgResponseID) {
 			return
 		}
-		if newResponseBoundary {
+		if newResponseBoundary && msg.Role != messages.RoleTool {
 			if continuation {
 				o.bindScheduledContinuation(continuationIndex, msgResponseID)
 			} else {

@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -13,6 +14,11 @@ import (
 )
 
 const sessionToolBargeInCallID = "call_barge_in_slow"
+const sessionToolBargeInFinalResponseText = "second scheduled response"
+const sessionToolBargeInFirstResponseID = "response_barge_in_tool"
+const sessionToolBargeInContinuationResponseID = "response_barge_in_continuation"
+const sessionToolBargeInFinalResponseID = "response_barge_in_final"
+const sessionToolBargeInContinuationReadyID = "session-tool-barge-in-continuation-ready"
 
 // sessionToolBargeInSession is a provider-shaped session double used through
 // the shipped session command. The first completed response requests one
@@ -23,31 +29,36 @@ type sessionToolBargeInSession struct {
 	recv *messages.TypedBuffer[messages.StreamMessage]
 	done chan struct{}
 
-	closeOnce            sync.Once
-	firstResponseEndOnce sync.Once
-	resultAcceptedOnce   sync.Once
-	continuationOnce     sync.Once
-	secondAudioOnce      sync.Once
+	closeOnce             sync.Once
+	firstResponseEndOnce  sync.Once
+	resultAcceptedOnce    sync.Once
+	continuationOnce      sync.Once
+	continuationReadyOnce sync.Once
+	secondAudioOnce       sync.Once
+	finalResponseOnce     sync.Once
 
 	mu                    sync.Mutex
 	bargeIn               bool
 	responseCount         int
 	toolResultAccepted    bool
 	secondResponsePending bool
+	continuationRequested bool
 	continuationEmitted   bool
 	sent                  []messages.StreamMessage
 	lifecycle             []string
 	resultAccepted        chan struct{}
 	secondAudioSent       chan struct{}
+	finalResponseObserved chan struct{}
 }
 
 func newSessionToolBargeInSessionWithMode(bargeIn bool) *sessionToolBargeInSession {
 	return &sessionToolBargeInSession{
-		recv:            messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:            make(chan struct{}),
-		bargeIn:         bargeIn,
-		resultAccepted:  make(chan struct{}),
-		secondAudioSent: make(chan struct{}),
+		recv:                  messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:                  make(chan struct{}),
+		bargeIn:               bargeIn,
+		resultAccepted:        make(chan struct{}),
+		secondAudioSent:       make(chan struct{}),
+		finalResponseObserved: make(chan struct{}),
 	}
 }
 
@@ -59,7 +70,6 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 	if err := ctx.Err(); err != nil {
 		return sessionToolBargeInContextOutcome(err)
 	}
-
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
 	s.mu.Unlock()
@@ -100,28 +110,21 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 		s.mu.Lock()
 		bargeIn := s.bargeIn
 		toolResultAccepted := s.toolResultAccepted
-		continuationEmitted := s.continuationEmitted
-		pendingSecondResponse := s.secondResponsePending
 		if bargeIn && !toolResultAccepted {
 			s.secondResponsePending = true
+			s.continuationRequested = true
 			s.mu.Unlock()
 			return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 		}
-		if bargeIn && !continuationEmitted {
-			s.continuationEmitted = true
-			s.secondResponsePending = false
+		if bargeIn {
+			s.continuationRequested = true
 		}
 		s.mu.Unlock()
 		if !bargeIn {
 			s.continuationOnce.Do(s.emitSecondResponse)
 			break
 		}
-		if !continuationEmitted {
-			s.emitSecondResponse()
-			if pendingSecondResponse {
-				s.emitThirdResponse()
-			}
-		}
+		s.queueActiveContinuationReady()
 	case messages.StreamTypeResponseCancel:
 		s.mu.Lock()
 		bargeIn := s.bargeIn
@@ -140,6 +143,7 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 				s.mu.Unlock()
 				s.recordLifecycle("result_accepted")
 				close(s.resultAccepted)
+				s.queueActiveContinuationReady()
 			})
 		}
 	}
@@ -151,6 +155,51 @@ func sessionToolBargeInContextOutcome(err error) messages.SessionSendOutcome {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+}
+
+func (s *sessionToolBargeInSession) markFinalResponseObserved() {
+	s.finalResponseOnce.Do(func() {
+		s.recordLifecycle("final_response_observed")
+		close(s.finalResponseObserved)
+		s.recv.Write(context.Background(), messages.StreamMessage{
+			Type:  messages.StreamTypeSessionClose,
+			Value: messages.NewSessionCloseValue("session-tool-barge-in", "final assistant response observed"),
+		})
+	})
+}
+
+// queueActiveContinuationReady places an explicit provider boundary behind
+// both sides of the tool lifecycle. The stream observer releases the scripted
+// assistant responses only after this marker crosses the session loop, so the
+// continuation request has been observed before final-response delivery can
+// race scheduled-session close.
+func (s *sessionToolBargeInSession) queueActiveContinuationReady() {
+	s.mu.Lock()
+	ready := s.bargeIn && s.toolResultAccepted && s.continuationRequested && s.secondResponsePending && !s.continuationEmitted
+	s.mu.Unlock()
+	if !ready {
+		return
+	}
+	s.continuationReadyOnce.Do(func() {
+		s.recv.Write(context.Background(), messages.StreamMessage{
+			Type:  messages.StreamTypeSessionUpdated,
+			Value: messages.NewSessionUpdatedValue(sessionToolBargeInContinuationReadyID),
+		})
+	})
+}
+
+func (s *sessionToolBargeInSession) emitPendingBargeInContinuation() {
+	s.mu.Lock()
+	if !s.bargeIn || !s.secondResponsePending || s.continuationEmitted {
+		s.mu.Unlock()
+		return
+	}
+	s.continuationEmitted = true
+	s.secondResponsePending = false
+	s.mu.Unlock()
+
+	s.emitSecondResponse()
+	s.emitThirdResponse()
 }
 
 func (s *sessionToolBargeInSession) emitFirstResponse() {
@@ -165,6 +214,7 @@ func (s *sessionToolBargeInSession) emitFirstResponse() {
 	if !s.bargeIn {
 		msgs = append(msgs, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	}
+	msgs = sessionToolBargeInWithResponseID(sessionToolBargeInFirstResponseID, msgs)
 	for _, msg := range msgs {
 		s.recv.Write(context.Background(), msg)
 	}
@@ -172,14 +222,15 @@ func (s *sessionToolBargeInSession) emitFirstResponse() {
 
 func (s *sessionToolBargeInSession) emitFirstResponseEnd() {
 	s.recv.Write(context.Background(), messages.StreamMessage{
-		Type:  messages.StreamTypeMessageEnd,
-		Role:  messages.RoleAssistant,
-		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: sessionToolBargeInFirstResponseID,
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 }
 
 func (s *sessionToolBargeInSession) emitSecondResponse() {
-	for _, msg := range []messages.StreamMessage{
+	msgs := []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("follow-on response")},
@@ -188,24 +239,33 @@ func (s *sessionToolBargeInSession) emitSecondResponse() {
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{3, 0, 4, 0})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
+	}
+	msgs = sessionToolBargeInWithResponseID(sessionToolBargeInContinuationResponseID, msgs)
+	for _, msg := range msgs {
 		s.recv.Write(context.Background(), msg)
 	}
 }
 
 func (s *sessionToolBargeInSession) emitThirdResponse() {
-	for _, msg := range []messages.StreamMessage{
+	for _, msg := range sessionToolBargeInWithResponseID(sessionToolBargeInFinalResponseID, []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
-		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("second scheduled response")},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(sessionToolBargeInFinalResponseText)},
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{5, 0, 6, 0})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
-	} {
+	}) {
 		s.recv.Write(context.Background(), msg)
 	}
+}
+
+func sessionToolBargeInWithResponseID(responseID string, msgs []messages.StreamMessage) []messages.StreamMessage {
+	for index := range msgs {
+		msgs[index].ResponseID = responseID
+	}
+	return msgs
 }
 
 func (s *sessionToolBargeInSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
@@ -478,6 +538,39 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
+	var finalResponseTextObserved bool
+	var traceMu sync.Mutex
+	var trace []string
+	agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
+		traceMu.Lock()
+		trace = append(trace, fmt.Sprintf("%s role=%s response=%q", msg.Type, msg.Role, msg.ResponseID))
+		traceMu.Unlock()
+		if msg.Type == messages.StreamTypeSessionUpdated {
+			value, ok := msg.Value.(*messages.SessionUpdatedValue)
+			if ok && value != nil && value.SessionID == sessionToolBargeInContinuationReadyID {
+				if session := inferencer.connectedSession(); session != nil {
+					session.emitPendingBargeInContinuation()
+				}
+			}
+			return
+		}
+		if msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeTextDelta {
+			value, ok := msg.Value.(*messages.TextDeltaValue)
+			if ok && value != nil && msg.ResponseID == sessionToolBargeInFinalResponseID && value.Content == sessionToolBargeInFinalResponseText {
+				finalResponseTextObserved = true
+			}
+		}
+		if msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == sessionToolBargeInFinalResponseID && finalResponseTextObserved {
+			if session := inferencer.connectedSession(); session != nil {
+				session.markFinalResponseObserved()
+			}
+		}
+		if msg.Type == messages.StreamTypeSessionClose {
+			if session := inferencer.connectedSession(); session != nil {
+				session.recordLifecycle("client_close")
+			}
+		}
+	})
 
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
@@ -509,11 +602,15 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 	close(executor.release)
 	waitSessionToolBargeInSignal(t, session.resultAccepted, "active scheduled correlated tool result acceptance")
 	waitSessionToolBargeInSignal(t, session.secondAudioSent, "active scheduled second audio dispatch")
+	waitSessionToolBargeInSignal(t, session.finalResponseObserved, "active scheduled final assistant response completion")
 
 	select {
 	case err := <-runErr:
 		if err != nil {
-			t.Fatalf("active scheduled tool command returned an error: %v", err)
+			traceMu.Lock()
+			gotTrace := append([]string(nil), trace...)
+			traceMu.Unlock()
+			t.Fatalf("active scheduled tool command returned an error: %v; lifecycle=%v; trace=%v", err, session.lifecycleSnapshot(), gotTrace)
 		}
 	case <-ctx.Done():
 		t.Fatalf("active scheduled tool command did not finish: %v", ctx.Err())
@@ -536,6 +633,10 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 	}
 	if cancelCount != 1 {
 		t.Fatalf("active scheduled provider received %d response cancellations, want exactly one", cancelCount)
+	}
+	gotLifecycle := session.lifecycleSnapshot()
+	if len(gotLifecycle) != 4 || gotLifecycle[0] != "second_audio_sent" || gotLifecycle[1] != "result_accepted" || gotLifecycle[2] != "final_response_observed" || gotLifecycle[3] != "client_close" {
+		t.Fatalf("active scheduled session lifecycle order = %v, want [second_audio_sent result_accepted final_response_observed client_close]", gotLifecycle)
 	}
 }
 
