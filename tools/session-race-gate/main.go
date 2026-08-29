@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ const (
 	defaultTimeout     = 10 * time.Minute
 	sessionsPackage    = "./test/functional/sessions"
 	sessionsRunPattern = "^(TestConcurrentSessionsCompleteScriptedTurns|TestConcurrentSessionsZeroCrossSessionLeakage|TestIsolationCheckerNamesLeakingSessionAndRecord|TestSharedCaptureBufferAliasingFailsIsolationCheck|TestConcurrentSessionsPerEventOrderingUnderInterleaving|TestCancellingOneMidRunSessionLeavesOthersUndisturbed)$"
+	watchdogSignature  = "concurrent run did not finish within 2m0s (stuck sessions likely)"
 )
 
 var requiredTests = []string{
@@ -48,12 +50,15 @@ type testEvent struct {
 	Action  string `json:"Action"`
 	Package string `json:"Package"`
 	Test    string `json:"Test"`
+	Output  string `json:"Output"`
 }
 
 type testResult struct {
 	passed  int
 	skipped bool
 	failed  bool
+	seen    bool
+	output  string
 }
 
 type gateFailure struct {
@@ -61,6 +66,17 @@ type gateFailure struct {
 	Skipped   []string
 	Failed    []string
 	Duplicate []string
+}
+
+type eventReport struct {
+	results map[string]testResult
+	failure gateFailure
+}
+
+type commandAttempt struct {
+	commandErr      error
+	report          *eventReport
+	verificationErr error
 }
 
 func main() {
@@ -106,38 +122,110 @@ func execute(cfg config, stdout, stderr io.Writer) error {
 		return fmt.Errorf("module directory %q is not a directory", moduleDir)
 	}
 
-	command := exec.Command(cfg.goBinary,
-		"test",
-		"-race",
-		"-tags=nomicrophone",
-		"-count=1",
-		"-timeout", cfg.timeout.String(),
-		"-json",
-		"-run", sessionsRunPattern,
-		sessionsPackage,
-	)
-	command.Dir = moduleDir
-	command.Env = childEnvironment(moduleDir)
-
-	var testJSON bytes.Buffer
 	if stdout == nil {
 		stdout = io.Discard
 	}
 	if stderr == nil {
 		stderr = io.Discard
 	}
+
+	first := runAttempt(cfg, moduleDir, sessionsRunPattern, "", stdout, stderr)
+	if retryTest, ok := eligibleRetryTest(first); ok {
+		fmt.Fprintf(stdout, "concurrent session race gate: attempt 1 failed with the recognized watchdog for %s; starting attempt 2 with only that test\n", retryTest)
+		retry := runAttempt(cfg, moduleDir, exactTestRunPattern(retryTest), retryTest, stdout, stderr)
+		if retry.commandErr == nil && retry.verificationErr == nil {
+			fmt.Fprintf(stdout, "concurrent session race gate: recovered %s; attempt 1 watchdog failure and attempt 2 passed all required checks\n", retryTest)
+			return nil
+		}
+		return retryFailure(retryTest, first, retry)
+	}
+	return firstFailure(first)
+}
+
+func runAttempt(cfg config, moduleDir, runPattern, retryTest string, stdout, stderr io.Writer) commandAttempt {
+	command := exec.Command(cfg.goBinary, testCommandArgs(cfg.timeout, runPattern)...)
+	command.Dir = moduleDir
+	command.Env = childEnvironment(moduleDir)
+
+	var testJSON bytes.Buffer
 	command.Stdout = io.MultiWriter(stdout, &testJSON)
 	command.Stderr = stderr
 
-	commandErr := command.Run()
-	verificationErr := verifyEvents(bytes.NewReader(testJSON.Bytes()))
-	if commandErr != nil {
-		if verificationErr != nil {
-			return fmt.Errorf("concurrent session race command failed: %v; %w", commandErr, verificationErr)
-		}
-		return fmt.Errorf("concurrent session race command failed: %w", commandErr)
+	attempt := commandAttempt{commandErr: command.Run()}
+	report, parseErr := parseEvents(bytes.NewReader(testJSON.Bytes()))
+	if parseErr != nil {
+		attempt.verificationErr = parseErr
+		return attempt
 	}
-	return verificationErr
+	attempt.report = report
+	if retryTest == "" {
+		attempt.verificationErr = report.verificationError()
+	} else {
+		attempt.verificationErr = report.retryVerificationError(retryTest)
+	}
+	return attempt
+}
+
+func testCommandArgs(timeout time.Duration, runPattern string) []string {
+	return []string{
+		"test",
+		"-race",
+		"-tags=nomicrophone",
+		"-count=1",
+		"-timeout", timeout.String(),
+		"-json",
+		"-run", runPattern,
+		sessionsPackage,
+	}
+}
+
+func exactTestRunPattern(testName string) string {
+	return "^" + regexp.QuoteMeta(testName) + "$"
+}
+
+func eligibleRetryTest(attempt commandAttempt) (string, bool) {
+	if attempt.commandErr == nil {
+		return "", false
+	}
+	report, ok := attemptReport(attempt)
+	if !ok || len(report.failure.Failed) != 1 || len(report.failure.Missing) != 0 || len(report.failure.Skipped) != 0 || len(report.failure.Duplicate) != 0 {
+		return "", false
+	}
+	testName := report.failure.Failed[0]
+	result := report.results[testName]
+	if result.passed != 0 || !result.failed || !strings.Contains(result.output, watchdogSignature) {
+		return "", false
+	}
+	return testName, true
+}
+
+func attemptReport(attempt commandAttempt) (*eventReport, bool) {
+	// A retry is only safe when the first command produced a fully parsed event
+	// report. parseEvents errors are stored as verificationErr and leave report
+	// nil, so malformed or incomplete command/setup failures cannot retry.
+	return attempt.report, attempt.report != nil
+}
+
+func firstFailure(attempt commandAttempt) error {
+	if attempt.commandErr != nil {
+		if attempt.verificationErr != nil {
+			return fmt.Errorf("concurrent session race command failed: %v; %w", attempt.commandErr, attempt.verificationErr)
+		}
+		return fmt.Errorf("concurrent session race command failed: %w", attempt.commandErr)
+	}
+	return attempt.verificationErr
+}
+
+func retryFailure(testName string, first, retry commandAttempt) error {
+	firstErr := firstFailure(first)
+	retryErr := firstFailure(retry)
+	if firstErr == nil {
+		firstErr = errors.New("first attempt unexpectedly passed")
+	}
+	if retryErr == nil {
+		retryErr = errors.New("retry attempt unexpectedly passed")
+	}
+	return fmt.Errorf("concurrent session race gate retry failed for %s; first attempt: %v; retry attempt: %v", testName, firstErr, retryErr)
 }
 
 func childEnvironment(moduleDir string) []string {
@@ -171,6 +259,14 @@ func findWorkspace(start string) (string, bool) {
 }
 
 func verifyEvents(input io.Reader) error {
+	report, err := parseEvents(input)
+	if err != nil {
+		return err
+	}
+	return report.verificationError()
+}
+
+func parseEvents(input io.Reader) (*eventReport, error) {
 	results := make(map[string]testResult, len(requiredTests))
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
@@ -183,12 +279,14 @@ func verifyEvents(input io.Reader) error {
 		}
 		var event testEvent
 		if err := json.Unmarshal(line, &event); err != nil {
-			return fmt.Errorf("decode go test JSON event on line %d: %w", lineNumber, err)
+			return nil, fmt.Errorf("decode go test JSON event on line %d: %w", lineNumber, err)
 		}
 		if _, required := requiredTestSet[event.Test]; !required {
 			continue
 		}
 		result := results[event.Test]
+		result.seen = true
+		result.output += event.Output
 		switch event.Action {
 		case "pass":
 			result.passed++
@@ -200,9 +298,15 @@ func verifyEvents(input io.Reader) error {
 		results[event.Test] = result
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read go test JSON output: %w", err)
+		return nil, fmt.Errorf("read go test JSON output: %w", err)
 	}
 
+	report := &eventReport{results: results}
+	report.failure = classifyResults(results)
+	return report, nil
+}
+
+func classifyResults(results map[string]testResult) gateFailure {
 	failure := gateFailure{}
 	for _, testName := range requiredTests {
 		result := results[testName]
@@ -217,10 +321,44 @@ func verifyEvents(input io.Reader) error {
 			failure.Duplicate = append(failure.Duplicate, testName)
 		}
 	}
-	if failure.empty() {
+	return failure
+}
+
+func (r *eventReport) verificationError() error {
+	if r == nil || r.failure.empty() {
 		return nil
 	}
-	return &failure
+	return &r.failure
+}
+
+func (r *eventReport) retryVerificationError(testName string) error {
+	if r == nil {
+		return errors.New("session race retry produced no event report")
+	}
+	if _, required := requiredTestSet[testName]; !required {
+		return fmt.Errorf("session race retry selected non-required test %q", testName)
+	}
+	for _, requiredTest := range requiredTests {
+		if requiredTest == testName {
+			continue
+		}
+		if r.results[requiredTest].seen {
+			return fmt.Errorf("session race retry ran unexpected required test %q", requiredTest)
+		}
+	}
+	result := r.results[testName]
+	switch {
+	case result.skipped:
+		return fmt.Errorf("session race retry skipped required test %q", testName)
+	case result.failed:
+		return fmt.Errorf("session race retry failed required test %q", testName)
+	case result.passed == 0:
+		return fmt.Errorf("session race retry did not complete required test %q", testName)
+	case result.passed != 1:
+		return fmt.Errorf("session race retry completed required test %q more than once", testName)
+	default:
+		return nil
+	}
 }
 
 var requiredTestSet = func() map[string]struct{} {

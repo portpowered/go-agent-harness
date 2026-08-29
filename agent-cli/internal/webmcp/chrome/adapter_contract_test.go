@@ -41,6 +41,7 @@ func TestExportedChromeAPIDoesNotLeakProtocolTypes(t *testing.T) {
 	}
 	directory := filepath.Dir(sourceFile)
 	fileSet := token.NewFileSet()
+	//lint:ignore SA1019 ParseDir is the contract test's deliberate source-file boundary.
 	parsed, err := parser.ParseDir(fileSet, directory, func(fileInfo os.FileInfo) bool {
 		return !strings.HasSuffix(fileInfo.Name(), "_test.go")
 	}, parser.SkipObjectResolution)
