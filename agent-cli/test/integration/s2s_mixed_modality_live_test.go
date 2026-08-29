@@ -31,7 +31,7 @@ const (
 	mixedModalityLiveMaxRun    = 60 * time.Second
 	mixedModalityLiveOptIn     = "AGENT_HARNESS_LIVE_MIXED_MODALITY"
 	mixedModalityLiveArtifact  = "AGENT_HARNESS_LIVE_MIXED_MODALITY_ARTIFACT_DIR"
-	mixedModalityLiveSystem    = "You are a terse visual assistant. Answer in five words or fewer. Use the supplied image for the first spoken question, answer later spoken turns briefly, and do not call tools."
+	mixedModalityLiveSystem    = "You are a terse visual assistant. Answer in five words or fewer. For the first spoken question, use the supplied image and say red square and blue diagonal when those facts are visible. Answer later spoken turns briefly, and do not call tools."
 	mixedModalityLiveImageName = "red-square-blue-diagonal.png"
 )
 
@@ -71,7 +71,7 @@ func TestLiveMixedModalityFiniteAudioWithImage(t *testing.T) {
 		t.Fatalf("finite mixed-modality live command failed: %v", run.err)
 	}
 
-	observation := assertMixedModalityLiveWireContract(t, run.capture, imagePath, []string{audioPath})
+	observation := assertMixedModalityLiveWireContract(t, run.capture, imagePath, []string{audioPath}, false)
 	assertMixedModalityGrounding(t, observation.transcripts, run.stdout)
 	retainMixedModalityLiveArtifacts(t, run, "finite")
 	logMixedModalityLiveEvidence(t, run.capture, observation, imagePath, "finite")
@@ -92,7 +92,7 @@ func TestLiveMixedModalityScheduledAudioWithImage(t *testing.T) {
 		t.Fatalf("scheduled mixed-modality live command failed: %v", run.err)
 	}
 
-	observation := assertMixedModalityLiveWireContract(t, run.capture, imagePath, audioPaths)
+	observation := assertMixedModalityLiveWireContract(t, run.capture, imagePath, audioPaths, true)
 	if len(observation.transcripts) < 2 {
 		t.Fatalf("scheduled live transcript count = %d, want at least two", len(observation.transcripts))
 	}
@@ -174,7 +174,7 @@ func runMixedModalityLiveSession(t *testing.T, apiKey, imagePath string, audioPa
 	}
 }
 
-func assertMixedModalityLiveWireContract(t *testing.T, capture gwtesting.SessionCapture, imagePath string, audioPaths []string) mixedModalityLiveObservation {
+func assertMixedModalityLiveWireContract(t *testing.T, capture gwtesting.SessionCapture, imagePath string, audioPaths []string, scheduled bool) mixedModalityLiveObservation {
 	t.Helper()
 	if capture.Provider.Name != "openai" || capture.Provider.Model != mixedModalityLiveModel {
 		t.Fatalf("mixed-modality live provider = (%q, %q), want (openai, %q)", capture.Provider.Name, capture.Provider.Model, mixedModalityLiveModel)
@@ -297,20 +297,30 @@ func assertMixedModalityLiveWireContract(t *testing.T, capture gwtesting.Session
 	if observation.outputAudioBytes == 0 || len(observation.transcripts) < wantTurns {
 		t.Fatalf("mixed-modality live assistant output = audio:%d transcript_turns:%d; want non-empty output for %d turns", observation.outputAudioBytes, len(observation.transcripts), wantTurns)
 	}
-	framesPerTurn := make([]int, 0, wantTurns)
+	appendCountPerTurn := make([]int, 0, wantTurns)
 	for _, audioPath := range audioPaths {
 		frameCount := len(multiturnAudioFrames(t, audioPath))
 		if frameCount == 0 {
 			t.Fatalf("mixed-modality live WAV %q produced no audio frames", filepath.Base(audioPath))
 		}
-		framesPerTurn = append(framesPerTurn, frameCount)
+		if scheduled {
+			// ScheduledAudioInput reads each finite WAV as one turn-sized
+			// payload; the finite source intentionally streams frame-sized
+			// appends for its standalone input path.
+			appendCountPerTurn = append(appendCountPerTurn, 1)
+		} else {
+			appendCountPerTurn = append(appendCountPerTurn, frameCount)
+		}
 	}
 	expectedAppendCount := 0
-	for _, frameCount := range framesPerTurn {
-		expectedAppendCount += frameCount
+	for _, appendCount := range appendCountPerTurn {
+		expectedAppendCount += appendCount
 	}
 	if len(observation.audioAppendIndices) != expectedAppendCount {
-		t.Fatalf("mixed-modality live audio append count = %d, want %d frames from the supplied WAV inputs", len(observation.audioAppendIndices), expectedAppendCount)
+		if scheduled {
+			t.Fatalf("mixed-modality live audio append count = %d, want one non-empty append per scheduled WAV (%d)", len(observation.audioAppendIndices), expectedAppendCount)
+		}
+		t.Fatalf("mixed-modality live audio append count = %d, want %d frames from the supplied WAV input", len(observation.audioAppendIndices), expectedAppendCount)
 	}
 
 	imageIndex := mixedModalityLiveEventIndex(capture, "conversation.item.create", gwtesting.DirectionClientToServer, 0)
@@ -321,15 +331,15 @@ func assertMixedModalityLiveWireContract(t *testing.T, capture gwtesting.Session
 		t.Fatalf("mixed-modality live image index = %d, first audio append = %d; image must be queued first", imageIndex, observation.audioAppendIndices[0])
 	}
 	appendOffset := 0
-	for turn, frameCount := range framesPerTurn {
-		lastAppend := observation.audioAppendIndices[appendOffset+frameCount-1]
+	for turn, appendCount := range appendCountPerTurn {
+		lastAppend := observation.audioAppendIndices[appendOffset+appendCount-1]
 		if observation.commitIndices[turn] <= lastAppend || observation.responseCreateIndices[turn] <= observation.commitIndices[turn] || observation.responseDoneIndices[turn] <= observation.responseCreateIndices[turn] {
 			t.Fatalf("mixed-modality live turn %d boundary order = append:%d commit:%d response:%d done:%d; want append < commit < response.create < response.done", turn+1, lastAppend, observation.commitIndices[turn], observation.responseCreateIndices[turn], observation.responseDoneIndices[turn])
 		}
 		if turn > 0 && observation.audioAppendIndices[appendOffset] <= observation.responseDoneIndices[turn-1] {
 			t.Fatalf("mixed-modality live turn %d first append at %d crossed before turn %d response.done at %d", turn+1, observation.audioAppendIndices[appendOffset], turn, observation.responseDoneIndices[turn-1])
 		}
-		appendOffset += frameCount
+		appendOffset += appendCount
 	}
 	return observation
 }
