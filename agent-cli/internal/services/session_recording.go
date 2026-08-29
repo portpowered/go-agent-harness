@@ -231,6 +231,12 @@ func runSessionWithImagesAndRecordingDirectory(
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
 	destination, err := prepareSessionRecordingDestination(directory)
 	if err != nil {
 		return err

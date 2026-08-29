@@ -133,6 +133,12 @@ func RunSessionWithImages(ctx context.Context, out io.Writer, opts SessionImageR
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, false)
 	if err != nil {
 		return err
@@ -180,6 +186,12 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 		opts.SessionRunOptions.Prompt = opts.TextSeed.Value
 		opts.SessionRunOptions.PromptProvided = true
 	}
+	var imageCleanup func()
+	opts.SessionRunOptions, imageCleanup, err = prepareSessionImageToolAccess(opts.SessionRunOptions, paths, parts)
+	if err != nil {
+		return err
+	}
+	defer imageCleanup()
 	audioSource, err := openSessionAudioInput(input)
 	if err != nil {
 		return err
