@@ -148,7 +148,7 @@ func assertCompleteExecDefinition(t *testing.T, definition messages.ToolDefiniti
 	if definition.Name != "exec" {
 		t.Fatalf("tool name = %q, want exec", definition.Name)
 	}
-	if definition.Description != "Execute a shell command and return its output. Use with caution." {
+	if definition.Description != "Execute a shell command on the local machine and return its output. Use with caution. Only for real shell work: never for browser-page actions, which have their own directly callable page tools." {
 		t.Fatalf("exec description = %q, want complete exec description", definition.Description)
 	}
 	if len(definition.Parameters) != 2 {

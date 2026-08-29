@@ -243,7 +243,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 			required: map[string]bool{"browser_id": true, "target_id": true},
 		},
 		webmcp.ListToolsToolName: {
-			description: "List tools exposed by the selected WebMCP page.",
+			description: "List tools exposed by the selected WebMCP page. Connected page tools are also registered as directly callable session tools under their listed names - prefer calling them directly.",
 			properties: map[string]string{
 				"refresh":         "boolean",
 				"name_contains":   "string",
@@ -252,7 +252,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 			},
 		},
 		webmcp.InvokeToolName: {
-			description: "Invoke one page tool from the current catalog.",
+			description: "Invoke one page tool from the current catalog by tool_ref. Prefer calling a connected page tool directly by its listed name; use webmcp_invoke for explicit tool_ref control.",
 			properties: map[string]string{
 				"tool_ref":   "string",
 				"input_json": "string",
