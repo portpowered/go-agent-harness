@@ -9,35 +9,42 @@ AGENT_CLI_INTEGRATION_TIMEOUT ?= 180s
 AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 COVERAGE_MANIFEST_DIR ?= coverage-manifest
+COVERAGE_BASE ?= origin/main
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
+ANALYZER_TOOL_DIR ?= .cache/go-tools
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
 SESSIONS_RACE_TIMEOUT ?= 600s
 GOLANGCI_LINT_VERSION ?= v2.3.0
 STATICCHECK_VERSION ?= 2025.1.1
-GOLANGCI_LINT_INSTALL ?= go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-STATICCHECK_INSTALL ?= go install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
+GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+STATICCHECK_PACKAGE ?= honnef.co/go/tools/cmd/staticcheck
+GOLANGCI_LINT_INSTALL ?= go install $(GOLANGCI_LINT_PACKAGE)@$(GOLANGCI_LINT_VERSION)
+STATICCHECK_INSTALL ?= go install $(STATICCHECK_PACKAGE)@$(STATICCHECK_VERSION)
 GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@latest
+PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
-FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence
+FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target
 RELEASE_VERSION ?= v0.0.1
 RELEASE_TAGS := $(RELEASE_VERSION) $(MODULES:%=%/$(RELEASE_VERSION))
 GORELEASER_CONFIG ?= .goreleaser.yaml
 SKIP_RELEASE_CI ?= 0
 
 .DEFAULT_GOAL := help
-.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix typecheck vet lint staticcheck test test-tools test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-registration coverage-changed prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\nOptional skip env vars:\n"
 	@printf "  %-18s %s\n" "SKIP_LINT=1" "Skip golangci-lint with a visible message."
 	@printf "  %-18s %s\n" "SKIP_STATICCHECK=1" "Skip staticcheck with a visible message."
+	@printf "  %-18s %s\n" "ANALYZER_TOOL_DIR=..." "Cache automatically installed pinned analyzers in this directory."
+	@printf "  %-18s %s\n" "COVERAGE_BASE=..." "Git ref used as the changed-package coverage comparison base."
 	@printf "\nOpt-in test env vars:\n"
 	@printf "  %-18s %s\n" "RUN_CUSTOMER_SESSIONS=1" "Acknowledge local-only private session sweep targets."
 	@printf "  %-18s %s\n" "CUSTOMER_SESSION_DIR=..." "Override the private session directory checked by test-customer-sessions."
@@ -64,7 +71,7 @@ fmt: ## Validate Go formatting across all workspace modules without rewriting fi
 		if [ -n "$$output" ]; then \
 			echo "gofmt drift detected in $$module:"; \
 			echo "$$output"; \
-			echo "Run 'make fmt-fix' to rewrite files before rerunning 'make ci'."; \
+			echo "Run 'make fmt-fix' to rewrite files before rerunning 'make prepush'."; \
 			exit 1; \
 		fi; \
 	done
@@ -81,7 +88,9 @@ vet: ## Run go vet across all workspace modules.
 	for module in $(MODULES); do \
 		echo "==> vet $$module"; \
 		(cd "$$module" && $(GO) vet ./...); \
-	done
+	done; \
+	echo "==> vet tools/analyzergate"; \
+	(cd tools/analyzergate && GOWORK=off $(GO) vet ./...)
 
 lint: ## Run golangci-lint across all workspace modules.
 	@set -euo pipefail; \
@@ -89,15 +98,22 @@ lint: ## Run golangci-lint across all workspace modules.
 		echo "==> lint skipped via SKIP_LINT=1"; \
 		exit 0; \
 	fi; \
-	if ! command -v "$(GOLANGCI_LINT)" >/dev/null 2>&1; then \
-		echo "golangci-lint is required for 'make lint'."; \
-		echo "Install it with: $(GOLANGCI_LINT_INSTALL)"; \
-		echo "Or rerun with SKIP_LINT=1 to skip intentionally."; \
+	if ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
+		--tool golangci-lint \
+		--expected-version "$(GOLANGCI_LINT_VERSION)" \
+		--candidate "$(GOLANGCI_LINT)" \
+		--go "$(GO)" \
+		--install-package "$(GOLANGCI_LINT_PACKAGE)" \
+		--tool-dir "$(abspath $(ANALYZER_TOOL_DIR))" \
+		--working-dir "$(CURDIR)")"; then \
+		echo "golangci-lint resolution failed for pinned version $(GOLANGCI_LINT_VERSION)." >&2; \
+		echo "Install with: $(GOLANGCI_LINT_INSTALL)" >&2; \
 		exit 1; \
 	fi; \
+	echo "==> lint using $$analyzer (pinned $(GOLANGCI_LINT_VERSION))"; \
 	for module in $(MODULES); do \
 		echo "==> lint $$module"; \
-		(cd "$$module" && "$(GOLANGCI_LINT)" run ./...); \
+		(cd "$$module" && "$$analyzer" run ./...); \
 	done
 
 staticcheck: ## Run staticcheck across all workspace modules.
@@ -106,15 +122,22 @@ staticcheck: ## Run staticcheck across all workspace modules.
 		echo "==> staticcheck skipped via SKIP_STATICCHECK=1"; \
 		exit 0; \
 	fi; \
-	if ! command -v "$(STATICCHECK)" >/dev/null 2>&1; then \
-		echo "staticcheck is required for 'make staticcheck'."; \
-		echo "Install it with: $(STATICCHECK_INSTALL)"; \
-		echo "Or rerun with SKIP_STATICCHECK=1 to skip intentionally."; \
+	if ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
+		--tool staticcheck \
+		--expected-version "$(STATICCHECK_VERSION)" \
+		--candidate "$(STATICCHECK)" \
+		--go "$(GO)" \
+		--install-package "$(STATICCHECK_PACKAGE)" \
+		--tool-dir "$(abspath $(ANALYZER_TOOL_DIR))" \
+		--working-dir "$(CURDIR)")"; then \
+		echo "staticcheck resolution failed for pinned version $(STATICCHECK_VERSION)." >&2; \
+		echo "Install with: $(STATICCHECK_INSTALL)" >&2; \
 		exit 1; \
 	fi; \
+	echo "==> staticcheck using $$analyzer (pinned $(STATICCHECK_VERSION))"; \
 	for module in $(MODULES); do \
 		echo "==> staticcheck $$module"; \
-		(cd "$$module" && "$(STATICCHECK)" ./...); \
+		(cd "$$module" && "$$analyzer" ./...); \
 	done
 
 test: ## Run deterministic Go tests across all workspace modules.
@@ -132,7 +155,13 @@ test: ## Run deterministic Go tests across all workspace modules.
 		else \
 			(cd "$$module" && $(GO) test ./... -timeout "$$effective_timeout"); \
 		fi; \
-	done
+	done; \
+	$(MAKE) test-tools
+
+test-tools: ## Run tests for standalone repository helper modules.
+	@set -euo pipefail; \
+	echo "==> test tools/analyzergate"; \
+	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
@@ -168,7 +197,7 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 			exit 1; \
 			;; \
 	esac; \
-	echo "==> test-factory-scripts executed $$test_count tests from both intended modules"; \
+	echo "==> test-factory-scripts executed $$test_count tests from configured modules"; \
 	if [ "$${FACTORY_TEST_CONTRACT_CHILD:-0}" = "0" ]; then \
 		echo "==> test-factory-scripts command contract"; \
 		FACTORY_TEST_CONTRACT_CHILD=1 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_factory_script_target; \
@@ -212,7 +241,11 @@ build: ## Build the agent-cli binary and compile library packages.
 	echo "==> build go-agent-loop packages"; \
 	(cd go-agent-loop && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
 	echo "==> build go-llm-gateway packages"; \
-	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...)
+	(cd go-llm-gateway && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \
+	echo "==> build tools/analyzergate"; \
+	analyzer_build_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$analyzer_build_dir"' EXIT; \
+	(cd tools/analyzergate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o "$$analyzer_build_dir/analyzergate" .)
 
 typecheck: build ## Backward-compatible alias for root compile validation.
 
@@ -235,6 +268,32 @@ coverage: ## Write per-module coverage profiles under coverage/.
 	done; \
 	echo "==> coverage gate"; \
 	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" ../../coverage/agent-cli.out ../../coverage/go-agent-loop.out ../../coverage/go-llm-gateway.out)
+
+coverage-registration: ## Validate every workspace Go package is registered without running coverage.
+	@set -euo pipefail; \
+	echo "==> coverage-registration"; \
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
+		--validate-registration \
+		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
+		--module-dir ../../agent-cli \
+		--module-dir ../../go-agent-loop \
+		--module-dir ../../go-llm-gateway)
+
+coverage-changed: ## Measure coverage floors only for packages owning changed Go files.
+	@set -euo pipefail; \
+	echo "==> coverage-changed (base: $(COVERAGE_BASE))"; \
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . \
+		--changed \
+		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
+		--repo ../.. \
+		--base "$(COVERAGE_BASE)" \
+		--test-timeout "$(GO_TEST_TIMEOUT)" \
+		--module-dir ../../agent-cli \
+		--module-dir ../../go-agent-loop \
+		--module-dir ../../go-llm-gateway)
+
+prepush: ## Run the fail-fast, timed local pre-push gate.
+	@PREPUSH_MAKE="$(PREPUSH_MAKE)" scripts/prepush.sh
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \

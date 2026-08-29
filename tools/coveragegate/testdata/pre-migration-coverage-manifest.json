@@ -31,6 +31,7 @@
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/wire", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/workspace", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/test/functional", "minimum": 75.00},
+    {"package": "github.com/portpowered/go-agent-harness/agent-cli/test/functional/parity", "exception": "test-only package has no measurable production statements"},
     {"package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration", "minimum": 71.40},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/cmd/ttscorpus", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop", "minimum": 70.70},
@@ -49,11 +50,15 @@
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/ttscorpus", "minimum": 80.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional", "minimum": 57.70},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/duplex", "exception": "test-only package has no measurable production statements"},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/internal/quarantinefixture", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/internal/sessionmock", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/internal/support", "exception": "alias-only package has no measurable production statements"},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/media", "minimum": 59.30},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration", "exception": "test-only package has no measurable production statements"},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/sessions", "minimum": 83.60},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/timeharness", "minimum": 66.90},
+    {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/tools", "exception": "test-only package has no measurable production statements"},
     {"package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/test_logging", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/cmd/session-fixture-validator", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/internal/sessionfixturevalidator", "minimum": 85.10},
@@ -74,7 +79,8 @@
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport", "minimum": 0.00},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc", "minimum": 87.60},
     {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest", "minimum": 71.40},
-    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio", "minimum": 0.00}
+    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio", "minimum": 0.00},
+    {"package": "github.com/portpowered/go-agent-harness/go-llm-gateway/test/functional", "exception": "test-only package has no measurable production statements"}
   ]
 }
 

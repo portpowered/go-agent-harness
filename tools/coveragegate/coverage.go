@@ -301,11 +301,23 @@ func ParseManifest(data []byte) (Manifest, error) {
 	}
 
 	manifest := Manifest{Packages: make([]PackageEntry, 0, len(document.Packages))}
-	for _, rawEntry := range document.Packages {
+	seen := make(map[string]int, len(document.Packages))
+	for index, rawEntry := range document.Packages {
 		entry, err := parseEntry(rawEntry)
 		if err != nil {
 			return Manifest{}, err
 		}
+		if previousIndex, duplicate := seen[entry.ImportPath]; duplicate {
+			return Manifest{}, &ManifestError{
+				Kind:       ErrManifestDuplicate,
+				ImportPath: entry.ImportPath,
+				Message: fmt.Sprintf(
+					"coverage manifest contains duplicate package %q at entries %d and %d",
+					entry.ImportPath, previousIndex, index,
+				),
+			}
+		}
+		seen[entry.ImportPath] = index
 		if len(manifest.Packages) > 0 {
 			previous := manifest.Packages[len(manifest.Packages)-1].ImportPath
 			if entry.ImportPath <= previous {
@@ -552,6 +564,56 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 		}
 	}
 
+	return finishFindings(findings)
+}
+
+// CompareSelected applies the same rounded coverage-floor calculation as
+// Compare, but only to the selected package paths. Measurements for
+// unchanged packages are intentionally ignored so a changed-package run can
+// enforce local floors without accidentally becoming a repository-wide gate.
+func CompareSelected(manifest Manifest, selected []string, measurements map[string]Coverage) error {
+	if err := validateManifest(manifest); err != nil {
+		return err
+	}
+	registered := make(map[string]PackageEntry, len(manifest.Packages))
+	for _, entry := range manifest.Packages {
+		registered[entry.ImportPath] = entry
+	}
+
+	findings := &FindingsError{}
+	seen := make(map[string]struct{}, len(selected))
+	for _, packagePath := range selected {
+		if _, duplicate := seen[packagePath]; duplicate {
+			continue
+		}
+		seen[packagePath] = struct{}{}
+		entry, ok := registered[packagePath]
+		if !ok {
+			findings.Unregistered = append(findings.Unregistered, packagePath)
+			continue
+		}
+		if entry.HasException {
+			continue
+		}
+		coverage, measured := measurements[packagePath]
+		if !measured || coverage.Total == 0 {
+			findings.Unmeasured = append(findings.Unmeasured, packagePath)
+			continue
+		}
+		actualCents := coverage.actualCents()
+		if actualCents+coverageComparisonBandCents < entry.MinimumCents {
+			findings.Violations = append(findings.Violations, Violation{
+				ImportPath:    packagePath,
+				ExpectedCents: entry.MinimumCents,
+				ActualCents:   actualCents,
+				DeltaCents:    actualCents - entry.MinimumCents,
+			})
+		}
+	}
+	return finishFindings(findings)
+}
+
+func finishFindings(findings *FindingsError) error {
 	sort.Strings(findings.Unregistered)
 	sort.Strings(findings.Unmeasured)
 	sort.Slice(findings.Violations, func(i, j int) bool {
@@ -565,10 +627,22 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 
 func validateManifest(manifest Manifest) error {
 	previous := ""
-	for _, entry := range manifest.Packages {
+	seen := make(map[string]int, len(manifest.Packages))
+	for index, entry := range manifest.Packages {
 		if strings.TrimSpace(entry.ImportPath) == "" {
 			return fmt.Errorf("%w: package import path is empty", ErrManifestInvalid)
 		}
+		if previousIndex, duplicate := seen[entry.ImportPath]; duplicate {
+			return &ManifestError{
+				Kind:       ErrManifestDuplicate,
+				ImportPath: entry.ImportPath,
+				Message: fmt.Sprintf(
+					"coverage manifest contains duplicate package %q at entries %d and %d",
+					entry.ImportPath, previousIndex, index,
+				),
+			}
+		}
+		seen[entry.ImportPath] = index
 		if entry.HasMinimum == entry.HasException {
 			if entry.HasMinimum {
 				return &ManifestError{
