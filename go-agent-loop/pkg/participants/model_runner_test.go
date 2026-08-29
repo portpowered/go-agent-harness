@@ -179,6 +179,52 @@ func TestModelRunner_SimpleInference(t *testing.T) {
 	}
 }
 
+func TestModelRunner_NonTerminalErrorContinuesToMessageEnd(t *testing.T) {
+	inf := &streamInferencer{
+		deltas: []messages.StreamMessage{
+			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+			{Type: messages.StreamTypeError, Role: messages.RoleAssistant, Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active")},
+			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("still alive")},
+			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		},
+	}
+
+	runner := NewModelRunner(inf, 10)
+	ap := NewActiveParticipant(messages.Model, runner)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	if !runner.Inbox.Write(ctx, messages.InferenceRequest{
+		Messages: []messages.Message{messages.NewTextMessage(messages.RoleUser, "hi")},
+	}) {
+		t.Fatal("failed to enqueue inference request")
+	}
+
+	wantTypes := []messages.StreamMessageType{
+		messages.StreamTypeMessageStart,
+		messages.StreamTypeError,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeMessageEnd,
+	}
+	for _, wantType := range wantTypes {
+		delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+		if !ok {
+			t.Fatalf("timed out waiting for %s", wantType)
+		}
+		if delta.Type != wantType {
+			t.Fatalf("delta type = %q, want %q", delta.Type, wantType)
+		}
+		if wantType == messages.StreamTypeError {
+			value, ok := delta.Value.(*messages.ErrorValue)
+			if !ok || value == nil || !value.IsNonTerminal() {
+				t.Fatalf("diagnostic value = %#v, want nonterminal ErrorValue", delta.Value)
+			}
+		}
+	}
+}
+
 func TestModelRunner_ProviderAuthoredCompletionGetsTerminalMetadata(t *testing.T) {
 	inf := &streamInferencer{
 		deltas: []messages.StreamMessage{

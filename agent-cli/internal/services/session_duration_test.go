@@ -99,6 +99,19 @@ func TestSessionDurationAdmission_PreservesCompleteMessageCapabilities(t *testin
 	}
 }
 
+func TestSessionDurationAdmission_ForwardsNonTerminalDiagnosticWithoutShutdown(t *testing.T) {
+	msg := messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
+	}
+	if isDurationShutdownMessage(msg) {
+		t.Fatal("nonterminal provider diagnostic is a shutdown message")
+	}
+	if !isDurationForwardMessage(msg) {
+		t.Fatal("nonterminal provider diagnostic was not retained for forwarding")
+	}
+}
+
 func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {

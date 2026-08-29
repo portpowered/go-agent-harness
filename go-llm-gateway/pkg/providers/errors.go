@@ -36,17 +36,20 @@ var (
 )
 
 const (
-	ErrorClassProviderRejected   = "provider_rejected"
-	ErrorClassAuthentication     = "authentication"
-	ErrorClassRateLimited        = "rate_limited"
-	ErrorClassInvalidRequest     = "invalid_request"
-	ErrorClassUnsupportedRequest = "unsupported_request"
-	ErrorClassTransport          = "transport"
-	ErrorClassCancellation       = "cancellation"
-	ErrorClassReplayMismatch     = "replay_mismatch"
-	ErrorClassReplayIncomplete   = "replay_incomplete"
-	ErrorClassPartialOutput      = "partial_output"
-	ErrorClassUnknown            = "unknown"
+	ErrorClassProviderRejected = "provider_rejected"
+	// ErrorClassResponseCancelNotActive identifies the OpenAI Realtime
+	// postcondition diagnostic where a requested response was already inactive.
+	ErrorClassResponseCancelNotActive = "response_cancel_not_active"
+	ErrorClassAuthentication          = "authentication"
+	ErrorClassRateLimited             = "rate_limited"
+	ErrorClassInvalidRequest          = "invalid_request"
+	ErrorClassUnsupportedRequest      = "unsupported_request"
+	ErrorClassTransport               = "transport"
+	ErrorClassCancellation            = "cancellation"
+	ErrorClassReplayMismatch          = "replay_mismatch"
+	ErrorClassReplayIncomplete        = "replay_incomplete"
+	ErrorClassPartialOutput           = "partial_output"
+	ErrorClassUnknown                 = "unknown"
 )
 
 // ProviderError carries provider rejection details while preserving errors.Is

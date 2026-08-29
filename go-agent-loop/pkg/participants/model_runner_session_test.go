@@ -329,6 +329,17 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	if second.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeAudioDelta)
 	}
+
+	// More speech in the same response overlap is still forwarded, but must not
+	// dispatch another cancellation for the response already cancelled above.
+	runner.UserAudioInbox <- []byte{7, 8, 9}
+	third := waitForSentMessage(t, ctx, session)
+	if third.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("third outbound type = %s, want %s without a duplicate cancel", third.Type, messages.StreamTypeAudioDelta)
+	}
+	if got := len(session.sentMessages()); got != 3 {
+		t.Fatalf("active overlap sent %d messages, want one cancel and two audio appends", got)
+	}
 }
 
 func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.T) {
@@ -605,6 +616,82 @@ func TestSessionModelRunner_CompletedResponseDoesNotCancelNextAudio(t *testing.T
 	}
 	if got := len(session.sentMessages()); got != 1 {
 		t.Fatalf("sent %d messages, want 1 (no RESPONSE.CANCEL after completion)", got)
+	}
+}
+
+func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 8, nil)
+	state := sessionRunState{responseInFlight: true}
+
+	// Both events are pending in the same logical transport turn. The provider
+	// boundary is already observable, so it must update the runner before the
+	// contentful peer frame is admitted.
+	session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	runner.UserAudioInbox <- []byte{1, 2, 3}
+
+	handled, closed, err := runner.forwardPendingSessionInputs(ctx, session, &state)
+	if err != nil {
+		t.Fatalf("forwardPendingSessionInputs error = %v", err)
+	}
+	if !handled || closed {
+		t.Fatalf("forwardPendingSessionInputs result = (handled=%t, closed=%t), want handled open", handled, closed)
+	}
+	if state.responseInFlight || state.responseCancelSent || !state.responseCompleted {
+		t.Fatalf("response state after queued MESSAGE.END = %+v, want completed and uncancelled", state)
+	}
+
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("provider sends after queued MESSAGE.END = %#v, want one AUDIO.DELTA and no RESPONSE.CANCEL", sent)
+	}
+	if got := sent[0].Value.(*messages.AudioDeltaValue).Content; string(got) != string([]byte{1, 2, 3}) {
+		t.Fatalf("peer audio = %v, want it forwarded unchanged", got)
+	}
+	if delta, ok := runner.DeltaOutbox.Read(); !ok || delta.Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("forwarded boundary = %#v, ok=%t; want MESSAGE.END", delta, ok)
+	}
+
+	// The next response starts a fresh cancellation window and reaches a normal
+	// terminal boundary, proving the completed response's state did not leak.
+	runner.forwardSessionMessageState(ctx, session, &state, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageStart,
+		Value: messages.NewMessageStartValue(),
+	})
+	runner.forwardSessionMessageState(ctx, session, &state, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewAudioDeltaValue([]byte{4, 5, 6}),
+	})
+	runner.forwardSessionMessageState(ctx, session, &state, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if state.responseInFlight || state.responseCancelSent || !state.responseCompleted {
+		t.Fatalf("response state after normal next turn = %+v, want completed and uncancelled", state)
+	}
+
+	var nextEnd *messages.MessageEndValue
+	for {
+		delta, ok := runner.DeltaOutbox.Read()
+		if !ok {
+			t.Fatal("next response ended without MESSAGE.END")
+		}
+		if delta.Type == messages.StreamTypeMessageEnd {
+			var ok bool
+			nextEnd, ok = delta.Value.(*messages.MessageEndValue)
+			if !ok {
+				t.Fatalf("next MESSAGE.END value = %T, want *MessageEndValue", delta.Value)
+			}
+			break
+		}
+	}
+	if nextEnd.TerminalReason == messages.TerminalReasonPartialOutput {
+		t.Fatalf("next normal MESSAGE.END retained interrupted terminal reason: %+v", nextEnd)
 	}
 }
 

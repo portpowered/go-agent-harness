@@ -190,6 +190,23 @@ func TestConsumeModelDeltaErrorReturnsTypedStreamDeltaError(t *testing.T) {
 	}
 }
 
+func TestConsumeModelDeltaNonTerminalErrorIsForwarded(t *testing.T) {
+	runner := participants.NewModelRunner(nil, 4)
+	o := NewGlobalOrdering(runner, nil, nil, nil)
+	ts := &state.LoopState{}
+	ev := messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active")
+
+	if err := o.consumeModelDelta(ts, messages.StreamMessage{Type: messages.StreamTypeError, Value: ev}); err != nil {
+		t.Fatalf("consumeModelDelta returned error for nonterminal diagnostic: %v", err)
+	}
+	if len(ts.Inputs.ModelInputDelta) != 1 || ts.Inputs.ModelInputDelta[0].Value != ev {
+		t.Fatalf("nonterminal diagnostic was not forwarded: %#v", ts.Inputs.ModelInputDelta)
+	}
+	if len(ts.Inputs.ModelOutputMessage) != 0 {
+		t.Fatalf("nonterminal diagnostic unexpectedly reconstructed a model message: %#v", ts.Inputs.ModelOutputMessage)
+	}
+}
+
 func TestConsumeToolDeltaErrorReturnsTypedStreamDeltaError(t *testing.T) {
 	runner := participants.NewToolRunner(nil, 4)
 	o := NewGlobalOrdering(nil, runner, nil, nil)

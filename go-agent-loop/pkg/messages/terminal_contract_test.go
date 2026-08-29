@@ -68,6 +68,49 @@ func TestTerminalMetadataSerializesOnErrorValue(t *testing.T) {
 	}
 }
 
+func TestNonTerminalErrorValuePreservesDiagnosticSemantics(t *testing.T) {
+	value := NewNonTerminalErrorValueWithDetails(
+		"response is not active",
+		"invalid_request_error",
+		"response_cancel_not_active",
+		"response.cancel",
+		"evt-123",
+	)
+	value.Classification = "response_cancel_not_active"
+
+	if value.IsTerminal() || !value.IsNonTerminal() {
+		t.Fatal("nonterminal error value must not be terminal")
+	}
+	if NewErrorValue("legacy error").IsNonTerminal() {
+		t.Fatal("legacy error values must remain terminal by default")
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	for key, want := range map[string]any{
+		"message":        "response is not active",
+		"classification": "response_cancel_not_active",
+		"non_terminal":   true,
+		"error_type":     "invalid_request_error",
+		"code":           "response_cancel_not_active",
+		"param":          "response.cancel",
+		"event_id":       "evt-123",
+	} {
+		if got[key] != want {
+			t.Fatalf("%s: got %v, want %v", key, got[key], want)
+		}
+	}
+	if _, ok := got["terminal_reason"]; ok {
+		t.Fatalf("nonterminal diagnostic unexpectedly has terminal_reason: %v", got["terminal_reason"])
+	}
+}
+
 func TestTerminalMetadataSerializesOnSessionClose(t *testing.T) {
 	value := NewSessionCloseValueWithTerminal(
 		"session-1",

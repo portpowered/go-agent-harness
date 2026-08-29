@@ -7,6 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 func TestRealtimeOutboundEvents_ResponseCancelMapsToProviderEvent(t *testing.T) {
@@ -22,6 +23,71 @@ func TestRealtimeOutboundEvents_ResponseCancelMapsToProviderEvent(t *testing.T) 
 	}
 	if events[0].Type != models.SessionEventResponseCancel {
 		t.Fatalf("provider event type = %q, want %q", events[0].Type, models.SessionEventResponseCancel)
+	}
+}
+
+func TestRealtimeInboundMessages_InactiveCancelRejectionIsNonTerminalDiagnostic(t *testing.T) {
+	raw := json.RawMessage(`{"type":"error","error":{"type":"invalid_request_error","code":"response_cancel_not_active","param":"response.cancel","event_id":"evt-cancel-1","message":"Can only cancel an active response."}}`)
+	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventError, Data: raw})
+	if len(got) != 1 || got[0].Type != messages.StreamTypeError {
+		t.Fatalf("error event normalization = %#v, want one ERROR", got)
+	}
+	value, ok := got[0].Value.(*messages.ErrorValue)
+	if !ok || value == nil {
+		t.Fatalf("normalized error value = %T, want *messages.ErrorValue", got[0].Value)
+	}
+	if value.IsTerminal() || !value.IsNonTerminal() {
+		t.Fatalf("inactive-cancel diagnostic terminal state: %#v", value)
+	}
+	if value.Classification != providers.ErrorClassResponseCancelNotActive ||
+		value.Message != "Can only cancel an active response." ||
+		value.ErrorType != "invalid_request_error" ||
+		value.Code != "response_cancel_not_active" ||
+		value.Param != "response.cancel" ||
+		value.EventID != "evt-cancel-1" {
+		t.Fatalf("inactive-cancel diagnostic details: %#v", value)
+	}
+	if value.TerminalReason != "" || value.TerminalProvenance != "" || value.OutputState != "" {
+		t.Fatalf("inactive-cancel diagnostic unexpectedly has terminal metadata: %#v", value)
+	}
+}
+
+func TestRealtimeInboundMessages_InactiveCancelHandlingRequiresExactProviderFields(t *testing.T) {
+	cases := []struct {
+		name        string
+		errorType   string
+		code        string
+		nonTerminal bool
+	}{
+		{name: "exact", errorType: "invalid_request_error", code: "response_cancel_not_active", nonTerminal: true},
+		{name: "different code", errorType: "invalid_request_error", code: "response_cancel_not_active_other"},
+		{name: "different type", errorType: "server_error", code: "response_cancel_not_active"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(map[string]any{
+				"type": "error",
+				"error": map[string]any{
+					"type":    tc.errorType,
+					"code":    tc.code,
+					"message": "provider error",
+				},
+			})
+			if err != nil {
+				t.Fatalf("marshal event: %v", err)
+			}
+			got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventError, Data: data})
+			value, ok := got[0].Value.(*messages.ErrorValue)
+			if !ok || value == nil {
+				t.Fatalf("normalized error value = %T, want *messages.ErrorValue", got[0].Value)
+			}
+			if value.IsNonTerminal() != tc.nonTerminal {
+				t.Fatalf("nonterminal = %t, want %t; value = %#v", value.IsNonTerminal(), tc.nonTerminal, value)
+			}
+			if !tc.nonTerminal && (value.Classification != providers.ErrorClassProviderRejected || value.TerminalReason != messages.TerminalReasonTerminalFailure) {
+				t.Fatalf("negative control metadata = %#v", value)
+			}
+		})
 	}
 }
 

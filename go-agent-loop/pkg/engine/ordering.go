@@ -190,7 +190,9 @@ func (e *StreamDeltaError) Error() string {
 }
 
 // consumeModelDelta processes one delta from the model runner's DeltaOutbox.
-// ERROR deltas clean up history and return an error. Stale deltas (LoopPassID
+// Terminal ERROR deltas clean up history and return an error. Nonterminal ERROR
+// diagnostics are ordered and forwarded without affecting response history.
+// Stale deltas (LoopPassID
 // lower than current) are silently dropped to handle mid-stream interrupts.
 // All other deltas are recorded in ModelInputDelta. On REASONING.END or
 // MESSAGE.END the message is reconstructed from delta history and emitted into
@@ -201,7 +203,7 @@ func (o *GlobalOrdering) consumeModelDelta(ts *state.LoopState, delta messages.S
 		return nil
 	}
 
-	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr {
+	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr && ev.IsTerminal() {
 		// Roll back any model deltas recorded so far in this response.
 		start := ts.History.ModelDeltaStartIndex
 		if start < len(ts.History.ConversationDeltaBuffer) {
@@ -255,7 +257,9 @@ func (o *GlobalOrdering) consumeModelDelta(ts *state.LoopState, delta messages.S
 }
 
 // consumeToolDelta processes one delta from the tool runner's DeltaOutbox.
-// ERROR deltas return an error. Stale deltas (LoopPassID lower than current)
+// Terminal ERROR deltas return an error. Nonterminal ERROR diagnostics are
+// ordered and forwarded without affecting tool reconstruction. Stale deltas
+// (LoopPassID lower than current)
 // are silently dropped. MESSAGE.START resets the tool batch tracking so
 // reconstruction knows where this batch's deltas begin in ConversationDeltaBuffer.
 // MESSAGE.END triggers reconstruction from the full delta history for this batch
@@ -266,7 +270,7 @@ func (o *GlobalOrdering) consumeToolDelta(ts *state.LoopState, delta messages.St
 		return nil
 	}
 
-	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr {
+	if ev, isErr := delta.Value.(*messages.ErrorValue); isErr && ev.IsTerminal() {
 		return &StreamDeltaError{Value: ev}
 	}
 

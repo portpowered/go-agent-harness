@@ -129,6 +129,36 @@ func TestStreamOutcome_Drained(t *testing.T) {
 	}
 }
 
+func TestStreamOutcome_NonTerminalErrorDoesNotFailStream(t *testing.T) {
+	ch := make(chan streamEvent, 2)
+	ch <- streamEvent{event: messages.StreamMessage{
+		Type:  messages.StreamTypeError,
+		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
+	}}
+	ch <- streamEvent{event: messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	}}
+	close(ch)
+
+	stream := newChanStream(ch)
+	if !stream.HasNext() || stream.Response().Type != messages.StreamTypeError {
+		t.Fatal("expected nonterminal ERROR to remain observable")
+	}
+	if stream.Err() != nil || stream.Outcome().Status != StreamOpen {
+		t.Fatalf("nonterminal ERROR changed stream outcome: err=%v outcome=%#v", stream.Err(), stream.Outcome())
+	}
+	if !stream.HasNext() || stream.Response().Type != messages.StreamTypeMessageEnd {
+		t.Fatal("expected stream to continue to MESSAGE.END")
+	}
+	if stream.HasNext() {
+		t.Fatal("HasNext = true after closed channel")
+	}
+	if outcome := stream.Outcome(); outcome.Status != StreamDrained || outcome.Err != nil {
+		t.Fatalf("final outcome = %#v, want drained without error", outcome)
+	}
+}
+
 func TestStreamOutcome_ReportsProviderTerminalSource(t *testing.T) {
 	ch := make(chan streamEvent, 1)
 	ch <- streamEvent{event: messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}}

@@ -380,6 +380,9 @@ func (b *liveDeviceProbeSessionBridge) Run(ctx context.Context) {
 				return
 			}
 		case messages.StreamTypeError:
+			if value, ok := message.Value.(*messages.ErrorValue); ok && value != nil && value.IsNonTerminal() {
+				continue
+			}
 			b.setError(liveDeviceProbeSessionError(message))
 			b.finishResponse()
 			return
