@@ -564,10 +564,7 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			if awaitingResponse {
 				return errors.Join(stopErr, fmt.Errorf("session cancelled while awaiting model response after end-of-turn: %w", ctx.Err()))
 			}
-			if stopErr != nil {
-				return stopErr
-			}
-			return ctx.Err()
+			return sessionRunTerminationError(ctx, stopErr)
 		case <-observedInferencer.Done():
 			drainErr := drainSessionLoopMessagesUntilQuiet(out, loop, 25*time.Millisecond, opts.observer)
 			stopErr := stopAndDrain()
