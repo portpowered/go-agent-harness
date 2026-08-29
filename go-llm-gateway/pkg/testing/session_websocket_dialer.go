@@ -1,7 +1,6 @@
 package testing
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -288,11 +287,11 @@ func (c *replayWebSocketConn) WriteMessage(_ int, payload []byte) error {
 			fmt.Errorf("got outbound before expected capture event"),
 		))
 	}
-	if !rawJSONEqual(eventPayload(evt), payload) {
+	if err := compareReplayPayloads(eventPayload(evt), payload); err != nil {
 		return c.setErrLocked(newReplayMismatchError(
-			fmt.Sprintf("outbound payload for %s at sequence %d", evt.Type, evt.Sequence),
-			websocketPayloadType(payload),
-			fmt.Errorf("expected outbound payload does not match actual outbound event"),
+			replayEventDescription(evt.Sequence, evt.Type),
+			replayEventDescription(evt.Sequence, websocketPayloadType(payload)),
+			err,
 		))
 	}
 	c.index++
@@ -374,24 +373,4 @@ func websocketPayloadType(payload []byte) string {
 		return "websocket.message"
 	}
 	return envelope.Type
-}
-
-func rawJSONEqual(a, b []byte) bool {
-	var av any
-	var bv any
-	if err := json.Unmarshal(a, &av); err != nil {
-		return bytes.Equal(a, b)
-	}
-	if err := json.Unmarshal(b, &bv); err != nil {
-		return bytes.Equal(a, b)
-	}
-	aj, err := json.Marshal(av)
-	if err != nil {
-		return bytes.Equal(a, b)
-	}
-	bj, err := json.Marshal(bv)
-	if err != nil {
-		return bytes.Equal(a, b)
-	}
-	return bytes.Equal(aj, bj)
 }

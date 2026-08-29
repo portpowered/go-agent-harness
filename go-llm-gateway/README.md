@@ -163,6 +163,14 @@ incomplete fields. Do not match error message text for control flow.
 | `gateway.ErrReplayIncomplete` | Diagnose a replay that ended before all required fixture or capture events were consumed |
 | `gateway.ErrCancellation` | Handle caller cancellation or timeout separately from provider failures |
 
+Replay mismatch errors from the session record/replay helpers include the
+capture sequence and expected/actual event types. For two valid JSON payloads,
+the detail identifies the first RFC 6901-style JSON pointer; otherwise it
+identifies the zero-based byte offset. Expected and actual payload excerpts are
+escaped and capped at 96 characters each, with `...(truncated)` marking
+omitted context. The structured detail is available through
+`*gateway.ReplayPayloadDivergenceError` with `errors.As`.
+
 Provider and stream adapters serialize the same caller-actionable meanings with
 the provider classification strings in `pkg/providers`:
 
