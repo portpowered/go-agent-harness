@@ -930,11 +930,8 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 		return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 	}
 	if browserID == "" {
-		if len(candidates) != 1 {
-			ids := make([]string, 0, len(candidates))
-			for _, candidate := range candidates {
-				ids = append(ids, string(candidate.ID))
-			}
+		ids := directBrowserCandidateIDs(candidates)
+		if len(ids) != 1 {
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousBrowser, "multiple browsers matched; an exact browser ID is required", map[string]any{
 				"candidate_browser_ids": ids,
 			})
@@ -1009,26 +1006,15 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, nil, err
 		}
 	} else {
-		matches := make([]webmcp.Target, 0, len(targets))
-		for _, possible := range targets {
-			if possible.Type != "" && !strings.EqualFold(possible.Type, "page") {
-				continue
-			}
-			if !possible.Eligible {
-				continue
-			}
-			if browser.Selection.Origin != "" && safeOrigin(possible.Origin) != safeOrigin(browser.Selection.Origin) {
-				continue
-			}
-			if err := directTargetPolicyError(possible, browser); err != nil {
-				continue
-			}
-			matches = append(matches, possible)
-		}
-		sort.SliceStable(matches, func(i, j int) bool { return matches[i].ID < matches[j].ID })
+		matches := directEligibleTargetMatches(targets, browser)
 		switch {
 		case len(matches) == 0:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, directNoEligibleTabError(browserID, browser, len(targets), "")
+		case len(matches) > 1:
+			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
+				"browser_id":           normalizeDirectOpaqueID(browserID),
+				"candidate_target_ids": directTargetCandidateIDs(matches),
+			})
 		case browser.Selection.AutoSelect == config.BrowserAutoSelectPersisted:
 			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, "persisted browser target selection is not current", map[string]any{
 				"browser_id":          browserID,
@@ -1042,15 +1028,6 @@ func (c *WebMCPOperationsCommand) resolveDirectTarget(ctx context.Context, cmd *
 				"target_id":           "",
 				"selected_generation": uint64(0),
 				"reason":              "selection_required",
-			})
-		case len(matches) > 1:
-			ids := make([]string, 0, len(matches))
-			for _, match := range matches {
-				ids = append(ids, string(match.ID))
-			}
-			return webmcp.BrowserCandidate{}, webmcp.Target{}, stored, webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
-				"browser_id":           browserID,
-				"candidate_target_ids": ids,
 			})
 		default:
 			selected := matches[0]

@@ -12,6 +12,119 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+const directNormalizedIDMaxLength = 64
+
+// normalizeDirectOpaqueID accepts the same bounded public-ID alphabet used by
+// discovery. Direct commands receive normalized IDs from their broker, but
+// keeping the output boundary defensive prevents malformed adapter values from
+// becoming endpoint-shaped or otherwise unsafe candidate details.
+func normalizeDirectOpaqueID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > directNormalizedIDMaxLength {
+		return ""
+	}
+	for _, character := range value {
+		if (character < 'a' || character > 'z') &&
+			(character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') &&
+			character != '_' && character != '-' {
+			return ""
+		}
+	}
+	return value
+}
+
+func sortedUniqueDirectIDs(values []string) []string {
+	ids := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if normalized := normalizeDirectOpaqueID(value); normalized != "" {
+			if _, exists := seen[normalized]; exists {
+				continue
+			}
+			seen[normalized] = struct{}{}
+			ids = append(ids, normalized)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func directSafeIDList(value any) []string {
+	values := make([]string, 0)
+	switch typed := value.(type) {
+	case []string:
+		values = append(values, typed...)
+	case []any:
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				values = append(values, text)
+			}
+		}
+	}
+	return sortedUniqueDirectIDs(values)
+}
+
+func directBrowserCandidateIDs(candidates []webmcp.BrowserCandidate) []string {
+	ids := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		ids = append(ids, string(candidate.ID))
+	}
+	return sortedUniqueDirectIDs(ids)
+}
+
+func directTargetCandidateIDs(targets []webmcp.Target) []string {
+	ids := make([]string, 0, len(targets))
+	for _, target := range targets {
+		ids = append(ids, string(target.ID))
+	}
+	return sortedUniqueDirectIDs(ids)
+}
+
+func normalizeDirectBrowserCandidates(candidates []webmcp.BrowserCandidate) []webmcp.BrowserCandidate {
+	normalized := make([]webmcp.BrowserCandidate, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		id := normalizeDirectOpaqueID(string(candidate.ID))
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		candidate.ID = webmcp.BrowserID(id)
+		seen[id] = struct{}{}
+		normalized = append(normalized, candidate)
+	}
+	sort.SliceStable(normalized, func(i, j int) bool { return normalized[i].ID < normalized[j].ID })
+	return normalized
+}
+
+func directEligibleTargetMatches(targets []webmcp.Target, browser config.BrowserConfig) []webmcp.Target {
+	matches := make([]webmcp.Target, 0, len(targets))
+	seen := make(map[string]struct{}, len(targets))
+	for _, possible := range targets {
+		id := normalizeDirectOpaqueID(string(possible.ID))
+		if id == "" || (possible.Type != "" && !strings.EqualFold(possible.Type, "page")) || !possible.Eligible {
+			continue
+		}
+		if browser.Selection.Origin != "" && safeOrigin(possible.Origin) != safeOrigin(browser.Selection.Origin) {
+			continue
+		}
+		if err := directTargetPolicyError(possible, browser); err != nil {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		possible.ID = webmcp.TargetID(id)
+		seen[id] = struct{}{}
+		matches = append(matches, possible)
+	}
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].ID < matches[j].ID })
+	return matches
+}
+
 // directNoEligibleTabError keeps the direct selection path aligned with the
 // C0 no_eligible_tab envelope. The broker target list is the complete
 // enumeration at this boundary, so its length is the useful candidate count
@@ -71,7 +184,7 @@ func discoverDirectCandidates(ctx context.Context, broker webmcp.Broker, browser
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+	candidates = normalizeDirectBrowserCandidates(candidates)
 	if len(candidates) == 0 {
 		return nil, webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "browser endpoint was not found", map[string]any{
 			"endpoint_kind": endpointKindFor(browser),

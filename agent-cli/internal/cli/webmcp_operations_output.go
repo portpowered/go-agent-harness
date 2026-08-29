@@ -434,6 +434,9 @@ func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr e
 			_, err = io.WriteString(out, " side_effect_unknown=true; rollback and retry safety are unknown")
 		}
 		if err == nil {
+			err = writeDirectAmbiguityDetails(out, resultError)
+		}
+		if err == nil {
 			_, err = fmt.Fprintln(out)
 		}
 		if err != nil {
@@ -531,7 +534,46 @@ func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr e
 
 func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResultError {
 	result := webmcp.ResultErrorFor(err, fallback, nil)
+	if result.Details == nil {
+		result.Details = map[string]any{}
+	}
+	switch webmcp.ErrorCode(result.Code) {
+	case webmcp.ErrorAmbiguousBrowser:
+		result.Details["candidate_browser_ids"] = directSafeIDList(result.Details["candidate_browser_ids"])
+	case webmcp.ErrorAmbiguousTab:
+		result.Details["browser_id"] = normalizeDirectOpaqueID(stringValue(result.Details["browser_id"]))
+		result.Details["candidate_target_ids"] = directSafeIDList(result.Details["candidate_target_ids"])
+	}
 	return result
+}
+
+func writeDirectAmbiguityDetails(out io.Writer, result webmcp.ToolResultError) error {
+	switch webmcp.ErrorCode(result.Code) {
+	case webmcp.ErrorAmbiguousBrowser:
+		ids := directSafeIDList(result.Details["candidate_browser_ids"])
+		if len(ids) > 0 {
+			_, err := fmt.Fprintf(out, " candidate_browser_ids=%s", strings.Join(ids, ","))
+			return err
+		}
+	case webmcp.ErrorAmbiguousTab:
+		browserID := normalizeDirectOpaqueID(stringValue(result.Details["browser_id"]))
+		ids := directSafeIDList(result.Details["candidate_target_ids"])
+		if browserID != "" {
+			if _, err := fmt.Fprintf(out, " browser_id=%s", browserID); err != nil {
+				return err
+			}
+		}
+		if len(ids) > 0 {
+			_, err := fmt.Fprintf(out, " candidate_target_ids=%s", strings.Join(ids, ","))
+			return err
+		}
+	}
+	return nil
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func compactDirectJSON(raw json.RawMessage) string {
