@@ -393,6 +393,14 @@ func (c *SessionCommand) SetSessionRTCRuntimeFactory(factory services.SessionRTC
 }
 
 // Generate returns the cobra command for the session group.
+// sessionCommandLongHelp is the session command long help, hoisted out of
+// Generate to keep the constructor within the function-length gate.
+const sessionCommandLongHelp = "Run a bidirectional session inference capture or replay a session capture file.\n" +
+	"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
+	"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
+	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
+	"Session history management remains available through the show, list, and delete subcommands."
+
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
 	var voice string
@@ -415,12 +423,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session [message]",
 		Short: "Run or manage agent sessions",
-		Long: "Run a bidirectional session inference capture or replay a session capture file.\n" +
-			"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
-			"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
-			"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
-			"Session history management remains available through the show, list, and delete subcommands.",
-		Args: cobra.ArbitraryArgs,
+		Long:  sessionCommandLongHelp,
+		Args:  cobra.ArbitraryArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
 			return services.ValidateOpenAIRealtimeVoice(voice)
 		},
