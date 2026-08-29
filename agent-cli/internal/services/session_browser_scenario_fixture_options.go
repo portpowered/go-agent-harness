@@ -87,18 +87,29 @@ type BrowserConversationPostSessionProbe = BrowserConversationTabStateProbe
 // BrowserConversationFixtureFactory starts one run-scoped fixture boundary.
 type BrowserConversationFixtureFactory func(context.Context, BrowserConversationScenario) (*BrowserConversationFixtureRun, error)
 
+// BrowserConversationCustomerNavigateFunc is the customer-owned navigation seam.
+// The coordinator invokes it after recording the customer's navigation turn
+// and before the next model tool call, so page generations can invalidate
+// previously issued references without creating a second browser owner.
+type BrowserConversationCustomerNavigateFunc func(context.Context, *BrowserConversationFixtureRun, BrowserCustomerNavigation) error
+
+// BrowserConversationNavigationFunc is a descriptive alias for callers that
+// prefer the shorter navigation terminology.
+type BrowserConversationNavigationFunc = BrowserConversationCustomerNavigateFunc
+
 // BrowserConversationSessionRequest is the exact composition handed to the
 // shared session runner. Audio, tools, and stream observation all use the
 // existing service seams.
 type BrowserConversationSessionRequest struct {
-	Scenario        BrowserConversationScenario
-	Fixture         *BrowserConversationFixtureRun
-	Broker          webmcp.Broker
-	ToolExecutor    messages.ToolExecutor
-	ToolDefinitions []messages.ToolDefinition
-	AudioInputs     []ScheduledAudioInput
-	SessionOptions  SessionRunOptions
-	StreamObserver  SessionStreamObserver
+	Scenario         BrowserConversationScenario
+	Fixture          *BrowserConversationFixtureRun
+	Broker           webmcp.Broker
+	ToolExecutor     messages.ToolExecutor
+	ToolDefinitions  []messages.ToolDefinition
+	AudioInputs      []ScheduledAudioInput
+	SessionOptions   SessionRunOptions
+	StreamObserver   SessionStreamObserver
+	CustomerNavigate BrowserConversationCustomerNavigateFunc
 }
 
 // BrowserConversationSessionRunner executes one shared duplex session.
@@ -115,6 +126,7 @@ type BrowserConversationRunOptions struct {
 	SessionRunner    BrowserConversationSessionRunner
 	Oracle           BrowserConversationOracleReader
 	PostSessionProbe BrowserConversationTabStateProbe
+	CustomerNavigate BrowserConversationCustomerNavigateFunc
 	Validator        BrowserConversationValidator
 	Output           io.Writer
 }

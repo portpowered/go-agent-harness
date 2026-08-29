@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -275,6 +276,22 @@ func (f *BrowserConversationFixtureRun) Cleanup() error {
 	return f.Close()
 }
 
+// Navigate applies one customer-owned page transition through the existing
+// fixture adapter. The adapter, broker, and session continue to share the
+// same target generation and event stream.
+func (f *BrowserConversationFixtureRun) Navigate(ctx context.Context, navigation BrowserCustomerNavigation) error {
+	if err := browserConversationContextError(ctx); err != nil {
+		return err
+	}
+	if f == nil || f.Adapter == nil {
+		return errors.New("browser conversation fixture has no navigation adapter")
+	}
+	if strings.TrimSpace(navigation.URL) == "" {
+		return errors.New("browser conversation navigation URL is required")
+	}
+	return f.Adapter.Navigate(ctx, navigation.URL)
+}
+
 // CloseCount exposes the exactly-once cleanup fact for harness diagnostics.
 func (f *BrowserConversationFixtureRun) CloseCount() int {
 	if f == nil {
@@ -356,7 +373,9 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 	runContext, cancel := context.WithTimeout(ctx, scenario.RunTimeout)
 	defer cancel()
 	tracker := newBrowserConversationEvidenceTracker(run, scenario)
+	tracker.configure(runContext, cancel, nil, options.CustomerNavigate)
 	var fixture *BrowserConversationFixtureRun
+	customerNavigate := options.CustomerNavigate
 	var observedBroker *browserConversationBroker
 	var rootErr error
 	lifecycle := BrowserConversationLifecycleEvidence{
@@ -410,6 +429,14 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 				errors.New("fixture has no broker"),
 			))
 		}
+		if fixture != nil {
+			if customerNavigate == nil {
+				customerNavigate = func(navigationContext context.Context, runFixture *BrowserConversationFixtureRun, navigation BrowserCustomerNavigation) error {
+					return runFixture.Navigate(navigationContext, navigation)
+				}
+			}
+			tracker.configure(runContext, cancel, fixture, customerNavigate)
+		}
 		if fixture != nil && rootErr == nil {
 			observedBroker = newBrowserConversationBroker(fixture.Broker, run, tracker, scenario, options.Oracle, fixture)
 			if err := prepareBrowserConversationFixture(runContext, scenario, observedBroker); err != nil {
@@ -419,14 +446,15 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 		if fixture != nil && rootErr == nil {
 			toolSet := webmcptools.NewBrokerToolSet(observedBroker)
 			sessionRequest := BrowserConversationSessionRequest{
-				Scenario:        cloneBrowserConversationScenario(scenario),
-				Fixture:         fixture,
-				Broker:          observedBroker,
-				ToolExecutor:    toolSet.Executor(),
-				ToolDefinitions: toolSet.Definitions(),
-				AudioInputs:     cloneScheduledAudioInputs(audioInputs),
-				SessionOptions:  options.SessionOptions,
-				StreamObserver:  tracker.observe,
+				Scenario:         cloneBrowserConversationScenario(scenario),
+				Fixture:          fixture,
+				Broker:           observedBroker,
+				ToolExecutor:     toolSet.Executor(),
+				ToolDefinitions:  toolSet.Definitions(),
+				AudioInputs:      cloneScheduledAudioInputs(audioInputs),
+				SessionOptions:   options.SessionOptions,
+				StreamObserver:   tracker.observe,
+				CustomerNavigate: customerNavigate,
 			}
 			lifecycle.SessionStarted = true
 			sessionRunner := options.SessionRunner
@@ -496,6 +524,7 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 		lifecycle.TargetClosed = targetClosed
 	}
 
+	tracker.stopDeadline()
 	if evidenceErr := tracker.err(); evidenceErr != nil {
 		addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, tracker.currentStep(), evidenceErr))
 	}
@@ -510,6 +539,11 @@ func RunBrowserConversation(ctx context.Context, out io.Writer, options BrowserC
 		lifecycle.Error = safeBrowserConversationError(rootErr)
 	}
 	provisional := run.Snapshot()
+	recoveries := deriveBrowserConversationRecovery(scenario, provisional)
+	if err := run.RecordRecovery(recoveries); err != nil {
+		addRootError(browserConversationPhaseError(BrowserConversationPhaseEvidence, "", err))
+	}
+	provisional = run.Snapshot()
 	provisional.Lifecycle = lifecycle
 	evaluation := evaluateBrowserConversation(scenario, provisional, rootErr)
 	if !evaluation.Passed && lifecycle.Outcome == BrowserConversationLifecycleCompleted {
@@ -654,10 +688,97 @@ type browserConversationEvidenceTracker struct {
 	currentStepIDValue string
 	assistant          strings.Builder
 	firstErr           error
+	awaitingAssistant  bool
+	context            context.Context
+	cancel             context.CancelFunc
+	fixture            *BrowserConversationFixtureRun
+	navigate           BrowserConversationCustomerNavigateFunc
+	deadlineTimer      *time.Timer
+	deadlineStop       chan struct{}
+	deadlineToken      uint64
 }
 
 func newBrowserConversationEvidenceTracker(run *BrowserConversationRun, scenario BrowserConversationScenario) *browserConversationEvidenceTracker {
 	return &browserConversationEvidenceTracker{run: run, scenario: scenario}
+}
+
+func (t *browserConversationEvidenceTracker) configure(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	fixture *BrowserConversationFixtureRun,
+	navigate BrowserConversationCustomerNavigateFunc,
+) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.context = ctx
+	t.cancel = cancel
+	t.fixture = fixture
+	t.navigate = navigate
+}
+
+func (t *browserConversationEvidenceTracker) stopDeadline() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.stopDeadlineLocked()
+}
+
+func (t *browserConversationEvidenceTracker) stopDeadlineLocked() {
+	t.deadlineToken++
+	if t.deadlineTimer != nil {
+		t.deadlineTimer.Stop()
+		t.deadlineTimer = nil
+	}
+	if t.deadlineStop != nil {
+		close(t.deadlineStop)
+		t.deadlineStop = nil
+	}
+}
+
+func (t *browserConversationEvidenceTracker) startDeadlineLocked(step BrowserConversationStep) {
+	t.stopDeadlineLocked()
+	if step.Deadline <= 0 || t.cancel == nil {
+		return
+	}
+	t.deadlineToken++
+	token := t.deadlineToken
+	timer := time.NewTimer(step.Deadline)
+	stop := make(chan struct{})
+	t.deadlineTimer = timer
+	t.deadlineStop = stop
+	go func() {
+		select {
+		case <-timer.C:
+			t.expireDeadline(token, step.ID, step.Deadline)
+		case <-stop:
+		}
+	}()
+}
+
+func (t *browserConversationEvidenceTracker) expireDeadline(token uint64, stepID string, deadline time.Duration) {
+	if t == nil {
+		return
+	}
+	var cancel context.CancelFunc
+	t.mu.Lock()
+	if token != t.deadlineToken || !t.awaitingAssistant || t.firstErr != nil {
+		t.mu.Unlock()
+		return
+	}
+	t.setErrorLocked(errors.Join(
+		ErrBrowserConversationTimeout,
+		fmt.Errorf("step %q exceeded deadline %s", stepID, deadline),
+	))
+	cancel = t.cancel
+	t.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (t *browserConversationEvidenceTracker) observe(message messages.StreamMessage) {
@@ -680,6 +801,10 @@ func (t *browserConversationEvidenceTracker) observe(message messages.StreamMess
 			t.setErrorLocked(errors.New("transcript end has empty customer text"))
 			return
 		}
+		if t.awaitingAssistant {
+			t.setErrorLocked(fmt.Errorf("customer transcript arrived before assistant turn for step %q", t.currentStepIDValue))
+			return
+		}
 		if t.customerAt >= len(t.scenario.Steps) {
 			t.setErrorLocked(errors.New("received more customer transcripts than scenario steps"))
 			return
@@ -691,6 +816,14 @@ func (t *browserConversationEvidenceTracker) observe(message messages.StreamMess
 		}
 		t.currentStepIDValue = step.ID
 		t.customerAt++
+		t.awaitingAssistant = true
+		if step.Navigation != nil {
+			if err := t.navigateStepLocked(step); err != nil {
+				t.setErrorLocked(err)
+				return
+			}
+		}
+		t.startDeadlineLocked(step)
 	case messages.StreamTypeMessageStart:
 		t.assistant.Reset()
 	case messages.StreamTypeTextDelta:
@@ -707,14 +840,57 @@ func (t *browserConversationEvidenceTracker) observe(message messages.StreamMess
 			return
 		}
 		text := strings.TrimSpace(t.assistant.String())
-		if text == "" || t.currentStepIDValue == "" {
+		if text == "" {
+			return
+		}
+		if t.currentStepIDValue == "" {
+			t.setErrorLocked(errors.New("assistant turn arrived before customer transcript"))
+			return
+		}
+		if !t.awaitingAssistant {
+			t.setErrorLocked(fmt.Errorf("assistant turn arrived out of order for step %q", t.currentStepIDValue))
+			return
+		}
+		step := browserConversationStepByID(t.scenario, t.currentStepIDValue)
+		if step != nil && browserConversationExpectedState(step) != nil && !browserConversationCompletedInvokeForStep(t.run.Snapshot().BrokerCalls, step.ID) {
+			t.setErrorLocked(fmt.Errorf("assistant turn arrived before completed browser invocation for step %q", step.ID))
 			return
 		}
 		if err := t.run.ObserveAssistantTurn(t.currentStepIDValue, text); err != nil {
 			t.setErrorLocked(err)
+			return
 		}
+		t.awaitingAssistant = false
+		t.stopDeadlineLocked()
 		t.assistant.Reset()
 	}
+}
+
+func (t *browserConversationEvidenceTracker) navigateStepLocked(step BrowserConversationStep) error {
+	if step.Navigation == nil {
+		return nil
+	}
+	navigation := *step.Navigation
+	previousGeneration := browserConversationFixtureGeneration(t.fixture)
+	var navigationErr error
+	if t.navigate == nil {
+		navigationErr = errors.New("customer navigation callback is unavailable")
+	} else {
+		navigationErr = t.navigate(t.context, t.fixture, navigation)
+	}
+	currentGeneration := browserConversationFixtureGeneration(t.fixture)
+	recordErr := t.run.ObserveBrokerCall(BrowserConversationBrokerCall{
+		StepID:             step.ID,
+		Operation:          BrowserConversationCustomerNavigate,
+		InputJSON:          browserConversationJSON(navigation),
+		PreviousGeneration: previousGeneration,
+		Generation:         currentGeneration,
+		ErrorCode:          browserConversationErrorCode(navigationErr),
+	})
+	if navigationErr != nil {
+		return navigationErr
+	}
+	return recordErr
 }
 
 func (t *browserConversationEvidenceTracker) currentStepID() string {
@@ -790,10 +966,11 @@ func (b *browserConversationBroker) ListTargets(ctx context.Context, selector we
 func (b *browserConversationBroker) Select(ctx context.Context, selector webmcp.TargetSelector) (webmcp.PageContext, error) {
 	result, err := b.inner.Select(ctx, selector)
 	b.recordOperation(BrowserConversationBrokerCall{
-		StepID:    b.tracker.currentStep(),
-		Operation: BrowserConversationSelectPage,
-		InputJSON: browserConversationJSON(selector),
-		ErrorCode: browserConversationErrorCode(err),
+		StepID:     b.tracker.currentStep(),
+		Operation:  BrowserConversationSelectPage,
+		InputJSON:  browserConversationJSON(selector),
+		Generation: result.Generation,
+		ErrorCode:  browserConversationErrorCode(err),
 	})
 	return result, err
 }
@@ -801,9 +978,10 @@ func (b *browserConversationBroker) Select(ctx context.Context, selector webmcp.
 func (b *browserConversationBroker) Selected(ctx context.Context) (webmcp.PageContext, error) {
 	result, err := b.inner.Selected(ctx)
 	b.recordOperation(BrowserConversationBrokerCall{
-		StepID:    b.tracker.currentStep(),
-		Operation: BrowserConversationWaitReady,
-		ErrorCode: browserConversationErrorCode(err),
+		StepID:     b.tracker.currentStep(),
+		Operation:  BrowserConversationWaitReady,
+		Generation: result.Generation,
+		ErrorCode:  browserConversationErrorCode(err),
 	})
 	return result, err
 }
@@ -818,11 +996,13 @@ func (b *browserConversationBroker) ListTools(ctx context.Context, options webmc
 		b.catalogMu.Unlock()
 	}
 	b.recordOperation(BrowserConversationBrokerCall{
-		StepID:    b.tracker.currentStep(),
-		Operation: BrowserConversationListTools,
-		InputJSON: browserConversationJSON(options),
-		Output:    browserConversationJSONRaw(result),
-		ErrorCode: browserConversationErrorCode(err),
+		StepID:     b.tracker.currentStep(),
+		Operation:  BrowserConversationListTools,
+		InputJSON:  browserConversationJSON(options),
+		Generation: result.Generation,
+		ToolRefs:   browserConversationToolRefs(result.Tools),
+		Output:     browserConversationJSONRaw(result),
+		ErrorCode:  browserConversationErrorCode(err),
 	})
 	return result, err
 }
@@ -833,13 +1013,15 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I
 	if step != nil && browserConversationExpectedState(step) != nil {
 		b.observeOracle(ctx, step, BrowserConversationOracleBefore)
 	}
+	toolGeneration := b.toolGeneration(request.ToolRef)
 	result, err := b.inner.Invoke(ctx, request)
 	if err != nil {
 		b.recordOperation(BrowserConversationBrokerCall{
 			StepID: stepID, Operation: BrowserConversationInvoke,
 			ToolRef: request.ToolRef, ToolName: b.toolName(request.ToolRef),
 			InputJSON: string(request.Input), State: webmcp.InvocationError,
-			Terminal: true, ErrorCode: browserConversationErrorCode(err),
+			Generation: toolGeneration,
+			Terminal:   true, ErrorCode: browserConversationErrorCode(err),
 		})
 		return result, err
 	}
@@ -860,7 +1042,7 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I
 			}
 		}
 	}
-	if step != nil && browserConversationExpectedState(step) != nil {
+	if result.State == webmcp.InvocationCompleted && browserConversationInvocationStateTerminal(result.State) && step != nil && browserConversationExpectedState(step) != nil {
 		b.observeOracle(ctx, step, BrowserConversationOracleAfter)
 	}
 	return result, nil
@@ -904,7 +1086,8 @@ func (b *browserConversationBroker) callFromInvoke(stepID string, request webmcp
 		StepID: stepID, Operation: BrowserConversationInvoke,
 		ToolRef: request.ToolRef, ToolName: b.toolName(request.ToolRef),
 		InvocationID: result.InvocationID, InputJSON: string(request.Input),
-		State: result.State, Terminal: browserConversationInvocationStateTerminal(result.State),
+		Generation: b.toolGeneration(request.ToolRef),
+		State:      result.State, Terminal: browserConversationInvocationStateTerminal(result.State),
 		Output: append(json.RawMessage(nil), result.Output...), ErrorCode: result.ErrorCode,
 	}
 }
@@ -913,6 +1096,12 @@ func (b *browserConversationBroker) toolName(ref webmcp.ToolRef) string {
 	b.catalogMu.Lock()
 	defer b.catalogMu.Unlock()
 	return b.catalog[ref].Name
+}
+
+func (b *browserConversationBroker) toolGeneration(ref webmcp.ToolRef) uint64 {
+	b.catalogMu.Lock()
+	defer b.catalogMu.Unlock()
+	return b.catalog[ref].Generation
 }
 
 func (b *browserConversationBroker) observeOracle(ctx context.Context, step *BrowserConversationStep, phase BrowserConversationOraclePhase) {
@@ -1009,13 +1198,13 @@ func browserConversationErrorCode(err error) string {
 	if err == nil {
 		return ""
 	}
-	code := webmcp.ContextErrorCode(err)
-	if code != "" {
-		return string(code)
-	}
 	var classified *webmcp.ClassifiedError
 	if errors.As(err, &classified) && classified != nil {
 		return string(classified.Code)
+	}
+	code := webmcp.ContextErrorCode(err)
+	if code != "" {
+		return string(code)
 	}
 	return "operation_failed"
 }
@@ -1040,6 +1229,19 @@ func cloneWebMCPToolDescriptor(descriptor webmcp.ToolDescriptor) webmcp.ToolDesc
 	descriptor.InputSchema = append(json.RawMessage(nil), descriptor.InputSchema...)
 	descriptor.Annotations.Raw = append(json.RawMessage(nil), descriptor.Annotations.Raw...)
 	return descriptor
+}
+
+func browserConversationToolRefs(tools []webmcp.ToolDescriptor) []webmcp.ToolRef {
+	if len(tools) == 0 {
+		return nil
+	}
+	refs := make([]webmcp.ToolRef, 0, len(tools))
+	for _, descriptor := range tools {
+		if descriptor.Ref != "" {
+			refs = append(refs, descriptor.Ref)
+		}
+	}
+	return refs
 }
 
 func cloneScheduledAudioInputs(inputs []ScheduledAudioInput) []ScheduledAudioInput {
@@ -1146,6 +1348,130 @@ func sanitizeBrowserConversationVerdict(verdict BrowserConversationValidatorVerd
 	return verdict
 }
 
+func deriveBrowserConversationRecovery(scenario BrowserConversationScenario, result BrowserConversationResult) []BrowserConversationRecoveryEvidence {
+	var recoveries []BrowserConversationRecoveryEvidence
+	for _, step := range scenario.Steps {
+		if step.Navigation == nil {
+			continue
+		}
+		recovery := BrowserConversationRecoveryEvidence{
+			StepID:     step.ID,
+			FromPageID: step.Navigation.FromPageID,
+			ToPageID:   step.Navigation.ToPageID,
+		}
+		navigationIndex := -1
+	forCalls:
+		for index := range result.BrokerCalls {
+			call := result.BrokerCalls[index]
+			if call.StepID == step.ID && call.Operation == BrowserConversationCustomerNavigate {
+				navigationIndex = index
+				recovery.NavigationObserved = call.ErrorCode == ""
+				recovery.PreviousGeneration = call.PreviousGeneration
+				recovery.CurrentGeneration = call.Generation
+				break forCalls
+			}
+		}
+		if navigationIndex >= 0 && !recovery.NavigationObserved {
+			recoveries = append(recoveries, recovery)
+			continue
+		}
+		if navigationIndex < 0 {
+			recoveries = append(recoveries, recovery)
+			continue
+		}
+
+		staleIndex := -1
+		for index := navigationIndex + 1; index < len(result.BrokerCalls); index++ {
+			call := result.BrokerCalls[index]
+			if call.StepID != step.ID || call.Operation != BrowserConversationInvoke || !call.Terminal || call.ErrorCode != string(webmcp.ErrorStaleToolRef) {
+				continue
+			}
+			staleIndex = index
+			recovery.StaleToolRef = call.ToolRef
+			recovery.StaleInvocationID = call.InvocationID
+			recovery.StaleGeneration = call.Generation
+			recovery.StaleErrorCode = call.ErrorCode
+			recovery.StaleRejected = true
+			break
+		}
+
+		listIndex := -1
+		if staleIndex >= 0 {
+			for index := staleIndex + 1; index < len(result.BrokerCalls); index++ {
+				call := result.BrokerCalls[index]
+				if call.StepID != step.ID || call.Operation != BrowserConversationListTools || call.ErrorCode != "" || len(call.ToolRefs) == 0 {
+					continue
+				}
+				listIndex = index
+				recovery.ToolsRelisted = true
+				recovery.RelistedToolRefs = append([]webmcp.ToolRef(nil), call.ToolRefs...)
+				recovery.RelistedGeneration = call.Generation
+				if recovery.CurrentGeneration == 0 {
+					recovery.CurrentGeneration = call.Generation
+				}
+				break
+			}
+		}
+
+		if listIndex >= 0 {
+			for index := listIndex + 1; index < len(result.BrokerCalls); index++ {
+				call := result.BrokerCalls[index]
+				if call.StepID != step.ID || call.Operation != BrowserConversationInvoke || !call.Terminal || call.State != webmcp.InvocationCompleted || call.ToolRef == recovery.StaleToolRef {
+					continue
+				}
+				recovery.FreshToolRef = call.ToolRef
+				recovery.FreshGeneration = call.Generation
+				recovery.RetryInvocationID = call.InvocationID
+				recovery.FreshInvocationCompleted = true
+				break
+			}
+		}
+		generationAdvanced := recovery.PreviousGeneration == 0 || recovery.CurrentGeneration == 0 || recovery.CurrentGeneration > recovery.PreviousGeneration
+		staleGenerationMatches := recovery.PreviousGeneration == 0 || recovery.StaleGeneration == 0 || recovery.StaleGeneration == recovery.PreviousGeneration
+		freshGenerationMatches := recovery.CurrentGeneration == 0 || recovery.FreshGeneration == 0 || recovery.FreshGeneration == recovery.CurrentGeneration
+		relistedGenerationMatches := recovery.CurrentGeneration == 0 || recovery.RelistedGeneration == 0 || recovery.RelistedGeneration == recovery.CurrentGeneration
+		recovery.Passed = recovery.NavigationObserved && recovery.StaleRejected && recovery.ToolsRelisted && recovery.FreshInvocationCompleted && generationAdvanced && staleGenerationMatches && freshGenerationMatches && relistedGenerationMatches
+		recoveries = append(recoveries, recovery)
+	}
+	return recoveries
+}
+
+func browserConversationRecoveryFailures(scenario BrowserConversationScenario, result BrowserConversationResult) []string {
+	recoveries := result.Recovery
+	if len(recoveries) == 0 {
+		recoveries = deriveBrowserConversationRecovery(scenario, result)
+	}
+	var failures []string
+	for _, recovery := range recoveries {
+		stepID := safeBrowserConversationText(recovery.StepID)
+		if !recovery.NavigationObserved {
+			failures = append(failures, "step "+stepID+": customer navigation was not observed")
+		}
+		if !recovery.StaleRejected {
+			failures = append(failures, "step "+stepID+": stale tool reference was not rejected as stale_tool_ref")
+		}
+		if !recovery.ToolsRelisted {
+			failures = append(failures, "step "+stepID+": fresh tool catalog was not listed after stale reference rejection")
+		}
+		if !recovery.FreshInvocationCompleted {
+			failures = append(failures, "step "+stepID+": fresh tool reference was not invoked to completion")
+		}
+		if recovery.NavigationObserved && recovery.PreviousGeneration != 0 && recovery.CurrentGeneration != 0 && recovery.CurrentGeneration <= recovery.PreviousGeneration {
+			failures = append(failures, "step "+stepID+": customer navigation did not advance the page generation")
+		}
+		if recovery.StaleRejected && recovery.PreviousGeneration != 0 && recovery.StaleGeneration != 0 && recovery.StaleGeneration != recovery.PreviousGeneration {
+			failures = append(failures, "step "+stepID+": stale invocation did not use the pre-navigation generation")
+		}
+		if recovery.ToolsRelisted && recovery.CurrentGeneration != 0 && recovery.RelistedGeneration != 0 && recovery.RelistedGeneration != recovery.CurrentGeneration {
+			failures = append(failures, "step "+stepID+": re-listed tools did not belong to the current generation")
+		}
+		if recovery.FreshInvocationCompleted && recovery.CurrentGeneration != 0 && recovery.FreshGeneration != 0 && recovery.FreshGeneration != recovery.CurrentGeneration {
+			failures = append(failures, "step "+stepID+": fresh invocation did not use the current generation")
+		}
+	}
+	return failures
+}
+
 func evaluateBrowserConversation(scenario BrowserConversationScenario, result BrowserConversationResult, rootErr error) BrowserConversationMechanicalEvaluation {
 	var failures []string
 	if rootErr != nil {
@@ -1180,6 +1506,7 @@ func evaluateBrowserConversation(scenario BrowserConversationScenario, result Br
 			}
 		}
 	}
+	failures = append(failures, browserConversationRecoveryFailures(scenario, result)...)
 	post := browserConversationOracleForStep(result.Oracles, "", BrowserConversationOraclePostSession)
 	if post == nil {
 		failures = append(failures, "post-session: missing independent oracle")

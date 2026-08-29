@@ -24,11 +24,15 @@ const (
 type BrowserConversationBrokerOperation string
 
 const (
-	BrowserConversationListTools  BrowserConversationBrokerOperation = "webmcp_list_tools"
-	BrowserConversationInvoke     BrowserConversationBrokerOperation = "webmcp_invoke"
-	BrowserConversationCancel     BrowserConversationBrokerOperation = "webmcp_cancel"
-	BrowserConversationSelectPage BrowserConversationBrokerOperation = "webmcp_select_page"
-	BrowserConversationWaitReady  BrowserConversationBrokerOperation = "webmcp_wait_ready"
+	BrowserConversationListTools        BrowserConversationBrokerOperation = "webmcp_list_tools"
+	BrowserConversationInvoke           BrowserConversationBrokerOperation = "webmcp_invoke"
+	BrowserConversationCancel           BrowserConversationBrokerOperation = "webmcp_cancel"
+	BrowserConversationSelectPage       BrowserConversationBrokerOperation = "webmcp_select_page"
+	BrowserConversationWaitReady        BrowserConversationBrokerOperation = "webmcp_wait_ready"
+	BrowserConversationCustomerNavigate BrowserConversationBrokerOperation = "customer_navigation"
+	// BrowserConversationNavigate is a concise alias for customer-owned
+	// navigation observations.
+	BrowserConversationNavigate = BrowserConversationCustomerNavigate
 )
 
 // BrowserConversationOraclePhase identifies where an independent page-state
@@ -80,17 +84,45 @@ type BrowserConversationTurn struct {
 // InputJSON is deliberately a string: invalid model output must be preserved
 // verbatim for later validity measurement rather than repaired or omitted.
 type BrowserConversationBrokerCall struct {
-	Sequence     uint64                             `json:"sequence"`
-	StepID       string                             `json:"step_id,omitempty"`
-	Operation    BrowserConversationBrokerOperation `json:"operation"`
-	ToolRef      webmcp.ToolRef                     `json:"tool_ref,omitempty"`
-	ToolName     string                             `json:"tool_name,omitempty"`
-	InvocationID webmcp.InvocationID                `json:"invocation_id,omitempty"`
-	InputJSON    string                             `json:"input_json"`
-	State        webmcp.InvocationState             `json:"state,omitempty"`
-	Terminal     bool                               `json:"terminal"`
-	Output       json.RawMessage                    `json:"output,omitempty"`
-	ErrorCode    string                             `json:"error_code,omitempty"`
+	Sequence           uint64                             `json:"sequence"`
+	StepID             string                             `json:"step_id,omitempty"`
+	Operation          BrowserConversationBrokerOperation `json:"operation"`
+	ToolRef            webmcp.ToolRef                     `json:"tool_ref,omitempty"`
+	ToolName           string                             `json:"tool_name,omitempty"`
+	InvocationID       webmcp.InvocationID                `json:"invocation_id,omitempty"`
+	InputJSON          string                             `json:"input_json"`
+	State              webmcp.InvocationState             `json:"state,omitempty"`
+	Terminal           bool                               `json:"terminal"`
+	Output             json.RawMessage                    `json:"output,omitempty"`
+	ErrorCode          string                             `json:"error_code,omitempty"`
+	Generation         uint64                             `json:"generation,omitempty"`
+	PreviousGeneration uint64                             `json:"previous_generation,omitempty"`
+	ToolRefs           []webmcp.ToolRef                   `json:"tool_refs,omitempty"`
+}
+
+// BrowserConversationRecoveryEvidence records the ordered facts needed to
+// prove customer-navigation recovery. A stale reference is retained exactly
+// as attempted; it is never replaced with the fresh reference in-place.
+type BrowserConversationRecoveryEvidence struct {
+	StepID                   string              `json:"step_id"`
+	FromPageID               string              `json:"from_page_id"`
+	ToPageID                 string              `json:"to_page_id"`
+	NavigationObserved       bool                `json:"navigation_observed"`
+	PreviousGeneration       uint64              `json:"previous_generation,omitempty"`
+	CurrentGeneration        uint64              `json:"current_generation,omitempty"`
+	StaleToolRef             webmcp.ToolRef      `json:"stale_tool_ref,omitempty"`
+	StaleInvocationID        webmcp.InvocationID `json:"stale_invocation_id,omitempty"`
+	StaleGeneration          uint64              `json:"stale_generation,omitempty"`
+	StaleErrorCode           string              `json:"stale_error_code,omitempty"`
+	StaleRejected            bool                `json:"stale_rejected"`
+	ToolsRelisted            bool                `json:"tools_relisted"`
+	RelistedToolRefs         []webmcp.ToolRef    `json:"relisted_tool_refs,omitempty"`
+	RelistedGeneration       uint64              `json:"relisted_generation,omitempty"`
+	FreshToolRef             webmcp.ToolRef      `json:"fresh_tool_ref,omitempty"`
+	FreshGeneration          uint64              `json:"fresh_generation,omitempty"`
+	RetryInvocationID        webmcp.InvocationID `json:"retry_invocation_id,omitempty"`
+	FreshInvocationCompleted bool                `json:"fresh_invocation_completed"`
+	Passed                   bool                `json:"passed"`
 }
 
 // BrowserConversationOracleSnapshot is an independent fixture-state reading.
@@ -167,6 +199,7 @@ type BrowserConversationResult struct {
 	Turns        []BrowserConversationTurn               `json:"turns,omitempty"`
 	BrokerCalls  []BrowserConversationBrokerCall         `json:"broker_calls,omitempty"`
 	Oracles      []BrowserConversationOracleSnapshot     `json:"oracle_snapshots,omitempty"`
+	Recovery     []BrowserConversationRecoveryEvidence   `json:"recovery,omitempty"`
 	Cancellation BrowserConversationCancellationEvidence `json:"cancellation"`
 	Lifecycle    BrowserConversationLifecycleEvidence    `json:"lifecycle"`
 	Mechanical   BrowserConversationMechanicalEvaluation `json:"mechanical"`
@@ -204,6 +237,21 @@ func (r BrowserConversationResult) Validate() error {
 		}
 		if call.Terminal && !browserConversationInvocationStateTerminal(call.State) {
 			return browserConversationResultError(path+".state", "terminal calls require a terminal invocation state")
+		}
+	}
+	for index, recovery := range r.Recovery {
+		path := fmt.Sprintf("recovery[%d]", index)
+		if strings.TrimSpace(recovery.StepID) == "" || strings.TrimSpace(recovery.FromPageID) == "" || strings.TrimSpace(recovery.ToPageID) == "" {
+			return browserConversationResultError(path, "requires step_id, from_page_id, and to_page_id")
+		}
+		if recovery.StaleRejected && recovery.StaleErrorCode != string(webmcp.ErrorStaleToolRef) {
+			return browserConversationResultError(path+".stale_error_code", "must be %q when stale_rejected is true", webmcp.ErrorStaleToolRef)
+		}
+		if recovery.ToolsRelisted && len(recovery.RelistedToolRefs) == 0 {
+			return browserConversationResultError(path+".relisted_tool_refs", "must include the fresh catalog references when tools_relisted is true")
+		}
+		if recovery.FreshInvocationCompleted && recovery.FreshToolRef == "" {
+			return browserConversationResultError(path+".fresh_tool_ref", "is required when fresh invocation completed")
 		}
 	}
 	for index, snapshot := range r.Oracles {
@@ -246,6 +294,7 @@ type BrowserConversationRun struct {
 	hasLifecycle    bool
 	hasMechanical   bool
 	hasValidator    bool
+	hasRecovery     bool
 }
 
 // NewBrowserConversationRun validates the full scenario before creating the
@@ -381,6 +430,39 @@ func (r *BrowserConversationRun) ObserveBrokerCall(call BrowserConversationBroke
 	call.InputJSON = string([]byte(call.InputJSON))
 	call.Output = append(json.RawMessage(nil), call.Output...)
 	r.result.BrokerCalls = append(r.result.BrokerCalls, cloneBrowserConversationBrokerCall(call))
+	return nil
+}
+
+// RecordRecovery records the derived stale-reference recovery evidence once.
+// The underlying ordered broker calls remain the source of truth.
+func (r *BrowserConversationRun) RecordRecovery(evidence []BrowserConversationRecoveryEvidence) error {
+	if r == nil {
+		return errors.New("browser conversation run is nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.ensureMutableLocked(); err != nil {
+		return err
+	}
+	if r.hasRecovery {
+		return ErrBrowserConversationDuplicateObservation
+	}
+	for index, recovery := range evidence {
+		if strings.TrimSpace(recovery.StepID) == "" || strings.TrimSpace(recovery.FromPageID) == "" || strings.TrimSpace(recovery.ToPageID) == "" {
+			return browserConversationObservationError(fmt.Sprintf("recovery[%d]", index), "requires step_id, from_page_id, and to_page_id")
+		}
+		if recovery.StaleRejected && recovery.StaleErrorCode != string(webmcp.ErrorStaleToolRef) {
+			return browserConversationObservationError(fmt.Sprintf("recovery[%d].stale_error_code", index), "must be %q when stale_rejected is true", webmcp.ErrorStaleToolRef)
+		}
+		if recovery.ToolsRelisted && len(recovery.RelistedToolRefs) == 0 {
+			return browserConversationObservationError(fmt.Sprintf("recovery[%d].relisted_tool_refs", index), "must include the fresh catalog references when tools_relisted is true")
+		}
+		if recovery.FreshInvocationCompleted && recovery.FreshToolRef == "" {
+			return browserConversationObservationError(fmt.Sprintf("recovery[%d].fresh_tool_ref", index), "is required when fresh invocation completed")
+		}
+	}
+	r.hasRecovery = true
+	r.result.Recovery = cloneBrowserConversationRecoveries(evidence)
 	return nil
 }
 
@@ -565,7 +647,7 @@ func (r *BrowserConversationRun) takeSequenceLocked() uint64 {
 
 func browserConversationBrokerOperationValid(operation BrowserConversationBrokerOperation) bool {
 	switch operation {
-	case BrowserConversationListTools, BrowserConversationInvoke, BrowserConversationCancel, BrowserConversationSelectPage, BrowserConversationWaitReady:
+	case BrowserConversationListTools, BrowserConversationInvoke, BrowserConversationCancel, BrowserConversationSelectPage, BrowserConversationWaitReady, BrowserConversationCustomerNavigate:
 		return true
 	default:
 		return false
@@ -632,6 +714,7 @@ func cloneBrowserConversationResult(result BrowserConversationResult) BrowserCon
 	for index, snapshot := range result.Oracles {
 		clone.Oracles[index] = cloneBrowserConversationOracleSnapshot(snapshot)
 	}
+	clone.Recovery = cloneBrowserConversationRecoveries(result.Recovery)
 	clone.Mechanical = cloneBrowserConversationMechanicalEvaluation(result.Mechanical)
 	clone.Validator = cloneBrowserConversationValidatorVerdict(result.Validator)
 	return clone
@@ -644,6 +727,19 @@ func cloneBrowserConversationTurn(turn BrowserConversationTurn) BrowserConversat
 func cloneBrowserConversationBrokerCall(call BrowserConversationBrokerCall) BrowserConversationBrokerCall {
 	clone := call
 	clone.Output = append(json.RawMessage(nil), call.Output...)
+	clone.ToolRefs = append([]webmcp.ToolRef(nil), call.ToolRefs...)
+	return clone
+}
+
+func cloneBrowserConversationRecoveries(recoveries []BrowserConversationRecoveryEvidence) []BrowserConversationRecoveryEvidence {
+	if recoveries == nil {
+		return nil
+	}
+	clone := make([]BrowserConversationRecoveryEvidence, len(recoveries))
+	for index, recovery := range recoveries {
+		clone[index] = recovery
+		clone[index].RelistedToolRefs = append([]webmcp.ToolRef(nil), recovery.RelistedToolRefs...)
+	}
 	return clone
 }
 
