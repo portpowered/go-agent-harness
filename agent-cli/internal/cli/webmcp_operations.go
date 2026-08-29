@@ -172,6 +172,7 @@ type webmcpDirectFlags struct {
 	reason               string
 	invocationID         string
 	timeout              time.Duration
+	commandTimeout       time.Duration
 }
 
 // WebMCPOperationsCommand owns the direct operation constructors and the
@@ -254,6 +255,7 @@ func (c *WebMCPOperationsCommand) browsersCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
 	return cmd
 }
@@ -321,6 +323,7 @@ func (c *WebMCPOperationsCommand) tabsCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.eligible, "eligible", false, "List only targets eligible for WebMCP")
 	cmd.Flags().BoolVar(&values.eligibleOnly, "eligible-only", false, "List only targets eligible for WebMCP")
 	cmd.Flags().BoolVar(&values.includeZeroToolPages, "include-zero-tool-pages", false, "Include eligible pages with no known tools")
@@ -343,6 +346,7 @@ func (c *WebMCPOperationsCommand) selectCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.activate, "activate", false, "Activate the selected tab after attaching")
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
 	return cmd
@@ -385,6 +389,7 @@ func (c *WebMCPOperationsCommand) activateCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
 	return cmd
 }
@@ -407,6 +412,7 @@ func (c *WebMCPOperationsCommand) contextCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.refresh, "refresh", false, "Refresh browser and catalog metadata")
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
 	return cmd
@@ -457,6 +463,7 @@ func (c *WebMCPOperationsCommand) toolsCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().BoolVar(&values.refresh, "refresh", false, "Refresh the selected page catalog")
 	cmd.Flags().StringVar(&values.nameContains, "name-contains", "", "Filter tools by a name substring")
 	cmd.Flags().StringVar(&values.frameID, "frame-id", "", "Filter tools to one frame identifier")
@@ -556,6 +563,7 @@ within %v; cancellation does not claim rollback or safe retry.`, webmcpDirectInt
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().StringVar(&values.toolRef, "tool-ref", "", "Exact generation-bound WebMCP tool reference")
 	cmd.Flags().StringVar(&values.inputJSON, "input-json", "", "JSON object passed to the page tool")
 	cmd.Flags().StringVar(&values.reason, "reason", "direct CLI invocation", "User-facing reason for the page action")
@@ -630,6 +638,7 @@ browser rejection is reported as a classified non-zero result.`,
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().StringVar(&values.invocationID, "invocation", "", "Exact invocation ID")
 	cmd.Flags().StringVar(&values.reason, "reason", "direct CLI cancellation", "User-facing cancellation reason")
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
@@ -666,6 +675,7 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 		},
 	}
 	registerWebMCPDirectBrowserFlags(cmd, &values.browser)
+	registerWebMCPDirectCommandTimeoutFlag(cmd, values)
 	cmd.Flags().DurationVar(&values.timeout, "timeout", 0, "Bound watch duration (Go duration)")
 	cmd.Flags().BoolVar(&values.once, "once", false, "Stop after the first event")
 	cmd.Flags().BoolVar(&values.json, "json", false, "Write one machine-readable JSON result")
@@ -696,13 +706,27 @@ func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Comm
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	commandTimeout := directCommandTimeout(values)
 	var data any
 	var operationErr error
-	if values != nil && values.timeout < 0 {
+	if values != nil && values.commandTimeout < 0 {
+		operationErr = directInvalidInputError("--command-timeout must not be negative", "/command_timeout")
+	} else if values != nil && values.timeout < 0 {
 		operationErr = directInvalidInputError("--timeout must be positive", "/timeout")
 	} else {
-		data, operationErr = c.runDirect(ctx, cmd, values, operation)
+		commandCtx, cancel := context.WithTimeout(ctx, commandTimeout)
+		if kind == "watch" && commandCtx.Err() != nil {
+			// A canceled watch has a terminal data result and does not need to
+			// construct a runtime just to observe that its stream is canceled.
+			// This also keeps a legacy, non-cooperative factory off the critical
+			// path after an interrupt-before-setup.
+			data, operationErr = runDirectWatchStream(commandCtx, nil, values != nil && values.once)
+		} else {
+			data, operationErr = c.runDirect(commandCtx, cmd, values, operation)
+		}
+		cancel()
 	}
+	operationErr = preferDirectBrowserDisconnected(operationErr)
 	var writeErr error
 	if values != nil && values.json {
 		writeErr = writeWebMCPDirectJSON(cmd.OutOrStdout(), data, operationErr, fallback)
@@ -730,15 +754,15 @@ func (c *WebMCPOperationsCommand) runDirect(ctx context.Context, cmd *cobra.Comm
 	if factory == nil {
 		factory = defaultWebMCPDoctorFactory(c.globalFlags)
 	}
-	runtime, factoryErr := factory(browser)
+	runtime, factoryErr := constructWebMCPDoctorRuntime(ctx, factory, browser)
 	if factoryErr != nil {
-		return nil, errors.Join(webmcpRuntimeFactoryError(factoryErr), closeWebMCPDoctorRuntime(runtime))
+		return nil, preferDirectBrowserDisconnected(errors.Join(directRuntimeFactoryFailure(factoryErr), closeWebMCPDoctorRuntimeBounded(runtime)))
 	}
 	if runtime.Broker == nil {
-		return nil, errors.Join(webmcpRuntimeUnavailableError("runtime_factory"), closeWebMCPDoctorRuntime(runtime))
+		return nil, preferDirectBrowserDisconnected(errors.Join(webmcpRuntimeUnavailableError("runtime_factory"), closeWebMCPDoctorRuntimeBounded(runtime)))
 	}
-	data, err = operation(ctx, runtime.Broker, browser)
-	return data, errors.Join(err, closeWebMCPDoctorRuntime(runtime))
+	data, err = runWebMCPDirectOperation(ctx, operation, runtime.Broker, browser)
+	return data, preferDirectBrowserDisconnected(errors.Join(err, closeWebMCPDoctorRuntimeBounded(runtime)))
 }
 
 func (c *WebMCPOperationsCommand) resolveDirectBrowserConfig(cmd *cobra.Command, values *webmcpDirectFlags) (config.BrowserConfig, error) {
@@ -807,22 +831,6 @@ func registerWebMCPDirectBrowserFlags(cmd *cobra.Command, values *flags.BrowserF
 	cmd.Flags().Var(&strictBrowserIntValue{target: &values.MaxResultBytes, name: "max-result-bytes"}, "max-result-bytes", "Maximum browser result bytes (decimal integer)")
 	cmd.Flags().Var(&strictBrowserIntValue{target: &values.MaxResultBytes, name: "browser-max-result-bytes"}, "browser-max-result-bytes", "Maximum browser result bytes (decimal integer)")
 	boolAliases(&values.SerializePerTarget, "Serialize browser page calls per target", "serialize-per-target", "browser-serialize-per-target")
-}
-
-func directBrowserFlagChanged(cmd *cobra.Command) bool {
-	return directFlagChanged(cmd, "browser", "browser-browser")
-}
-
-func directFlagChanged(cmd *cobra.Command, names ...string) bool {
-	if cmd == nil {
-		return false
-	}
-	for _, name := range names {
-		if cmd.Flags().Changed(name) {
-			return true
-		}
-	}
-	return false
 }
 
 func directBrowserOverrides(cmd *cobra.Command, values *flags.BrowserFlags) config.BrowserOverrides {

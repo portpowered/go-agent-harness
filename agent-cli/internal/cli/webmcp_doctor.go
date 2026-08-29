@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -191,10 +192,11 @@ func (e *WebMCPDoctorError) Unwrap() error {
 
 // WebMCPDoctorCommand implements `agent webmcp doctor`.
 type WebMCPDoctorCommand struct {
-	globalFlags  *flags.GlobalFlags
-	factory      WebMCPDoctorFactory
-	json         bool
-	browserFlags *flags.BrowserFlags
+	globalFlags    *flags.GlobalFlags
+	factory        WebMCPDoctorFactory
+	json           bool
+	browserFlags   *flags.BrowserFlags
+	commandTimeout time.Duration
 }
 
 // NewWebMCPDoctorCommand constructs doctor with an optional injected runtime
@@ -231,6 +233,7 @@ func (c *WebMCPDoctorCommand) Generate() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&c.json, "json", false, "Write one machine-readable JSON diagnostic object")
+	registerWebMCPCommandTimeoutFlag(cmd, &c.commandTimeout)
 	registerSessionBrowserFlags(cmd, c.browserFlags)
 	return cmd
 }
@@ -254,14 +257,31 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 	}
 	report = newWebMCPDoctorReport()
 
+	commandTimeout := c.commandTimeout
+	if commandTimeout == 0 {
+		commandTimeout = DefaultWebMCPDirectCommandTimeout
+	}
+
 	var (
 		primary        error
 		factoryRuntime WebMCPDoctorRuntime
+		factoryErr     error
 		runtimeOwned   bool
 	)
+	if commandTimeout < 0 {
+		primary = directInvalidInputError("--command-timeout must not be negative", "/command_timeout")
+		report.Status = doctorStatusInvalidConfiguration
+		report.Error = doctorErrorDataFor(primary, webmcp.ErrorInvalidToolInput, nil)
+		report.setCheck("configuration", doctorCheckFail, "The WebMCP command timeout is invalid.", map[string]any{"phase": "command_timeout"})
+		return report, primary
+	}
+	commandCtx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	ctx = commandCtx
+
 	defer func() {
 		if runtimeOwned {
-			closeErr := closeWebMCPDoctorRuntime(factoryRuntime)
+			closeErr := closeWebMCPDoctorRuntimeBounded(factoryRuntime)
 			if closeErr != nil {
 				report.setCheck("cleanup", doctorCheckFail, "Diagnostic cleanup failed.", map[string]any{"phase": "cleanup"})
 				if primary == nil {
@@ -356,10 +376,10 @@ func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) 
 	if factory == nil {
 		factory = defaultWebMCPDoctorFactory(c.globalFlags)
 	}
-	factoryRuntime, factoryErr := factory(loaded.Browser)
+	factoryRuntime, factoryErr = constructWebMCPDoctorRuntime(ctx, factory, loaded.Browser)
 	runtimeOwned = factoryRuntime.Close != nil || factoryRuntime.Broker != nil
 	if factoryErr != nil {
-		primary = webmcpRuntimeFactoryError(factoryErr)
+		primary = directRuntimeFactoryFailure(factoryErr)
 		report.Status = doctorStatusUnavailable
 		report.Error = doctorErrorDataFor(primary, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "runtime_factory"})
 		report.setCheck("discovery", doctorCheckUnavailable, "The diagnostic runtime could not be constructed.", map[string]any{"phase": "runtime_factory"})
@@ -1163,6 +1183,7 @@ func boundedDoctorText(value string, limit int) string {
 }
 
 func doctorErrorDataFor(err error, fallback webmcp.ErrorCode, details map[string]any) *WebMCPDoctorErrorData {
+	err = preferDirectBrowserDisconnected(err)
 	result := webmcp.ResultErrorFor(err, fallback, details)
 	return &WebMCPDoctorErrorData{Code: result.Code, Message: result.Message, Retryable: result.Retryable, Details: result.Details}
 }

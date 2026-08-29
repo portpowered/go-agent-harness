@@ -477,6 +477,229 @@ func (h *ScriptedBrowserHandle) BlockListTargets() {
 	h.control.mu.Unlock()
 }
 
+// BlockOpen holds the browser dial after the open operation is admitted until
+// the test releases the gate or disconnects the browser.
+func (h *ScriptedBrowserHandle) BlockOpen() {
+	if h == nil || h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	h.control.openBlocked = true
+	h.control.mu.Unlock()
+}
+
+func (h *ScriptedBrowserHandle) UnblockOpen() {
+	if h == nil || h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	if h.control.openBlocked {
+		h.control.openBlocked = false
+		close(h.control.openChanges)
+		h.control.openChanges = make(chan struct{})
+	}
+	h.control.mu.Unlock()
+}
+
+// BlockActivate holds optional target activation after its operation is
+// admitted until the test releases the gate or disconnects the browser.
+func (h *ScriptedBrowserHandle) BlockActivate() {
+	if h == nil || h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	h.control.activateBlocked = true
+	h.control.mu.Unlock()
+}
+
+func (h *ScriptedBrowserHandle) UnblockActivate() {
+	if h == nil || h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	if h.control.activateBlocked {
+		h.control.activateBlocked = false
+		close(h.control.activateChanges)
+		h.control.activateChanges = make(chan struct{})
+	}
+	h.control.mu.Unlock()
+}
+
+// BlockAttach holds target attachment after its operation is admitted until
+// the test releases the gate or disconnects the browser.
+func (h *ScriptedBrowserHandle) BlockAttach() {
+	if h == nil || h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	h.control.attachBlocked = true
+	h.control.mu.Unlock()
+}
+
+func (h *ScriptedBrowserHandle) UnblockAttach() {
+	if h == nil || h.control == nil {
+		return
+	}
+	h.control.mu.Lock()
+	if h.control.attachBlocked {
+		h.control.attachBlocked = false
+		close(h.control.attachChanges)
+		h.control.attachChanges = make(chan struct{})
+	}
+	h.control.mu.Unlock()
+}
+
+func (h *ScriptedBrowserHandle) Activate(ctx context.Context, targetID webmcp.TargetID) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return webmcp.ErrClosed
+	}
+	if h.disconnected {
+		err := disconnectedError(h.candidate.ID, targetID, "activate", "browser_disconnected")
+		h.mu.Unlock()
+		return err
+	}
+	if _, ok := h.targets[targetID]; !ok {
+		h.mu.Unlock()
+		return fmt.Errorf("%w: %s", webmcp.ErrTargetNotFound, targetID)
+	}
+	control := h.control
+	closeDone := h.closeDone
+	candidateID := h.candidate.ID
+	h.mu.Unlock()
+	h.runtime.record(Operation{Kind: OperationActivate, BrowserID: candidateID, TargetID: targetID})
+	control.mu.Lock()
+	blocked := control.activateBlocked
+	activateChanges := control.activateChanges
+	controlDisconnected := control.disconnected
+	control.mu.Unlock()
+	if controlDisconnected {
+		return disconnectedError(candidateID, targetID, "activate", "browser_disconnected")
+	}
+	if blocked {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-activateChanges:
+		case <-closeDone:
+			return webmcp.ErrClosed
+		}
+	}
+	control.mu.Lock()
+	controlDisconnected = control.disconnected
+	control.mu.Unlock()
+	if controlDisconnected {
+		return disconnectedError(candidateID, targetID, "activate", "browser_disconnected")
+	}
+	return nil
+}
+
+func (h *ScriptedBrowserHandle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) (webmcp.TargetSession, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	if ownership == "" {
+		ownership = webmcp.TargetOwnershipExternal
+	}
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return nil, webmcp.ErrClosed
+	}
+	if h.disconnected {
+		err := disconnectedError(h.candidate.ID, targetID, "attach", "browser_disconnected")
+		h.mu.Unlock()
+		return nil, err
+	}
+	entry, ok := h.targets[targetID]
+	if !ok {
+		h.mu.Unlock()
+		return nil, fmt.Errorf("%w: %s", webmcp.ErrTargetNotFound, targetID)
+	}
+	entry.mu.Lock()
+	if entry.removed {
+		entry.mu.Unlock()
+		h.mu.Unlock()
+		return nil, fmt.Errorf("%w: %s", webmcp.ErrTargetNotFound, targetID)
+	}
+	if session := h.sessions[targetID]; session != nil && !session.isClosed() {
+		entry.mu.Unlock()
+		if session.ownership != ownership {
+			h.mu.Unlock()
+			return nil, fmt.Errorf("%w: %s", ErrTargetAlreadyAttached, targetID)
+		}
+		h.mu.Unlock()
+		return session, nil
+	}
+	page := entry.config.Session.Context
+	if page.Key.BrowserID == "" {
+		page.Key.BrowserID = h.candidate.ID
+	}
+	if page.Key.TargetID == "" {
+		page.Key.TargetID = targetID
+	}
+	if page.Title == "" {
+		page.Title = entry.target.Title
+	}
+	if page.URL == "" {
+		page.URL = entry.target.URL
+	}
+	if page.Origin == "" {
+		page.Origin = entry.target.Origin
+	}
+	if page.Generation == 0 {
+		page.Generation = 1
+	}
+	page.Connected = true
+	session := newScriptedTargetSession(h, entry, entry.target, page, ownership, entry.config.Session)
+	h.sessions[targetID] = session
+	entry.sessions[session] = struct{}{}
+	entry.lastSession = session
+	entry.target.Attached = true
+	entry.mu.Unlock()
+	h.mu.Unlock()
+	h.runtime.registerSession(session)
+
+	h.runtime.record(Operation{Kind: OperationAttach, BrowserID: h.candidate.ID, TargetID: targetID, Generation: page.Generation, Ownership: ownership})
+	control := h.control
+	closeDone := h.closeDone
+	control.mu.Lock()
+	blocked := control.attachBlocked
+	attachChanges := control.attachChanges
+	controlDisconnected := control.disconnected
+	control.mu.Unlock()
+	if controlDisconnected {
+		if err := session.Err(); err != nil {
+			return nil, err
+		}
+		return nil, disconnectedError(h.candidate.ID, targetID, "attach", "browser_disconnected")
+	}
+	if blocked {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-attachChanges:
+		case <-closeDone:
+			return nil, webmcp.ErrClosed
+		}
+	}
+	control.mu.Lock()
+	controlDisconnected = control.disconnected
+	control.mu.Unlock()
+	if controlDisconnected {
+		if err := session.Err(); err != nil {
+			return nil, err
+		}
+		return nil, disconnectedError(h.candidate.ID, targetID, "attach", "browser_disconnected")
+	}
+	_ = session.emitLocal(webmcp.BrowserEvent{Type: webmcp.EventTargetAttached, Generation: page.Generation})
+	return session, nil
+}
+
 func (h *ScriptedBrowserHandle) updateTarget(session *ScriptedTargetSession, target webmcp.Target, page webmcp.PageContext) {
 	if h == nil || session == nil {
 		return
@@ -547,10 +770,25 @@ func (h *ScriptedBrowserHandle) Disconnect(reasons ...string) error {
 	if h.control != nil {
 		h.control.mu.Lock()
 		h.control.disconnected = true
+		if h.control.openBlocked {
+			h.control.openBlocked = false
+			close(h.control.openChanges)
+			h.control.openChanges = make(chan struct{})
+		}
 		if h.control.listBlocked {
 			h.control.listBlocked = false
 			close(h.control.listChanges)
 			h.control.listChanges = make(chan struct{})
+		}
+		if h.control.activateBlocked {
+			h.control.activateBlocked = false
+			close(h.control.activateChanges)
+			h.control.activateChanges = make(chan struct{})
+		}
+		if h.control.attachBlocked {
+			h.control.attachBlocked = false
+			close(h.control.attachChanges)
+			h.control.attachChanges = make(chan struct{})
 		}
 		h.control.mu.Unlock()
 	}

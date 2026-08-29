@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -533,6 +535,226 @@ func TestWebMCPDoctorReportsUnsupportedWebMCPDisconnectAndCleanup(t *testing.T) 
 			}
 			if tc.name == "cleanup" && tc.broker.closeCalls != 1 {
 				t.Fatalf("cleanup calls = %d, want one", tc.broker.closeCalls)
+			}
+		})
+	}
+}
+
+func TestWebMCPDoctorCommandTimeoutBoundsRuntimeConstruction(t *testing.T) {
+	configDir := writeDoctorConfig(t, "\nbrowser:\n  connection:\n    cdp_url: http://127.0.0.1:9222\n")
+	factoryStarted := make(chan struct{})
+	releaseFactory := make(chan struct{})
+	factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+		close(factoryStarted)
+		<-releaseFactory
+		return WebMCPDoctorRuntime{}, nil
+	}
+	root, stdout, stderr := executeDoctorCommand(t, configDir, factory, "--command-timeout", "40ms", "--json")
+
+	started := time.Now()
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(context.Background()) }()
+	select {
+	case <-factoryStarted:
+	case <-time.After(time.Second):
+		t.Fatal("doctor runtime factory did not start")
+	}
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(time.Second):
+		close(releaseFactory)
+		t.Fatal("doctor remained blocked after the command deadline")
+	}
+	close(releaseFactory)
+	if err == nil {
+		t.Fatal("doctor unexpectedly succeeded after the command deadline")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("doctor command took %s after its 40ms deadline", elapsed)
+	}
+	_ = stderr
+	report := decodeDoctorReport(t, stdout.String())
+	if report.Error == nil || report.Error.Code != string(webmcp.ErrorInvocationTimedOut) {
+		t.Fatalf("runtime construction timeout report = %+v, want invocation_timed_out", report.Error)
+	}
+	if report.Error.Details["phase"] != "runtime_factory" {
+		t.Fatalf("runtime construction timeout details = %#v", report.Error.Details)
+	}
+}
+
+func TestWebMCPDoctorCanceledContextBoundsNonCooperativeRuntimeConstruction(t *testing.T) {
+	configDir := writeDoctorConfig(t, "\nbrowser:\n  connection:\n    cdp_url: http://127.0.0.1:9222\n")
+	factoryStarted := make(chan struct{})
+	releaseFactory := make(chan struct{})
+	runtimeClosed := make(chan struct{})
+	var closeOnce sync.Once
+	factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+		close(factoryStarted)
+		<-releaseFactory
+		return WebMCPDoctorRuntime{Close: func() error {
+			closeOnce.Do(func() { close(runtimeClosed) })
+			return nil
+		}}, nil
+	}
+	root, stdout, _ := executeDoctorCommand(t, configDir, factory, "--json")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	started := time.Now()
+	go func() { done <- root.ExecuteContext(ctx) }()
+	select {
+	case <-factoryStarted:
+	case <-time.After(time.Second):
+		close(releaseFactory)
+		t.Fatal("doctor runtime factory did not start")
+	}
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(time.Second):
+		close(releaseFactory)
+		t.Fatal("doctor remained blocked by a non-cooperative factory after context cancellation")
+	}
+	if err == nil {
+		t.Fatal("doctor unexpectedly succeeded with an already-canceled context")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("doctor took %s after an already-canceled context", elapsed)
+	}
+	if report := decodeDoctorReport(t, stdout.String()); report.Error == nil {
+		t.Fatalf("canceled doctor report = %+v, want an error", report)
+	}
+
+	close(releaseFactory)
+	select {
+	case <-runtimeClosed:
+	case <-time.After(time.Second):
+		t.Fatal("late runtime was not cleaned up after the factory completed")
+	}
+}
+
+func TestWebMCPDoctorRejectsNegativeCommandTimeoutAtCLIBoundary(t *testing.T) {
+	configDir := writeDoctorConfig(t, "\nbrowser:\n  connection:\n    cdp_url: http://127.0.0.1:9222\n")
+	factoryCalls := 0
+	factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
+		factoryCalls++
+		return WebMCPDoctorRuntime{}, nil
+	}
+	root, stdout, _ := executeDoctorCommand(t, configDir, factory, "--command-timeout=-1s", "--json")
+	err := root.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("doctor unexpectedly succeeded with a negative command timeout")
+	}
+	if factoryCalls != 0 {
+		t.Fatalf("factory calls = %d, want zero for invalid input", factoryCalls)
+	}
+	report := decodeDoctorReport(t, stdout.String())
+	if report.Status != doctorStatusInvalidConfiguration || report.Error == nil || report.Error.Code != string(webmcp.ErrorInvalidToolInput) {
+		t.Fatalf("negative timeout report = %+v, want invalid_tool_input", report)
+	}
+	if report.Error.Details["issues"] == nil {
+		t.Fatalf("negative timeout details = %#v, want validation issues", report.Error.Details)
+	}
+}
+
+func TestWebMCPDoctorDisconnectAtProbeAndCatalogStagesIsBounded(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{
+		ID:       "browser-a",
+		Product:  "Chrome/Test",
+		Protocol: "1.3",
+		HTTPURL:  "http://127.0.0.1:9222",
+		Loopback: true,
+	}
+	target := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        "tab-a",
+		Type:      "page",
+		Origin:    "https://fixture.test",
+		Eligible:  true,
+	}
+
+	for _, testCase := range []struct {
+		name      string
+		operation testkit.OperationKind
+		configure func(*testkit.ScriptedBrowserHandle, *testkit.ScriptedTargetSession)
+	}{
+		{
+			name:      "discovery_dial",
+			operation: testkit.OperationOpen,
+			configure: func(handle *testkit.ScriptedBrowserHandle, _ *testkit.ScriptedTargetSession) { handle.BlockOpen() },
+		},
+		{
+			name:      "catalog_ready",
+			operation: testkit.OperationEnableAcknowledged,
+			configure: func(_ *testkit.ScriptedBrowserHandle, _ *testkit.ScriptedTargetSession) {},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+				Candidate: candidate,
+				Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target)},
+			})
+			defer func() { _ = runtime.Close() }()
+			handle := runtime.Browser(candidate.ID)
+			if handle == nil {
+				t.Fatal("scripted browser handle is nil")
+			}
+			testCase.configure(handle, nil)
+			broker := webmcp.NewBroker(webmcp.BrokerOptions{
+				Runtime:    runtime,
+				Discoverer: doctorDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}},
+			})
+			configDir := writeDoctorConfig(t, `
+browser:
+  connection:
+    cdp_url: http://127.0.0.1:9222
+  selection:
+    browser: browser-a
+    tab: tab-a
+`)
+			root, stdout, stderr := executeDoctorCommand(t, configDir, directFactory(broker), "--command-timeout", "250ms", "--json")
+			done := make(chan error, 1)
+			started := time.Now()
+			go func() { done <- root.ExecuteContext(context.Background()) }()
+
+			waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
+			_, waitErr := runtime.WaitForOperationAdmitted(waitCtx, testCase.operation)
+			cancelWait()
+			if waitErr != nil {
+				t.Fatalf("wait for %s admission: %v", testCase.operation, waitErr)
+			}
+			if err := runtime.Disconnect(candidate.ID, "transport_lost"); err != nil {
+				// Disconnect returns the session's terminal error for the catalog
+				// case; the command result is the assertion under test.
+				var classified *webmcp.ClassifiedError
+				if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
+					t.Fatalf("disconnect: %v", err)
+				}
+			}
+
+			var err error
+			select {
+			case err = <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("doctor remained blocked after %s", testCase.name)
+			}
+			if err == nil {
+				t.Fatalf("doctor unexpectedly succeeded after %s browser death; output=%s", testCase.name, stdout.String())
+			}
+			if elapsed := time.Since(started); elapsed > time.Second {
+				t.Fatalf("doctor %s took %s after browser death", testCase.name, elapsed)
+			}
+			_ = stderr
+			report := decodeDoctorReport(t, stdout.String())
+			if report.Error == nil || report.Error.Code != string(webmcp.ErrorBrowserDisconnected) {
+				t.Fatalf("doctor %s report = %+v, want browser_disconnected", testCase.name, report.Error)
+			}
+			if report.Error.Details["browser_id"] != string(candidate.ID) {
+				t.Fatalf("doctor %s browser_id = %#v", testCase.name, report.Error.Details["browser_id"])
 			}
 		})
 	}

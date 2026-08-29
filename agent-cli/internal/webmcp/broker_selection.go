@@ -44,10 +44,37 @@ func (b *StatefulBroker) waitForInitialCatalog(ctx context.Context, selected *br
 		}
 		return b.catalogEvidenceError(selected, "session_ended")
 	case <-ctx.Done():
+		if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
+			return failure
+		}
 		return ctx.Err()
 	case <-timer.C:
+		if failure := b.browserDisconnectObserved(selected, "catalog"); failure != nil {
+			return failure
+		}
 		return b.catalogEvidenceError(selected, "deadline_exceeded")
 	}
+}
+
+// browserDisconnectObserved closes the timeout/disconnect race at the
+// catalog boundary. The session can know that its transport ended before the
+// broker event loop has published the corresponding lifecycle event.
+func (b *StatefulBroker) browserDisconnectObserved(selected *brokerSession, phase string) error {
+	if b == nil || selected == nil || selected.session == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if selected.invalidatedCode != ErrorBrowserDisconnected {
+		failure := sessionLifecycleFailure(selected)
+		if classified, ok := lifecycleClassifiedError(failure); !ok || classified.Code != ErrorBrowserDisconnected {
+			return nil
+		}
+	}
+	if b.selected == selected && selected.active {
+		b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, phase)
+	}
+	return browserDisconnectedErrorForSession(selected, phase, sessionLifecycleFailure(selected))
 }
 
 func (b *StatefulBroker) syncSessionReadiness(selected *brokerSession) {

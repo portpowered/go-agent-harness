@@ -136,13 +136,24 @@ func (b *StatefulBroker) browserDisconnectedLocked(selected *brokerSession, phas
 }
 
 func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector TargetSelector, phase string, cause error) error {
-	if !isBrowserEndpointLossError(cause) {
-		return nil
-	}
 	if selected != nil && selector.BrowserID != "" && selected.context.Key.BrowserID != selector.BrowserID {
 		selected = nil
 	}
 	if selected != nil {
+		b.mu.Lock()
+		if b.selected == selected {
+			if failure := sessionLifecycleFailure(selected); failure != nil {
+				if classified, ok := lifecycleClassifiedError(failure); ok && classified.Code == ErrorBrowserDisconnected {
+					b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, phase)
+					b.mu.Unlock()
+					return browserDisconnectedErrorForSession(selected, phase, failure)
+				}
+			}
+		}
+		b.mu.Unlock()
+		if !isBrowserEndpointLossError(cause) {
+			return nil
+		}
 		selected.dispatchMu.Lock()
 		defer selected.dispatchMu.Unlock()
 		b.mu.Lock()
@@ -152,7 +163,21 @@ func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector Ta
 		}
 		return b.browserDisconnectedLocked(selected, phase, cause)
 	}
-	if isBrowserDisconnectedTransportError(cause) {
+	if !isBrowserEndpointLossError(cause) {
+		return nil
+	}
+	known := false
+	if selector.BrowserID != "" {
+		b.mu.Lock()
+		state := b.browsers[selector.BrowserID]
+		// Discovery records candidates before the first Open succeeds. That
+		// observation proves only that an endpoint was advertised, not that
+		// this broker established a browser transport. Keep initial dial/open
+		// failures in the endpoint error vocabulary until a handle exists.
+		known = state != nil && state.handle != nil
+		b.mu.Unlock()
+	}
+	if known {
 		return browserDisconnectedErrorForSelector(selector, phase, cause)
 	}
 	return nil
