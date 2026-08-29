@@ -161,7 +161,9 @@ test: ## Run deterministic Go tests across all workspace modules.
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
 	echo "==> test tools/analyzergate"; \
-	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)")
+	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	echo "==> test tools/session-race-gate"; \
+	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
@@ -297,7 +299,7 @@ prepush: ## Run the fail-fast, timed local pre-push gate.
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
-	steps="fmt vet lint staticcheck test-factory-scripts test-integration test-regressions build coverage"; \
+	steps="fmt vet lint staticcheck test-tools test-factory-scripts test-integration test-regressions build coverage"; \
 	for step in $$steps; do \
 		echo "==> ci $$step"; \
 		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
