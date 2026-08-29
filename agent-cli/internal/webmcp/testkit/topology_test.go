@@ -82,6 +82,85 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	}
 }
 
+func TestTopologyStageGatesCanBeReleased(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
+	target := webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Generation: 1}
+	runtime := NewScriptedBrowserRuntime(BrowserConfig{
+		Candidate: candidate,
+		Targets:   []TargetConfig{NewTargetConfig(target)},
+	})
+	defer func() { _ = runtime.Close() }()
+	handleTemplate := runtime.Browser(candidate.ID)
+	if handleTemplate == nil {
+		t.Fatal("scripted browser handle is nil")
+	}
+
+	handleTemplate.BlockOpen()
+	openDone := make(chan struct {
+		handle webmcp.BrowserHandle
+		err    error
+	}, 1)
+	go func() {
+		handle, err := runtime.Open(context.Background(), candidate)
+		openDone <- struct {
+			handle webmcp.BrowserHandle
+			err    error
+		}{handle: handle, err: err}
+	}()
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationOpen); err != nil {
+		t.Fatalf("wait for open admission: %v", err)
+	}
+	handleTemplate.UnblockOpen()
+	opened := <-openDone
+	if opened.err != nil {
+		t.Fatalf("release open gate: %v", opened.err)
+	}
+	handle := opened.handle.(*ScriptedBrowserHandle)
+
+	handle.BlockActivate()
+	activateDone := make(chan error, 1)
+	activateCursor := runtime.OperationCursor()
+	go func() { activateDone <- handle.Activate(context.Background(), target.ID) }()
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationActivate, activateCursor); err != nil {
+		t.Fatalf("wait for activate admission: %v", err)
+	}
+	handle.UnblockActivate()
+	if err := <-activateDone; err != nil {
+		t.Fatalf("release activate gate: %v", err)
+	}
+
+	handle.BlockAttach()
+	attachDone := make(chan struct {
+		session webmcp.TargetSession
+		err     error
+	}, 1)
+	attachCursor := runtime.OperationCursor()
+	go func() {
+		session, err := handle.Attach(context.Background(), target.ID, webmcp.TargetOwnershipExternal)
+		attachDone <- struct {
+			session webmcp.TargetSession
+			err     error
+		}{session: session, err: err}
+	}()
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationAttach, attachCursor); err != nil {
+		t.Fatalf("wait for attach admission: %v", err)
+	}
+	handle.UnblockAttach()
+	attached := <-attachDone
+	if attached.err != nil {
+		t.Fatalf("release attach gate: %v", attached.err)
+	}
+	if attached.session == nil {
+		t.Fatal("attach gate returned nil session")
+	}
+	if err := attached.session.EnableWebMCP(context.Background()); err != nil {
+		t.Fatalf("enable WebMCP: %v", err)
+	}
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), OperationEnableAcknowledged); err != nil {
+		t.Fatalf("wait for enable acknowledgement: %v", err)
+	}
+}
+
 func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{

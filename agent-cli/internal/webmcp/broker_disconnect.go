@@ -136,13 +136,24 @@ func (b *StatefulBroker) browserDisconnectedLocked(selected *brokerSession, phas
 }
 
 func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector TargetSelector, phase string, cause error) error {
-	if !isBrowserEndpointLossError(cause) {
-		return nil
-	}
 	if selected != nil && selector.BrowserID != "" && selected.context.Key.BrowserID != selector.BrowserID {
 		selected = nil
 	}
 	if selected != nil {
+		b.mu.Lock()
+		if b.selected == selected {
+			if failure := sessionLifecycleFailure(selected); failure != nil {
+				if classified, ok := lifecycleClassifiedError(failure); ok && classified.Code == ErrorBrowserDisconnected {
+					b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, phase)
+					b.mu.Unlock()
+					return browserDisconnectedErrorForSession(selected, phase, failure)
+				}
+			}
+		}
+		b.mu.Unlock()
+		if !isBrowserEndpointLossError(cause) {
+			return nil
+		}
 		selected.dispatchMu.Lock()
 		defer selected.dispatchMu.Unlock()
 		b.mu.Lock()
@@ -152,7 +163,17 @@ func (b *StatefulBroker) promoteBrowserLoss(selected *brokerSession, selector Ta
 		}
 		return b.browserDisconnectedLocked(selected, phase, cause)
 	}
-	if isBrowserDisconnectedTransportError(cause) {
+	if !isBrowserEndpointLossError(cause) {
+		return nil
+	}
+	known := false
+	if selector.BrowserID != "" {
+		b.mu.Lock()
+		state := b.browsers[selector.BrowserID]
+		known = state != nil && state.candidate.ID != ""
+		b.mu.Unlock()
+	}
+	if known || isBrowserDisconnectedTransportError(cause) {
 		return browserDisconnectedErrorForSelector(selector, phase, cause)
 	}
 	return nil
