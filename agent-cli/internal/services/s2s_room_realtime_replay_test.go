@@ -263,9 +263,18 @@ func (c *roomRealtimeReplayConn) WriteMessage(messageType int, payload []byte) e
 }
 
 func (c *roomRealtimeReplayConn) Close() error {
+	priorErr := c.owner.inner.Err()
 	err := c.inner.Close()
 	if err != nil {
 		return c.owner.annotate(c.nextPosition(), err)
+	}
+	// A mismatch is already latched and exposed through the dialer's Err
+	// method. Do not report that same error as a second cleanup failure when a
+	// caller explicitly cancels the room after observing the mismatch. An error
+	// created by Close itself (such as an incomplete capture) remains visible.
+	var mismatch *gateway.ReplayMismatchError
+	if errors.As(priorErr, &mismatch) {
+		return nil
 	}
 	if replayErr := c.owner.inner.Err(); replayErr != nil {
 		return c.owner.annotate(c.nextPosition(), replayErr)
