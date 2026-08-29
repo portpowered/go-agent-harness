@@ -170,7 +170,21 @@ func (o *sessionProgressObserver) noteScheduledResponseDisposition(id string, di
 		return
 	}
 	lifecycle := &o.scheduledResponses[index]
-	if !lifecycle.bound || lifecycle.disposition != scheduledAudioResponsePending {
+	if !lifecycle.bound {
+		return
+	}
+	if lifecycle.disposition != scheduledAudioResponsePending {
+		// A cancelled provider response and its later continuation share one
+		// scheduled lifecycle. The continuation terminal reaches this method
+		// with the same logical index after the cancellation already resolved the
+		// lifecycle, so clear the temporary active mapping even though the
+		// terminal disposition itself is not duplicated.
+		if o.logicalScheduledResponseSet && o.logicalScheduledResponseIndex == index {
+			o.logicalScheduledResponseSet = false
+		}
+		if o.activeScheduledResponseSet && o.activeScheduledResponseIndex == index {
+			o.activeScheduledResponseSet = false
+		}
 		return
 	}
 	lifecycle.disposition = disposition
