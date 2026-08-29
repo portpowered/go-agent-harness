@@ -295,7 +295,11 @@ func assertMixedModalityLiveWireContract(t *testing.T, capture gwtesting.Session
 	}
 	framesPerTurn := make([]int, 0, wantTurns)
 	for _, audioPath := range audioPaths {
-		framesPerTurn = append(framesPerTurn, len(multiturnAudioFrames(t, audioPath)))
+		frameCount := len(multiturnAudioFrames(t, audioPath))
+		if frameCount == 0 {
+			t.Fatalf("mixed-modality live WAV %q produced no audio frames", filepath.Base(audioPath))
+		}
+		framesPerTurn = append(framesPerTurn, frameCount)
 	}
 	expectedAppendCount := 0
 	for _, frameCount := range framesPerTurn {
