@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "id": "family-a-iterative-project",
+  "name": "Iterative Aurora project build-up",
+  "family": "A",
+  "persona": "A patient but exacting project collaborator",
+  "goal": "Build a small Aurora project incrementally and report its actual final state",
+  "wording_freedom": "Use natural conversational wording while preserving the declared paths, content, order, and final facts.",
+  "text_seed": "The sandbox starts empty. Work through each request in order and confirm only what the filesystem proves.",
+  "image_events": [],
+  "actions": [
+    {
+      "id": "create-project-directory",
+      "intent": "Create the project directory.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Preserve the directory if later work is cancelled and report its observed type.",
+      "oracle": {
+        "description": "The project directory exists before any file content is added.",
+        "checkpoints": [
+          {
+            "path": "project",
+            "type": "directory",
+            "sha256": "88b1c13b8a583b27447037cc9cc5a6505e8df6c8f7e21365f567223b2dddbefb"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["created the project directory"]
+      }
+    },
+    {
+      "id": "add-readme-content",
+      "intent": "Add the initial README content.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Keep the written README and report its exact content if a later action fails.",
+      "oracle": {
+        "description": "project/README.md contains the declared initial content.",
+        "checkpoints": [
+          {
+            "path": "project/README.md",
+            "type": "file",
+            "sha256": "80c5d7af4946465790e1fde42f1100c969b7a42564c1a0203d3f14681df1e600",
+            "content": "# Aurora\n\nA small conversational project.\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["added the README content"]
+      }
+    },
+    {
+      "id": "revise-readme",
+      "intent": "Modify the README status from its initial content to ready for review.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "preserve",
+      "side_effect_rule": "Preserve the last actual README state and never claim the revision before the edit is observed.",
+      "oracle": {
+        "description": "project/README.md contains the revised final content.",
+        "checkpoints": [
+          {
+            "path": "project/README.md",
+            "type": "file",
+            "sha256": "2d0f35b4ead27c0082743e865b28ecdde73cb33aac6b5228fffc8d134865d688",
+            "content": "# Aurora\n\nA small conversational project.\n\nStatus: ready for review.\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["updated project/README.md", "ready for review"]
+      }
+    },
+    {
+      "id": "summarize-final-state",
+      "intent": "Speak a summary of the actual final project state.",
+      "allowed_dispositions": ["completed", "failed", "cancelled"],
+      "partial_side_effect_policy": "forbid",
+      "side_effect_rule": "Make no filesystem change; preserve the final README checkpoint as the source of truth for the spoken summary.",
+      "oracle": {
+        "description": "The spoken summary names the actual README and its ready-for-review status.",
+        "checkpoints": [
+          {
+            "path": "project/README.md",
+            "type": "file",
+            "sha256": "2d0f35b4ead27c0082743e865b28ecdde73cb33aac6b5228fffc8d134865d688",
+            "content": "# Aurora\n\nA small conversational project.\n\nStatus: ready for review.\n"
+          }
+        ],
+        "require_confirmation": true,
+        "required_text": ["project/README.md", "ready for review"],
+        "forbidden_text": ["draft"]
+      }
+    }
+  ],
+  "sandbox": {
+    "name": "fresh-family-a-sandbox",
+    "root": ".",
+    "fresh": true
+  },
+  "interruption_trigger": {
+    "kind": "none",
+    "before_terminal": false
+  },
+  "patience": {
+    "listen_before_follow_up": 500000000,
+    "response_start": 1000000000,
+    "in_progress_work": 2000000000,
+    "reprompt": 3000000000,
+    "absolute_dead_air": 10000000000,
+    "max_reprompts": 2
+  },
+  "termination": "natural",
+  "deadline": 30000000000
+}

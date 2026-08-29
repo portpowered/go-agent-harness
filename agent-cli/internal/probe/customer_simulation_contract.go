@@ -216,6 +216,8 @@ type ActionOracle struct {
 	Description         string                  `json:"description"`
 	Checkpoints         []FilesystemExpectation `json:"checkpoints"`
 	RequireConfirmation bool                    `json:"require_confirmation"`
+	RequiredText        []string                `json:"required_text,omitempty"`
+	ForbiddenText       []string                `json:"forbidden_text,omitempty"`
 }
 
 type FilesystemExpectation struct {
@@ -333,6 +335,25 @@ func (o ActionOracle) validate(field string) error {
 	for i, checkpoint := range o.Checkpoints {
 		if err := checkpoint.validate(fmt.Sprintf("%s.checkpoints[%d]", field, i)); err != nil {
 			return err
+		}
+	}
+	for _, text := range []struct {
+		name   string
+		values []string
+	}{
+		{"required_text", o.RequiredText},
+		{"forbidden_text", o.ForbiddenText},
+	} {
+		seen := map[string]struct{}{}
+		for i, value := range text.values {
+			if strings.TrimSpace(value) == "" {
+				return contractFieldError(ErrInvalidCustomerScenario, fmt.Sprintf("%s.%s[%d]", field, text.name, i), "must not be empty")
+			}
+			key := strings.ToLower(strings.TrimSpace(value))
+			if _, ok := seen[key]; ok {
+				return contractFieldError(ErrInvalidCustomerScenario, field+"."+text.name, "values must be unique")
+			}
+			seen[key] = struct{}{}
 		}
 	}
 	return nil

@@ -209,6 +209,7 @@ type ActionResult struct {
 	ActionID           string              `json:"action_id"`
 	TurnID             string              `json:"turn_id,omitempty"`
 	Confirmed          bool                `json:"confirmed"`
+	ConfirmedAt        time.Duration       `json:"confirmed_at,omitempty"`
 	Disposition        TerminalDisposition `json:"disposition"`
 	OutcomeReason      string              `json:"outcome_reason,omitempty"`
 	EvidenceRefs       []string            `json:"evidence_refs"`
@@ -253,6 +254,9 @@ func (v MechanicalVerdict) validate(scenario CustomerScenario, field string) err
 		seen[result.ActionID] = struct{}{}
 		if result.Confirmed && result.Disposition == "" {
 			return contractFieldError(ErrConfirmationWithoutDisposition, item+".disposition", "confirmed action must have a terminal disposition")
+		}
+		if result.ConfirmedAt < 0 {
+			return contractFieldError(ErrInvalidCustomerEvidence, item+".confirmed_at", "must not be negative")
 		}
 		if !result.Disposition.valid() {
 			return contractFieldError(ErrInvalidCustomerEvidence, item+".disposition", fmt.Sprintf("%q is invalid", result.Disposition))
