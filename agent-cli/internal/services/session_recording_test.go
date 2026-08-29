@@ -490,7 +490,7 @@ func TestRunSessionWithImagesAndRecordingDirectoryPreservesImageTurn(t *testing.
 	inputSegments := sessionRecordingInputSegments()
 	inputPath := writeSessionRecordingInputFixture(t, inputSegments)
 
-	inferencer := newSessionRecordingRunnerInferencer([]messages.StreamMessage{
+	inferencer := newSessionRecordingRunnerInferencerAfterAudioEnd([]messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{0x10, 0x00, 0x11, 0x00})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
@@ -498,7 +498,7 @@ func TestRunSessionWithImagesAndRecordingDirectoryPreservesImageTurn(t *testing.
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("image response")},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("image-session", "done")},
-	}, false, true)
+	})
 	destination := filepath.Join(dir, "nested", "image-recording")
 	err := RunSessionWithImagesAndRecordingDirectoryAndAudioInput(context.Background(), io.Discard, SessionImageRunOptions{
 		SessionRunOptions: SessionRunOptions{

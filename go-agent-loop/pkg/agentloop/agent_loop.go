@@ -152,7 +152,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 		// Forward completed tool results before Coordinator emits the
 		// result-driven model request. This preserves provider-wire
 		// queue/sequence ordering when both are ready in the same tick.
-		hlps = append(hlps, subsystems.NewToolResultForwarder(modelRunner.UserEventInbox, cfg.Logger))
+		hlps = append(hlps, subsystems.NewToolResultForwarderWithEnqueuer(modelRunner.EnqueueSessionEvent, cfg.Logger))
 		pingPong := subsystems.NewPingPong(kernelRunner.DeltaInbox, cfg.Logger)
 		hlps = append(hlps, pingPong)
 	}
@@ -500,12 +500,7 @@ func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
 	if mr == nil || mr.UserAudioInbox == nil {
 		return fmt.Errorf("SendAudioInput: not in session mode")
 	}
-	select {
-	case mr.UserAudioInbox <- pcm:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return mr.EnqueueSessionAudioInput(ctx, pcm)
 }
 
 // SendSessionEvent delivers a pre-built outbound StreamMessage to the running
@@ -518,12 +513,7 @@ func (al *AgentLoop) SendSessionEvent(ctx context.Context, msg messages.StreamMe
 	if mr == nil || mr.UserEventInbox == nil {
 		return fmt.Errorf("SendSessionEvent: not in session mode")
 	}
-	select {
-	case mr.UserEventInbox <- msg:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return mr.EnqueueSessionEvent(ctx, msg)
 }
 
 // EnqueueTodo appends a message to the TODO queue for deferred processing.
