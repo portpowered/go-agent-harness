@@ -48,6 +48,8 @@ type targetSession struct {
 	finishDone      chan struct{}
 	stopOnce        sync.Once
 	sequence        uint64
+	listenerReady   bool
+	wireSequence    uint64
 }
 
 func newTargetSession(
@@ -98,6 +100,39 @@ func (s *targetSession) setProtocolTarget(targetValue *chromedp.Target) {
 		s.page.Connected = true
 	}
 	s.mu.Unlock()
+}
+
+func (s *targetSession) markListenerReady() {
+	s.mu.Lock()
+	s.listenerReady = true
+	s.mu.Unlock()
+}
+
+// recordWireBeforeDispatch records only the exact identity needed to audit a
+// browser command. It is called from the target action immediately before the
+// generated CDP command, after Attach has registered both listeners.
+func (s *targetSession) recordWireBeforeDispatch(method string, invocationID webmcp.InvocationID) {
+	if s == nil || s.handle == nil {
+		return
+	}
+	s.mu.Lock()
+	s.wireSequence++
+	trace := webmcp.WebMCPWireTrace{
+		Version:         webmcp.WebMCPWireTraceVersion,
+		Sequence:        s.wireSequence,
+		BrowserID:       s.page.Key.BrowserID,
+		TargetID:        s.page.Key.TargetID,
+		TargetSessionID: string(s.protocolSession),
+		Method:          method,
+		InvocationID:    invocationID,
+		Phase:           webmcp.WebMCPWirePhaseBeforeDispatch,
+		ListenerReady:   s.listenerReady,
+	}
+	sink := s.handle.wireTrace
+	s.mu.Unlock()
+	if sink != nil {
+		sink.RecordWebMCPWireTrace(trace)
+	}
 }
 
 func (s *targetSession) publishAttached() {
@@ -440,6 +475,7 @@ func (s *targetSession) CancelWebMCP(ctx context.Context, invocationID webmcp.In
 		})
 	}
 	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		s.recordWireBeforeDispatch(webmcp.WebMCPCancelInvocationMethod, invocationID)
 		return cdpWebMCP.CancelInvocation(string(invocationID)).Do(ctx)
 	}))
 	if err != nil {

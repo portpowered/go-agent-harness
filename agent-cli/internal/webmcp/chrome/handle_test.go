@@ -191,13 +191,20 @@ func TestAttachUsesCallerTargetIDAndNormalizedTargetMetadata(t *testing.T) {
 	handle.candidate.BrowserWSURL = "ws://127.0.0.1:9222/devtools/browser/browser-1"
 	var selectedID target.ID
 	protocolTarget := &chromedp.Target{SessionID: "session-wanted", TargetID: "wanted-target"}
+	listenersRegistered := 0
 	handle.targetOps = targetContextOps{
 		newContext: func(_ context.Context, id target.ID) (context.Context, context.CancelFunc) {
 			selectedID = id
 			return context.WithCancel(context.Background())
 		},
-		listen: func(context.Context, func(any)) {},
-		run:    func(context.Context, ...chromedp.Action) error { return nil },
+		listen:        func(context.Context, func(any)) { listenersRegistered++ },
+		listenBrowser: func(context.Context, func(any)) { listenersRegistered++ },
+		run: func(context.Context, ...chromedp.Action) error {
+			if listenersRegistered != 2 {
+				return errors.New("target command ran before both listeners were registered")
+			}
+			return nil
+		},
 		target: func(context.Context) *chromedp.Target { return protocolTarget },
 	}
 
@@ -207,6 +214,9 @@ func TestAttachUsesCallerTargetIDAndNormalizedTargetMetadata(t *testing.T) {
 	}
 	if selectedID != "wanted-target" {
 		t.Fatalf("attach selected target ID = %q, want wanted-target", selectedID)
+	}
+	if listenersRegistered != 2 {
+		t.Fatalf("listeners registered = %d, want target and browser listeners", listenersRegistered)
 	}
 	page := neutralSession.Context()
 	if page.Key.TargetID != "wanted-target" || page.Title != "Wanted" || page.URL != "https://example.test/wanted" {

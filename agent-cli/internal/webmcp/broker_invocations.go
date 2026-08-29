@@ -677,10 +677,19 @@ func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request Dir
 		return err
 	}
 	session := selected.session
+	selectedGeneration := selected.context.Generation
 	b.mu.Unlock()
 
 	if session == nil {
 		return targetAttachError(request.Target, "cancel", ErrClosed)
+	}
+	// The broker selection and the target session are separate state holders.
+	// Recheck the session identity at the command boundary so a stale or
+	// accidentally substituted session can never receive a direct cancel for a
+	// different target.
+	sessionContext := session.Context()
+	if sessionContext.Key.BrowserID != request.Target.BrowserID || sessionContext.Key.TargetID != request.Target.TargetID {
+		return staleSelectionError(request.Target.BrowserID, request.Target.TargetID, selectedGeneration, "exact_target_session_mismatch")
 	}
 	if err := session.CancelWebMCP(ctx, request.InvocationID); err != nil {
 		var classifiedErr *ClassifiedError

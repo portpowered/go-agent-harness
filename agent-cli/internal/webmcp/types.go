@@ -26,6 +26,43 @@ type Diagnostic struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
+// WebMCPWireTrace is a bounded, transport-safe record of a WebMCP command
+// boundary. It intentionally contains only normalized identities and the
+// protocol method/correlation ID needed to prove which target received a
+// command. It has no endpoint, credential, input, or page-output fields.
+type WebMCPWireTrace struct {
+	Version         string       `json:"version"`
+	Sequence        uint64       `json:"sequence"`
+	BrowserID       BrowserID    `json:"browser_id"`
+	TargetID        TargetID     `json:"target_id"`
+	TargetSessionID string       `json:"target_session_id"`
+	Method          string       `json:"method"`
+	InvocationID    InvocationID `json:"invocation_id,omitempty"`
+	Phase           string       `json:"phase"`
+	ListenerReady   bool         `json:"listener_ready"`
+}
+
+const (
+	WebMCPWireTraceVersion        = "webmcp.wire-trace.v1"
+	WebMCPWirePhaseBeforeDispatch = "before_dispatch"
+	WebMCPCancelInvocationMethod  = "WebMCP.cancelInvocation"
+)
+
+// WireTraceSink receives safe WebMCP wire-boundary evidence. Implementations
+// should keep recording bounded and must not add raw transport or page data.
+type WireTraceSink interface {
+	RecordWebMCPWireTrace(WebMCPWireTrace)
+}
+
+// WireTraceFunc adapts a function to WireTraceSink.
+type WireTraceFunc func(WebMCPWireTrace)
+
+func (f WireTraceFunc) RecordWebMCPWireTrace(trace WebMCPWireTrace) {
+	if f != nil {
+		f(trace)
+	}
+}
+
 // BrowserCandidate is the normalized identity and connection metadata for a
 // browser endpoint. Browser-specific protocol values stay at the adapter
 // boundary and are represented here only as neutral strings.

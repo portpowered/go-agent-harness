@@ -34,6 +34,23 @@ type invocationExecutor struct {
 	errors       map[string]error
 }
 
+type wireTraceRecorder struct {
+	mu     sync.Mutex
+	traces []webmcp.WebMCPWireTrace
+}
+
+func (r *wireTraceRecorder) RecordWebMCPWireTrace(trace webmcp.WebMCPWireTrace) {
+	r.mu.Lock()
+	r.traces = append(r.traces, trace)
+	r.mu.Unlock()
+}
+
+func (r *wireTraceRecorder) snapshot() []webmcp.WebMCPWireTrace {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]webmcp.WebMCPWireTrace(nil), r.traces...)
+}
+
 func (e *invocationExecutor) Execute(ctx context.Context, method string, params, result any) error {
 	select {
 	case <-ctx.Done():
@@ -266,6 +283,46 @@ func TestCancelWebMCPDispatchesExactIDWithoutSynthesizingResult(t *testing.T) {
 	responded := nextBrowserEvent(t, session.Events())
 	if responded.InvocationID != invocationID || responded.ErrorCode != string(webmcp.ErrorInvocationCanceled) {
 		t.Fatalf("canceled response = %+v, want exact ID and cancellation semantics", responded)
+	}
+}
+
+func TestCancelWebMCPRecordsExactTargetSessionBeforeDispatch(t *testing.T) {
+	const (
+		browserID    = "browser-invocation"
+		targetID     = "target-invocation"
+		sessionID    = "session-wire-trace"
+		invocationID = "browser-receipt-wire-7"
+	)
+	executor := &invocationExecutor{errors: make(map[string]error)}
+	session := newInvocationTestSession(t, executor)
+	recorder := &wireTraceRecorder{}
+	session.handle.wireTrace = recorder
+	session.setProtocolTarget(&chromedp.Target{SessionID: sessionID, TargetID: targetID})
+	session.markListenerReady()
+
+	if err := session.CancelWebMCP(context.Background(), invocationID); err != nil {
+		t.Fatalf("cancel WebMCP: %v", err)
+	}
+	calls := executor.snapshot()
+	if len(calls) != 1 || calls[0].method != cdpWebMCP.CommandCancelInvocation || calls[0].invocationID != invocationID {
+		t.Fatalf("cancel calls = %+v, want one exact CDP cancellation", calls)
+	}
+	traces := recorder.snapshot()
+	if len(traces) != 1 {
+		t.Fatalf("wire traces = %+v, want one trace", traces)
+	}
+	trace := traces[0]
+	if trace.Version != webmcp.WebMCPWireTraceVersion || trace.Sequence != 1 || trace.BrowserID != browserID || trace.TargetID != targetID || trace.TargetSessionID != sessionID || trace.Method != webmcp.WebMCPCancelInvocationMethod || trace.InvocationID != invocationID || trace.Phase != webmcp.WebMCPWirePhaseBeforeDispatch || !trace.ListenerReady {
+		t.Fatalf("wire trace = %+v, want exact target/session and ready-before-dispatch evidence", trace)
+	}
+	wire, err := json.Marshal(trace)
+	if err != nil {
+		t.Fatalf("marshal wire trace: %v", err)
+	}
+	for _, forbidden := range []string{"endpoint", "credential", "input", "output", "ws://", "https://"} {
+		if bytes.Contains(wire, []byte(forbidden)) {
+			t.Fatalf("wire trace contains forbidden %q: %s", forbidden, wire)
+		}
 	}
 }
 
