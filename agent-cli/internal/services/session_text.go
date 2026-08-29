@@ -33,6 +33,7 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 	}
 
 	opts.Prompt = seed.Value
+	opts.PromptProvided = true
 	if err := validateSessionRunOptions(opts); err != nil {
 		return err
 	}
@@ -53,7 +54,6 @@ func RunSessionWithTextSeed(ctx context.Context, out io.Writer, opts SessionRunO
 			inner:      plan.inferencer,
 			wirePrompt: wirePrompt,
 			value:      seed.Value,
-			audioOut:   output,
 		}
 	}
 	return errors.Join(plan.run(ctx, output), output.errorValue())
@@ -72,7 +72,6 @@ type sessionTextSeedInferencer struct {
 	inner      messages.SessionInferencer
 	wirePrompt string
 	value      string
-	audioOut   *sessionTextOutput
 }
 
 var _ messages.SessionInferencer = (*sessionTextSeedInferencer)(nil)
@@ -86,7 +85,6 @@ func (i *sessionTextSeedInferencer) ConnectSession(ctx context.Context) (message
 		inner:      session,
 		wirePrompt: i.wirePrompt,
 		value:      i.value,
-		audioOut:   i.audioOut,
 		receive:    messages.NewTypedBuffer[messages.StreamMessage](256),
 	}
 	go wrapped.forwardIncoming()
@@ -97,7 +95,6 @@ type sessionTextSeedSession struct {
 	inner      messages.Session
 	wirePrompt string
 	value      string
-	audioOut   *sessionTextOutput
 	receive    *messages.TypedBuffer[messages.StreamMessage]
 
 	mu       sync.Mutex
@@ -169,12 +166,6 @@ func (s *sessionTextSeedSession) forwardIncoming() {
 		if !ok {
 			return
 		}
-		if value, ok := msg.Value.(*messages.AudioDeltaValue); ok {
-			if err := s.audioOut.writeAudio(value.Content); err != nil {
-				_ = s.inner.Close()
-				return
-			}
-		}
 		if !s.receive.Write(context.Background(), msg) {
 			_ = s.inner.Close()
 			return
@@ -222,14 +213,6 @@ func (o *sessionTextOutput) Write(data []byte) (int, error) {
 		o.writeErr = err
 	}
 	return n, err
-}
-
-func (o *sessionTextOutput) writeAudio(data []byte) error {
-	if len(data) == 0 {
-		return nil
-	}
-	_, err := o.Write(data)
-	return err
 }
 
 func (o *sessionTextOutput) errorValue() error {

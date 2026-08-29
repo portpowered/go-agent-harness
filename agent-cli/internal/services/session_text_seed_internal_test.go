@@ -38,7 +38,6 @@ func TestSessionTextSeedSessionSubstitutesEverySendPath(t *testing.T) {
 		inner:      capturing,
 		wirePrompt: wirePrompt,
 		value:      seedValue,
-		audioOut:   &sessionTextOutput{writer: discardWriter{}},
 		receive:    messages.NewTypedBuffer[messages.StreamMessage](16),
 	}
 	go session.forwardIncoming()
@@ -76,7 +75,3 @@ func TestSessionTextSeedSessionSubstitutesEverySendPath(t *testing.T) {
 		}
 	}
 }
-
-type discardWriter struct{}
-
-func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }

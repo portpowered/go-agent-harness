@@ -319,8 +319,9 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
 		return result, err
 	}
+	promptProvided := opts.PromptProvided || opts.Prompt != ""
 	if msg.Type == messages.StreamTypeSessionOpen && !durationExpired {
-		if opts.Prompt != "" && !result.promptSent {
+		if promptProvided && !result.promptSent {
 			result.promptSent = true
 			userMsg := messages.NewTextMessage(messages.RoleUser, opts.Prompt)
 			if err := loop.Send(ctx, []messages.Message{userMsg}); err != nil {
@@ -328,7 +329,7 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 			}
 			opts.observer.noteUserTextInput(opts.Prompt)
 		}
-		if opts.CloseAfterOpen && opts.Prompt == "" && !result.closeSent {
+		if opts.CloseAfterOpen && !promptProvided && !result.closeSent {
 			result.closeAfterOpenPending = true
 		}
 	}
@@ -337,7 +338,7 @@ func processDurationLoopMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if err != nil {
 		return result, err
 	}
-	if !durationExpired && opts.CloseAfterOpen && opts.Prompt != "" && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
+	if !durationExpired && opts.CloseAfterOpen && promptProvided && msg.Type == messages.StreamTypeMessageEnd && !result.closeSent && (opts.observer == nil || opts.observer.lastMessageEndAdmitted()) {
 		result.closeAfterOpenPending = true
 	}
 	state, err := closePendingSessionIfReady(ctx, loop, opts, sessionLoopMessageState{

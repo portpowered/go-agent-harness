@@ -74,6 +74,20 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	if strings.TrimSpace(model) == "" {
 		model = openAIRealtimeModel
 	}
+	prompt := opts.Prompt
+	promptProvided := opts.PromptProvided || prompt != ""
+	barePromptReplay := false
+	if !promptProvided {
+		capturedPrompt, promptErr := loadReplaySessionPrompt(opts.ReplayPath)
+		if promptErr != nil {
+			return sessionRuntimePlan{}, promptErr
+		}
+		if capturedPrompt != nil {
+			prompt = capturedPrompt.text
+			promptProvided = true
+			barePromptReplay = true
+		}
+	}
 	// The initial provider configuration is captured wire data. The current
 	// tool definitions remain on plan.loop for local execution, but are not
 	// used to rebuild the provider handshake.
@@ -86,15 +100,16 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
 	sessionInferencer = newWebSocketReplaySessionInferencer(sessionInferencer)
-	return sessionRuntimePlan{
+	plan := sessionRuntimePlan{
 		mode:       sessionRuntimeModeReplayOpenAI,
 		provider:   sessionProviderOpenAI,
 		model:      model,
 		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
-			Prompt:       opts.Prompt,
-			WaitForClose: opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-			MaxDuration:  3 * time.Second,
+			Prompt:         prompt,
+			PromptProvided: promptProvided,
+			WaitForClose:   opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
+			MaxDuration:    3 * time.Second,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
 			if err := replayDialer.Err(); err != nil {
@@ -102,7 +117,14 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			}
 			return nil
 		},
-	}, nil
+	}
+	if barePromptReplay {
+		plan.replayCompletion = func(out io.Writer) error {
+			_, err := fmt.Fprintln(out, "\n[session replay complete]")
+			return err
+		}
+	}
+	return plan, nil
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {

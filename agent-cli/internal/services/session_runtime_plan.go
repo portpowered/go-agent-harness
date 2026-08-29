@@ -112,6 +112,7 @@ type sessionRuntimePlan struct {
 	announce               string
 	flushCapture           func() error
 	finalize               func(context.Context, io.Writer) error
+	replayCompletion       func(io.Writer) error
 	diagnostics            SessionDiagnosticSink
 	metricsRecorder        metrics.Recorder
 	streamObserver         SessionStreamObserver
@@ -133,6 +134,9 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 	finalizer := newSessionRuntimeFinalizer(p)
 	defer func() {
 		runErr = finalizer.finish(ctx, out, runErr)
+		if runErr == nil && p.replayCompletion != nil {
+			runErr = p.replayCompletion(out)
+		}
 	}()
 
 	deviceBinding, err := PrepareRTCDeviceBindings(p.rtcDeviceRequest)

@@ -138,13 +138,13 @@ func TestSessionCommandPromptPresenceMatrix(t *testing.T) {
 	}
 }
 
-func TestSessionCommandPromptToAudioOutput(t *testing.T) {
+func TestSessionCommandPromptKeepsPCMOutOfTextOutput(t *testing.T) {
 	inf := functional.NewMockSessionInferencer()
 	t.Cleanup(inf.Close)
 	output := &recordingSessionOutput{}
 	cmd := cli.NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, inf).Generate()
 	cmd.SetOut(output)
-	cmd.SetArgs([]string{"--replay", "synthetic.json", "--prompt", "distinctive text seed for audio"})
+	cmd.SetArgs([]string{"--replay", "synthetic.json", "--wait-for-close", "--prompt", "distinctive text seed"})
 	result := make(chan error, 1)
 	go func() { result <- cmd.ExecuteContext(context.Background()) }()
 
@@ -153,19 +153,22 @@ func TestSessionCommandPromptToAudioOutput(t *testing.T) {
 		t.Fatal("timed out waiting for text seed")
 	}
 	textValue, ok := sent.Value.(*messages.TextDeltaValue)
-	if !ok || textValue.Content != "distinctive text seed for audio" {
+	if !ok || textValue.Content != "distinctive text seed" {
 		t.Fatalf("sent text = %#v, want distinctive prompt", sent.Value)
 	}
 	if _, ok := inf.WaitForSentMessage(messages.StreamTypeTextDelta, 100*time.Millisecond); ok {
 		t.Fatal("session sent more than one text seed")
 	}
 
-	wantAudio := []byte{0x52, 0x49, 0x46, 0x46, 0x10, 0x20, 0x30, 0x40}
+	pcm := []byte{0x52, 0x49, 0x46, 0x46, 0x10, 0x20, 0x30, 0x40}
+	const transcript = "readable transcript"
 	inf.AddServerEventSequence([]messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(wantAudio)},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm)},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue(transcript)},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("mock-session", "provider_closed")},
 	})
 
 	select {
@@ -179,11 +182,14 @@ func TestSessionCommandPromptToAudioOutput(t *testing.T) {
 	}
 
 	writes := output.Writes()
-	if len(writes) != 1 {
-		t.Fatalf("audio output write count = %d, want 1", len(writes))
+	got := string(bytes.Join(writes, nil))
+	want := transcript + "\n[session closed: provider_closed]\n" +
+		"[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\n"
+	if got != want {
+		t.Fatalf("text output = %q, want %q", got, want)
 	}
-	if !bytes.Equal(writes[0], wantAudio) {
-		t.Fatalf("audio output = %v, want %v", writes[0], wantAudio)
+	if bytes.Contains([]byte(got), pcm) {
+		t.Fatalf("text output contains raw PCM: %q", got)
 	}
 	inf.Close()
 }
