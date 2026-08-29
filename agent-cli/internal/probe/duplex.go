@@ -931,6 +931,13 @@ func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writ
 			if errors.Is(readErr, io.EOF) {
 				return nil
 			}
+			// exec.Cmd.Wait closes runner-owned stdout after the child has
+			// exited. A blocked reader can observe that close as os.ErrClosed
+			// instead of EOF; it is the same completed pipe boundary and must
+			// not cancel a run that is still collecting final evidence.
+			if isExpectedDuplexPipeClosure(readErr) {
+				return nil
+			}
 			if isExpectedDuplexCancellation(readErr, ctx) {
 				return nil
 			}
