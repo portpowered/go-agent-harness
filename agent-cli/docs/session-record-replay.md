@@ -3,7 +3,7 @@
 ---
 author: Codex
 owner: Agent CLI maintainers
-last modified: 2026, April, 11
+last modified: 2026, August, 28
 ---
 
 Use `agent session --record` to capture live Grok realtime or OpenAI Realtime session traffic. Use `agent session --replay` to run the same session traffic later without provider credentials or a live network connection.
@@ -128,6 +128,66 @@ You can pass a prompt when the capture expects an outbound user event:
 ```bash
 agent session "hello from the CLI" --replay captures/grok-demo.session.json
 ```
+
+### Reproduce a prompt
+
+Record through the normal CLI boundary, then replay the produced capture with
+the same prompt. The replay command does not need `--api-key` or a provider
+network endpoint:
+
+```bash
+agent session "hello from the CLI" \
+  --record captures/prompt.session.json \
+  --provider openai --model gpt-realtime --api-key "$OPENAI_API_KEY"
+
+agent session "hello from the CLI" \
+  --replay captures/prompt.session.json
+```
+
+### Reproduce scheduled spoken turns
+
+`--audio-in-turn` accepts finite WAV/PCM inputs and is repeatable. It requires
+`--record-dir`, which keeps the complete turn and audio sidecar in one
+persistent session. The raw JSON capture can be recorded alongside it and
+replayed without a key:
+
+```bash
+agent session \
+  --record captures/spoken.session.json \
+  --record-dir captures/spoken-recording \
+  --provider openai --model gpt-realtime --api-key "$OPENAI_API_KEY" \
+  --audio-in-turn fixtures/turn-1.wav \
+  --audio-in-turn fixtures/turn-2.wav
+
+agent session \
+  --replay captures/spoken.session.json \
+  --record-dir captures/spoken-replay \
+  --audio-in-turn fixtures/turn-1.wav \
+  --audio-in-turn fixtures/turn-2.wav
+```
+
+### Diagnose a corrupted capture
+
+After copying a capture for a negative test, mutate a nested field in the
+JSON payload (the capture itself remains untouched):
+
+```bash
+jq '(.records[] | select(.direction == "client_to_server" and .type == "conversation.item.create") | .payload.item.content[0].text) = "CORRUPTED_PROMPT"' \
+  captures/prompt.session.json > captures/prompt-corrupt.session.json
+agent session --replay captures/prompt-corrupt.session.json "hello from the CLI"
+```
+
+The non-zero replay error identifies the capture event and first differing
+field, for example:
+
+```text
+replay mismatch: expected event type "conversation.item.create" at sequence 4, actual event type "conversation.item.create" at sequence 4: JSON pointer /item/content/0/text: expected "CORRUPTED_PROMPT", actual "hello from the CLI"
+```
+
+Long values are escaped and bounded with `...(truncated)`. Malformed JSON
+payloads report the zero-based byte offset instead of a JSON pointer. This
+keeps the same strict post-handshake replay contract useful for both prompt
+and spoken-turn diagnosis.
 
 ## Sanitize Before Committing
 
