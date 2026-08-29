@@ -98,6 +98,9 @@ func TestCustomerSimulationCommandRejectsNonPassingResultWithNilRunnerError(t *t
 	}
 	const envName = "CUSTOMER_SIMULATION_NONPASSING_KEY"
 	t.Setenv(envName, "test-key")
+	// Keep the test hermetic even when the custom flag is not the first
+	// credential source selected by a command implementation under test.
+	t.Setenv(defaultCustomerSimulationAPIKeyEnv, "test-key")
 
 	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
 	command.SetValidator(probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, _ probe.CustomerSimulationValidatorRequest) ([]byte, error) {
@@ -149,6 +152,7 @@ func TestCustomerSimulationCommandCleansValidatorCredentialOnPrimaryFailure(t *t
 }
 
 func TestCustomerSimulationCommandRejectsMissingAudioInsteadOfSkipping(t *testing.T) {
+	t.Setenv(defaultCustomerSimulationAPIKeyEnv, "test-key")
 	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
 	command.SetRunner(func(_ context.Context, _ probe.CustomerSimulationSuiteOptions) (probe.CustomerSimulationSuiteResult, error) {
 		t.Fatal("runner called despite missing audio")
