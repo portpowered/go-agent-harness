@@ -370,6 +370,22 @@ func (o *sessionProgressObserver) beginObservedResponse(id string) bool {
 	o.activeResponse = true
 	o.activeResponseID = id
 	o.resetObservedResponseState()
+	// Unscheduled tool sessions do not have a scheduled lifecycle to bind
+	// against. Preserve the response-ID association used by the ordinary
+	// continuation path so their pending calls can still observe the next
+	// provider response.
+	if id != "" && len(o.scheduledResponses) == 0 {
+		o.toolStateMu.Lock()
+		o.ensureToolStateLocked()
+		for _, state := range o.toolContinuations {
+			if state == nil || !state.resultAccepted || !state.continuationRequested ||
+				!state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
+				continue
+			}
+			state.continuationResponseID = id
+		}
+		o.toolStateMu.Unlock()
+	}
 	return true
 }
 
@@ -407,6 +423,21 @@ func (o *sessionProgressObserver) adoptObservedResponseID(id string) bool {
 	if o.activeScheduledResponseSet {
 		o.setActiveScheduledResponseWithID(o.activeScheduledResponseIndex, id)
 		o.bindPendingToolContinuations(o.activeScheduledResponseIndex, id)
+	} else if len(o.scheduledResponses) == 0 {
+		// Unscheduled tool sessions can first learn the provider response ID at
+		// the terminal event. Keep their pending continuation associated with
+		// that adopted ID just as beginObservedResponse does for identified
+		// response.created events.
+		o.toolStateMu.Lock()
+		o.ensureToolStateLocked()
+		for _, state := range o.toolContinuations {
+			if state == nil || !state.resultAccepted || !state.continuationRequested ||
+				!state.providerCallObserved || !state.toolResponseComplete || state.continuationResponseID != "" {
+				continue
+			}
+			state.continuationResponseID = id
+		}
+		o.toolStateMu.Unlock()
 	}
 	return true
 }

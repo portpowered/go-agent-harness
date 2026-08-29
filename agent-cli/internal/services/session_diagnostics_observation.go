@@ -18,6 +18,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	// not a provider response boundary and must not reset response output,
 	// consume a scheduled slot, or become the owner of a continuation.
 	if msg.Role == messages.RoleTool {
+		o.accountToolRoleMessage(msg)
 		return
 	}
 	msgResponseID := strings.TrimSpace(msg.ResponseID)
@@ -267,5 +268,30 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.captureFailureFromError(v)
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
+	}
+}
+
+// accountToolRoleMessage preserves output accounting for the ToolRunner's
+// observable result while keeping that result out of provider response
+// ownership and admission state. Tool results are emitted as stream output,
+// so dropping them would make the diagnostic byte matrix disagree with the
+// rendered session output.
+func (o *sessionProgressObserver) accountToolRoleMessage(msg messages.StreamMessage) {
+	if o == nil {
+		return
+	}
+	switch v := msg.Value.(type) {
+	case *messages.AudioDeltaValue:
+		o.account(metrics.DirectionOutput, metrics.ModalityAudio, len(v.Content))
+	case *messages.TextDeltaValue:
+		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Content))
+	case *messages.TranscriptDeltaValue:
+		o.account(metrics.DirectionOutput, metrics.ModalityText, len(v.Text))
+	case *messages.ToolCallDeltaValue:
+		o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.PartialJSON))
+	case *messages.ToolCallEndValue:
+		if !o.toolDeltaSeen {
+			o.account(metrics.DirectionOutput, metrics.ModalityTool, len(v.Arguments))
+		}
 	}
 }
