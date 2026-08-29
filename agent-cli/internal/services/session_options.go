@@ -379,7 +379,12 @@ func isJSONCapturePath(path string) bool {
 }
 
 func validateInjectedLiveSession(opts SessionRunOptions) error {
-	switch strings.ToLower(effectiveSessionProvider(opts)) {
+	provider := strings.ToLower(strings.TrimSpace(effectiveSessionProvider(opts)))
+	if provider == "" {
+		return missingSessionProviderError()
+	}
+
+	switch provider {
 	case sessionProviderOpenAI:
 		_, err := resolveOpenAIRealtimeSessionConfig(opts)
 		return err
@@ -389,6 +394,10 @@ func validateInjectedLiveSession(opts SessionRunOptions) error {
 	default:
 		return fmt.Errorf("--record supports session providers %q and %q; got %q", sessionProviderGrok, sessionProviderOpenAI, effectiveSessionProvider(opts))
 	}
+}
+
+func missingSessionProviderError() error {
+	return fmt.Errorf("--record requires --provider %s or --provider %s for live session inference", sessionProviderGrok, sessionProviderOpenAI)
 }
 
 func effectiveSessionProvider(opts SessionRunOptions) string {
@@ -422,12 +431,12 @@ func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error)
 		}
 	}
 	if strings.TrimSpace(opts.Provider) == "" && !strings.EqualFold(loadedCfg.Model.Provider, sessionProviderGrok) {
-		return config.GrokConfig{}, fmt.Errorf("--record requires --provider grok for live session inference")
+		return config.GrokConfig{}, missingSessionProviderError()
 	}
 
 	effective := loadedCfg.ApplyOverrides(opts.APIKey, opts.Model, opts.Provider, opts.BaseURL)
 	if strings.TrimSpace(effective.Model.Provider) == "" {
-		return config.GrokConfig{}, fmt.Errorf("--record requires --provider grok for live session inference")
+		return config.GrokConfig{}, missingSessionProviderError()
 	}
 	if !strings.EqualFold(effective.Model.Provider, sessionProviderGrok) {
 		return config.GrokConfig{}, fmt.Errorf("--record supports provider %q only; got %q", sessionProviderGrok, effective.Model.Provider)
@@ -459,12 +468,12 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 		}
 	}
 	if strings.TrimSpace(opts.Provider) == "" && !strings.EqualFold(loadedCfg.Model.Provider, sessionProviderOpenAI) {
-		return config.OpenAIConfig{}, fmt.Errorf("--record requires --provider openai for OpenAI realtime session inference")
+		return config.OpenAIConfig{}, missingSessionProviderError()
 	}
 
 	effective := loadedCfg.ApplyOverrides(opts.APIKey, opts.Model, opts.Provider, opts.BaseURL)
 	if strings.TrimSpace(effective.Model.Provider) == "" {
-		return config.OpenAIConfig{}, fmt.Errorf("--record requires --provider openai for OpenAI realtime session inference")
+		return config.OpenAIConfig{}, missingSessionProviderError()
 	}
 	if !strings.EqualFold(effective.Model.Provider, sessionProviderOpenAI) {
 		return config.OpenAIConfig{}, fmt.Errorf("--record supports provider %q only for OpenAI realtime sessions; got %q", sessionProviderOpenAI, effective.Model.Provider)

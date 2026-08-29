@@ -80,7 +80,7 @@ func TestSessionCommand_RejectsNonJSONCapturePath(t *testing.T) {
 	}
 }
 
-func TestSessionCommand_RecordRequiresLiveGrokProvider(t *testing.T) {
+func TestSessionCommand_RecordRequiresLiveSessionProvider(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
@@ -93,8 +93,9 @@ func TestSessionCommand_RecordRequiresLiveGrokProvider(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing provider error")
 	}
-	if !strings.Contains(err.Error(), "--provider grok") {
-		t.Fatalf("record error should explain live Grok provider requirement, got: %v", err)
+	want := "--record requires --provider grok or --provider openai for live session inference"
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("record error should provide full live provider guidance %q, got: %v", want, err)
 	}
 }
 
