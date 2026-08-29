@@ -9,6 +9,21 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+// EvaluateBrowserConversation validates and evaluates one externally collected
+// browser conversation. Live production runners use this boundary after they
+// have joined their session-log, browser-event, oracle, and lifecycle
+// observations into the same result contract as the hermetic runner.
+func EvaluateBrowserConversation(scenario BrowserConversationScenario, result BrowserConversationResult, rootErr error) (BrowserConversationMechanicalEvaluation, error) {
+	normalizedScenario, err := NewBrowserConversationScenario(scenario)
+	if err != nil {
+		return BrowserConversationMechanicalEvaluation{}, err
+	}
+	if err := result.Validate(); err != nil {
+		return BrowserConversationMechanicalEvaluation{}, err
+	}
+	return evaluateBrowserConversation(normalizedScenario, result, rootErr), nil
+}
+
 func evaluateBrowserConversation(scenario BrowserConversationScenario, result BrowserConversationResult, rootErr error) BrowserConversationMechanicalEvaluation {
 	var failures []string
 	expectedCancellation := browserConversationExpectedCancellation(scenario, result, rootErr)

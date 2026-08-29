@@ -100,6 +100,32 @@ type BrowserConversationBrokerCall struct {
 	ToolRefs           []webmcp.ToolRef                   `json:"tool_refs,omitempty"`
 }
 
+// BrowserConversationInputJSONAttempt is the immutable validity observation
+// for one recorded webmcp_invoke call. InputJSON remains the exact model
+// string; ValidObject is derived from it and never replaces it.
+type BrowserConversationInputJSONAttempt struct {
+	Sequence     uint64                 `json:"sequence"`
+	StepID       string                 `json:"step_id,omitempty"`
+	InvocationID webmcp.InvocationID    `json:"invocation_id,omitempty"`
+	ToolRef      webmcp.ToolRef         `json:"tool_ref,omitempty"`
+	ToolName     string                 `json:"tool_name,omitempty"`
+	State        webmcp.InvocationState `json:"state,omitempty"`
+	Terminal     bool                   `json:"terminal"`
+	InputJSON    string                 `json:"input_json"`
+	ValidObject  bool                   `json:"valid_object"`
+}
+
+// BrowserConversationInputJSONValidity is the exact numerator/denominator
+// measurement over every observed webmcp_invoke broker call. Attempts are
+// retained so an invalid model value can be reviewed without coercion,
+// retry, or omission.
+type BrowserConversationInputJSONValidity struct {
+	ValidObjectStrings int                                   `json:"valid_object_strings"`
+	TotalAttempts      int                                   `json:"total_attempts"`
+	Percentage         float64                               `json:"percentage"`
+	Attempts           []BrowserConversationInputJSONAttempt `json:"attempts,omitempty"`
+}
+
 // BrowserConversationRecoveryEvidence records the ordered facts needed to
 // prove customer-navigation recovery. A stale reference is retained exactly
 // as attempted; it is never replaced with the fresh reference in-place.
@@ -227,18 +253,19 @@ type BrowserConversationMechanicalEvaluation struct {
 // independent oracle snapshots, cancellation, lifecycle, mechanical checks,
 // and validator output.
 type BrowserConversationResult struct {
-	ScenarioID   string                                  `json:"scenario_id"`
-	ScenarioName string                                  `json:"scenario_name"`
-	Finalized    bool                                    `json:"finalized"`
-	Turns        []BrowserConversationTurn               `json:"turns,omitempty"`
-	BrokerCalls  []BrowserConversationBrokerCall         `json:"broker_calls,omitempty"`
-	Oracles      []BrowserConversationOracleSnapshot     `json:"oracle_snapshots,omitempty"`
-	Corrections  []BrowserConversationCorrectionEvidence `json:"corrections,omitempty"`
-	Recovery     []BrowserConversationRecoveryEvidence   `json:"recovery,omitempty"`
-	Cancellation BrowserConversationCancellationEvidence `json:"cancellation"`
-	Lifecycle    BrowserConversationLifecycleEvidence    `json:"lifecycle"`
-	Mechanical   BrowserConversationMechanicalEvaluation `json:"mechanical"`
-	Validator    BrowserConversationValidatorVerdict     `json:"validator"`
+	ScenarioID        string                                  `json:"scenario_id"`
+	ScenarioName      string                                  `json:"scenario_name"`
+	Finalized         bool                                    `json:"finalized"`
+	Turns             []BrowserConversationTurn               `json:"turns,omitempty"`
+	BrokerCalls       []BrowserConversationBrokerCall         `json:"broker_calls,omitempty"`
+	InputJSONValidity BrowserConversationInputJSONValidity    `json:"input_json_validity"`
+	Oracles           []BrowserConversationOracleSnapshot     `json:"oracle_snapshots,omitempty"`
+	Corrections       []BrowserConversationCorrectionEvidence `json:"corrections,omitempty"`
+	Recovery          []BrowserConversationRecoveryEvidence   `json:"recovery,omitempty"`
+	Cancellation      BrowserConversationCancellationEvidence `json:"cancellation"`
+	Lifecycle         BrowserConversationLifecycleEvidence    `json:"lifecycle"`
+	Mechanical        BrowserConversationMechanicalEvaluation `json:"mechanical"`
+	Validator         BrowserConversationValidatorVerdict     `json:"validator"`
 }
 
 // BrowserScenarioResult and BrowserScenarioRun are descriptive aliases for
@@ -246,9 +273,9 @@ type BrowserConversationResult struct {
 type BrowserScenarioResult = BrowserConversationResult
 type BrowserScenarioRun = BrowserConversationRun
 
-// Validate checks the joined evidence shape without validating the content
-// of InputJSON. Invalid invocation input is an observation that must remain
-// serializable for the later validity measurement.
+// Validate checks the joined evidence shape without rejecting invalid
+// InputJSON. Invalid invocation input is an observation that must remain
+// serializable for the validity measurement.
 func (r BrowserConversationResult) Validate() error {
 	if strings.TrimSpace(r.ScenarioID) == "" {
 		return browserConversationResultError("scenario_id", "is required")
@@ -860,6 +887,7 @@ func cloneBrowserConversationResult(result BrowserConversationResult) BrowserCon
 	for index, call := range result.BrokerCalls {
 		clone.BrokerCalls[index] = cloneBrowserConversationBrokerCall(call)
 	}
+	clone.InputJSONValidity = computeBrowserConversationInputJSONValidity(clone.BrokerCalls)
 	clone.Oracles = make([]BrowserConversationOracleSnapshot, len(result.Oracles))
 	for index, snapshot := range result.Oracles {
 		clone.Oracles[index] = cloneBrowserConversationOracleSnapshot(snapshot)

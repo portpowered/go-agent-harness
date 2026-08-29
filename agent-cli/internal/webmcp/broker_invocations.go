@@ -192,6 +192,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 		TargetID:     descriptor.TargetID,
 		Generation:   descriptor.Generation,
 		ToolRef:      request.ToolRef,
+		ToolName:     descriptor.Name,
 		InvocationID: id,
 		State:        InvocationQueued,
 		Reason:       "admitted",
@@ -941,6 +942,7 @@ func (b *StatefulBroker) finishInvocationLocked(invocation *brokerInvocation, re
 		Generation:   invocation.invocation.Tool.Generation,
 		InvocationID: invocation.invocation.ID,
 		ToolRef:      invocation.invocation.Tool.Ref,
+		ToolName:     invocation.invocation.Tool.Name,
 		State:        result.State,
 		Reason:       result.ErrorCode,
 	})

@@ -1125,6 +1125,7 @@ func recordBrowserConversationValidator(run *BrowserConversationRun, validator B
 	}
 	candidate := run.Snapshot()
 	candidate.Finalized = true
+	candidate = SanitizeBrowserConversationResult(candidate)
 	verdict, err := validator.ValidateBrowserConversation(candidate)
 	if err != nil {
 		fallback := BrowserConversationValidatorVerdict{

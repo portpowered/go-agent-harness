@@ -2,10 +2,20 @@ package services
 
 import "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 
+// DeriveBrowserConversationRecovery exposes the same evidence derivation used
+// by the shared runner to production report builders. It only derives facts
+// from observed calls; it never repairs or retries a stale reference.
+func DeriveBrowserConversationRecovery(scenario BrowserConversationScenario, result BrowserConversationResult) []BrowserConversationRecoveryEvidence {
+	return deriveBrowserConversationRecovery(scenario, result)
+}
+
 func deriveBrowserConversationRecovery(scenario BrowserConversationScenario, result BrowserConversationResult) []BrowserConversationRecoveryEvidence {
 	var recoveries []BrowserConversationRecoveryEvidence
 	for _, step := range scenario.Steps {
-		if step.Navigation == nil {
+		// A correction may deliberately navigate to the page where the
+		// superseded action is corrected. That navigation belongs to the
+		// correction evidence, not to the stale-reference recovery contract.
+		if step.Navigation == nil || step.Correction != nil {
 			continue
 		}
 		recovery := BrowserConversationRecoveryEvidence{

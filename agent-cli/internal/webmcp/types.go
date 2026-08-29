@@ -301,6 +301,7 @@ type BrokerEvent struct {
 	Generation   uint64
 	InvocationID InvocationID
 	ToolRef      ToolRef
+	ToolName     string
 	State        InvocationState
 	Reason       string
 }

@@ -4,6 +4,12 @@ import (
 	"encoding/json"
 )
 
+// DeriveBrowserConversationCorrections exposes the shared correction evidence
+// derivation to live report builders without introducing a second evaluator.
+func DeriveBrowserConversationCorrections(scenario BrowserConversationScenario, result BrowserConversationResult) []BrowserConversationCorrectionEvidence {
+	return deriveBrowserConversationCorrections(scenario, result)
+}
+
 // deriveBrowserConversationCorrections joins the original and correcting
 // turns, completed invocations, and oracle pairs after the session has
 // stopped. Keeping this derivation separate from collection means a plausible
@@ -90,8 +96,11 @@ func browserConversationCorrectionEvidencePassed(
 		!browserConversationJSONEqual(evidence.CorrectionAfter, correctionTransition.After) {
 		return false
 	}
-	if !browserConversationJSONEqual(evidence.OriginalAfter, evidence.CorrectionBefore) ||
-		browserConversationJSONEqual(evidence.OriginalAfter, evidence.CorrectionAfter) ||
+	// The correction can happen after other valid actions or navigation have
+	// changed unrelated fields. The independent transition pairs must match
+	// their declared expectations; they do not need byte-for-byte equality at
+	// the hand-off between the original and correction.
+	if browserConversationJSONEqual(evidence.OriginalAfter, evidence.CorrectionAfter) ||
 		browserConversationJSONEqual(evidence.CorrectionBefore, evidence.CorrectionAfter) {
 		return false
 	}
@@ -128,10 +137,6 @@ func browserConversationCorrectionFailures(scenario BrowserConversationScenario,
 		}
 		if len(correction.CorrectionBefore) == 0 || len(correction.CorrectionAfter) == 0 {
 			failures = append(failures, "step "+stepID+": correction is missing an independent oracle transition")
-		}
-		if len(correction.OriginalAfter) != 0 && len(correction.CorrectionBefore) != 0 &&
-			!browserConversationJSONEqual(correction.OriginalAfter, correction.CorrectionBefore) {
-			failures = append(failures, "step "+stepID+": correction did not start from the superseded state")
 		}
 		if len(correction.OriginalAfter) != 0 && len(correction.CorrectionAfter) != 0 &&
 			browserConversationJSONEqual(correction.OriginalAfter, correction.CorrectionAfter) {
