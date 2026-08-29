@@ -200,6 +200,8 @@ func familyBCorrectionEvidence() CorrectionEvidence {
 		ReplacementResponseEndedAt:   1200 * time.Millisecond,
 		OriginalResponseStatus:       "cancelled",
 		ReplacementResponseStatus:    "completed",
+		CancellationEventRecorded:    true,
+		CancellationResponseID:       "response-original",
 		Process: &ProcessFacts{
 			PID:                123,
 			ExitCode:           0,

@@ -34,6 +34,8 @@ type CorrectionEvidence struct {
 	OriginalResponseEndedAt      time.Duration `json:"original_response_ended_at"`
 	ReplacementResponseStartedAt time.Duration `json:"replacement_response_started_at"`
 	ReplacementResponseEndedAt   time.Duration `json:"replacement_response_ended_at"`
+	CancellationEventRecorded    bool          `json:"cancellation_event_recorded"`
+	CancellationResponseID       string        `json:"cancellation_response_id,omitempty"`
 
 	OriginalResponseStatus    string `json:"original_response_status"`
 	ReplacementResponseStatus string `json:"replacement_response_status"`

@@ -20,24 +20,29 @@ import (
 // customerSimulationRecordingFacts are derived only from the copied product
 // record directory. They intentionally omit tool arguments and raw payloads.
 type customerSimulationRecordingFacts struct {
-	responses      []customerSimulationResponse
-	tools          []ToolObservation
-	cancelObserved bool
-	cancelAt       time.Duration
-	cancelWallAt   time.Time
-	recordingBase  time.Time
+	responses         []customerSimulationResponse
+	tools             []ToolObservation
+	cancelObserved    bool
+	cancelAt          time.Duration
+	cancelWallAt      time.Time
+	cancelResponseID  string
+	inputSpeechStarts []time.Duration
+	recordingBase     time.Time
 }
 
 type customerSimulationResponse struct {
-	ID         string
-	Text       string
-	Start      time.Duration
-	End        time.Duration
-	AudioBytes int
-	Complete   bool
-	Cancelled  bool
-	WallStart  time.Time
-	WallEnd    time.Time
+	ID            string
+	Text          string
+	Start         time.Duration
+	End           time.Duration
+	AudioBytes    int
+	Complete      bool
+	Cancelled     bool
+	WallStart     time.Time
+	WallEnd       time.Time
+	AudioStart    time.Duration
+	AudioEnd      time.Duration
+	AudioObserved bool
 }
 
 type customerSimulationTool struct {
@@ -97,6 +102,8 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 	facts.cancelObserved = streamFacts.cancelObserved
 	facts.cancelAt = streamFacts.cancelAt
 	facts.cancelWallAt = streamFacts.cancelWallAt
+	facts.cancelResponseID = streamFacts.cancelResponseID
+	facts.inputSpeechStarts = append([]time.Duration(nil), streamFacts.inputSpeechStarts...)
 	facts.recordingBase = streamFacts.recordingBase
 	return facts, errors.Join(failures...)
 }
@@ -162,9 +169,11 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 	var current *customerSimulationResponse
 	var text strings.Builder
 	pending := make(map[string]*customerSimulationTool)
+	activeResponseID := ""
 	responseIndex := 0
 	lastWallAt := base
 	lastAt := time.Duration(0)
+	inputSpeechActive := false
 	flush := func(at time.Duration, wallAt time.Time, complete, cancelled bool) {
 		if current == nil {
 			return
@@ -193,6 +202,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		case messages.StreamTypeMessageStart:
 			if isAssistant && current == nil {
 				current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
+				activeResponseID = strings.TrimSpace(msg.ResponseID)
 				responseIndex++
 			}
 		case messages.StreamTypeTextDelta:
@@ -201,6 +211,9 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 					current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
 				} else if current.ID == "" {
 					current.ID = msg.ResponseID
+				}
+				if activeResponseID == "" {
+					activeResponseID = strings.TrimSpace(msg.ResponseID)
 				}
 				if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil {
 					text.WriteString(value.Content)
@@ -213,20 +226,53 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 				} else if current.ID == "" {
 					current.ID = msg.ResponseID
 				}
+				if activeResponseID == "" {
+					activeResponseID = strings.TrimSpace(msg.ResponseID)
+				}
 				if value, ok := msg.Value.(*messages.TranscriptEndValue); ok && value != nil && text.Len() == 0 {
 					text.WriteString(value.FullText)
 				}
 			}
 		case messages.StreamTypeAudioDelta:
+			value, ok := msg.Value.(*messages.AudioDeltaValue)
+			if !ok || value == nil {
+				break
+			}
 			if isAssistant {
 				if current == nil {
 					current = &customerSimulationResponse{ID: msg.ResponseID, Start: record.at, WallStart: record.wallAt}
 				} else if current.ID == "" {
 					current.ID = msg.ResponseID
 				}
-				if value, ok := msg.Value.(*messages.AudioDeltaValue); ok && value != nil {
-					current.AudioBytes += len(value.Content)
+				if activeResponseID == "" {
+					activeResponseID = strings.TrimSpace(msg.ResponseID)
 				}
+				current.AudioBytes += len(value.Content)
+				if !current.AudioObserved {
+					current.AudioStart = record.at
+					current.AudioObserved = true
+				}
+				end := record.at + customerSimulationPCM16Duration(len(value.Content))
+				if end <= record.at {
+					end = record.at + time.Nanosecond
+				}
+				if end > current.AudioEnd {
+					current.AudioEnd = end
+				}
+				// A provider audio response is an observable boundary between
+				// customer speech runs. This also covers providers that omit
+				// explicit VAD silence frames from the recording.
+				inputSpeechActive = false
+			} else if record.dir == transcript.DirectionIn {
+				// The recorder's agent-side DirectionIn is the outbound
+				// provider-bound customer audio. Keep only the first frame of
+				// each non-silent run so the correction boundary is grounded in
+				// this same transcript clock as response audio and RESPONSE.CANCEL.
+				signal := customerSimulationPCM16HasSignal(value.Content)
+				if signal && !inputSpeechActive {
+					facts.inputSpeechStarts = append(facts.inputSpeechStarts, record.at)
+				}
+				inputSpeechActive = signal
 			}
 		case messages.StreamTypeToolCallEnd:
 			if isAssistant {
@@ -237,15 +283,30 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 				completedToolIDs[value.ToolCallID] = record.at
 			}
 		case messages.StreamTypeResponseCancel:
-			facts.cancelObserved = true
-			facts.cancelAt = record.at
-			facts.cancelWallAt = record.wallAt
-			if current != nil {
-				current.Cancelled = true
+			if record.dir == transcript.DirectionIn {
+				// DirectionIn on the agent transcript is the actual outbound
+				// provider cancellation. Do not treat a provider-side or
+				// inferred terminal event as proof of a customer barge-in.
+				if !facts.cancelObserved {
+					facts.cancelObserved = true
+					facts.cancelAt = record.at
+					facts.cancelWallAt = record.wallAt
+					facts.cancelResponseID = strings.TrimSpace(msg.ResponseID)
+					if facts.cancelResponseID == "" {
+						facts.cancelResponseID = activeResponseID
+					}
+					if facts.cancelResponseID == "" && current != nil {
+						facts.cancelResponseID = current.ID
+					}
+				}
+				if current != nil {
+					current.Cancelled = true
+				}
 			}
 		case messages.StreamTypeMessageEnd:
 			if isAssistant {
 				flush(record.at, record.wallAt, true, current != nil && current.Cancelled)
+				activeResponseID = ""
 			}
 		}
 		if responseIndex > len(scenario.Actions)+knownResponses+1 {
@@ -293,6 +354,15 @@ func recordContainsStreamType(payload []byte, want string) bool {
 	return json.Unmarshal(payload, &envelope) == nil && envelope.Type == want
 }
 
+func customerSimulationPCM16HasSignal(data []byte) bool {
+	for _, value := range data {
+		if value != 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func fullMessageToolID(payload []byte) (string, bool) {
 	var envelope struct {
 		ToolCallID string `json:"tool_call_id"`
@@ -318,43 +388,26 @@ func maxDuration(left, right time.Duration) time.Duration {
 	return left
 }
 
-func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, facts customerSimulationRecordingFacts, result DuplexRunResult) CorrectionEvidence {
+func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, facts customerSimulationRecordingFacts) CorrectionEvidence {
 	original := customerSimulationRecordedResponse(facts, 0)
 	replacement := customerSimulationRecordedResponse(facts, 1)
-	originalStart := customerSimulationResponseTime(original, original.Start, result, true)
-	originalEnd := customerSimulationResponseTime(original, original.End, result, false)
-	replacementStart := customerSimulationResponseTime(replacement, replacement.Start, result, true)
-	replacementEnd := customerSimulationResponseTime(replacement, replacement.End, result, false)
-	var originalAudioEnd time.Duration
-	if start, end, ok := customerSimulationResponseOutputInterval(scenario, facts, original, result); ok {
-		originalStart = start
-		originalAudioEnd = end
-		originalEnd = end
+	originalStart, originalEnd := customerSimulationResponseOutputBoundaries(original)
+	replacementStart, replacementEnd := customerSimulationResponseOutputBoundaries(replacement)
+	// All three boundaries come from the copied agent transcript's logical
+	// clock: response output audio, the first non-silent correction frame, and
+	// the actual provider-boundary RESPONSE.CANCEL. Do not substitute a parent
+	// process PCM read, a next response, or a terminal marker for any of them.
+	correctionAt := customerSimulationRecordedInputStart(facts, 1)
+	cancelAt := time.Duration(0)
+	if facts.cancelObserved {
+		cancelAt = facts.cancelAt
 	}
-	if start, end, ok := customerSimulationResponseOutputInterval(scenario, facts, replacement, result); ok {
-		replacementStart = start
-		replacementEnd = end
-	}
-	correctionAt := customerSimulationInputStart(result, FamilyBReplacementActionID, 1)
-	cancelAt := customerSimulationRecordedTime(facts.cancelWallAt, facts.cancelAt, result)
 
 	originalStatus := customerSimulationResponseStatus(original)
-	if originalStatus == "incomplete" && facts.cancelObserved {
+	if originalStatus == "incomplete" && facts.cancelObserved && facts.cancelResponseID == original.ID {
 		originalStatus = "cancelled"
 	}
 	replacementStatus := customerSimulationResponseStatus(replacement)
-	// The shipped recorder uses a deterministic epoch for its logical event
-	// clock, while DuplexRunResult uses the child runner's wall-clock origin.
-	// When the raw response terminal event is not directly wall-clocked, the
-	// next response's observed PCM boundary is the upper bound that proves the
-	// cancelled original was still active when the correction arrived. The
-	// original audio end remains the observed cancellation-side boundary.
-	if originalStatus == "cancelled" && replacementStart > correctionAt {
-		originalEnd = replacementStart
-	}
-	if originalAudioEnd > 0 && originalAudioEnd < correctionAt {
-		cancelAt = originalAudioEnd
-	}
 	originalResponseID := original.ID
 	if originalResponseID == "" && len(product) > 0 {
 		// Keep a visible placeholder for the malformed/missing-record case. The
@@ -367,8 +420,23 @@ func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []T
 		OriginalTurnID: customerSimulationTurnID(scenario, 0), CorrectionTurnID: customerSimulationTurnID(scenario, 1), OriginalResponseID: originalResponseID,
 		OriginalResponseStartedAt: originalStart, CorrectionStartedAt: correctionAt, CancellationSentAt: cancelAt, OriginalResponseEndedAt: originalEnd,
 		ReplacementResponseStartedAt: replacementStart, ReplacementResponseEndedAt: replacementEnd,
+		CancellationEventRecorded: facts.cancelObserved, CancellationResponseID: facts.cancelResponseID,
 		OriginalResponseStatus: originalStatus, ReplacementResponseStatus: replacementStatus, Process: &process,
 	}
+}
+
+func customerSimulationResponseOutputBoundaries(response customerSimulationResponse) (time.Duration, time.Duration) {
+	if !response.AudioObserved || response.AudioEnd <= response.AudioStart {
+		return 0, 0
+	}
+	return response.AudioStart, response.AudioEnd
+}
+
+func customerSimulationRecordedInputStart(facts customerSimulationRecordingFacts, index int) time.Duration {
+	if index < 0 || index >= len(facts.inputSpeechStarts) {
+		return 0
+	}
+	return facts.inputSpeechStarts[index]
 }
 
 // customerSimulationResponseOutputInterval maps a recorded response's audio

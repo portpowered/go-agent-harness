@@ -512,7 +512,7 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 	}
 	var correction *CorrectionEvidence
 	if spec.Scenario.Family == ScenarioFamilyB {
-		value := customerSimulationCorrectionEvidence(spec.Scenario, transcripts.Product, process, recordingFacts, duplexResult)
+		value := customerSimulationCorrectionEvidence(spec.Scenario, transcripts.Product, process, recordingFacts)
 		correction = &value
 	}
 	if recordErr := addCustomerSimulationProductRecord(bundle, recordRoot); recordErr != nil {
@@ -1106,7 +1106,7 @@ func customerSimulationMechanicalVerdict(scenario CustomerScenario, actions []Ac
 	var err error
 	switch scenario.Family {
 	case ScenarioFamilyB:
-		correction := customerSimulationCorrectionEvidence(scenario, product, process, facts, result)
+		correction := customerSimulationCorrectionEvidence(scenario, product, process, facts)
 		verdict, err = EvaluateCustomerSimulationCorrection(scenario, actions, checkpoints, tools, product, correction)
 	case ScenarioFamilyC:
 		mixed := customerSimulationMixedModalEvidence(scenario, PairedTranscripts{Product: product}, DuplexRunResult{})
@@ -1182,7 +1182,7 @@ func registerCustomerSimulationEvidenceRefs(bundle *CustomerEvidenceBundle, corr
 	}
 	if bundle.Scenario.Family == ScenarioFamilyB {
 		if correction == nil {
-			value := customerSimulationCorrectionEvidence(bundle.Scenario, bundle.Transcripts.Product, bundle.Process, customerSimulationRecordingFacts{}, DuplexRunResult{})
+			value := customerSimulationCorrectionEvidence(bundle.Scenario, bundle.Transcripts.Product, bundle.Process, customerSimulationRecordingFacts{})
 			correction = &value
 		}
 		if err := bundle.AddArtifactBytes("events/correction.json", ArtifactKindCorrectionEvidence, mustCustomerSimulationJSON(correction), true); err != nil {

@@ -170,6 +170,99 @@ func TestReadCustomerSimulationStreamCorrelatesCompleteToolMessage(t *testing.T)
 	}
 }
 
+func TestReadCustomerSimulationStreamUsesRecordedCorrectionBoundaries(t *testing.T) {
+	root := t.TempDir()
+	base := time.Unix(0, 0)
+	var data bytes.Buffer
+	sequence := uint64(0)
+	write := func(at time.Duration, direction transcript.Direction, message messages.StreamMessage) {
+		t.Helper()
+		payload, err := gatewaytesting.MarshalStreamMessage(message)
+		if err != nil {
+			t.Fatalf("MarshalStreamMessage(%s): %v", message.Type, err)
+		}
+		sequence++
+		encoded, err := transcript.Encode(transcript.NewRecord(sequence, base.Add(at), transcript.PeerAgent, direction, transcript.StreamWS, payload))
+		if err != nil {
+			t.Fatalf("Encode(%s): %v", message.Type, err)
+		}
+		data.Write(encoded)
+	}
+
+	write(time.Millisecond, transcript.DirectionIn, messages.StreamMessage{
+		Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1, 0, 1, 0}),
+	})
+	write(2*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeMessageStart, ResponseID: "response-original", Value: messages.NewMessageStartValue(),
+	})
+	write(2500*time.Microsecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-original", Value: messages.NewTranscriptDeltaValue("created the draft"),
+	})
+	write(3*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeAudioDelta, ResponseID: "response-original", Value: messages.NewAudioDeltaValue([]byte{1, 0, 1, 0}),
+	})
+	// The cancellation deliberately omits ResponseID. The parser must bind it
+	// to the currently open response, while still requiring this actual
+	// provider-boundary event rather than a later response or PCM marker.
+	write(4*time.Millisecond, transcript.DirectionIn, messages.StreamMessage{
+		Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue(),
+	})
+	write(5*time.Millisecond, transcript.DirectionIn, messages.StreamMessage{
+		Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{2, 0, 2, 0}),
+	})
+	write(6*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd, ResponseID: "response-original", Value: &messages.MessageEndValue{Type: "message_end", Status: "cancelled"},
+	})
+	write(7*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeMessageStart, ResponseID: "response-replacement", Value: messages.NewMessageStartValue(),
+	})
+	write(7500*time.Microsecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, ResponseID: "response-replacement", Value: messages.NewTranscriptDeltaValue("created the final"),
+	})
+	write(8*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeAudioDelta, ResponseID: "response-replacement", Value: messages.NewAudioDeltaValue([]byte{3, 0, 3, 0}),
+	})
+	write(9*time.Millisecond, transcript.DirectionOut, messages.StreamMessage{
+		Type: messages.StreamTypeMessageEnd, ResponseID: "response-replacement", Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if err := os.WriteFile(filepath.Join(root, "agent.transcript.jsonl"), data.Bytes(), 0o600); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	facts, err := readCustomerSimulationStream(root, NewFamilyBScenario(), 0)
+	if err != nil {
+		t.Fatalf("readCustomerSimulationStream: %v", err)
+	}
+	if !facts.cancelObserved || facts.cancelAt != 3*time.Millisecond || facts.cancelResponseID != "response-original" {
+		t.Fatalf("recorded cancellation = observed:%t at:%s response:%q, want 3ms on original response", facts.cancelObserved, facts.cancelAt, facts.cancelResponseID)
+	}
+	if len(facts.inputSpeechStarts) != 2 || facts.inputSpeechStarts[0] != 0 || facts.inputSpeechStarts[1] != 4*time.Millisecond {
+		t.Fatalf("recorded input speech starts = %v, want initial 0 and correction 4ms", facts.inputSpeechStarts)
+	}
+	original := customerSimulationRecordedResponse(facts, 0)
+	replacement := customerSimulationRecordedResponse(facts, 1)
+	if !original.AudioObserved || !replacement.AudioObserved || original.AudioStart != 2*time.Millisecond || replacement.AudioStart != 7*time.Millisecond {
+		t.Fatalf("recorded response audio boundaries = %+v / %+v, want original 2ms and replacement 7ms", original, replacement)
+	}
+
+	evidence := customerSimulationCorrectionEvidence(NewFamilyBScenario(), nil, ProcessFacts{}, facts)
+	if !evidence.CancellationEventRecorded || evidence.CancellationResponseID != "response-original" || evidence.CancellationSentAt != 3*time.Millisecond || evidence.CorrectionStartedAt != 4*time.Millisecond {
+		t.Fatalf("correction evidence = %+v, want recorded cancellation and correction boundaries", evidence)
+	}
+	if evidence.OriginalResponseStartedAt != 2*time.Millisecond || evidence.OriginalResponseEndedAt <= evidence.OriginalResponseStartedAt {
+		t.Fatalf("original response output interval = %s-%s, want positive recorded interval", evidence.OriginalResponseStartedAt, evidence.OriginalResponseEndedAt)
+	}
+
+	withoutCancellation := facts
+	withoutCancellation.cancelObserved = false
+	withoutCancellation.cancelAt = 0
+	withoutCancellation.cancelResponseID = ""
+	withoutCancellationEvidence := customerSimulationCorrectionEvidence(NewFamilyBScenario(), nil, ProcessFacts{}, withoutCancellation)
+	if withoutCancellationEvidence.CancellationEventRecorded || withoutCancellationEvidence.CancellationSentAt != 0 {
+		t.Fatalf("missing cancellation evidence = %+v, must not infer cancellation from output/input boundaries", withoutCancellationEvidence)
+	}
+}
+
 func TestCustomerSimulationAudioEventsCorrelateMultipleReadsToRecordedResponses(t *testing.T) {
 	scenario := NewFamilyBScenario()
 	facts := customerSimulationRecordingFacts{responses: []customerSimulationResponse{

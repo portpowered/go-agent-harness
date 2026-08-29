@@ -631,6 +631,13 @@ func EvaluateCustomerSimulationCorrection(
 	if !isCorrectionCompletedStatus(correction.ReplacementResponseStatus) {
 		addFinding("replacement_response_incomplete", correction.ReplacementActionID, correction.CorrectionTurnID, fmt.Sprintf("replacement response ended with status %q", correction.ReplacementResponseStatus))
 	}
+	if !correction.CancellationEventRecorded {
+		addFinding("cancellation_event_missing", correction.OriginalActionID, correction.CorrectionTurnID, "the copied product recording has no outbound RESPONSE.CANCEL event")
+	} else if strings.TrimSpace(correction.CancellationResponseID) == "" {
+		addFinding("cancellation_response_missing", correction.OriginalActionID, correction.CorrectionTurnID, "the recorded RESPONSE.CANCEL event is not associated with an original response")
+	} else if correction.CancellationResponseID != correction.OriginalResponseID {
+		addFinding("cancellation_response_mismatch", correction.OriginalActionID, correction.CorrectionTurnID, fmt.Sprintf("recorded RESPONSE.CANCEL targets %q, original response is %q", correction.CancellationResponseID, correction.OriginalResponseID))
+	}
 	if correction.OriginalResponseStartedAt >= correction.CorrectionStartedAt {
 		addFinding("correction_not_after_output_start", correction.OriginalActionID, correction.OriginalTurnID, "correction speech did not begin after original output started")
 	}

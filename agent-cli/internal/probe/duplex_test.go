@@ -89,14 +89,16 @@ func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 func TestDuplexRunnerSendsSIGINTAtOutputBoundary(t *testing.T) {
 	binary := buildDuplexSIGINTChild(t)
 	result, err := RunDuplexSession(context.Background(), DuplexSessionConfig{
-		BinaryPath:                  binary,
-		RecordDir:                   filepath.Join(t.TempDir(), "record"),
-		Provider:                    "openai",
-		Model:                       "duplex-test-model",
-		APIKey:                      "sigint-secret",
-		MaxDuration:                 time.Second,
-		FrameDuration:               time.Millisecond,
-		ShutdownGrace:               200 * time.Millisecond,
+		BinaryPath: binary,
+		RecordDir:  filepath.Join(t.TempDir(), "record"),
+		Provider:   "openai",
+		Model:      "duplex-test-model",
+		APIKey:     "sigint-secret",
+		// Keep this budget generous enough for a busy full-suite scheduler while
+		// retaining a hard upper bound for a child that fails to start or exit.
+		MaxDuration:                 3 * time.Second,
+		FrameDuration:               2 * time.Millisecond,
+		ShutdownGrace:               time.Second,
 		Termination:                 TerminationSIGINT,
 		TerminationAfterOutputBytes: 2,
 		Segments: []DuplexAudioSegment{{
@@ -279,6 +281,7 @@ func main() {
 	frame := make([]byte, 960)
 	if n, err := io.ReadFull(os.Stdin, frame); n > 0 {
 		_, _ = os.Stdout.Write([]byte{0xa1, 0xb2})
+		_ = os.Stdout.Sync()
 		if err != nil {
 			return
 		}
