@@ -737,6 +737,9 @@ func (h *blockingCloseHandle) Close() error {
 }
 
 func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
+	// A session-level SIGINT cleanup uses this same broker close boundary. An
+	// externally owned browser must be detached, never closed, so the caller's
+	// tabs remain usable after the agent process exits.
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
@@ -788,6 +791,11 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 		}
 		if closeErr := session.Close(); closeErr != nil {
 			t.Fatalf("detach post-session target %q: %v", targetID, closeErr)
+		}
+	}
+	for _, operation := range inner.Operations() {
+		if operation.Kind == testkit.OperationCloseTarget || operation.Kind == testkit.OperationCloseHandle {
+			t.Fatalf("external session cleanup issued destructive operation: %#v", operation)
 		}
 	}
 	if closeErr := inner.Close(); closeErr != nil {

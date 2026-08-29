@@ -143,6 +143,15 @@ type sessionLoopOptions struct {
 	// session command. Nil keeps the existing runtime path unchanged.
 	runtime *sessionRuntimeObservationRecorder
 
+	// cancellationIntent is the CLI-owned run marker used to distinguish an
+	// operator SIGINT from ordinary caller cancellation.
+	cancellationIntent *SessionCancellationIntent
+
+	// terminalSummaryRecorder receives a synthetic user-cancellation terminal
+	// summary on the non-duration path. Duration artifacts already receive the
+	// same summary through writeDurationSessionReplayMessage.
+	terminalSummaryRecorder sessionDurationTerminalRecorder
+
 	// AudioOutputError lets the audio-output wrapper report a concrete artifact
 	// failure before the incomplete-response guard classifies a tool round trip.
 	// Without this seam, malformed output can stop the wrapper before the final
@@ -203,7 +212,12 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeoutAndObserver(opts.ToolExecutor, opts.ToolExecutionTimeout, opts.toolLifecycleObserver)))
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
+			opts.ToolExecutor,
+			opts.ToolExecutionTimeout,
+			opts.toolLifecycleObserver,
+			opts.cancellationIntent,
+		)))
 	} else {
 		loopOpts = append(loopOpts, agentloop.WithToolExecutionDisabled())
 	}
@@ -214,8 +228,51 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
 	err = audioResponseCompletionError(err, opts)
 	err = scheduledAudioCompletionError(err, opts)
+	cleanSIGINT := sessionSIGINTCleanForObserver(err, opts.cancellationIntent, opts.observer)
 	err = opts.observer.finish(err)
+	if cleanSIGINT {
+		err = errors.Join(err, publishSessionUserCancellation(out, opts, writeSessionReplayMessage))
+	}
 	return err
+}
+
+func publishSessionUserCancellation(out io.Writer, opts sessionLoopOptions, write func(io.Writer, messages.StreamMessage) error) error {
+	terminal := sessionUserCancelledTerminalMessage(opts.observer)
+	var errs []error
+	if opts.terminalSummaryRecorder != nil {
+		summary, present, err := recordingTerminalSummaryFromMessage(terminal)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("record user cancellation terminal summary: %w", err))
+		} else if present {
+			if err := opts.terminalSummaryRecorder.RecordTerminalSummary(*summary); err != nil {
+				errs = append(errs, fmt.Errorf("record user cancellation terminal summary: %w", err))
+			}
+		}
+	}
+	if write != nil {
+		if err := write(out, terminal); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func sessionUserCancelledTerminalMessage(observer *sessionProgressObserver) messages.StreamMessage {
+	outputState := messages.TerminalOutputNone
+	if observer != nil {
+		outputState = observer.userCancellationOutputState()
+	}
+	return messages.StreamMessage{
+		Type: messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValueWithTerminal(
+			"",
+			SessionUserCancelledClassification,
+			SessionUserCancelledClassification,
+			messages.TerminalReasonCancellation,
+			messages.TerminalProvenanceCLI,
+			outputState,
+		),
+	}
 }
 
 // audioResponseCompletionError prevents an audio-input session from reporting

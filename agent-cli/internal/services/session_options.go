@@ -222,6 +222,11 @@ type SessionRunOptions struct {
 	CapabilityClose       func() error
 	capabilityCoordinator *SessionCapabilityCoordinator
 
+	// CancellationIntent carries the CLI-owned, run-scoped SIGINT marker into
+	// terminal accounting. A nil value preserves ordinary caller-cancellation
+	// behavior for service callers that do not own OS signal handling.
+	CancellationIntent *SessionCancellationIntent
+
 	// ToolExecutionTimeout overrides the per-invocation session tool adapter
 	// deadline for hermetic tests. Zero selects defaultSessionToolExecutionTimeout;
 	// production plans never set it, so live behavior is unchanged.

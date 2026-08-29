@@ -176,6 +176,7 @@ func (p sessionRuntimePlan) configureLoopObserver(loop *sessionLoopOptions) {
 	obs := newSessionProgressObserver(p.diagnostics, p.metricsRecorder, p.provider, p.model)
 	obs.streamObserver = p.streamObserver
 	obs.runtime = p.runtime
+	obs.cancellationIntent = loop.cancellationIntent
 	obs.requireSessionUpdated = loop.RequireSessionUpdated
 	obs.scheduledAudioDispatch = loop.ScheduledAudioDispatch
 	obs.scheduleAudioInputs(p.audioInputs)
@@ -220,6 +221,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
+	plan.loop.cancellationIntent = opts.CancellationIntent
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.loop.AudioInterruptions = opts.AudioInterruptions
 	plan.rtcDeviceRequest = opts.RTCDeviceBinding

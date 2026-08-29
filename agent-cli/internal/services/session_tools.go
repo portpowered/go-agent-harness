@@ -19,9 +19,10 @@ const defaultSessionToolExecutionTimeout = 60 * time.Second
 // definitions: the wrapped executor remains the owner of tool lookup and
 // argument validation.
 type sessionToolExecutor struct {
-	inner    messages.ToolExecutor
-	timeout  time.Duration
-	observer sessionToolLifecycleObserver
+	inner              messages.ToolExecutor
+	timeout            time.Duration
+	observer           sessionToolLifecycleObserver
+	cancellationIntent *SessionCancellationIntent
 }
 
 var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
@@ -49,10 +50,24 @@ func newSessionToolExecutorWithTimeout(inner messages.ToolExecutor, timeout time
 }
 
 func newSessionToolExecutorWithTimeoutAndObserver(inner messages.ToolExecutor, timeout time.Duration, observer sessionToolLifecycleObserver) *sessionToolExecutor {
+	return newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(inner, timeout, observer, nil)
+}
+
+func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
+	inner messages.ToolExecutor,
+	timeout time.Duration,
+	observer sessionToolLifecycleObserver,
+	cancellationIntent *SessionCancellationIntent,
+) *sessionToolExecutor {
 	if timeout <= 0 {
 		timeout = defaultSessionToolExecutionTimeout
 	}
-	return &sessionToolExecutor{inner: inner, timeout: timeout, observer: observer}
+	return &sessionToolExecutor{
+		inner:              inner,
+		timeout:            timeout,
+		observer:           observer,
+		cancellationIntent: cancellationIntent,
+	}
 }
 
 type sessionToolExecutionResult struct {
@@ -100,12 +115,37 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	select {
 	case result := <-resultCh:
 		if result.err != nil {
+			if e.sigintCancelled(execCtx, result.err) {
+				return correlatedSessionToolCancellation(call, result.err)
+			}
 			return finish(sessionToolFailure(call, result.err), true)
 		}
 		return finish(result.response, sessionToolResponseFailed(result.response.Content))
 	case <-execCtx.Done():
+		if e.sigintCancelled(execCtx, execCtx.Err()) {
+			return correlatedSessionToolCancellation(call, execCtx.Err())
+		}
 		return finish(sessionToolFailure(call, sessionToolContextFailure(execCtx.Err())), true)
 	}
+}
+
+// sigintCancelled identifies the one cancellation path that must not be
+// turned into a provider-visible failed tool result. The tool runner still
+// receives context.Canceled so the enclosing loop stops, but the lifecycle
+// observer records only the provider call, allowing the terminal summary to
+// classify the outstanding obligation as a user cancellation. An ordinary
+// caller cancellation and every independent tool error retain their existing
+// failure/result behavior.
+func (e *sessionToolExecutor) sigintCancelled(ctx context.Context, err error) bool {
+	return e != nil && e.cancellationIntent != nil && e.cancellationIntent.SIGINTReceived() &&
+		errors.Is(ctx.Err(), context.Canceled) && errors.Is(err, context.Canceled)
+}
+
+func correlatedSessionToolCancellation(call messages.ToolCall, err error) (messages.ToolCallResponse, error) {
+	return messages.ToolCallResponse{
+		ToolCallID: call.ID,
+		Name:       call.Name,
+	}, err
 }
 
 // sessionToolResponseFailed recognizes the structured WebMCP failure envelope

@@ -269,6 +269,7 @@ func runSessionWithImagesAndRecordingDirectory(
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
 	plan.loop.toolLifecycleObserver = recording
+	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
 		plan.inferencer = &sessionDirectoryRecordingInferencer{
 			inner:     plan.inferencer,
@@ -380,6 +381,7 @@ func runSessionWithRecordingDirectory(
 
 	recording := newSessionDirectoryRecording(destination, plan, opts)
 	plan.loop.toolLifecycleObserver = recording
+	plan.loop.terminalSummaryRecorder = recording
 	if plan.inferencer != nil {
 		plan.inferencer = &sessionDirectoryRecordingInferencer{
 			inner:     plan.inferencer,

@@ -145,6 +145,44 @@ func TestSessionToolExecutor_CooperativeWorkerExitsAfterTimeout(t *testing.T) {
 	}
 }
 
+func TestSessionToolExecutor_SIGINTCancellationDoesNotRecordFailedResult(t *testing.T) {
+	intent := NewSessionCancellationIntent()
+	intent.MarkSIGINT()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	observer := &sessionToolCancellationObserver{}
+	inner := sessionToolExecutorFunc(func(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
+		<-ctx.Done()
+		return messages.ToolCallResponse{}, ctx.Err()
+	})
+	call := messages.ToolCall{ID: "sigint-call", Name: "sleep", Arguments: `{"duration":"30s"}`}
+
+	_, err := newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(inner, time.Second, observer, intent).Execute(ctx, call)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SIGINT tool cancellation error = %v, want context.Canceled", err)
+	}
+	if observer.calls != 1 {
+		t.Fatalf("observed tool calls = %d, want one", observer.calls)
+	}
+	if observer.results != 0 {
+		t.Fatalf("observed tool results = %d, want zero for a user-canceled invocation", observer.results)
+	}
+}
+
+type sessionToolCancellationObserver struct {
+	calls   int
+	results int
+}
+
+func (o *sessionToolCancellationObserver) observeToolCall(messages.ToolCall) {
+	o.calls++
+}
+
+func (o *sessionToolCancellationObserver) observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool) {
+	o.results++
+}
+
 func TestSessionToolExecutor_DefaultTimeoutExecutesSuccessfully(t *testing.T) {
 	inner := sessionToolExecutorFunc(func(_ context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
 		return messages.ToolCallResponse{Content: "ok"}, nil
