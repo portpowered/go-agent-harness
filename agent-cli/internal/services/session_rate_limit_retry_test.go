@@ -298,11 +298,97 @@ func TestRateLimitRetryWaitStopsOnContextCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := retryScheduledRateLimitedResponse(ctx, nil, loop, observer, terminal); !errors.Is(err, context.Canceled) {
+	if err := retryScheduledRateLimitedResponse(ctx, nil, nil, loop, observer, terminal); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled retry error = %v, want context cancellation", err)
 	}
 	if got := session.countSent(messages.StreamTypeResponseCreate); got != 0 {
 		t.Fatalf("cancelled retry sent %d response.create messages, want zero", got)
+	}
+}
+
+func TestRunAgentLoopSessionMaxDurationStopsRateLimitRetry(t *testing.T) {
+	const retryDelay = 500 * time.Millisecond
+
+	session := newRateLimitRetrySession()
+	session.continuationFailures = []rateLimitRetryTerminal{{
+		code:    rateLimitRetryCode,
+		message: "Please try again in 0.5s",
+		details: "reason=error, code=rate_limit_exceeded, message=Please try again in 0.5s",
+	}}
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
+	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
+
+	err := runAgentLoopSessionStream(context.Background(), io.Discard, &rateLimitRetrySessionInferencer{session: session}, sessionLoopOptions{
+		MaxDuration:              100 * time.Millisecond,
+		CloseAfterScheduledAudio: true,
+		ToolExecutor:             &rateLimitRetryToolExecutor{},
+		ToolDefinitions:          []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+		observer:                 observer,
+	})
+	if err != nil {
+		t.Fatalf("runAgentLoopSessionStream: %v; timeline=%v", err, session.timelineSnapshot())
+	}
+	if got := session.countSent(messages.StreamTypeResponseCreate); got != 1 {
+		t.Fatalf("response.create count = %d, want initial continuation only (retry delay %s); timeline=%v", got, retryDelay, session.timelineSnapshot())
+	}
+}
+
+func TestRunAgentLoopSessionWithDurationMaxDurationStopsRateLimitRetry(t *testing.T) {
+	clock := &durationTestClock{}
+	session := newRateLimitRetrySession()
+	session.continuationFailures = []rateLimitRetryTerminal{{
+		code:    rateLimitRetryCode,
+		message: "Please try again in 0.5s",
+		details: "reason=error, code=rate_limit_exceeded, message=Please try again in 0.5s",
+	}}
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
+	observer.scheduleAudioInputs([]ScheduledAudioInput{{AfterCompletedTurns: 0, PCM: []byte{1, 2}, EndOfTurn: true}})
+	failureObserved := make(chan struct{})
+	var failureOnce sync.Once
+	observer.streamObserver = func(msg messages.StreamMessage) {
+		if msg.Type != messages.StreamTypeMessageEnd {
+			return
+		}
+		terminal, ok := msg.Value.(*messages.MessageEndValue)
+		if !ok || terminal == nil || providerTerminalErrorCode(terminal) != rateLimitRetryCode {
+			return
+		}
+		failureOnce.Do(func() { close(failureObserved) })
+	}
+
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- runAgentLoopSessionWithDurationClock(
+			context.Background(),
+			io.Discard,
+			&rateLimitRetrySessionInferencer{session: session},
+			sessionLoopOptions{
+				ToolExecutor:    &rateLimitRetryToolExecutor{},
+				ToolDefinitions: []messages.ToolDefinition{{Name: "lookup", Description: "Look up one value."}},
+				observer:        observer,
+			},
+			time.Hour,
+			clock,
+		)
+	}()
+
+	select {
+	case <-failureObserved:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for rate-limit terminal")
+	}
+	clock.fire()
+
+	select {
+	case err := <-runErrCh:
+		if err == nil || !errors.Is(err, ErrSessionToolContinuationIncomplete) {
+			t.Fatalf("duration run error = %v, want the existing incomplete continuation classification; timeline=%v", err, session.timelineSnapshot())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("duration run did not stop after deadline")
+	}
+	if got := session.countSent(messages.StreamTypeResponseCreate); got != 1 {
+		t.Fatalf("response.create count = %d, want initial continuation only; timeline=%v", got, session.timelineSnapshot())
 	}
 }
 
