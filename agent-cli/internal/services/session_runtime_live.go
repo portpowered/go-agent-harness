@@ -46,7 +46,7 @@ func planBrowserLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntim
 	var inferencer messages.SessionInferencer
 	switch provider {
 	case sessionProviderOpenAI:
-		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, len(opts.AudioInputs) > 0)
+		inferencer, err = factory.newOpenAISessionInferencerForTools(openAISessionCfg, opts.Voice, liveDialer, opts.ToolDefinitions, opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0)
 	case sessionProviderGrok:
 		inferencer, err = factory.newGrokSessionInferencerForTools(grokSessionCfg, liveDialer, opts.ToolDefinitions)
 	}

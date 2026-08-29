@@ -43,9 +43,9 @@ func (e *SessionScheduledAudioIncompleteError) Unwrap() error {
 }
 
 // ErrSessionAudioResponseIncomplete identifies an audio-input run that ended
-// after a provider tool-call turn but before a final assistant response. A
-// provider close or a duration cutoff is not a successful conversation when
-// the tool round trip has no continuation.
+// before a final assistant response. A provider close or duration cutoff is
+// not a successful finite conversation when no terminal assistant output was
+// observed.
 var ErrSessionAudioResponseIncomplete = errors.New("audio session ended before the final assistant response")
 
 // ErrSessionScheduledAudioConfigTimeout identifies a live scheduled-audio run
@@ -86,8 +86,14 @@ type sessionLoopOptions struct {
 	// A tool-call MESSAGE.END is an intermediate provider turn; the session
 	// must observe a later non-tool assistant MESSAGE.END before clean success.
 	RequireAssistantResponse bool
-	Done                     <-chan struct{}
-	DoneErr                  func() error
+	// RequireTerminalAssistantResponse applies the stricter terminal-output
+	// contract to composed image-plus-audio turns. It is separate from
+	// RequireAssistantResponse so existing audio-only callers may retain their
+	// provider-close compatibility behavior while the multimodal turn rejects
+	// a clean close with no assistant output.
+	RequireTerminalAssistantResponse bool
+	Done                             <-chan struct{}
+	DoneErr                          func() error
 	// AudioIn optionally streams a bounded file or stdin audio source into
 	// the loop after SESSION.OPEN. When nil, every session path behaves
 	// exactly as it did before audio input existed.
@@ -206,16 +212,21 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	return err
 }
 
-// audioResponseCompletionError prevents any session from reporting clean
-// success when it observed a tool-call response but never observed the final
-// assistant response that should follow accepted tool-result delivery. The
-// guard is input-source agnostic; RequireAssistantResponse remains a stop-rule
-// compatibility option, not the lifecycle contract.
+// audioResponseCompletionError prevents an audio-input session from reporting
+// clean success without a terminal assistant response. It also preserves the
+// older tool-continuation guard for callers that do not set RequireAssistantResponse.
 func audioResponseCompletionError(err error, opts sessionLoopOptions) error {
 	if opts.AudioOutputError != nil {
 		if outputErr := opts.AudioOutputError(); outputErr != nil {
 			return err
 		}
+	}
+	if opts.RequireTerminalAssistantResponse && (opts.observer == nil || !opts.observer.assistantResponseCompleted()) {
+		incomplete := ErrSessionAudioResponseIncomplete
+		if err == nil {
+			return incomplete
+		}
+		return errors.Join(err, incomplete)
 	}
 	if opts.observer == nil || !opts.observer.providerToolCallObserved() || opts.observer.assistantResponseCompleted() {
 		return err

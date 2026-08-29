@@ -205,6 +205,7 @@ func runSessionWithImagesAndRecordingDirectory(
 				runErr = errors.Join(runErr, closeErr)
 			}
 		}()
+		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	}
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil)
 	if err != nil {
@@ -219,6 +220,7 @@ func runSessionWithImagesAndRecordingDirectory(
 		// response containing a tool call. Keep the session open through the
 		// tool result and the follow-up assistant response.
 		plan.loop.RequireAssistantResponse = true
+		plan.loop.RequireTerminalAssistantResponse = true
 	}
 	recording := newSessionDirectoryRecording(destination, plan, opts.SessionRunOptions)
 	if plan.inferencer != nil {

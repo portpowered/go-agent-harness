@@ -188,6 +188,10 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 		}
 	}()
 
+	// The finite source sends MESSAGE.END after its final frame. Disable
+	// provider-side turn detection before planning the live runtime so that
+	// this path owns the single commit and response boundary.
+	opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	plan, wirePrompt, err := planSessionImageRuntime(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, true)
 	if err != nil {
 		return err
@@ -196,6 +200,7 @@ func RunSessionWithImagesAndAudioInput(ctx context.Context, out io.Writer, opts 
 	plan.loop.AudioIn = audioSource
 	plan.loop.MaxDuration = opts.MaxDuration
 	plan.loop.RequireAssistantResponse = true
+	plan.loop.RequireTerminalAssistantResponse = true
 	return runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
 }
 
@@ -282,6 +287,9 @@ func runSessionImagePlan(ctx context.Context, out io.Writer, plan sessionRuntime
 		return errors.Join(err, output.errorValue())
 	}
 	if opts.MaxDuration == 0 {
+		return plan.run(ctx, out)
+	}
+	if plan.loop.AudioIn != nil {
 		return plan.run(ctx, out)
 	}
 	return runSessionImageDuration(ctx, out, plan, opts.MaxDuration)
