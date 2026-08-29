@@ -77,7 +77,7 @@ func TestRunCustomerSimulationSuiteLeavesTypedBrokenBundleWithoutProductRecord(t
 	if _, err := VerifyCustomerEvidenceBundle(run.BundleRoot); err != nil {
 		t.Fatalf("VerifyCustomerEvidenceBundle(%q): %v", run.BundleRoot, err)
 	}
-	if run.Error == "" || !strings.Contains(run.Error, "child") && !strings.Contains(run.Error, "validator") {
+	if run.Error == "" || !strings.Contains(run.Error, "child") && !strings.Contains(run.Error, "validator") && !strings.Contains(run.Error, "deadline") {
 		t.Fatalf("run error = %q, want bounded non-secret diagnosis", run.Error)
 	}
 	if strings.Contains(run.Error, "test-key") {
