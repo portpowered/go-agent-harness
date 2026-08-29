@@ -210,6 +210,8 @@ type sessionProgressObserver struct {
 	scheduledInputs               int
 	dispatchedInputs              int
 	completedScheduled            int
+	scheduledTurnBase             int
+	scheduledTurnBaseSet          bool
 	scheduledResponses            []scheduledAudioResponseLifecycle
 	scheduledResponseByID         map[string]int
 	nextScheduledResponse         int

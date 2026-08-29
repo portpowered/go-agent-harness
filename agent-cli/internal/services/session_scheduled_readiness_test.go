@@ -385,6 +385,108 @@ func TestSessionProgressObserverCountsCancelledScheduledResponseDisposition(t *t
 	}
 }
 
+func TestSessionProgressObserverResolvedBargeLifecycleReleasesThirdTurnAfterReplacement(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.scheduledAudioDispatch = ScheduledAudioDispatchActiveResponse
+	probe := &scheduledInputDispatchProbe{}
+	observer.scheduleAudioInputs([]ScheduledAudioInput{
+		{AfterCompletedTurns: 0, PCM: []byte{1}, EndOfTurn: true},
+		{AfterCompletedTurns: 1, PCM: []byte{2}, EndOfTurn: true},
+		{AfterCompletedTurns: 2, PCM: []byte{3}, EndOfTurn: true},
+	})
+
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch first scheduled input: %v", err)
+	}
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-first",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch barging scheduled input: %v", err)
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-first",
+		Role:       messages.RoleAssistant,
+		Value: messages.NewMessageEndValueWithTerminal(
+			messages.TokenUsage{},
+			messages.TerminalReasonPartialOutput,
+			messages.TerminalProvenanceLoop,
+			messages.TerminalOutputNone,
+		),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-second",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageStartValue(),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch while replacement response is active: %v", err)
+	}
+	if len(probe.audio) != 2 {
+		t.Fatalf("third scheduled input crossed cancelled-response lookahead: %#v", probe.audio)
+	}
+	if observer.turnsCompleted != 0 {
+		t.Fatalf("cancelled response advanced ordinary turns = %d, want 0", observer.turnsCompleted)
+	}
+	if observer.completedScheduled != 1 {
+		t.Fatalf("resolved scheduled lifecycles = %d, want cancelled first lifecycle only", observer.completedScheduled)
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeTextDelta,
+		ResponseID: "resp-second",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewTextDeltaValue("replacement response"),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-second",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+	if err := observer.dispatchScheduledInputs(context.Background(), probe); err != nil {
+		t.Fatalf("dispatch third scheduled input after replacement: %v", err)
+	}
+	if len(probe.audio) != 3 || string(probe.audio[2]) != string([]byte{3}) {
+		t.Fatalf("resolved lifecycle dispatch = %#v, want third input exactly once", probe.audio)
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "resp-third",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageStartValue(),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeTextDelta,
+		ResponseID: "resp-third",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewTextDeltaValue("third response"),
+	})
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		ResponseID: "resp-third",
+		Role:       messages.RoleAssistant,
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+
+	if observer.turnsCompleted != 2 {
+		t.Fatalf("ordinary completed turns = %d, want two admitted replacements", observer.turnsCompleted)
+	}
+	if completed, dispatched, scheduled := observer.scheduledAudioCounts(); completed != 3 || dispatched != 3 || scheduled != 3 {
+		t.Fatalf("final scheduled counts = %d/%d/%d, want completed=3 dispatched=3 scheduled=3", completed, dispatched, scheduled)
+	}
+	if !observer.scheduledAudioComplete() {
+		t.Fatal("resolved three-turn schedule was not marked complete")
+	}
+}
+
 func TestSessionProgressObserverCompletionGatedIgnoresActiveResponse(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
 	probe := &scheduledInputDispatchProbe{}
