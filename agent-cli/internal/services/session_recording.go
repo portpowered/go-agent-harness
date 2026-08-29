@@ -251,11 +251,11 @@ func runSessionWithImagesAndRecordingDirectory(
 		}()
 		opts.SessionRunOptions.ClientOwnsAudioTurnBoundaries = true
 	}
-	plan, wirePrompt, cleanupRuntime, err := planSessionImageForDirectoryRecording(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
+	plan, wirePrompt, cleanup, err := planSessionImageRuntimeForDirectory(opts.SessionRunOptions, parts, opts.TextSeed, opts.SystemPrompt, audioSource != nil || len(opts.SessionRunOptions.AudioInputs) > 0)
 	if err != nil {
 		return err
 	}
-	defer cleanupRuntime()
+	defer cleanup()
 	if audioSource != nil {
 		audioSource.bindRuntime(plan.runtime)
 		plan.loop.CloseAfterOpen = false

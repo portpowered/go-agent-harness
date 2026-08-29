@@ -223,6 +223,28 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 	if err != nil {
 		return sessionRuntimePlan{}, "", err
 	}
+	return attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
+}
+
+// planSessionImageRuntimeForDirectory keeps directory recording independent
+// from the optional provider capture file. In particular, --record-dir alone
+// needs the live provider runtime without giving its capture finalizer an
+// empty path to flush. The directory planner owns that distinction and still
+// preserves explicit --record and --replay behavior.
+func planSessionImageRuntimeForDirectory(opts SessionRunOptions, parts []messages.ImagePart, seed SessionTextSeed, systemPrompt string, deferResponse bool) (sessionRuntimePlan, string, func(), error) {
+	plan, cleanup, err := planSessionForDirectoryRecordingWithInstructions(opts, systemPrompt, true)
+	if err != nil {
+		return sessionRuntimePlan{}, "", func() {}, err
+	}
+	plan, wirePrompt, err := attachSessionImageRuntime(plan, parts, seed, deferResponse, opts.Prompt)
+	if err != nil {
+		cleanup()
+		return sessionRuntimePlan{}, "", func() {}, err
+	}
+	return plan, wirePrompt, cleanup, nil
+}
+
+func attachSessionImageRuntime(plan sessionRuntimePlan, parts []messages.ImagePart, seed SessionTextSeed, deferResponse bool, prompt string) (sessionRuntimePlan, string, error) {
 	if plan.inferencer == nil {
 		return sessionRuntimePlan{}, "", errors.New("session image runtime has no session inferencer")
 	}
@@ -239,7 +261,7 @@ func planSessionImageRuntime(opts SessionRunOptions, parts []messages.ImagePart,
 		plan.loop.Prompt = wirePrompt
 		return plan, wirePrompt, nil
 	}
-	if opts.Prompt == "" {
+	if prompt == "" {
 		plan.loop.Prompt = sessionImageOnlyPrompt
 	}
 	return plan, "", nil

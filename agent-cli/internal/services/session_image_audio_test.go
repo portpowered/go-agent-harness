@@ -3,6 +3,7 @@ package services_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
@@ -78,6 +80,60 @@ func TestSessionCommandImageAndAudioInputUsesSingleTurn(t *testing.T) {
 	}
 	if audioDeltas != 1 || messageEnds != 1 {
 		t.Fatalf("CLI audio boundary events = audio:%d message_end:%d, want 1/1", audioDeltas, messageEnds)
+	}
+}
+
+func TestSessionCommandImageAndScheduledAudioDirectoryWithoutRecord(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := copySessionImageFixture(t, dir, "fixture.png")
+	audioPath := filepath.Join(dir, "question.raw")
+	samples := make([]int16, audio.FrameSize)
+	samples[0] = 1200
+	if err := os.WriteFile(audioPath, pcm16Bytes(samples), 0o600); err != nil {
+		t.Fatalf("write question PCM: %v", err)
+	}
+
+	session := newRecordingSessionImageSession()
+	session.onEvent = func(ctx context.Context, event messages.StreamMessage) {
+		if event.Type != messages.StreamTypeMessageEnd {
+			return
+		}
+		session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
+		session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("scheduled answer")})
+		session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+		session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("cli-image-scheduled", "done")})
+	}
+	inferencer := &scheduledSessionImageInferencer{session: session}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = filepath.Join(dir, "config")
+	command := cli.NewSessionCommand(flags.NewAskFlags(), globalFlags, nil, inferencer).Generate()
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+	command.SetArgs([]string{
+		"--record-dir", filepath.Join(dir, "recording"),
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "test-key",
+		"--image", imagePath,
+		"--audio-in-turn", audioPath,
+	})
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute image-plus-scheduled-audio command: %v", err)
+	}
+	if inferencer.connects != 1 || len(session.messages) != 1 {
+		t.Fatalf("connects/messages = %d/%d, want one connected image turn", inferencer.connects, len(session.messages))
+	}
+	if len(session.events) == 0 {
+		t.Fatal("scheduled audio did not reach the scripted provider")
+	}
+	for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl", "manifest.json"} {
+		data, err := os.ReadFile(filepath.Join(dir, "recording", name))
+		if err != nil {
+			t.Fatalf("read recording artifact %q: %v", name, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("recording artifact %q is empty", name)
+		}
 	}
 }
 
@@ -184,4 +240,91 @@ func TestRunSessionWithImagesAndAudioInputUsesOneDeferredTurn(t *testing.T) {
 	} else if info.Size() <= 44 {
 		t.Fatalf("assistant audio output size = %d, want WAV header plus audio", info.Size())
 	}
+}
+
+func TestRunSessionWithImagesAndScheduledAudioDirectoryWithoutRecord(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := copySessionImageFixture(t, dir, "fixture.png")
+	audioPath := filepath.Join(dir, "question.raw")
+	samples := make([]int16, audio.FrameSize)
+	samples[0] = 1200
+	if err := os.WriteFile(audioPath, pcm16Bytes(samples), 0o600); err != nil {
+		t.Fatalf("write question PCM: %v", err)
+	}
+
+	destination := filepath.Join(dir, "recording")
+	server := newScheduledAudioLifecycleServer()
+	err := services.RunSessionWithImagesAndRecordingDirectoryAndAudioFilesAndOutputAndTextSeedAndMaxDuration(
+		context.Background(),
+		io.Discard,
+		services.SessionImageRunOptions{
+			SessionRunOptions: services.SessionRunOptions{
+				Provider:        "openai",
+				Model:           "gpt-realtime-2.1-mini",
+				APIKey:          "test-key",
+				ConfigDir:       filepath.Join(dir, "config"),
+				WebSocketDialer: server,
+			},
+			ImagePaths: []string{imagePath},
+		},
+		destination,
+		"",
+		5*time.Second,
+		services.SessionTextSeed{},
+		[]string{audioPath},
+		"",
+	)
+	if err != nil {
+		t.Fatalf("image-plus-scheduled-audio directory run: %v", err)
+	}
+
+	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read recording manifest: %v", err)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("decode recording manifest: %v", err)
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("validate recording manifest: %v", err)
+	}
+	if len(manifest.Artifacts) == 0 {
+		t.Fatalf("recording manifest = %+v, want artifacts", manifest)
+	}
+	if writes := server.writesSnapshot(); countSessionWireType(writes, "conversation.item.create") != 1 || countSessionWireType(writes, "response.create") != 1 {
+		t.Fatalf("scheduled image/audio wire = %v, want one image item and one response", writes)
+	}
+	for _, path := range []string{"audio/in-000.pcm", "audio/out-000.pcm"} {
+		info, statErr := os.Stat(filepath.Join(destination, filepath.FromSlash(path)))
+		if statErr != nil || info.Size() == 0 {
+			t.Fatalf("recorded audio %q = %v, stat error %v; want non-empty artifact", path, info, statErr)
+		}
+	}
+}
+
+func countSessionWireType(writes []string, want string) int {
+	count := 0
+	for _, write := range writes {
+		if write == want {
+			count++
+		}
+	}
+	return count
+}
+
+type scheduledSessionImageInferencer struct {
+	connects int
+	session  *recordingSessionImageSession
+}
+
+func (i *scheduledSessionImageInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.connects++
+	if !i.session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("cli-image-scheduled", "gpt-realtime")}) {
+		return nil, ctx.Err()
+	}
+	if !i.session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("cli-image-scheduled")}) {
+		return nil, ctx.Err()
+	}
+	return i.session, nil
 }
