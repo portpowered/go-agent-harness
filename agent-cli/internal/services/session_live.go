@@ -212,7 +212,12 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeoutAndObserver(opts.ToolExecutor, opts.ToolExecutionTimeout, opts.toolLifecycleObserver)))
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
+			opts.ToolExecutor,
+			opts.ToolExecutionTimeout,
+			opts.toolLifecycleObserver,
+			opts.cancellationIntent,
+		)))
 	} else {
 		loopOpts = append(loopOpts, agentloop.WithToolExecutionDisabled())
 	}

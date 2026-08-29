@@ -99,6 +99,49 @@ agent session "hello from the CLI" --record captures/openai-demo.session.json --
 
 Do not commit a live capture until you have sanitized it. Session captures can contain sensitive text, audio payloads, prompts, model output, session identifiers, and provider metadata.
 
+## Stop a Session with Ctrl-C
+
+Press Ctrl-C once to stop an active `agent session` run. The CLI treats this
+SIGINT as intentional user cancellation, including when a tool is running or
+the provider has already accepted a tool result and is preparing the next
+response. The process exits with status `0` and emits one terminal summary:
+
+```text
+[session terminal: classification=user_cancelled terminal_reason=cancellation terminal_provenance=cli output_state=partial]
+```
+
+`output_state` is `none` when no assistant output was admitted and `partial`
+when output was admitted before Ctrl-C. A cancellation summary is not a
+provider failure: the CLI does not invent a tool result, continuation, or
+scheduled-turn completion for work that was still pending. Diagnostics identify
+pending work as canceled by the user, while already accepted tool calls remain
+visible in the recording.
+
+When `--record-dir` is enabled, cancellation still finalizes the recording
+directory. The final bundle contains the JSONL artifacts and `manifest.json`;
+the manifest records the terminal classification and hashes of the finalized
+artifacts. Temporary staging content is removed, so a Ctrl-C does not leave a
+partial bundle that looks complete.
+
+The clean-cancellation classification applies only to the CLI-owned SIGINT
+intent. Parent-context cancellation, an unexpected provider close, malformed
+provider data, tool failures, and independent recording or transport errors
+retain their normal failure classification and process status. Inspect the
+terminal fields before treating a non-zero exit as a user stop.
+
+For a reproducible local check, use a sanitized fixture or replay capture and
+keep credentials out of the command and any evidence:
+
+```bash
+agent session --replay captures/openai-demo.session.json \
+  --record-dir captures/openai-cancelled
+```
+
+If a live confirmation is required, use a short run with a test account,
+record it, and redact prompts, outputs, authorization headers, session IDs,
+and provider URLs before sharing the result. Do not commit the live capture or
+the command's secret-bearing environment.
+
 ## Replay a Session
 
 Replay a capture without opening a live provider connection:
