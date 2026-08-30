@@ -736,6 +736,30 @@ func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing
 	}
 }
 
+func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("draft")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard")},
+		// The assistant completion arrives after the user role became active.
+		// It must not close the user's line or cause the user completion to
+		// render the completed text a second time.
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("draft revised")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard revised")},
+	}
+	for _, event := range events {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write transcript event: %v", err)
+		}
+	}
+
+	if got, want := out.String(), "Assistant: draft\nUser: heard\n"; got != want {
+		t.Fatalf("late interleaved transcript output = %q, want %q", got, want)
+	}
+}
+
 func TestWriteSessionReplayMessage_ReturnsSessionErrorTerminalFields(t *testing.T) {
 	err := writeSessionReplayMessage(io.Discard, messages.StreamMessage{
 		Type: messages.StreamTypeError,

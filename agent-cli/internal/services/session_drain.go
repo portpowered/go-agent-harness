@@ -77,6 +77,12 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 		return writeSessionReplayString(r.out, value.Text)
 	case *messages.TranscriptEndValue:
 		role := r.transcriptRoleFor(msg.Role)
+		// A role can change before the provider delivers the previous role's
+		// completion. The delta already rendered that previous line, so its
+		// completion must not close or replace the currently active role's line.
+		if r.transcriptOpen && r.transcriptRole != role {
+			return nil
+		}
 		// Some providers can send only the completed event. Render that final
 		// value once; when deltas were already shown, the completed value is
 		// deliberately not appended because it would duplicate the utterance.
