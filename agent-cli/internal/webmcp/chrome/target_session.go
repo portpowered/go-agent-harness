@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	_ "image/png"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/cdp"
+	cdpPage "github.com/chromedp/cdproto/page"
 	cdpTarget "github.com/chromedp/cdproto/target"
 	cdpWebMCP "github.com/chromedp/cdproto/webmcp"
 	"github.com/chromedp/chromedp"
@@ -416,6 +419,44 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 		})
 	}
 	return nil
+}
+
+// CapturePageScreenshot uses the target-bound CDP context created at attach
+// time. It intentionally does not activate, navigate, or otherwise mutate the
+// browser before asking Page.captureScreenshot for the selected document.
+func (s *targetSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
+	var data []byte
+	err := s.run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		s.recordWireBeforeDispatch(webmcp.PageCaptureScreenshotMethod, "")
+		var err error
+		data, err = cdpPage.CaptureScreenshot().
+			WithFormat(cdpPage.CaptureScreenshotFormatPng).
+			WithFromSurface(true).
+			Do(ctx)
+		return err
+	}))
+	if err != nil {
+		return webmcp.PageScreenshot{}, classifySessionError(s, webmcp.ErrorBrowserProtocol, "capture_page", err)
+	}
+	if len(data) == 0 {
+		return webmcp.PageScreenshot{}, classifySessionError(s, webmcp.ErrorBrowserProtocol, "capture_page", errors.New("browser returned an empty screenshot"))
+	}
+	decoded, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || format != "png" || decoded.Width <= 0 || decoded.Height <= 0 {
+		if err == nil {
+			err = errors.New("browser returned a malformed PNG screenshot")
+		}
+		return webmcp.PageScreenshot{}, classifySessionError(s, webmcp.ErrorBrowserProtocol, "capture_page", err)
+	}
+	page := s.Context()
+	return webmcp.PageScreenshot{
+		BrowserID: page.Key.BrowserID,
+		TargetID:  page.Key.TargetID,
+		MIMEType:  "image/png",
+		Bytes:     append([]byte(nil), data...),
+		Width:     decoded.Width,
+		Height:    decoded.Height,
+	}, nil
 }
 
 func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {

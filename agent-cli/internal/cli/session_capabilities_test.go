@@ -553,7 +553,7 @@ func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *t
 		t.Fatalf("disabled browser constructed broker %d times", calls)
 	}
 	for _, definition := range capabilities.Definitions {
-		if isStableBrokerName(definition.Name) {
+		if isBrokerToolName(definition.Name) {
 			t.Fatalf("disabled definitions include broker tool %q", definition.Name)
 		}
 	}
@@ -585,16 +585,21 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 	if !gotBrowser.BrowserBackendEnabled() {
 		t.Fatalf("factory received disabled browser config: %+v", gotBrowser)
 	}
-	if len(capabilities.Definitions) != 7 {
-		t.Fatalf("definitions = %d, want one static plus six broker tools", len(capabilities.Definitions))
+	if len(capabilities.Definitions) != 8 {
+		t.Fatalf("definitions = %d, want one static plus six broker tools and show_page", len(capabilities.Definitions))
 	}
-	if capabilities.Definitions[0].Name != "sleep" {
-		t.Fatalf("static definition = %q, want filtered sleep", capabilities.Definitions[0].Name)
-	}
-	for _, definition := range capabilities.Definitions[1:] {
-		if !isStableBrokerName(definition.Name) {
-			t.Fatalf("composed definition %q is not a broker tool", definition.Name)
+	foundSleep := false
+	for _, definition := range capabilities.Definitions {
+		if definition.Name == "sleep" {
+			foundSleep = true
+			continue
 		}
+		if !isBrokerToolName(definition.Name) {
+			t.Fatalf("composed definition %q is neither filtered static sleep nor a broker tool", definition.Name)
+		}
+	}
+	if !foundSleep {
+		t.Fatalf("composed definitions = %#v, want filtered sleep", capabilities.Definitions)
 	}
 
 	response, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{
@@ -663,7 +668,10 @@ func browserCapabilityConfig(enabled bool) *config.Config {
 	return cfg
 }
 
-func isStableBrokerName(name string) bool {
+func isBrokerToolName(name string) bool {
+	if name == webmcp.ShowPageToolName {
+		return true
+	}
 	for _, candidate := range webmcp.StableToolNames() {
 		if candidate == name {
 			return true

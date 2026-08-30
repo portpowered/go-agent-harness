@@ -132,6 +132,21 @@ func (s *productionTargetSession) EnableWebMCP(ctx context.Context) error {
 	return s.flushEvents(ctx)
 }
 
+func (s *productionTargetSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
+	if s == nil || s.raw == nil {
+		return webmcp.PageScreenshot{}, webmcp.ErrClosed
+	}
+	capturer, ok := s.raw.(webmcp.PageScreenshotter)
+	if !ok {
+		return webmcp.PageScreenshot{}, webmcp.NewClassifiedError(
+			webmcp.ErrorUnsupportedWebMCP,
+			"the selected browser page does not support screenshot capture",
+			map[string]any{"capability": webmcp.PageCaptureScreenshotMethod},
+		)
+	}
+	return capturer.CapturePageScreenshot(ctx)
+}
+
 func (s *productionTargetSession) Events() <-chan webmcp.BrowserEvent { return s.events }
 
 func (s *productionTargetSession) InvokeWebMCP(ctx context.Context, frameID webmcp.FrameID, toolName string, input json.RawMessage) (webmcp.InvocationID, error) {

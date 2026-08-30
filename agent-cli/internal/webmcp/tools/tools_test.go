@@ -1,26 +1,33 @@
 package tools
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"reflect"
 	"strings"
 	"testing"
 
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestBrokerToolSetHasExactlyTheFrozenSixSchemas(t *testing.T) {
+func TestBrokerToolSetPreservesFrozenSchemasAndAddsShowPage(t *testing.T) {
 	set := NewToolSet(nil)
 	schemas := set.DefinitionSchemas()
-	if len(schemas) != 6 {
-		t.Fatalf("schema count = %d, want six", len(schemas))
+	if len(schemas) != 7 {
+		t.Fatalf("schema count = %d, want six stable tools plus show_page", len(schemas))
 	}
 	wantNames := webmcp.StableToolNames()
-	for i, schema := range schemas {
+	for i, schema := range schemas[:len(wantNames)] {
 		if schema["type"] != "function" {
 			t.Fatalf("schema %d type = %#v, want function", i, schema["type"])
 		}
@@ -38,6 +45,18 @@ func TestBrokerToolSetHasExactlyTheFrozenSixSchemas(t *testing.T) {
 		if parameters["type"] != "object" || parameters["additionalProperties"] != false {
 			t.Fatalf("schema %q is not a closed object: %#v", wantNames[i], parameters)
 		}
+	}
+	showPage := schemas[len(wantNames)]
+	showPageFunction, ok := showPage["function"].(map[string]any)
+	if !ok || showPageFunction["name"] != webmcp.ShowPageToolName {
+		t.Fatalf("show_page schema = %#v", showPage)
+	}
+	showPageParameters, ok := showPageFunction["parameters"].(map[string]any)
+	if !ok || showPageParameters["type"] != "object" || showPageParameters["additionalProperties"] != false {
+		t.Fatalf("show_page parameters = %#v, want a closed object", showPageFunction["parameters"])
+	}
+	if properties, ok := showPageParameters["properties"].(map[string]any); !ok || len(properties) != 0 {
+		t.Fatalf("show_page properties = %#v, want empty", showPageParameters["properties"])
 	}
 
 	cases := []struct {
@@ -88,6 +107,167 @@ func TestBrokerToolSetHasExactlyTheFrozenSixSchemas(t *testing.T) {
 	second := NewToolSet(nil).DefinitionSchemas()[0]["function"].(map[string]any)["parameters"].(map[string]any)
 	if second["additionalProperties"] != false {
 		t.Fatal("stable definitions share mutable schema state")
+	}
+}
+
+func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
+	imageBytes := testPNG(t, 3, 2)
+	broker := &recordingBroker{
+		selected: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
+		screenshot: webmcp.PageScreenshot{
+			MIMEType: "IMAGE/PNG",
+			Bytes:    imageBytes,
+		},
+	}
+	response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "show-call",
+		Name:      webmcp.ShowPageToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("show_page: %v", err)
+	}
+	assertTextualResponse(t, response, "show-call", webmcp.ShowPageToolName)
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil || !envelope.OK {
+		t.Fatalf("show_page envelope = %#v (err %v), want success", envelope, err)
+	}
+	var result ShowPageResult
+	if err := json.Unmarshal(envelope.Data, &result); err != nil {
+		t.Fatalf("decode show_page data: %v", err)
+	}
+	digest := sha256.Sum256(imageBytes)
+	if result.Version != ShowPageResultVersion || result.Source != showPageSource ||
+		result.BrowserID != "browser-a" || result.TargetID != "tab-a" ||
+		result.MIMEType != "image/png" || result.ByteLength != len(imageBytes) ||
+		result.Width != 3 || result.Height != 2 || result.SHA256 != fmt.Sprintf("%x", digest) {
+		t.Fatalf("show_page result = %+v, want normalized capture metadata", result)
+	}
+	if strings.Contains(response.Content, string(imageBytes)) {
+		t.Fatal("show_page result exposed raw image bytes")
+	}
+	if got := broker.calls; len(got) != 1 || got[0] != "capture_page" {
+		t.Fatalf("broker calls = %#v, want one capture call", got)
+	}
+}
+
+func TestShowPageReturnsClassifiedErrorsWithoutImageData(t *testing.T) {
+	valid := testPNG(t, 2, 2)
+	cases := []struct {
+		name   string
+		shot   webmcp.PageScreenshot
+		reason string
+	}{
+		{name: "empty", shot: webmcp.PageScreenshot{MIMEType: "image/png"}, reason: "empty_capture"},
+		{name: "unsupported mime", shot: webmcp.PageScreenshot{MIMEType: "image/webp", Bytes: valid}, reason: "unsupported_mime_type"},
+		{name: "mime mismatch", shot: webmcp.PageScreenshot{MIMEType: "image/jpeg", Bytes: valid}, reason: "mime_mismatch"},
+		{name: "malformed", shot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: []byte("not an image")}, reason: "malformed_image"},
+		{name: "dimension mismatch", shot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: valid, Width: 9}, reason: "dimension_mismatch"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			broker := &recordingBroker{
+				selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
+				screenshot: testCase.shot,
+			}
+			response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+				ID:        "error-call",
+				Name:      webmcp.ShowPageToolName,
+				Arguments: `{}`,
+			})
+			if err != nil {
+				t.Fatalf("show_page: %v", err)
+			}
+			envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+			if err != nil || envelope.OK || envelope.Error == nil {
+				t.Fatalf("show_page envelope = %#v (err %v), want failure", envelope, err)
+			}
+			if envelope.Error.Code != string(webmcp.ErrorInvocationFailed) || envelope.Data == nil {
+				t.Fatalf("show_page error = %#v, want invocation_failed with null data", envelope.Error)
+			}
+			if got := envelope.Error.Details["reason_code"]; got != testCase.reason {
+				t.Fatalf("reason_code = %#v, want %q", got, testCase.reason)
+			}
+			if string(envelope.Data) != "null" {
+				t.Fatalf("failed show_page data = %s, want null", envelope.Data)
+			}
+		})
+	}
+}
+
+func TestShowPageIsDisabledAndInputClosedOutsideBrowserSessions(t *testing.T) {
+	response, err := NewBrokerToolSet(nil).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "disabled-show",
+		Name:      webmcp.ShowPageToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("disabled show_page: %v", err)
+	}
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorWebMCPDisabled) {
+		t.Fatalf("disabled show_page = %#v (err %v), want webmcp_disabled", envelope, err)
+	}
+
+	broker := &recordingBroker{
+		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
+		screenshot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: testPNG(t, 1, 1)},
+	}
+	response, err = NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "invalid-show",
+		Name:      webmcp.ShowPageToolName,
+		Arguments: `{"unexpected":true}`,
+	})
+	if err != nil {
+		t.Fatalf("invalid show_page: %v", err)
+	}
+	envelope, err = webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvalidToolInput) {
+		t.Fatalf("invalid show_page = %#v (err %v), want invalid_tool_input", envelope, err)
+	}
+	if len(broker.calls) != 0 {
+		t.Fatalf("invalid show_page called broker: %#v", broker.calls)
+	}
+}
+
+func TestShowPagePreservesCancellationAndDeadlineClassification(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		err  error
+		code webmcp.ErrorCode
+	}{
+		{name: "canceled", err: context.Canceled, code: webmcp.ErrorInvocationCanceled},
+		{name: "deadline", err: context.DeadlineExceeded, code: webmcp.ErrorInvocationTimedOut},
+		{name: "closed", err: webmcp.ErrClosed, code: webmcp.ErrorInvocationFailed},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			broker := &recordingBroker{
+				selected:      webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
+				screenshotErr: testCase.err,
+			}
+			response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
+				ID:        "error-classification",
+				Name:      webmcp.ShowPageToolName,
+				Arguments: `{}`,
+			})
+			if err != nil {
+				t.Fatalf("show_page: %v", err)
+			}
+			envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+			if err != nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(testCase.code) {
+				t.Fatalf("show_page envelope = %#v (err %v), want %s", envelope, err, testCase.code)
+			}
+		})
+	}
+}
+
+func TestShowPageNamespaceIsPreflightedWithStaticTools(t *testing.T) {
+	err := cliTools.ValidateToolDefinitionNamespaces(
+		[]messages.ToolDefinition{{Name: webmcp.ShowPageToolName}},
+		NewBrokerToolSet(nil).Definitions(),
+	)
+	if !errors.Is(err, cliTools.ErrToolCompositionCollision) {
+		t.Fatalf("show_page namespace error = %v, want collision before composition", err)
 	}
 }
 
@@ -362,8 +542,8 @@ func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registry: %v", err)
 	}
-	if got := registry.List(); len(got) != 6 {
-		t.Fatalf("registry names = %#v, want six tools", got)
+	if got := registry.List(); len(got) != 7 {
+		t.Fatalf("registry names = %#v, want six stable tools plus show_page", got)
 	}
 	msgs, err := registry.Execute(context.Background(), webmcp.GetContextToolName, map[string]any{"refresh": false})
 	if err != nil {
@@ -378,13 +558,15 @@ func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
 }
 
 type recordingBroker struct {
-	selected     webmcp.PageContext
-	targets      []webmcp.Target
-	catalog      webmcp.ToolCatalogSnapshot
-	invokeResult webmcp.InvokeResult
-	lastInvoke   webmcp.InvokeRequest
-	lastCancel   webmcp.CancelRequest
-	calls        []string
+	selected      webmcp.PageContext
+	targets       []webmcp.Target
+	catalog       webmcp.ToolCatalogSnapshot
+	invokeResult  webmcp.InvokeResult
+	lastInvoke    webmcp.InvokeRequest
+	lastCancel    webmcp.CancelRequest
+	screenshot    webmcp.PageScreenshot
+	screenshotErr error
+	calls         []string
 }
 
 func (b *recordingBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
@@ -422,6 +604,22 @@ func (b *recordingBroker) Cancel(_ context.Context, request webmcp.CancelRequest
 	b.calls = append(b.calls, "cancel")
 	b.lastCancel = request
 	return nil
+}
+
+func (b *recordingBroker) CapturePageScreenshot(context.Context) (webmcp.PageScreenshot, error) {
+	b.calls = append(b.calls, "capture_page")
+	if b.screenshotErr != nil {
+		return webmcp.PageScreenshot{}, b.screenshotErr
+	}
+	screenshot := b.screenshot
+	if screenshot.BrowserID == "" {
+		screenshot.BrowserID = b.selected.Key.BrowserID
+	}
+	if screenshot.TargetID == "" {
+		screenshot.TargetID = b.selected.Key.TargetID
+	}
+	screenshot.Bytes = append([]byte(nil), screenshot.Bytes...)
+	return screenshot, nil
 }
 
 func (b *recordingBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
@@ -467,6 +665,21 @@ func mustRawJSON(t *testing.T, value any) []byte {
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+func testPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	imageValue := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			imageValue.SetRGBA(x, y, color.RGBA{R: uint8(x + 1), G: uint8(y + 1), B: 0x7f, A: 0xff})
+		}
+	}
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, imageValue); err != nil {
+		t.Fatalf("encode test PNG: %v", err)
+	}
+	return buffer.Bytes()
+}
 
 type staticToolTestDiscoverer struct {
 	candidate webmcp.BrowserCandidate

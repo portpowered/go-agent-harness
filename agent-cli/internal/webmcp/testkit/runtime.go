@@ -26,17 +26,18 @@ var (
 type OperationKind = OperationType
 
 const (
-	OperationOpen               OperationKind = "open_browser"
-	OperationListTargets        OperationKind = "list_targets"
-	OperationActivate           OperationKind = "activate_target"
-	OperationAttach             OperationKind = "attach_target"
-	OperationEnableAcknowledged OperationKind = "enable_webmcp_acknowledged"
-	OperationInvoke             OperationKind = "invoke_tool"
-	OperationCancel             OperationKind = "cancel_invocation"
-	OperationDetach             OperationKind = "detach_target"
-	OperationCloseHandle        OperationKind = "close_browser"
-	OperationDisconnect         OperationKind = "disconnect_browser"
-	OperationReplace            OperationKind = "replace_browser"
+	OperationOpen                  OperationKind = "open_browser"
+	OperationListTargets           OperationKind = "list_targets"
+	OperationActivate              OperationKind = "activate_target"
+	OperationAttach                OperationKind = "attach_target"
+	OperationCapturePageScreenshot OperationKind = "capture_page_screenshot"
+	OperationEnableAcknowledged    OperationKind = "enable_webmcp_acknowledged"
+	OperationInvoke                OperationKind = "invoke_tool"
+	OperationCancel                OperationKind = "cancel_invocation"
+	OperationDetach                OperationKind = "detach_target"
+	OperationCloseHandle           OperationKind = "close_browser"
+	OperationDisconnect            OperationKind = "disconnect_browser"
+	OperationReplace               OperationKind = "replace_browser"
 )
 
 // Operation is a race-safe snapshot of one fake-runtime command. Input and
@@ -119,6 +120,8 @@ type ScriptedTargetSessionOptions struct {
 	EnableError              error
 	InvokeError              error
 	CancelError              error
+	PageScreenshot           webmcp.PageScreenshot
+	PageScreenshotError      error
 	AutoRespond              bool
 	AutoResponseStatus       string
 	AutoResponseOutput       json.RawMessage
@@ -179,6 +182,20 @@ func WithInvokeError(err error) ScriptedTargetSessionOption {
 
 func WithCancelError(err error) ScriptedTargetSessionOption {
 	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.CancelError = err })
+}
+
+// WithPageScreenshot configures the deterministic screenshot returned by a
+// scripted target session. The bytes are copied at the option boundary.
+func WithPageScreenshot(screenshot webmcp.PageScreenshot) ScriptedTargetSessionOption {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
+		options.PageScreenshot = clonePageScreenshot(screenshot)
+	})
+}
+
+func WithPageScreenshotError(err error) ScriptedTargetSessionOption {
+	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
+		options.PageScreenshotError = err
+	})
 }
 
 func WithCancellationAcknowledgement(acknowledged bool) ScriptedTargetSessionOption {

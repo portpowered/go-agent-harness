@@ -15,9 +15,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// BrokerToolSet contains the six stable tools and a matching executor. It is
-// intentionally not registered in the process-wide static tool registry;
-// callers opt into this set when browser tools are explicitly enabled.
+// BrokerToolSet contains the six stable tools plus the browser-enabled page
+// capture tool and a matching executor. It is intentionally not registered
+// in the process-wide static tool registry; callers opt into this set when
+// browser tools are explicitly enabled.
 type BrokerToolSet struct {
 	broker      webmcp.Broker
 	definitions []webmcp.BrokerToolDefinition
@@ -35,7 +36,7 @@ type ToolSet = BrokerToolSet
 // broker is allowed so definitions can be composed before browser activation;
 // execution then returns a classified webmcp_disabled envelope.
 func NewBrokerToolSet(broker webmcp.Broker) *BrokerToolSet {
-	definitions := webmcp.StableBrokerToolDefinitions()
+	definitions := webmcp.BrowserToolDefinitions()
 	set := &BrokerToolSet{
 		broker:      broker,
 		definitions: definitions,
@@ -63,7 +64,7 @@ func NewExecutor(broker webmcp.Broker) *Executor {
 	return NewBrokerToolSet(broker).Executor()
 }
 
-// Tools returns the six CLI-compatible tools in frozen order.
+// Tools returns the CLI-compatible broker tools in frozen order.
 func (s *BrokerToolSet) Tools() []cliTools.Tool {
 	if s == nil {
 		return nil
@@ -71,7 +72,7 @@ func (s *BrokerToolSet) Tools() []cliTools.Tool {
 	return append([]cliTools.Tool(nil), s.tools...)
 }
 
-// Definitions returns the six provider-neutral flat definitions used by the
+// Definitions returns the provider-neutral flat definitions used by the
 // current agent-loop contract. Use DefinitionSchemas when the complete
 // additionalProperties/default-bearing JSON schemas are needed.
 func (s *BrokerToolSet) Definitions() []messages.ToolDefinition {
@@ -101,7 +102,7 @@ func (s *BrokerToolSet) DefinitionSchemas() []map[string]any {
 	if s == nil {
 		return nil
 	}
-	return webmcp.StableBrokerToolSchemas()
+	return webmcp.BrowserToolSchemas()
 }
 
 // FunctionDefinitions is a descriptive alias for DefinitionSchemas.
@@ -109,8 +110,8 @@ func (s *BrokerToolSet) FunctionDefinitions() []map[string]any {
 	return s.DefinitionSchemas()
 }
 
-// Registry returns an isolated CLI registry containing only the six broker
-// tools. It never mutates a caller's static registry.
+// Registry returns an isolated CLI registry containing only the broker tools.
+// It never mutates a caller's static registry.
 func (s *BrokerToolSet) Registry() (*cliTools.ToolRegistry, error) {
 	registry := cliTools.NewEmptyToolRegistry()
 	if s == nil {
@@ -335,6 +336,10 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 			})
 		}
 		return webmcp.EncodeToolResult(cancelData{InvocationID: request.InvocationID, Status: "cancel_requested"}, nil)
+
+	case webmcp.ShowPageToolName:
+		return s.capturePage(ctx)
+
 	default:
 		return invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
 	}
@@ -397,6 +402,7 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 		webmcp.ListToolsToolName:  {"refresh", "name_contains", "include_schemas", "frame_id"},
 		webmcp.InvokeToolName:     {"tool_ref", "input_json", "reason"},
 		webmcp.CancelToolName:     {"invocation_id", "reason"},
+		webmcp.ShowPageToolName:   {},
 	}
 	properties := definition.Parameters["properties"].(map[string]any)
 	var requiredSet map[string]bool

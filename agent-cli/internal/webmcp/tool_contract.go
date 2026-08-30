@@ -10,6 +10,7 @@ const (
 	ListToolsToolName  = "webmcp_list_tools"
 	InvokeToolName     = "webmcp_invoke"
 	CancelToolName     = "webmcp_cancel"
+	ShowPageToolName   = "show_page"
 )
 
 // StableToolNames is a copy of the ordered C0 tool-name list.
@@ -97,7 +98,29 @@ func StableBrokerToolDefinitions() []BrokerToolDefinition {
 // StableBrokerToolSchemas returns the six definitions in the same function
 // shape used by the existing CLI ToolToSchema helper.
 func StableBrokerToolSchemas() []map[string]any {
+	return brokerToolSchemas(StableBrokerToolDefinitions())
+}
+
+// BrowserToolDefinitions returns the stable broker controls plus the
+// browser-enabled page capture capability. The latter is deliberately kept
+// out of StableBrokerToolDefinitions so disabled sessions and the frozen C0
+// contract remain inert.
+func BrowserToolDefinitions() []BrokerToolDefinition {
 	definitions := StableBrokerToolDefinitions()
+	return append(definitions, BrokerToolDefinition{
+		Name:        ShowPageToolName,
+		Description: "Capture the currently selected browser page without changing browser state.",
+		Parameters:  objectSchema(),
+	})
+}
+
+// BrowserToolSchemas returns fresh provider-facing schemas for the complete
+// browser-enabled broker surface.
+func BrowserToolSchemas() []map[string]any {
+	return brokerToolSchemas(BrowserToolDefinitions())
+}
+
+func brokerToolSchemas(definitions []BrokerToolDefinition) []map[string]any {
 	result := make([]map[string]any, 0, len(definitions))
 	for _, definition := range definitions {
 		result = append(result, map[string]any{

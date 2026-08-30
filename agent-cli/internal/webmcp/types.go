@@ -48,6 +48,7 @@ const (
 	WebMCPEnableMethod            = "WebMCP.enable"
 	WebMCPInvokeToolMethod        = "WebMCP.invokeTool"
 	WebMCPCancelInvocationMethod  = "WebMCP.cancelInvocation"
+	PageCaptureScreenshotMethod   = "Page.captureScreenshot"
 )
 
 // WireTraceSink receives safe WebMCP wire-boundary evidence. Implementations

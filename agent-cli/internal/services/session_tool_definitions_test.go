@@ -138,8 +138,8 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve composed session capabilities: %v", err)
 	}
-	if len(capabilities.Definitions) != 7 {
-		t.Fatalf("composed definitions = %d, want one static plus six broker definitions", len(capabilities.Definitions))
+	if len(capabilities.Definitions) != 8 {
+		t.Fatalf("composed definitions = %d, want one static plus six broker definitions and show_page", len(capabilities.Definitions))
 	}
 
 	conn := newRecordingRealtimeTestConn()
@@ -211,8 +211,8 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 		t.Fatalf("OpenAI session.update count = %d, want exactly one initial provider configuration; writes=%q", len(sessionUpdates), writes)
 	}
 	advertised := sessionUpdates[0].Session.Tools
-	if len(advertised) != 7 {
-		t.Fatalf("OpenAI advertised tools = %d, want one static plus six broker tools: %#v", len(advertised), advertised)
+	if len(advertised) != 8 {
+		t.Fatalf("OpenAI advertised tools = %d, want one static plus six broker tools and show_page: %#v", len(advertised), advertised)
 	}
 
 	expectedBroker := map[string]struct {
@@ -267,6 +267,10 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 				"reason":        "string",
 			},
 			required: map[string]bool{"invocation_id": true},
+		},
+		webmcp.ShowPageToolName: {
+			description: "Capture the currently selected browser page without changing browser state.",
+			properties:  map[string]string{},
 		},
 	}
 	seenStatic := false
