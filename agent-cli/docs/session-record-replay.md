@@ -181,10 +181,11 @@ agent session --replay captures/openai-demo.session.json
 ```
 
 The strict replay transport still validates the generated client frames in
-capture order. A successful capture-derived prompt replay ends with exactly
-one `[session replay complete]` line; a failed replay does not print that
-success marker. Supplying `--prompt` (including `--prompt=`) remains an
-explicit prompt and continues to use strict mismatch validation.
+capture order. A successful capture-derived prompt replay emits one
+`replay_complete` terminal summary followed by exactly one
+`[session replay complete]` line; a failed replay does not print that success
+marker. Supplying `--prompt` (including `--prompt=`) remains an explicit
+prompt and continues to use strict mismatch validation.
 
 ### Reproduce a prompt
 
@@ -227,7 +228,8 @@ agent session --replay captures/spoken.session.json
 ```
 
 Like the capture-derived prompt replay above, a bare scheduled-audio-turn
-replay ends with exactly one `[session replay complete]` line and never
+replay emits one `replay_complete` terminal summary followed by exactly one
+`[session replay complete]` line and never
 depends on `--max-duration` to end the process; a failed replay does not print
 that success marker. `--record-dir` is not required to combine `--audio-in-turn`
 with `--replay` either, since a replay drives its scheduled audio turns from
