@@ -186,9 +186,13 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 		OutputDir:                  outputDir,
 		ConfigDir:                  roomConfigDir(roomRunGlobalFlags(c)),
 		BrowserCapabilitiesFactory: NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c))),
-		Stream:                     broker,
+		DeviceRegistry: roomRunDeviceRegistry(c),
+		Stream:         broker,
 		OnDiagnostic: func(participantID string, record services.SessionDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
+		},
+		OnParticipantReady: func(ready services.RoomParticipantReady) {
+			output.printf("participant %q ready: kind=%s input=%s output=%s provider=%s model=%s\n", ready.ParticipantID, ready.Kind, ready.InputDevice, ready.OutputDevice, ready.Provider, ready.Model)
 		},
 		OnParticipantTerminated: func(result services.RoomParticipantResult) {
 			output.printf("participant %q: %s turns=%d connected=%t\n", result.ParticipantID, result.TerminationReason, result.TurnsCompleted, result.Connected)
