@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-	const (
-		timeoutFixturePackage       = "./internal/testtimeout/testdata/blockedchild"
-		blockedFixtureTimeoutBudget = 5 * time.Second
+const (
+	timeoutFixturePackage       = "./internal/testtimeout/testdata/blockedchild"
+	blockedFixtureTimeoutBudget = 5 * time.Second
 )
 
 func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T) {
