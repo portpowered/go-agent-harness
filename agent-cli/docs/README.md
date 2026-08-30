@@ -17,6 +17,7 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [Tool-assistant room live acceptance](room-tool-assistant-live-acceptance.md) documents the credential-safe billed run, sanitized evidence checks, and exact proof-file verification.
 - [Room Phase 1 live acceptance](room-live-acceptance.md) documents the billed/non-CI three-participant smoke procedure, artifact inspection, C1 wedge rule, and honest scenario ledger.
 - [Room recording bundle layout](room-recording-bundle.md) documents `agent room run --out`'s complete evidence bundle: per-participant `sent.pcm`/`received.pcm`, wall-clock-stamped events, `room-timeline.jsonl`, and `room-mix.wav`.
+- [Room turn-to-turn latency live acceptance](room-turn-to-turn-latency-live.md) locks the bounded two-participant latency fixture, report command, and credential-safe evidence procedure.
 - [Files TODO](FILES.md) describes planned provider file-upload behavior and the proposed `agent files` commands for managing uploaded files.
 
 ## Fixture and Test Authors
