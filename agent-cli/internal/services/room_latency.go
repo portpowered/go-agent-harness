@@ -172,6 +172,8 @@ type roomLatencyTransitionState struct {
 	peerID        string
 	turnIndex     int
 	speakerSeq    uint64
+	commitSeen    bool
+	responseSeen  bool
 	providerSeen  bool
 	peerAudioSeen bool
 	responseID    string
@@ -314,12 +316,40 @@ func (r *roomLatencyRecorder) observeRuntime(participantID string, observation S
 	defer r.mu.Unlock()
 	participantID = strings.TrimSpace(participantID)
 	transitionID := r.active[participantID]
-	turnIndex := 0
-	if state := r.transitions[transitionID]; state != nil {
-		turnIndex = state.turnIndex
-		if observation.ResponseID != "" {
-			state.responseID = observation.ResponseID
+	state := r.transitions[transitionID]
+	if state == nil {
+		// A provider may emit an opening response before any peer speech has
+		// created a measurable transition. Keep that response out of the
+		// latency ledger; its later peer handoff cannot be assigned causally.
+		return
+	}
+	turnIndex := state.turnIndex
+	if observation.ResponseID != "" {
+		state.responseID = observation.ResponseID
+	}
+	switch kind {
+	case RoomLatencyEventInputCommit:
+		if state.commitSeen {
+			return
 		}
+		state.commitSeen = true
+	case RoomLatencyEventResponseCreate:
+		if state.responseSeen {
+			// A client-owned MESSAGE.END can be followed by the provider's
+			// response.created boundary. Preserve an ID learned from the latter
+			// without adding a duplicate landmark.
+			if observation.ResponseID != "" {
+				for index := len(r.events) - 1; index >= 0; index-- {
+					event := &r.events[index]
+					if event.TransitionID == transitionID && event.Kind == RoomLatencyEventResponseCreate {
+						event.ResponseID = observation.ResponseID
+						break
+					}
+				}
+			}
+			return
+		}
+		state.responseSeen = true
 	}
 	timestamp := observation.Timestamp
 	if timestamp.IsZero() {
@@ -337,19 +367,17 @@ func (r *roomLatencyRecorder) observeProviderAudio(participantID string, respons
 	participantID = strings.TrimSpace(participantID)
 	transitionID := r.active[participantID]
 	state := r.transitions[transitionID]
-	if state != nil {
-		if state.providerSeen {
-			return
-		}
-		state.providerSeen = true
-		if responseID != "" {
-			state.responseID = responseID
-		}
+	if state == nil {
+		return
 	}
-	turnIndex := 0
-	if state != nil {
-		turnIndex = state.turnIndex
+	if state.providerSeen {
+		return
 	}
+	state.providerSeen = true
+	if responseID != "" {
+		state.responseID = responseID
+	}
+	turnIndex := state.turnIndex
 	r.appendLocked(RoomLatencyEventProviderAudio, transitionID, participantID, "", turnIndex, responseID, 0)
 }
 
@@ -363,18 +391,15 @@ func (r *roomLatencyRecorder) observePeerAudio(sourceID, targetID string, pcm []
 	targetID = strings.TrimSpace(targetID)
 	transitionID := r.active[sourceID]
 	state := r.transitions[transitionID]
-	if state != nil {
-		if state.peerAudioSeen {
-			return
-		}
-		state.peerAudioSeen = true
+	if state == nil {
+		return
 	}
-	turnIndex := 0
-	responseID := ""
-	if state != nil {
-		turnIndex = state.turnIndex
-		responseID = state.responseID
+	if state.peerAudioSeen {
+		return
 	}
+	state.peerAudioSeen = true
+	turnIndex := state.turnIndex
+	responseID := state.responseID
 	r.appendLocked(RoomLatencyEventPeerAudio, transitionID, sourceID, targetID, turnIndex, responseID, len(pcm))
 }
 

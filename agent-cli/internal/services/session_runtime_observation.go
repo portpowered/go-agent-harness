@@ -67,8 +67,9 @@ type SessionRuntimeObservation struct {
 	Timestamp      time.Time
 	Payload        []byte
 	TurnsCompleted int
-	// InputCommit is the one-based ordinal of a client-to-server MESSAGE.END
-	// accepted by the session. It is populated only for InputCommit observations.
+	// InputCommit is the one-based ordinal of an input commit accepted by the
+	// session. It is populated for client-owned MESSAGE.END boundaries and may
+	// be zero for a provider-originated server-VAD commit.
 	InputCommit int
 	// ResponseID and ResponsePurpose are populated on ResponseCreate
 	// observations when the provider/session seam has those identities.
@@ -92,9 +93,10 @@ type SessionRuntimeObserver interface {
 // composition, so deterministic callers observe the same source that was
 // injected into the generated command graph.
 type sessionRuntimeObservationRecorder struct {
-	observer SessionRuntimeObserver
-	clock    platformclock.Source
-	sequence atomic.Uint64
+	observer                  SessionRuntimeObserver
+	clock                     platformclock.Source
+	sequence                  atomic.Uint64
+	providerBoundaryObserving bool
 
 	terminalOnce sync.Once
 	inputMu      sync.Mutex
@@ -109,6 +111,16 @@ func newSessionRuntimeObservationRecorder(observer SessionRuntimeObserver, sourc
 	return &sessionRuntimeObservationRecorder{
 		observer: observer,
 		clock:    platformclock.Ensure(source),
+	}
+}
+
+// enableProviderBoundaryObservations opts a runtime recorder into inbound
+// provider commit/response boundaries. Ordinary session runtime observers keep
+// their historical client-owned observation surface; room latency evidence is
+// the caller that needs server-VAD boundaries as well.
+func (r *sessionRuntimeObservationRecorder) enableProviderBoundaryObservations() {
+	if r != nil {
+		r.providerBoundaryObserving = true
 	}
 }
 
@@ -177,6 +189,21 @@ func (r *sessionRuntimeObservationRecorder) inputCommit() {
 	r.inputPayload = nil
 	r.inputMu.Unlock()
 	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, commit, true, nil)
+}
+
+// providerInputCommit records a provider-originated commit boundary, such as
+// the INPUT_ITEM.ADDED event emitted after server-side VAD. The provider owns
+// the commit, so there is no client ordinal to report, but the accumulated
+// audio remains available to the runtime observer for evidence consumers.
+func (r *sessionRuntimeObservationRecorder) providerInputCommit() {
+	if r == nil {
+		return
+	}
+	r.inputMu.Lock()
+	payload := append([]byte(nil), r.inputPayload...)
+	r.inputPayload = nil
+	r.inputMu.Unlock()
+	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, 0, true, nil)
 }
 
 // responseCreate records the response request accepted by the session. A

@@ -114,7 +114,7 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 		latency:      newRoomLatencyRecorder(clock, format),
 		source:       clock,
 	}
-	evidence.clock = newRoomClock(evidence.startedAt)
+	evidence.clock = newRoomClock(evidence.startedAt, clock)
 	evidence.mix = newRoomMixBuffer(format.SampleRate)
 	var err error
 	evidence.timeline, err = newRoomTimeline(filepath.Join(evidence.destination, RoomEvidenceTimelinePath), evidence.clock)
@@ -352,6 +352,19 @@ func (p *roomParticipantEvidence) observeSentAudio(pcm []byte) error {
 	}
 	if err := p.observeAudio(pcm); err != nil {
 		return err
+	}
+	return p.observeSentStream(pcm)
+}
+
+// observeSentStream records everything observeSentAudio does except the
+// participant WAV write: the sent-PCM stream, the room mix placement, and the
+// speech-segment timeline. It is split out so the room stream observer can keep
+// this on the provider-to-peer critical path (where the room mix and timeline
+// need the un-delayed offset) while deferring the WAV write until after the
+// bounded handoff.
+func (p *roomParticipantEvidence) observeSentStream(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return errors.New("room participant audio evidence is not initialized")
 	}
 	if p.sentPCM != nil {
 		if err := p.sentPCM.write(pcm); err != nil {

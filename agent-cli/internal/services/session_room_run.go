@@ -186,6 +186,13 @@ func runRoomParticipant(
 			recorder:      evidence.latency,
 			participantID: runtime.plan.manifest.ID,
 		}, opts.Clock)
+		latencyRuntime.enableProviderBoundaryObservations()
+		// Latency sampling is a live-path measurement only. A replayed room
+		// drives its own scheduler off the recorded timeline, so attaching the
+		// runtime observer there emits outbound audio after replay completed.
+		if !runtime.plan.replay {
+			observer.runtime = latencyRuntime
+		}
 	}
 	loopOptions := sessionLoopOptions{
 		Prompt:                 runtime.plan.options.Prompt,
@@ -206,12 +213,6 @@ func runRoomParticipant(
 	}
 	loopOptions.observer = observer
 	loopOptions.loopReady = runtime.loopReady
-	// Latency sampling is a live-path measurement only. A replayed room drives
-	// its own scheduler off the recorded timeline, so attaching the runtime
-	// observer there would emit outbound audio events after replay completed.
-	if !runtime.plan.replay {
-		loopOptions.runtime = latencyRuntime
-	}
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, loopOptions)
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
@@ -341,6 +342,17 @@ func observeRoomParticipantStream(
 			evidence.observeProviderAudio(plan.manifest.ID, msg.ResponseID)
 		}
 	}
+	if participantEvidence != nil {
+		// The sent-PCM stream, room mix, and speech timeline stay on the
+		// critical path: they are offset-anchored, so deferring them past the
+		// handoff would misplace this participant's audio in the room mix.
+		// The WAV write, which nothing else is ordered against, moves below.
+		if evidenceErr := participantEvidence.observeSentStream(pcm); evidenceErr != nil {
+			if evidence != nil {
+				evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
+			}
+		}
+	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
@@ -376,13 +388,11 @@ func observeRoomParticipantStream(
 	// mixer frame wait before it can accept the first provider PCM delta.
 	recordParticipantDelta()
 	if participantEvidence != nil {
-		// observeSentAudio is the superset write: it performs the participant
-		// WAV write and then the sent-PCM stream, room mix, and speech-segment
-		// timeline. All of it is durable I/O, so it belongs here, after the
-		// bounded provider-to-peer handoff, rather than on the critical path.
-		if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
+		// Durable WAV I/O only. A slow filesystem here must not delay the
+		// provider-to-peer handoff above.
+		if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
 			if evidence != nil {
-				evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
+				evidence.recordError(plan.manifest.ID, fmt.Errorf("write WAV audio: %w", evidenceErr))
 			}
 		}
 	}
