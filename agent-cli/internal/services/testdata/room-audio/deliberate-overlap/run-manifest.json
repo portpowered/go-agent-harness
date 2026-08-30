@@ -1,0 +1,296 @@
+{
+  "annotations": {
+    "loudness": [
+      {
+        "end_ms": 6500,
+        "id": "deliberate-overlap-balance",
+        "kind": "loudness",
+        "left": "agent-a",
+        "right": "agent-b",
+        "start_ms": 1000
+      }
+    ],
+    "overlaps": [
+      {
+        "a": "agent-a",
+        "a_received_stream_id": "agent-a:received",
+        "a_sent_stream_id": "agent-a:sent",
+        "b": "agent-b",
+        "b_received_stream_id": "agent-b:received",
+        "b_sent_stream_id": "agent-b:sent",
+        "end_ms": 6500,
+        "id": "deliberate-overlap-interval",
+        "kind": "deliberate_overlap",
+        "start_ms": 1000
+      }
+    ]
+  },
+  "artifacts": {
+    "room_mix": {
+      "path": "room-mix.wav",
+      "size": 16044,
+      "sha256": "1a7022a17a36edd08efdab4e63e6a2da19ad6cb748f02669312354a7a8a7962c"
+    },
+    "room_timeline": {
+      "path": "room-timeline.jsonl",
+      "size": 588,
+      "sha256": "93833f1df1710e4f925e83098b1d6f499a7699b8812f5f0637b9e3f4f8882307"
+    }
+  },
+  "clock_base": "2026-08-30T12:00:00Z",
+  "finalized": true,
+  "participants": {
+    "agent-a": {
+      "artifacts": {
+        "deltas": {
+          "path": "participants/agent-a/deltas.jsonl",
+          "size": 22028,
+          "sha256": "a0db4ab42a084d95c20fac7d25cf8e68335fe14f3c5accf41a4466dfdadb5dcc"
+        },
+        "diagnostics": {
+          "path": "participants/agent-a/diagnostics.jsonl",
+          "size": 127,
+          "sha256": "5fd5ee0e02f40cf66fb99ecda9d0047a9cc2f8494f9f8046274f275bb17f540c"
+        },
+        "events": {
+          "path": "participants/agent-a/events.jsonl",
+          "size": 208,
+          "sha256": "e65dc14ce8605c5b2ef4ac81685507c8343b79ae1036a9aa4ab53702c49a74e8"
+        },
+        "received_pcm": {
+          "path": "participants/agent-a/received.pcm",
+          "size": 16000,
+          "sha256": "d1f2bb41b8305a36ce29d704d70f63a17c2ec0554b701eeb4aa24f5260912d54"
+        },
+        "sent_pcm": {
+          "path": "participants/agent-a/sent.pcm",
+          "size": 16000,
+          "sha256": "57bd4e5d8aceee5d62cbbfdd2207c9d1a4da1b35e29437d061fe1b5eff202839"
+        },
+        "wav": {
+          "path": "participants/agent-a/agent.wav",
+          "size": 16044,
+          "sha256": "338dd163e566e9689cc532fadcfcca8a43078dbb36ec416fc4c180a8e60c673e"
+        }
+      },
+      "capture": {
+        "path": "participants/agent-a/capture.session.json",
+        "size": 569,
+        "sha256": "51e9fe704abd63c3c6bf36a0da245918ae0e2adf0434dbea90a5e23b168eb587"
+      },
+      "completed_turns": 1,
+      "id": "agent-a",
+      "kind": "agent",
+      "model": "deliberate-overlap-v1",
+      "opening_prompt": "Begin the deterministic deliberate overlap fixture.",
+      "provider": "offline",
+      "received_audio_contract": "provider-bound room delivery in participants/\u003cid\u003e/received.pcm",
+      "streams": {
+        "received": {
+          "expected_speech": [
+            {
+              "end_ms": 6520,
+              "label": "agent-b-overlap-turn",
+              "start_ms": 1020
+            }
+          ],
+          "stream_id": "agent-a:received",
+          "timeline_end_ms": 8000,
+          "timeline_start_ms": 0
+        },
+        "sent": {
+          "expected_speech": [
+            {
+              "end_ms": 6500,
+              "label": "agent-a-overlap-turn",
+              "start_ms": 1000
+            }
+          ],
+          "stream_id": "agent-a:sent",
+          "timeline_end_ms": 8000,
+          "timeline_start_ms": 0
+        },
+        "wav": {
+          "chunk_boundaries": [
+            {
+              "id": "agent-a-chunk-1",
+              "sample_index": 1200
+            },
+            {
+              "id": "agent-a-chunk-2",
+              "sample_index": 2200
+            },
+            {
+              "id": "agent-a-chunk-3",
+              "sample_index": 3200
+            }
+          ],
+          "expected_speech": [
+            {
+              "end_ms": 6500,
+              "label": "agent-a-overlap-turn",
+              "start_ms": 1000
+            }
+          ],
+          "stream_id": "agent-a:output",
+          "timeline_end_ms": 8000,
+          "timeline_start_ms": 0
+        }
+      },
+      "system_prompt": "Use the privacy-safe synthetic overlap fixture; do not contact a provider.",
+      "voice": "synthetic-noise"
+    },
+    "agent-b": {
+      "artifacts": {
+        "deltas": {
+          "path": "participants/agent-b/deltas.jsonl",
+          "size": 22028,
+          "sha256": "67133f6927852a4b15864407275a639f0040a16490b1813eea3333f14a6506f8"
+        },
+        "diagnostics": {
+          "path": "participants/agent-b/diagnostics.jsonl",
+          "size": 127,
+          "sha256": "594aadf3b3ea8a1275851a1cd23b76e2b1a75e47e87c382d793bda3f92211cc7"
+        },
+        "events": {
+          "path": "participants/agent-b/events.jsonl",
+          "size": 208,
+          "sha256": "466f1762ab9bfd4a1935d1d8ee40508d4d0b1acaefc68ea589c51fc455062fad"
+        },
+        "received_pcm": {
+          "path": "participants/agent-b/received.pcm",
+          "size": 16000,
+          "sha256": "db0d75b1417c054600ee2d0249ea44af3467a76a0fc30b7dbede69291e549351"
+        },
+        "sent_pcm": {
+          "path": "participants/agent-b/sent.pcm",
+          "size": 16000,
+          "sha256": "9e4d3f08cab894807436038481a5d0ee449fb30cec19900fc2d4d28e41ae3d22"
+        },
+        "wav": {
+          "path": "participants/agent-b/agent.wav",
+          "size": 16044,
+          "sha256": "a187e671943bf2d0dd21763a2247b3a7fd29883b4e1a7b2cf31e61ca320b7d35"
+        }
+      },
+      "capture": {
+        "path": "participants/agent-b/capture.session.json",
+        "size": 569,
+        "sha256": "2543607ace9bd775f323b0dce10e8523ba0db23d7447a98f75a8afc93e14c8ac"
+      },
+      "completed_turns": 1,
+      "id": "agent-b",
+      "kind": "agent",
+      "model": "deliberate-overlap-v1",
+      "opening_prompt": "Begin the deterministic deliberate overlap fixture.",
+      "provider": "offline",
+      "received_audio_contract": "provider-bound room delivery in participants/\u003cid\u003e/received.pcm",
+      "streams": {
+        "received": {
+          "expected_speech": [
+            {
+              "end_ms": 6520,
+              "label": "agent-a-overlap-turn",
+              "start_ms": 1020
+            }
+          ],
+          "stream_id": "agent-b:received",
+          "timeline_end_ms": 8000,
+          "timeline_start_ms": 0
+        },
+        "sent": {
+          "expected_speech": [
+            {
+              "end_ms": 6500,
+              "label": "agent-b-overlap-turn",
+              "start_ms": 1000
+            }
+          ],
+          "stream_id": "agent-b:sent",
+          "timeline_end_ms": 8000,
+          "timeline_start_ms": 0
+        },
+        "wav": {
+          "chunk_boundaries": [
+            {
+              "id": "agent-b-chunk-1",
+              "sample_index": 1200
+            },
+            {
+              "id": "agent-b-chunk-2",
+              "sample_index": 2200
+            },
+            {
+              "id": "agent-b-chunk-3",
+              "sample_index": 3200
+            }
+          ],
+          "expected_speech": [
+            {
+              "end_ms": 6500,
+              "label": "agent-b-overlap-turn",
+              "start_ms": 1000
+            }
+          ],
+          "stream_id": "agent-b:output",
+          "timeline_end_ms": 8000,
+          "timeline_start_ms": 0
+        }
+      },
+      "system_prompt": "Use the privacy-safe synthetic overlap fixture; do not contact a provider.",
+      "voice": "synthetic-noise"
+    }
+  },
+  "pcm_format": {
+    "byte_order": "little",
+    "channels": 1,
+    "encoding": "signed_pcm16",
+    "sample_rate_hz": 1000,
+    "sample_width_bits": 16
+  },
+  "provenance": {
+    "consent_review": "not applicable; all samples are generated from a fixed seeded pseudo-speech signal",
+    "fixture_provenance": "synthetic",
+    "hashes": "sha256 and byte sizes for every replay artifact are embedded in this manifest",
+    "received_audio_dependency_revision": "s2s-room-participants-deaf-while-speaking@1ed45336; s2s-room-recording-completeness@649f0cd6",
+    "regeneration_command": "go run ./agent-cli/internal/services/testdata/room-audio/generate.go --shape deliberate-overlap --output agent-cli/internal/services/testdata/room-audio/deliberate-overlap",
+    "sanitization": "no real speech entered the fixture; participant identities and prompts are synthetic",
+    "source_run": "offline deterministic generator; no provider, microphone, credentials, or private recording",
+    "transformations": [
+      "generated mono signed little-endian PCM16 at 1000 Hz",
+      "kept eight seconds with a 5.5 second simultaneous-speech interval",
+      "delayed each provider-bound peer received stream by 20 ms",
+      "preserved stable sent/received identities and absolute millisecond alignment",
+      "split each output stream into four timestamped delta chunks"
+    ]
+  },
+  "schema_version": 2,
+  "timing": {
+    "elapsed": "8s",
+    "ended_at": "2026-08-30T12:00:08Z",
+    "started_at": "2026-08-30T12:00:00Z"
+  },
+  "tolerances": {
+    "barge_in_speech_threshold_dbfs": -40,
+    "boundary_delta": 6000,
+    "boundary_quiet_dbfs": -24,
+    "clip_sample_threshold": 32700,
+    "correlation_lag_window": {
+      "max": "100ms",
+      "min": "-100ms"
+    },
+    "correlation_silence_floor_dbfs": -50,
+    "edge_sample_threshold": 1000,
+    "final_frame_max_rms_dbfs": -40,
+    "frame_duration": "20ms",
+    "max_barge_in_latency": "500ms",
+    "max_drift_absolute": "20ms",
+    "max_drift_fraction": 0.001,
+    "max_loudness_difference_db": 6,
+    "max_natural_pause": "750ms",
+    "max_self_correlation": 0.3,
+    "min_peer_correlation": 0.55,
+    "name": "deliberate-overlap-v1",
+    "silence_floor_dbfs": -50
+  }
+}

@@ -1,0 +1,4 @@
+{"monotonic_offset_ms":1000,"participant_id":"agent-a","sequence":0,"turn_id":"agent-a-overlap-turn","type":"turn_started","unix_ms":1788091201000}
+{"monotonic_offset_ms":1000,"participant_id":"agent-b","sequence":1,"turn_id":"agent-b-overlap-turn","type":"turn_started","unix_ms":1788091201000}
+{"monotonic_offset_ms":6500,"participant_id":"agent-a","sequence":2,"turn_id":"agent-a-overlap-turn","type":"turn_ended","unix_ms":1788091206500}
+{"monotonic_offset_ms":6500,"participant_id":"agent-b","sequence":3,"turn_id":"agent-b-overlap-turn","type":"turn_ended","unix_ms":1788091206500}
