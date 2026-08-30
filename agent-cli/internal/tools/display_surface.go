@@ -70,6 +70,29 @@ func (c DisplayCapability) Usable() bool {
 	return c.Available && c.DisplayCount > 0 && (c.State == "" || c.State == ScreenCaptureGranted)
 }
 
+// Advertisable reports whether display-dependent tools (show, mouse) should
+// be advertised to the model in an interactive session. It is deliberately
+// broader than Usable: a capability that is structurally present but not
+// currently capturable -- most commonly, macOS Screen Recording permission
+// has not been granted -- still returns true, so the model can invoke the
+// tool and receive the actionable, invocation-time permission-denied
+// envelope (with the customer-facing grant instructions) instead of never
+// seeing the tool exists at all. Only a capability that could not prove a
+// display exists in the first place -- headless CI, a failed or timed-out
+// probe -- returns false. The at-invocation preflight (ScreenTool.Execute)
+// remains the authority on whether a capture can actually proceed.
+func (c DisplayCapability) Advertisable() bool {
+	if c.Usable() {
+		return true
+	}
+	switch c.State {
+	case ScreenCaptureUnavailable, "":
+		return false
+	default:
+		return true
+	}
+}
+
 // UsableDisplayCapability constructs a normalized positive capability.
 func UsableDisplayCapability(displayCount int) DisplayCapability {
 	if displayCount < 0 {

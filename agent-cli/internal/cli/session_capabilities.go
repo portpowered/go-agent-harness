@@ -211,20 +211,38 @@ func resolveSessionDisplayCapability(cfg *config.Config, probe cliTools.DisplayC
 
 	select {
 	case result := <-resultCh:
-		if result.err != nil {
+		capability := result.capability
+		if result.err != nil && capability.State == "" {
+			// The probe boundary failed without producing any typed
+			// admission signal at all (for example, an injected probe
+			// returning a bare error). There is nothing structural to
+			// advertise, so fail closed exactly as before.
 			return cliTools.UnavailableDisplayCapability("display capability probe failed")
 		}
-		if !result.capability.Usable() {
-			if result.capability.Reason == "" {
-				result.capability.Reason = "no usable display or capture surface was proven"
+		if !capability.Usable() {
+			// A non-usable result still carries a State that distinguishes
+			// "structurally absent" (headless: State == Unavailable or
+			// unset) from "structurally present but not currently
+			// capturable" (most commonly macOS Screen Recording permission
+			// denied: State == Denied). That distinction must survive this
+			// normalization so registry gating (DisplayCapability.
+			// Advertisable) can keep show/mouse advertised in the latter
+			// case -- clobbering State to Unavailable here is exactly what
+			// used to de-advertise show whenever permission was denied,
+			// leaving the model with no tool to invoke and no way to relay
+			// the invocation-time grant instructions.
+			if capability.Reason == "" {
+				capability.Reason = "no usable display or capture surface was proven"
 			}
-			result.capability.State = cliTools.DisplayCapabilityUnavailable
-			result.capability.Available = false
-			return result.capability
+			if capability.State == "" {
+				capability.State = cliTools.DisplayCapabilityUnavailable
+			}
+			capability.Available = false
+			return capability
 		}
-		result.capability.State = cliTools.DisplayCapabilityUsable
-		result.capability.Available = true
-		return result.capability
+		capability.State = cliTools.DisplayCapabilityUsable
+		capability.Available = true
+		return capability
 	case <-ctx.Done():
 		return cliTools.UnavailableDisplayCapability("display capability probe timed out")
 	}
