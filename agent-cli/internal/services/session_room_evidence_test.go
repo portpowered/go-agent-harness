@@ -265,6 +265,43 @@ func TestRoomEvidence_FinalizeIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestRoomEvidenceManifest_RecordsSanitizedParticipantBrowserTools(t *testing.T) {
+	browser := room.DefaultBrowserToolsConfig()
+	browser.Connection.CDPURL = "http://127.0.0.1:9222/json/version?query-secret=hide#fragment-secret"
+	browser.Connection.WSEndpoint = "ws://127.0.0.1:9222/devtools/browser/browser-secret?query-secret=hide"
+	manifest := room.Manifest{
+		SchemaVersion: room.SchemaVersion,
+		Room:          room.Room{MaxTurns: 1},
+		Participants: []room.Participant{
+			{ID: "browser", SystemPrompt: "browser", Provider: "openai", Model: "model", APIKeyEnv: "ROOM_KEY", Tools: []string{}, BrowserTools: &browser},
+			{ID: "other", SystemPrompt: "other", Provider: "openai", Model: "model", APIKeyEnv: "ROOM_KEY", Tools: []string{}},
+		},
+	}
+	evidence, err := newRoomEvidence(t.TempDir(), manifest, room.DefaultPCM16Format(), nil, time.Now())
+	if err != nil {
+		t.Fatalf("newRoomEvidence: %v", err)
+	}
+	if err := evidence.finalize(RoomResult{
+		TerminationReason: RoomTerminationStopped,
+		Participants: map[string]RoomParticipantResult{
+			"browser": {ID: "browser", TerminationReason: ParticipantTerminationEnded},
+			"other":   {ID: "other", TerminationReason: ParticipantTerminationEnded},
+		},
+	}, nil, time.Now()); err != nil {
+		t.Fatalf("finalize evidence: %v", err)
+	}
+	data := readRoomEvidenceFile(t, filepath.Join(evidence.destination, RoomEvidenceManifestPath))
+	serialized := string(data)
+	if !strings.Contains(serialized, `"browser_tools"`) {
+		t.Fatalf("room evidence omitted browser configuration: %s", serialized)
+	}
+	for _, forbidden := range []string{"query-secret", "fragment-secret", "browser-secret", "token="} {
+		if strings.Contains(serialized, forbidden) {
+			t.Fatalf("room evidence leaked browser endpoint material %q: %s", forbidden, serialized)
+		}
+	}
+}
+
 func readRoomEvidenceFile(t *testing.T, path string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(path)

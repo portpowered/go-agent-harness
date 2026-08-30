@@ -331,6 +331,7 @@ type roomEvidenceParticipantManifest struct {
 	APIKeyEnv         string                       `json:"api_key_env"`
 	Voice             string                       `json:"voice,omitempty"`
 	Tools             []string                     `json:"tools"`
+	BrowserTools      *room.BrowserToolsConfig     `json:"browser_tools,omitempty"`
 	CompletedTurns    int                          `json:"completed_turns"`
 	TerminationReason ParticipantTerminationReason `json:"termination_reason"`
 	Reason            ParticipantTerminationReason `json:"reason,omitempty"`
@@ -398,6 +399,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 			APIKeyEnv:         e.redactText(participant.APIKeyEnv),
 			Voice:             e.redactText(participant.Voice),
 			Tools:             redactRoomStrings(participant.Tools, e.redactText),
+			BrowserTools:      participant.BrowserTools,
 			CompletedTurns:    participantResult.TurnsCompleted,
 			TerminationReason: participantReason,
 			Reason:            participantReason,
