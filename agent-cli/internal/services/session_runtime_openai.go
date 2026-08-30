@@ -110,7 +110,11 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	// The initial provider configuration is captured wire data. The current
 	// tool definitions remain on plan.loop for local execution, but are not
 	// used to rebuild the provider handshake.
-	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(replayDialer, configuration)
+	replayDialerWithConfiguration := newReplayInitialSessionUpdateDialer(
+		replayDialer,
+		configuration,
+		barePromptReplay || bareAudioTurnReplay,
+	)
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,

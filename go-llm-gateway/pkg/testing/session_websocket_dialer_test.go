@@ -177,6 +177,77 @@ func TestReplayWebSocketDialer_ReplaysInboundEventsBeforeNextExpectedOutbound(t 
 	}
 }
 
+func TestReplayWebSocketDialer_WaitForNextOutboundFollowsCaptureCursor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "paced.session.json")
+	writeWebSocketCapture(t, path, []CapturedSessionEvent{
+		websocketCapture(DirectionServerToClient, 1, `{"type":"session.created","session_id":"sess-1"}`),
+		websocketCapture(DirectionServerToClient, 2, `{"type":"rate_limits.updated"}`),
+		websocketCapture(DirectionClientToServer, 3, `{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`),
+	})
+
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	ready := make(chan error, 1)
+	go func() { ready <- dialer.WaitForNextOutbound() }()
+	select {
+	case err := <-ready:
+		t.Fatalf("cursor gate returned before inbound records were read: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage session.created: %v", err)
+	}
+	select {
+	case err := <-ready:
+		t.Fatalf("cursor gate returned before inter-turn inbound record: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("ReadMessage rate_limits.updated: %v", err)
+	}
+
+	select {
+	case err := <-ready:
+		if err != nil {
+			t.Fatalf("cursor gate after all earlier inbound records: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cursor gate did not release at the next outbound record")
+	}
+	if err := conn.WriteMessage(1, []byte(`{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`)); err != nil {
+		t.Fatalf("strict outbound validation after cursor gate: %v", err)
+	}
+}
+
+func TestReplayWebSocketDialer_EarlyOutboundStillReportsMismatch(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "early-outbound.session.json")
+	writeWebSocketCapture(t, path, []CapturedSessionEvent{
+		websocketCapture(DirectionServerToClient, 1, `{"type":"rate_limits.updated"}`),
+		websocketCapture(DirectionClientToServer, 2, `{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`),
+	})
+
+	dialer, err := NewReplayWebSocketDialer(path)
+	if err != nil {
+		t.Fatalf("NewReplayWebSocketDialer: %v", err)
+	}
+	conn, err := dialer.Dial("", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	err = conn.WriteMessage(1, []byte(`{"type":"input_audio_buffer.append","audio":"aGVsbG8="}`))
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("early outbound error = %v, want typed replay mismatch", err)
+	}
+}
+
 func TestReplayWebSocketDialer_ReportsIncompleteExpectedOutboundOnClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "grok.session.json")
 	writeWebSocketCapture(t, path, []CapturedSessionEvent{

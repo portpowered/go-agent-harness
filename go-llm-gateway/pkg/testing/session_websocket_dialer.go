@@ -166,6 +166,16 @@ type ReplayWebSocketDialer struct {
 
 var _ transport.Dialer = (*ReplayWebSocketDialer)(nil)
 
+// ReplayOutboundPacer is the optional cursor gate used by a self-driving
+// replay. It releases an outbound frame only after every earlier inbound
+// capture record has been read. The replay connection still performs the
+// strict payload and direction validation when the frame is written.
+type ReplayOutboundPacer interface {
+	WaitForNextOutbound() error
+}
+
+var _ ReplayOutboundPacer = (*ReplayWebSocketDialer)(nil)
+
 // NewReplayWebSocketDialer loads a raw WebSocket session capture from path.
 func NewReplayWebSocketDialer(path string) (*ReplayWebSocketDialer, error) {
 	capture, err := LoadSessionCapture(path)
@@ -191,6 +201,19 @@ func NewReplayWebSocketDialerFromCapture(capture SessionCapture) (*ReplayWebSock
 // Model returns the model metadata from the replay capture, if present.
 func (d *ReplayWebSocketDialer) Model() string {
 	return d.capture.Provider.Model
+}
+
+// WaitForNextOutbound waits for the active replay cursor to reach its next
+// client-to-server record. It is intended for capture-derived self-driving
+// callers; direct writes remain strict and continue to reject early frames.
+func (d *ReplayWebSocketDialer) WaitForNextOutbound() error {
+	d.mu.Lock()
+	conn := d.conn
+	d.mu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("replay websocket dialer has no active connection")
+	}
+	return conn.waitForNextOutbound()
 }
 
 // Dial returns an in-memory replay connection and never opens a live network connection.
@@ -264,6 +287,34 @@ func (c *replayWebSocketConn) ReadMessage() (int, []byte, error) {
 			c.index++
 			c.cond.Broadcast()
 			return 1, eventPayload(evt), nil
+		}
+		c.cond.Wait()
+	}
+}
+
+// waitForNextOutbound is deliberately separate from WriteMessage. A
+// self-driving caller may wait for the capture cursor, while an ordinary
+// caller that writes early must still receive the established replay mismatch.
+func (c *replayWebSocketConn) waitForNextOutbound() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for {
+		if c.err != nil {
+			return c.err
+		}
+		if c.closed {
+			return io.ErrClosedPipe
+		}
+		if c.index >= len(c.events) {
+			return newReplayMismatchError(
+				"replay completed",
+				"self-driving outbound",
+				fmt.Errorf("unexpected outbound event after replay completed"),
+			)
+		}
+		if c.events[c.index].Direction == DirectionClientToServer {
+			return nil
 		}
 		c.cond.Wait()
 	}

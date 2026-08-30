@@ -428,16 +428,24 @@ func replayCaptureRecordPayload(record gwtesting.CapturedSessionEvent) []byte {
 // capture's raw configuration. The wrapped replay dialer still strictly
 // validates that replacement and every later outbound frame.
 type replayInitialSessionUpdateDialer struct {
-	inner   transport.Dialer
-	payload []byte
+	inner               transport.Dialer
+	payload             []byte
+	waitForNextOutbound func() error
 }
 
 var _ transport.Dialer = (*replayInitialSessionUpdateDialer)(nil)
 
-func newReplayInitialSessionUpdateDialer(inner transport.Dialer, configuration replaySessionConfiguration) transport.Dialer {
+func newReplayInitialSessionUpdateDialer(inner transport.Dialer, configuration replaySessionConfiguration, paceOutbound ...bool) transport.Dialer {
+	var waitForNextOutbound func() error
+	if len(paceOutbound) > 0 && paceOutbound[0] {
+		if pacer, ok := inner.(gwtesting.ReplayOutboundPacer); ok {
+			waitForNextOutbound = pacer.WaitForNextOutbound
+		}
+	}
 	return &replayInitialSessionUpdateDialer{
-		inner:   inner,
-		payload: append([]byte(nil), configuration.payload...),
+		inner:               inner,
+		payload:             append([]byte(nil), configuration.payload...),
+		waitForNextOutbound: waitForNextOutbound,
 	}
 }
 
@@ -450,16 +458,18 @@ func (d *replayInitialSessionUpdateDialer) Dial(endpoint string, headers map[str
 		return nil, err
 	}
 	return &replayInitialSessionUpdateConn{
-		inner:   conn,
-		payload: append([]byte(nil), d.payload...),
+		inner:               conn,
+		payload:             append([]byte(nil), d.payload...),
+		waitForNextOutbound: d.waitForNextOutbound,
 	}, nil
 }
 
 type replayInitialSessionUpdateConn struct {
-	inner       transport.Conn
-	payload     []byte
-	writeMu     sync.Mutex
-	handshakeOn bool
+	inner               transport.Conn
+	payload             []byte
+	waitForNextOutbound func() error
+	writeMu             sync.Mutex
+	handshakeOn         bool
 }
 
 var _ transport.Conn = (*replayInitialSessionUpdateConn)(nil)
@@ -474,6 +484,11 @@ func (c *replayInitialSessionUpdateConn) WriteMessage(messageType int, payload [
 	// that guarantee for custom test transports.
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	if c.waitForNextOutbound != nil {
+		if err := c.waitForNextOutbound(); err != nil {
+			return err
+		}
+	}
 
 	if !c.handshakeOn {
 		var envelope struct {
