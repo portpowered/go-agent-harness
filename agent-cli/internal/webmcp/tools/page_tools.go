@@ -63,8 +63,8 @@ func (s *BrokerToolSet) SetReservedToolNames(names []string) {
 
 // PageToolDefinitions snapshots the connected catalog as first-class session
 // tool definitions: the page tool's own name (prefixed only on collision),
-// its description, and its top-level input schema translated to the flat
-// agent-loop parameter contract. A broker without a connected catalog yields
+// its description, and both its complete input schema and backward-compatible
+// flat agent-loop parameter view. A broker without a connected catalog yields
 // no page tools and no error; the stable broker tools remain available.
 func (s *BrokerToolSet) PageToolDefinitions(ctx context.Context) []messages.ToolDefinition {
 	definitions, _ := s.PageToolDefinitionsWithError(ctx)
@@ -114,10 +114,15 @@ func pageToolDefinition(advertised string, descriptor webmcp.ToolDescriptor) mes
 		description = "Tool provided by the connected browser page."
 	}
 	parameters, closed := pageToolParameters(descriptor.InputSchema)
+	parameterSchema := append(json.RawMessage(nil), descriptor.InputSchema...)
+	if len(bytes.TrimSpace(parameterSchema)) == 0 {
+		parameterSchema = json.RawMessage(`{}`)
+	}
 	return messages.ToolDefinition{
 		Name:             advertised,
 		Description:      description,
 		Parameters:       parameters,
+		ParameterSchema:  parameterSchema,
 		ParametersClosed: closed,
 	}
 }

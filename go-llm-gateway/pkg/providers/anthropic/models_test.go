@@ -2,12 +2,33 @@ package anthropic
 
 import (
 	"encoding/base64"
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
+
+func TestMapToolToInputSchemaPreservesCompletePageSchema(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]},"turns":{"type":"integer","minimum":1}},"required":["face","turns"],"additionalProperties":false}}},"required":["moves"],"additionalProperties":false}`)
+	input := mapToolToInputSchema(models.ToolDefinition{ParameterSchema: schema})
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal complete Anthropic schema: %v", err)
+	}
+	var got, want any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatalf("decode serialized Anthropic schema: %v", err)
+	}
+	if err := json.Unmarshal(schema, &want); err != nil {
+		t.Fatalf("decode expected schema: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("serialized Anthropic schema = %#v, want %#v", got, want)
+	}
+}
 
 func TestMessagesToParams_UserMessageTextOnly(t *testing.T) {
 	system, params, err := messagesToParams([]models.Message{models.NewTextMessage(models.RoleUser, "Hello")})

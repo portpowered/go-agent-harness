@@ -162,11 +162,23 @@ func toolsToGeminiTools(tools []models.ToolDefinition) []*genai.Tool {
 		decl := &genai.FunctionDeclaration{
 			Name:        tool.Name,
 			Description: tool.Description,
-			Parameters:  toolParametersToSchema(tool.Parameters),
+		}
+		if schema, ok := completeToolParameterJSONSchema(tool.ParameterSchema); ok {
+			decl.ParametersJsonSchema = schema
+		} else {
+			decl.Parameters = toolParametersToSchema(tool.Parameters)
 		}
 		decls = append(decls, decl)
 	}
 	return []*genai.Tool{{FunctionDeclarations: decls}}
+}
+
+func completeToolParameterJSONSchema(raw json.RawMessage) (map[string]any, bool) {
+	var schema map[string]any
+	if len(raw) == 0 || json.Unmarshal(raw, &schema) != nil || schema == nil {
+		return nil, false
+	}
+	return schema, true
 }
 
 // toolParametersToSchema converts gateway ToolParameters to a Gemini Schema.

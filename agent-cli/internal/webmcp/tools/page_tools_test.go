@@ -3,11 +3,13 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -74,6 +76,97 @@ func TestPageToolDefinitionsRegisterCatalogFirstClass(t *testing.T) {
 	}
 	if _, ok := byName["exec"]; ok {
 		t.Fatalf("catalog tool shadowed the reserved exec name: %v", byName)
+	}
+}
+
+func TestPageToolDefinitionsRetainCompleteSchema(t *testing.T) {
+	schema := richPageToolSchema()
+	broker := &recordingBroker{catalog: webmcp.ToolCatalogSnapshot{
+		Generation: 9,
+		Tools: []webmcp.ToolDescriptor{{
+			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:rich-schema"),
+			Name:        "queue_cube_moves",
+			Description: "Queue cube rotations.",
+			InputSchema: schema,
+		}},
+	}}
+	definitions := NewBrokerToolSet(broker).PageToolDefinitions(context.Background())
+	if len(definitions) != 1 {
+		t.Fatalf("page definitions = %d, want one definition", len(definitions))
+	}
+	assertJSONValueEqual(t, definitions[0].ParameterSchema, schema)
+}
+
+func TestPageToolExecutionValidatesRichSchemaBeforeDispatch(t *testing.T) {
+	candidate := webmcp.BrowserCandidate{ID: "browser-cube", Product: "fixture", Loopback: true}
+	target := webmcp.Target{
+		BrowserID: candidate.ID,
+		ID:        "tab-cube",
+		Type:      "page",
+		Title:     "Cube",
+		URL:       "https://cube.fixture/",
+		Origin:    "https://cube.fixture",
+	}
+	tool := webmcp.ToolDescriptor{
+		Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:rich-schema"),
+		Name:        "queue_cube_moves",
+		Description: "Queue cube rotations.",
+		InputSchema: richPageToolSchema(),
+		FrameID:     "frame-cube",
+		Origin:      target.Origin,
+	}
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
+		testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool), testkit.WithAutoResponse(json.RawMessage(`{"accepted":true}`))),
+	))
+	defer func() { _ = runtime.Close() }()
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:    runtime,
+		Discoverer: staticToolTestDiscoverer{candidate: candidate},
+	})
+	defer func() { _ = broker.Close() }()
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
+		t.Fatalf("select cube page: %v", err)
+	}
+
+	set := NewBrokerToolSet(broker)
+	set.SetReservedToolNames([]string{"exec"})
+	definitions := set.PageToolDefinitions(context.Background())
+	if len(definitions) != 1 {
+		t.Fatalf("page definitions = %d, want one definition", len(definitions))
+	}
+	assertJSONValueEqual(t, definitions[0].ParameterSchema, tool.InputSchema)
+	runtime.ResetOperations()
+
+	valid, err := set.Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "call-rich-valid",
+		Name:      "queue_cube_moves",
+		Arguments: `{"moves":[{"face":"R","turns":1}]}`,
+	})
+	if err != nil {
+		t.Fatalf("execute valid rich page tool: %v", err)
+	}
+	validEnvelope, err := webmcp.UnmarshalToolResult([]byte(valid.Content))
+	if err != nil || !validEnvelope.OK {
+		t.Fatalf("valid response = %s (err %v), want successful invocation", valid.Content, err)
+	}
+	if got := countPageToolInvocations(runtime.Operations()); got != 1 {
+		t.Fatalf("valid invocation count = %d, want exactly one", got)
+	}
+
+	invalid, err := set.Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "call-rich-invalid",
+		Name:      "queue_cube_moves",
+		Arguments: `{"moves":[{"face":"X","turns":0}]}`,
+	})
+	if err != nil {
+		t.Fatalf("execute invalid rich page tool: %v", err)
+	}
+	invalidEnvelope, err := webmcp.UnmarshalToolResult([]byte(invalid.Content))
+	if err != nil || invalidEnvelope.OK || invalidEnvelope.Error == nil || invalidEnvelope.Error.Code != string(webmcp.ErrorInvalidToolInput) {
+		t.Fatalf("invalid response = %s (err %v), want invalid_tool_input envelope", invalid.Content, err)
+	}
+	if got := countPageToolInvocations(runtime.Operations()); got != 1 {
+		t.Fatalf("invalid invocation count = %d, want unchanged after validation rejection", got)
 	}
 }
 
@@ -181,6 +274,34 @@ func TestComposedSurfaceNeverDeadEndsOnCatalogNames(t *testing.T) {
 	if !strings.Contains(envelope.Error.Message, "get_cube_state") || !strings.Contains(envelope.Error.Message, "webmcp_list_tools") {
 		t.Fatalf("guidance message %q lacks close matches or the stable path", envelope.Error.Message)
 	}
+}
+
+func richPageToolSchema() json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]},"turns":{"type":"integer","minimum":1}},"required":["face","turns"],"additionalProperties":false}}},"required":["moves"],"additionalProperties":false}`)
+}
+
+func assertJSONValueEqual(t *testing.T, got, want json.RawMessage) {
+	t.Helper()
+	var gotValue, wantValue any
+	if err := json.Unmarshal(got, &gotValue); err != nil {
+		t.Fatalf("decode actual JSON: %v", err)
+	}
+	if err := json.Unmarshal(want, &wantValue); err != nil {
+		t.Fatalf("decode expected JSON: %v", err)
+	}
+	if !reflect.DeepEqual(gotValue, wantValue) {
+		t.Fatalf("JSON value = %#v, want %#v", gotValue, wantValue)
+	}
+}
+
+func countPageToolInvocations(operations []testkit.Operation) int {
+	count := 0
+	for _, operation := range operations {
+		if operation.Kind == testkit.OperationInvoke {
+			count++
+		}
+	}
+	return count
 }
 
 type staticStub struct{}
