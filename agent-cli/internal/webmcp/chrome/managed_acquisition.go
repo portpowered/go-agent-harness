@@ -21,7 +21,10 @@ const (
 	// managed WebMCP path is allowed to start.
 	MinimumManagedChromeMajor = 151
 
-	defaultChromeVersionTimeout = 2 * time.Second
+	// A freshly extracted Chrome for Testing binary can spend several seconds
+	// completing macOS first-launch validation before answering --version. Keep
+	// the probe bounded, but leave enough room for that one-time platform work.
+	defaultChromeVersionTimeout = 10 * time.Second
 	maxChromeVersionOutputBytes = 64 << 10
 )
 
