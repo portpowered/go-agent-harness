@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 )
 
 // RunRoom runs a manifest-defined room and discards the structured result.
@@ -65,10 +66,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		publishStreamTermination(result)
 		return result, err
 	}
+	roomClock := platformclock.Ensure(opts.Clock)
+	opts.Clock = roomClock
 
 	var evidence *roomEvidence
 	var evidenceSecrets []string
-	startedAt := time.Now().UTC()
+	startedAt := roomClock.Now().UTC()
 	if strings.TrimSpace(opts.OutputDir) != "" {
 		outputDir, outputErr := prepareRoomEvidenceOutput(opts.OutputDir)
 		if outputErr != nil {
@@ -80,7 +83,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		if !replayMode {
 			evidenceSecrets = roomCredentialSecrets(opts.Manifest, validation)
 		}
-		evidence, err = newRoomEvidence(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt)
+		evidence, err = newRoomEvidence(outputDir, opts.Manifest, roomFormatForOptions(opts), evidenceSecrets, startedAt, roomClock)
 		if err != nil {
 			result := roomFailureResult(err, evidenceSecrets)
 			publishStreamTermination(result)
@@ -89,7 +92,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	}
 	finalizeEvidence := func(result RoomResult, runErr error) (RoomResult, error) {
 		if evidence != nil {
-			finalizeErr := evidence.finalize(result, runErr, time.Now().UTC())
+			finalizeErr := evidence.finalize(result, runErr, roomClock.Now().UTC())
 			if finalizeErr != nil {
 				runErr = errors.Join(runErr, finalizeErr)
 				if result.Error == "" {

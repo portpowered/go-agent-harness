@@ -257,10 +257,13 @@ customerAudioRecorded:
 	}
 	// Three per-participant artifacts (WAV/diagnostics/deltas) times two
 	// participants, plus the terminal manifest, room-mix.wav,
-	// room-timeline.jsonl, and the participants/ directory holding
-	// sent.pcm/received.pcm.
-	if len(entries) != 10 {
-		t.Fatalf("finalized room output entries = %d, want 10: %v", len(entries), entries)
+	// room-timeline.jsonl, room-latency.json, and the participants/ directory
+	// holding sent.pcm/received.pcm.
+	if len(entries) != 11 {
+		t.Fatalf("finalized room output entries = %d, want 11: %v", len(entries), entries)
+	}
+	if _, statErr := os.Stat(filepath.Join(opts.OutputDir, RoomLatencyArtifactPath)); statErr != nil {
+		t.Fatalf("finalized room output missing latency artifact: %v", statErr)
 	}
 	for _, id := range []string{"customer", "agent"} {
 		participant := manifest.Participants[id]

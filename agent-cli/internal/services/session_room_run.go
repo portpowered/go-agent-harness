@@ -180,6 +180,13 @@ func runRoomParticipant(
 		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
 		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 	}
+	var latencyRuntime *sessionRuntimeObservationRecorder
+	if evidence != nil && evidence.latency != nil {
+		latencyRuntime = newSessionRuntimeObservationRecorder(roomLatencyRuntimeObserver{
+			recorder:      evidence.latency,
+			participantID: runtime.plan.manifest.ID,
+		}, opts.Clock)
+	}
 	loopOptions := sessionLoopOptions{
 		Prompt:                 runtime.plan.options.Prompt,
 		WaitForClose:           true,
@@ -199,6 +206,9 @@ func runRoomParticipant(
 	}
 	loopOptions.observer = observer
 	loopOptions.loopReady = runtime.loopReady
+	// Latency sampling rides along on replay too: the recorder is driven by the
+	// injected clock, so a replayed room reproduces the same breakdown.
+	loopOptions.runtime = latencyRuntime
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, loopOptions)
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
@@ -275,6 +285,9 @@ func observeRoomParticipantStream(
 	msg messages.StreamMessage,
 ) {
 	plan := runtime.plan
+	if evidence != nil && msg.Type == messages.StreamTypeVADSpeechStopped {
+		evidence.observeSpeechStopped(plan.manifest.ID)
+	}
 	if opts.onParticipantStream != nil {
 		opts.onParticipantStream(plan.manifest.ID, msg)
 	}
@@ -307,6 +320,19 @@ func observeRoomParticipantStream(
 		return
 	}
 	pcm := append([]byte(nil), value.Content...)
+	targets := coordinator.activeExcept(plan.manifest.ID)
+	targetIDs := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if target != nil && target.plan != nil {
+			targetIDs = append(targetIDs, target.plan.manifest.ID)
+		}
+	}
+	if evidence != nil {
+		evidence.observeSpeakerAudio(plan.manifest.ID, targetIDs, pcm)
+		if len(pcm) > 0 {
+			evidence.observeProviderAudio(plan.manifest.ID, msg.ResponseID)
+		}
+	}
 	if participantEvidence != nil {
 		if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
 			evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
@@ -324,13 +350,20 @@ func observeRoomParticipantStream(
 		// the cross-participant order and overlap.
 		return
 	}
-	for _, target := range coordinator.activeExcept(plan.manifest.ID) {
+	for _, target := range targets {
 		if target == nil || target.mixer == nil {
 			continue
 		}
-		if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
-			coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
-		} else if opts.onParticipantAudioFanned != nil {
+		if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil {
+			if coordinator.isActive(target.plan.manifest.ID) {
+				coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
+			}
+			continue
+		}
+		if evidence != nil {
+			evidence.observePeerAudio(plan.manifest.ID, target.plan.manifest.ID, pcm)
+		}
+		if opts.onParticipantAudioFanned != nil {
 			opts.onParticipantAudioFanned(plan.manifest.ID, target.plan.manifest.ID, append([]byte(nil), pcm...))
 		}
 	}

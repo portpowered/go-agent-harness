@@ -36,10 +36,12 @@ type SessionRuntimeObserver = services.SessionRuntimeObserver
 type SessionRuntimeObservation = services.SessionRuntimeObservation
 
 const (
-	SessionRuntimeObservationAudioOutput   = services.SessionRuntimeObservationAudioOutput
-	SessionRuntimeObservationAudioInput    = services.SessionRuntimeObservationAudioInput
-	SessionRuntimeObservationTurnCompleted = services.SessionRuntimeObservationTurnCompleted
-	SessionRuntimeObservationTerminal      = services.SessionRuntimeObservationTerminal
+	SessionRuntimeObservationAudioOutput    = services.SessionRuntimeObservationAudioOutput
+	SessionRuntimeObservationAudioInput     = services.SessionRuntimeObservationAudioInput
+	SessionRuntimeObservationInputCommit    = services.SessionRuntimeObservationInputCommit
+	SessionRuntimeObservationResponseCreate = services.SessionRuntimeObservationResponseCreate
+	SessionRuntimeObservationTurnCompleted  = services.SessionRuntimeObservationTurnCompleted
+	SessionRuntimeObservationTerminal       = services.SessionRuntimeObservationTerminal
 )
 
 // SessionFinalAccounting is the production-owned terminal token and metrics

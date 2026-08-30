@@ -4,6 +4,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -135,6 +136,10 @@ type RoomRunOptions struct {
 	// both values so startup can pass a validated, immutable plan through the
 	// service boundary without reopening the source bundle.
 	ReplayPlan *RoomReplayPlan
+	// Clock is the shared room timestamp source used by runtime landmarks and
+	// finalized evidence. Nil selects the host clock; deterministic callers
+	// should inject one source for all participants.
+	Clock platformclock.Source
 	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
 	// The CLI supplies it for bare launches so command/service composition tests
 	// can observe the selected devices and credential provenance without
