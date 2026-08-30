@@ -176,7 +176,9 @@ func (s *ScriptedTargetSession) EmitLateEvent(event webmcp.BrowserEvent) error {
 
 func (s *ScriptedTargetSession) produceEvent(event webmcp.BrowserEvent) webmcp.BrowserEvent {
 	s.mu.Lock()
+	s.entry.eventMu.Lock()
 	produced := s.decorateProducedEventLocked(event)
+	s.entry.eventMu.Unlock()
 	s.mu.Unlock()
 	return produced
 }
@@ -263,9 +265,12 @@ func (s *ScriptedTargetSession) EmitDisconnected(reasons ...string) error {
 
 func (s *ScriptedTargetSession) decorateProducedEventLocked(event webmcp.BrowserEvent) webmcp.BrowserEvent {
 	if event.Sequence == 0 {
-		s.sequence++
-		event.Sequence = s.sequence
-	} else if event.Sequence > s.sequence {
+		s.entry.eventSequence++
+		event.Sequence = s.entry.eventSequence
+	} else if event.Sequence > s.entry.eventSequence {
+		s.entry.eventSequence = event.Sequence
+	}
+	if event.Sequence > s.sequence {
 		s.sequence = event.Sequence
 	}
 	if event.BrowserID == "" {
