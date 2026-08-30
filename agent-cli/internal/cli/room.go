@@ -231,8 +231,8 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 		OutputDir:                  outputDir,
 		ConfigDir:                  roomConfigDir(roomRunGlobalFlags(c)),
 		BrowserCapabilitiesFactory: NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c))),
-		DeviceRegistry: roomRunDeviceRegistry(c),
-		Stream:         broker,
+		DeviceRegistry:             roomRunDeviceRegistry(c),
+		Stream:                     broker,
 		OnDiagnostic: func(participantID string, record services.SessionDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
 		},

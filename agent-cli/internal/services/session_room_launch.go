@@ -61,7 +61,8 @@ const (
 
 // RoomLaunchParticipantPlan is the side-effect-free, non-secret projection of
 // one resolved participant. InputDevice and OutputDevice are populated for a
-// synthesized customer; provider metadata is populated for an agent.
+// synthesized or configured human; provider metadata is populated for an
+// agent.
 type RoomLaunchParticipantPlan struct {
 	ID                   string
 	Kind                 room.ParticipantKind
