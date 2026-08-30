@@ -29,6 +29,7 @@ const (
 // Room stream lifecycle event names.
 const (
 	RoomStreamEventParticipantJoined     = "participant_joined"
+	RoomStreamEventParticipantReady      = "participant_ready"
 	RoomStreamEventParticipantTerminated = "participant_terminated"
 	RoomStreamEventRunTerminated         = "run_terminated"
 )

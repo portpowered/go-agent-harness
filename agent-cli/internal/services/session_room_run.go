@@ -2,15 +2,19 @@ package services
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 type roomParticipantRunResult struct {
@@ -65,6 +69,10 @@ func runRoomParticipant(
 				close(runtime.mixerDone)
 			}
 		}()
+		if roomParticipantIsHuman(runtime.plan) {
+			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, secrets)
+			return
+		}
 		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, secrets)
 	}()
 
@@ -75,6 +83,14 @@ func runRoomParticipant(
 	participantStream := RoomParticipantEventSink{}
 	if opts.Stream != nil {
 		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
+	}
+	if roomParticipantIsHuman(runtime.plan) {
+		runErr := runRoomHumanCapture(roomCtx, coordinator, runtime, startGate, participantEvidence, opts, secrets)
+		runErr = coordinator.participantRunError(runtime.plan.manifest.ID, runErr)
+		runtime.lifecycle.markRunDone(runErr)
+		connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
+		results <- roomParticipantRunResult{plan: runtime.plan, runtime: runtime, err: runErr, connected: connected, connectErr: connectErr}
+		return
 	}
 	diagnosticSinks := roomParticipantDiagnosticSinks(runtime.plan, opts, participantEvidence, participantStream)
 	observer := newSessionProgressObserver(combineRoomDiagnosticSinks(diagnosticSinks...), nil, runtime.plan.manifest.Provider, runtime.plan.manifest.Model)
@@ -265,6 +281,7 @@ func collectRoomParticipantResults(
 	results <-chan roomParticipantRunResult,
 	cleanup *roomCleanupWaiter,
 ) error {
+	escalateRuntimeErrors := roomPlansHaveHumanParticipant(plans)
 	pending := make(map[string]struct{}, len(plans))
 	for _, plan := range plans {
 		if plan != nil {
@@ -309,8 +326,19 @@ func collectRoomParticipantResults(
 				continue
 			}
 			delete(pending, id)
-			if result.connectErr != nil && !coordinator.isStopping() {
-				coordinator.fail(roomParticipantFailure(id, result.connectErr, secretsForPlan(result.plan)))
+			if !coordinator.isStopping() {
+				failure := result.connectErr
+				if escalateRuntimeErrors && failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
+					// A provider can connect successfully and then terminate with a
+					// transport/session error. Treat that runtime failure as a room
+					// failure too, so the coordinator cancels the human/device
+					// participant and every other sibling instead of leaving the room
+					// blocked on local capture or playback.
+					failure = result.err
+				}
+				if failure != nil {
+					coordinator.fail(roomParticipantFailure(id, failure, append(secretsForPlan(result.plan), secrets...)))
+				}
 			}
 			finishRoomParticipant(coordinator, mesh, result, secretsForPlan(result.plan), cleanup)
 			if coordinator.isStopping() {
@@ -319,6 +347,15 @@ func collectRoomParticipantResults(
 		}
 	}
 	return nil
+}
+
+func roomPlansHaveHumanParticipant(plans []*roomParticipantPlan) bool {
+	for _, plan := range plans {
+		if roomParticipantIsHuman(plan) {
+			return true
+		}
+	}
+	return false
 }
 
 func waitRoomParticipantWork(
@@ -340,7 +377,14 @@ func waitRoomParticipantWork(
 	}()
 	select {
 	case <-done:
-		return nil
+		var closeErr error
+		for _, plan := range plans {
+			if plan == nil || plan.participant == nil || roomParticipantIsHuman(plan) || plan.participant.lifecycle == nil {
+				continue
+			}
+			closeErr = errors.Join(closeErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(plan.manifest.ID, "session.close"), plan.participant.lifecycle.closeOwnedSession))
+		}
+		return closeErr
 	case <-cleanup.done():
 		outstanding := make([]string, 0)
 		for _, plan := range plans {
@@ -402,6 +446,7 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 		if runtime.cancel != nil {
 			runtime.cancel()
 		}
+		cleanupErr = errors.Join(cleanupErr, closeRoomParticipantDevices(runtime, cleanup))
 		if runtime.mixer != nil {
 			cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(runtime.plan.manifest.ID, "mixer"), runtime.mixer.Close))
 		}
@@ -410,6 +455,21 @@ func cleanupRoomParticipantSetup(runtimes []*roomParticipantRuntime, mesh *room.
 		cleanupErr = errors.Join(cleanupErr, closeRoomMeshBounded(mesh, cleanup))
 	}
 	return cleanupErr
+}
+
+func closeRoomParticipantDevices(runtime *roomParticipantRuntime, cleanup *roomCleanupWaiter) error {
+	if runtime == nil || runtime.plan == nil {
+		return nil
+	}
+	id := runtime.plan.manifest.ID
+	var closeErr error
+	if runtime.input != nil {
+		closeErr = errors.Join(closeErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "input.device"), runtime.input.Close))
+	}
+	if runtime.output != nil {
+		closeErr = errors.Join(closeErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "output.device"), runtime.output.Close))
+	}
+	return closeErr
 }
 
 func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result roomParticipantRunResult, secrets []string, cleanup *roomCleanupWaiter) {
@@ -471,4 +531,191 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			}
 		}
 	}
+}
+
+func runRoomHumanCapture(
+	roomCtx context.Context,
+	coordinator *roomCoordinator,
+	runtime *roomParticipantRuntime,
+	startGate <-chan struct{},
+	participantEvidence *roomParticipantEvidence,
+	opts RoomRunOptions,
+	secrets []string,
+) error {
+	if runtime == nil || runtime.plan == nil || runtime.input == nil || runtime.mixer == nil {
+		return errors.New("human participant input device is not ready")
+	}
+	select {
+	case <-startGate:
+	case <-runtime.ctx.Done():
+		return nil
+	case <-roomCtx.Done():
+		return nil
+	}
+
+	participantID := runtime.plan.manifest.ID
+	frame := make([]int16, audio.FrameSize)
+	for {
+		if err := runtime.input.ReadFrame(runtime.ctx, frame); err != nil {
+			if errors.Is(err, io.EOF) || runtime.ctx.Err() != nil || coordinator.isStopping() || errors.Is(err, context.Canceled) {
+				return nil
+			}
+			failure := roomParticipantFailure(participantID, fmt.Errorf("read human input device: %w", err), secrets)
+			coordinator.fail(failure)
+			return failure
+		}
+		roomSamples, err := resampleRoomSamples(frame, audio.SampleRate, runtime.mixer.Format().SampleRate)
+		if err != nil {
+			failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio: %w", err), secrets)
+			coordinator.fail(failure)
+			return failure
+		}
+		pcm := encodeRoomPCM16(roomSamples)
+		if participantEvidence != nil {
+			if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
+				failure := roomParticipantFailure(participantID, fmt.Errorf("record human input audio: %w", evidenceErr), secrets)
+				coordinator.fail(failure)
+				return failure
+			}
+		}
+		for _, target := range coordinator.activeExcept(participantID) {
+			if target == nil || target.mixer == nil {
+				continue
+			}
+			targetPCM := pcm
+			if target.mixer.Format() != runtime.mixer.Format() {
+				targetSamples, convertErr := resampleRoomSamples(frame, audio.SampleRate, target.mixer.Format().SampleRate)
+				if convertErr != nil {
+					failure := roomParticipantFailure(participantID, fmt.Errorf("convert human input audio for %s: %w", target.plan.manifest.ID, convertErr), secrets)
+					coordinator.fail(failure)
+					return failure
+				}
+				targetPCM = encodeRoomPCM16(targetSamples)
+			}
+			if writeErr := target.mixer.WriteContext(runtime.ctx, participantID, targetPCM); writeErr != nil && coordinator.isActive(target.plan.manifest.ID) {
+				failure := roomParticipantFailure(participantID, fmt.Errorf("fan out human PCM to %s: %w", target.plan.manifest.ID, writeErr), secrets)
+				coordinator.fail(failure)
+				return failure
+			}
+			if opts.onParticipantAudioFanned != nil {
+				opts.onParticipantAudioFanned(participantID, target.plan.manifest.ID, append([]byte(nil), targetPCM...))
+			}
+		}
+	}
+}
+
+func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, secrets []string) {
+	if runtime == nil || runtime.mixer == nil || runtime.output == nil {
+		return
+	}
+	select {
+	case <-startGate:
+	case <-runtime.ctx.Done():
+		return
+	case <-ctx.Done():
+		return
+	}
+	output := roomHumanOutputBuffer{}
+	for {
+		frame, err := runtime.mixer.ReadFrame(runtime.ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, room.ErrMixerClosed) || runtime.ctx.Err() != nil || coordinator.isStopping() {
+				return
+			}
+			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
+			return
+		}
+		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
+			if runtime.ctx.Err() != nil || coordinator.isStopping() {
+				return
+			}
+			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("write human output device: %w", err), secrets))
+			return
+		}
+	}
+}
+
+func encodeRoomPCM16(samples []int16) []byte {
+	pcm := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
+	}
+	return pcm
+}
+
+// resampleRoomSamples converts the fixed 16 kHz device contract to the room's
+// configured mono clock (and back for playback). The shared wavio converter is
+// used for production rates; the small generic fallback preserves the room
+// package's arbitrary-rate deterministic test seam.
+func resampleRoomSamples(samples []int16, inputRate, outputRate int) ([]int16, error) {
+	if inputRate <= 0 || outputRate <= 0 {
+		return nil, fmt.Errorf("audio sample rates must be positive: %d Hz to %d Hz", inputRate, outputRate)
+	}
+	if inputRate == outputRate {
+		return append([]int16(nil), samples...), nil
+	}
+	if roomResampleRateSupported(inputRate) && roomResampleRateSupported(outputRate) {
+		return wavio.Resample(samples, inputRate, outputRate)
+	}
+	if len(samples) == 0 {
+		return []int16{}, nil
+	}
+	outputLengthFloat := math.Ceil(float64(len(samples)) * float64(outputRate) / float64(inputRate))
+	maximumInt := int(^uint(0) >> 1)
+	if outputLengthFloat > float64(maximumInt) {
+		return nil, fmt.Errorf("audio resample output is too large: %g samples", outputLengthFloat)
+	}
+	outputLength := int(outputLengthFloat)
+	converted := make([]int16, outputLength)
+	for outputIndex := range converted {
+		position := float64(outputIndex) * float64(inputRate) / float64(outputRate)
+		sourceIndex := int(position)
+		if sourceIndex >= len(samples)-1 {
+			converted[outputIndex] = samples[len(samples)-1]
+			continue
+		}
+		fraction := position - float64(sourceIndex)
+		value := float64(samples[sourceIndex]) + (float64(samples[sourceIndex+1])-float64(samples[sourceIndex]))*fraction
+		converted[outputIndex] = int16(math.Round(value))
+	}
+	return converted, nil
+}
+
+func roomResampleRateSupported(rate int) bool {
+	return rate == wavio.Rate16kHz || rate == wavio.Rate24kHz || rate == wavio.Rate48kHz
+}
+
+type roomHumanOutputBuffer struct {
+	pending []int16
+}
+
+func (b *roomHumanOutputBuffer) writeFrame(ctx context.Context, sink *audio.DeviceSink, format room.PCM16Format, pcm []byte) error {
+	if sink == nil {
+		return errors.New("human participant output device is nil")
+	}
+	if format == (room.PCM16Format{}) {
+		format = room.DefaultPCM16Format()
+	}
+	if format.Channels != 1 {
+		return fmt.Errorf("human output requires mono mixer audio, got %d channels", format.Channels)
+	}
+	if len(pcm)%2 != 0 {
+		return errors.New("human output mixer produced an odd PCM16 frame")
+	}
+	samples := make([]int16, len(pcm)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:]))
+	}
+	converted, err := resampleRoomSamples(samples, format.SampleRate, audio.SampleRate)
+	if err != nil {
+		return fmt.Errorf("resample mixer audio from %d Hz to %d Hz: %w", format.SampleRate, audio.SampleRate, err)
+	}
+	b.pending = append(b.pending, converted...)
+	for len(b.pending) >= audio.FrameSize {
+		if err := sink.WriteFrame(ctx, b.pending[:audio.FrameSize]); err != nil {
+			return err
+		}
+		b.pending = b.pending[audio.FrameSize:]
+	}
+	return nil
 }

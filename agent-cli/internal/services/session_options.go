@@ -33,6 +33,9 @@ const (
 	SessionTransportWebSocket = "ws"
 	// SessionTransportWebRTC selects the service-owned WebRTC runtime.
 	SessionTransportWebRTC = "webrtc"
+	// SessionOpenAIAPIKeyEnv is the canonical environment key used by the
+	// shared config loader for OpenAI realtime sessions.
+	SessionOpenAIAPIKeyEnv = "AGENT_MODEL__OPENAI__API_KEY"
 )
 
 var (
@@ -531,7 +534,7 @@ func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAICo
 		active.Model = openAIRealtimeModel
 	}
 	if strings.TrimSpace(active.APIKey) == "" {
-		return config.OpenAIConfig{}, fmt.Errorf("OpenAI API key is required for live realtime session mode (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure model.openai.api_key in %s)", config.ConfigFileName)
+		return config.OpenAIConfig{}, fmt.Errorf("OpenAI API key is required for live realtime session mode (set %s, pass --api-key, or configure model.openai.api_key in %s)", SessionOpenAIAPIKeyEnv, config.ConfigFileName)
 	}
 	if strings.TrimSpace(active.Model) == "" {
 		if active.Model == "" && !opts.ModelProvided && opts.Model == "" {

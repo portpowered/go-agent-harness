@@ -10,6 +10,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 )
 
+func roomParticipantIsHuman(plan *roomParticipantPlan) bool {
+	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
+}
+
 func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions) ([]*roomParticipantPlan, []string, error) {
 	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation)
 }
@@ -55,9 +59,18 @@ func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptio
 	}
 	plans = make([]*roomParticipantPlan, 0, len(opts.Manifest.Participants))
 	for _, participant := range opts.Manifest.Participants {
+		kind := room.NormalizeParticipantKind(participant.Kind)
 		value, ok := lookup(participant.APIKeyEnv)
 		if !ok {
 			value = ""
+		}
+		if kind == room.ParticipantKindHuman {
+			// Human participants own local capture/playback rather than a
+			// provider session. Keep the manifest and its device selectors in
+			// the plan, but do not construct a provider inferencer or resolve a
+			// credential for this participant.
+			plans = append(plans, &roomParticipantPlan{manifest: participant})
+			continue
 		}
 		sessionOptions := SessionRunOptions{
 			Provider:        participant.Provider,
@@ -273,11 +286,24 @@ func awaitRoomParticipantConnections(
 			if plan == nil || plan.participant == nil {
 				continue
 			}
+			if roomParticipantIsHuman(plan) {
+				if plan.participant.lifecycle.deviceHasReady() {
+					continue
+				}
+				if plan.participant.lifecycle.runHasFinished() || coordinator.isStopping() {
+					return roomParticipantFailure(plan.manifest.ID, errors.New("human participant devices were not ready"), append(secretsForPlan(plan), secrets...))
+				}
+				allOpened = false
+				continue
+			}
 			_, opened, closed, _, _, _, _ := plan.participant.lifecycle.snapshot()
 			if opened {
 				continue
 			}
 			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
+				if _, terminalErr, terminalObserved := plan.participant.lifecycle.terminal(); terminalObserved && terminalErr != nil {
+					return roomParticipantFailure(plan.manifest.ID, terminalErr, append(secretsForPlan(plan), secrets...))
+				}
 				return roomParticipantFailure(plan.manifest.ID, errors.New("session ended before SESSION.OPEN"), append(secretsForPlan(plan), secrets...))
 			}
 			allOpened = false
@@ -301,6 +327,12 @@ func awaitRoomParticipantConnections(
 			outstanding := make([]string, 0, len(plans))
 			for _, plan := range plans {
 				if plan == nil || plan.participant == nil {
+					continue
+				}
+				if roomParticipantIsHuman(plan) {
+					if !plan.participant.lifecycle.deviceHasReady() {
+						outstanding = append(outstanding, roomLifecycleWorkLabel(plan.manifest.ID, "devices"))
+					}
 					continue
 				}
 				_, opened, _, _, _, _, _ := plan.participant.lifecycle.snapshot()

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -98,6 +99,24 @@ type RoomParticipantDiagnosticObserver func(participantID string, record Session
 // room. It is called only after that participant's own mixer has been stopped.
 type RoomParticipantObserver func(RoomParticipantResult)
 
+// RoomParticipantReady is the credential-free startup projection for one
+// participant. Human participants report their selected device IDs; provider
+// participants report their provider/model. The resolved credential value is
+// intentionally absent.
+type RoomParticipantReady struct {
+	ID            string               `json:"id"`
+	ParticipantID string               `json:"participant_id"`
+	Kind          room.ParticipantKind `json:"kind"`
+	InputDevice   string               `json:"input_device,omitempty"`
+	OutputDevice  string               `json:"output_device,omitempty"`
+	Provider      string               `json:"provider,omitempty"`
+	Model         string               `json:"model,omitempty"`
+}
+
+// RoomParticipantReadyObserver receives one event for each participant after
+// all required human devices and provider sessions have passed admission.
+type RoomParticipantReadyObserver func(RoomParticipantReady)
+
 // RoomObserver receives the single room terminal event after all participant
 // goroutines and mixers have been torn down.
 type RoomObserver func(RoomResult)
@@ -107,10 +126,21 @@ type RoomObserver func(RoomResult)
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
 	Manifest room.Manifest
+	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
+	// The CLI supplies it for bare launches so command/service composition tests
+	// can observe the selected devices and credential provenance without
+	// inspecting or reopening a config file. A nil value preserves direct
+	// manifest-driven service callers.
+	LaunchPlan *RoomLaunchPlan
 	// OutputDir enables the durable room evidence bundle. An empty value keeps
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
 	OutputDir string
+	// DeviceRegistry is the runtime registry used by human participants. Bare
+	// launch resolution selects the defaults without opening them; the room
+	// opens the selected input and output at startup and owns them until the
+	// participant is torn down. Provider-only manifests do not require it.
+	DeviceRegistry audio.DeviceRegistry
 
 	SessionFactory     RoomSessionInferencerFactory
 	SessionInferencers map[string]messages.SessionInferencer
@@ -150,6 +180,7 @@ type RoomRunOptions struct {
 	OnAudioOutput           RoomParticipantAudioObserver
 	OnAudioInput            RoomParticipantAudioObserver
 	OnDiagnostic            RoomParticipantDiagnosticObserver
+	OnParticipantReady      RoomParticipantReadyObserver
 	OnParticipantTerminated RoomParticipantObserver
 	OnRoomTerminated        RoomObserver
 	// onParticipantSessionOpen is an internal deterministic lifecycle seam used

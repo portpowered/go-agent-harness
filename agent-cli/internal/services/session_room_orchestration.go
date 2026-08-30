@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 )
@@ -61,6 +62,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			publishStreamTermination(result)
 			return result, err
 		}
+	}
+	opts, err = normalizeRoomRecordingOptions(opts)
+	if err != nil {
+		result := roomFailureResult(err, nil)
+		publishStreamTermination(result)
+		return result, err
 	}
 
 	var evidence *roomEvidence
@@ -184,7 +191,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress},
 		}
 		plan.participant = runtime
-		plan.tracker.lifecycle = runtime.lifecycle
+		if plan.tracker != nil {
+			plan.tracker.lifecycle = runtime.lifecycle
+		}
 		runtimes = append(runtimes, runtime)
 		for _, other := range plans {
 			if other.manifest.ID == plan.manifest.ID {
@@ -192,6 +201,14 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			}
 			if addErr := mixer.AddInput(other.manifest.ID); addErr != nil {
 				coordinator.fail(roomParticipantFailure(plan.manifest.ID, addErr, secrets))
+				roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
+				result := roomFailureResult(roomErr, secrets)
+				return finalizeEvidence(result, roomErr)
+			}
+		}
+		if roomParticipantIsHuman(plan) {
+			if deviceErr := openRoomHumanDevices(runtime, opts.DeviceRegistry); deviceErr != nil {
+				coordinator.fail(roomParticipantFailure(plan.manifest.ID, deviceErr, secretsForPlan(plan)))
 				roomErr := errors.Join(coordinator.roomError(), cleanupSetup())
 				result := roomFailureResult(roomErr, secrets)
 				return finalizeEvidence(result, roomErr)
@@ -215,7 +232,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	startGate := make(chan struct{})
 	connectionOutcomes := make(chan roomConnectionOutcome, len(plans))
 	for _, plan := range plans {
-		plan.tracker.setOutcomeSink(connectionOutcomes)
+		if plan.tracker != nil {
+			plan.tracker.setOutcomeSink(connectionOutcomes)
+		}
 	}
 	var runWG sync.WaitGroup
 	var mixerWG sync.WaitGroup
@@ -243,6 +262,23 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			coordinator.fail(startupErr)
 		}
 		cleanup.start()
+	}
+	if startupErr == nil && !coordinator.isStopping() {
+		for _, plan := range plans {
+			if plan == nil {
+				continue
+			}
+			ready := roomParticipantReady(plan)
+			if evidence != nil {
+				evidence.setParticipantReady(ready)
+			}
+			if opts.Stream != nil {
+				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantReady, ready.ParticipantID)
+			}
+			if opts.OnParticipantReady != nil {
+				opts.OnParticipantReady(ready)
+			}
+		}
 	}
 	close(startGate)
 	collectErr := collectRoomParticipantResults(ctx, coordinator, plans, mesh, secrets, timer, results, cleanup)
@@ -280,8 +316,53 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			result.Error = sanitizeRoomError(roomErr, secrets)
 		}
 	}
-	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d\n", result.Reason, len(result.Participants)); writeErr != nil {
+	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d active=%d\n", result.Reason, len(result.Participants), len(result.ActiveParticipants)); writeErr != nil {
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))
 	}
 	return result, roomErr
+}
+
+func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {
+	if plan == nil {
+		return RoomParticipantReady{}
+	}
+	participant := plan.manifest
+	ready := RoomParticipantReady{
+		ID:            participant.ID,
+		ParticipantID: participant.ID,
+		Kind:          room.NormalizeParticipantKind(participant.Kind),
+		InputDevice:   participant.InputDevice,
+		OutputDevice:  participant.OutputDevice,
+		Provider:      participant.Provider,
+		Model:         participant.Model,
+	}
+	if runtime := plan.participant; roomParticipantIsHuman(plan) && runtime != nil {
+		if runtime.input != nil {
+			ready.InputDevice = string(runtime.input.DeviceID())
+		}
+		if runtime.output != nil {
+			ready.OutputDevice = string(runtime.output.DeviceID())
+		}
+	}
+	return ready
+}
+
+func openRoomHumanDevices(runtime *roomParticipantRuntime, registry audio.DeviceRegistry) error {
+	if runtime == nil || runtime.plan == nil {
+		return errors.New("human participant runtime is nil")
+	}
+	participant := runtime.plan.manifest
+	input, err := audio.NewDeviceSource(registry, audio.DeviceID(participant.InputDevice))
+	if err != nil {
+		return fmt.Errorf("open human participant input device %q: %w", participant.InputDevice, err)
+	}
+	runtime.input = input
+	output, err := audio.NewDeviceSink(registry, audio.DeviceID(participant.OutputDevice))
+	if err != nil {
+		closeErr := input.Close()
+		return errors.Join(fmt.Errorf("open human participant output device %q: %w", participant.OutputDevice, err), closeErr)
+	}
+	runtime.output = output
+	runtime.lifecycle.markDeviceReady()
+	return nil
 }

@@ -9,15 +9,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 const (
-	// DefaultRoomOutputDir is the deterministic evidence directory used by the
-	// room CLI when --out is omitted. It is resolved relative to the process's
-	// working directory and must still satisfy the empty-directory safety check.
+	// DefaultRoomOutputDir is retained for configured-room compatibility when
+	// --out is omitted. Bare room launches allocate a fresh sibling under the
+	// effective config directory before runtime side effects begin.
 	DefaultRoomOutputDir = "room-run"
 
 	// Room lifecycle cleanup is deliberately finite. Provider/session contracts
@@ -48,6 +49,8 @@ type roomParticipantRuntime struct {
 	observerDone    chan struct{}
 	observerOnce    sync.Once
 	mixer           *room.PCM16Mixer
+	input           *audio.DeviceSource
+	output          *audio.DeviceSink
 	lifecycle       *roomParticipantLifecycle
 }
 
@@ -133,7 +136,11 @@ func roomParticipantOutstandingWork(runtime *roomParticipantRuntime) []string {
 	}
 	id := runtime.plan.manifest.ID
 	outstanding := make([]string, 0, 6)
-	if runtime.plan.tracker == nil {
+	if roomParticipantIsHuman(runtime.plan) {
+		if runtime.lifecycle == nil || !runtime.lifecycle.deviceHasReady() {
+			outstanding = append(outstanding, roomLifecycleWorkLabel(id, "devices"))
+		}
+	} else if runtime.plan.tracker == nil {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
 	} else if _, ready := runtime.plan.tracker.outcome(); !ready {
 		outstanding = append(outstanding, roomLifecycleWorkLabel(id, "connect"))
@@ -168,9 +175,11 @@ type roomParticipantLifecycle struct {
 	mu                   sync.Mutex
 	connected            bool
 	connectErr           error
+	deviceReady          bool
 	sessionCreated       bool
 	ownedSessionClosed   bool
 	sessionCloseErr      error
+	ownedSession         *roomTrackedSession
 	sessionOpened        bool
 	sessionClosed        bool
 	transportEnded       bool
@@ -193,7 +202,33 @@ func (l *roomParticipantLifecycle) markConnected(err error) {
 	l.mu.Lock()
 	l.connected = err == nil
 	l.connectErr = err
+	l.signalLocked()
 	l.mu.Unlock()
+}
+
+// markDeviceReady records the readiness boundary for a human participant.
+// Human participants have no provider ConnectSession outcome, so their
+// capture and playback handles become the equivalent startup admission
+// signal once both have been acquired.
+func (l *roomParticipantLifecycle) markDeviceReady() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.connected = true
+	l.deviceReady = true
+	l.connectErr = nil
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) deviceHasReady() bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.deviceReady
 }
 
 func (l *roomParticipantLifecycle) signalLocked() {
@@ -214,6 +249,29 @@ func (l *roomParticipantLifecycle) markSessionCreated() {
 	l.sessionCreated = true
 	l.signalLocked()
 	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) setOwnedSession(session *roomTrackedSession) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.ownedSession = session
+	l.signalLocked()
+	l.mu.Unlock()
+}
+
+func (l *roomParticipantLifecycle) closeOwnedSession() error {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	session := l.ownedSession
+	l.mu.Unlock()
+	if session == nil {
+		return nil
+	}
+	return session.Close()
 }
 
 func (l *roomParticipantLifecycle) markOwnedSessionClosed(err error) {
@@ -560,6 +618,7 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 			}
 			tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle}
 			if i.lifecycle != nil {
+				i.lifecycle.setOwnedSession(tracked)
 				terminalError := func() error { return terminalSessionError(tracked) }
 				i.lifecycle.setTransportDone(tracked.Done(), terminalError)
 			}
@@ -573,6 +632,7 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 	if err == nil && session != nil && i.lifecycle != nil {
 		i.lifecycle.markSessionCreated()
 		tracked := &roomTrackedSession{Session: session, lifecycle: i.lifecycle}
+		i.lifecycle.setOwnedSession(tracked)
 		terminalError := func() error { return terminalSessionError(tracked) }
 		i.lifecycle.setTransportDone(tracked.Done(), terminalError)
 		recordSessionEnd := func() {
@@ -585,6 +645,12 @@ func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (mes
 			case <-ctx.Done():
 				if roomChannelClosed(tracked.Done()) {
 					recordSessionEnd()
+				} else {
+					// Cancellation can win before the model runner reaches its
+					// deferred session Close (for example while the room is still
+					// admitting a sibling). The tracker owns this idempotent
+					// fallback so a connected provider cannot outlive the room.
+					_ = tracked.Close()
 				}
 			}
 		}()
@@ -770,6 +836,12 @@ func (c *roomCoordinator) noteTurn(participantID string, turns int) {
 		if participant == nil || participant.lifecycle == nil {
 			return
 		}
+		if roomParticipantIsHuman(participant.plan) {
+			// A human has no provider response boundary to count. Room bounds
+			// are satisfied by the provider-backed participants while local
+			// capture/playback remains continuously available.
+			continue
+		}
 		_, _, _, _, _, completed, _ := participant.lifecycle.snapshot()
 		if completed < c.maxTurns {
 			return
@@ -859,6 +931,12 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 		runtime.cancel()
 	}
 	var cleanupErr error
+	if runtime.input != nil {
+		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "input.device"), runtime.input.Close))
+	}
+	if runtime.output != nil {
+		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "output.device"), runtime.output.Close))
+	}
 	if runtime.mixer != nil {
 		cleanupErr = errors.Join(cleanupErr, boundedRoomCleanupOperation(cleanup, roomLifecycleWorkLabel(id, "mixer"), runtime.mixer.Close))
 	}
