@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -387,6 +388,164 @@ func TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration(t *te
 	}
 	if bytes.Contains([]byte(got), []byte{0x52, 0x49, 0x46, 0x46, 0x10, 0x20, 0x30, 0x40}) {
 		t.Fatalf("bare empty-prompt replay wrote recorded PCM to text output, got: %q", got)
+	}
+}
+
+// writeAudioTurnReplayFixture writes the embedded s2s-08 gate-probe capture
+// (audioTurnReplayFixtureJSON) to path for one test.
+func writeAudioTurnReplayFixture(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(audioTurnReplayFixtureJSON), 0o600); err != nil {
+		t.Fatalf("write audio-turn replay fixture: %v", err)
+	}
+}
+
+// TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecordedFramesAndReportsCompletion
+// covers the scheduled-audio-turn shape recorded by --audio-in-turn/--record-dir
+// (probe s2s-08, 2026-08-30): a bare `--replay <capture>` with no --audio-in-turn,
+// no --record-dir, and no --max-duration must self-drive every recorded client
+// frame (input_audio_buffer.append/commit, response.create), print the full
+// recorded transcript, and self-terminate honestly instead of hanging until an
+// external duration bound reaps it.
+func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecordedFramesAndReportsCompletion(t *testing.T) {
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	capturePath := filepath.Join(t.TempDir(), "openai-bare-audio-turn.session.json")
+	writeAudioTurnReplayFixture(t, capturePath)
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	// Bare invocation: no --audio-in-turn, no --record-dir, no --max-duration.
+	rootCmd.SetArgs([]string{
+		"session",
+		"--replay", capturePath,
+	})
+
+	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute bare OpenAI realtime audio-turn replay: %v", err)
+	}
+
+	got := testWriter.StdoutString()
+	for _, want := range []string{"Carrot grows underground.", "Six letters", `rot".`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("bare audio-turn replay missing recorded transcript %q, got:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "[session replay complete]") {
+		t.Fatalf("bare audio-turn replay should self-report completion, got:\n%s", got)
+	}
+	if strings.Contains(got, "max_duration") {
+		t.Fatalf("bare audio-turn replay terminated via max_duration instead of self-completion, got:\n%s", got)
+	}
+}
+
+// TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnIsByteDeterministic proves
+// two independent bare replays of the same scheduled-audio-turn capture produce
+// byte-identical stdout, matching the record shape's own byte-determinism.
+func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnIsByteDeterministic(t *testing.T) {
+	capturePath := filepath.Join(t.TempDir(), "openai-bare-audio-turn.session.json")
+	writeAudioTurnReplayFixture(t, capturePath)
+
+	run := func() string {
+		agentCLI, err := wire.InitializeMockAgentCLI(
+			&mockToolExecutor{},
+			&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+		)
+		if err != nil {
+			t.Fatalf("initialize CLI: %v", err)
+		}
+		testWriter := NewTestWriter()
+		rootCmd := agentCLI.Generate()
+		rootCmd.SetOut(testWriter.Stdout())
+		rootCmd.SetErr(testWriter.Stderr())
+		rootCmd.SetArgs([]string{"session", "--replay", capturePath})
+		if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+			t.Fatalf("execute bare OpenAI realtime audio-turn replay: %v", err)
+		}
+		return testWriter.StdoutString()
+	}
+
+	first := run()
+	second := run()
+	if first != second {
+		t.Fatalf("bare audio-turn replay is not byte-deterministic:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+}
+
+// TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir
+// proves --record-dir is no longer required to combine --audio-in-turn with
+// --replay: a replay drives its scheduled audio turns from the recorded
+// capture, not a live provider, so there is nothing for --record-dir to
+// observe unless the caller wants one.
+func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t *testing.T) {
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	capturePath := filepath.Join(t.TempDir(), "openai-bare-audio-turn.session.json")
+	writeAudioTurnReplayFixture(t, capturePath)
+
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetArgs([]string{
+		"session",
+		"--replay", capturePath,
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
+	})
+
+	err = rootCmd.ExecuteContext(context.Background())
+	if err != nil && strings.Contains(err.Error(), "--audio-in-turn requires --record-dir") {
+		t.Fatalf("--audio-in-turn with --replay should not require --record-dir, got: %v", err)
+	}
+}
+
+// TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch
+// preserves the #279 principle for an explicit --audio-in-turn re-supply: when
+// the caller-provided audio genuinely diverges from the recorded capture, the
+// strict replay dialer still reports a diff-bearing mismatch instead of the
+// self-driving path silently accepting different audio.
+func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch(t *testing.T) {
+	agentCLI, err := wire.InitializeMockAgentCLI(
+		&mockToolExecutor{},
+		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
+	)
+	if err != nil {
+		t.Fatalf("initialize CLI: %v", err)
+	}
+
+	capturePath := filepath.Join(t.TempDir(), "openai-bare-audio-turn.session.json")
+	writeAudioTurnReplayFixture(t, capturePath)
+
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetArgs([]string{
+		"session",
+		"--replay", capturePath,
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+	})
+
+	err = rootCmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("expected a divergent --audio-in-turn re-supply to fail replay")
+	}
+	if !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("expected strict replay mismatch, got: %v", err)
 	}
 }
 

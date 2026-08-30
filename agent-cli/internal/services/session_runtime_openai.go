@@ -79,6 +79,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	prompt := opts.Prompt
 	promptProvided := opts.PromptProvided || prompt != ""
 	barePromptReplay := false
+	var bareAudioTurns []ScheduledAudioInput
 	if !promptProvided {
 		capturedPrompt, promptErr := loadReplaySessionPrompt(opts.ReplayPath)
 		if promptErr != nil {
@@ -88,8 +89,24 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			prompt = capturedPrompt.text
 			promptProvided = true
 			barePromptReplay = true
+		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries {
+			// No recorded text-prompt shape, no caller-supplied audio turns,
+			// and no caller-owned streaming --audio-in source (which drives
+			// its own committed audio independently of ScheduledAudioInput
+			// and must keep reaching the strict replay dialer unchanged):
+			// this may be the scheduled-audio-turn shape recorded by
+			// --audio-in-turn/--record-dir. Reconstruct its turns directly from
+			// the recorded client frames so a bare replay never needs the
+			// caller to re-supply the original audio files.
+			audioTurns, audioErr := loadReplaySessionAudioTurns(opts.ReplayPath)
+			if audioErr != nil {
+				return sessionRuntimePlan{}, audioErr
+			}
+			bareAudioTurns = audioTurns
 		}
 	}
+	bareAudioTurnReplay := len(bareAudioTurns) > 0
+	scheduledAudio := len(opts.AudioInputs) > 0 || bareAudioTurnReplay
 	// The initial provider configuration is captured wire data. The current
 	// tool definitions remain on plan.loop for local execution, but are not
 	// used to rebuild the provider handshake.
@@ -97,7 +114,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, opts.Voice, replayDialerWithConfiguration, nil, false, models.InputAudioTranscriptionConfig{})
+	}, opts.Voice, replayDialerWithConfiguration, nil, scheduledAudio, models.InputAudioTranscriptionConfig{})
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -108,10 +125,11 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 		model:      model,
 		inferencer: sessionInferencer,
 		loop: sessionLoopOptions{
-			Prompt:         prompt,
-			PromptProvided: promptProvided,
-			WaitForClose:   opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
-			MaxDuration:    3 * time.Second,
+			Prompt:                   prompt,
+			PromptProvided:           promptProvided,
+			WaitForClose:             opts.WaitForClose || captureHasEvent(opts.ReplayPath, sessionClosedEventType),
+			MaxDuration:              3 * time.Second,
+			CloseAfterScheduledAudio: scheduledAudio,
 		},
 		finalize: func(_ context.Context, _ io.Writer) error {
 			if err := replayDialer.Err(); err != nil {
@@ -120,7 +138,13 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			return nil
 		},
 	}
-	if barePromptReplay {
+	if bareAudioTurnReplay {
+		// The recorded client frames are entirely self-driving: no
+		// caller-supplied audio, --record-dir, or --max-duration bound is
+		// needed to reach the recorded scheduled-audio turns.
+		plan.audioInputs = bareAudioTurns
+	}
+	if barePromptReplay || bareAudioTurnReplay {
 		plan.replayCompletion = func(out io.Writer) error {
 			_, err := fmt.Fprintln(out, "\n[session replay complete]")
 			return err

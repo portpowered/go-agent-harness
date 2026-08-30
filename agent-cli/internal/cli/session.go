@@ -594,7 +594,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				if audioInput.Present || audioInput.DevicePresent {
 					return fmt.Errorf("--audio-in and --audio-in-turn cannot be used together")
 				}
-				if recordDirPath == "" {
+				// A replay drives its scheduled audio turns from the recorded
+				// capture rather than a live provider; --record-dir observes a
+				// live recording and is not required to replay one.
+				if recordDirPath == "" && c.askFlags.ReplayCapturePath == "" {
 					return fmt.Errorf("--audio-in-turn requires --record-dir")
 				}
 			}

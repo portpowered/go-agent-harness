@@ -250,7 +250,13 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.diagnostics = opts.Diagnostics
 	plan.metricsRecorder = opts.MetricsRecorder
 	plan.streamObserver = opts.StreamObserver
-	plan.audioInputs = opts.AudioInputs
+	// A mode planner (for example a self-driving bare replay of a recorded
+	// scheduled-audio-turn capture) may have already populated audioInputs
+	// directly from the capture; opts.AudioInputs only fills that in when the
+	// planner left it unset.
+	if plan.audioInputs == nil {
+		plan.audioInputs = opts.AudioInputs
+	}
 	plan.scheduledAudioDispatch = scheduledAudioDispatch
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)

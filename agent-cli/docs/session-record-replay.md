@@ -203,10 +203,9 @@ agent session "hello from the CLI" \
 
 ### Reproduce scheduled spoken turns
 
-`--audio-in-turn` accepts finite WAV/PCM inputs and is repeatable. It requires
-`--record-dir`, which keeps the complete turn and audio sidecar in one
-persistent session. The raw JSON capture can be recorded alongside it and
-replayed without a key:
+`--audio-in-turn` accepts finite WAV/PCM inputs and is repeatable. Under
+`--record`, it requires `--record-dir`, which keeps the complete turn and
+audio sidecar in one persistent session:
 
 ```bash
 agent session \
@@ -215,13 +214,36 @@ agent session \
   --provider openai --model gpt-realtime --api-key "$OPENAI_API_KEY" \
   --audio-in-turn fixtures/turn-1.wav \
   --audio-in-turn fixtures/turn-2.wav
+```
 
+For a scheduled-audio-turn capture whose post-handshake client actions are one
+or more `input_audio_buffer.append` events, an `input_audio_buffer.commit`,
+and a `response.create`, repeated once per spoken turn, a bare replay
+reconstructs every turn's audio directly from the recorded capture, so it
+needs no `--audio-in-turn`, `--record-dir`, or `--max-duration` at all:
+
+```bash
+agent session --replay captures/spoken.session.json
+```
+
+Like the capture-derived prompt replay above, a bare scheduled-audio-turn
+replay ends with exactly one `[session replay complete]` line and never
+depends on `--max-duration` to end the process; a failed replay does not print
+that success marker. `--record-dir` is not required to combine `--audio-in-turn`
+with `--replay` either, since a replay drives its scheduled audio turns from
+the recorded capture rather than a live provider:
+
+```bash
 agent session \
   --replay captures/spoken.session.json \
-  --record-dir captures/spoken-replay \
   --audio-in-turn fixtures/turn-1.wav \
   --audio-in-turn fixtures/turn-2.wav
 ```
+
+Supplying `--audio-in-turn` for a replay still reaches the strict replay
+transport for its own outbound validation, so genuinely divergent audio still
+fails replay with the same diff-bearing mismatch error as any other outbound
+divergence.
 
 ### Diagnose a corrupted capture
 
