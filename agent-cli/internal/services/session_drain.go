@@ -31,10 +31,23 @@ type sessionReplayRenderer struct {
 	pendingTranscriptRole messages.Role
 	transcriptOpen        bool
 	transcriptJustClosed  bool
+	transcriptStates      map[messages.Role]sessionReplayTranscriptState
+}
+
+// sessionReplayTranscriptState tracks the lifecycle of the latest transcript
+// utterance for a role. A role's visible line can be closed by an interleaved
+// role before its provider completion arrives, so the renderer must retain
+// that state after the line is no longer active.
+type sessionReplayTranscriptState struct {
+	deltaRendered bool
+	completed     bool
 }
 
 func newSessionReplayRenderer(out io.Writer) *sessionReplayRenderer {
-	return &sessionReplayRenderer{out: out}
+	return &sessionReplayRenderer{
+		out:              out,
+		transcriptStates: make(map[messages.Role]sessionReplayTranscriptState),
+	}
 }
 
 func (r *sessionReplayRenderer) Write(data []byte) (int, error) {
@@ -57,7 +70,11 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 		if err := r.finishTranscript(); err != nil {
 			return err
 		}
-		r.pendingTranscriptRole = sessionReplayTranscriptRole(msg.Role, messages.RoleAssistant)
+		role := sessionReplayTranscriptRole(msg.Role, messages.RoleAssistant)
+		r.pendingTranscriptRole = role
+		// TRANSCRIPT.START is an explicit new utterance boundary. Reset only
+		// this role; another role may still have a completion in flight.
+		r.transcriptStates[role] = sessionReplayTranscriptState{}
 		return nil
 	case *messages.TranscriptDeltaValue:
 		if value == nil || value.Text == "" || (!r.transcriptOpen && strings.TrimSpace(value.Text) == "") {
@@ -70,17 +87,44 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 			}
 		}
 		if !r.transcriptOpen {
+			state := r.transcriptStates[role]
+			if state.completed || !state.deltaRendered {
+				// A delta after a completed transcript starts the next
+				// utterance. If the prior line was only closed by an
+				// interleaved role, retain its pending completion state.
+				r.transcriptStates[role] = sessionReplayTranscriptState{}
+			}
 			if err := r.startTranscript(role); err != nil {
 				return err
 			}
 		}
-		return writeSessionReplayString(r.out, value.Text)
+		if err := writeSessionReplayString(r.out, value.Text); err != nil {
+			return err
+		}
+		state := r.transcriptStates[role]
+		state.deltaRendered = true
+		state.completed = false
+		r.transcriptStates[role] = state
+		return nil
 	case *messages.TranscriptEndValue:
 		role := r.transcriptRoleFor(msg.Role)
+		state := r.transcriptStates[role]
 		// A role can change before the provider delivers the previous role's
 		// completion. The delta already rendered that previous line, so its
 		// completion must not close or replace the currently active role's line.
 		if r.transcriptOpen && r.transcriptRole != role {
+			if state.deltaRendered {
+				state.completed = true
+				r.transcriptStates[role] = state
+			}
+			return nil
+		}
+		if !r.transcriptOpen && (state.deltaRendered || state.completed) {
+			// The role's delta line was already rendered and may have been
+			// closed by another role. Its completion is bookkeeping, not a
+			// second visible transcript line.
+			state.completed = true
+			r.transcriptStates[role] = state
 			return nil
 		}
 		// Some providers can send only the completed event. Render that final
@@ -94,7 +138,12 @@ func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMes
 				return err
 			}
 		}
-		return r.finishTranscript()
+		if err := r.finishTranscript(); err != nil {
+			return err
+		}
+		state.completed = true
+		r.transcriptStates[role] = state
+		return nil
 	default:
 		if err := r.finishTranscript(); err != nil {
 			return err
