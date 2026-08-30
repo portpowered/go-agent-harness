@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
@@ -70,6 +72,84 @@ type bootstrapSelectionDiscovery struct {
 
 func (d bootstrapSelectionDiscovery) Reconnect(context.Context, discovery.ConnectionInputs, ...discovery.ReconnectOptions) (discovery.Selection, error) {
 	return d.selected, nil
+}
+
+type recordingBootstrapSelectionDiscovery struct {
+	bootstrapSelectionDiscovery
+	reconnectOptions []discovery.ReconnectOptions
+}
+
+func (d *recordingBootstrapSelectionDiscovery) LoadPersistedSelection(context.Context) (discovery.PersistedSelection, bool, error) {
+	return discovery.PersistedSelection{}, false, nil
+}
+
+func (d *recordingBootstrapSelectionDiscovery) Reconnect(ctx context.Context, inputs discovery.ConnectionInputs, options ...discovery.ReconnectOptions) (discovery.Selection, error) {
+	d.reconnectOptions = append(d.reconnectOptions, options...)
+	return d.selected, nil
+}
+
+func TestSessionCapabilityBootstrapUsesSingleSelectionForManagedDefault(t *testing.T) {
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = true
+	selected := discovery.Selection{
+		BrowserID: "managed-browser",
+		TargetID:  "managed-tab",
+		Origin:    "https://example.test",
+	}
+	discoveryService := &recordingBootstrapSelectionDiscovery{
+		bootstrapSelectionDiscovery: bootstrapSelectionDiscovery{selected: selected},
+	}
+	broker := &capabilityBroker{selected: webmcp.PageContext{
+		Key:       webmcp.PageKey{BrowserID: webmcp.BrowserID(selected.BrowserID), TargetID: webmcp.TargetID(selected.TargetID)},
+		Origin:    selected.Origin,
+		Connected: true,
+		Ready:     true,
+	}}
+
+	if err := sessionCapabilityBootstrap(browser, discoveryService, broker)(context.Background()); err != nil {
+		t.Fatalf("bootstrap managed browser: %v", err)
+	}
+	if len(discoveryService.reconnectOptions) != 1 {
+		t.Fatalf("reconnect calls = %d, want 1", len(discoveryService.reconnectOptions))
+	}
+	if got := discoveryService.reconnectOptions[0].AutoSelect; got != discovery.AutoSelectSingle {
+		t.Fatalf("auto-select = %q, want %q", got, discovery.AutoSelectSingle)
+	}
+	if broker.selectCalls != 1 {
+		t.Fatalf("selection calls = %d, want 1", broker.selectCalls)
+	}
+}
+
+func TestSessionCapabilityErrorKeepsManagedRemediationSafe(t *testing.T) {
+	secret := "download failed at /private/profile with token=secret"
+	acquisitionErr := &chrome.ManagedChromeAcquisitionError{
+		FallbackCategory: "download_failed",
+		Platform:         "darwin-arm64",
+		Cause:            errors.New(secret),
+	}
+	launchErr := &chrome.ManagedBrowserLaunchError{
+		Phase: "acquisition",
+		Mode:  "headful",
+		Cause: acquisitionErr,
+	}
+
+	err := sessionCapabilityError(launchErr)
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified == nil {
+		t.Fatalf("managed launch error = %T %v, want classified error", err, err)
+	}
+	if classified.Code != webmcp.ErrorEndpointUnreachable {
+		t.Fatalf("managed launch code = %q, want %q", classified.Code, webmcp.ErrorEndpointUnreachable)
+	}
+	if classified.Details["phase"] != "acquisition" || classified.Details["mode"] != "headful" {
+		t.Fatalf("managed launch details = %#v, want phase and mode", classified.Details)
+	}
+	if remediation, _ := classified.Details["remediation"].(string); !strings.Contains(remediation, "install Chrome 151") {
+		t.Fatalf("managed launch remediation = %q, want Chrome prerequisite guidance", remediation)
+	}
+	if !strings.Contains(classified.Message, "download_failed") || strings.Contains(classified.Message, secret) {
+		t.Fatalf("managed launch message = %q, want safe fallback category without nested secret", classified.Message)
+	}
 }
 
 var _ WebMCPDiscoveryService = bootstrapSelectionDiscovery{}
