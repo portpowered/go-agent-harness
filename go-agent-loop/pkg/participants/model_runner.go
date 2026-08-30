@@ -427,9 +427,11 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 		state.hasOutput = true
 	}
 	// On SESSION.CREATED, send back SESSION.UPDATE with the configured
-	// session parameters (model, instructions, modalities) if set.
+	// session parameters (model, instructions, modalities) if set. Use the
+	// same failure-preserving path as mid-session updates so a rejected
+	// provider update cannot silently leave the advertised surface stale.
 	if msg.Type == messages.StreamTypeSessionCreated && r.sessionConfig != nil {
-		session.Send(ctx, messages.StreamMessage{
+		r.forwardSessionEvent(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionUpdate,
 			Value: messages.NewSessionUpdateValue(r.sessionConfig),
 		})

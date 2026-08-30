@@ -364,10 +364,21 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		if !ok || v == nil {
 			return models.SessionEvent{}, false
 		}
+		update := map[string]any{}
+		if v.Model != "" {
+			update["model"] = v.Model
+		}
+		if v.Instructions != "" {
+			update["instructions"] = v.Instructions
+		}
+		if len(v.Modalities) > 0 {
+			update["modalities"] = append([]string(nil), v.Modalities...)
+		}
+		if len(v.Tools) > 0 {
+			update["tools"] = v.Tools
+		}
 		data, _ := json.Marshal(map[string]any{
-			"session": map[string]any{
-				"instructions": v.Instructions,
-			},
+			"session": update,
 		})
 		return models.NewSessionUpdateEvent(data), true
 

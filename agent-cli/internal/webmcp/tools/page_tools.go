@@ -65,12 +65,20 @@ func (s *BrokerToolSet) SetReservedToolNames(names []string) {
 // agent-loop parameter contract. A broker without a connected catalog yields
 // no page tools and no error; the stable broker tools remain available.
 func (s *BrokerToolSet) PageToolDefinitions(ctx context.Context) []messages.ToolDefinition {
+	definitions, _ := s.PageToolDefinitionsWithError(ctx)
+	return definitions
+}
+
+// PageToolDefinitionsWithError is the error-preserving form of
+// PageToolDefinitions. Session publication uses this form so a failed catalog
+// refresh cannot be mistaken for an intentional empty page surface.
+func (s *BrokerToolSet) PageToolDefinitionsWithError(ctx context.Context) ([]messages.ToolDefinition, error) {
 	if s == nil || s.broker == nil {
-		return nil
+		return nil, nil
 	}
 	catalog, err := s.broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	state := s.pageState()
 	state.mu.Lock()
@@ -95,7 +103,7 @@ func (s *BrokerToolSet) PageToolDefinitions(ctx context.Context) []messages.Tool
 		state.publishedName[advertised] = name
 		definitions = append(definitions, pageToolDefinition(advertised, descriptor))
 	}
-	return definitions
+	return definitions, nil
 }
 
 func pageToolDefinition(advertised string, descriptor webmcp.ToolDescriptor) messages.ToolDefinition {

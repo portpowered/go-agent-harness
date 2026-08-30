@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -152,6 +153,15 @@ type sessionLoopOptions struct {
 	// InteractiveToolPolicy is the immutable per-session class and timeout
 	// snapshot paired with ToolDefinitions and ToolExecutor.
 	InteractiveToolPolicy *InteractiveToolPolicy
+	// ToolDefinitionBase is the immutable static and stable broker surface
+	// retained by the dynamic publisher while page definitions change.
+	ToolDefinitionBase []messages.ToolDefinition
+	// RefreshToolDefinitions returns the complete current tool surface after a
+	// broker selection/catalog/generation event.
+	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
+	// BrowserWatch is an independent subscription to the broker's semantic
+	// lifecycle observations. It is nil for sessions without browser tools.
+	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
 
 	// AdvertiseToolDefinitions sends the definitions through the generic
 	// SESSION.UPDATE seam used by injected sessions. Live provider-backed
@@ -542,6 +552,8 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	defer publisher.stop()
 	if opts.loopReady != nil {
 		select {
 		case opts.loopReady <- loop:
@@ -654,6 +666,8 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	toolLifecycleEvents := opts.observer.toolLifecycleEvents()
 	for {
 		select {
+		case publicationErr := <-publisherErrors:
+			return errors.Join(publicationErr, stopAndDrain())
 		case input, ok := <-audioInterruptions:
 			if !ok {
 				audioInterruptions = nil
@@ -764,6 +778,13 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 			state = nextState
 			if msgErr != nil {
 				return msgErr
+			}
+			if msg.Type == messages.StreamTypeSessionCreated {
+				// ModelRunner sends the initial SESSION.UPDATE while handling
+				// SESSION.CREATED. Release dynamic publication only after that
+				// provider bootstrap boundary has been processed, so a page
+				// update cannot overtake the initial configuration.
+				publisher.markSessionReady()
 			}
 			if msg.Type == messages.StreamTypeSessionOpen {
 				startSessionUpdatedTimer()

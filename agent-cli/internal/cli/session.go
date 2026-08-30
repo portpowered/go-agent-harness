@@ -36,6 +36,10 @@ type SessionToolCapabilities struct {
 	// first-class page tools read from the connected browser catalog. Nil
 	// means Definitions is already final.
 	RefreshDefinitions func(context.Context) []messages.ToolDefinition
+	// RefreshDefinitionsWithError is the error-preserving form used by the
+	// live session publisher. A catalog read failure must not be collapsed into
+	// an empty page surface and treated as a successful provider update.
+	RefreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 	// Initialize is called synchronously after capability construction and
 	// before the session provider can issue a browser tool call. Implementations
 	// retain a classified failed state in the executor when initialization
@@ -51,6 +55,45 @@ type SessionToolCapabilities struct {
 	// Close transfers ownership of any capability resources to the session
 	// coordinator. Nil means this capability has no closeable resources.
 	Close func() error
+}
+
+type resolvedSessionToolSurface struct {
+	executor        messages.ToolExecutor
+	definitions     []messages.ToolDefinition
+	base            []messages.ToolDefinition
+	refresh         func(context.Context) ([]messages.ToolDefinition, error)
+	browserWatch    func(context.Context) <-chan webmcp.BrokerEvent
+	capabilityClose func() error
+}
+
+func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapabilities) resolvedSessionToolSurface {
+	if capabilities.Initialize != nil {
+		// Initialization is deliberately completed before the provider receives
+		// the executor. A failed initializer remains represented by the broker's
+		// classified failed state and is surfaced by later tool calls.
+		_ = capabilities.Initialize(ctx)
+	}
+	result := resolvedSessionToolSurface{
+		executor:     capabilities.Executor,
+		definitions:  append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		base:         append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		refresh:      capabilities.RefreshDefinitionsWithError,
+		browserWatch: capabilities.BrowserWatch,
+	}
+	if result.refresh == nil && capabilities.RefreshDefinitions != nil {
+		result.refresh = func(ctx context.Context) ([]messages.ToolDefinition, error) {
+			return capabilities.RefreshDefinitions(ctx), nil
+		}
+	}
+	if capabilities.RefreshDefinitions != nil {
+		result.definitions = capabilities.RefreshDefinitions(ctx)
+	}
+	if capabilities.Close != nil {
+		// Ownership transfers to the service coordinator after capability
+		// construction succeeds.
+		result.capabilityClose = capabilities.Close
+	}
+	return result
 }
 
 // SessionCapabilityState is the lifecycle state of a request-scoped session
@@ -520,6 +563,8 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			}
 			toolExecutor := c.toolExecutorOverride
 			var toolDefinitions []messages.ToolDefinition
+			var toolDefinitionBase []messages.ToolDefinition
+			var refreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 			var capabilityClose func() error
 			var browserWatch func(context.Context) <-chan webmcp.BrokerEvent
 			if c.sessionToolCapabilities != nil {
@@ -533,60 +578,79 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("configure session tools: %w", err)
 				}
-				if capabilities.Initialize != nil {
-					// Initialization is deliberately completed before the provider
-					// receives the executor. A failed initializer remains represented by
-					// the broker's classified failed state, allowing the session to keep
-					// static tools while refusing every browser dispatch.
-					_ = capabilities.Initialize(sessionContext)
-				}
-				toolExecutor = capabilities.Executor
-				toolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-				if capabilities.RefreshDefinitions != nil {
-					toolDefinitions = capabilities.RefreshDefinitions(sessionContext)
-				}
-				browserWatch = capabilities.BrowserWatch
-				if capabilities.Close != nil {
-					// The service entry point creates the single coordinator after
-					// capability construction succeeds. Keeping the transferred hook
-					// intact avoids a second command-side ownership wrapper.
-					capabilityClose = capabilities.Close
-				}
+				surface := resolveSessionToolSurface(sessionContext, capabilities)
+				toolExecutor = surface.executor
+				toolDefinitions = surface.definitions
+				toolDefinitionBase = surface.base
+				refreshDefinitionsWithError = surface.refresh
+				browserWatch = surface.browserWatch
+				capabilityClose = surface.capabilityClose
 			}
 			audioInterruptions, capabilityClose, err := prepareSessionAudioInterruptions(cmd, audioInterrupts, audioInterruptTool, browserWatch, capabilityClose)
 			if err != nil {
 				return err
 			}
 			sessionOptions := services.SessionRunOptions{
-				RecordPath:           c.askFlags.RecordCapturePath,
-				ReplayPath:           c.askFlags.ReplayCapturePath,
-				Provider:             c.askFlags.Provider,
-				Model:                c.askFlags.Model,
-				ModelProvided:        cmd.Flags().Changed("model"),
-				NoInputTranscription: noInputTranscription,
-				APIKey:               c.askFlags.APIKey,
-				BaseURL:              c.askFlags.BaseURL,
-				ConfigDir:            c.globalFlags.ConfigDir(),
-				Prompt:               strings.Join(args, " "),
-				PromptProvided:       cmd.Flags().Changed("prompt") || len(args) > 0,
-				Voice:                voice,
-				Transport:            selectedTransport,
-				Signaling:            signaling,
-				MediaSource:          mediaSource,
-				RTCRuntimeFactory:    c.rtcRuntimeFactory,
-				SessionInferencer:    c.sessionInferencerOverride,
-				ToolExecutor:         toolExecutor,
-				ToolDefinitions:      toolDefinitions,
-				AudioInterruptions:   audioInterruptions,
-				CapabilityClose:      capabilityClose,
-				CancellationIntent:   cancellationIntent,
-				LoadedConfig:         loadedConfig,
-				BrowserToolsEnabled:  browserConfigEnablesTools(loadedConfig),
-				WaitForClose:         waitForClose,
-				StreamObserver:       c.streamObserver,
-				Clock:                c.clockSource,
-				RuntimeObserver:      c.runtimeObserver,
-				AudioInTurnBarge:     audioInTurnBarge,
+				RecordPath:             c.askFlags.RecordCapturePath,
+				ReplayPath:             c.askFlags.ReplayCapturePath,
+				Provider:               c.askFlags.Provider,
+				Model:                  c.askFlags.Model,
+				ModelProvided:          cmd.Flags().Changed("model"),
+				NoInputTranscription:   noInputTranscription,
+				APIKey:                 c.askFlags.APIKey,
+				BaseURL:                c.askFlags.BaseURL,
+				ConfigDir:              c.globalFlags.ConfigDir(),
+				Prompt:                 strings.Join(args, " "),
+				PromptProvided:         cmd.Flags().Changed("prompt") || len(args) > 0,
+				Voice:                  voice,
+				Transport:              selectedTransport,
+				Signaling:              signaling,
+				MediaSource:            mediaSource,
+				RTCRuntimeFactory:      c.rtcRuntimeFactory,
+				SessionInferencer:      c.sessionInferencerOverride,
+				ToolExecutor:           toolExecutor,
+				ToolDefinitions:        toolDefinitions,
+				AudioInterruptions:     audioInterruptions,
+				CapabilityClose:        capabilityClose,
+				CancellationIntent:     cancellationIntent,
+				LoadedConfig:           loadedConfig,
+				BrowserToolsEnabled:    browserConfigEnablesTools(loadedConfig),
+				WaitForClose:           waitForClose,
+				StreamObserver:         c.streamObserver,
+				Clock:                  c.clockSource,
+				RuntimeObserver:        c.runtimeObserver,
+				AudioInTurnBarge:       audioInTurnBarge,
+				RecordPath:             c.askFlags.RecordCapturePath,
+				ReplayPath:             c.askFlags.ReplayCapturePath,
+				Provider:               c.askFlags.Provider,
+				Model:                  c.askFlags.Model,
+				ModelProvided:          cmd.Flags().Changed("model"),
+				APIKey:                 c.askFlags.APIKey,
+				BaseURL:                c.askFlags.BaseURL,
+				ConfigDir:              c.globalFlags.ConfigDir(),
+				Prompt:                 strings.Join(args, " "),
+				PromptProvided:         cmd.Flags().Changed("prompt") || len(args) > 0,
+				Voice:                  voice,
+				Transport:              selectedTransport,
+				Signaling:              signaling,
+				MediaSource:            mediaSource,
+				RTCRuntimeFactory:      c.rtcRuntimeFactory,
+				SessionInferencer:      c.sessionInferencerOverride,
+				ToolExecutor:           toolExecutor,
+				ToolDefinitions:        toolDefinitions,
+				ToolDefinitionBase:     toolDefinitionBase,
+				RefreshToolDefinitions: refreshDefinitionsWithError,
+				BrowserWatch:           browserWatch,
+				AudioInterruptions:     audioInterruptions,
+				CapabilityClose:        capabilityClose,
+				CancellationIntent:     cancellationIntent,
+				LoadedConfig:           loadedConfig,
+				BrowserToolsEnabled:    browserConfigEnablesTools(loadedConfig),
+				WaitForClose:           waitForClose,
+				StreamObserver:         c.streamObserver,
+				Clock:                  c.clockSource,
+				RuntimeObserver:        c.runtimeObserver,
+				AudioInTurnBarge:       audioInTurnBarge,
 				RTCDeviceBinding: services.RTCDeviceBindingRequest{
 					Registry:      c.deviceRegistry,
 					InputDevice:   audioInDevice,

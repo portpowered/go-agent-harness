@@ -150,6 +150,14 @@ func newSessionToolCapabilitiesFactory(
 		}
 		brokerSet.SetReservedToolNames(reservedNames)
 		capabilityCoordinator := services.NewSessionCapabilityCoordinator(broker.Close)
+		refreshDefinitions := func(ctx context.Context) ([]messages.ToolDefinition, error) {
+			pageDefinitions, refreshErr := brokerSet.PageToolDefinitionsWithError(ctx)
+			if refreshErr != nil {
+				return nil, fmt.Errorf("refresh WebMCP page tools: %w", refreshErr)
+			}
+			refreshed := append([]messages.ToolDefinition(nil), surface.Definitions...)
+			return append(refreshed, pageDefinitions...), nil
+		}
 		capabilities := SessionToolCapabilities{
 			Executor:          surface.Executor,
 			Definitions:       surface.Definitions,
@@ -160,11 +168,18 @@ func newSessionToolCapabilitiesFactory(
 			// against the live catalog at execution time, so the definition
 			// snapshot taken here is a steering surface, not a routing table.
 			RefreshDefinitions: func(ctx context.Context) []messages.ToolDefinition {
-				refreshed := append([]messages.ToolDefinition(nil), surface.Definitions...)
-				return append(refreshed, brokerSet.PageToolDefinitions(ctx)...)
+				refreshed, refreshErr := refreshDefinitions(ctx)
+				if refreshErr != nil {
+					// Preserve the historical best-effort helper contract for
+					// callers that cannot return an error. The live session path
+					// uses RefreshDefinitionsWithError instead.
+					return append([]messages.ToolDefinition(nil), surface.Definitions...)
+				}
+				return refreshed
 			},
-			BrowserWatch: broker.Watch,
-			Close:        capabilityCoordinator.Close,
+			RefreshDefinitionsWithError: refreshDefinitions,
+			BrowserWatch:                broker.Watch,
+			Close:                       capabilityCoordinator.Close,
 		}
 		if initializer, ok := broker.(SessionCapabilityInitializer); ok {
 			capabilities.Initialize = initializer.InitializeSession

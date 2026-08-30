@@ -248,6 +248,50 @@ func TestSessionModelRunner_SendsSessionUpdateOnSessionCreated(t *testing.T) {
 	}
 }
 
+func TestSessionModelRunner_SessionCreatedUpdateFailureIsObservable(t *testing.T) {
+	session := &outcomeRecordingSession{
+		recordingSession: newRecordingSession(),
+		outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+			messages.StreamTypeSessionUpdate: {Status: messages.SessionSendTerminalFailure},
+		},
+	}
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, &messages.SessionUpdateConfig{
+		Tools: []messages.ToolDefinition{{Name: "current_page_tool"}},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- runner.Run(ctx) }()
+
+	if !session.recv.Write(ctx, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionCreated,
+		Value: messages.NewSessionCreatedValue("failed-config-session", "test"),
+	}) {
+		t.Fatal("failed to enqueue SESSION.CREATED")
+	}
+	failure := waitForDelta(t, ctx, runner, messages.StreamTypeError)
+	value, ok := failure.Value.(*messages.ErrorValue)
+	if !ok || value.Classification != "unresolved_session_update" || !contains(value.Message, "tool definition update") {
+		t.Fatalf("session-created update failure = %#v, want unresolved session update", failure.Value)
+	}
+	if sent := session.sentMessages(); len(sent) != 0 {
+		t.Fatalf("rejected initial update sent %d provider messages, want zero", len(sent))
+	}
+
+	if err := session.Close(); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run = %v, want nil", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Run did not return after session close")
+	}
+}
+
 func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)

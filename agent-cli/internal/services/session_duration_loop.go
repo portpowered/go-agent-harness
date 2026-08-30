@@ -76,6 +76,8 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	publisher, publisherErrors := startSessionDynamicToolPublisher(runCtx, loop, opts)
+	defer publisher.stop()
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- loop.Run(runCtx)
@@ -200,6 +202,8 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		}
 
 		select {
+		case publicationErr := <-publisherErrors:
+			return finish(false, publicationErr)
 		case <-toolLifecycleEvents:
 			// Tool lifecycle completion is an asynchronous scheduler wake. It
 			// must re-check pending audio before checking whether the session
@@ -281,6 +285,13 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			durationTerminalWritten = result.durationTerminalWritten
 			if msgErr != nil {
 				return finishDurationLoopMessageError(msgErr, expire, finish)
+			}
+			if msg.Type == messages.StreamTypeSessionCreated {
+				// ModelRunner sends the initial SESSION.UPDATE while handling
+				// SESSION.CREATED. Release dynamic publication only after that
+				// provider bootstrap boundary has been processed, so a page
+				// update cannot overtake the initial configuration.
+				publisher.markSessionReady()
 			}
 			if msg.Type == messages.StreamTypeSessionOpen {
 				startSessionUpdatedTimer()
