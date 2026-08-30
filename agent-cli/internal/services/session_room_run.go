@@ -206,9 +206,12 @@ func runRoomParticipant(
 	}
 	loopOptions.observer = observer
 	loopOptions.loopReady = runtime.loopReady
-	// Latency sampling rides along on replay too: the recorder is driven by the
-	// injected clock, so a replayed room reproduces the same breakdown.
-	loopOptions.runtime = latencyRuntime
+	// Latency sampling is a live-path measurement only. A replayed room drives
+	// its own scheduler off the recorded timeline, so attaching the runtime
+	// observer there would emit outbound audio events after replay completed.
+	if !runtime.plan.replay {
+		loopOptions.runtime = latencyRuntime
+	}
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, loopOptions)
 	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
 		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
@@ -294,8 +297,11 @@ func observeRoomParticipantStream(
 	if opts.Stream != nil {
 		participantStream.ObserveStream(msg)
 	}
-	if participantEvidence != nil {
-		if evidenceErr := participantEvidence.observeDelta(msg); evidenceErr != nil {
+	recordParticipantDelta := func() {
+		if participantEvidence == nil {
+			return
+		}
+		if evidenceErr := participantEvidence.observeDelta(msg); evidenceErr != nil && evidence != nil {
 			evidence.recordError(plan.manifest.ID, fmt.Errorf("write stream delta: %w", evidenceErr))
 		}
 	}
@@ -312,10 +318,12 @@ func observeRoomParticipantStream(
 		participantEvidence.closeSentSpeechSegment()
 	}
 	if msg.Type != messages.StreamTypeAudioDelta || !assistantAudioDelta(msg) {
+		recordParticipantDelta()
 		return
 	}
 	value, ok := msg.Value.(*messages.AudioDeltaValue)
 	if !ok || value == nil {
+		recordParticipantDelta()
 		coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value), secretsForPlan(plan)))
 		return
 	}
@@ -333,38 +341,49 @@ func observeRoomParticipantStream(
 			evidence.observeProviderAudio(plan.manifest.ID, msg.ResponseID)
 		}
 	}
-	if participantEvidence != nil {
-		if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
-			evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
-		}
-	}
 	if opts.OnAudioOutput != nil {
 		if outputErr := opts.OnAudioOutput(plan.manifest.ID, append([]byte(nil), pcm...)); outputErr != nil {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
 		}
 	}
-	if plan.replay {
-		// Room replay audio is released by the single room scheduler from the
-		// recorded logical timeline. Provider output remains observable above,
-		// but independently fanning it here would let goroutine timing choose
-		// the cross-participant order and overlap.
-		return
-	}
-	for _, target := range targets {
-		if target == nil || target.mixer == nil {
-			continue
-		}
-		if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil {
-			if coordinator.isActive(target.plan.manifest.ID) {
-				coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
+	// Room replay audio is released by the single room scheduler from the
+	// recorded logical timeline. Provider output remains observable above, but
+	// independently fanning it here would let goroutine timing choose the
+	// cross-participant order and overlap. Only the fan-out is skipped: the
+	// durable evidence writes below still run on the replay path, so a replayed
+	// room produces the same artifacts as the live room it was recorded from.
+	if !plan.replay {
+		for _, target := range targets {
+			if target == nil || target.mixer == nil {
+				continue
 			}
-			continue
+			if writeErr := target.mixer.WriteContext(runtime.ctx, plan.manifest.ID, pcm); writeErr != nil {
+				if coordinator.isActive(target.plan.manifest.ID) {
+					coordinator.fail(roomParticipantFailure(plan.manifest.ID, fmt.Errorf("fan out PCM to %s: %w", target.plan.manifest.ID, writeErr), secretsForPlan(plan)))
+				}
+				continue
+			}
+			if evidence != nil {
+				evidence.observePeerAudio(plan.manifest.ID, target.plan.manifest.ID, pcm)
+			}
+			if opts.onParticipantAudioFanned != nil {
+				opts.onParticipantAudioFanned(plan.manifest.ID, target.plan.manifest.ID, append([]byte(nil), pcm...))
+			}
 		}
-		if evidence != nil {
-			evidence.observePeerAudio(plan.manifest.ID, target.plan.manifest.ID, pcm)
-		}
-		if opts.onParticipantAudioFanned != nil {
-			opts.onParticipantAudioFanned(plan.manifest.ID, target.plan.manifest.ID, append([]byte(nil), pcm...))
+	}
+	// Durable JSONL/WAV evidence is intentionally recorded after the bounded
+	// provider-to-peer handoff. A slow filesystem must not make the next room
+	// mixer frame wait before it can accept the first provider PCM delta.
+	recordParticipantDelta()
+	if participantEvidence != nil {
+		// observeSentAudio is the superset write: it performs the participant
+		// WAV write and then the sent-PCM stream, room mix, and speech-segment
+		// timeline. All of it is durable I/O, so it belongs here, after the
+		// bounded provider-to-peer handoff, rather than on the critical path.
+		if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
+			if evidence != nil {
+				evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
+			}
 		}
 	}
 }
