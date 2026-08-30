@@ -656,7 +656,11 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
+		if opts.InputAudioTranscription != nil {
+			inputAudioTranscription = *opts.InputAudioTranscription
+		}
 		config.InputAudioTranscription = &inputAudioTranscription
+		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
 		config.Voice = opts.Voice
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []oaiprovider.Option{
@@ -681,6 +685,12 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
+		if opts.InputAudioTranscription != nil {
+			inputAudioTranscription = *opts.InputAudioTranscription
+		}
+		config.InputAudioTranscription = &inputAudioTranscription
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey)}
 		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
@@ -699,6 +709,18 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}
+}
+
+func cloneSessionTurnDetection(policy *models.TurnDetectionConfig) *models.TurnDetectionConfig {
+	if policy == nil {
+		return nil
+	}
+	copy := *policy
+	if policy.CreateResponse != nil {
+		createResponse := *policy.CreateResponse
+		copy.CreateResponse = &createResponse
+	}
+	return &copy
 }
 
 func deviceProbeSessionConfig(model, instructions string, input, output models.AudioFormat) models.SessionConfig {

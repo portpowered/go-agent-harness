@@ -105,6 +105,12 @@ type sessionLoopOptions struct {
 	CloseAfterOpen bool
 	WaitForClose   bool
 	MaxDuration    time.Duration
+	// BareLive keeps a default-device voice session open until its owner
+	// cancels it instead of applying the ordinary single-turn close policy.
+	BareLive bool
+	// ListeningBanner is emitted after the provider's SESSION.CREATED event.
+	// The enclosing plan fills it only after both local devices are open.
+	ListeningBanner string
 	// RequireAssistantResponse is enabled for finite audio-input sessions.
 	// A tool-call MESSAGE.END is an intermediate provider turn; the session
 	// must observe a later non-tool assistant MESSAGE.END before clean success.
@@ -394,6 +400,7 @@ type sessionLoopMessageState struct {
 	promptSent            bool
 	closeSent             bool
 	closeAfterOpenPending bool
+	listeningReported     bool
 }
 
 func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, deadline <-chan time.Time, out io.Writer, loop *agentloop.AgentLoop, opts sessionLoopOptions, msg messages.StreamMessage, state sessionLoopMessageState, awaitingResponse bool, startAudio func(), stopAndDrain func() error) (sessionLoopMessageState, bool, error) {
@@ -401,6 +408,12 @@ func handleSessionLoopMessage(ctx context.Context, sessionDone <-chan struct{}, 
 	opts.observer.observe(msg)
 	if err := writeSessionReplayMessage(out, msg); err != nil {
 		return state, false, errors.Join(err, stopAndDrain())
+	}
+	if msg.Type == messages.StreamTypeSessionCreated && opts.BareLive && opts.ListeningBanner != "" && !state.listeningReported {
+		if _, err := fmt.Fprintln(out, opts.ListeningBanner); err != nil {
+			return state, false, errors.Join(err, stopAndDrain())
+		}
+		state.listeningReported = true
 	}
 	if err := retryScheduledRateLimitedResponse(ctx, sessionDone, deadline, loop, opts.observer, msg); err != nil {
 		if errors.Is(err, errSessionMaxDurationExpired) {

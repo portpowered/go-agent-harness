@@ -118,7 +118,10 @@ func TestSessionCommandHelpAndOmittedDurationBehavior(t *testing.T) {
 		t.Fatal("runtime.Caller did not return the test file")
 	}
 	moduleDir := filepath.Clean(filepath.Join(filepath.Dir(testFile), "..", ".."))
-	for _, args := range [][]string{{"session", "--help"}, {"session"}} {
+	// A bare session is now a live-device admission path. Keep this help smoke
+	// test on an explicit non-session-mode invocation so it never needs a host
+	// credential or audio device.
+	for _, args := range [][]string{{"session", "--help"}, {"session", "--prompt="}} {
 		cmd := exec.Command("go", append([]string{"run", "./cmd/agent"}, args...)...)
 		cmd.Dir = moduleDir
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")

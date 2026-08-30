@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -197,5 +198,48 @@ func TestResolveBareSessionOptionsCLIDeviceSelectorsOverridePersistedValues(t *t
 	}
 	if resolved.RTCDeviceBinding.InputDevice != "cli:mic" || resolved.RTCDeviceBinding.OutputDevice != "" {
 		t.Fatalf("device selectors = %#v, want CLI input and explicit default output", resolved.RTCDeviceBinding)
+	}
+}
+
+func TestNewLiveSessionInferencerCarriesBareAudioPolicies(t *testing.T) {
+	createResponse := true
+	inferencer, model, err := NewLiveSessionInferencer(SessionRunOptions{
+		Provider:  sessionProviderOpenAI,
+		Model:     openAIRealtimeModel,
+		APIKey:    "bare-test-key",
+		ConfigDir: t.TempDir(),
+		TurnDetection: &models.TurnDetectionConfig{
+			Type:              "server_vad",
+			Threshold:         0.68,
+			PrefixPaddingMs:   160,
+			SilenceDurationMs: 560,
+			CreateResponse:    &createResponse,
+		},
+		InputAudioTranscription: &models.InputAudioTranscriptionConfig{
+			Enabled: true,
+			Model:   "bare-transcriber",
+		},
+	}, "bare instructions")
+	if err != nil {
+		t.Fatalf("NewLiveSessionInferencer(): %v", err)
+	}
+	if model != openAIRealtimeModel {
+		t.Fatalf("model = %q, want %q", model, openAIRealtimeModel)
+	}
+	requested, ok := inferencer.(interface {
+		Request() inference.SessionRequest
+	})
+	if !ok {
+		t.Fatalf("inferencer type %T does not expose its session request", inferencer)
+	}
+	config := requested.Request().Config
+	if config.Instructions != "bare instructions" || config.TurnDetection == nil || config.TurnDetection.Threshold != 0.68 || config.TurnDetection.SilenceDurationMs != 560 || config.TurnDetection.CreateResponse == nil || !*config.TurnDetection.CreateResponse {
+		t.Fatalf("session turn policy = %#v, want resolved server VAD", config.TurnDetection)
+	}
+	if config.InputAudioTranscription == nil || !config.InputAudioTranscription.Enabled || config.InputAudioTranscription.Model != "bare-transcriber" {
+		t.Fatalf("session transcription policy = %#v, want resolved transcription", config.InputAudioTranscription)
+	}
+	if config.InputAudioFormat != models.AudioFormatPCM16 || config.OutputAudioFormat != models.AudioFormatPCM16 {
+		t.Fatalf("session audio formats = %q/%q, want PCM16", config.InputAudioFormat, config.OutputAudioFormat)
 	}
 }
