@@ -25,6 +25,9 @@ const (
 	// TerminalReasonReplayIncomplete means replay ended before all required
 	// recorded events were consumed.
 	TerminalReasonReplayIncomplete TerminalReason = "replay_incomplete"
+	// TerminalReasonReplayComplete means a capture-derived replay consumed every
+	// recorded event and published its successful completion boundary.
+	TerminalReasonReplayComplete TerminalReason = "replay_complete"
 	// TerminalReasonSessionClose means a bidirectional session closed without a
 	// more specific provider, cancellation, replay, or failure reason.
 	TerminalReasonSessionClose TerminalReason = "session_close"

@@ -329,17 +329,22 @@ func TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsComp
 		"--replay", capturePath,
 	})
 
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("execute bare OpenAI realtime replay without live network: %v", err)
 	}
 
 	got := testWriter.StdoutString()
-	want := "recorded bare replay transcript\n[session replay complete]\n"
+	want := "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
 	if got != want {
 		t.Fatalf("bare OpenAI replay output = %q, want %q", got, want)
 	}
 	if strings.Count(got, "[session replay complete]") != 1 {
 		t.Fatalf("bare OpenAI replay should report exactly one completion marker, got:\n%s", got)
+	}
+	if strings.Count(got, "classification=replay_complete") != 1 || strings.Count(got, "terminal_reason=replay_complete") != 1 {
+		t.Fatalf("bare OpenAI replay should report exactly one replay_complete terminal, got:\n%s", got)
 	}
 	if strings.Contains(got, "[session closed: client_close]") {
 		t.Fatalf("bare OpenAI replay reported a synthesized client close, got:\n%s", got)
@@ -371,17 +376,22 @@ func TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration(t *te
 		"--max-duration", "1s",
 	})
 
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("execute bare empty-prompt OpenAI replay with max duration: %v", err)
 	}
 
 	got := testWriter.StdoutString()
-	want := "recorded bare replay transcript\n[session replay complete]\n"
+	want := "recorded bare replay transcript\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
 	if got != want {
 		t.Fatalf("bare empty-prompt OpenAI replay output = %q, want %q", got, want)
 	}
 	if strings.Count(got, "[session replay complete]") != 1 {
 		t.Fatalf("bare empty-prompt replay should report exactly one completion marker, got:\n%s", got)
+	}
+	if strings.Count(got, "classification=replay_complete") != 1 || strings.Count(got, "terminal_reason=replay_complete") != 1 {
+		t.Fatalf("bare empty-prompt replay should report exactly one replay_complete terminal, got:\n%s", got)
 	}
 	if strings.Contains(got, "[session closed: client_close]") {
 		t.Fatalf("bare empty-prompt replay reported a synthesized client close, got:\n%s", got)
@@ -429,8 +439,14 @@ func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecorded
 		"--replay", capturePath,
 	})
 
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("execute bare OpenAI realtime audio-turn replay: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed >= 2*time.Second {
+		t.Fatalf("bare audio-turn replay did not complete promptly: elapsed=%s", elapsed)
 	}
 
 	got := testWriter.StdoutString()
@@ -441,6 +457,27 @@ func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecorded
 	}
 	if !strings.Contains(got, "[session replay complete]") {
 		t.Fatalf("bare audio-turn replay should self-report completion, got:\n%s", got)
+	}
+	if strings.Count(got, "[session replay complete]") != 1 {
+		t.Fatalf("bare audio-turn replay should report exactly one completion marker, got:\n%s", got)
+	}
+	for _, want := range []string{
+		"classification=replay_complete",
+		"terminal_reason=replay_complete",
+		"terminal_provenance=replay",
+		"output_state=complete",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("bare audio-turn replay missing terminal field %q, got:\n%s", want, got)
+		}
+	}
+	if strings.Count(got, "classification=replay_complete") != 1 || strings.Count(got, "terminal_reason=replay_complete") != 1 {
+		t.Fatalf("bare audio-turn replay should report exactly one replay_complete terminal, got:\n%s", got)
+	}
+	for _, forbidden := range []string{"replay mismatch", "sequence 33", "sequence-33", "replay_incomplete", "incomplete", "terminal_reason=max_duration", "classification=max_duration", "[session closed: client_close]"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("bare audio-turn replay contains forbidden terminal evidence %q, got:\n%s", forbidden, got)
+		}
 	}
 	if strings.Contains(got, "max_duration") {
 		t.Fatalf("bare audio-turn replay terminated via max_duration instead of self-completion, got:\n%s", got)
@@ -467,7 +504,9 @@ func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnIsByteDeterministic(t *
 		rootCmd.SetOut(testWriter.Stdout())
 		rootCmd.SetErr(testWriter.Stderr())
 		rootCmd.SetArgs([]string{"session", "--replay", capturePath})
-		if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			t.Fatalf("execute bare OpenAI realtime audio-turn replay: %v", err)
 		}
 		return testWriter.StdoutString()
@@ -508,7 +547,9 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t
 		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
 	})
 
-	err = rootCmd.ExecuteContext(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err = rootCmd.ExecuteContext(ctx)
 	if err != nil && strings.Contains(err.Error(), "--audio-in-turn requires --record-dir") {
 		t.Fatalf("--audio-in-turn with --replay should not require --record-dir, got: %v", err)
 	}
@@ -540,12 +581,17 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithM
 		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
 	})
 
-	err = rootCmd.ExecuteContext(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
 		t.Fatal("expected a divergent --audio-in-turn re-supply to fail replay")
 	}
 	if !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("expected strict replay mismatch, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "sequence") || !strings.Contains(err.Error(), "expected") || !strings.Contains(err.Error(), "actual") {
+		t.Fatalf("strict replay mismatch should include expected/actual sequence details, got: %v", err)
 	}
 }
 
@@ -568,7 +614,9 @@ func TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict(t *
 		"--prompt=",
 	})
 
-	err = rootCmd.ExecuteContext(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
 		t.Fatal("expected explicit empty prompt to mismatch the recorded prompt")
 	}

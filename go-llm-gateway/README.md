@@ -220,7 +220,7 @@ serialized fields are:
 
 Terminal reasons are `provider_authored_completion`,
 `loop_synthesized_completion`, `cancellation`, `replay_divergence`,
-`replay_incomplete`, `session_close`, `partial_output`, `provider_close`, and
+`replay_incomplete`, `replay_complete`, `session_close`, `partial_output`, `provider_close`, and
 `terminal_failure`. Provenance values are `provider`, `loop`, `gateway`,
 `session`, `replay`, and `cli`. Output states are `complete`, `partial`, `none`,
 and `not_applicable`.
