@@ -313,6 +313,8 @@ type scriptedToolCallInferencer struct {
 	out          *signalingBuffer
 	runFinished  chan struct{}
 	finishOnce   sync.Once
+	sessionMu    sync.Mutex
+	session      *roundTripSession
 }
 
 var _ messages.SessionInferencer = (*scriptedToolCallInferencer)(nil)
@@ -329,6 +331,9 @@ func newScriptedToolCallInferencer(out *signalingBuffer, followUp, followUpGate 
 
 func (i *scriptedToolCallInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := newRoundTripSession()
+	i.sessionMu.Lock()
+	i.session = session
+	i.sessionMu.Unlock()
 	go func() {
 		// The session deliberately stays open; the runner's MaxDuration ends
 		// the run so all provider turns are drained deterministically.
@@ -376,6 +381,12 @@ func (i *scriptedToolCallInferencer) ConnectSession(ctx context.Context) (messag
 		})
 	}()
 	return session, nil
+}
+
+func (i *scriptedToolCallInferencer) sessionSnapshot() *roundTripSession {
+	i.sessionMu.Lock()
+	defer i.sessionMu.Unlock()
+	return i.session
 }
 
 func toolCallEvents(callID, name, args string) []messages.StreamMessage {
