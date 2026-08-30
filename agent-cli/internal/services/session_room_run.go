@@ -281,6 +281,7 @@ func collectRoomParticipantResults(
 	results <-chan roomParticipantRunResult,
 	cleanup *roomCleanupWaiter,
 ) error {
+	escalateRuntimeErrors := roomPlansHaveHumanParticipant(plans)
 	pending := make(map[string]struct{}, len(plans))
 	for _, plan := range plans {
 		if plan != nil {
@@ -327,7 +328,7 @@ func collectRoomParticipantResults(
 			delete(pending, id)
 			if !coordinator.isStopping() {
 				failure := result.connectErr
-				if failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
+				if escalateRuntimeErrors && failure == nil && result.err != nil && !roomCancellationOnly(result.err) {
 					// A provider can connect successfully and then terminate with a
 					// transport/session error. Treat that runtime failure as a room
 					// failure too, so the coordinator cancels the human/device
@@ -346,6 +347,15 @@ func collectRoomParticipantResults(
 		}
 	}
 	return nil
+}
+
+func roomPlansHaveHumanParticipant(plans []*roomParticipantPlan) bool {
+	for _, plan := range plans {
+		if roomParticipantIsHuman(plan) {
+			return true
+		}
+	}
+	return false
 }
 
 func waitRoomParticipantWork(
