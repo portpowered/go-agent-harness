@@ -51,6 +51,10 @@ const (
 	// capture tool.
 	ScreenToolID = "show"
 
+	// ScreenRecordingPermissionDeniedErrorCode is the provider-visible error
+	// classification for a denied macOS Screen Recording preflight.
+	ScreenRecordingPermissionDeniedErrorCode = "screen_recording_permission_denied"
+
 	ScreenResultVersion                   = sight.ResultVersion
 	ScreenResultStatusSuccess             = sight.StatusSuccess
 	ScreenResultStatusError               = sight.StatusError
@@ -71,7 +75,17 @@ func ScreenToolErrorResult(err error) string {
 	result := sight.NewError(sight.SourceScreen, err)
 	var captureErr *ScreenCaptureError
 	if errors.As(err, &captureErr) && captureErr != nil && captureErr.State != "" {
-		result.ErrorCode = string(captureErr.State)
+		if captureErr.State == ScreenCaptureDenied {
+			result.ErrorCode = ScreenRecordingPermissionDeniedErrorCode
+		} else {
+			result.ErrorCode = string(captureErr.State)
+		}
+	}
+	if errors.Is(err, ErrScreenRecordingPermissionDenied) {
+		result.ErrorCode = ScreenRecordingPermissionDeniedErrorCode
+		if !strings.Contains(result.Error, "System Settings → Privacy & Security → Screen & System Audio Recording") {
+			result.Error = strings.TrimSpace(strings.Join([]string{result.Error, screenRecordingPermissionGuidance()}, " "))
+		}
 	}
 	encoded, encodeErr := sight.Encode(result)
 	if encodeErr != nil {

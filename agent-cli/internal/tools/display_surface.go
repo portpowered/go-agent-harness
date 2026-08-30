@@ -54,9 +54,8 @@ var (
 )
 
 // DisplayCapability is the side-effect-free admission snapshot for the
-// display-dependent tool. The capture permission check is allowed to be
-// deferred until the actual capture on macOS because TCC's authoritative
-// signal is the screencapture operation itself.
+// display-dependent tool. On macOS, Probe runs the non-prompting Screen
+// Recording preflight before it asks the host for display metadata.
 type DisplayCapability struct {
 	State        ScreenCaptureState
 	Available    bool
@@ -189,9 +188,9 @@ func (f DisplayCapabilityProbeFunc) Probe(ctx context.Context) (DisplayCapabilit
 	return f(ctx)
 }
 
-// DisplayPermissionState describes an optional preflight permission result.
-// On macOS the default production path leaves this seam nil and classifies
-// TCC from the authoritative screencapture result instead of guessing.
+// DisplayPermissionState describes a preflight permission result. The
+// production macOS implementation obtains it from
+// CGPreflightScreenCaptureAccess; other platforms leave this boundary nil.
 type DisplayPermissionState string
 
 const (
@@ -347,9 +346,13 @@ func NewHostDisplaySurfaceWithOptions(options HostDisplaySurfaceOptions) Display
 	if process == nil {
 		process = defaultDisplayProcess()
 	}
+	permission := options.PermissionChecker
+	if permission == nil {
+		permission = defaultDisplayPermissionChecker()
+	}
 	return &hostDisplaySurface{
 		process:    process,
-		permission: options.PermissionChecker,
+		permission: permission,
 		capturer:   options.Capturer,
 	}
 }
@@ -560,7 +563,7 @@ func boundedScreenContext(ctx context.Context, limit time.Duration) (context.Con
 func screenRecordingPermissionGuidance() string {
 	host := screenRecordingHostName()
 	return fmt.Sprintf(
-		"Screen-recording permission is not granted, so I cannot see the screen. Tell the customer to enable the launching terminal/CLI host %q in System Settings → Privacy & Security → Screen & System Audio Recording, then completely quit and restart that host before asking again. The CLI cannot grant this permission itself.",
+		"Screen-recording permission is not granted, so I cannot see the screen. Tell the customer to open System Settings → Privacy & Security → Screen & System Audio Recording, enable the hosting application %q, then completely quit and restart that application before asking again. macOS Sequoia may require monthly re-confirmation. The CLI cannot grant this permission itself.",
 		host,
 	)
 }

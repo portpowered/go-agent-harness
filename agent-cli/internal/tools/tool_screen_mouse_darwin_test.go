@@ -76,7 +76,11 @@ func expectedDarwinDragLog(fromX, fromY, toX, toY int) []string {
 func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
 	dir := fakeDarwinDesktop(t)
 	logPath := filepath.Join(dir, "cliclick.log")
-	tool := NewScreenTool()
+	tool := NewScreenToolWithDisplaySurface(NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+			return DisplayPermission{State: DisplayPermissionGranted}, nil
+		}),
+	}))
 	if got := screenDisplayCount(); got != 2 {
 		t.Fatalf("screenDisplayCount = %d, want 2", got)
 	}
@@ -146,7 +150,12 @@ func TestDarwinHostDisplaySurfaceProbeUsesOneMetadataQuery(t *testing.T) {
 		},
 	}
 
-	capability, err := NewHostDisplaySurface(process).Probe(context.Background())
+	capability, err := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+		Process: process,
+		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+			return DisplayPermission{State: DisplayPermissionGranted}, nil
+		}),
+	}).Probe(context.Background())
 	if err != nil {
 		t.Fatalf("display probe: %v", err)
 	}
