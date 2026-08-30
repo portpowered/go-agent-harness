@@ -171,6 +171,102 @@ func TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface(t *testing
 	assertRawInputTranscriptEvents(t, recordPath)
 }
 
+// TestSessionCommand_ReplayInputTranscriptionCapturePreservesEverySurface
+// proves that a new-format capture keeps its recorded enabled handshake and
+// replays the same user transcript semantics without consulting the current
+// live default. Both the original scripted run and the replay are checked
+// through the shipped command and finalized recording directory.
+func TestSessionCommand_ReplayInputTranscriptionCapturePreservesEverySurface(t *testing.T) {
+	fixture := newRecordReplayWebSocketFixture(true, 1)
+	fixture.inputTranscriptDelta = "heard "
+	fixture.inputTranscriptCompleted = "heard clearly"
+	fixture.assistantTranscriptDelta = "answering "
+	fixture.assistantTranscriptCompleted = "answering now"
+	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
+	defer server.Close()
+
+	audioPath := writeRecordReplayAudio(t, "replayed-transcribed-turn.wav", 1200)
+	recordPath := filepath.Join(t.TempDir(), "replayed-transcribed.session.json")
+	recordDir := filepath.Join(t.TempDir(), "replayed-transcribed-recording")
+	configDir := t.TempDir()
+	writeSessionToolConfig(t, configDir, false)
+	baseURL := strings.Replace(server.URL, "http://", "ws://", 1) + "/v1/realtime"
+
+	stdout, stderr, err := executeProductionSessionCommand(t, []string{
+		"--config-dir", configDir,
+		"session",
+		"--record", recordPath,
+		"--record-dir", recordDir,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "synthetic-replay-transcription-key",
+		"--base-url", baseURL,
+		"--audio-in-turn", audioPath,
+	})
+	if err != nil {
+		t.Fatalf("record scripted input transcription session: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("load input transcription replay capture: %v", err)
+	}
+	assertEnabledInputTranscriptionHandshake(t, firstSessionUpdateRecord(t, capture))
+	assertRecordedInputTranscripts(t, filepath.Join(recordDir, "client.transcript.jsonl"))
+	assertRecordedInputTranscriptSessionLog(t, filepath.Join(recordDir, "session-log.jsonl"))
+	if !strings.Contains(stdout, "User: heard ") || !strings.Contains(stdout, "Assistant: answering ") {
+		t.Fatalf("record terminal output = %q, want distinct user and assistant transcript labels", stdout)
+	}
+
+	replayRecordDir := filepath.Join(t.TempDir(), "replayed-transcribed-recording")
+	replayStdout, replayStderr, err := executeProductionSessionCommand(t, []string{
+		"session",
+		"--replay", recordPath,
+		"--record-dir", replayRecordDir,
+		"--audio-in-turn", audioPath,
+	})
+	if err != nil {
+		t.Fatalf("replay input transcription capture: %v\nstdout=%s\nstderr=%s", err, replayStdout, replayStderr)
+	}
+	if !strings.Contains(replayStdout, "User: heard ") || !strings.Contains(replayStdout, "Assistant: answering ") {
+		t.Fatalf("replay terminal output = %q, want distinct user and assistant transcript labels", replayStdout)
+	}
+	assertRecordedInputTranscripts(t, filepath.Join(replayRecordDir, "client.transcript.jsonl"))
+	assertRecordedInputTranscriptSessionLog(t, filepath.Join(replayRecordDir, "session-log.jsonl"))
+}
+
+func assertEnabledInputTranscriptionHandshake(t *testing.T, record gwtesting.CapturedSessionEvent) {
+	t.Helper()
+	var envelope struct {
+		Session struct {
+			Audio struct {
+				Input struct {
+					Transcription json.RawMessage `json:"transcription"`
+				} `json:"input"`
+			} `json:"audio"`
+			Legacy json.RawMessage `json:"input_audio_transcription"`
+		} `json:"session"`
+	}
+	if err := json.Unmarshal(record.Payload, &envelope); err != nil {
+		t.Fatalf("decode enabled input transcription handshake: %v", err)
+	}
+	if len(envelope.Session.Audio.Input.Transcription) == 0 || string(envelope.Session.Audio.Input.Transcription) == "null" {
+		t.Fatalf("enabled input transcription handshake omitted GA audio.input.transcription: %s", record.Payload)
+	}
+	var transcription struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(envelope.Session.Audio.Input.Transcription, &transcription); err != nil {
+		t.Fatalf("decode GA input transcription configuration: %v", err)
+	}
+	if transcription.Model != "gpt-live-transcribe" {
+		t.Fatalf("input transcription model = %q, want gpt-live-transcribe", transcription.Model)
+	}
+	if len(envelope.Session.Legacy) != 0 && string(envelope.Session.Legacy) != "null" {
+		t.Fatalf("enabled GA handshake also included legacy input_audio_transcription: %s", record.Payload)
+	}
+}
+
 func assertRecordedInputTranscripts(t *testing.T, path string) {
 	t.Helper()
 	file, err := os.Open(path)
@@ -179,7 +275,7 @@ func assertRecordedInputTranscripts(t *testing.T, path string) {
 	}
 	defer file.Close()
 
-	var userDelta, userEnd, assistantDelta, assistantEnd bool
+	var userDelta, userEnd, assistantDelta, assistantEnd int
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		record, decodeErr := transcript.Decode(scanner.Bytes())
@@ -196,28 +292,28 @@ func assertRecordedInputTranscripts(t *testing.T, path string) {
 				t.Fatalf("transcript delta role = %q, want user or assistant", message.Role)
 			}
 			if message.Role == messages.RoleUser && value.Text == "heard " {
-				userDelta = true
+				userDelta++
 			}
 			if message.Role == messages.RoleAssistant && value.Text == "answering " {
-				assistantDelta = true
+				assistantDelta++
 			}
 		case *messages.TranscriptEndValue:
 			if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
 				t.Fatalf("transcript end role = %q, want user or assistant", message.Role)
 			}
 			if message.Role == messages.RoleUser && value.FullText == "heard clearly" {
-				userEnd = true
+				userEnd++
 			}
 			if message.Role == messages.RoleAssistant && value.FullText == "answering now" {
-				assistantEnd = true
+				assistantEnd++
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scan client transcript: %v", err)
 	}
-	if !userDelta || !userEnd || !assistantDelta || !assistantEnd {
-		t.Fatalf("client transcript user_delta=%t user_end=%t assistant_delta=%t assistant_end=%t; want all role-preserved records", userDelta, userEnd, assistantDelta, assistantEnd)
+	if userDelta != 1 || userEnd != 1 || assistantDelta != 1 || assistantEnd != 1 {
+		t.Fatalf("client transcript user_delta=%d user_end=%d assistant_delta=%d assistant_end=%d; want one of each role-preserved record", userDelta, userEnd, assistantDelta, assistantEnd)
 	}
 }
 

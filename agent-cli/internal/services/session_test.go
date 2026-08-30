@@ -594,38 +594,66 @@ func replayResponseCreateRecord(sequence int) gwtesting.CapturedSessionEvent {
 	}
 }
 
-func TestReplayInitialSessionUpdateDialerReplacesOnlyProviderHandshake(t *testing.T) {
-	innerConn := &replayHandshakeRecordingConn{}
-	inner := &replayHandshakeRecordingDialer{conn: innerConn}
-	expected := []byte(`{"type":"session.update","session":{"model":"recorded","instructions":"captured"}}`)
-	dialer := newReplayInitialSessionUpdateDialer(inner, replaySessionConfiguration{payload: expected})
+func TestReplayInitialSessionUpdateDialerPreservesCapturedHandshakeBytes(t *testing.T) {
+	cases := []struct {
+		name      string
+		captured  []byte
+		generated []byte
+	}{
+		{
+			name: "historical handshake without input transcription",
+			captured: []byte(`{
+  "type": "session.update",
+  "session": {"model": "gpt-realtime", "audio": {"input": {"format": {"type": "audio/pcm", "rate": 24000}}}}
+}`),
+			generated: []byte(`{"type":"session.update","session":{"model":"gpt-realtime","audio":{"input":{"transcription":{"model":"gpt-live-transcribe"}}}}}`),
+		},
+		{
+			name:      "new enabled GA handshake",
+			captured:  []byte(`{"type":"session.update","session":{"type":"realtime","model":"gpt-realtime","audio":{"input":{"transcription":{"model":"gpt-live-transcribe"}}}}}`),
+			generated: []byte(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+		},
+		{
+			name:      "explicit opt-out handshake",
+			captured:  []byte(`{"type":"session.update","session":{"model":"gpt-realtime","audio":{"input":{"format":{"type":"audio/pcm","rate":24000}}}}}`),
+			generated: []byte(`{"type":"session.update","session":{"model":"gpt-realtime","audio":{"input":{"transcription":{"model":"gpt-live-transcribe"}}}}}`),
+		},
+	}
 
-	conn, err := dialer.Dial("wss://replay.invalid", map[string]string{"Authorization": "Bearer replay"})
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
-	if err := conn.WriteMessage(1, []byte(`{"type":"session.update","session":{"model":"live"}}`)); err != nil {
-		t.Fatalf("first WriteMessage: %v", err)
-	}
-	later := []byte(`{"type":"response.create"}`)
-	if err := conn.WriteMessage(1, later); err != nil {
-		t.Fatalf("second WriteMessage: %v", err)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			innerConn := &replayHandshakeRecordingConn{}
+			inner := &replayHandshakeRecordingDialer{conn: innerConn}
+			dialer := newReplayInitialSessionUpdateDialer(inner, replaySessionConfiguration{payload: tc.captured})
 
-	innerConn.mu.Lock()
-	writes := make([][]byte, len(innerConn.writes))
-	for index := range innerConn.writes {
-		writes[index] = append([]byte(nil), innerConn.writes[index]...)
-	}
-	innerConn.mu.Unlock()
-	if len(writes) != 2 {
-		t.Fatalf("inner writes = %d, want 2", len(writes))
-	}
-	if !bytes.Equal(writes[0], expected) {
-		t.Fatalf("initial write = %s, want captured payload %s", writes[0], expected)
-	}
-	if !bytes.Equal(writes[1], later) {
-		t.Fatalf("later write = %s, want unchanged payload %s", writes[1], later)
+			conn, err := dialer.Dial("wss://replay.invalid", map[string]string{"Authorization": "Bearer replay"})
+			if err != nil {
+				t.Fatalf("Dial: %v", err)
+			}
+			if err := conn.WriteMessage(1, tc.generated); err != nil {
+				t.Fatalf("first WriteMessage: %v", err)
+			}
+			later := []byte(`{"type":"response.create"}`)
+			if err := conn.WriteMessage(1, later); err != nil {
+				t.Fatalf("second WriteMessage: %v", err)
+			}
+
+			innerConn.mu.Lock()
+			writes := make([][]byte, len(innerConn.writes))
+			for index := range innerConn.writes {
+				writes[index] = append([]byte(nil), innerConn.writes[index]...)
+			}
+			innerConn.mu.Unlock()
+			if len(writes) != 2 {
+				t.Fatalf("inner writes = %d, want 2", len(writes))
+			}
+			if !bytes.Equal(writes[0], tc.captured) {
+				t.Fatalf("initial write = %s, want captured payload %s", writes[0], tc.captured)
+			}
+			if !bytes.Equal(writes[1], later) {
+				t.Fatalf("later write = %s, want unchanged payload %s", writes[1], later)
+			}
+		})
 	}
 }
 
