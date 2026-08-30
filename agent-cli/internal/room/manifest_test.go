@@ -345,6 +345,45 @@ func TestManifestValidate_RejectsNilToolsInDirectNormalizedValue(t *testing.T) {
 	assertManifestError(t, err, "participants[0].tools", ErrInvalidParticipant)
 }
 
+func TestParseManifest_RequiresDeviceSelectorsForHumanParticipants(t *testing.T) {
+	tests := []struct {
+		name   string
+		field  string
+		mutate func(map[string]any)
+	}{
+		{
+			name:  "input device",
+			field: "participants[0].input_device",
+			mutate: func(document map[string]any) {
+				participant := document["participants"].([]any)[0].(map[string]any)
+				participant["kind"] = "human"
+				delete(participant, "provider")
+				delete(participant, "model")
+				delete(participant, "api_key_env")
+				participant["output_device"] = "fake:output"
+			},
+		},
+		{
+			name:  "output device",
+			field: "participants[0].output_device",
+			mutate: func(document map[string]any) {
+				participant := document["participants"].([]any)[0].(map[string]any)
+				participant["kind"] = "human"
+				delete(participant, "provider")
+				delete(participant, "model")
+				delete(participant, "api_key_env")
+				participant["input_device"] = "fake:input"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := parseFixtureError(t, test.mutate, ValidationOptions{})
+			assertManifestError(t, err, test.field, ErrInvalidParticipant)
+		})
+	}
+}
+
 func TestParseManifest_PreservesRecordingPolicyAndDestination(t *testing.T) {
 	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
 	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")

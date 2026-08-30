@@ -355,6 +355,8 @@ func newRoomHumanRunOptions(registry *roomHumanTestRegistry, inferencer *roomTes
 					ID:           "customer",
 					SystemPrompt: "human customer",
 					Tools:        []string{},
+					InputDevice:  string(registry.inputDevice.ID),
+					OutputDevice: string(registry.outputDevice.ID),
 				},
 				{
 					Kind:         room.ParticipantKindAgent,

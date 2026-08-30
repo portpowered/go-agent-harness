@@ -351,6 +351,52 @@ func TestRoomRunCommandConfigValidationPrecedesRunnerAndDeviceLookup(t *testing.
 	}
 }
 
+func TestRoomRunCommandConfiguredHumanDeviceValidationPrecedesRunner(t *testing.T) {
+	registry := newBareRoomCLIRegistry(t)
+	configPath := filepath.Join(t.TempDir(), "invalid-human-room.yaml")
+	configData := fmt.Sprintf(
+		"schema_version: 1\n"+
+			"room:\n"+
+			"  max_turns: 1\n"+
+			"participants:\n"+
+			"  - kind: human\n"+
+			"    id: customer\n"+
+			"    system_prompt: Human customer\n"+
+			"    input_device: %s\n"+
+			"    output_device: %s\n"+
+			"    tools: []\n"+
+			"  - id: agent\n"+
+			"    system_prompt: Provider agent\n"+
+			"    provider: openai\n"+
+			"    model: gpt-realtime-2.1-mini\n"+
+			"    api_key_env: ROOM_CONFIG_AGENT_KEY\n"+
+			"    tools: []\n",
+		registry.output.ID, registry.output.ID,
+	)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatalf("write invalid human room: %v", err)
+	}
+	t.Setenv("ROOM_CONFIG_AGENT_KEY", "configured-agent-secret")
+	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), registry)
+	var runnerCalls int
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		runnerCalls++
+		return services.RoomResult{}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--config", configPath, "--out", filepath.Join(t.TempDir(), "evidence")})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "participants[0].input_device") {
+		t.Fatalf("error = %v, want field-specific configured input-device error", err)
+	}
+	if !errors.Is(err, audio.ErrDeviceDirectionMismatch) {
+		t.Fatalf("error = %v, want direction mismatch", err)
+	}
+	if runnerCalls != 0 || registry.openCalls != 0 {
+		t.Fatalf("invalid human device caused startup work: runner=%d opens=%d", runnerCalls, registry.openCalls)
+	}
+}
+
 func TestRoomRunCommandRejectsConflictingConfigAndManifestPathsBeforeRunner(t *testing.T) {
 	first := writeRoomCLIManifest(t)
 	second := writeRoomCLIManifest(t)

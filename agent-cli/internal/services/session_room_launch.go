@@ -242,6 +242,10 @@ func resolveConfiguredRoomLaunchPlan(path string, options RoomLaunchOptions) (Ro
 	if err != nil {
 		return RoomLaunchPlan{}, fmt.Errorf("validate room config: %w", err)
 	}
+	devices, err := resolveConfiguredRoomDevices(manifest, options.DeviceRegistry)
+	if err != nil {
+		return RoomLaunchPlan{}, fmt.Errorf("validate room config: %w", err)
+	}
 	participants := make([]RoomLaunchParticipantPlan, 0, len(manifest.Participants))
 	for _, participant := range manifest.Participants {
 		kind := room.NormalizeParticipantKind(participant.Kind)
@@ -251,6 +255,10 @@ func resolveConfiguredRoomLaunchPlan(path string, options RoomLaunchOptions) (Ro
 			Provider:            participant.Provider,
 			Model:               participant.Model,
 			CredentialReference: participant.APIKeyEnv,
+		}
+		if selected, ok := devices[participant.ID]; ok {
+			decision.InputDevice = selected.input
+			decision.OutputDevice = selected.output
 		}
 		if participant.APIKeyEnv != "" {
 			if value, present := lookup(participant.APIKeyEnv); present && strings.TrimSpace(value) != "" {
@@ -266,6 +274,87 @@ func resolveConfiguredRoomLaunchPlan(path string, options RoomLaunchOptions) (Ro
 		Manifest:     manifest,
 		Participants: participants,
 	}, nil
+}
+
+type roomLaunchParticipantDevices struct {
+	input  audio.Device
+	output audio.Device
+}
+
+// resolveConfiguredRoomDevices validates every configured human selector
+// against one observational registry snapshot. It intentionally does not call
+// Open, so malformed or unavailable configured devices fail before evidence,
+// provider factories, or participant goroutines are created.
+func resolveConfiguredRoomDevices(manifest room.Manifest, registry audio.DeviceRegistry) (map[string]roomLaunchParticipantDevices, error) {
+	hasHuman := false
+	for _, participant := range manifest.Participants {
+		if room.NormalizeParticipantKind(participant.Kind) == room.ParticipantKindHuman {
+			hasHuman = true
+			break
+		}
+	}
+	if !hasHuman {
+		return nil, nil
+	}
+	if registry == nil {
+		return nil, configuredRoomDeviceValidationError(0, "input_device", "", "audio device registry is unavailable; run agent devices list", audio.ErrNilDeviceRegistry)
+	}
+	devices, err := registry.List()
+	if err != nil {
+		return nil, configuredRoomDeviceValidationError(0, "input_device", "", "could not inspect available devices: "+err.Error(), err)
+	}
+	byID := make(map[audio.DeviceID]audio.Device, len(devices))
+	for _, device := range devices {
+		if _, exists := byID[device.ID]; !exists {
+			byID[device.ID] = device
+		}
+	}
+	resolved := make(map[string]roomLaunchParticipantDevices)
+	for index, participant := range manifest.Participants {
+		if room.NormalizeParticipantKind(participant.Kind) != room.ParticipantKindHuman {
+			continue
+		}
+		input, err := resolveConfiguredRoomDevice(byID, index, "input_device", participant.InputDevice, audio.DirectionInput)
+		if err != nil {
+			return nil, err
+		}
+		output, err := resolveConfiguredRoomDevice(byID, index, "output_device", participant.OutputDevice, audio.DirectionOutput)
+		if err != nil {
+			return nil, err
+		}
+		resolved[participant.ID] = roomLaunchParticipantDevices{input: input, output: output}
+	}
+	return resolved, nil
+}
+
+func resolveConfiguredRoomDevice(devices map[audio.DeviceID]audio.Device, participantIndex int, field, selector string, direction audio.Direction) (audio.Device, error) {
+	device, ok := devices[selector]
+	if !ok {
+		return audio.Device{}, configuredRoomDeviceValidationError(participantIndex, field, selector, "device is unavailable; run agent devices list", audio.NewDeviceNotFoundError(selector))
+	}
+	if err := device.Validate(); err != nil {
+		return audio.Device{}, configuredRoomDeviceValidationError(participantIndex, field, selector, err.Error(), err)
+	}
+	if device.Direction != direction {
+		mismatch := &audio.DeviceDirectionError{
+			ID:        device.ID,
+			Direction: direction,
+			Want:      direction,
+			Got:       device.Direction,
+			Kind:      audio.ErrDeviceDirectionMismatch,
+		}
+		return audio.Device{}, configuredRoomDeviceValidationError(participantIndex, field, selector, mismatch.Error(), mismatch)
+	}
+	return device, nil
+}
+
+func configuredRoomDeviceValidationError(participantIndex int, field, value, problem string, cause error) error {
+	return &room.ValidationError{
+		Field:   fmt.Sprintf("participants[%d].%s", participantIndex, field),
+		Value:   value,
+		Problem: problem,
+		Cause:   cause,
+	}
 }
 
 func resolveRoomLaunchConfig(options RoomLaunchOptions) (*config.Config, error) {
@@ -300,6 +389,18 @@ func resolveBareRoomDevice(registry audio.DeviceRegistry, direction audio.Direct
 	}
 	if err := device.Validate(); err != nil {
 		return audio.Device{}, &RoomLaunchDeviceError{Direction: direction, Err: err}
+	}
+	if device.Direction != direction {
+		return audio.Device{}, &RoomLaunchDeviceError{
+			Direction: direction,
+			Err: &audio.DeviceDirectionError{
+				ID:        device.ID,
+				Direction: direction,
+				Want:      direction,
+				Got:       device.Direction,
+				Kind:      audio.ErrDeviceDirectionMismatch,
+			},
+		}
 	}
 	return device, nil
 }

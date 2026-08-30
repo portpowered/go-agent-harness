@@ -371,6 +371,12 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 			if participant.Provider != "" || participant.Model != "" || participant.APIKeyEnv != "" {
 				return validation(field("kind"), string(kind), "human participants must not configure a provider, model, or credential", ErrInvalidParticipant)
 			}
+			if strings.TrimSpace(participant.InputDevice) == "" {
+				return validation(field("input_device"), "", "must name a non-empty device ID", ErrInvalidParticipant)
+			}
+			if strings.TrimSpace(participant.OutputDevice) == "" {
+				return validation(field("output_device"), "", "must name a non-empty device ID", ErrInvalidParticipant)
+			}
 			if participant.Voice != "" {
 				return validation(field("voice"), participant.Voice, "human participants must not configure a provider voice", ErrInvalidParticipant)
 			}
@@ -600,6 +606,12 @@ func validateRawRequiredFields(raw []manifestParticipant, normalized []Participa
 			return validation(field("kind"), string(participant.Kind), "must be agent or human", ErrUnknownParticipantKind)
 		}
 		if participant.Kind == ParticipantKindHuman {
+			if rawParticipant.InputDevice == nil || participant.InputDevice == "" {
+				return validation(field("input_device"), "", "must name a non-empty device ID", ErrInvalidParticipant)
+			}
+			if rawParticipant.OutputDevice == nil || participant.OutputDevice == "" {
+				return validation(field("output_device"), "", "must name a non-empty device ID", ErrInvalidParticipant)
+			}
 			if rawParticipant.Tools == nil {
 				return validation(field("tools"), "", "must be provided as a list; use [] when no tools are enabled", ErrInvalidParticipant)
 			}

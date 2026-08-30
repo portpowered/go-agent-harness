@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,6 +152,34 @@ func TestResolveBareRoomLaunchPlanReportsDirectionalDefaultFailure(t *testing.T)
 	}
 }
 
+func TestResolveBareRoomLaunchPlanRejectsWrongDirectionalDefaultBeforeAcquisition(t *testing.T) {
+	output, err := audio.NewDevice("fake", "output", "Fake Speakers", audio.DirectionOutput)
+	if err != nil {
+		t.Fatalf("new output device: %v", err)
+	}
+	registry := &roomLaunchTestRegistry{defaults: map[audio.Direction]audio.Device{
+		audio.DirectionInput:  output,
+		audio.DirectionOutput: output,
+	}}
+	_, err = ResolveBareRoomLaunchPlan(RoomLaunchOptions{
+		DeviceRegistry: registry,
+		LoadedConfig:   &config.Config{},
+		CredentialLookup: func(string) (string, bool) {
+			return "fake-openai-key", true
+		},
+	})
+	if err == nil || !errors.Is(err, audio.ErrDeviceDirectionMismatch) {
+		t.Fatalf("wrong-direction default error = %v, want direction mismatch", err)
+	}
+	var deviceErr *RoomLaunchDeviceError
+	if !errors.As(err, &deviceErr) || deviceErr.Direction != audio.DirectionInput {
+		t.Fatalf("error = %v, want input RoomLaunchDeviceError", err)
+	}
+	if registry.defaultCalls != 1 || registry.openCalls != 0 {
+		t.Fatalf("wrong-direction planning calls = defaults:%d opens:%d, want 1/0", registry.defaultCalls, registry.openCalls)
+	}
+}
+
 func TestResolveRoomLaunchPlanConfiguredIsAuthoritativeAndUsesInjectedCredentialLookup(t *testing.T) {
 	configDir := filepath.Join(t.TempDir(), "config")
 	path := filepath.Join(t.TempDir(), "room.yaml")
@@ -221,14 +250,139 @@ participants:
 	}
 }
 
+func TestResolveRoomLaunchPlanConfiguredHumanDevicesAreValidatedBeforeAcquisition(t *testing.T) {
+	input, err := audio.NewDevice("fake", "input", "Fake Microphone", audio.DirectionInput)
+	if err != nil {
+		t.Fatalf("new input device: %v", err)
+	}
+	output, err := audio.NewDevice("fake", "output", "Fake Speakers", audio.DirectionOutput)
+	if err != nil {
+		t.Fatalf("new output device: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		inputSelector  string
+		outputSelector string
+		field          string
+		cause          error
+		wantValid      bool
+		wantListCalls  int
+	}{
+		{
+			name:           "missing input selector",
+			outputSelector: output.ID,
+			field:          "participants[0].input_device",
+			cause:          room.ErrInvalidParticipant,
+			wantListCalls:  0,
+		},
+		{
+			name:          "missing output selector",
+			inputSelector: input.ID,
+			field:         "participants[0].output_device",
+			cause:         room.ErrInvalidParticipant,
+			wantListCalls: 0,
+		},
+		{
+			name:           "missing input device",
+			inputSelector:  "fake:missing-input",
+			outputSelector: output.ID,
+			field:          "participants[0].input_device",
+			cause:          audio.ErrDeviceNotFound,
+			wantListCalls:  1,
+		},
+		{
+			name:           "wrong input direction",
+			inputSelector:  output.ID,
+			outputSelector: output.ID,
+			field:          "participants[0].input_device",
+			cause:          audio.ErrDeviceDirectionMismatch,
+			wantListCalls:  1,
+		},
+		{
+			name:           "valid exact IDs",
+			inputSelector:  input.ID,
+			outputSelector: output.ID,
+			wantValid:      true,
+			wantListCalls:  1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "room.yaml")
+			inputLine := ""
+			if test.inputSelector != "" {
+				inputLine = fmt.Sprintf("\n    input_device: %s", test.inputSelector)
+			}
+			outputLine := ""
+			if test.outputSelector != "" {
+				outputLine = fmt.Sprintf("\n    output_device: %s", test.outputSelector)
+			}
+			data := []byte(fmt.Sprintf(
+				"schema_version: 1\n"+
+					"room:\n"+
+					"  max_turns: 1\n"+
+					"participants:\n"+
+					"  - kind: human\n"+
+					"    id: customer\n"+
+					"    system_prompt: \"Human customer\"%s%s\n"+
+					"    tools: []\n"+
+					"  - id: agent\n"+
+					"    system_prompt: \"Provider agent\"\n"+
+					"    provider: openai\n"+
+					"    model: gpt-realtime-2.1-mini\n"+
+					"    api_key_env: ROOM_AGENT_KEY\n"+
+					"    tools: []\n",
+				inputLine, outputLine))
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				t.Fatalf("write room: %v", err)
+			}
+			registry := &roomLaunchTestRegistry{defaults: map[audio.Direction]audio.Device{
+				audio.DirectionInput: input, audio.DirectionOutput: output,
+			}}
+			plan, err := ResolveRoomLaunchPlan(RoomLaunchOptions{
+				ConfigPath:     path,
+				DeviceRegistry: registry,
+				CredentialLookup: func(name string) (string, bool) {
+					return "configured-secret", name == "ROOM_AGENT_KEY"
+				},
+			})
+			if test.wantValid {
+				if err != nil {
+					t.Fatalf("resolve valid configured human room: %v", err)
+				}
+				customer, ok := plan.Participant("customer")
+				if !ok || customer.InputDevice.ID != input.ID || customer.OutputDevice.ID != output.ID {
+					t.Fatalf("resolved customer devices = %+v, want exact IDs %q/%q", customer, input.ID, output.ID)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("resolve invalid configured human room succeeded")
+				}
+				if !strings.Contains(err.Error(), test.field) {
+					t.Fatalf("error = %v, want field %q", err, test.field)
+				}
+				if !errors.Is(err, test.cause) {
+					t.Fatalf("error = %v, want errors.Is(%v)", err, test.cause)
+				}
+			}
+			if registry.listCalls != test.wantListCalls || registry.openCalls != 0 {
+				t.Fatalf("registry calls = list:%d open:%d, want list:%d open:0", registry.listCalls, registry.openCalls, test.wantListCalls)
+			}
+		})
+	}
+}
+
 type roomLaunchTestRegistry struct {
 	defaults     map[audio.Direction]audio.Device
 	defaultErr   map[audio.Direction]error
 	defaultCalls int
+	listCalls    int
 	openCalls    int
 }
 
 func (r *roomLaunchTestRegistry) List() ([]audio.Device, error) {
+	r.listCalls++
 	devices := make([]audio.Device, 0, len(r.defaults))
 	for _, device := range r.defaults {
 		devices = append(devices, device)
