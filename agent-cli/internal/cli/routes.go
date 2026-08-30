@@ -106,7 +106,7 @@ func NewRouter(
 		SessionShowCommand:        sessionShowCommand,
 		SessionListCommand:        sessionListCommand,
 		SessionDeleteCommand:      sessionDeleteCommand,
-		RoomRunCommand:            NewRoomRunCommand(flags),
+		RoomRunCommand:            NewRoomRunCommandWithDeviceRegistry(flags, deviceRegistry),
 		ConfigCommand:             configCommand,
 		ConfigAddLocalCommand:     configAddLocalCommand,
 		WebMCPCommand:             NewWebMCPCommand(flags),
@@ -149,7 +149,7 @@ func (r *Router) BuildRoot() *cobra.Command {
 	if roomRunCommand == nil {
 		roomRunCommand = NewRoomRunCommand(r.Flags)
 	}
-	roomGroup.AddCommand(NewPath("run --manifest <file> [--out <dir>] [--stream <addr>]", roomRunCommand.Generate()))
+	roomGroup.AddCommand(NewPath("run [--config <file>] [--out <dir>] [--stream <addr>]", roomRunCommand.Generate()))
 	root.AddCommand(roomGroup)
 
 	sessionGroup := NewPath("session", r.SessionCommand.Generate())

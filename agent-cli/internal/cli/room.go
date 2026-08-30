@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/spf13/cobra"
 )
@@ -36,16 +36,38 @@ type RoomRunFunc func(context.Context, io.Writer, services.RoomRunOptions) (serv
 
 // RoomRunCommand implements `agent room run`.
 type RoomRunCommand struct {
-	globalFlags *flags.GlobalFlags
-	run         RoomRunFunc
+	globalFlags    *flags.GlobalFlags
+	deviceRegistry audio.DeviceRegistry
+	run            RoomRunFunc
 }
 
-// NewRoomRunCommand creates the manifest-driven room runner command.
+// NewRoomRunCommand creates the room runner command using the host audio
+// registry. An explicit registry can be supplied through
+// NewRoomRunCommandWithDeviceRegistry for hermetic composition tests.
 func NewRoomRunCommand(globalFlags *flags.GlobalFlags) *RoomRunCommand {
 	return &RoomRunCommand{
-		globalFlags: globalFlags,
-		run:         services.RunRoomWithResult,
+		globalFlags:    globalFlags,
+		deviceRegistry: newDefaultDeviceRegistry(),
+		run:            services.RunRoomWithResult,
 	}
+}
+
+// NewRoomRunCommandWithDeviceRegistry composes a room command with the same
+// registry abstraction used by device and session commands.
+func NewRoomRunCommandWithDeviceRegistry(globalFlags *flags.GlobalFlags, registry audio.DeviceRegistry) *RoomRunCommand {
+	command := NewRoomRunCommand(globalFlags)
+	command.deviceRegistry = registry
+	return command
+}
+
+// SetDeviceRegistry replaces the registry used during side-effect-free bare
+// launch resolution. It is intended for application wiring and fake-device
+// command tests.
+func (c *RoomRunCommand) SetDeviceRegistry(registry audio.DeviceRegistry) {
+	if c == nil {
+		return
+	}
+	c.deviceRegistry = registry
 }
 
 // SetRunner replaces the room service used by this command. It is intended
@@ -66,7 +88,7 @@ func NewRoomCommand() *RoomCommand { return &RoomCommand{} }
 func (c *RoomCommand) Generate() *cobra.Command {
 	return &cobra.Command{
 		Use:   "room",
-		Short: "Run manifest-defined participant rooms",
+		Short: "Run participant rooms",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -76,36 +98,46 @@ func (c *RoomCommand) Generate() *cobra.Command {
 
 // Generate returns the room run command.
 func (c *RoomRunCommand) Generate() *cobra.Command {
+	var configPath string
 	var manifestPath string
 	var outputDir string
 	var streamAddress string
 
 	cmd := &cobra.Command{
-		Use:   "run --manifest <file>",
-		Short: "Run an N-participant room from a manifest",
-		Long: "Run an N-participant room from a manifest. Validate a complete room manifest, start one isolated live session per participant, " +
+		Use:   "run [--config <file>]",
+		Short: "Run a room, or start the bare customer-plus-agent room",
+		Long: "Run an N-participant room from --config (or the legacy --manifest spelling). " +
+			"With neither flag, start the interactive room with one human customer on the host default microphone and speakers and one OpenAI realtime agent. " +
+			"An explicit --config is authoritative and overrides bare defaults. Validate a complete room manifest, start one isolated live session per participant, " +
 			"and write redacted evidence to an empty output directory. An optional HTTP " +
 			"listener exposes forward-only JSON events at /events.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return c.execute(cmd, manifestPath, outputDir, streamAddress)
+			return c.execute(cmd, configPath, manifestPath, outputDir, streamAddress)
 		},
 	}
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to the authoritative schema-version-1 JSON or YAML room config; omit for bare defaults")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "Path to the schema-version-1 JSON or YAML room manifest")
 	cmd.Flags().StringVar(&outputDir, "out", DefaultRoomOutputDir, "Empty directory for redacted room evidence (default: room-run)")
 	cmd.Flags().StringVar(&streamAddress, "stream", "", "Optional TCP listen address for GET /events (for example 127.0.0.1:8080)")
-	_ = cmd.MarkFlagRequired("manifest")
 	return cmd
 }
 
-func (c *RoomRunCommand) execute(cmd *cobra.Command, manifestPath, outputDir, streamAddress string) error {
-	if strings.TrimSpace(manifestPath) == "" {
-		return errors.New("--manifest is required")
+func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, outputDir, streamAddress string) error {
+	parent := cmd.Context()
+	if parent == nil {
+		parent = context.Background()
 	}
-	manifest, err := room.ReadManifest(manifestPath)
+	launchPlan, err := services.ResolveRoomLaunchPlan(services.RoomLaunchOptions{
+		ConfigPath:     configPath,
+		ManifestPath:   manifestPath,
+		ConfigDir:      roomConfigDir(roomRunGlobalFlags(c)),
+		DeviceRegistry: roomRunDeviceRegistry(c),
+	})
 	if err != nil {
-		return fmt.Errorf("validate room manifest: %w", err)
+		return err
 	}
+	manifest := launchPlan.Manifest
 
 	outputDir = strings.TrimSpace(outputDir)
 	if outputDir == "" {
@@ -145,15 +177,12 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, manifestPath, outputDir, st
 		}
 	}
 
-	parent := cmd.Context()
-	if parent == nil {
-		parent = context.Background()
-	}
 	runContext, stopSignals := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
 	options := services.RoomRunOptions{
 		Manifest:                   manifest,
+		LaunchPlan:                 &launchPlan,
 		OutputDir:                  outputDir,
 		ConfigDir:                  roomConfigDir(roomRunGlobalFlags(c)),
 		BrowserCapabilitiesFactory: NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c))),
@@ -188,6 +217,13 @@ func roomRunGlobalFlags(command *RoomRunCommand) *flags.GlobalFlags {
 		return nil
 	}
 	return command.globalFlags
+}
+
+func roomRunDeviceRegistry(command *RoomRunCommand) audio.DeviceRegistry {
+	if command == nil {
+		return nil
+	}
+	return command.deviceRegistry
 }
 
 func roomConfigDir(globalFlags *flags.GlobalFlags) string {

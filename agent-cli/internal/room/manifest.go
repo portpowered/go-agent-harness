@@ -24,21 +24,48 @@ const (
 )
 
 var (
-	ErrInvalidManifest      = errors.New("invalid room manifest")
-	ErrUnsupportedSchema    = errors.New("unsupported room manifest schema")
-	ErrMissingBound         = errors.New("room manifest requires a bound")
-	ErrInvalidBound         = errors.New("invalid room manifest bound")
-	ErrTooFewParticipants   = errors.New("room manifest requires at least two participants")
-	ErrInvalidParticipant   = errors.New("invalid room manifest participant")
-	ErrDuplicateParticipant = errors.New("room manifest contains duplicate participant")
-	ErrCredential           = errors.New("invalid room manifest credential")
-	ErrUnknownProvider      = errors.New("unknown room manifest provider")
-	ErrUnknownModel         = errors.New("unknown room manifest model")
-	ErrUnknownTool          = errors.New("unknown room manifest tool")
-	ErrUnknownVoice         = errors.New("unknown room manifest voice")
-	ErrDuplicateTool        = errors.New("room manifest contains duplicate tool")
-	ErrInvalidDocument      = errors.New("invalid room manifest document")
+	ErrInvalidManifest        = errors.New("invalid room manifest")
+	ErrUnsupportedSchema      = errors.New("unsupported room manifest schema")
+	ErrMissingBound           = errors.New("room manifest requires a bound")
+	ErrInvalidBound           = errors.New("invalid room manifest bound")
+	ErrTooFewParticipants     = errors.New("room manifest requires at least two participants")
+	ErrInvalidParticipant     = errors.New("invalid room manifest participant")
+	ErrUnknownParticipantKind = errors.New("unknown room manifest participant kind")
+	ErrDuplicateParticipant   = errors.New("room manifest contains duplicate participant")
+	ErrCredential             = errors.New("invalid room manifest credential")
+	ErrUnknownProvider        = errors.New("unknown room manifest provider")
+	ErrUnknownModel           = errors.New("unknown room manifest model")
+	ErrUnknownTool            = errors.New("unknown room manifest tool")
+	ErrUnknownVoice           = errors.New("unknown room manifest voice")
+	ErrDuplicateTool          = errors.New("room manifest contains duplicate tool")
+	ErrInvalidDocument        = errors.New("invalid room manifest document")
 )
+
+// ParticipantKind identifies the owner of a room participant's media and
+// conversation lifecycle. An omitted kind is normalized to agent for
+// compatibility with schema-version-1 manifests written before human
+// participants were supported.
+type ParticipantKind string
+
+const (
+	ParticipantKindAgent    ParticipantKind = "agent"
+	ParticipantKindHuman    ParticipantKind = "human"
+	ParticipantKindCustomer ParticipantKind = "customer"
+)
+
+// NormalizeParticipantKind returns the compatibility default for a manifest
+// participant. Customer is accepted as a descriptive alias for human at the
+// composition boundary.
+func NormalizeParticipantKind(kind ParticipantKind) ParticipantKind {
+	switch ParticipantKind(strings.ToLower(strings.TrimSpace(string(kind)))) {
+	case "", ParticipantKindAgent:
+		return ParticipantKindAgent
+	case ParticipantKindHuman, ParticipantKindCustomer:
+		return ParticipantKindHuman
+	default:
+		return ParticipantKind(strings.ToLower(strings.TrimSpace(string(kind))))
+	}
+}
 
 // ValidationError identifies the exact manifest field that made a document
 // unusable. Value is populated only for non-secret identifiers such as
@@ -89,10 +116,14 @@ type Manifest struct {
 	Participants  []Participant `json:"participants" yaml:"participants"`
 }
 
-// Room contains the optional positive bounds. At least one bound must be set.
+// Room contains optional positive bounds. An interactive room may omit both
+// bounds and remains alive until cancellation or terminal failure.
 type Room struct {
 	MaxTurns    int           `json:"max_turns,omitempty" yaml:"max_turns,omitempty"`
 	MaxDuration time.Duration `json:"-" yaml:"-"`
+	// Interactive permits a room without a turn or duration bound. It is used
+	// by the bare customer-plus-agent launch and remains opt-in for manifests.
+	Interactive bool `json:"interactive,omitempty" yaml:"interactive,omitempty"`
 }
 
 // MarshalJSON keeps normalized output human-readable while retaining the
@@ -101,8 +132,9 @@ func (r Room) MarshalJSON() ([]byte, error) {
 	type roomJSON struct {
 		MaxTurns    int    `json:"max_turns,omitempty"`
 		MaxDuration string `json:"max_duration,omitempty"`
+		Interactive bool   `json:"interactive,omitempty"`
 	}
-	output := roomJSON{MaxTurns: r.MaxTurns}
+	output := roomJSON{MaxTurns: r.MaxTurns, Interactive: r.Interactive}
 	if r.MaxDuration > 0 {
 		output.MaxDuration = r.MaxDuration.String()
 	}
@@ -115,8 +147,9 @@ func (r Room) MarshalYAML() (any, error) {
 	type roomYAML struct {
 		MaxTurns    int    `yaml:"max_turns,omitempty"`
 		MaxDuration string `yaml:"max_duration,omitempty"`
+		Interactive bool   `yaml:"interactive,omitempty"`
 	}
-	output := roomYAML{MaxTurns: r.MaxTurns}
+	output := roomYAML{MaxTurns: r.MaxTurns, Interactive: r.Interactive}
 	if r.MaxDuration > 0 {
 		output.MaxDuration = r.MaxDuration.String()
 	}
@@ -126,18 +159,24 @@ func (r Room) MarshalYAML() (any, error) {
 // Participant is one independently configured room member. APIKeyEnv is only
 // an environment variable name, never the resolved credential value.
 type Participant struct {
-	ID            string   `json:"id" yaml:"id"`
-	SystemPrompt  string   `json:"system_prompt" yaml:"system_prompt"`
-	OpeningPrompt string   `json:"opening_prompt,omitempty" yaml:"opening_prompt,omitempty"`
-	Provider      string   `json:"provider" yaml:"provider"`
-	Model         string   `json:"model" yaml:"model"`
-	APIKeyEnv     string   `json:"api_key_env" yaml:"api_key_env"`
-	Voice         string   `json:"voice,omitempty" yaml:"voice,omitempty"`
-	Tools         []string `json:"tools" yaml:"tools"`
+	Kind          ParticipantKind `json:"kind,omitempty" yaml:"kind,omitempty"`
+	ID            string          `json:"id" yaml:"id"`
+	SystemPrompt  string          `json:"system_prompt" yaml:"system_prompt"`
+	OpeningPrompt string          `json:"opening_prompt,omitempty" yaml:"opening_prompt,omitempty"`
+	Provider      string          `json:"provider" yaml:"provider"`
+	Model         string          `json:"model" yaml:"model"`
+	APIKeyEnv     string          `json:"api_key_env" yaml:"api_key_env"`
+	Voice         string          `json:"voice,omitempty" yaml:"voice,omitempty"`
+	Tools         []string        `json:"tools" yaml:"tools"`
 	// BrowserTools is nil unless the manifest explicitly grants this
 	// participant the WebMCP browser capability. Its presence, rather than an
 	// endpoint value, is the activation switch.
 	BrowserTools *BrowserToolsConfig `json:"browserTools,omitempty" yaml:"browserTools,omitempty"`
+	// InputDevice and OutputDevice are stable audio.DeviceID values. They are
+	// intentionally strings here so the manifest package does not acquire the
+	// runtime audio backend; the composition root resolves and validates them.
+	InputDevice  string `json:"input_device,omitempty" yaml:"input_device,omitempty"`
+	OutputDevice string `json:"output_device,omitempty" yaml:"output_device,omitempty"`
 }
 
 // ValidationOptions supplies the registries that are available in the
@@ -255,7 +294,7 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 	if m.Room.MaxDuration < 0 {
 		return validation("room.max_duration", "", "must be a positive duration", ErrInvalidBound)
 	}
-	if m.Room.MaxTurns == 0 && m.Room.MaxDuration == 0 {
+	if m.Room.MaxTurns == 0 && m.Room.MaxDuration == 0 && !m.Room.Interactive {
 		return validation("room", "", "must set a positive max_turns and/or max_duration", ErrMissingBound)
 	}
 	if len(m.Participants) < 2 {
@@ -278,8 +317,27 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 				return err
 			}
 		}
+		kind := NormalizeParticipantKind(participant.Kind)
+		if kind != ParticipantKindAgent && kind != ParticipantKindHuman {
+			return validation(field("kind"), string(participant.Kind), "must be agent or human", ErrUnknownParticipantKind)
+		}
 		if strings.TrimSpace(participant.SystemPrompt) == "" {
 			return validation(field("system_prompt"), "", "must not be empty", ErrInvalidParticipant)
+		}
+		if kind == ParticipantKindHuman {
+			if participant.Provider != "" || participant.Model != "" || participant.APIKeyEnv != "" {
+				return validation(field("kind"), string(kind), "human participants must not configure a provider, model, or credential", ErrInvalidParticipant)
+			}
+			if participant.Voice != "" {
+				return validation(field("voice"), participant.Voice, "human participants must not configure a provider voice", ErrInvalidParticipant)
+			}
+			if participant.Tools == nil {
+				return validation(field("tools"), "", "must be provided as a list; use [] when no tools are enabled", ErrInvalidParticipant)
+			}
+			if len(participant.Tools) > 0 {
+				return validation(field("tools"), "", "human participants cannot enable provider tools", ErrInvalidParticipant)
+			}
+			continue
 		}
 		if participant.Provider == "" {
 			return validation(field("provider"), "", "must not be empty", ErrInvalidParticipant)
@@ -368,9 +426,11 @@ type manifestDocument struct {
 type manifestRoomDocument struct {
 	MaxTurns    *int    `json:"max_turns" yaml:"max_turns"`
 	MaxDuration *string `json:"max_duration" yaml:"max_duration"`
+	Interactive *bool   `json:"interactive" yaml:"interactive"`
 }
 
 type manifestParticipant struct {
+	Kind          *string               `json:"kind" yaml:"kind"`
 	ID            *string               `json:"id" yaml:"id"`
 	SystemPrompt  *string               `json:"system_prompt" yaml:"system_prompt"`
 	OpeningPrompt *string               `json:"opening_prompt" yaml:"opening_prompt"`
@@ -380,6 +440,8 @@ type manifestParticipant struct {
 	Voice         *string               `json:"voice" yaml:"voice"`
 	Tools         *[]string             `json:"tools" yaml:"tools"`
 	BrowserTools  *manifestBrowserTools `json:"browserTools" yaml:"browserTools"`
+	InputDevice   *string               `json:"input_device" yaml:"input_device"`
+	OutputDevice  *string               `json:"output_device" yaml:"output_device"`
 }
 
 func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifest, error) {
@@ -408,7 +470,10 @@ func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifes
 		}
 		room.MaxDuration = duration
 	}
-	if room.MaxTurns == 0 && room.MaxDuration == 0 {
+	if raw.Room.Interactive != nil {
+		room.Interactive = *raw.Room.Interactive
+	}
+	if room.MaxTurns == 0 && room.MaxDuration == 0 && !room.Interactive {
 		return Manifest{}, validation("room", "", "must set a positive max_turns and/or max_duration", ErrMissingBound)
 	}
 	if len(raw.Participants) < 2 {
@@ -418,6 +483,7 @@ func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifes
 	participants := make([]Participant, len(raw.Participants))
 	for index, rawParticipant := range raw.Participants {
 		participant := Participant{
+			Kind:          NormalizeParticipantKind(ParticipantKind(normalizeString(rawParticipant.Kind))),
 			ID:            normalizeString(rawParticipant.ID),
 			SystemPrompt:  normalizeString(rawParticipant.SystemPrompt),
 			OpeningPrompt: normalizeString(rawParticipant.OpeningPrompt),
@@ -425,6 +491,8 @@ func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifes
 			Model:         normalizeString(rawParticipant.Model),
 			APIKeyEnv:     normalizeString(rawParticipant.APIKeyEnv),
 			Voice:         normalizeString(rawParticipant.Voice),
+			InputDevice:   normalizeString(rawParticipant.InputDevice),
+			OutputDevice:  normalizeString(rawParticipant.OutputDevice),
 		}
 		if rawParticipant.Tools != nil {
 			participant.Tools = make([]string, len(*rawParticipant.Tools))
@@ -468,6 +536,15 @@ func validateRawRequiredFields(raw []manifestParticipant, normalized []Participa
 		}
 		if rawParticipant.SystemPrompt == nil || strings.TrimSpace(participant.SystemPrompt) == "" {
 			return validation(field("system_prompt"), "", "must not be empty", ErrInvalidParticipant)
+		}
+		if participant.Kind != ParticipantKindAgent && participant.Kind != ParticipantKindHuman {
+			return validation(field("kind"), string(participant.Kind), "must be agent or human", ErrUnknownParticipantKind)
+		}
+		if participant.Kind == ParticipantKindHuman {
+			if rawParticipant.Tools == nil {
+				return validation(field("tools"), "", "must be provided as a list; use [] when no tools are enabled", ErrInvalidParticipant)
+			}
+			continue
 		}
 		if rawParticipant.Provider == nil || participant.Provider == "" {
 			return validation(field("provider"), "", "must not be empty", ErrInvalidParticipant)

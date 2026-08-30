@@ -107,6 +107,12 @@ type RoomObserver func(RoomResult)
 // the default factory builds the repository's existing live session runtime.
 type RoomRunOptions struct {
 	Manifest room.Manifest
+	// LaunchPlan is the normalized decision produced by ResolveRoomLaunchPlan.
+	// The CLI supplies it for bare launches so command/service composition tests
+	// can observe the selected devices and credential provenance without
+	// inspecting or reopening a config file. A nil value preserves direct
+	// manifest-driven service callers.
+	LaunchPlan *RoomLaunchPlan
 	// OutputDir enables the durable room evidence bundle. An empty value keeps
 	// the service's observational-only mode for callers that do not need
 	// artifacts; the room CLI supplies a concrete, empty directory.
