@@ -193,7 +193,11 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 				return finish(sessionToolFailure(call, denial), true)
 			}
 		}
-		return finish(sessionToolFailure(call, sessionToolContextFailure(execCtx.Err())), true)
+		failure := sessionToolContextFailure(execCtx.Err())
+		if errors.Is(failure, ErrSessionToolTimeout) {
+			failure = fmt.Errorf("%w after %s", ErrSessionToolTimeout, timeout)
+		}
+		return finish(sessionToolFailure(call, failure), true)
 	}
 }
 

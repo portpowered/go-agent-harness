@@ -319,7 +319,15 @@ func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []m
 			return InteractiveToolPolicy{}, fmt.Errorf("inspect interactive tool configuration: %w", err)
 		}
 	}
-	return ResolveInteractiveToolPolicy(loadedConfig, definitions)
+	settings := config.DefaultInteractiveToolConfig()
+	if loadedConfig != nil {
+		resolved, err := loadedConfig.ResolveInteractiveToolConfig()
+		if err != nil {
+			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+		}
+		settings = resolved
+	}
+	return NewInteractiveToolPolicyForSession(settings, definitions, opts.ToolDefinitionBase, opts.BrowserToolsEnabled)
 }
 
 func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -202,8 +204,35 @@ func (e *Executor) ResolvesDynamicTools() bool {
 // generation bumps and tool-ref rotation. A name with no live catalog match
 // returns a model-visible guidance envelope, never a hard executor error.
 func (s *BrokerToolSet) executePageTool(ctx context.Context, call messages.ToolCall) ([]byte, error) {
-	catalog, err := s.broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: false})
+	// The catalog step is where a cold or degraded broker pays its browser
+	// setup (dial, attach, enable, catalog wait). Bound it separately from
+	// the page tool's own run so an interactive deadline expiring here is
+	// reported as slow browser setup, not blamed on the page tool.
+	setupContext := ctx
+	cancelSetup := func() {}
+	if deadline, ok := ctx.Deadline(); ok {
+		reserve := time.Until(deadline) / 3
+		if reserve > 0 {
+			setupContext, cancelSetup = context.WithDeadline(ctx, deadline.Add(-reserve))
+		}
+	}
+	setupStarted := time.Now()
+	catalog, err := s.broker.ListTools(setupContext, webmcp.ListToolsOptions{IncludeSchemas: false})
+	cancelSetup()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || (setupContext.Err() != nil && ctx.Err() == nil) {
+			resultError := webmcp.ToolResultError{
+				Code:      string(webmcp.ErrorTargetAttachFailed),
+				Retryable: true,
+				Message:   fmt.Sprintf("browser setup for %q did not become ready within %s: the connection, attach, or page catalog is slow; the page tool itself never ran", call.Name, time.Since(setupStarted).Round(time.Millisecond)),
+				Details: map[string]any{
+					"phase":          "setup_timeout",
+					"tool":           call.Name,
+					"setup_duration": time.Since(setupStarted).String(),
+				},
+			}
+			return webmcp.EncodeToolResult(nil, &resultError)
+		}
 		return brokerFailure(err, webmcp.ErrorStaleSelection, map[string]any{
 			"phase": "page_tool_catalog",
 			"tool":  call.Name,
