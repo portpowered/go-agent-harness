@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -56,7 +57,7 @@ model:
 			gotModel = model
 			return recordingDialer
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			gotCfg = cfg
 			gotVoice = voice
 			gotDialer = dialer
@@ -103,7 +104,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			apiKey:   "sk-scheduled-test-key",
 			plan:     planOpenAIRecordRuntime,
 			configure: func(factory *sessionRuntimeFactory) {
-				factory.newOpenAISessionInf = func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error) {
+				factory.newOpenAISessionInf = func(config.OpenAIConfig, string, transport.Dialer, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 					return &scriptedSessionInferencer{}, nil
 				}
 			},
@@ -272,7 +273,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 			}
 			return replayDialer, nil
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			openAICalled = true
 			gotVoice = voice
 			if cfg.Model != "gpt-realtime" {
@@ -349,7 +350,7 @@ func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDef
 				newReplayDialer: func(string) (sessionReplayDialer, error) {
 					return replayDialer, nil
 				},
-				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, definitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, definitions []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 					gotProviderDefinitions = definitions
 					return &scriptedSessionInferencer{}, nil
 				},
@@ -593,38 +594,66 @@ func replayResponseCreateRecord(sequence int) gwtesting.CapturedSessionEvent {
 	}
 }
 
-func TestReplayInitialSessionUpdateDialerReplacesOnlyProviderHandshake(t *testing.T) {
-	innerConn := &replayHandshakeRecordingConn{}
-	inner := &replayHandshakeRecordingDialer{conn: innerConn}
-	expected := []byte(`{"type":"session.update","session":{"model":"recorded","instructions":"captured"}}`)
-	dialer := newReplayInitialSessionUpdateDialer(inner, replaySessionConfiguration{payload: expected})
+func TestReplayInitialSessionUpdateDialerPreservesCapturedHandshakeBytes(t *testing.T) {
+	cases := []struct {
+		name      string
+		captured  []byte
+		generated []byte
+	}{
+		{
+			name: "historical handshake without input transcription",
+			captured: []byte(`{
+  "type": "session.update",
+  "session": {"model": "gpt-realtime", "audio": {"input": {"format": {"type": "audio/pcm", "rate": 24000}}}}
+}`),
+			generated: []byte(`{"type":"session.update","session":{"model":"gpt-realtime","audio":{"input":{"transcription":{"model":"gpt-live-transcribe"}}}}}`),
+		},
+		{
+			name:      "new enabled GA handshake",
+			captured:  []byte(`{"type":"session.update","session":{"type":"realtime","model":"gpt-realtime","audio":{"input":{"transcription":{"model":"gpt-live-transcribe"}}}}}`),
+			generated: []byte(`{"type":"session.update","session":{"model":"gpt-realtime"}}`),
+		},
+		{
+			name:      "explicit opt-out handshake",
+			captured:  []byte(`{"type":"session.update","session":{"model":"gpt-realtime","audio":{"input":{"format":{"type":"audio/pcm","rate":24000}}}}}`),
+			generated: []byte(`{"type":"session.update","session":{"model":"gpt-realtime","audio":{"input":{"transcription":{"model":"gpt-live-transcribe"}}}}}`),
+		},
+	}
 
-	conn, err := dialer.Dial("wss://replay.invalid", map[string]string{"Authorization": "Bearer replay"})
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
-	if err := conn.WriteMessage(1, []byte(`{"type":"session.update","session":{"model":"live"}}`)); err != nil {
-		t.Fatalf("first WriteMessage: %v", err)
-	}
-	later := []byte(`{"type":"response.create"}`)
-	if err := conn.WriteMessage(1, later); err != nil {
-		t.Fatalf("second WriteMessage: %v", err)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			innerConn := &replayHandshakeRecordingConn{}
+			inner := &replayHandshakeRecordingDialer{conn: innerConn}
+			dialer := newReplayInitialSessionUpdateDialer(inner, replaySessionConfiguration{payload: tc.captured})
 
-	innerConn.mu.Lock()
-	writes := make([][]byte, len(innerConn.writes))
-	for index := range innerConn.writes {
-		writes[index] = append([]byte(nil), innerConn.writes[index]...)
-	}
-	innerConn.mu.Unlock()
-	if len(writes) != 2 {
-		t.Fatalf("inner writes = %d, want 2", len(writes))
-	}
-	if !bytes.Equal(writes[0], expected) {
-		t.Fatalf("initial write = %s, want captured payload %s", writes[0], expected)
-	}
-	if !bytes.Equal(writes[1], later) {
-		t.Fatalf("later write = %s, want unchanged payload %s", writes[1], later)
+			conn, err := dialer.Dial("wss://replay.invalid", map[string]string{"Authorization": "Bearer replay"})
+			if err != nil {
+				t.Fatalf("Dial: %v", err)
+			}
+			if err := conn.WriteMessage(1, tc.generated); err != nil {
+				t.Fatalf("first WriteMessage: %v", err)
+			}
+			later := []byte(`{"type":"response.create"}`)
+			if err := conn.WriteMessage(1, later); err != nil {
+				t.Fatalf("second WriteMessage: %v", err)
+			}
+
+			innerConn.mu.Lock()
+			writes := make([][]byte, len(innerConn.writes))
+			for index := range innerConn.writes {
+				writes[index] = append([]byte(nil), innerConn.writes[index]...)
+			}
+			innerConn.mu.Unlock()
+			if len(writes) != 2 {
+				t.Fatalf("inner writes = %d, want 2", len(writes))
+			}
+			if !bytes.Equal(writes[0], tc.captured) {
+				t.Fatalf("initial write = %s, want captured payload %s", writes[0], tc.captured)
+			}
+			if !bytes.Equal(writes[1], later) {
+				t.Fatalf("later write = %s, want unchanged payload %s", writes[1], later)
+			}
+		})
 	}
 }
 
@@ -680,8 +709,122 @@ func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeSessionReplayMessage: %v", err)
 	}
-	if got := out.String(); got != "spoken image description" {
-		t.Fatalf("transcript output = %q, want %q", got, "spoken image description")
+	if got := out.String(); got != "Assistant: spoken image description\n" {
+		t.Fatalf("transcript output = %q, want %q", got, "Assistant: spoken image description\\n")
+	}
+}
+
+func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard ")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("reply")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("reply")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("again")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("again")},
+	}
+	for _, event := range events {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write transcript event: %v", err)
+		}
+	}
+
+	if got, want := out.String(), "User: heard \nAssistant: reply\nUser: again\n"; got != want {
+		t.Fatalf("interleaved transcript output = %q, want %q", got, want)
+	}
+}
+
+func TestSessionReplayRendererIgnoresLateCompletionForInactiveRole(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		events []messages.StreamMessage
+	}{
+		{
+			name: "assistant completion while user line is active",
+			events: []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("draft")},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard")},
+				// The assistant completion arrives after the user role became active.
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("draft revised")},
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard revised")},
+			},
+		},
+		{
+			name: "assistant completion after user line closes",
+			events: []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("draft")},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard")},
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard revised")},
+				// The assistant completion is late even though the active user
+				// line has already been closed.
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("draft revised")},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out bytes.Buffer
+			renderer := newSessionReplayRenderer(&out)
+			for _, event := range testCase.events {
+				if err := writeSessionReplayMessage(renderer, event); err != nil {
+					t.Fatalf("write transcript event: %v", err)
+				}
+			}
+
+			if got, want := out.String(), "Assistant: draft\nUser: heard\n"; got != want {
+				t.Fatalf("late interleaved transcript output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestSessionReplayRendererRendersInactiveCompletionOnly(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		events []messages.StreamMessage
+		want   string
+	}{
+		{
+			name: "assistant completion while user line is active",
+			events: []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard")},
+				// The assistant has no deltas, so its completion must be
+				// rendered without disturbing the role attribution.
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("reply")},
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard")},
+			},
+			want: "User: heard\nAssistant: reply\n",
+		},
+		{
+			name: "user completion while assistant line is active",
+			events: []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleAssistant, Value: messages.NewTranscriptStartValue()},
+				{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("draft")},
+				// The user has no deltas, so its completion must be rendered
+				// as a separate line while the assistant remains distinct.
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("heard")},
+				{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("draft")},
+			},
+			want: "Assistant: draft\nUser: heard\n",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var out bytes.Buffer
+			renderer := newSessionReplayRenderer(&out)
+			for _, event := range testCase.events {
+				if err := writeSessionReplayMessage(renderer, event); err != nil {
+					t.Fatalf("write transcript event: %v", err)
+				}
+			}
+
+			if got := out.String(); got != testCase.want {
+				t.Fatalf("completion-only transcript output = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }
 

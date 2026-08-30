@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -107,7 +108,7 @@ func TestPlanSessionRuntime_BrowserToolsWithRecordingPreservesCaptureLifecycle(t
 				}
 			case config.ProviderOpenAI:
 				loaded.Model.OpenAI = &config.OpenAIConfig{Model: testCase.model, APIKey: testCase.apiKey}
-				factory.newOpenAISessionWithTools = func(_ config.OpenAIConfig, _ string, dialer transport.Dialer, _ []messages.ToolDefinition) (messages.SessionInferencer, error) {
+				factory.newOpenAISessionWithTools = func(_ config.OpenAIConfig, _ string, dialer transport.Dialer, _ []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 					gotDialer = dialer
 					return &scriptedSessionInferencer{}, nil
 				}

@@ -123,26 +123,27 @@ func (e sessionConversationToolEvent) MarshalJSON() ([]byte, error) {
 // sessionConversationTurn accumulates stream observations for the turn in
 // progress. It is owned by the recording finalizer's mutex domain.
 type sessionConversationTurn struct {
-	inputText        string
-	inputTranscript  strings.Builder
-	inputFullText    string
-	inputAudioBytes  uint64
-	inputCommitted   bool
-	inputSegments    []string
-	responseDeltas   strings.Builder
-	responseFullText string
-	outputAudioBytes uint64
-	outputSegments   []string
-	complete         bool
-	toolEvents       []sessionConversationToolEvent
-	toolCallMessage  bool
+	inputText                string
+	inputTranscript          strings.Builder
+	inputFullText            string
+	inputTranscriptCompleted bool
+	inputAudioBytes          uint64
+	inputCommitted           bool
+	inputSegments            []string
+	responseDeltas           strings.Builder
+	responseFullText         string
+	outputAudioBytes         uint64
+	outputSegments           []string
+	complete                 bool
+	toolEvents               []sessionConversationToolEvent
+	toolCallMessage          bool
 }
 
 // observed reports whether any conversational content was recorded for the
 // turn; empty bracket turns (for example a bare session handshake) are not
 // logged at all.
 func (t *sessionConversationTurn) observed() bool {
-	return t.inputText != "" || t.inputTranscript.Len() > 0 || t.inputFullText != "" || t.inputAudioBytes > 0 || t.responseDeltas.Len() > 0 || t.responseFullText != "" || t.outputAudioBytes > 0 || len(t.toolEvents) > 0
+	return t.inputText != "" || strings.TrimSpace(t.inputTranscript.String()) != "" || strings.TrimSpace(t.inputFullText) != "" || t.inputAudioBytes > 0 || t.responseDeltas.Len() > 0 || t.responseFullText != "" || t.outputAudioBytes > 0 || len(t.toolEvents) > 0
 }
 
 // sessionConversationCollector reduces observed stream messages into ordered
@@ -242,10 +243,14 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 		if outbound {
 			return
 		}
-		if transcript, ok := msg.Value.(*messages.TranscriptEndValue); ok && transcript != nil && transcript.FullText != "" {
+		if transcript, ok := msg.Value.(*messages.TranscriptEndValue); ok && transcript != nil {
 			if msg.Role == messages.RoleUser {
+				// The completion is authoritative even when it is empty. An
+				// empty completion must not fall back to interim text and invent
+				// a user utterance in the finalized log.
+				turn.inputTranscriptCompleted = true
 				turn.inputFullText = transcript.FullText
-			} else {
+			} else if transcript.FullText != "" {
 				turn.responseFullText = transcript.FullText
 			}
 		}
@@ -284,10 +289,14 @@ func (c *sessionConversationCollector) entries() []sessionConversationLogEntry {
 	log := make([]sessionConversationLogEntry, 0, len(all))
 	for index, turn := range all {
 		inputText := turn.inputText
-		if turn.inputFullText != "" {
-			inputText = turn.inputFullText
-		} else if turn.inputTranscript.Len() > 0 {
-			inputText = turn.inputTranscript.String()
+		if turn.inputTranscriptCompleted {
+			if strings.TrimSpace(turn.inputFullText) != "" {
+				inputText = turn.inputFullText
+			} else {
+				inputText = ""
+			}
+		} else if transcript := turn.inputTranscript.String(); strings.TrimSpace(transcript) != "" {
+			inputText = transcript
 		}
 		text := turn.responseFullText
 		if text == "" {

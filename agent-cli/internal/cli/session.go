@@ -404,6 +404,7 @@ const sessionCommandLongHelp = "Run a bidirectional session inference capture or
 	"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
 	"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
 	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
+	"Input transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\n" +
 	"Session history management remains available through the show, list, and delete subcommands."
 
 func (c *SessionCommand) Generate() *cobra.Command {
@@ -416,6 +417,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	mediaSource := ""
 	var maxDuration time.Duration
 	var waitForClose bool
+	var noInputTranscription bool
 	var audioIn string
 	var audioInTurns []string
 	var audioInTurnBarge bool
@@ -553,34 +555,35 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return err
 			}
 			sessionOptions := services.SessionRunOptions{
-				RecordPath:          c.askFlags.RecordCapturePath,
-				ReplayPath:          c.askFlags.ReplayCapturePath,
-				Provider:            c.askFlags.Provider,
-				Model:               c.askFlags.Model,
-				ModelProvided:       cmd.Flags().Changed("model"),
-				APIKey:              c.askFlags.APIKey,
-				BaseURL:             c.askFlags.BaseURL,
-				ConfigDir:           c.globalFlags.ConfigDir(),
-				Prompt:              strings.Join(args, " "),
-				PromptProvided:      cmd.Flags().Changed("prompt") || len(args) > 0,
-				Voice:               voice,
-				Transport:           selectedTransport,
-				Signaling:           signaling,
-				MediaSource:         mediaSource,
-				RTCRuntimeFactory:   c.rtcRuntimeFactory,
-				SessionInferencer:   c.sessionInferencerOverride,
-				ToolExecutor:        toolExecutor,
-				ToolDefinitions:     toolDefinitions,
-				AudioInterruptions:  audioInterruptions,
-				CapabilityClose:     capabilityClose,
-				CancellationIntent:  cancellationIntent,
-				LoadedConfig:        loadedConfig,
-				BrowserToolsEnabled: browserConfigEnablesTools(loadedConfig),
-				WaitForClose:        waitForClose,
-				StreamObserver:      c.streamObserver,
-				Clock:               c.clockSource,
-				RuntimeObserver:     c.runtimeObserver,
-				AudioInTurnBarge:    audioInTurnBarge,
+				RecordPath:           c.askFlags.RecordCapturePath,
+				ReplayPath:           c.askFlags.ReplayCapturePath,
+				Provider:             c.askFlags.Provider,
+				Model:                c.askFlags.Model,
+				ModelProvided:        cmd.Flags().Changed("model"),
+				NoInputTranscription: noInputTranscription,
+				APIKey:               c.askFlags.APIKey,
+				BaseURL:              c.askFlags.BaseURL,
+				ConfigDir:            c.globalFlags.ConfigDir(),
+				Prompt:               strings.Join(args, " "),
+				PromptProvided:       cmd.Flags().Changed("prompt") || len(args) > 0,
+				Voice:                voice,
+				Transport:            selectedTransport,
+				Signaling:            signaling,
+				MediaSource:          mediaSource,
+				RTCRuntimeFactory:    c.rtcRuntimeFactory,
+				SessionInferencer:    c.sessionInferencerOverride,
+				ToolExecutor:         toolExecutor,
+				ToolDefinitions:      toolDefinitions,
+				AudioInterruptions:   audioInterruptions,
+				CapabilityClose:      capabilityClose,
+				CancellationIntent:   cancellationIntent,
+				LoadedConfig:         loadedConfig,
+				BrowserToolsEnabled:  browserConfigEnablesTools(loadedConfig),
+				WaitForClose:         waitForClose,
+				StreamObserver:       c.streamObserver,
+				Clock:                c.clockSource,
+				RuntimeObserver:      c.runtimeObserver,
+				AudioInTurnBarge:     audioInTurnBarge,
 				RTCDeviceBinding: services.RTCDeviceBindingRequest{
 					Registry:      c.deviceRegistry,
 					InputDevice:   audioInDevice,
@@ -670,12 +673,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			return services.RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(sessionContext, cmd.OutOrStdout(), sessionOptions, audioOutPath, maxDuration, seed, c.askFlags.SystemPrompt)
 		},
 	}
-	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		if voiceFlag.err != nil {
-			return voiceFlag.err
-		}
-		return err
-	})
+	setSessionFlagErrorFunc(cmd, voiceFlag)
 	cmd.Flags().StringVar(&c.askFlags.RecordCapturePath, "record", "", "Record bidirectional session traffic to a JSON capture file")
 	cmd.Flags().StringVar(&recordDirPath, "record-dir", "", "Record a complete both-side session directory separately from --record")
 	cmd.Flags().StringVar(&c.askFlags.ReplayCapturePath, "replay", "", "Replay bidirectional session traffic from a JSON capture file without live provider network calls")
@@ -685,6 +683,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	cmd.Flags().DurationVar(&maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().BoolVar(&waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")
+	cmd.Flags().BoolVar(&noInputTranscription, "no-input-transcription", false, "Disable customer-speech transcription for live OpenAI audio-input sessions")
 	cmd.Flags().Var(voiceFlag, "voice", fmt.Sprintf("OpenAI Realtime audio output voice (supported: %s)", strings.Join(services.SupportedOpenAIRealtimeVoices(), ", ")))
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "Session provider API key for live record mode")
 	cmd.Flags().StringVar(&audioIn, "audio-in", "", "Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input")
@@ -703,6 +702,15 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	registerSessionBrowserFlags(cmd, browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags).Generate())
 	return cmd
+}
+
+func setSessionFlagErrorFunc(cmd *cobra.Command, voiceFlag *sessionVoiceFlagValue) {
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		if voiceFlag.err != nil {
+			return voiceFlag.err
+		}
+		return err
+	})
 }
 
 func prepareSessionAudioInterruptions(

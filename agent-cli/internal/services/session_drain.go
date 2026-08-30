@@ -13,24 +13,275 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// sessionReplayMessageWriter is implemented by the stateful terminal renderer
+// used by a complete session run. Keeping the interface private preserves the
+// small writeSessionReplayMessage seam used by cancellation and unit tests.
+type sessionReplayMessageWriter interface {
+	writeSessionReplayMessage(messages.StreamMessage) error
+}
+
+// sessionReplayRenderer keeps streamed transcript chunks on one labeled line
+// until the provider closes that transcript. A role change closes the current
+// line before starting the next one, so interleaved customer and assistant
+// transcripts can never be rendered as one utterance.
+type sessionReplayRenderer struct {
+	out io.Writer
+
+	transcriptRole        messages.Role
+	pendingTranscriptRole messages.Role
+	transcriptOpen        bool
+	transcriptJustClosed  bool
+	transcriptStates      map[messages.Role]sessionReplayTranscriptState
+}
+
+// sessionReplayTranscriptState tracks the lifecycle of the latest transcript
+// utterance for a role. A role's visible line can be closed by an interleaved
+// role before its provider completion arrives, so the renderer must retain
+// that state after the line is no longer active.
+type sessionReplayTranscriptState struct {
+	deltaRendered bool
+	completed     bool
+}
+
+func newSessionReplayRenderer(out io.Writer) *sessionReplayRenderer {
+	return &sessionReplayRenderer{
+		out:              out,
+		transcriptStates: make(map[messages.Role]sessionReplayTranscriptState),
+	}
+}
+
+func (r *sessionReplayRenderer) Write(data []byte) (int, error) {
+	if err := r.finishTranscript(); err != nil {
+		return 0, err
+	}
+	n, err := r.out.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	if err == nil {
+		r.transcriptJustClosed = false
+	}
+	return n, err
+}
+
+func (r *sessionReplayRenderer) writeSessionReplayMessage(msg messages.StreamMessage) error {
+	switch value := msg.Value.(type) {
+	case *messages.TranscriptStartValue:
+		if err := r.finishTranscript(); err != nil {
+			return err
+		}
+		role := sessionReplayTranscriptRole(msg.Role, messages.RoleAssistant)
+		r.pendingTranscriptRole = role
+		// TRANSCRIPT.START is an explicit new utterance boundary. Reset only
+		// this role; another role may still have a completion in flight.
+		r.transcriptStates[role] = sessionReplayTranscriptState{}
+		return nil
+	case *messages.TranscriptDeltaValue:
+		if value == nil || value.Text == "" || (!r.transcriptOpen && strings.TrimSpace(value.Text) == "") {
+			return nil
+		}
+		role := r.transcriptRoleFor(msg.Role)
+		if r.transcriptOpen && r.transcriptRole != role {
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
+		}
+		if !r.transcriptOpen {
+			state := r.transcriptStates[role]
+			if state.completed || !state.deltaRendered {
+				// A delta after a completed transcript starts the next
+				// utterance. If the prior line was only closed by an
+				// interleaved role, retain its pending completion state.
+				r.transcriptStates[role] = sessionReplayTranscriptState{}
+			}
+			if err := r.startTranscript(role); err != nil {
+				return err
+			}
+		}
+		if err := writeSessionReplayString(r.out, value.Text); err != nil {
+			return err
+		}
+		state := r.transcriptStates[role]
+		state.deltaRendered = true
+		state.completed = false
+		r.transcriptStates[role] = state
+		return nil
+	case *messages.TranscriptEndValue:
+		role := r.transcriptRoleFor(msg.Role)
+		state := r.transcriptStates[role]
+		// A role can change before the provider delivers the previous role's
+		// completion. The delta already rendered that previous line, so its
+		// completion must not close or replace the currently active role's line.
+		if r.transcriptOpen && r.transcriptRole != role {
+			if state.deltaRendered || state.completed {
+				if state.deltaRendered {
+					state.completed = true
+					r.transcriptStates[role] = state
+				}
+				return nil
+			}
+			// A provider may complete an inactive role without sending any
+			// deltas. Preserve the active line, then render this completion as
+			// its own line exactly once when it contains usable text.
+			if value == nil || value.FullText == "" || strings.TrimSpace(value.FullText) == "" {
+				return nil
+			}
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
+			if err := r.startTranscript(role); err != nil {
+				return err
+			}
+			if err := writeSessionReplayString(r.out, value.FullText); err != nil {
+				return err
+			}
+			if err := r.finishTranscript(); err != nil {
+				return err
+			}
+			state.completed = true
+			r.transcriptStates[role] = state
+			return nil
+		}
+		if !r.transcriptOpen && (state.deltaRendered || state.completed) {
+			// The role's delta line was already rendered and may have been
+			// closed by another role. Its completion is bookkeeping, not a
+			// second visible transcript line.
+			state.completed = true
+			r.transcriptStates[role] = state
+			return nil
+		}
+		// Some providers can send only the completed event. Render that final
+		// value once; when deltas were already shown, the completed value is
+		// deliberately not appended because it would duplicate the utterance.
+		if !r.transcriptOpen && value != nil && value.FullText != "" && strings.TrimSpace(value.FullText) != "" {
+			if err := r.startTranscript(role); err != nil {
+				return err
+			}
+			if err := writeSessionReplayString(r.out, value.FullText); err != nil {
+				return err
+			}
+		}
+		if err := r.finishTranscript(); err != nil {
+			return err
+		}
+		state.completed = true
+		r.transcriptStates[role] = state
+		return nil
+	default:
+		if err := r.finishTranscript(); err != nil {
+			return err
+		}
+		if value, ok := msg.Value.(*messages.SessionCloseValue); ok {
+			leadingNewline := !r.transcriptJustClosed
+			r.transcriptJustClosed = false
+			return writeSessionReplayClose(r.out, value, leadingNewline)
+		}
+		err := writeSessionReplayMessageUnscoped(r.out, msg)
+		if err == nil {
+			if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value != nil && value.Content != "" {
+				r.transcriptJustClosed = false
+			}
+		}
+		return err
+	}
+}
+
+func (r *sessionReplayRenderer) transcriptRoleFor(role messages.Role) messages.Role {
+	if role != "" {
+		return sessionReplayTranscriptRole(role, messages.RoleAssistant)
+	}
+	if r.transcriptOpen && r.transcriptRole != "" {
+		return r.transcriptRole
+	}
+	if r.pendingTranscriptRole != "" {
+		return r.pendingTranscriptRole
+	}
+	return messages.RoleAssistant
+}
+
+func (r *sessionReplayRenderer) startTranscript(role messages.Role) error {
+	if err := writeSessionReplayString(r.out, sessionReplayTranscriptLabel(role)+": "); err != nil {
+		return err
+	}
+	r.transcriptRole = role
+	r.pendingTranscriptRole = role
+	r.transcriptOpen = true
+	r.transcriptJustClosed = false
+	return nil
+}
+
+func (r *sessionReplayRenderer) finishTranscript() error {
+	if !r.transcriptOpen {
+		return nil
+	}
+	err := writeSessionReplayString(r.out, "\n")
+	if err == nil {
+		r.transcriptRole = ""
+		r.pendingTranscriptRole = ""
+		r.transcriptOpen = false
+		r.transcriptJustClosed = true
+	}
+	return err
+}
+
+func sessionReplayTranscriptRole(role, fallback messages.Role) messages.Role {
+	if role == messages.RoleUser {
+		return messages.RoleUser
+	}
+	if role != "" {
+		return role
+	}
+	return fallback
+}
+
+func sessionReplayTranscriptLabel(role messages.Role) string {
+	if role == messages.RoleUser {
+		return "User"
+	}
+	return "Assistant"
+}
+
+func writeSessionReplayBytes(out io.Writer, data []byte) error {
+	n, err := out.Write(data)
+	if err == nil && n != len(data) {
+		return io.ErrShortWrite
+	}
+	return err
+}
+
+func writeSessionReplayString(out io.Writer, data string) error {
+	return writeSessionReplayBytes(out, []byte(data))
+}
+
 func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error {
+	if writer, ok := out.(sessionReplayMessageWriter); ok {
+		return writer.writeSessionReplayMessage(msg)
+	}
+	return writeSessionReplayMessageUnscoped(out, msg)
+}
+
+// writeSessionReplayMessageUnscoped retains the direct helper's behavior for
+// callers that provide a plain writer. A full session uses the renderer above
+// so a stream of deltas receives one label rather than one label per chunk.
+func writeSessionReplayMessageUnscoped(out io.Writer, msg messages.StreamMessage) error {
 	switch v := msg.Value.(type) {
 	case *messages.TextDeltaValue:
 		_, err := fmt.Fprint(out, v.Content)
 		return err
 	case *messages.TranscriptDeltaValue:
-		_, err := fmt.Fprint(out, v.Text)
+		if v == nil || v.Text == "" || strings.TrimSpace(v.Text) == "" {
+			return nil
+		}
+		_, err := fmt.Fprintf(out, "%s: %s\n", sessionReplayTranscriptLabel(msg.Role), v.Text)
+		return err
+	case *messages.TranscriptEndValue:
+		if v == nil || v.FullText == "" || strings.TrimSpace(v.FullText) == "" {
+			return nil
+		}
+		_, err := fmt.Fprintf(out, "%s: %s\n", sessionReplayTranscriptLabel(msg.Role), v.FullText)
 		return err
 	case *messages.SessionCloseValue:
-		if v.Reason != "" {
-			if _, err := fmt.Fprintf(out, "\n[session closed: %s]\n", v.Reason); err != nil {
-				return err
-			}
-		}
-		if fields := sessionTerminalFields(v.Classification, v.TerminalReason, v.TerminalProvenance, v.OutputState); fields != "" {
-			_, err := fmt.Fprintf(out, "[session terminal: %s]\n", fields)
-			return err
-		}
+		return writeSessionReplayClose(out, v, true)
 	case *messages.ErrorValue:
 		if v.IsNonTerminal() {
 			return nil
@@ -52,6 +303,26 @@ func writeSessionReplayMessage(out io.Writer, msg messages.StreamMessage) error 
 			return wrapCause(fmt.Sprintf("session error [%s]", fields))
 		}
 		return wrapCause("session error")
+	}
+	return nil
+}
+
+func writeSessionReplayClose(out io.Writer, value *messages.SessionCloseValue, leadingNewline bool) error {
+	if value == nil {
+		return nil
+	}
+	if value.Reason != "" {
+		prefix := ""
+		if leadingNewline {
+			prefix = "\n"
+		}
+		if _, err := fmt.Fprintf(out, "%s[session closed: %s]\n", prefix, value.Reason); err != nil {
+			return err
+		}
+	}
+	if fields := sessionTerminalFields(value.Classification, value.TerminalReason, value.TerminalProvenance, value.OutputState); fields != "" {
+		_, err := fmt.Fprintf(out, "[session terminal: %s]\n", fields)
+		return err
 	}
 	return nil
 }

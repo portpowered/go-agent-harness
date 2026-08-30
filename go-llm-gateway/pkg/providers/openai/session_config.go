@@ -4,6 +4,7 @@ package openai
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
@@ -67,6 +68,9 @@ func buildLegacyRealtimeSessionUpdate(config models.SessionConfig, model string,
 	} else if config.TurnDetection != nil {
 		update["turn_detection"] = config.TurnDetection
 	}
+	if transcription, ok := realtimeInputAudioTranscription(config, disableTurnDetection); ok {
+		update["input_audio_transcription"] = transcription
+	}
 	if len(config.Tools) > 0 {
 		update["tools"] = config.Tools
 	}
@@ -105,6 +109,9 @@ func buildRealtimeAudioConfig(config models.SessionConfig, disableTurnDetection 
 	} else if config.TurnDetection != nil {
 		input["turn_detection"] = config.TurnDetection
 	}
+	if transcription, ok := realtimeInputAudioTranscription(config, disableTurnDetection); ok {
+		input["transcription"] = transcription
+	}
 	if len(input) > 0 {
 		audio["input"] = input
 	}
@@ -120,6 +127,22 @@ func buildRealtimeAudioConfig(config models.SessionConfig, disableTurnDetection 
 	}
 
 	return audio
+}
+
+func realtimeInputAudioTranscription(config models.SessionConfig, clientOwnsAudioTurnBoundaries bool) (map[string]any, bool) {
+	policy := config.InputAudioTranscription
+	if policy == nil || !policy.Enabled || !realtimeSessionAcceptsAudioInput(config, clientOwnsAudioTurnBoundaries) {
+		return nil, false
+	}
+	model := strings.TrimSpace(policy.Model)
+	if model == "" {
+		model = models.DefaultInputAudioTranscriptionModel
+	}
+	return map[string]any{"model": model}, true
+}
+
+func realtimeSessionAcceptsAudioInput(config models.SessionConfig, clientOwnsAudioTurnBoundaries bool) bool {
+	return clientOwnsAudioTurnBoundaries || config.InputAudioFormat != "" || config.InputAudioSampleRate != 0
 }
 
 func realtimeAudioFormat(format models.AudioFormat, rate models.SampleRate) map[string]any {

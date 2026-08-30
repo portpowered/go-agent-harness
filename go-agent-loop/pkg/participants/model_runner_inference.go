@@ -279,6 +279,12 @@ func isCancellationError(err error) bool {
 }
 
 func isOutputDelta(msg messages.StreamMessage) bool {
+	// Input-audio transcription is a customer-side stream. It is forwarded to
+	// consumers, but must not make an assistant response look populated or
+	// change the terminal classification of that response.
+	if msg.Role == messages.RoleUser && (msg.Type == messages.StreamTypeTranscriptDelta || msg.Type == messages.StreamTypeTranscriptEnd) {
+		return false
+	}
 	switch msg.Type {
 	case messages.StreamTypeTextDelta,
 		messages.StreamTypeReasoningDelta,
@@ -298,6 +304,12 @@ func isOutputDelta(msg messages.StreamMessage) bool {
 }
 
 func isCustomerOutputDelta(msg messages.StreamMessage) bool {
+	// A user transcript is session input, not stale assistant output. In
+	// particular, preserving it after a barge-in keeps the recognized words in
+	// the recording even while late assistant output is filtered.
+	if msg.Role == messages.RoleUser && (msg.Type == messages.StreamTypeTranscriptDelta || msg.Type == messages.StreamTypeTranscriptEnd) {
+		return false
+	}
 	switch msg.Type {
 	case messages.StreamTypeTextDelta,
 		messages.StreamTypeReasoningDelta,
