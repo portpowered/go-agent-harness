@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cubecade shared browser proof</title>
+  <style>
+    :root {
+      --ink: #f7f1df;
+      --acid: #c9ff39;
+      --pink: #ff4da6;
+      --orange: #ff7b2f;
+      --blue: #47a7ff;
+      --night: #0b0b19;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(circle at 70% 30%, #252143 0, var(--night) 58%);
+      font-family: Arial, sans-serif;
+    }
+
+    main {
+      width: min(960px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 32px 36px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #403b60;
+      padding-bottom: 18px;
+      letter-spacing: 2px;
+      font-size: 12px;
+    }
+
+    .brand { font-size: 22px; font-weight: 800; }
+    .brand span { color: var(--pink); }
+    .ready { color: var(--acid); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 36px;
+      align-items: center;
+      padding: 70px 0 40px;
+    }
+
+    h1 { margin: 0 0 16px; font-size: clamp(42px, 7vw, 74px); line-height: .9; }
+    h1 em { color: var(--pink); font-style: normal; }
+    p { color: #c5bfd5; line-height: 1.5; }
+
+    .stage {
+      display: grid;
+      grid-template-columns: repeat(3, 70px);
+      gap: 8px;
+      justify-content: center;
+      padding: 35px 20px;
+      border: 1px solid #4c4670;
+      background: #15132c;
+      transform: rotate(-4deg);
+      box-shadow: 18px 18px 0 #090812;
+    }
+
+    .stage b { display: block; height: 70px; border: 2px solid #0b0b19; }
+    .u { background: #f7f1df; }
+    .r { background: #ff496c; }
+    .f { background: #39ed82; }
+    .d { background: #ffd83d; }
+    .l { background: #ff8c30; }
+    .back { background: var(--blue); }
+
+    .state-card {
+      grid-column: 1 / -1;
+      padding: 20px;
+      border: 1px solid #403b60;
+      background: rgba(21, 19, 44, .9);
+    }
+
+    .state-card dl {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin: 0;
+    }
+
+    dt { color: #aaa7b9; font-size: 10px; letter-spacing: 2px; }
+    dd { margin: 8px 0 0; color: var(--acid); font-size: 28px; font-weight: 700; }
+    .marker { margin: 22px 0 0; color: var(--acid); font-weight: 700; letter-spacing: 2px; }
+
+    @media (max-width: 650px) {
+      main { padding: 20px; }
+      .hero { grid-template-columns: 1fr; padding-top: 42px; }
+      .stage { grid-row: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand">◈ CUBE<span>CADE</span></div>
+      <div class="ready">WEBMCP READY</div>
+    </header>
+    <section class="hero">
+      <div>
+        <p>SHARED PAGE / INDEPENDENT CLIENTS</p>
+        <h1>Twist the<br><em>impossible.</em></h1>
+        <p>One deterministic Cubecade page shared by two browser capability sessions.</p>
+      </div>
+      <div class="stage" aria-label="six color cube faces">
+        <b class="u"></b><b class="r"></b><b class="f"></b>
+        <b class="d"></b><b class="l"></b><b class="back"></b>
+      </div>
+      <div class="state-card" aria-label="cube state">
+        <dl>
+          <div><dt>MOVE COUNT</dt><dd id="move-count">0</dd></div>
+          <div><dt>QUEUE</dt><dd id="queue-depth">0</dd></div>
+          <div><dt>STATE</dt><dd id="cube-state">SOLVED</dd></div>
+        </dl>
+        <div class="marker">CUBECADE-SHARED-BROWSER</div>
+      </div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const modelContext = document.modelContext || navigator.modelContext;
+      if (!modelContext || typeof modelContext.registerTool !== "function") return;
+
+      const state = {
+        accepted: true,
+        solved: true,
+        queueDepth: 0,
+        moveCount: 0,
+        lastMoves: []
+      };
+      window.__cubecadeSharedBrowserState = state;
+      const moveCount = document.querySelector("#move-count");
+      const queueDepth = document.querySelector("#queue-depth");
+      const cubeState = document.querySelector("#cube-state");
+
+      const render = () => {
+        moveCount.textContent = String(state.moveCount);
+        queueDepth.textContent = String(state.queueDepth);
+        cubeState.textContent = state.solved ? "SOLVED" : "SCRAMBLED";
+      };
+
+      const normalizeMoves = (input) => {
+        if (!input || !Array.isArray(input.moves) || input.moves.length !== 6) {
+          throw new Error("moves must contain exactly six cube moves");
+        }
+        return input.moves.map((move) => String(move));
+      };
+
+      const register = async () => {
+        await Promise.all([
+          modelContext.registerTool({
+            name: "get_cube_state",
+            title: "Get cube state",
+            description: "Read the current deterministic Cubecade cube state.",
+            inputSchema: { type: "object", properties: {}, additionalProperties: false },
+            annotations: { readOnly: true },
+            execute: async () => ({
+              accepted: state.accepted,
+              solved: state.solved,
+              queue_depth: state.queueDepth,
+              move_count: state.moveCount,
+              last_moves: state.lastMoves.slice()
+            })
+          }),
+          modelContext.registerTool({
+            name: "queue_cube_moves",
+            title: "Queue cube moves",
+            description: "Queue six deterministic Cubecade moves and return after the queue drains.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                moves: {
+                  type: "array",
+                  description: "Exactly six cube moves, for example R U F L' D B2.",
+                  items: { type: "string" }
+                }
+              },
+              required: ["moves"],
+              additionalProperties: false
+            },
+            annotations: { readOnly: false },
+            execute: async (input) => {
+              const moves = normalizeMoves(input);
+              state.queueDepth = moves.length;
+              render();
+              await new Promise((resolve) => window.setTimeout(resolve, 25));
+              state.queueDepth = 0;
+              state.moveCount += moves.length;
+              state.lastMoves = moves.slice();
+              state.solved = false;
+              render();
+              return {
+                accepted: state.accepted,
+                solved: state.solved,
+                queue_depth: state.queueDepth,
+                move_count: state.moveCount,
+                last_moves: state.lastMoves.slice()
+              };
+            }
+          })
+        ]);
+        render();
+      };
+
+      register().catch(() => {});
+    })();
+  </script>
+</body>
+</html>
