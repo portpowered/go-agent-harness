@@ -174,6 +174,34 @@ func (e *composedToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 	return response, err
 }
 
+func (e *composedToolExecutor) screenRecordingPermissionRechecker() (ScreenRecordingPermissionRechecker, bool) {
+	if e == nil {
+		return nil, false
+	}
+	route, ok := e.routes[ScreenToolID]
+	if !ok || isNilToolExecutor(route.executor) {
+		return nil, false
+	}
+	rechecker, ok := route.executor.(ScreenRecordingPermissionRechecker)
+	return rechecker, ok
+}
+
+func (e *composedToolExecutor) ScreenRecordingPermissionRecheckSupported() bool {
+	rechecker, ok := e.screenRecordingPermissionRechecker()
+	return ok && rechecker.ScreenRecordingPermissionRecheckSupported()
+}
+
+func (e *composedToolExecutor) RecheckScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	rechecker, ok := e.screenRecordingPermissionRechecker()
+	if !ok {
+		return DisplayPermission{
+			State:  DisplayPermissionUnavailable,
+			Reason: "screen recording permission re-check is unavailable",
+		}, nil
+	}
+	return rechecker.RecheckScreenRecordingPermission(ctx)
+}
+
 func textualBrokerResponse(response messages.ToolCallResponse) messages.ToolCallResponse {
 	if len(response.ContentParts) == 0 {
 		return response

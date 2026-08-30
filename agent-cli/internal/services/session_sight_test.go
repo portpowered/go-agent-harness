@@ -37,14 +37,16 @@ func TestSessionToolExecutorScreenFailureUsesTypedEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode screen failure: %v", err)
 	}
-	if result.Status != sight.StatusError || result.Source != sight.SourceScreen || result.ErrorCode != string(cliTools.ScreenCaptureDenied) || strings.TrimSpace(result.Error) == "" {
+	if result.Status != sight.StatusError || result.Source != sight.SourceScreen || result.ErrorCode != cliTools.ScreenRecordingPermissionDeniedErrorCode || strings.TrimSpace(result.Error) == "" {
 		t.Fatalf("screen failure result = %+v, want classified non-empty error", result)
 	}
 	for _, want := range []string{
 		"System Settings → Privacy & Security → Screen & System Audio Recording",
-		"launching terminal/CLI host",
+		"hosting application",
 		"Tell the customer",
-		"restart",
+		"completely quit and restart",
+		"macOS Sequoia",
+		"monthly re-confirmation",
 	} {
 		if !strings.Contains(result.Error, want) {
 			t.Errorf("screen failure error %q does not contain %q", result.Error, want)

@@ -54,9 +54,8 @@ var (
 )
 
 // DisplayCapability is the side-effect-free admission snapshot for the
-// display-dependent tool. The capture permission check is allowed to be
-// deferred until the actual capture on macOS because TCC's authoritative
-// signal is the screencapture operation itself.
+// display-dependent tool. On macOS, Probe runs the non-prompting Screen
+// Recording preflight before it asks the host for display metadata.
 type DisplayCapability struct {
 	State        ScreenCaptureState
 	Available    bool
@@ -189,9 +188,9 @@ func (f DisplayCapabilityProbeFunc) Probe(ctx context.Context) (DisplayCapabilit
 	return f(ctx)
 }
 
-// DisplayPermissionState describes an optional preflight permission result.
-// On macOS the default production path leaves this seam nil and classifies
-// TCC from the authoritative screencapture result instead of guessing.
+// DisplayPermissionState describes a preflight permission result. The
+// production macOS implementation obtains it from
+// CGPreflightScreenCaptureAccess; other platforms leave this boundary nil.
 type DisplayPermissionState string
 
 const (
@@ -219,6 +218,15 @@ func (f DisplayPermissionCheckerFunc) Check(ctx context.Context) (DisplayPermiss
 		return DisplayPermission{State: DisplayPermissionGranted}, nil
 	}
 	return f(ctx)
+}
+
+// ScreenRecordingPermissionRechecker is the optional session boundary used to
+// inspect a macOS permission state after an interactive screen call times out.
+// The recheck is deliberately separate from DisplaySurface so non-screen tools
+// and non-macOS surfaces do not acquire timeout-specific behavior by accident.
+type ScreenRecordingPermissionRechecker interface {
+	ScreenRecordingPermissionRecheckSupported() bool
+	RecheckScreenRecordingPermission(context.Context) (DisplayPermission, error)
 }
 
 // DisplayProcess is the narrow subprocess boundary used by command-based
@@ -347,9 +355,13 @@ func NewHostDisplaySurfaceWithOptions(options HostDisplaySurfaceOptions) Display
 	if process == nil {
 		process = defaultDisplayProcess()
 	}
+	permission := options.PermissionChecker
+	if permission == nil {
+		permission = defaultDisplayPermissionChecker()
+	}
 	return &hostDisplaySurface{
 		process:    process,
-		permission: options.PermissionChecker,
+		permission: permission,
 		capturer:   options.Capturer,
 	}
 }
@@ -364,7 +376,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		}
 	}
 	if s.permission != nil {
-		permission, err := s.permission.Check(ctx)
+		permission, err := s.checkScreenRecordingPermission(ctx)
 		if err != nil {
 			return capabilityForScreenError(err, "screen recording permission check failed"), newScreenCaptureError("screen recording permission check", "", err)
 		}
@@ -404,6 +416,29 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display geometry", Reason: capability.Reason}
 	}
 	return UsableDisplayCapability(count), nil
+}
+
+func (s *hostDisplaySurface) ScreenRecordingPermissionRecheckSupported() bool {
+	return screenRecordingPermissionRecheckSupported()
+}
+
+// RecheckScreenRecordingPermission uses the same permission checker as Probe.
+// It does not inspect display metadata or start a capture process.
+func (s *hostDisplaySurface) RecheckScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	if !s.ScreenRecordingPermissionRecheckSupported() {
+		return DisplayPermission{
+			State:  DisplayPermissionUnavailable,
+			Reason: "macOS Screen Recording permission re-check is unavailable on this platform",
+		}, nil
+	}
+	return s.checkScreenRecordingPermission(ctx)
+}
+
+func (s *hostDisplaySurface) checkScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	if s == nil || s.permission == nil {
+		return DisplayPermission{State: DisplayPermissionGranted}, nil
+	}
+	return s.permission.Check(ctx)
 }
 
 func (s *hostDisplaySurface) DisplayCount(ctx context.Context) (int, error) {
@@ -560,7 +595,7 @@ func boundedScreenContext(ctx context.Context, limit time.Duration) (context.Con
 func screenRecordingPermissionGuidance() string {
 	host := screenRecordingHostName()
 	return fmt.Sprintf(
-		"Screen-recording permission is not granted, so I cannot see the screen. Tell the customer to enable the launching terminal/CLI host %q in System Settings → Privacy & Security → Screen & System Audio Recording, then completely quit and restart that host before asking again. The CLI cannot grant this permission itself.",
+		"Screen-recording permission is not granted, so I cannot see the screen. Tell the customer to open System Settings → Privacy & Security → Screen & System Audio Recording, enable the hosting application %q, then completely quit and restart that application before asking again. macOS Sequoia may require monthly re-confirmation. The CLI cannot grant this permission itself.",
 		host,
 	)
 }

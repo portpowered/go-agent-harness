@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
+	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -16,6 +18,226 @@ type sessionToolExecutorFunc func(context.Context, messages.ToolCall) (messages.
 
 func (f sessionToolExecutorFunc) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	return f(ctx, call)
+}
+
+type timeoutScreenPermissionExecutor struct {
+	mu sync.Mutex
+
+	permission  cliTools.DisplayPermission
+	recheckErr  error
+	recheckWait <-chan struct{}
+	rechecks    int
+	started     chan struct{}
+	exited      chan struct{}
+	startOnce   sync.Once
+	exitOnce    sync.Once
+}
+
+func newTimeoutScreenPermissionExecutor(permission cliTools.DisplayPermission) *timeoutScreenPermissionExecutor {
+	return &timeoutScreenPermissionExecutor{
+		permission: permission,
+		started:    make(chan struct{}),
+		exited:     make(chan struct{}),
+	}
+}
+
+func (e *timeoutScreenPermissionExecutor) Execute(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
+	e.startOnce.Do(func() { close(e.started) })
+	defer e.exitOnce.Do(func() { close(e.exited) })
+	<-ctx.Done()
+	return messages.ToolCallResponse{}, ctx.Err()
+}
+
+func (e *timeoutScreenPermissionExecutor) ScreenRecordingPermissionRecheckSupported() bool {
+	return true
+}
+
+func (e *timeoutScreenPermissionExecutor) RecheckScreenRecordingPermission(ctx context.Context) (cliTools.DisplayPermission, error) {
+	e.mu.Lock()
+	e.rechecks++
+	permission := e.permission
+	recheckErr := e.recheckErr
+	wait := e.recheckWait
+	e.mu.Unlock()
+	if wait != nil {
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return cliTools.DisplayPermission{}, ctx.Err()
+		}
+	}
+	return permission, recheckErr
+}
+
+func (e *timeoutScreenPermissionExecutor) setPermission(permission cliTools.DisplayPermission) {
+	e.mu.Lock()
+	e.permission = permission
+	e.mu.Unlock()
+}
+
+func (e *timeoutScreenPermissionExecutor) recheckCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.rechecks
+}
+
+func TestSessionToolExecutor_ScreenTimeoutDeniedRecheckUsesOneCorrelatedPermissionResult(t *testing.T) {
+	executor := newTimeoutScreenPermissionExecutor(cliTools.DisplayPermission{State: cliTools.DisplayPermissionGranted})
+	call := messages.ToolCall{ID: "screen-timeout-denied", Name: cliTools.ScreenToolID, Arguments: `{"action":"screenshot"}`}
+	go func() {
+		<-executor.started
+		executor.setPermission(cliTools.DisplayPermission{State: cliTools.DisplayPermissionDenied, Reason: "permission became ineffective during capture"})
+	}()
+
+	response, err := newSessionToolExecutorWithTimeout(executor, 15*time.Millisecond).Execute(context.Background(), call)
+	if err != nil {
+		t.Fatalf("Execute returned Go error: %v", err)
+	}
+	if response.ToolCallID != call.ID || response.Name != call.Name || len(response.ContentParts) != 0 {
+		t.Fatalf("screen timeout denial response = %#v, want correlated text-only result", response)
+	}
+	result, err := sight.Decode([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode screen timeout denial: %v", err)
+	}
+	if result.Version != sight.ResultVersion || result.Status != sight.StatusError || result.Source != sight.SourceScreen || result.ErrorCode != cliTools.ScreenRecordingPermissionDeniedErrorCode {
+		t.Fatalf("screen timeout denial result = %+v, want version 2 permission denial", result)
+	}
+	for _, want := range []string{
+		"System Settings → Privacy & Security → Screen & System Audio Recording",
+		"hosting application",
+		"completely quit and restart",
+		"macOS Sequoia",
+		"monthly re-confirmation",
+	} {
+		if !strings.Contains(result.Error, want) {
+			t.Errorf("screen timeout denial error %q does not contain %q", result.Error, want)
+		}
+	}
+	if executor.recheckCount() != 1 {
+		t.Fatalf("screen permission rechecks = %d, want exactly one", executor.recheckCount())
+	}
+	select {
+	case <-executor.exited:
+	case <-time.After(time.Second):
+		t.Fatal("timed-out screen worker did not exit")
+	}
+}
+
+func TestSessionToolExecutor_ScreenTimeoutRecheckPreservesTimeoutForNonDenial(t *testing.T) {
+	cases := []struct {
+		name       string
+		permission cliTools.DisplayPermission
+		recheckErr error
+		wait       bool
+		callName   string
+	}{
+		{name: "granted", permission: cliTools.DisplayPermission{State: cliTools.DisplayPermissionGranted}},
+		{name: "unavailable", permission: cliTools.DisplayPermission{State: cliTools.DisplayPermissionUnavailable}},
+		{name: "failed", recheckErr: errors.New("permission service failed")},
+		{name: "unrelated tool", permission: cliTools.DisplayPermission{State: cliTools.DisplayPermissionDenied}, callName: "show_page"},
+		{name: "bounded inconclusive", wait: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor := newTimeoutScreenPermissionExecutor(tc.permission)
+			executor.recheckErr = tc.recheckErr
+			var unblock chan struct{}
+			if tc.wait {
+				unblock = make(chan struct{})
+				executor.recheckWait = unblock
+				defer close(unblock)
+			}
+			name := tc.callName
+			if name == "" {
+				name = cliTools.ScreenToolID
+			}
+			call := messages.ToolCall{ID: "screen-timeout-" + tc.name, Name: name, Arguments: `{}`}
+
+			startedAt := time.Now()
+			response, err := newSessionToolExecutorWithTimeout(executor, 15*time.Millisecond).Execute(context.Background(), call)
+			elapsed := time.Since(startedAt)
+			if err != nil {
+				t.Fatalf("Execute returned Go error: %v", err)
+			}
+			if response.ToolCallID != call.ID || response.Name != call.Name || len(response.ContentParts) != 0 {
+				t.Fatalf("timeout response = %#v, want correlated text-only result", response)
+			}
+			if elapsed > 500*time.Millisecond {
+				t.Fatalf("timeout/recheck took %s, want bounded completion", elapsed)
+			}
+			if tc.callName != "" {
+				if !strings.Contains(response.Content, "classification="+SessionToolTimeoutClassification) || !strings.Contains(response.Content, "tool execution timed out") {
+					t.Fatalf("unrelated timeout result = %q, want unchanged generic timeout failure", response.Content)
+				}
+			} else {
+				result, decodeErr := sight.Decode([]byte(response.Content))
+				if decodeErr != nil {
+					t.Fatalf("decode timeout result: %v", decodeErr)
+				}
+				if result.ErrorCode == cliTools.ScreenRecordingPermissionDeniedErrorCode || !strings.Contains(result.Error, "tool execution timed out") {
+					t.Fatalf("timeout result = %+v, want unchanged timeout failure", result)
+				}
+			}
+			wantRechecks := 1
+			if tc.callName != "" {
+				wantRechecks = 0
+			}
+			if got := executor.recheckCount(); got != wantRechecks {
+				t.Fatalf("permission rechecks = %d, want %d", got, wantRechecks)
+			}
+			select {
+			case <-executor.exited:
+			case <-time.After(time.Second):
+				t.Fatal("timed-out worker did not exit")
+			}
+		})
+	}
+}
+
+func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t *testing.T) {
+	const callID = "screen-timeout-session-call"
+	settings := config.DefaultInteractiveToolConfig()
+	settings.FastReadTimeout = 15 * time.Millisecond
+	definitions := []messages.ToolDefinition{{Name: cliTools.ScreenToolID}}
+	policy, err := NewInteractiveToolPolicy(settings, definitions)
+	if err != nil {
+		t.Fatalf("NewInteractiveToolPolicy: %v", err)
+	}
+
+	executor := newTimeoutScreenPermissionExecutor(cliTools.DisplayPermission{State: cliTools.DisplayPermissionGranted})
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(
+		out,
+		"post-screen-timeout continuation",
+		cliTools.ScreenRecordingPermissionDeniedErrorCode,
+		scriptedTurn{events: toolCallEvents(callID, cliTools.ScreenToolID, `{"action":"screenshot"}`)},
+	)
+	go func() {
+		<-executor.started
+		executor.setPermission(cliTools.DisplayPermission{State: cliTools.DisplayPermissionDenied, Reason: "permission became ineffective during capture"})
+	}()
+
+	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:           2 * time.Second,
+		WaitForClose:          true,
+		ToolExecutor:          executor,
+		ToolDefinitions:       definitions,
+		InteractiveToolPolicy: &policy,
+	})
+	if err != nil {
+		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
+	}
+	if executor.recheckCount() != 1 {
+		t.Fatalf("screen permission rechecks = %d, want exactly one", executor.recheckCount())
+	}
+	if !strings.Contains(out.String(), cliTools.ScreenRecordingPermissionDeniedErrorCode) {
+		t.Fatalf("session output = %q, want permission denial result", out.String())
+	}
+	if !strings.Contains(out.String(), "post-screen-timeout continuation") {
+		t.Fatalf("session did not reach one grounded continuation:\n%s", out.String())
+	}
 }
 
 func TestSessionToolExecutor_PreservesCallAndCorrelatesSuccess(t *testing.T) {

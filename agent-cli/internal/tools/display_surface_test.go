@@ -6,12 +6,15 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
+	"io"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -26,6 +29,21 @@ type scriptedDisplaySurface struct {
 	boundsN    int
 	captures   int
 	deadline   bool
+}
+
+type screenPermissionRecheckSurface struct {
+	*scriptedDisplaySurface
+	permission DisplayPermission
+	rechecks   int
+}
+
+func (s *screenPermissionRecheckSurface) ScreenRecordingPermissionRecheckSupported() bool {
+	return true
+}
+
+func (s *screenPermissionRecheckSurface) RecheckScreenRecordingPermission(context.Context) (DisplayPermission, error) {
+	s.rechecks++
+	return s.permission, nil
 }
 
 func (s *scriptedDisplaySurface) Probe(ctx context.Context) (DisplayCapability, error) {
@@ -101,7 +119,9 @@ func TestScreenToolPermissionDenialIsTypedAndActionable(t *testing.T) {
 		"Screen-recording permission is not granted",
 		"System Settings → Privacy & Security → Screen & System Audio Recording",
 		"iTerm2",
-		"restart",
+		"completely quit and restart",
+		"macOS Sequoia",
+		"monthly re-confirmation",
 		"asking again",
 		"Tell the customer",
 		"cannot grant",
@@ -255,6 +275,120 @@ func TestDisplayPermissionCheckerStopsProbeBeforeDisplaySideEffects(t *testing.T
 	}
 }
 
+func TestScreenPermissionRecheckPropagatesThroughRegistryAndComposition(t *testing.T) {
+	surface := &screenPermissionRecheckSurface{
+		scriptedDisplaySurface: &scriptedDisplaySurface{capability: UsableDisplayCapability(1)},
+		permission:             DisplayPermission{State: DisplayPermissionDenied, Reason: "recheck denied"},
+	}
+	tool := NewScreenToolWithDisplaySurface(surface)
+	registry := NewEmptyToolRegistry()
+	if err := registry.Register(tool); err != nil {
+		t.Fatalf("register screen tool: %v", err)
+	}
+	executor := NewRegistryExecutor(registry)
+	rechecker, ok := any(executor).(ScreenRecordingPermissionRechecker)
+	if !ok || !rechecker.ScreenRecordingPermissionRecheckSupported() {
+		t.Fatalf("registry executor does not expose screen permission recheck: %T", executor)
+	}
+	permission, err := rechecker.RecheckScreenRecordingPermission(context.Background())
+	if err != nil || permission.State != DisplayPermissionDenied {
+		t.Fatalf("registry recheck = %#v, %v, want denied permission", permission, err)
+	}
+
+	composed, err := ComposeToolSurface(
+		executor,
+		[]messages.ToolDefinition{{Name: ScreenToolID}},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("compose screen surface: %v", err)
+	}
+	composedRechecker, ok := composed.Executor.(ScreenRecordingPermissionRechecker)
+	if !ok || !composedRechecker.ScreenRecordingPermissionRecheckSupported() {
+		t.Fatalf("composed executor does not expose screen permission recheck: %T", composed.Executor)
+	}
+	permission, err = composedRechecker.RecheckScreenRecordingPermission(context.Background())
+	if err != nil || permission.State != DisplayPermissionDenied {
+		t.Fatalf("composed recheck = %#v, %v, want denied permission", permission, err)
+	}
+	if surface.rechecks != 2 {
+		t.Fatalf("permission checker calls = %d, want two calls through the same surface contract", surface.rechecks)
+	}
+}
+
+func TestDeniedScreenPreflightStopsScreenshotAndRecordingSideEffects(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	for _, action := range []string{"screenshot", "record"} {
+		t.Run(action, func(t *testing.T) {
+			permissionCalls := 0
+			processCalls := 0
+			captureCalls := 0
+			encodeCalls := 0
+			surface := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+				Process: DisplayProcessAdapter{
+					RunFunc: func(context.Context, string, ...string) ([]byte, error) {
+						processCalls++
+						return nil, nil
+					},
+					LookPathFunc: func(string) (string, error) {
+						processCalls++
+						return "capture", nil
+					},
+				},
+				PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+					permissionCalls++
+					return DisplayPermission{State: DisplayPermissionDenied, Reason: "preflight denied"}, nil
+				}),
+				Capturer: DisplayCapturerFunc(func(context.Context, int, image.Rectangle) (*image.RGBA, error) {
+					captureCalls++
+					return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
+				}),
+			})
+			tool := NewScreenToolWithOptions(ScreenToolOptions{
+				DisplaySurface: surface,
+				RecordingEncoder: ScreenRecordingEncoderFunc(func(context.Context, io.Writer, *gif.GIF) error {
+					encodeCalls++
+					return nil
+				}),
+			})
+
+			args := map[string]any{"action": action}
+			if action == "record" {
+				args["duration"] = 1.0
+				args["fps"] = 1.0
+			}
+			messages, err := tool.Execute(context.Background(), args)
+			var captureErr *ScreenCaptureError
+			if err == nil || !errors.As(err, &captureErr) || captureErr.State != ScreenCaptureDenied || messages != nil {
+				t.Fatalf("%s denial = %#v, err = %v", action, messages, err)
+			}
+			if permissionCalls != 1 || processCalls != 0 || captureCalls != 0 || encodeCalls != 0 {
+				t.Fatalf("%s side effects = permission:%d process:%d capture:%d encode:%d", action, permissionCalls, processCalls, captureCalls, encodeCalls)
+			}
+
+			result, decodeErr := sight.Decode([]byte(ScreenToolErrorResult(err)))
+			if decodeErr != nil {
+				t.Fatalf("decode %s denial envelope: %v", action, decodeErr)
+			}
+			if result.Version != sight.ResultVersion || result.Status != sight.StatusError || result.Source != sight.SourceScreen || result.ErrorCode != ScreenRecordingPermissionDeniedErrorCode || result.MIMEType != "" || result.TypedProjection != "" {
+				t.Fatalf("%s denial envelope = %+v, want version 2 text-only permission denial", action, result)
+			}
+			for _, want := range []string{
+				"System Settings → Privacy & Security → Screen & System Audio Recording",
+				"hosting application",
+				"completely quit and restart",
+				"macOS Sequoia",
+				"monthly re-confirmation",
+			} {
+				if !strings.Contains(result.Error, want) {
+					t.Errorf("%s denial error %q does not contain %q", action, result.Error, want)
+				}
+			}
+		})
+	}
+}
+
 func TestDisplaySurfaceProbeUsesContextAndDoesNotCapture(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("display admission process seam is covered only on command-based platforms")
@@ -285,7 +419,12 @@ func TestDisplaySurfaceProbeUsesContextAndDoesNotCapture(t *testing.T) {
 			return name, nil
 		},
 	}
-	capability, err := NewHostDisplaySurface(process).Probe(context.Background())
+	capability, err := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+		Process: process,
+		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+			return DisplayPermission{State: DisplayPermissionGranted}, nil
+		}),
+	}).Probe(context.Background())
 	if err != nil || !capability.Usable() {
 		t.Fatalf("display probe = %#v, err = %v", capability, err)
 	}
