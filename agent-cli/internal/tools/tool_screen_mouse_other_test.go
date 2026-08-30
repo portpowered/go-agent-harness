@@ -21,7 +21,7 @@ func TestS4UnsupportedPlatformIdentities(t *testing.T) {
 			run: func() ([]messages.Message, error) {
 				return NewScreenTool().Execute(context.Background(), map[string]any{"action": "screenshot"})
 			},
-			want: "capture screen: screen capture is not yet supported on this platform",
+			want: "display unavailable for show",
 		},
 		{
 			name: "mouse move",

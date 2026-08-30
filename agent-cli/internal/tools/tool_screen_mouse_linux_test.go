@@ -182,16 +182,16 @@ func TestS12LinuxHelpersAndCapabilityErrors(t *testing.T) {
 		t.Fatalf("screenDisplayBounds = %v", got)
 	}
 	t.Setenv(linuxXrandrModeEnv, "fail")
-	if got := screenDisplayCount(); got != 1 {
-		t.Fatalf("xrandr fallback count = %d, want 1", got)
+	if got := screenDisplayCount(); got != 0 {
+		t.Fatalf("xrandr failed count = %d, want unavailable zero", got)
 	}
 	t.Setenv(linuxXrandrModeEnv, "ok")
 	t.Setenv(linuxXdotoolModeEnv, "fail")
-	if got := screenDisplayBounds(0); got.Dx() != 1920 || got.Dy() != 1080 {
-		t.Fatalf("xdotool fallback bounds = %v", got)
+	if got := screenDisplayBounds(0); !got.Empty() {
+		t.Fatalf("xdotool failed bounds = %v, want empty unavailable bounds", got)
 	}
 	t.Setenv(linuxXdotoolModeEnv, "ok")
-	img, err := screenCapture(image.Rect(0, 0, 2, 2))
+	img, err := NewHostDisplaySurface().Capture(context.Background(), image.Rect(0, 0, 2, 2))
 	if err != nil || img.Bounds().Dx() != 2 {
 		t.Fatalf("screenCapture = %v, err = %v", img.Bounds(), err)
 	}
@@ -210,7 +210,7 @@ func TestS12LinuxHelpersAndCapabilityErrors(t *testing.T) {
 	}
 
 	t.Setenv(linuxXdotoolModeEnv, "fail")
-	if _, err := screenCapture(image.Rect(0, 0, 2, 2)); err == nil || !strings.Contains(err.Error(), "scrot -a") {
+	if _, err := NewHostDisplaySurface().Capture(context.Background(), image.Rect(0, 0, 2, 2)); err == nil || !strings.Contains(err.Error(), "scrot -a") {
 		t.Fatalf("failed scrot error = %v", err)
 	}
 	t.Setenv(linuxXdotoolModeEnv, "ok")
@@ -223,7 +223,7 @@ func TestS12LinuxHelpersAndCapabilityErrors(t *testing.T) {
 
 	missingDir := t.TempDir()
 	t.Setenv("PATH", missingDir)
-	if _, err := screenCapture(image.Rect(0, 0, 2, 2)); err == nil || !strings.Contains(err.Error(), "scrot not found") {
+	if _, err := NewHostDisplaySurface().Capture(context.Background(), image.Rect(0, 0, 2, 2)); err == nil || !strings.Contains(err.Error(), "scrot not found") {
 		t.Fatalf("missing scrot error = %v", err)
 	}
 	if err := runXdotool("move"); err == nil || !strings.Contains(err.Error(), "xdotool not found") {

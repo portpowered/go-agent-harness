@@ -3,16 +3,42 @@
 package tools
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"image"
 )
 
-func screenDisplayCount() int { return 1 }
-
-func screenDisplayBounds(_ int) image.Rectangle {
-	return image.Rect(0, 0, 1920, 1080)
+func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
+	return 0, errors.New("display discovery is not supported on this platform")
 }
 
-func screenCapture(_ image.Rectangle) (*image.RGBA, error) {
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, _ DisplayProcess) (image.Rectangle, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return image.Rectangle{}, err
+		}
+	}
+	return image.Rectangle{}, errors.New("display geometry is not supported on this platform")
+}
+
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ DisplayProcess) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	return errors.New("screen capture is not yet supported on this platform")
+}
+
+func screenCaptureWithContextAndProcess(ctx context.Context, _ image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, nil); err != nil {
+		return nil, err
+	}
 	return nil, fmt.Errorf("screen capture is not yet supported on this platform")
 }

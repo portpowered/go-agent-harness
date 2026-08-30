@@ -3,61 +3,87 @@
 package tools
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
 	"os"
-	"os/exec"
+	"regexp"
 	"strings"
 )
 
-// screenDisplayCount returns the number of displays by counting "Resolution:"
-// entries in system_profiler output.  Falls back to 1 on error.
-func screenDisplayCount() int {
-	out, err := exec.Command("system_profiler", "SPDisplaysDataType").Output()
+var darwinDisplayResolutionPattern = regexp.MustCompile(`(?i)([0-9]+)\s*x\s*([0-9]+)`)
+
+func screenDisplayCountWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, error) {
+	out, err := process.Run(ctx, "system_profiler", "SPDisplaysDataType")
 	if err != nil {
-		return 1
+		return 0, fmt.Errorf("system_profiler SPDisplaysDataType: %w", err)
 	}
 	n := strings.Count(string(out), "Resolution:")
-	if n > 0 {
-		return n
+	if n <= 0 {
+		return 0, errors.New("system_profiler reported no displays")
 	}
-	return 1
+	return n, nil
 }
 
-// screenDisplayBounds returns the logical (UI) pixel dimensions of the
-// requested display by capturing a full-screen PNG and reading its size.
-// The logical resolution matches the coordinate space used by screencapture
-// and the mouse, including on HiDPI/Retina displays.
-// The idx parameter is 0-based; screencapture -D uses 1-based numbering.
-func screenDisplayBounds(idx int) image.Rectangle {
-	f, err := os.CreateTemp("", "agent-screen-bounds-*.png")
+// screenDisplayBounds returns the logical (UI) pixel dimensions reported by
+// system_profiler. It deliberately does not capture screen content merely to
+// decide whether the display tool may be advertised.
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, process DisplayProcess) (image.Rectangle, error) {
+	out, err := process.Run(ctx, "system_profiler", "SPDisplaysDataType")
 	if err != nil {
-		return image.Rect(0, 0, 1920, 1080)
+		return image.Rectangle{}, fmt.Errorf("system_profiler SPDisplaysDataType: %w", err)
 	}
-	path := f.Name()
-	_ = f.Close()
-	defer func() { _ = os.Remove(path) }()
+	resolutions := darwinDisplayResolutions(string(out))
+	if idx < 0 || idx >= len(resolutions) {
+		return image.Rectangle{}, fmt.Errorf("display %d not available (only %d display(s) found)", idx, len(resolutions))
+	}
+	return resolutions[idx], nil
+}
 
-	args := []string{"-x", path}
-	if idx > 0 {
-		args = []string{"-x", "-D", fmt.Sprintf("%d", idx+1), path}
+func darwinDisplayResolutions(output string) []image.Rectangle {
+	lines := strings.Split(output, "\n")
+	resolutions := make([]image.Rectangle, 0)
+	for _, line := range lines {
+		if !strings.Contains(strings.ToLower(line), "resolution:") {
+			continue
+		}
+		match := darwinDisplayResolutionPattern.FindStringSubmatch(line)
+		if len(match) != 3 {
+			continue
+		}
+		var width, height int
+		if _, err := fmt.Sscanf(match[1], "%d", &width); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(match[2], "%d", &height); err != nil {
+			continue
+		}
+		if width > 0 && height > 0 {
+			resolutions = append(resolutions, image.Rect(0, 0, width, height))
+		}
 	}
-	if exec.Command("screencapture", args...).Run() != nil {
-		return image.Rect(0, 0, 1920, 1080)
-	}
+	return resolutions
+}
 
-	img, err := loadPNGasRGBA(path)
-	if err != nil {
-		return image.Rect(0, 0, 1920, 1080)
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, process DisplayProcess) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return img.Bounds()
+	if _, err := process.LookPath("screencapture"); err != nil {
+		return fmt.Errorf("screencapture not found: %w", err)
+	}
+	return nil
 }
 
 // screenCapture uses the built-in screencapture command to capture the given
-// region.  No external tools need to be installed.
-func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
+// region. No external tools need to be installed.
+func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, process); err != nil {
+		return nil, err
+	}
 	f, err := os.CreateTemp("", "agent-screen-*.png")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
@@ -67,8 +93,11 @@ func screenCapture(bounds image.Rectangle) (*image.RGBA, error) {
 	defer func() { _ = os.Remove(path) }()
 
 	region := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
-	out, err := exec.Command("screencapture", "-x", "-R", region, path).CombinedOutput()
+	out, err := process.Run(ctx, "screencapture", "-x", "-R", region, path)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		return nil, fmt.Errorf("screencapture -R %s: %w (output: %s)", region, err, string(out))
 	}
 
