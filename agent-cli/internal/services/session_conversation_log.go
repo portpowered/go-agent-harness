@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -45,6 +46,17 @@ type sessionConversationTurnInput struct {
 	AudioBytes    uint64   `json:"audio_bytes"`
 	Committed     bool     `json:"committed"`
 	AudioSegments []string `json:"audio_segments,omitempty"`
+}
+
+// sessionConversationTurnTiming carries real wall-clock measurements for one
+// turn. The recording tick clock is deterministic by design (bundle artifacts
+// must stay byte-comparable across equivalent runs and are hash-covered by
+// the manifest), so true latency lives in a separate run-specific diagnostic
+// file, never inside hashed bundle artifacts.
+type sessionConversationTurnTiming struct {
+	TurnIndex            int    `json:"turn_index"`
+	CommittedAt          string `json:"committed_at"`
+	FirstResponseAudioMS int64  `json:"first_response_audio_ms,omitempty"`
 }
 
 // sessionConversationTurnResponse describes the assistant reply for one turn.
@@ -149,14 +161,26 @@ type sessionConversationTurn struct {
 	inputTranscriptCompleted bool
 	inputAudioBytes          uint64
 	inputCommitted           bool
-	inputSegments            []string
-	responseDeltas           strings.Builder
-	responseFullText         string
-	outputAudioBytes         uint64
-	outputSegments           []string
-	complete                 bool
-	toolEvents               []sessionConversationToolEvent
-	toolCallMessage          bool
+	// inputOrdinal is this turn's zero-based position in server commit order,
+	// assigned at the outbound end-of-turn boundary (inputOrdinalSet guards
+	// the zero value). Item-correlated input transcription is attributed
+	// through this ordinal, never arrival order.
+	inputOrdinal    int
+	inputOrdinalSet bool
+	// committedAt / firstResponseAudioAt are real wall-clock observations
+	// (the recording clock is deliberately deterministic and carries no
+	// duration information), captured so per-turn response latency is
+	// computable from the bundle alone.
+	committedAt          time.Time
+	firstResponseAudioAt time.Time
+	inputSegments        []string
+	responseDeltas       strings.Builder
+	responseFullText     string
+	outputAudioBytes     uint64
+	outputSegments       []string
+	complete             bool
+	toolEvents           []sessionConversationToolEvent
+	toolCallMessage      bool
 }
 
 // observed reports whether any conversational content was recorded for the
@@ -173,6 +197,65 @@ type sessionConversationCollector struct {
 	closed           []sessionConversationTurn
 	current          sessionConversationTurn
 	nextToolSequence uint64
+
+	// Item-correlated input transcription. Input ASR streams asynchronously
+	// and interleaves across turns (a turn's transcript routinely finishes
+	// after the next turn has begun), so text is accumulated per committed
+	// input ordinal on the collector — NOT on the turn absorbing whatever is
+	// current at arrival time — and joined to turns at snapshot time.
+	itemOrdinals    map[string]int
+	nextItemOrdinal int
+	inputTexts      map[int]*sessionInputTranscriptAccum
+	committedInputs int
+
+	// now is the wall clock for per-turn latency observations; tests inject.
+	now func() time.Time
+}
+
+// sessionInputTranscriptAccum holds one committed input's ASR text.
+type sessionInputTranscriptAccum struct {
+	deltas    strings.Builder
+	fullText  string
+	completed bool
+}
+
+// wallNow returns the injected wall clock's reading, or the zero time when no
+// clock is configured (timing is then omitted from the log entirely, which
+// keeps byte-exact log expectations stable for consumers that opt out).
+func (c *sessionConversationCollector) wallNow() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Time{}
+}
+
+// inputOrdinalForItem resolves (registering on first sight) the committed
+// ordinal owning a provider item id. INPUT_ITEM.ADDED events register ids in
+// authoritative server commit order; a transcription event for an id that
+// arrives first registers it in first-sight order as a fallback.
+func (c *sessionConversationCollector) inputOrdinalForItem(itemID string) int {
+	if c.itemOrdinals == nil {
+		c.itemOrdinals = make(map[string]int)
+	}
+	ordinal, ok := c.itemOrdinals[itemID]
+	if !ok {
+		ordinal = c.nextItemOrdinal
+		c.itemOrdinals[itemID] = ordinal
+		c.nextItemOrdinal++
+	}
+	return ordinal
+}
+
+func (c *sessionConversationCollector) inputAccum(ordinal int) *sessionInputTranscriptAccum {
+	if c.inputTexts == nil {
+		c.inputTexts = make(map[int]*sessionInputTranscriptAccum)
+	}
+	accum, ok := c.inputTexts[ordinal]
+	if !ok {
+		accum = &sessionInputTranscriptAccum{}
+		c.inputTexts[ordinal] = accum
+	}
+	return accum
 }
 
 func (c *sessionConversationCollector) observeToolCall(call messages.ToolCall) {
@@ -227,6 +310,11 @@ func (c *sessionConversationCollector) closeTurn() {
 func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbound bool, inputIndex, outputIndex int) {
 	turn := &c.current
 	switch msg.Type {
+	case messages.StreamTypeInputItemAdded:
+		if added, ok := msg.Value.(*messages.InputItemAddedValue); ok && added != nil && added.ItemID != "" {
+			c.inputOrdinalForItem(added.ItemID)
+		}
+		return
 	case messages.StreamTypeAudioDelta:
 		audio, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok || audio == nil {
@@ -238,6 +326,9 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 				turn.inputSegments = append(turn.inputSegments, fmt.Sprintf("audio/in-%03d.pcm", inputIndex))
 			}
 			return
+		}
+		if turn.inputCommitted && turn.firstResponseAudioAt.IsZero() && len(audio.Content) > 0 {
+			turn.firstResponseAudioAt = c.wallNow()
 		}
 		turn.outputAudioBytes += uint64(len(audio.Content))
 		if outputIndex >= 0 {
@@ -259,6 +350,13 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 		}
 		if transcript, ok := msg.Value.(*messages.TranscriptDeltaValue); ok && transcript != nil {
 			if msg.Role == messages.RoleUser {
+				if transcript.ItemID != "" {
+					accum := c.inputAccum(c.inputOrdinalForItem(transcript.ItemID))
+					if !accum.completed {
+						accum.deltas.WriteString(transcript.Text)
+					}
+					return
+				}
 				turn.inputTranscript.WriteString(transcript.Text)
 			} else {
 				turn.responseDeltas.WriteString(transcript.Text)
@@ -270,9 +368,15 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 		}
 		if transcript, ok := msg.Value.(*messages.TranscriptEndValue); ok && transcript != nil {
 			if msg.Role == messages.RoleUser {
-				// The completion is authoritative even when it is empty. An
-				// empty completion must not fall back to interim text and invent
-				// a user utterance in the finalized log.
+				if transcript.ItemID != "" {
+					accum := c.inputAccum(c.inputOrdinalForItem(transcript.ItemID))
+					// The completion is authoritative even when it is empty:
+					// it must not fall back to interim deltas and invent a
+					// user utterance in the finalized log.
+					accum.completed = true
+					accum.fullText = transcript.FullText
+					return
+				}
 				turn.inputTranscriptCompleted = true
 				turn.inputFullText = transcript.FullText
 			} else if transcript.FullText != "" {
@@ -291,8 +395,15 @@ func (c *sessionConversationCollector) observe(msg messages.StreamMessage, outbo
 			// End-of-turn control plane: commit plus response.create on the
 			// realtime wire. Its value is intentionally empty, so the type is
 			// the carrier of meaning here. The user side of this turn is now
-			// complete.
-			turn.inputCommitted = true
+			// complete, and its position in commit order binds it to the
+			// server-side input item created for the committed audio.
+			if !turn.inputCommitted {
+				turn.inputCommitted = true
+				turn.inputOrdinal = c.committedInputs
+				turn.inputOrdinalSet = true
+				c.committedInputs++
+				turn.committedAt = c.wallNow()
+			}
 			return
 		}
 		if turn.toolCallMessage {
@@ -314,7 +425,21 @@ func (c *sessionConversationCollector) entries() []sessionConversationLogEntry {
 	log := make([]sessionConversationLogEntry, 0, len(all))
 	for index, turn := range all {
 		inputText := turn.inputText
-		if turn.inputTranscriptCompleted {
+		if accum, ok := c.inputTexts[turn.inputOrdinal]; ok && turn.inputOrdinalSet {
+			// Item-correlated ASR is authoritative for committed turns: the
+			// completed transcript when the provider finalized one (even
+			// empty — never invent an utterance from interim deltas), the
+			// accumulated deltas otherwise.
+			if accum.completed {
+				if strings.TrimSpace(accum.fullText) != "" {
+					inputText = accum.fullText
+				} else {
+					inputText = ""
+				}
+			} else if deltas := accum.deltas.String(); strings.TrimSpace(deltas) != "" {
+				inputText = deltas
+			}
+		} else if turn.inputTranscriptCompleted {
 			if strings.TrimSpace(turn.inputFullText) != "" {
 				inputText = turn.inputFullText
 			} else {
@@ -345,6 +470,32 @@ func (c *sessionConversationCollector) entries() []sessionConversationLogEntry {
 		})
 	}
 	return log
+}
+
+// timingEntries snapshots real wall-clock turn timing (empty when no wall
+// clock was injected). Written as the run-specific timing.json diagnostic
+// beside the deterministic bundle.
+func (c *sessionConversationCollector) timingEntries() []sessionConversationTurnTiming {
+	all := make([]sessionConversationTurn, 0, len(c.closed)+1)
+	all = append(all, c.closed...)
+	if c.current.observed() {
+		all = append(all, c.current)
+	}
+	var timings []sessionConversationTurnTiming
+	for index, turn := range all {
+		if turn.committedAt.IsZero() {
+			continue
+		}
+		timing := sessionConversationTurnTiming{
+			TurnIndex:   index + 1,
+			CommittedAt: turn.committedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if !turn.firstResponseAudioAt.IsZero() {
+			timing.FirstResponseAudioMS = turn.firstResponseAudioAt.Sub(turn.committedAt).Milliseconds()
+		}
+		timings = append(timings, timing)
+	}
+	return timings
 }
 
 func boundSessionToolEventValue(value string) string {

@@ -183,6 +183,7 @@ func TestSessionDirectoryRecordingWritesConversationSessionLog(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "capture")
 	plan := sessionRuntimePlan{provider: sessionProviderOpenAI}
 	recording := newSessionDirectoryRecording(destination, plan, SessionRunOptions{Model: "gpt-realtime"})
+	recording.conversation.now = func() time.Time { return time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC) }
 	inner := newSessionRecordingTestSession()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -417,5 +418,127 @@ func TestSessionDirectoryRecordingCapturesCorrelatedToolLifecycle(t *testing.T) 
 	}
 	if !strings.Contains(entry.ToolEvents[3].Content, "REDACTED") {
 		t.Fatalf("failed result content = %q, want credential redaction marker", entry.ToolEvents[3].Content)
+	}
+}
+
+// The provider streams input ASR asynchronously: a turn's transcription
+// routinely keeps arriving after the next turn has begun, and the final
+// turn's completion can land during drain after the last assistant reply.
+// Attribution must follow item identity (INPUT_ITEM.ADDED commit order),
+// never arrival order. This is the regression for the live off-by-one where
+// turn N carried turn N-1's words and the last turn's text was dropped.
+func TestSessionConversationCollectorAttributesLateTranscriptionsByItem(t *testing.T) {
+	collector := &sessionConversationCollector{}
+	outbound := func(msg messages.StreamMessage) { collector.observe(msg, true, -1, -1) }
+	inbound := func(msg messages.StreamMessage) { collector.observe(msg, false, -1, -1) }
+	userDelta := func(text, item string) messages.StreamMessage {
+		return messages.StreamMessage{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValueForItem(text, item)}
+	}
+	userDone := func(text, item string) messages.StreamMessage {
+		return messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValueForItem(text, item)}
+	}
+	itemAdded := func(item string) messages.StreamMessage {
+		return messages.StreamMessage{Type: messages.StreamTypeInputItemAdded, Role: messages.RoleUser, Value: messages.NewInputItemAddedValue(item)}
+	}
+	assistantReply := func(text string) {
+		inbound(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(text)})
+		inbound(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	}
+	spokenTurn := func() {
+		outbound(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1, 2})})
+		outbound(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	}
+
+	// Turn 1 commits; its item registers; only PART of its ASR arrives before
+	// the assistant reply closes the turn.
+	spokenTurn()
+	inbound(itemAdded("item-1"))
+	inbound(userDelta("first turn", "item-1"))
+	assistantReply("reply one")
+
+	// Turn 2 commits. Turn 1's remaining ASR (and completion) arrive AFTER
+	// turn 2 began — the live interleaving shape.
+	spokenTurn()
+	inbound(itemAdded("item-2"))
+	inbound(userDelta(" continues late", "item-1"))
+	inbound(userDone("first turn continues late", "item-1"))
+	inbound(userDelta("second turn words", "item-2"))
+	assistantReply("reply two")
+
+	// Turn 3 commits; its ENTIRE transcription arrives after its assistant
+	// reply closed the turn (the dropped-final-turn shape).
+	spokenTurn()
+	inbound(itemAdded("item-3"))
+	assistantReply("reply three")
+	inbound(userDelta("third turn spoken", "item-3"))
+	inbound(userDone("third turn spoken", "item-3"))
+
+	entries := collector.entries()
+	if len(entries) != 3 {
+		t.Fatalf("entries = %d, want 3", len(entries))
+	}
+	wantInputs := []string{"first turn continues late", "second turn words", "third turn spoken"}
+	for i, want := range wantInputs {
+		if got := entries[i].Input.Text; got != want {
+			t.Fatalf("turn %d input.text = %q, want %q", i+1, got, want)
+		}
+	}
+	if entries[1].Response.Text != "reply two" {
+		t.Fatalf("turn 2 response = %q", entries[1].Response.Text)
+	}
+}
+
+// An empty authoritative completion must yield empty input text (never
+// resurrect interim deltas), per-item.
+func TestSessionConversationCollectorEmptyItemCompletionIsAuthoritative(t *testing.T) {
+	collector := &sessionConversationCollector{}
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1})}, true, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, true, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeInputItemAdded, Role: messages.RoleUser, Value: messages.NewInputItemAddedValue("item-x")}, false, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValueForItem("interim guess", "item-x")}, false, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValueForItem("", "item-x")}, false, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("ok")}, false, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, false, -1, -1)
+
+	entries := collector.entries()
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(entries))
+	}
+	if entries[0].Input.Text != "" {
+		t.Fatalf("input.text = %q, want empty (authoritative empty completion)", entries[0].Input.Text)
+	}
+}
+
+// With an injected wall clock, committed turns carry real timing: committed_at
+// plus commit-to-first-response-audio latency. The deterministic tick clock in
+// the bundle cannot express durations, so this is the bundle's only true
+// latency source.
+func TestSessionConversationCollectorEmitsTimingWithInjectedClock(t *testing.T) {
+	current := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	collector := &sessionConversationCollector{now: func() time.Time { return current }}
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1})}, true, -1, -1)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, true, -1, -1)
+	current = current.Add(1250 * time.Millisecond)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{9, 9})}, false, -1, 0)
+	collector.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, false, -1, -1)
+
+	timings := collector.timingEntries()
+	if len(timings) != 1 {
+		t.Fatalf("expected one timing entry, got %+v", timings)
+	}
+	if timings[0].TurnIndex != 1 || timings[0].CommittedAt != "2026-08-30T12:00:00Z" {
+		t.Fatalf("timing = %+v", timings[0])
+	}
+	if timings[0].FirstResponseAudioMS != 1250 {
+		t.Fatalf("first_response_audio_ms = %d, want 1250", timings[0].FirstResponseAudioMS)
+	}
+
+	// The deterministic session-log entries must carry no timing at all.
+	raw, err := sessionConversationLogJSON(collector)
+	if err != nil {
+		t.Fatalf("render session log: %v", err)
+	}
+	if strings.Contains(string(raw), "timing") {
+		t.Fatalf("session-log must stay timing-free, got %s", raw)
 	}
 }

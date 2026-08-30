@@ -103,6 +103,9 @@ const (
 	SessionEventInputAudioBufferCommit SessionEventType = "input_audio_buffer.commit"
 	// SessionEventInputAudioBufferClear discards buffered audio on the server.
 	SessionEventInputAudioBufferClear SessionEventType = "input_audio_buffer.clear"
+	// SessionEventInputAudioBufferCommitted confirms a committed user audio
+	// buffer and names the conversation item the server created for it.
+	SessionEventInputAudioBufferCommitted SessionEventType = "input_audio_buffer.committed"
 	// SessionEventResponseCreate triggers a model response.
 	SessionEventResponseCreate SessionEventType = "response.create"
 	// SessionEventResponseCancel cancels an in-progress response.

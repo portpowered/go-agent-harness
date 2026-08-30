@@ -198,6 +198,7 @@ type RecordingMetadata struct {
 	Transport      string               `json:"-"`
 	Model          string               `json:"-"`
 	ClockBase      string               `json:"-"`
+	WallClockStart string               `json:"-"`
 	MediaSource    *MediaSourceMetadata `json:"-"`
 	MediaSourceURL string               `json:"-"`
 	Configuration  map[string]string    `json:"-"`
@@ -262,18 +263,19 @@ type RecordingConfig struct {
 // declaration and all variable-length collections are normalized before
 // marshaling.
 type RecordingManifest struct {
-	FormatVersion int                       `json:"format_version"`
-	InputDevice   DeviceMetadata            `json:"input_device"`
-	OutputDevice  DeviceMetadata            `json:"output_device"`
-	Transport     string                    `json:"transport"`
-	Model         string                    `json:"model"`
-	ClockBase     string                    `json:"clock_base"`
-	MediaSource   *MediaSourceMetadata      `json:"media_source,omitempty"`
-	Configuration map[string]string         `json:"configuration,omitempty"`
-	Corpus        []CorpusHash              `json:"corpus,omitempty"`
-	Terminal      *RecordingTerminalSummary `json:"terminal,omitempty"`
-	Artifacts     []ArtifactHash            `json:"artifacts"`
-	Browser       *BrowserManifest          `json:"browser,omitempty"`
+	FormatVersion  int                       `json:"format_version"`
+	InputDevice    DeviceMetadata            `json:"input_device"`
+	OutputDevice   DeviceMetadata            `json:"output_device"`
+	Transport      string                    `json:"transport"`
+	Model          string                    `json:"model"`
+	ClockBase      string                    `json:"clock_base"`
+	WallClockStart string                    `json:"wall_clock_start,omitempty"`
+	MediaSource    *MediaSourceMetadata      `json:"media_source,omitempty"`
+	Configuration  map[string]string         `json:"configuration,omitempty"`
+	Corpus         []CorpusHash              `json:"corpus,omitempty"`
+	Terminal       *RecordingTerminalSummary `json:"terminal,omitempty"`
+	Artifacts      []ArtifactHash            `json:"artifacts"`
+	Browser        *BrowserManifest          `json:"browser,omitempty"`
 }
 
 // RecordingWriter is a reusable finalizer for one RecordingConfig. It does
@@ -692,17 +694,18 @@ func buildManifest(recording normalizedRecording, redactor credentialRedactor, a
 	mediaSource := redactMediaSource(metadata.MediaSource, metadata.MediaSourceURL, redactor)
 	corpus := normalizeCorpus(recording.corpus, redactor)
 	manifest := RecordingManifest{
-		FormatVersion: recording.manifestVersion,
-		InputDevice:   redactDevice(metadata.InputDevice, redactor),
-		OutputDevice:  redactDevice(metadata.OutputDevice, redactor),
-		Transport:     redactor.string(metadata.Transport),
-		Model:         redactor.string(metadata.Model),
-		ClockBase:     redactor.string(metadata.ClockBase),
-		MediaSource:   mediaSource,
-		Configuration: configuration,
-		Corpus:        corpus,
-		Terminal:      cloneRecordingTerminalSummary(recording.terminal),
-		Artifacts:     artifacts,
+		FormatVersion:  recording.manifestVersion,
+		InputDevice:    redactDevice(metadata.InputDevice, redactor),
+		OutputDevice:   redactDevice(metadata.OutputDevice, redactor),
+		Transport:      redactor.string(metadata.Transport),
+		Model:          redactor.string(metadata.Model),
+		ClockBase:      redactor.string(metadata.ClockBase),
+		WallClockStart: redactor.string(metadata.WallClockStart),
+		MediaSource:    mediaSource,
+		Configuration:  configuration,
+		Corpus:         corpus,
+		Terminal:       cloneRecordingTerminalSummary(recording.terminal),
+		Artifacts:      artifacts,
 	}
 	if recording.browser != nil {
 		manifest.Browser = &BrowserManifest{
