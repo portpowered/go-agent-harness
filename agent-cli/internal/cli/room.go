@@ -179,6 +179,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 	if err := output.err(); err != nil {
 		return err
 	}
+	readyParticipants := 0
 
 	participantIDs := make([]string, 0, len(manifest.Participants))
 	for _, participant := range manifest.Participants {
@@ -237,6 +238,10 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 		},
 		OnParticipantReady: func(ready services.RoomParticipantReady) {
 			output.printf("participant %q ready: kind=%s input=%s output=%s provider=%s model=%s\n", ready.ParticipantID, ready.Kind, ready.InputDevice, ready.OutputDevice, ready.Provider, ready.Model)
+			readyParticipants++
+			if readyParticipants == len(manifest.Participants) {
+				output.printf("room running: participants=%d\n", len(manifest.Participants))
+			}
 		},
 		OnParticipantTerminated: func(result services.RoomParticipantResult) {
 			output.printf("participant %q: %s turns=%d connected=%t\n", result.ParticipantID, result.TerminationReason, result.TurnsCompleted, result.Connected)
@@ -333,7 +338,7 @@ func writeRoomResult(output *roomCommandOutput, result services.RoomResult) {
 	if reason == "" {
 		reason = services.RoomTerminationFailed
 	}
-	output.printf("room stopped: reason=%s participants=%d\n", reason, len(result.Participants))
+	output.printf("room stopped: reason=%s participants=%d active=%d\n", reason, len(result.Participants), len(result.ActiveParticipants))
 	ids := make([]string, 0, len(result.Participants))
 	for id := range result.Participants {
 		ids = append(ids, id)

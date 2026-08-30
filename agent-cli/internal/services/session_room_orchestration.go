@@ -316,7 +316,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			result.Error = sanitizeRoomError(roomErr, secrets)
 		}
 	}
-	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d\n", result.Reason, len(result.Participants)); writeErr != nil {
+	if _, writeErr := fmt.Fprintf(out, "room stopped: reason=%s participants=%d active=%d\n", result.Reason, len(result.Participants), len(result.ActiveParticipants)); writeErr != nil {
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))
 	}
 	return result, roomErr

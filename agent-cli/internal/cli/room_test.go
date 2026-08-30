@@ -100,7 +100,7 @@ func TestRoomRunCommandUsesDocumentedDefaultOutputAndBoundedProgress(t *testing.
 		"room starting: participants=2 output=room-run",
 		`participant "alice": session_turn_completed turn=2`,
 		`participant "alice": session_tool_call_unexecutable`,
-		"room stopped: reason=max_turns_reached participants=1",
+		"room stopped: reason=max_turns_reached participants=1 active=0",
 	} {
 		if !strings.Contains(output.String(), want) {
 			t.Fatalf("output = %q, want %q", output.String(), want)
@@ -108,6 +108,47 @@ func TestRoomRunCommandUsesDocumentedDefaultOutputAndBoundedProgress(t *testing.
 	}
 	if strings.Contains(output.String(), "AUDIO.DELTA") || strings.Contains(output.String(), "raw") {
 		t.Fatalf("bounded room output contains raw-delta text: %q", output.String())
+	}
+}
+
+func TestRoomRunCommandEmitsRunningAfterAllParticipantsAreReady(t *testing.T) {
+	manifestPath := writeRoomCLIManifest(t)
+	command := NewRoomRunCommand(flags.NewGlobalFlags())
+	command.SetRunner(func(_ context.Context, _ io.Writer, options services.RoomRunOptions) (services.RoomResult, error) {
+		for _, participant := range options.Manifest.Participants {
+			options.OnParticipantReady(services.RoomParticipantReady{
+				ParticipantID: participant.ID,
+				Kind:          participant.Kind,
+				InputDevice:   participant.InputDevice,
+				OutputDevice:  participant.OutputDevice,
+				Provider:      participant.Provider,
+				Model:         participant.Model,
+			})
+		}
+		return services.RoomResult{
+			TerminationReason: services.RoomTerminationStopped,
+			Participants: map[string]services.RoomParticipantResult{
+				"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: services.ParticipantTerminationEnded},
+				"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: services.ParticipantTerminationEnded},
+			},
+		}, nil
+	})
+
+	var output bytes.Buffer
+	cmd := command.Generate()
+	cmd.SetOut(&output)
+	cmd.SetArgs([]string{"--manifest", manifestPath})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute room run: %v", err)
+	}
+	text := output.String()
+	lastReady := strings.LastIndex(text, `participant "bob" ready:`)
+	running := strings.Index(text, "room running: participants=2")
+	if lastReady < 0 || running < 0 || running <= lastReady {
+		t.Fatalf("room output = %q, want running marker after both ready markers", text)
+	}
+	if !strings.Contains(text, "room stopped: reason=stopped participants=2 active=0") {
+		t.Fatalf("room output = %q, want zero-active terminal marker", text)
 	}
 }
 
