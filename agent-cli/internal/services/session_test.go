@@ -681,8 +681,30 @@ func TestWriteSessionReplayMessage_PrintsTranscriptDelta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeSessionReplayMessage: %v", err)
 	}
-	if got := out.String(); got != "spoken image description" {
-		t.Fatalf("transcript output = %q, want %q", got, "spoken image description")
+	if got := out.String(); got != "Assistant: spoken image description\n" {
+		t.Fatalf("transcript output = %q, want %q", got, "Assistant: spoken image description\\n")
+	}
+}
+
+func TestSessionReplayRendererKeepsInterleavedTranscriptRolesSeparate(t *testing.T) {
+	var out bytes.Buffer
+	renderer := newSessionReplayRenderer(&out)
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeTranscriptStart, Role: messages.RoleUser, Value: messages.NewTranscriptStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("heard ")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleAssistant, Value: messages.NewTranscriptDeltaValue("reply")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, Value: messages.NewTranscriptEndValue("reply")},
+		{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue("again")},
+		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("again")},
+	}
+	for _, event := range events {
+		if err := writeSessionReplayMessage(renderer, event); err != nil {
+			t.Fatalf("write transcript event: %v", err)
+		}
+	}
+
+	if got, want := out.String(), "User: heard \nAssistant: reply\nUser: again\n"; got != want {
+		t.Fatalf("interleaved transcript output = %q, want %q", got, want)
 	}
 }
 

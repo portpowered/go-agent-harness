@@ -34,11 +34,14 @@ func (s *sessionDurationTerminalState) observe(msg messages.StreamMessage) {
 		messages.StreamTypeVideoDelta,
 		messages.StreamTypeFileDelta,
 		messages.StreamTypeEmbeddingDelta,
-		messages.StreamTypeTranscriptDelta,
 		messages.StreamTypeToolCallDelta,
 		messages.StreamTypeToolCallEnd,
 		messages.StreamTypeRefusal:
 		s.responseOutput = true
+	case messages.StreamTypeTranscriptDelta:
+		if msg.Role != messages.RoleUser {
+			s.responseOutput = true
+		}
 	case messages.StreamTypeMessageEnd:
 		s.responseComplete = true
 	}

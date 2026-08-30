@@ -13,6 +13,15 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
+	// Input-audio transcription belongs to the customer input stream. It must
+	// remain observable, but it cannot open, reset, or complete an assistant
+	// response—especially when a provider interleaves recognition with output.
+	if msg.Role == messages.RoleUser && (msg.Type == messages.StreamTypeTranscriptStart || msg.Type == messages.StreamTypeTranscriptDelta || msg.Type == messages.StreamTypeTranscriptEnd) {
+		if value, ok := msg.Value.(*messages.TranscriptDeltaValue); ok && value != nil {
+			o.account(metrics.DirectionInput, metrics.ModalityText, len(value.Text))
+		}
+		return
+	}
 	// ToolRunner delivery is an internal bridge between the provider tool call
 	// and the next provider response. It is observable to callers, but it is
 	// not a provider response boundary and must not reset response output,

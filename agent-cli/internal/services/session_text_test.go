@@ -183,7 +183,7 @@ func TestSessionCommandPromptKeepsPCMOutOfTextOutput(t *testing.T) {
 
 	writes := output.Writes()
 	got := string(bytes.Join(writes, nil))
-	want := transcript + "\n[session closed: provider_closed]\n" +
+	want := "Assistant: " + transcript + "\n[session closed: provider_closed]\n" +
 		"[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\n"
 	if got != want {
 		t.Fatalf("text output = %q, want %q", got, want)

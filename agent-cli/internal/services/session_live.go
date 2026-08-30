@@ -246,13 +246,14 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 }
 
 func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) error {
-	err := runAgentLoopSessionStream(ctx, out, sessionInferencer, opts)
+	renderer := newSessionReplayRenderer(out)
+	err := runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
 	err = audioResponseCompletionError(err, opts)
 	err = scheduledAudioCompletionError(err, opts)
 	cleanSIGINT := sessionSIGINTCleanForObserver(err, opts.cancellationIntent, opts.observer)
 	err = opts.observer.finish(err)
 	if cleanSIGINT {
-		err = errors.Join(err, publishSessionUserCancellation(out, opts, writeSessionReplayMessage))
+		err = errors.Join(err, publishSessionUserCancellation(renderer, opts, writeSessionReplayMessage))
 	}
 	return err
 }

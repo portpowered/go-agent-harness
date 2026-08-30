@@ -366,6 +366,7 @@ func (c *replayInitialSessionUpdateConn) Close() error {
 }
 
 func replaySessionCapture(ctx context.Context, out io.Writer, path string) error {
+	renderer := newSessionReplayRenderer(out)
 	replayer, err := gwtesting.NewSessionReplayer(path, gwtesting.WithReplayOutboundValidation(false), gwtesting.WithReplayContext(ctx))
 	if err != nil {
 		return fmt.Errorf("replay session capture %s: %w", path, err)
@@ -376,12 +377,12 @@ func replaySessionCapture(ctx context.Context, out io.Writer, path string) error
 			_ = replayer.Close()
 			return ctx.Err()
 		case <-replayer.Done():
-			return drainSessionReplayMessages(out, replayer)
+			return drainSessionReplayMessages(renderer, replayer)
 		case msg, ok := <-replayer.Receive().Chan():
 			if !ok {
 				continue
 			}
-			if err := writeSessionReplayMessage(out, msg); err != nil {
+			if err := writeSessionReplayMessage(renderer, msg); err != nil {
 				return err
 			}
 		}

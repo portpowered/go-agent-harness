@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -18,6 +19,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
@@ -123,6 +126,179 @@ func TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI(t *testing.
 		t.Fatalf("replay scheduled audio through shipped CLI: %v\nstderr=%s", err, replayStderr)
 	}
 	assertCLILiveRecordingBundle(t, replayRecordDir, 2)
+}
+
+// TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface drives one
+// production command through a deterministic WebSocket provider. The same run
+// is the source of terminal output, normalized transcript artifacts, the
+// completed conversation log, and raw wire capture.
+func TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface(t *testing.T) {
+	fixture := newRecordReplayWebSocketFixture(true, 1)
+	fixture.inputTranscriptDelta = "heard "
+	fixture.inputTranscriptCompleted = "heard clearly"
+	fixture.assistantTranscriptDelta = "answering "
+	fixture.assistantTranscriptCompleted = "answering now"
+	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
+	defer server.Close()
+
+	audioPath := writeRecordReplayAudio(t, "transcribed-turn.wav", 1200)
+	recordPath := filepath.Join(t.TempDir(), "transcribed.session.json")
+	recordDir := filepath.Join(t.TempDir(), "transcribed-recording")
+	configDir := t.TempDir()
+	writeSessionToolConfig(t, configDir, false)
+	baseURL := strings.Replace(server.URL, "http://", "ws://", 1) + "/v1/realtime"
+
+	stdout, stderr, err := executeProductionSessionCommand(t, []string{
+		"--config-dir", configDir,
+		"session",
+		"--record", recordPath,
+		"--record-dir", recordDir,
+		"--provider", "openai",
+		"--model", "gpt-realtime",
+		"--api-key", "synthetic-transcription-key",
+		"--base-url", baseURL,
+		"--audio-in-turn", audioPath,
+	})
+	if err != nil {
+		t.Fatalf("scripted input transcription session: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "User: heard ") || !strings.Contains(stdout, "Assistant: answering ") {
+		t.Fatalf("terminal output = %q, want distinct user and assistant transcript labels", stdout)
+	}
+
+	assertRecordedInputTranscripts(t, filepath.Join(recordDir, "client.transcript.jsonl"))
+	assertRecordedInputTranscriptSessionLog(t, filepath.Join(recordDir, "session-log.jsonl"))
+	assertRawInputTranscriptEvents(t, recordPath)
+}
+
+func assertRecordedInputTranscripts(t *testing.T, path string) {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open client transcript: %v", err)
+	}
+	defer file.Close()
+
+	var userDelta, userEnd, assistantDelta, assistantEnd bool
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		record, decodeErr := transcript.Decode(scanner.Bytes())
+		if decodeErr != nil {
+			t.Fatalf("decode client transcript record: %v", decodeErr)
+		}
+		message, unmarshalErr := gwtesting.UnmarshalStreamMessage(record.Payload)
+		if unmarshalErr != nil {
+			t.Fatalf("decode client transcript payload: %v", unmarshalErr)
+		}
+		switch value := message.Value.(type) {
+		case *messages.TranscriptDeltaValue:
+			if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
+				t.Fatalf("transcript delta role = %q, want user or assistant", message.Role)
+			}
+			if message.Role == messages.RoleUser && value.Text == "heard " {
+				userDelta = true
+			}
+			if message.Role == messages.RoleAssistant && value.Text == "answering " {
+				assistantDelta = true
+			}
+		case *messages.TranscriptEndValue:
+			if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
+				t.Fatalf("transcript end role = %q, want user or assistant", message.Role)
+			}
+			if message.Role == messages.RoleUser && value.FullText == "heard clearly" {
+				userEnd = true
+			}
+			if message.Role == messages.RoleAssistant && value.FullText == "answering now" {
+				assistantEnd = true
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan client transcript: %v", err)
+	}
+	if !userDelta || !userEnd || !assistantDelta || !assistantEnd {
+		t.Fatalf("client transcript user_delta=%t user_end=%t assistant_delta=%t assistant_end=%t; want all role-preserved records", userDelta, userEnd, assistantDelta, assistantEnd)
+	}
+}
+
+func assertRecordedInputTranscriptSessionLog(t *testing.T, path string) {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open session log: %v", err)
+	}
+	defer file.Close()
+
+	type recordingEntry struct {
+		TurnIndex int `json:"turn_index"`
+		Input     struct {
+			Text          string   `json:"text"`
+			AudioBytes    uint64   `json:"audio_bytes"`
+			Committed     bool     `json:"committed"`
+			AudioSegments []string `json:"audio_segments"`
+		} `json:"input"`
+		Response struct {
+			Text       string `json:"text"`
+			Complete   bool   `json:"complete"`
+			AudioBytes uint64 `json:"audio_bytes"`
+		} `json:"response"`
+	}
+	var entries []recordingEntry
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var entry recordingEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("decode session log entry: %v", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan session log: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("session log entries = %d, want one: %#v", len(entries), entries)
+	}
+	entry := entries[0]
+	if entry.TurnIndex != 1 || entry.Input.Text != "heard clearly" || entry.Input.AudioBytes == 0 || !entry.Input.Committed || len(entry.Input.AudioSegments) != 1 || entry.Response.Text != "answering now" || !entry.Response.Complete || entry.Response.AudioBytes == 0 {
+		t.Fatalf("session log entry = %#v, want authoritative input transcript with retained audio/response fields", entry)
+	}
+}
+
+func assertRawInputTranscriptEvents(t *testing.T, path string) {
+	t.Helper()
+	capture, err := gwtesting.LoadSessionCapture(path)
+	if err != nil {
+		t.Fatalf("load raw input transcription capture: %v", err)
+	}
+	var matched []gwtesting.CapturedSessionEvent
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionServerToClient && strings.HasPrefix(record.Type, "conversation.item.input_audio_transcription.") {
+			matched = append(matched, record)
+		}
+	}
+	if len(matched) != 2 || matched[0].Type != "conversation.item.input_audio_transcription.delta" || matched[1].Type != "conversation.item.input_audio_transcription.completed" {
+		t.Fatalf("raw input transcription events = %#v, want ordered delta and completed events", matched)
+	}
+	for _, record := range matched {
+		if record.PayloadType != gwtesting.SessionPayloadTypeWebSocketMessage {
+			t.Fatalf("raw input transcription payload type = %q, want websocket_message", record.PayloadType)
+		}
+	}
+	var delta, completed struct {
+		Type       string `json:"type"`
+		ItemID     string `json:"item_id"`
+		Delta      string `json:"delta"`
+		Transcript string `json:"transcript"`
+	}
+	if err := json.Unmarshal(matched[0].Payload, &delta); err != nil {
+		t.Fatalf("decode raw input transcription delta: %v", err)
+	}
+	if err := json.Unmarshal(matched[1].Payload, &completed); err != nil {
+		t.Fatalf("decode raw input transcription completed: %v", err)
+	}
+	if delta.Type != matched[0].Type || delta.ItemID != "item_record_replay_1" || delta.Delta != "heard " || completed.Type != matched[1].Type || completed.ItemID != delta.ItemID || completed.Transcript != "heard clearly" {
+		t.Fatalf("raw input transcription payloads = delta:%#v completed:%#v", delta, completed)
+	}
 }
 
 // TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence
@@ -355,11 +531,15 @@ func assertScheduledAudioOutboundWireTypes(t *testing.T, capture gwtesting.Sessi
 }
 
 type recordReplayWebSocketFixture struct {
-	upgrader          websocket.Upgrader
-	audio             bool
-	expectedResponses int
-	mu                sync.Mutex
-	responseCount     int
+	upgrader                     websocket.Upgrader
+	audio                        bool
+	expectedResponses            int
+	inputTranscriptDelta         string
+	inputTranscriptCompleted     string
+	assistantTranscriptDelta     string
+	assistantTranscriptCompleted string
+	mu                           sync.Mutex
+	responseCount                int
 }
 
 func newRecordReplayWebSocketFixture(audio bool, expectedResponses int) *recordReplayWebSocketFixture {
@@ -429,9 +609,40 @@ func (f *recordReplayWebSocketFixture) writeResponse(connection *websocket.Conn,
 	}
 	if f.audio {
 		transcript := fmt.Sprintf("response turn %d", responseNumber)
+		if f.inputTranscriptDelta != "" || f.inputTranscriptCompleted != "" {
+			itemID := fmt.Sprintf("item_record_replay_%d", responseNumber)
+			if f.inputTranscriptDelta != "" {
+				if err := connection.WriteJSON(map[string]string{
+					"type":    "conversation.item.input_audio_transcription.delta",
+					"item_id": itemID,
+					"delta":   f.inputTranscriptDelta,
+				}); err != nil {
+					return err
+				}
+			}
+			if err := connection.WriteJSON(map[string]string{
+				"type":       "conversation.item.input_audio_transcription.completed",
+				"item_id":    itemID,
+				"transcript": f.inputTranscriptCompleted,
+			}); err != nil {
+				return err
+			}
+		}
+		if f.assistantTranscriptDelta != "" {
+			if err := connection.WriteJSON(map[string]string{
+				"type":  "response.output_audio_transcript.delta",
+				"delta": f.assistantTranscriptDelta,
+			}); err != nil {
+				return err
+			}
+		}
+		assistantTranscript := f.assistantTranscriptCompleted
+		if assistantTranscript == "" {
+			assistantTranscript = transcript
+		}
 		if err := connection.WriteJSON(map[string]string{
 			"type":       "response.output_audio_transcript.done",
-			"transcript": transcript,
+			"transcript": assistantTranscript,
 		}); err != nil {
 			return err
 		}

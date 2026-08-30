@@ -34,13 +34,14 @@ func runAgentLoopSessionWithDurationClock(ctx context.Context, out io.Writer, se
 }
 
 func runAgentLoopSessionWithDurationAdmissionClock(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions, maxDuration time.Duration, durationClock SessionDurationClock, admittedInferencer *sessionDurationAdmissionInferencer) error {
-	err := runAgentLoopSessionWithDurationAdmissionClockStream(ctx, out, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
+	renderer := newSessionReplayRenderer(out)
+	err := runAgentLoopSessionWithDurationAdmissionClockStream(ctx, renderer, sessionInferencer, opts, maxDuration, durationClock, admittedInferencer)
 	err = scheduledAudioCompletionError(err, opts)
 	cleanSIGINT := sessionSIGINTCleanForObserver(err, opts.cancellationIntent, opts.observer)
 	err = opts.observer.finish(err)
 	if cleanSIGINT {
 		artifacts := sessionDurationArtifactsFromContext(ctx)
-		err = errors.Join(err, publishSessionUserCancellation(out, opts, func(out io.Writer, msg messages.StreamMessage) error {
+		err = errors.Join(err, publishSessionUserCancellation(renderer, opts, func(out io.Writer, msg messages.StreamMessage) error {
 			return writeDurationSessionReplayMessage(out, msg, artifacts)
 		}))
 	}
