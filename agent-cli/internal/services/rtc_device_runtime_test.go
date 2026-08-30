@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -234,7 +235,8 @@ type runtimeRTCSession struct {
 	done  chan struct{}
 	media services.RTCMediaEndpoints
 
-	doneOnce sync.Once
+	doneOnce   sync.Once
+	closeCalls atomic.Int32
 }
 
 type failingRTCOutboundMedia struct {
@@ -258,6 +260,7 @@ func (s *runtimeRTCSession) Receive() *messages.TypedBuffer[messages.StreamMessa
 func (s *runtimeRTCSession) Done() <-chan struct{} { return s.done }
 
 func (s *runtimeRTCSession) Close() error {
+	s.closeCalls.Add(1)
 	s.doneOnce.Do(func() { close(s.done) })
 	return nil
 }

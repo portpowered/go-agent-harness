@@ -224,6 +224,9 @@ func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions st
 // same value before ConnectSession can send their initial wire update.
 func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFactory {
 	factory := defaultSessionRuntimeFactory
+	factory.newBareLiveSessionInferencer = func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
+		return NewLiveSessionInferencer(opts, instructions)
+	}
 	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}

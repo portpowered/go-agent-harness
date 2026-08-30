@@ -448,10 +448,56 @@ func (c *SessionCommand) SetSessionRTCRuntimeFactory(factory services.SessionRTC
 // Generate to keep the constructor within the function-length gate.
 const sessionCommandLongHelp = "Run a bidirectional session inference capture or replay a session capture file.\n" +
 	"Use --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\n" +
+	"With no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `agent session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\n" +
 	"Use repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\n" +
 	"WebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\n" +
 	"Input transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\n" +
 	"Session history management remains available through the show, list, and delete subcommands."
+
+func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode bool, imagePaths []string) bool {
+	if cmd == nil || hasSessionMode || len(args) > 0 || len(imagePaths) > 0 || hasSessionBrowserFlag(cmd) {
+		return false
+	}
+	for _, name := range []string{
+		"record",
+		"record-dir",
+		"replay",
+		"prompt",
+		"system-prompt",
+		"audio-in",
+		"audio-out",
+		"audio-in-turn",
+		"audio-in-turn-barge",
+		"audio-interrupt",
+		"audio-interrupt-on-tool",
+		"image",
+	} {
+		if cmd.Flags().Changed(name) {
+			return false
+		}
+	}
+	return true
+}
+
+func resolveSessionAdmission(globalFlags *flags.GlobalFlags, cmd *cobra.Command, browserFlags *flags.BrowserFlags, args []string, hasSessionMode bool, imagePaths []string) (bool, *config.Config, error) {
+	bareSession := isBareSessionInvocation(cmd, args, hasSessionMode, imagePaths)
+	var loadedConfig *config.Config
+	if hasSessionMode || hasSessionBrowserFlag(cmd) || bareSession {
+		var err error
+		loadedConfig, err = resolveSessionBrowserConfig(globalFlags, cmd, browserFlags)
+		if err != nil {
+			return false, nil, err
+		}
+	}
+	// Browser configuration is intentionally not a standalone admission
+	// trigger. Preserve that contract when a persisted config enables the
+	// browser capability: an otherwise empty invocation still prints help
+	// instead of silently starting a non-browser bare session.
+	if bareSession && browserConfigEnablesTools(loadedConfig) {
+		bareSession = false
+	}
+	return bareSession, loadedConfig, nil
+}
 
 func (c *SessionCommand) Generate() *cobra.Command {
 	var prompt string
@@ -513,18 +559,11 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				return &SessionWebRTCUnavailableError{}
 			}
 			hasSessionMode := c.askFlags.RecordCapturePath != "" || c.askFlags.ReplayCapturePath != "" || recordDirPath != "" || len(audioInTurns) > 0 || len(audioInterrupts) > 0
-			var loadedConfig *config.Config
-			// Resolve browser flags before admission so invalid values fail without
-			// touching a provider or browser. The explicit capability flag is the
-			// only new standalone admission trigger; other browser settings remain
-			// inert when no existing session mode is selected.
-			if hasSessionMode || hasSessionBrowserFlag(cmd) {
-				loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
-				if err != nil {
-					return err
-				}
+			bareSession, loadedConfig, err := resolveSessionAdmission(c.globalFlags, cmd, browserFlags, args, hasSessionMode, c.imagePaths)
+			if err != nil {
+				return err
 			}
-			if !hasSessionMode && !browserToolsAdmission(cmd) {
+			if !hasSessionMode && !browserToolsAdmission(cmd) && !bareSession {
 				return cmd.Help()
 			}
 			sessionContext, stopSignal, cancellationIntent := newSessionSignalContext(cmd.Context())
@@ -567,7 +606,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 			var refreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
 			var capabilityClose func() error
 			var browserWatch func(context.Context) <-chan webmcp.BrokerEvent
-			if c.sessionToolCapabilities != nil {
+			if c.sessionToolCapabilities != nil && !bareSession {
 				if loadedConfig == nil {
 					loadedConfig, err = resolveSessionBrowserConfig(c.globalFlags, cmd, browserFlags)
 					if err != nil {
@@ -594,6 +633,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				RecordPath:             c.askFlags.RecordCapturePath,
 				ReplayPath:             c.askFlags.ReplayCapturePath,
 				Provider:               c.askFlags.Provider,
+				ProviderProvided:       cmd.Flags().Changed("provider"),
 				Model:                  c.askFlags.Model,
 				ModelProvided:          cmd.Flags().Changed("model"),
 				NoInputTranscription:   noInputTranscription,
@@ -604,6 +644,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				PromptProvided:         cmd.Flags().Changed("prompt") || len(args) > 0,
 				Voice:                  voice,
 				Transport:              selectedTransport,
+				TransportProvided:      cmd.Flags().Changed("transport"),
 				Signaling:              signaling,
 				MediaSource:            mediaSource,
 				RTCRuntimeFactory:      c.rtcRuntimeFactory,
@@ -617,7 +658,7 @@ func (c *SessionCommand) Generate() *cobra.Command {
 				CapabilityClose:        capabilityClose,
 				CancellationIntent:     cancellationIntent,
 				LoadedConfig:           loadedConfig,
-				BrowserToolsEnabled:    browserConfigEnablesTools(loadedConfig),
+				BrowserToolsEnabled:    !bareSession && browserConfigEnablesTools(loadedConfig),
 				WaitForClose:           waitForClose,
 				StreamObserver:         c.streamObserver,
 				Clock:                  c.clockSource,
@@ -630,6 +671,12 @@ func (c *SessionCommand) Generate() *cobra.Command {
 					InputPresent:  cmd.Flags().Changed(services.SessionAudioInDeviceFlag),
 					OutputPresent: cmd.Flags().Changed(services.SessionAudioOutDeviceFlag),
 				},
+			}
+			if bareSession {
+				sessionOptions, err = services.ResolveBareSessionOptions(sessionOptions)
+				if err != nil {
+					return err
+				}
 			}
 			if len(audioInTurns) > 0 {
 				if len(c.imagePaths) > 0 {

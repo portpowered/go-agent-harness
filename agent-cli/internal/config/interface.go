@@ -32,6 +32,10 @@ const structTag = "koanf"
 type Config struct {
 	Model ModelConfig `koanf:"model" yaml:"model"`
 	Tools ToolsConfig `koanf:"tools" yaml:"tools"`
+	// Session contains settings that are specific to the live session
+	// surface. It is a pointer so an absent session block remains distinct from
+	// the generated defaults used by one-shot model commands.
+	Session *SessionConfig `koanf:"session" yaml:"session,omitempty"`
 	// Browser contains the opt-in WebMCP browser capability configuration.
 	// Browser settings never activate a model session by themselves; the
 	// session command owns that admission decision.
@@ -41,6 +45,10 @@ type Config struct {
 	// session capability factory uses it to bind selection persistence to the
 	// same -C directory as the effective browser configuration.
 	ConfigDir string `koanf:"-" yaml:"-" json:"-"`
+	// ConfigPath is runtime metadata identifying the file that produced this
+	// snapshot. It is excluded from persisted configuration so prerequisite
+	// errors can name the effective file without guessing its location.
+	ConfigPath string `koanf:"-" yaml:"-" json:"-"`
 }
 
 const (
@@ -132,6 +140,39 @@ type BrowserRecordingConfig struct {
 type BrowserReplayConfig struct {
 	Path   string `koanf:"path" yaml:"path"`
 	Strict bool   `koanf:"strict" yaml:"strict"`
+}
+
+// SessionConfig is the persisted, session-specific default surface. The
+// ordinary model configuration remains authoritative for provider
+// credentials and provider-specific model settings; this block only carries
+// live-session choices that should not change one-shot command defaults.
+type SessionConfig struct {
+	Provider           string                           `koanf:"provider" yaml:"provider"`
+	Model              string                           `koanf:"model" yaml:"model"`
+	Transport          string                           `koanf:"transport" yaml:"transport"`
+	InputDevice        string                           `koanf:"input_device" yaml:"input_device"`
+	OutputDevice       string                           `koanf:"output_device" yaml:"output_device"`
+	VAD                *SessionVADConfig                `koanf:"vad" yaml:"vad"`
+	InputTranscription *SessionInputTranscriptionConfig `koanf:"input_transcription" yaml:"input_transcription"`
+}
+
+// SessionVADConfig contains the server-side voice activity detection policy
+// for a live session. Pointer fields preserve the difference between an
+// omitted setting and an explicit false value.
+type SessionVADConfig struct {
+	Enabled           *bool   `koanf:"enabled" yaml:"enabled"`
+	Type              string  `koanf:"type" yaml:"type"`
+	Threshold         float64 `koanf:"threshold" yaml:"threshold"`
+	PrefixPaddingMs   int     `koanf:"prefix_padding_ms" yaml:"prefix_padding_ms"`
+	SilenceDurationMs int     `koanf:"silence_duration_ms" yaml:"silence_duration_ms"`
+	CreateResponse    *bool   `koanf:"create_response" yaml:"create_response"`
+}
+
+// SessionInputTranscriptionConfig contains the customer-audio transcription
+// policy for a live session. Pointer Enabled preserves an explicit opt-out.
+type SessionInputTranscriptionConfig struct {
+	Enabled *bool  `koanf:"enabled" yaml:"enabled"`
+	Model   string `koanf:"model" yaml:"model"`
 }
 
 // ModelConfig holds which provider is active and per-provider settings.

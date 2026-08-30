@@ -132,6 +132,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 			preCancelDrainErr = drainDurationSessionLoopMessagesUntilQuiet(out, loop, planned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
 		}
 		cancel()
+		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 		bindingErr := closeRTCDeviceBinding(opts.rtcDeviceBinding)
 		runErr := <-runErrCh
 		admittedInferencer.waitForClose()
@@ -147,7 +148,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		runtimeErr := admittedInferencer.runtimeError()
 		closeErr := admittedInferencer.closeError()
 		if preferredErr != nil {
-			lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr)
+			lifecycleErr := errors.Join(providerErr, sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr))
 			transportErr := sessionTransportError(sessionErr)
 			if lifecycleErr != nil || transportErr != nil {
 				return errors.Join(preferredErr, lifecycleErr, transportErr)
@@ -157,7 +158,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		if preCancelDrainErr != nil {
 			return preCancelDrainErr
 		}
-		if lifecycleErr := sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr); lifecycleErr != nil {
+		if lifecycleErr := errors.Join(providerErr, sessionDurationLifecycleError(runtimeErr, closeErr, bindingErr)); lifecycleErr != nil {
 			return lifecycleErr
 		}
 		if sessionErr != nil {

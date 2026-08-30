@@ -8,6 +8,44 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// planBareLiveSessionRuntime builds the alternate-free live voice path. The
+// resolver has already supplied the provider, model, credential, audio policy,
+// and device presence bits; this planner only creates the existing
+// audio-capable WebSocket inferencer and leaves device acquisition to the
+// common session plan runner.
+func planBareLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {
+	provider := strings.ToLower(strings.TrimSpace(opts.Provider))
+	if provider != sessionProviderOpenAI && provider != sessionProviderGrok {
+		return sessionRuntimePlan{}, fmt.Errorf("bare live sessions require provider %q or %q; got %q", sessionProviderOpenAI, sessionProviderGrok, provider)
+	}
+
+	build := factory.newBareLiveSessionInferencer
+	if build == nil {
+		build = func(options SessionRunOptions) (messages.SessionInferencer, string, error) {
+			return NewLiveSessionInferencer(options, "")
+		}
+	}
+	inferencer, model, err := build(opts)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
+	if inferencer == nil {
+		return sessionRuntimePlan{}, fmt.Errorf("bare live session provider %q returned no session inferencer", provider)
+	}
+
+	return sessionRuntimePlan{
+		mode:       sessionRuntimeModeBareLive,
+		provider:   provider,
+		model:      model,
+		inferencer: inferencer,
+		loop: sessionLoopOptions{
+			WaitForClose:             true,
+			BareLive:                 true,
+			AdvertiseToolDefinitions: false,
+		},
+	}, nil
+}
+
 // planBrowserLiveSessionRuntime plans an explicitly browser-enabled live
 // session without wrapping its provider transport in a capture recorder. The
 // browser capability is still carried by opts.ToolDefinitions and

@@ -192,8 +192,12 @@ func runSessionDurationPlanWithAdmission(ctx context.Context, out io.Writer, pla
 		plan.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
 	}
-	if plan.announce != "" {
-		if _, err := fmt.Fprintln(out, plan.announce); err != nil {
+	announcement := plan.announce
+	if plan.loop.BareLive {
+		announcement, plan.loop.ListeningBanner = plan.bareLiveOutput(deviceBinding)
+	}
+	if announcement != "" {
+		if _, err := fmt.Fprintln(out, announcement); err != nil {
 			return wrapSessionRuntimeError(plan, err)
 		}
 	}

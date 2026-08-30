@@ -23,6 +23,7 @@ import (
 type sessionRuntimeMode string
 
 const (
+	sessionRuntimeModeBareLive      sessionRuntimeMode = "bare-live"
 	sessionRuntimeModeInjectedLive  sessionRuntimeMode = "injected-live"
 	sessionRuntimeModeReplayGeneric sessionRuntimeMode = "replay-generic"
 	sessionRuntimeModeReplayGrok    sessionRuntimeMode = "replay-grok-websocket"
@@ -50,6 +51,7 @@ type sessionRuntimeFactory struct {
 	newReplayInferencer                func(string) messages.SessionInferencer
 	newGrokSessionInferencer           func(config.GrokConfig, transport.Dialer) (messages.SessionInferencer, error)
 	newOpenAISessionInf                func(config.OpenAIConfig, string, transport.Dialer, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
+	newBareLiveSessionInferencer       func(SessionRunOptions) (messages.SessionInferencer, string, error)
 	newGrokSessionWithTools            func(config.GrokConfig, transport.Dialer, []messages.ToolDefinition) (messages.SessionInferencer, error)
 	newOpenAISessionWithTools          func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
 	newOpenAIScheduledSessionWithTools func(config.OpenAIConfig, string, transport.Dialer, []messages.ToolDefinition, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error)
@@ -74,6 +76,9 @@ var defaultSessionRuntimeFactory = sessionRuntimeFactory{
 	},
 	newOpenAISessionInf: func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 		return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, inputAudioTranscription)
+	},
+	newBareLiveSessionInferencer: func(opts SessionRunOptions) (messages.SessionInferencer, string, error) {
+		return NewLiveSessionInferencer(opts, "")
 	},
 	newGrokSessionWithTools: func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithTools(sessionCfg, dialer, toolDefinitions)
@@ -133,6 +138,24 @@ type sessionRuntimePlan struct {
 	interactivePolicy      *InteractiveToolPolicy
 }
 
+func (p sessionRuntimePlan) bareLiveOutput(binding *RTCDeviceBinding) (string, string) {
+	transport := p.transport
+	if transport == "" {
+		transport = SessionTransportWebSocket
+	}
+	inputDevice, outputDevice := "unavailable", "unavailable"
+	if binding != nil {
+		if binding.Source != nil {
+			inputDevice = string(binding.Source.DeviceID())
+		}
+		if binding.Sink != nil {
+			outputDevice = string(binding.Sink.DeviceID())
+		}
+	}
+	identity := fmt.Sprintf("provider=%s model=%s transport=%s input-device=%s output-device=%s", p.provider, p.model, transport, inputDevice, outputDevice)
+	return "Starting bare live session: " + identity, "Listening: " + identity
+}
+
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
 	finalizer := newSessionRuntimeFinalizer(p)
 	defer func() {
@@ -150,8 +173,12 @@ func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr erro
 		p.loop.rtcDeviceBinding = deviceBinding
 		finalizer.setDeviceBinding(deviceBinding)
 	}
-	if p.announce != "" {
-		if _, err := fmt.Fprintln(out, p.announce); err != nil {
+	announcement := p.announce
+	if p.loop.BareLive {
+		announcement, p.loop.ListeningBanner = p.bareLiveOutput(deviceBinding)
+	}
+	if announcement != "" {
+		if _, err := fmt.Fprintln(out, announcement); err != nil {
 			return err
 		}
 	}
@@ -228,6 +255,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.clockSource = platformclock.Ensure(opts.Clock)
 	plan.runtime = newSessionRuntimeObservationRecorder(opts.RuntimeObserver, plan.clockSource)
 	plan.loop.runtime = plan.runtime
+	plan.loop.BareLive = plan.loop.BareLive || opts.BareLive
 	plan.loop.cancellationIntent = opts.CancellationIntent
 	plan.loop.SessionUpdatedTimeout = opts.SessionUpdatedTimeout
 	plan.loop.AudioInterruptions = opts.AudioInterruptions
@@ -309,19 +337,30 @@ func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactor
 			inferencer: opts.SessionInferencer,
 			loop: sessionLoopOptions{
 				Prompt:                   opts.Prompt,
-				CloseAfterOpen:           !opts.WaitForClose && len(opts.AudioInputs) == 0,
-				WaitForClose:             opts.WaitForClose || len(opts.AudioInputs) > 0,
+				CloseAfterOpen:           !opts.BareLive && !opts.WaitForClose && len(opts.AudioInputs) == 0,
+				WaitForClose:             opts.BareLive || opts.WaitForClose || len(opts.AudioInputs) > 0,
 				CloseAfterScheduledAudio: len(opts.AudioInputs) > 0,
-				MaxDuration:              3 * time.Second,
+				MaxDuration:              injectedSessionMaxDuration(opts.BareLive),
 				AdvertiseToolDefinitions: true,
 				RequireSessionUpdated:    len(opts.AudioInputs) > 0 && strings.EqualFold(effectiveSessionProvider(opts), sessionProviderOpenAI),
+				BareLive:                 opts.BareLive,
 			},
 		}, nil
+	}
+	if opts.BareLive {
+		return planBareLiveSessionRuntime(opts, factory)
 	}
 	if opts.BrowserToolsEnabled && opts.RecordPath == "" {
 		return planBrowserLiveSessionRuntime(opts, factory)
 	}
 	return planRecordSessionRuntime(opts, factory)
+}
+
+func injectedSessionMaxDuration(bareLive bool) time.Duration {
+	if bareLive {
+		return 0
+	}
+	return 3 * time.Second
 }
 
 func planReplaySessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

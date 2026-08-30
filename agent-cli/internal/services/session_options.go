@@ -153,19 +153,26 @@ func (e *SessionRuntimeSelectionError) Unwrap() error {
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
-	RecordPath    string
-	ReplayPath    string
-	Provider      string
-	Model         string
-	ModelProvided bool
+	RecordPath string
+	ReplayPath string
+	Provider   string
+	// ProviderProvided distinguishes an explicit provider flag from the
+	// command's empty/default value when resolving persisted bare-session
+	// settings.
+	ProviderProvided bool
+	Model            string
+	ModelProvided    bool
 	// NoInputTranscription explicitly disables the live OpenAI customer-audio
 	// transcription default. It has no effect on replay, whose recorded
 	// session.update remains authoritative.
 	NoInputTranscription bool
-	APIKey               string
-	BaseURL              string
-	ConfigDir            string
-	Prompt               string
+	// InputAudioTranscription is the resolved request-scoped transcription
+	// policy. Nil preserves the existing mode-specific policy resolution.
+	InputAudioTranscription *models.InputAudioTranscriptionConfig
+	APIKey                  string
+	BaseURL                 string
+	ConfigDir               string
+	Prompt                  string
 	// PromptProvided distinguishes an explicitly supplied empty prompt from an
 	// omitted prompt. Replay uses the distinction to opt into capture-derived
 	// prompt planning only when the caller did not provide a prompt.
@@ -188,6 +195,15 @@ type SessionRunOptions struct {
 	// contract only long enough for case/space-insensitive validation; plans
 	// store the canonical ws or webrtc value.
 	Transport string
+	// TransportProvided distinguishes the pflag default from an explicit
+	// transport selection so persisted bare-session transport can be honored.
+	TransportProvided bool
+	// BareLive marks the resolved zero/alternate-free live-device request. It
+	// is intentionally separate from BrowserToolsEnabled and capture modes.
+	BareLive bool
+	// TurnDetection is the resolved server-side VAD policy for a bare live
+	// session. Nil preserves existing non-bare behavior.
+	TurnDetection *models.TurnDetectionConfig
 	// Signaling is the selected opaque signaling endpoint. It is consumed by
 	// the WebRTC runtime only; it must remain empty for the WebSocket runtime.
 	Signaling string
@@ -316,7 +332,7 @@ func validateSessionRunOptions(opts SessionRunOptions) error {
 	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
 		return err
 	}
-	if opts.RecordPath == "" && opts.ReplayPath == "" && !opts.BrowserToolsEnabled {
+	if opts.RecordPath == "" && opts.ReplayPath == "" && !opts.BrowserToolsEnabled && !opts.BareLive {
 		return fmt.Errorf("agent session requires --record <file>.json or --replay <file>.json")
 	}
 	if opts.RecordPath != "" && opts.ReplayPath != "" {
@@ -640,7 +656,11 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
 		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
+		if opts.InputAudioTranscription != nil {
+			inputAudioTranscription = *opts.InputAudioTranscription
+		}
 		config.InputAudioTranscription = &inputAudioTranscription
+		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
 		config.Voice = opts.Voice
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []oaiprovider.Option{
@@ -665,6 +685,12 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		config.TurnDetection = cloneSessionTurnDetection(opts.TurnDetection)
+		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
+		if opts.InputAudioTranscription != nil {
+			inputAudioTranscription = *opts.InputAudioTranscription
+		}
+		config.InputAudioTranscription = &inputAudioTranscription
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []grok.Option{grok.WithAPIKey(sessionCfg.APIKey)}
 		if strings.TrimSpace(sessionCfg.BaseURL) != "" {
@@ -683,6 +709,18 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 	default:
 		return nil, "", fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", sessionProviderOpenAI, sessionProviderGrok, providerName)
 	}
+}
+
+func cloneSessionTurnDetection(policy *models.TurnDetectionConfig) *models.TurnDetectionConfig {
+	if policy == nil {
+		return nil
+	}
+	copy := *policy
+	if policy.CreateResponse != nil {
+		createResponse := *policy.CreateResponse
+		copy.CreateResponse = &createResponse
+	}
+	return &copy
 }
 
 func deviceProbeSessionConfig(model, instructions string, input, output models.AudioFormat) models.SessionConfig {

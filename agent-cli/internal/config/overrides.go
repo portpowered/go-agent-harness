@@ -24,11 +24,40 @@ func copyGrokConfig(g *GrokConfig) *GrokConfig {
 	}
 }
 
+func copySessionConfig(s *SessionConfig) *SessionConfig {
+	if s == nil {
+		return nil
+	}
+	out := *s
+	if s.VAD != nil {
+		vad := *s.VAD
+		if s.VAD.Enabled != nil {
+			enabled := *s.VAD.Enabled
+			vad.Enabled = &enabled
+		}
+		if s.VAD.CreateResponse != nil {
+			createResponse := *s.VAD.CreateResponse
+			vad.CreateResponse = &createResponse
+		}
+		out.VAD = &vad
+	}
+	if s.InputTranscription != nil {
+		transcription := *s.InputTranscription
+		if s.InputTranscription.Enabled != nil {
+			enabled := *s.InputTranscription.Enabled
+			transcription.Enabled = &enabled
+		}
+		out.InputTranscription = &transcription
+	}
+	return &out
+}
+
 // ApplyOverrides returns a copy of cfg with CLI flag overrides applied.
 // Empty strings mean no override. Used by ask/chat commands so that
 // --api-key, --model, --provider, --base-url override config file values.
 func (c Config) ApplyOverrides(apiKey, model, provider, baseURL string) Config {
 	out := c
+	out.Session = copySessionConfig(c.Session)
 
 	// Determine effective provider (switch if --provider set)
 	effProvider := c.Model.Provider
