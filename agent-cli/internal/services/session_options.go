@@ -156,10 +156,14 @@ type SessionRunOptions struct {
 	Provider      string
 	Model         string
 	ModelProvided bool
-	APIKey        string
-	BaseURL       string
-	ConfigDir     string
-	Prompt        string
+	// NoInputTranscription explicitly disables the live OpenAI customer-audio
+	// transcription default. It has no effect on replay, whose recorded
+	// session.update remains authoritative.
+	NoInputTranscription bool
+	APIKey               string
+	BaseURL              string
+	ConfigDir            string
+	Prompt               string
 	// PromptProvided distinguishes an explicitly supplied empty prompt from an
 	// omitted prompt. Replay uses the distinction to opt into capture-derived
 	// prompt planning only when the caller did not provide a prompt.
@@ -559,6 +563,13 @@ func NewOpenAIRealtimeSessionInferencerWithToolsAndOptions(sessionCfg config.Ope
 }
 
 func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg config.OpenAIConfig, voice string, toolDefinitions []messages.ToolDefinition, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, toolDefinitions, models.InputAudioTranscriptionConfig{
+		Enabled: true,
+		Model:   models.DefaultInputAudioTranscriptionModel,
+	}, opts...)
+}
+
+func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg config.OpenAIConfig, voice string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig, opts ...oaiprovider.Option) (messages.SessionInferencer, error) {
 	if !isOpenAIRealtimeModel(sessionCfg.Model) {
 		return nil, unsupportedOpenAIRealtimeModelError(sessionCfg.Model)
 	}
@@ -573,6 +584,7 @@ func newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg co
 		return nil, fmt.Errorf("create OpenAI realtime session gateway: %w", err)
 	}
 	inferenceOpts := []inference.SessionOption{inference.WithSessionModel(sessionCfg.Model)}
+	inferenceOpts = append(inferenceOpts, inference.WithSessionInputAudioTranscription(inputAudioTranscription))
 	if voice != "" {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))
 	}
@@ -607,6 +619,8 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 		}
 		model = sessionCfg.Model
 		config = deviceProbeSessionConfig(model, instructions, models.AudioFormatPCM16, models.AudioFormatPCM16)
+		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, providerName, true)
+		config.InputAudioTranscription = &inputAudioTranscription
 		config.Voice = opts.Voice
 		config.Tools = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
 		providerOpts := []oaiprovider.Option{

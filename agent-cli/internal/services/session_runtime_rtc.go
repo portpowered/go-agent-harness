@@ -151,7 +151,8 @@ func planWebRTCSessionRuntime(opts SessionRunOptions, selection SessionRuntimeSe
 		if recordingDialer == nil {
 			return closeOnPlanError(wrapSessionRTCRuntimeError("create recording transport", ErrSessionRTCRuntimeUnavailable))
 		}
-		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false)
+		inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, provider, opts.RTCDeviceBinding.InputPresent)
+		inner, err = factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, false, inputAudioTranscription)
 		if err != nil {
 			return closeOnPlanError(err)
 		}

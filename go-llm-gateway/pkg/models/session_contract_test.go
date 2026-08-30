@@ -119,7 +119,11 @@ func populatedSessionConfig() SessionConfig {
 		OutputAudioSampleRate: SampleRate16000,
 		Tools:                 []ToolDefinition{populatedToolDefinition()},
 		TurnDetection:         func() *TurnDetectionConfig { v := populatedTurnDetectionConfig(); return &v }(),
-		Config:                json.RawMessage(`{"temperature":0.65,"provider":"xai"}`),
+		InputAudioTranscription: func() *InputAudioTranscriptionConfig {
+			v := InputAudioTranscriptionConfig{Enabled: true, Model: DefaultInputAudioTranscriptionModel}
+			return &v
+		}(),
+		Config: json.RawMessage(`{"temperature":0.65,"provider":"xai"}`),
 	}
 }
 

@@ -28,6 +28,21 @@ const (
 	SessionModalityAudio SessionModality = "audio"
 )
 
+// DefaultInputAudioTranscriptionModel is the OpenAI Realtime transcription
+// model used for live customer-audio sessions when no opt-out is selected.
+const DefaultInputAudioTranscriptionModel = "gpt-live-transcribe"
+
+// InputAudioTranscriptionConfig is the typed policy for transcribing
+// customer audio. A pointer on SessionConfig distinguishes an omitted policy
+// from an explicitly disabled one while keeping the provider wire mapping
+// provider-specific.
+type InputAudioTranscriptionConfig struct {
+	// Enabled controls whether customer audio transcription is requested.
+	Enabled bool `json:"enabled"`
+	// Model identifies the transcription model when Enabled is true.
+	Model string `json:"model,omitempty"`
+}
+
 // TurnDetectionConfig configures server-side voice activity detection.
 type TurnDetectionConfig struct {
 	// Type is the turn detection mode (e.g. "server_vad").
@@ -67,6 +82,9 @@ type SessionConfig struct {
 	Tools []ToolDefinition `json:"tools,omitempty"`
 	// TurnDetection configures voice activity detection.
 	TurnDetection *TurnDetectionConfig `json:"turn_detection,omitempty"`
+	// InputAudioTranscription carries the resolved customer-audio transcription
+	// policy. Providers translate it into their own session-update schema.
+	InputAudioTranscription *InputAudioTranscriptionConfig `json:"input_audio_transcription,omitempty"`
 	// Config holds provider-specific parameters as raw JSON.
 	Config json.RawMessage `json:"config,omitempty"`
 }

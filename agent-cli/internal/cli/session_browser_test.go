@@ -42,6 +42,25 @@ func TestSessionCommandBrowserFlagsExposeC0Surface(t *testing.T) {
 	}
 }
 
+func TestSessionCommandInputAudioTranscriptionHelp(t *testing.T) {
+	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	var help bytes.Buffer
+	command.SetOut(&help)
+	command.SetArgs([]string{"--help"})
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("session --help: %v", err)
+	}
+	if command.Flags().Lookup("no-input-transcription") == nil {
+		t.Fatal("session command did not register --no-input-transcription")
+	}
+	for _, want := range []string{"enabled by default only for live OpenAI sessions that accept audio input", "--no-input-transcription", "Replay always follows its recorded session.update handshake"} {
+		if !strings.Contains(help.String(), want) {
+			t.Fatalf("session help does not document %q:\n%s", want, help.String())
+		}
+	}
+}
+
 func TestResolveSessionBrowserConfigAppliesCLIOverYAMLAndEnvironment(t *testing.T) {
 	configDir := t.TempDir()
 	configYAML := `

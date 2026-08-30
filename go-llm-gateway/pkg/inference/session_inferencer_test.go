@@ -120,6 +120,23 @@ func TestSessionGatewayInferencer_WithSessionToolsDefensivelyCopies(t *testing.T
 	}
 }
 
+func TestSessionGatewayInferencer_WithSessionInputAudioTranscriptionDefensivelyCopies(t *testing.T) {
+	policy := models.InputAudioTranscriptionConfig{Enabled: true, Model: models.DefaultInputAudioTranscriptionModel}
+	si := NewSessionGatewayInferencer(&mockSessionGateway{session: newMockSession()}, WithSessionInputAudioTranscription(policy))
+
+	policy.Model = "mutated-input-transcriber"
+	snapshot := si.Request()
+	if snapshot.Config.InputAudioTranscription == nil || !snapshot.Config.InputAudioTranscription.Enabled || snapshot.Config.InputAudioTranscription.Model != models.DefaultInputAudioTranscriptionModel {
+		t.Fatalf("input transcription policy was not copied: %#v", snapshot.Config.InputAudioTranscription)
+	}
+
+	snapshot.Config.InputAudioTranscription.Model = "snapshot-mutated-input-transcriber"
+	again := si.Request()
+	if again.Config.InputAudioTranscription == nil || again.Config.InputAudioTranscription.Model != models.DefaultInputAudioTranscriptionModel {
+		t.Fatalf("Request returned mutable input transcription state: %#v", again.Config.InputAudioTranscription)
+	}
+}
+
 func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *testing.T) {
 	sess := newMockSession()
 	gw := &mockSessionGateway{session: sess}

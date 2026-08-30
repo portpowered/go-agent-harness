@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -226,17 +227,17 @@ func sessionRuntimeFactoryWithInstructions(instructions string) sessionRuntimeFa
 	factory.newGrokSessionInferencer = func(sessionCfg config.GrokConfig, dialer transport.Dialer) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructions(sessionCfg, dialer, instructions)
 	}
-	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg, voice, dialer, instructions)
+	factory.newOpenAISessionInf = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, inputAudioTranscription)
 	}
 	factory.newGrokSessionWithTools = func(sessionCfg config.GrokConfig, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
 		return buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg, dialer, instructions, toolDefinitions)
 	}
-	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, voice, dialer, instructions, toolDefinitions)
+	factory.newOpenAISessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
 	}
-	factory.newOpenAIScheduledSessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudio(sessionCfg, voice, dialer, instructions, toolDefinitions)
+	factory.newOpenAIScheduledSessionWithTools = func(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+		return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudioAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
 	}
 	return factory
 }
@@ -267,19 +268,23 @@ func buildGrokSessionInferencerWithInstructionsAndTools(sessionCfg config.GrokCo
 	return inference.NewSessionGatewayInferencer(sessionGateway, inferenceOpts...), nil
 }
 
-func buildOpenAIRealtimeSessionInferencerWithInstructions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg, voice, dialer, instructions, nil)
-}
-
 func buildOpenAIRealtimeSessionInferencerWithInstructionsAndTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions)
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, toolDefinitions, models.InputAudioTranscriptionConfig{})
 }
 
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudio(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, oaiprovider.WithClientOwnedAudioTurnBoundaries())
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg, voice, dialer, instructions, nil, inputAudioTranscription)
 }
 
-func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, extra ...oaiprovider.Option) (messages.SessionInferencer, error) {
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndScheduledAudioAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, dialer, instructions, toolDefinitions, inputAudioTranscription, oaiprovider.WithClientOwnedAudioTurnBoundaries())
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, instructions string, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig, extra ...oaiprovider.Option) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
@@ -300,6 +305,7 @@ func buildOpenAIRealtimeSessionInferencerWithInstructionsAndToolsAndOptions(sess
 	inferenceOpts := []inference.SessionOption{
 		inference.WithSessionModel(sessionCfg.Model),
 		inference.WithSessionInstructions(instructions),
+		inference.WithSessionInputAudioTranscription(inputAudioTranscription),
 	}
 	if voice != "" {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(voice))

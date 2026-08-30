@@ -18,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -56,7 +57,7 @@ model:
 			gotModel = model
 			return recordingDialer
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			gotCfg = cfg
 			gotVoice = voice
 			gotDialer = dialer
@@ -103,7 +104,7 @@ func TestPlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle(t *testing
 			apiKey:   "sk-scheduled-test-key",
 			plan:     planOpenAIRecordRuntime,
 			configure: func(factory *sessionRuntimeFactory) {
-				factory.newOpenAISessionInf = func(config.OpenAIConfig, string, transport.Dialer) (messages.SessionInferencer, error) {
+				factory.newOpenAISessionInf = func(config.OpenAIConfig, string, transport.Dialer, models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 					return &scriptedSessionInferencer{}, nil
 				}
 			},
@@ -272,7 +273,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 			}
 			return replayDialer, nil
 		},
-		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
+		newOpenAISessionInf: func(cfg config.OpenAIConfig, voice string, dialer transport.Dialer, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 			openAICalled = true
 			gotVoice = voice
 			if cfg.Model != "gpt-realtime" {
@@ -349,7 +350,7 @@ func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDef
 				newReplayDialer: func(string) (sessionReplayDialer, error) {
 					return replayDialer, nil
 				},
-				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, definitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+				newOpenAISessionWithTools: func(_ config.OpenAIConfig, _ string, _ transport.Dialer, definitions []messages.ToolDefinition, _ models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 					gotProviderDefinitions = definitions
 					return &scriptedSessionInferencer{}, nil
 				},

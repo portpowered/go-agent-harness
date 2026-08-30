@@ -9,6 +9,7 @@ type AudioFormat = models.AudioFormat
 type SampleRate = models.SampleRate
 type SessionModality = models.SessionModality
 type TurnDetectionConfig = models.TurnDetectionConfig
+type InputAudioTranscriptionConfig = models.InputAudioTranscriptionConfig
 type SessionConfig = models.SessionConfig
 type SessionEventType = models.SessionEventType
 type SessionEvent = models.SessionEvent
@@ -32,6 +33,10 @@ const (
 	SessionModalityText  = models.SessionModalityText
 	SessionModalityAudio = models.SessionModalityAudio
 )
+
+// DefaultInputAudioTranscriptionModel is the default OpenAI customer-audio
+// transcription model exposed through the gateway package.
+const DefaultInputAudioTranscriptionModel = models.DefaultInputAudioTranscriptionModel
 
 // Re-export client-to-server event type constants.
 const (

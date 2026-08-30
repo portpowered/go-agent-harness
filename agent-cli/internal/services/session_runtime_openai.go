@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -29,7 +30,8 @@ func planOpenAIRecordRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	}
 	recordingDialer := factory.newRecordingDialer(liveDialer, sessionProviderOpenAI, sessionCfg.Model)
 	clientOwnedAudio := opts.ClientOwnsAudioTurnBoundaries || len(opts.AudioInputs) > 0
-	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio)
+	inputAudioTranscription := resolveInputAudioTranscriptionPolicy(opts, sessionProviderOpenAI, clientOwnedAudio)
+	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(sessionCfg, opts.Voice, recordingDialer, opts.ToolDefinitions, clientOwnedAudio, inputAudioTranscription)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -95,7 +97,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 	sessionInferencer, err := factory.newOpenAISessionInferencerForTools(config.OpenAIConfig{
 		APIKey: "replay",
 		Model:  model,
-	}, opts.Voice, replayDialerWithConfiguration, nil, false)
+	}, opts.Voice, replayDialerWithConfiguration, nil, false, models.InputAudioTranscriptionConfig{})
 	if err != nil {
 		return sessionRuntimePlan{}, fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
 	}
@@ -128,19 +130,27 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 }
 
 func buildOpenAIRealtimeSessionInferencer(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer) (messages.SessionInferencer, error) {
-	return buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg, voice, dialer, nil)
+	return buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg, voice, dialer, models.InputAudioTranscriptionConfig{})
 }
 
 func buildOpenAIRealtimeSessionInferencerWithTools(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg, voice, dialer, toolDefinitions, models.InputAudioTranscriptionConfig{})
+}
+
+func buildOpenAIRealtimeSessionInferencerWithInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
+	return buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg, voice, dialer, nil, inputAudioTranscription)
+}
+
+func buildOpenAIRealtimeSessionInferencerWithToolsAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
 	opts := make([]oaiprovider.Option, 0, 1)
 	opts = append(opts, oaiprovider.WithWebSocketDialer(dialer))
-	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, toolDefinitions, inputAudioTranscription, opts...)
 }
 
-func buildOpenAIRealtimeSessionInferencerWithScheduledAudio(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition) (messages.SessionInferencer, error) {
+func buildOpenAIRealtimeSessionInferencerWithScheduledAudioAndInputAudioTranscription(sessionCfg config.OpenAIConfig, voice string, dialer transport.Dialer, toolDefinitions []messages.ToolDefinition, inputAudioTranscription models.InputAudioTranscriptionConfig) (messages.SessionInferencer, error) {
 	if dialer == nil {
 		return nil, missingOwnedSessionDialerError(sessionProviderOpenAI)
 	}
@@ -148,5 +158,5 @@ func buildOpenAIRealtimeSessionInferencerWithScheduledAudio(sessionCfg config.Op
 		oaiprovider.WithWebSocketDialer(dialer),
 		oaiprovider.WithClientOwnedAudioTurnBoundaries(),
 	}
-	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndOptions(sessionCfg, voice, toolDefinitions, opts...)
+	return newOpenAIRealtimeSessionInferencerWithVoiceAndToolsAndInputAudioTranscriptionAndOptions(sessionCfg, voice, toolDefinitions, inputAudioTranscription, opts...)
 }

@@ -79,6 +79,17 @@ func WithSessionTools(tools []models.ToolDefinition) SessionOption {
 	}
 }
 
+// WithSessionInputAudioTranscription sets the resolved customer-audio
+// transcription policy for every session connection. The value is copied so
+// callers can safely reuse or mutate their input after configuring the
+// inferencer.
+func WithSessionInputAudioTranscription(policy models.InputAudioTranscriptionConfig) SessionOption {
+	return func(si *SessionGatewayInferencer) {
+		policyCopy := policy
+		si.request.Config.InputAudioTranscription = &policyCopy
+	}
+}
+
 // NewSessionGatewayInferencer creates a bridge that delegates session
 // establishment to a gateway-owned session adapter while preserving
 // messages.SessionInferencer as the consumer-facing contract.
@@ -118,6 +129,10 @@ func cloneSessionConfig(config models.SessionConfig) models.SessionConfig {
 			turnDetection.CreateResponse = &createResponse
 		}
 		config.TurnDetection = &turnDetection
+	}
+	if config.InputAudioTranscription != nil {
+		inputAudioTranscription := *config.InputAudioTranscription
+		config.InputAudioTranscription = &inputAudioTranscription
 	}
 	config.Config = append([]byte(nil), config.Config...)
 	return config
