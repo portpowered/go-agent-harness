@@ -29,12 +29,13 @@ const (
 )
 
 type roomParticipantPlan struct {
-	manifest    room.Participant
-	options     SessionRunOptions
-	inferencer  messages.SessionInferencer
-	secret      string
-	tracker     *roomConnectTrackingInferencer
-	participant *roomParticipantRuntime
+	manifest              room.Participant
+	options               SessionRunOptions
+	inferencer            messages.SessionInferencer
+	secret                string
+	tracker               *roomConnectTrackingInferencer
+	participant           *roomParticipantRuntime
+	capabilityCoordinator *SessionCapabilityCoordinator
 }
 
 type roomParticipantRuntime struct {

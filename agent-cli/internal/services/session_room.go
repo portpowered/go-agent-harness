@@ -119,6 +119,12 @@ type RoomRunOptions struct {
 	// uses the normal config-backed registry when tools are requested; an
 	// explicit empty tools list never constructs or advertises tools.
 	ToolCapabilitiesFactory RoomParticipantToolCapabilitiesFactory
+	// BrowserCapabilitiesFactory supplies an isolated WebMCP capability set
+	// for each participant that has an explicit browserTools manifest object.
+	// The room CLI installs the production factory; service tests and embedders
+	// can inject a hermetic factory. It is never called for browser-disabled
+	// participants.
+	BrowserCapabilitiesFactory RoomParticipantBrowserCapabilitiesFactory
 
 	// Validation is applied before any session factory is called. Setting
 	// CredentialLookup is a convenience override for Validation.LookupCredential.

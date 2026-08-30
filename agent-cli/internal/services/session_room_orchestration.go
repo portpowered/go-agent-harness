@@ -96,7 +96,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		return result, runErr
 	}
 
-	plans, secrets, err := buildRoomParticipantPlans(opts, validation)
+	plans, secrets, err := buildRoomParticipantPlansWithContext(ctx, opts, validation)
 	if err != nil {
 		result := roomFailureResult(err, secrets)
 		return finalizeEvidence(result, err)
@@ -127,7 +127,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	for _, plan := range plans {
 		if err := mesh.Join(roomCtx, plan.manifest.ID); err != nil {
 			safeErr := roomParticipantFailure(plan.manifest.ID, err, secrets)
-			safeErr = errors.Join(safeErr, closeMeshNow())
+			safeErr = errors.Join(safeErr, closeMeshNow(), closeRoomParticipantPlanCapabilities(plans))
 			result := roomFailureResult(safeErr, secrets)
 			return finalizeEvidence(result, safeErr)
 		}
@@ -154,7 +154,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		cleanup := &roomCleanupWaiter{}
 		cleanup.start()
 		defer cleanup.stop()
-		return cleanupRoomParticipantSetup(runtimes, mesh, cleanup)
+		return errors.Join(cleanupRoomParticipantSetup(runtimes, mesh, cleanup), closeRoomParticipantPlanCapabilities(plans))
 	}
 	if evidence != nil {
 		evidence.setErrorHandler(func(participantID string, evidenceErr error) {
