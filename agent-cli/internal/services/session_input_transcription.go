@@ -14,6 +14,9 @@ func resolveInputAudioTranscriptionPolicy(opts SessionRunOptions, provider strin
 	if !acceptsAudioInput || opts.NoInputTranscription || opts.ReplayPath != "" || !strings.EqualFold(strings.TrimSpace(provider), sessionProviderOpenAI) {
 		return models.InputAudioTranscriptionConfig{}
 	}
+	if opts.InputAudioTranscription != nil {
+		return *opts.InputAudioTranscription
+	}
 	return models.InputAudioTranscriptionConfig{
 		Enabled: true,
 		Model:   models.DefaultInputAudioTranscriptionModel,

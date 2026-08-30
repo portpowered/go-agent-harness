@@ -193,6 +193,89 @@ model:
 	}
 }
 
+func TestLoad_SessionConfigAndEffectivePath(t *testing.T) {
+	const sessionYAML = `
+session:
+  provider: openai
+  model: gpt-realtime-2.1-mini
+  transport: ws
+  input_device: virtual:mic
+  output_device: virtual:speakers
+  vad:
+    enabled: true
+    type: server_vad
+    threshold: 0.7
+    prefix_padding_ms: 100
+    silence_duration_ms: 500
+    create_response: false
+  input_transcription:
+    enabled: false
+    model: custom-transcriber
+`
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ConfigFileName)
+	if err := os.WriteFile(configPath, []byte(sessionYAML), 0600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	storage := NewConfigStorage(configPath)
+	cfg, err := storage.Load()
+	if err != nil {
+		t.Fatalf("Load(): %v", err)
+	}
+	if cfg.ConfigPath != configPath || storage.Path() != configPath {
+		t.Fatalf("config path = %q / storage path = %q, want %q", cfg.ConfigPath, storage.Path(), configPath)
+	}
+	if cfg.Session == nil {
+		t.Fatal("Session: expected persisted session config")
+	}
+	if cfg.Session.Provider != ProviderOpenAI || cfg.Session.Model != "gpt-realtime-2.1-mini" || cfg.Session.InputDevice != "virtual:mic" || cfg.Session.OutputDevice != "virtual:speakers" {
+		t.Fatalf("Session identity = %#v", cfg.Session)
+	}
+	if cfg.Session.VAD == nil || cfg.Session.VAD.Enabled == nil || !*cfg.Session.VAD.Enabled || cfg.Session.VAD.Threshold != 0.7 || cfg.Session.VAD.CreateResponse == nil || *cfg.Session.VAD.CreateResponse {
+		t.Fatalf("Session.VAD = %#v, want decoded policy", cfg.Session.VAD)
+	}
+	if cfg.Session.InputTranscription == nil || cfg.Session.InputTranscription.Enabled == nil || *cfg.Session.InputTranscription.Enabled || cfg.Session.InputTranscription.Model != "custom-transcriber" {
+		t.Fatalf("Session.InputTranscription = %#v, want decoded policy", cfg.Session.InputTranscription)
+	}
+}
+
+func TestLoad_EnvOverrides_SessionDefaults(t *testing.T) {
+	const sessionYAML = `
+session:
+  provider: grok
+  model: file-session-model
+  vad:
+    enabled: true
+  input_transcription:
+    enabled: false
+`
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ConfigFileName)
+	if err := os.WriteFile(configPath, []byte(sessionYAML), 0600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	setEnv(t, "AGENT_SESSION__PROVIDER", ProviderOpenAI)
+	setEnv(t, "AGENT_SESSION__MODEL", "env-session-model")
+	setEnv(t, "AGENT_SESSION__VAD__ENABLED", "false")
+	setEnv(t, "AGENT_SESSION__INPUT_TRANSCRIPTION__ENABLED", "true")
+	defer unsetEnv(t, "AGENT_SESSION__PROVIDER", "AGENT_SESSION__MODEL", "AGENT_SESSION__VAD__ENABLED", "AGENT_SESSION__INPUT_TRANSCRIPTION__ENABLED")
+
+	cfg, err := NewConfigStorage(configPath).Load()
+	if err != nil {
+		t.Fatalf("Load(): %v", err)
+	}
+	if cfg.Session == nil || cfg.Session.Provider != ProviderOpenAI || cfg.Session.Model != "env-session-model" {
+		t.Fatalf("Session identity = %#v, want environment values", cfg.Session)
+	}
+	if cfg.Session.VAD == nil || cfg.Session.VAD.Enabled == nil || *cfg.Session.VAD.Enabled {
+		t.Fatalf("Session.VAD = %#v, want environment disabled value", cfg.Session.VAD)
+	}
+	if cfg.Session.InputTranscription == nil || cfg.Session.InputTranscription.Enabled == nil || !*cfg.Session.InputTranscription.Enabled {
+		t.Fatalf("Session.InputTranscription = %#v, want environment enabled value", cfg.Session.InputTranscription)
+	}
+}
+
 func TestLoad_EnvOverrides_Grok(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, ConfigFileName)

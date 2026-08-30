@@ -92,6 +92,15 @@ func NewConfigStorage(configPath string) *ConfigStorage {
 	}
 }
 
+// Path returns the effective configuration file path owned by this storage.
+// It is safe to call before Load and does not perform filesystem I/O.
+func (s *ConfigStorage) Path() string {
+	if s == nil {
+		return ""
+	}
+	return s.configPath
+}
+
 // NewDefaultConfigStorage creates a ConfigStorage using the default config directory
 // (~/.agent-cli/config.yaml). If configDir is non-empty it is used instead.
 func NewDefaultConfigStorage(configDir string) (*ConfigStorage, error) {
@@ -197,6 +206,7 @@ func (s *ConfigStorage) Load() (*Config, error) {
 	if err := cfg.ValidateInteractive(); err != nil {
 		return nil, fmt.Errorf("invalid interactive tool configuration: %w", err)
 	}
+	cfg.ConfigPath = s.configPath
 
 	s.cached = &cfg
 	return &cfg, nil
