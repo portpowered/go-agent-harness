@@ -144,7 +144,17 @@ func (s *productionTargetSession) CapturePageScreenshot(ctx context.Context) (we
 			map[string]any{"capability": webmcp.PageCaptureScreenshotMethod},
 		)
 	}
-	return capturer.CapturePageScreenshot(ctx)
+	screenshot, err := capturer.CapturePageScreenshot(ctx)
+	if err != nil {
+		return webmcp.PageScreenshot{}, err
+	}
+	// The raw Chrome adapter reports the protocol target ID. This bridge owns
+	// the public discovery identity, so remap the successful capture before it
+	// reaches the neutral broker's exact-selection check.
+	screenshot.BrowserID = s.target.BrowserID
+	screenshot.TargetID = s.target.ID
+	screenshot.Bytes = append([]byte(nil), screenshot.Bytes...)
+	return screenshot, nil
 }
 
 func (s *productionTargetSession) Events() <-chan webmcp.BrowserEvent { return s.events }
