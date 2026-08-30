@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -609,13 +610,17 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 	// deterministic clock keeps both transcript sides on the same timeline.
 	base := sessionRecordingClockBase
 	return &sessionDirectoryRecording{
-		destination: destination,
-		base:        base,
-		clock:       platformclock.NewDeterministic(base, time.Nanosecond),
+		destination:  destination,
+		base:         base,
+		clock:        platformclock.NewDeterministic(base, time.Nanosecond),
+		conversation: sessionConversationCollector{now: time.Now},
 		metadata: transcript.RecordingMetadata{
 			Transport: "websocket",
 			Model:     sessionRecordingModel(opts, plan),
 			ClockBase: base.Format(time.RFC3339Nano),
+			// The tick clock above is deliberately deterministic; the real
+			// wall-clock start anchors bundle timing for latency analysis.
+			WallClockStart: time.Now().UTC().Format(time.RFC3339Nano),
 		},
 		credentials: sessionRecordingCredentials(opts, plan),
 	}
@@ -1077,8 +1082,30 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			AdditionalArtifacts: copySessionRecordingArtifacts(r.imageArtifacts),
 			WriteFile:           r.writeFile,
 		}
+		timings := r.conversation.timingEntries()
 		r.mu.Unlock()
 		r.finalizeErr = transcript.WriteRecordingBundle(config)
+		if r.finalizeErr != nil || len(timings) == 0 {
+			return
+		}
+		// timing.json is a run-specific diagnostic beside the deterministic,
+		// manifest-hashed bundle: real wall-clock turn latency legitimately
+		// differs between equivalent runs, so it must never enter artifacts
+		// covered by the comparability contract.
+		timingBytes, timingErr := json.Marshal(timings)
+		if timingErr != nil {
+			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "encode timing diagnostic", r.destination, timingErr)
+			return
+		}
+		var writeErr error
+		if r.writeFile != nil {
+			_, writeErr = r.writeFile(filepath.Join(r.destination, "timing.json"), append(timingBytes, 0x0a), 0o644)
+		} else {
+			writeErr = os.WriteFile(filepath.Join(r.destination, "timing.json"), append(timingBytes, 0x0a), 0o644)
+		}
+		if writeErr != nil {
+			r.finalizeErr = recordingDestinationError(transcript.ErrRecordingWrite, "write timing diagnostic", r.destination, writeErr)
+		}
 	})
 	return r.finalizeErr
 }

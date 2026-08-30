@@ -641,6 +641,7 @@ func TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput(t *t
 		"client.transcript.jsonl",
 		"manifest.json",
 		"session-log.jsonl",
+		"timing.json",
 	}
 	if got := recordingEntries(t, destination); !reflect.DeepEqual(got, wantEntries) {
 		t.Fatalf("runner recording entries = %v, want %v", got, wantEntries)
@@ -881,16 +882,37 @@ func recordingFileBytes(t *testing.T, root string) map[string][]byte {
 	t.Helper()
 	files := make(map[string][]byte)
 	for _, relative := range recordingEntries(t, root) {
-		if relative == "audio" {
+		if relative == "audio" || relative == "timing.json" {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil {
 			t.Fatalf("read recording file %s: %v", relative, err)
 		}
-		files[relative] = data
+		files[relative] = normalizeRunSpecificTiming(relative, data)
 	}
 	return files
+}
+
+// normalizeRunSpecificTiming strips real wall-clock observations from bundle
+// artifacts before comparability checks. Bundles stay flag-composition
+// invariant; genuine timing measurements legitimately differ between two live
+// runs of the same scripted session.
+func normalizeRunSpecificTiming(relative string, data []byte) []byte {
+	switch relative {
+	case "manifest.json":
+		var doc map[string]any
+		if json.Unmarshal(data, &doc) != nil {
+			return data
+		}
+		delete(doc, "wall_clock_start")
+		normalized, err := json.Marshal(doc)
+		if err != nil {
+			return data
+		}
+		return normalized
+	}
+	return data
 }
 
 func assertSessionCaptureEquivalent(t *testing.T, want, got gwtesting.SessionCapture) {

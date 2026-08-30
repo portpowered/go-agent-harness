@@ -113,15 +113,24 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 	case models.SessionEventResponseOutputAudioTranscriptDone:
 		text := firstStringField(event.Data, "transcript")
 		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTranscriptEndValue(text)}}
+	case models.SessionEventInputAudioBufferCommitted:
+		// The server names the conversation item created for the committed
+		// buffer here, in commit order. That ordering is the authoritative
+		// item-to-turn correlation for input transcription attribution.
+		itemID := firstStringField(event.Data, "item_id")
+		if itemID == "" {
+			return nil
+		}
+		return []messages.StreamMessage{{Type: messages.StreamTypeInputItemAdded, Role: messages.RoleUser, Value: messages.NewInputItemAddedValue(itemID)}}
 	case models.SessionEventConversationItemInputAudioTranscriptionDelta:
 		text := firstStringField(event.Data, "delta")
 		if text == "" {
 			return nil
 		}
-		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptDelta, Role: messages.RoleUser, Value: messages.NewTranscriptDeltaValueForItem(text, firstStringField(event.Data, "item_id"))}}
 	case models.SessionEventConversationItemInputAudioTranscriptionCompleted:
 		text := firstStringField(event.Data, "transcript")
-		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue(text)}}
+		return []messages.StreamMessage{{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValueForItem(text, firstStringField(event.Data, "item_id"))}}
 	case models.SessionEventResponseFunctionCallArgumentsDelta:
 		partial := firstStringField(event.Data, "delta")
 		if partial == "" {

@@ -93,6 +93,12 @@ const (
 	StreamTypeTranscriptDelta StreamMessageType = "TRANSCRIPT.DELTA"
 	StreamTypeTranscriptEnd   StreamMessageType = "TRANSCRIPT.END"
 
+	// StreamTypeInputItemAdded announces the provider conversation item
+	// created for one committed user audio input, in server commit order. It
+	// is a correlation signal for input transcription attribution and takes
+	// no part in response lifecycle or message reconstruction.
+	StreamTypeInputItemAdded StreamMessageType = "INPUT_ITEM.ADDED"
+
 	// StreamTypePong is emitted in response to a ping control plane message.
 	StreamTypePong StreamMessageType = "PONG"
 
