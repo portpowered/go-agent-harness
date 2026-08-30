@@ -7,6 +7,7 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [PNIG interaction replay](interaction-replay.md) explains how to replay normalized interaction fixtures as NDJSON without provider credentials or live network calls.
 - [Agent session record and replay](session-record-replay.md) explains how to record live Grok and OpenAI Realtime sessions, replay captures without provider network calls, and interpret replay divergence errors.
 - [Live audio-in round-trip proof](session-audio-in-live.md) documents the bounded spoken-audio proof and the per-session input-transcription cost policy.
+- [Interactive voice tool latency contract](session-interactive-tool-timeouts.md) catalogs voice tool classes, timeout configuration, display admission, observable timing boundaries, hermetic evidence, and the one-live-confirmation procedure.
 - [Blind acceptance probes](acceptance-probe.md) explains the artifact-backed verdict contract and live/replay transport seam.
 - [Conversational customer simulation](customer-simulation-live.md) documents the explicit billed live suite, A/B/D selectors, safe key setup, audio layout, and hermetic versus live reruns.
 - [Room live visualizer](room-visualizer.html) is a zero-build browser page for the room's transcript, diagnostic, and lifecycle SSE events.
