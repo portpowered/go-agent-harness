@@ -11,12 +11,24 @@ import (
 )
 
 func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOptions) ([]*roomParticipantPlan, []string, error) {
+	return buildRoomParticipantPlansWithContext(context.Background(), opts, validation)
+}
+
+func buildRoomParticipantPlansWithContext(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions) (plans []*roomParticipantPlan, secrets []string, planErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	defer func() {
+		if planErr != nil {
+			planErr = errors.Join(planErr, closeRoomParticipantPlanCapabilities(plans))
+		}
+	}()
 	lookup := validation.LookupCredential
 	if lookup == nil {
 		lookup = os.LookupEnv
 	}
 	known := make(map[string]struct{}, len(opts.Manifest.Participants))
-	secrets := make([]string, 0, len(opts.Manifest.Participants))
+	secrets = make([]string, 0, len(opts.Manifest.Participants))
 	for _, participant := range opts.Manifest.Participants {
 		known[participant.ID] = struct{}{}
 		if value, ok := lookup(participant.APIKeyEnv); ok && value != "" {
@@ -25,14 +37,14 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 	}
 	for id := range opts.SessionInferencers {
 		if _, ok := known[id]; !ok {
-			return nil, secrets, fmt.Errorf("room session inferencer provided for unknown participant %q", id)
+			return plans, secrets, fmt.Errorf("room session inferencer provided for unknown participant %q", id)
 		}
 	}
 	toolFactory := opts.ToolCapabilitiesFactory
 	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
 		defaultFactory, factoryErr := newDefaultRoomParticipantToolCapabilitiesFactory(opts.ConfigDir)
 		if factoryErr != nil {
-			return nil, secrets, fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, factoryErr)
+			return plans, secrets, fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, factoryErr)
 		}
 		toolFactory = defaultFactory
 	}
@@ -41,7 +53,7 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 	if factory == nil {
 		factory = defaultRoomSessionFactory
 	}
-	plans := make([]*roomParticipantPlan, 0, len(opts.Manifest.Participants))
+	plans = make([]*roomParticipantPlan, 0, len(opts.Manifest.Participants))
 	for _, participant := range opts.Manifest.Participants {
 		value, ok := lookup(participant.APIKeyEnv)
 		if !ok {
@@ -59,41 +71,84 @@ func buildRoomParticipantPlans(opts RoomRunOptions, validation room.ValidationOp
 			WebSocketDialer: opts.WebSocketDialer,
 			WaitForClose:    true,
 		}
+		var staticCapabilities RoomParticipantToolCapabilities
 		if len(participant.Tools) > 0 {
 			if toolFactory == nil {
-				return nil, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantToolsUnavailable, []string{value})
+				return plans, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantToolsUnavailable, []string{value})
 			}
 			capabilities, capabilityErr := toolFactory(participant)
 			if capabilityErr != nil {
-				return nil, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure participant tools: %w", capabilityErr), []string{value})
+				return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure participant tools: %w", capabilityErr), []string{value})
 			}
 			if capabilityErr := validateRoomParticipantToolCapabilities(participant, capabilities); capabilityErr != nil {
-				return nil, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+				return plans, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
 			}
-			sessionOptions.ToolExecutor = capabilities.Executor
-			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(capabilities.Definitions)
+			staticCapabilities = capabilities
+			sessionOptions.ToolExecutor = staticCapabilities.Executor
+			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(staticCapabilities.Definitions)
 		}
 		if opts.WebSocketDialerFactory != nil {
 			sessionOptions.WebSocketDialer = opts.WebSocketDialerFactory(participant)
 		}
 		plan := &roomParticipantPlan{manifest: participant, options: sessionOptions, secret: value}
+		if participant.BrowserTools != nil {
+			if opts.BrowserCapabilitiesFactory == nil {
+				return plans, secrets, roomParticipantFailure(participant.ID, ErrRoomParticipantBrowserToolsUnavailable, []string{value})
+			}
+			browserCapabilities, capabilityErr := opts.BrowserCapabilitiesFactory(participant)
+			if capabilityErr != nil {
+				return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("configure browser tools: %w", capabilityErr), []string{value})
+			}
+			plan.capabilityCoordinator = NewSessionCapabilityCoordinator(browserCapabilities.Close)
+			plans = append(plans, plan)
+			if capabilityErr := validateRoomParticipantBrowserCapabilities(participant, browserCapabilities); capabilityErr != nil {
+				return plans, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+			}
+			composed, capabilityErr := composeRoomParticipantBrowserCapabilities(participant, staticCapabilities, browserCapabilities)
+			if capabilityErr != nil {
+				return plans, secrets, roomParticipantFailure(participant.ID, capabilityErr, []string{value})
+			}
+			if composed.Initialize != nil {
+				if initializeErr := composed.Initialize(ctx); initializeErr != nil {
+					return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("initialize browser tools: %w", initializeErr), []string{value})
+				}
+			}
+			if composed.RefreshToolDefinitions != nil {
+				refreshed, refreshErr := composed.RefreshToolDefinitions(ctx)
+				if refreshErr == nil {
+					composed.Definitions = cloneRoomToolDefinitions(refreshed)
+				} else if ctx.Err() != nil {
+					return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("refresh browser tools: %w", refreshErr), []string{value})
+				}
+			}
+			sessionOptions.ToolExecutor = composed.Executor
+			sessionOptions.ToolDefinitions = cloneRoomToolDefinitions(composed.Definitions)
+			sessionOptions.ToolDefinitionBase = cloneRoomToolDefinitions(composed.ToolDefinitionBase)
+			sessionOptions.RefreshToolDefinitions = composed.RefreshToolDefinitions
+			sessionOptions.BrowserWatch = composed.BrowserWatch
+			sessionOptions.BrowserToolsEnabled = true
+			sessionOptions.CapabilityClose = plan.capabilityCoordinator.Close
+		}
+		plan.options = sessionOptions
 		if inferencer, exists := opts.SessionInferencers[participant.ID]; exists {
 			if nilInterface(inferencer) {
-				return nil, secrets, roomParticipantFailure(participant.ID, errors.New("injected session inferencer is nil"), []string{value})
+				return plans, secrets, roomParticipantFailure(participant.ID, errors.New("injected session inferencer is nil"), []string{value})
 			}
 			plan.inferencer = inferencer
 		} else {
 			inferencer, factoryErr := factory(participant, sessionOptions)
 			if factoryErr != nil {
-				return nil, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("construct live session: %w", factoryErr), []string{value})
+				return plans, secrets, roomParticipantFailure(participant.ID, fmt.Errorf("construct live session: %w", factoryErr), []string{value})
 			}
 			if nilInterface(inferencer) {
-				return nil, secrets, roomParticipantFailure(participant.ID, errors.New("session factory returned a nil inferencer"), []string{value})
+				return plans, secrets, roomParticipantFailure(participant.ID, errors.New("session factory returned a nil inferencer"), []string{value})
 			}
 			plan.inferencer = inferencer
 		}
 		plan.tracker = newRoomConnectTrackingInferencer(plan.inferencer)
-		plans = append(plans, plan)
+		if participant.BrowserTools == nil {
+			plans = append(plans, plan)
+		}
 	}
 	return plans, secrets, nil
 }

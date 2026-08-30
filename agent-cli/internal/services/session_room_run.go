@@ -94,15 +94,21 @@ func runRoomParticipant(
 		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
 	}
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, sessionLoopOptions{
-		Prompt:          runtime.plan.options.Prompt,
-		WaitForClose:    true,
-		Done:            coordinator.done,
-		DoneErr:         coordinator.roomError,
-		ToolExecutor:    runtime.plan.options.ToolExecutor,
-		ToolDefinitions: cloneRoomToolDefinitions(runtime.plan.options.ToolDefinitions),
-		observer:        observer,
-		loopReady:       runtime.loopReady,
+		Prompt:                 runtime.plan.options.Prompt,
+		WaitForClose:           true,
+		Done:                   coordinator.done,
+		DoneErr:                coordinator.roomError,
+		ToolExecutor:           runtime.plan.options.ToolExecutor,
+		ToolDefinitions:        cloneRoomToolDefinitions(runtime.plan.options.ToolDefinitions),
+		ToolDefinitionBase:     cloneRoomToolDefinitions(runtime.plan.options.ToolDefinitionBase),
+		RefreshToolDefinitions: runtime.plan.options.RefreshToolDefinitions,
+		BrowserWatch:           runtime.plan.options.BrowserWatch,
+		observer:               observer,
+		loopReady:              runtime.loopReady,
 	})
+	if closeErr := closeRoomParticipantCapability(runtime.plan); closeErr != nil {
+		runErr = errors.Join(runErr, roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("close browser tools: %w", closeErr), secretsForPlan(runtime.plan)))
+	}
 	runtime.lifecycle.markRunDone(coordinator.participantRunError(runtime.plan.manifest.ID, runErr))
 	connected, _, _, _, _, _, connectErr := runtime.lifecycle.snapshot()
 	if trackedErr, ready := runtime.plan.tracker.outcome(); ready {

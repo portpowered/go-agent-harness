@@ -134,6 +134,10 @@ type Participant struct {
 	APIKeyEnv     string   `json:"api_key_env" yaml:"api_key_env"`
 	Voice         string   `json:"voice,omitempty" yaml:"voice,omitempty"`
 	Tools         []string `json:"tools" yaml:"tools"`
+	// BrowserTools is nil unless the manifest explicitly grants this
+	// participant the WebMCP browser capability. Its presence, rather than an
+	// endpoint value, is the activation switch.
+	BrowserTools *BrowserToolsConfig `json:"browserTools,omitempty" yaml:"browserTools,omitempty"`
 }
 
 // ValidationOptions supplies the registries that are available in the
@@ -269,6 +273,11 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 			return validation(field("id"), participant.ID, "must be unique", ErrDuplicateParticipant)
 		}
 		seenIDs[participant.ID] = struct{}{}
+		if participant.BrowserTools != nil {
+			if err := participant.BrowserTools.validateAt(field("browserTools")); err != nil {
+				return err
+			}
+		}
 		if strings.TrimSpace(participant.SystemPrompt) == "" {
 			return validation(field("system_prompt"), "", "must not be empty", ErrInvalidParticipant)
 		}
@@ -318,6 +327,9 @@ func ParseManifest(data []byte, options ...ValidationOptions) (Manifest, error) 
 	if len(options) > 1 {
 		return Manifest{}, validation("options", "", "at most one validation option set is supported", ErrInvalidManifest)
 	}
+	if err := validateManifestBrowserToolsShape(data); err != nil {
+		return Manifest{}, err
+	}
 	var raw manifestDocument
 	decoder := yamlv3.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
@@ -359,14 +371,15 @@ type manifestRoomDocument struct {
 }
 
 type manifestParticipant struct {
-	ID            *string   `json:"id" yaml:"id"`
-	SystemPrompt  *string   `json:"system_prompt" yaml:"system_prompt"`
-	OpeningPrompt *string   `json:"opening_prompt" yaml:"opening_prompt"`
-	Provider      *string   `json:"provider" yaml:"provider"`
-	Model         *string   `json:"model" yaml:"model"`
-	APIKeyEnv     *string   `json:"api_key_env" yaml:"api_key_env"`
-	Voice         *string   `json:"voice" yaml:"voice"`
-	Tools         *[]string `json:"tools" yaml:"tools"`
+	ID            *string               `json:"id" yaml:"id"`
+	SystemPrompt  *string               `json:"system_prompt" yaml:"system_prompt"`
+	OpeningPrompt *string               `json:"opening_prompt" yaml:"opening_prompt"`
+	Provider      *string               `json:"provider" yaml:"provider"`
+	Model         *string               `json:"model" yaml:"model"`
+	APIKeyEnv     *string               `json:"api_key_env" yaml:"api_key_env"`
+	Voice         *string               `json:"voice" yaml:"voice"`
+	Tools         *[]string             `json:"tools" yaml:"tools"`
+	BrowserTools  *manifestBrowserTools `json:"browserTools" yaml:"browserTools"`
 }
 
 func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifest, error) {
@@ -418,6 +431,16 @@ func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifes
 			for toolIndex, tool := range *rawParticipant.Tools {
 				participant.Tools[toolIndex] = strings.ToLower(strings.TrimSpace(tool))
 			}
+		}
+		if rawParticipant.BrowserTools != nil {
+			browserTools, browserToolsErr := normalizeManifestBrowserTools(
+				rawParticipant.BrowserTools,
+				fmt.Sprintf("participants[%d].browserTools", index),
+			)
+			if browserToolsErr != nil {
+				return Manifest{}, browserToolsErr
+			}
+			participant.BrowserTools = &browserTools
 		}
 		participants[index] = participant
 	}

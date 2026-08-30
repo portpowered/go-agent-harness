@@ -521,10 +521,15 @@ func (h *ScriptedBrowserHandle) newClient() *ScriptedBrowserHandle {
 
 type scriptedTargetEntry struct {
 	mu       sync.Mutex
+	eventMu  sync.Mutex
 	target   webmcp.Target
 	config   TargetConfig
 	removed  bool
 	sessions map[*ScriptedTargetSession]struct{}
+	// eventSequence is shared by every client attached to this target. Browser
+	// events are broadcast to all of them, so their producer sequence must be
+	// one target-local stream rather than one counter per client session.
+	eventSequence uint64
 	// lastSession keeps an externally-owned retired session inspectable after
 	// transport loss. A new Attach still wins through h.sessions, while the
 	// retained pointer lets recovery tests inject late events explicitly.
@@ -761,6 +766,8 @@ func (s *ScriptedTargetSession) emitPublishedLocked(event webmcp.BrowserEvent, t
 	if len(terminal) > 0 && terminal[0] {
 		return s.emitLocalPublishedLocked(event, true)
 	}
+	s.entry.eventMu.Lock()
+	defer s.entry.eventMu.Unlock()
 	decorated := s.decorateProducedEventLocked(event)
 	if err := s.entry.broadcast(decorated); err != nil {
 		return PublishedEvent{}, err
@@ -769,6 +776,8 @@ func (s *ScriptedTargetSession) emitPublishedLocked(event webmcp.BrowserEvent, t
 }
 
 func (s *ScriptedTargetSession) emitLocalPublishedLocked(event webmcp.BrowserEvent, terminal bool) (PublishedEvent, error) {
+	s.entry.eventMu.Lock()
+	defer s.entry.eventMu.Unlock()
 	decorated := s.decorateProducedEventLocked(event)
 	select {
 	case s.events <- decorated:

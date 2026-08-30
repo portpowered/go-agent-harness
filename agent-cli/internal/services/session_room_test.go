@@ -589,12 +589,14 @@ func (i *roomTestInferencer) sessionsSnapshot() []*roomTestSession {
 }
 
 type roomTestSession struct {
-	receive *messages.TypedBuffer[messages.StreamMessage]
-	done    chan struct{}
+	receive    *messages.TypedBuffer[messages.StreamMessage]
+	done       chan struct{}
+	sentNotify chan struct{}
 
 	mu             sync.Mutex
 	closeCalls     int
 	sent           []messages.StreamMessage
+	sentRead       int
 	once           sync.Once
 	closeStartOnce sync.Once
 	closeStarted   chan struct{}
@@ -603,8 +605,9 @@ type roomTestSession struct {
 
 func newRoomTestSession() *roomTestSession {
 	return &roomTestSession{
-		receive: messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:    make(chan struct{}),
+		receive:    messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:       make(chan struct{}),
+		sentNotify: make(chan struct{}, 1),
 	}
 }
 
@@ -619,6 +622,10 @@ func (s *roomTestSession) Send(ctx context.Context, msg messages.StreamMessage) 
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
 	s.mu.Unlock()
+	select {
+	case s.sentNotify <- struct{}{}:
+	default:
+	}
 	return true
 }
 
@@ -669,6 +676,27 @@ func (s *roomTestSession) sentCountSnapshot() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.sent)
+}
+
+func (s *roomTestSession) nextSent(ctx context.Context) (messages.StreamMessage, bool) {
+	if s == nil {
+		return messages.StreamMessage{}, false
+	}
+	for {
+		s.mu.Lock()
+		if s.sentRead < len(s.sent) {
+			msg := s.sent[s.sentRead]
+			s.sentRead++
+			s.mu.Unlock()
+			return msg, true
+		}
+		s.mu.Unlock()
+		select {
+		case <-s.sentNotify:
+		case <-ctx.Done():
+			return messages.StreamMessage{}, false
+		}
+	}
 }
 
 func newRoomTestRunOptions(ids []string, inferencers map[string]*roomTestInferencer) (RoomRunOptions, map[string]SessionRunOptions) {

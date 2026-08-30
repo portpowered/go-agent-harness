@@ -183,8 +183,9 @@ func TestScriptedRuntimeBroadcastsEventsAcrossIndependentClients(t *testing.T) {
 		t.Fatalf("attach first client: %v", err)
 	}
 	first := firstValue.(*ScriptedTargetSession)
-	if event := nextEvent(t, first.Events()); event.Type != webmcp.EventTargetAttached {
-		t.Fatalf("first attach event = %#v, want target_attached", event)
+	firstAttached := nextEvent(t, first.Events())
+	if firstAttached.Type != webmcp.EventTargetAttached || firstAttached.Sequence != 1 {
+		t.Fatalf("first attach event = %#v, want target_attached at sequence one", firstAttached)
 	}
 
 	secondHandle, err := runtime.Open(context.Background(), candidate)
@@ -199,30 +200,41 @@ func TestScriptedRuntimeBroadcastsEventsAcrossIndependentClients(t *testing.T) {
 	if first == second {
 		t.Fatal("independent clients returned the same target session")
 	}
-	if event := nextEvent(t, second.Events()); event.Type != webmcp.EventTargetAttached {
-		t.Fatalf("second attach event = %#v, want target_attached", event)
+	secondAttached := nextEvent(t, second.Events())
+	if secondAttached.Type != webmcp.EventTargetAttached || secondAttached.Sequence <= firstAttached.Sequence {
+		t.Fatalf("second attach event = %#v, want target-local sequence after first attach %d", secondAttached, firstAttached.Sequence)
 	}
 
 	tool := webmcp.ToolDescriptor{Name: "read_state", FrameID: "frame-1", InputSchema: []byte(`{"type":"object"}`)}
 	if err := second.EmitToolsAdded(tool); err != nil {
 		t.Fatalf("emit shared catalog event: %v", err)
 	}
+	var catalogSequence uint64
 	for name, session := range map[string]*ScriptedTargetSession{"first": first, "second": second} {
 		event := nextEvent(t, session.Events())
 		if event.Type != webmcp.EventToolsAdded || event.Generation != 1 || len(event.Tools) != 1 || event.Tools[0].Name != tool.Name {
 			t.Fatalf("%s catalog event = %#v, want generation-one tools_added", name, event)
 		}
+		if event.Sequence <= secondAttached.Sequence {
+			t.Fatalf("%s catalog sequence = %d, want after second attach %d", name, event.Sequence, secondAttached.Sequence)
+		}
+		catalogSequence = event.Sequence
 	}
 
 	id, err := second.InvokeWebMCP(context.Background(), tool.FrameID, tool.Name, []byte(`{"value":1}`))
 	if err != nil {
 		t.Fatalf("invoke from second client: %v", err)
 	}
+	var invocationSequence uint64
 	for name, session := range map[string]*ScriptedTargetSession{"first": first, "second": second} {
 		event := nextEvent(t, session.Events())
 		if event.Type != webmcp.EventToolInvoked || event.InvocationID != id {
 			t.Fatalf("%s invocation event = %#v, want correlated tool_invoked", name, event)
 		}
+		if event.Sequence <= catalogSequence {
+			t.Fatalf("%s invocation sequence = %d, want after catalog %d", name, event.Sequence, catalogSequence)
+		}
+		invocationSequence = event.Sequence
 	}
 	if err := second.EmitToolResponse(id, "Completed", []byte(`{"ok":true}`)); err != nil {
 		t.Fatalf("respond from second client: %v", err)
@@ -231,6 +243,9 @@ func TestScriptedRuntimeBroadcastsEventsAcrossIndependentClients(t *testing.T) {
 		event := nextEvent(t, session.Events())
 		if event.Type != webmcp.EventToolResponded || event.InvocationID != id || string(event.Output) != `{"ok":true}` {
 			t.Fatalf("%s response event = %#v, want correlated tool_responded", name, event)
+		}
+		if event.Sequence <= invocationSequence {
+			t.Fatalf("%s response sequence = %d, want after invocation %d", name, event.Sequence, invocationSequence)
 		}
 	}
 }

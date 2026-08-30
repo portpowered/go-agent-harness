@@ -153,10 +153,11 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, manifestPath, outputDir, st
 	defer stopSignals()
 
 	options := services.RoomRunOptions{
-		Manifest:  manifest,
-		OutputDir: outputDir,
-		ConfigDir: roomConfigDir(roomRunGlobalFlags(c)),
-		Stream:    broker,
+		Manifest:                   manifest,
+		OutputDir:                  outputDir,
+		ConfigDir:                  roomConfigDir(roomRunGlobalFlags(c)),
+		BrowserCapabilitiesFactory: NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c))),
+		Stream:                     broker,
 		OnDiagnostic: func(participantID string, record services.SessionDiagnosticRecord) {
 			writeRoomDiagnosticProgress(output, participantID, record)
 		},
