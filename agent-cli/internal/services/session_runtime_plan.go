@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -129,6 +130,7 @@ type sessionRuntimePlan struct {
 	mediaSource            string
 	rtcDeviceRequest       RTCDeviceBindingRequest
 	capabilityCoordinator  *SessionCapabilityCoordinator
+	interactivePolicy      *InteractiveToolPolicy
 }
 
 func (p sessionRuntimePlan) run(ctx context.Context, out io.Writer) (runErr error) {
@@ -197,6 +199,10 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 			closeSessionCapabilityIfNeeded(capabilityCoordinator, &planErr)
 		}
 	}()
+	interactivePolicy, err := resolveSessionInteractiveToolPolicy(opts, opts.ToolDefinitions)
+	if err != nil {
+		return sessionRuntimePlan{}, err
+	}
 	if err := ValidateSessionAudioInTurnBarge(opts.AudioInTurnBarge, len(opts.AudioInputs)); err != nil {
 		return sessionRuntimePlan{}, err
 	}
@@ -232,8 +238,11 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	// so its capability snapshot cannot leak across concurrent sessions.
 	plan.loop.ToolExecutor = bindSessionImageToolExecutor(opts, plan)
 	plan.loop.ToolDefinitions = append([]messages.ToolDefinition(nil), opts.ToolDefinitions...)
-	// The per-invocation adapter deadline override crosses with the executor;
-	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
+	policySnapshot := interactivePolicy.Clone()
+	plan.interactivePolicy = &policySnapshot
+	plan.loop.InteractiveToolPolicy = &policySnapshot
+	// The per-invocation adapter deadline override is a hermetic test seam;
+	// zero selects the class-specific policy budget.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
 	plan.selection = selection
@@ -245,6 +254,39 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	}
 	plan.capabilityCoordinator = capabilityCoordinator
 	return plan, nil
+}
+
+func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []messages.ToolDefinition) (InteractiveToolPolicy, error) {
+	if opts.InteractiveToolPolicy != nil {
+		policy := opts.InteractiveToolPolicy.Clone()
+		if err := policy.Validate(); err != nil {
+			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+		}
+		return policy, nil
+	}
+
+	loadedConfig := opts.LoadedConfig
+	if loadedConfig == nil && opts.ConfigDir != "" {
+		// The CLI composition root supplies LoadedConfig alongside its tool
+		// definitions. Direct service callers may only provide ConfigDir; honor
+		// an existing file there without creating a new config as a planning
+		// side effect. Provider resolution retains ownership of default-file
+		// creation when no file exists.
+		configPath := filepath.Join(opts.ConfigDir, config.ConfigFileName)
+		if _, err := os.Stat(configPath); err == nil {
+			storage, storageErr := config.NewDefaultConfigStorage(opts.ConfigDir)
+			if storageErr != nil {
+				return InteractiveToolPolicy{}, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
+			}
+			loadedConfig, storageErr = storage.Load()
+			if storageErr != nil {
+				return InteractiveToolPolicy{}, fmt.Errorf("load interactive tool configuration: %w", storageErr)
+			}
+		} else if !os.IsNotExist(err) {
+			return InteractiveToolPolicy{}, fmt.Errorf("inspect interactive tool configuration: %w", err)
+		}
+	}
+	return ResolveInteractiveToolPolicy(loadedConfig, definitions)
 }
 
 func planSessionRuntimeMode(opts SessionRunOptions, factory sessionRuntimeFactory) (sessionRuntimePlan, error) {

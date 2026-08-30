@@ -238,6 +238,9 @@ type ToolsConfig struct {
 	Web  WebToolsConfig  `koanf:"web" yaml:"web"`
 	Cron CronToolsConfig `koanf:"cron" yaml:"cron"`
 	Exec ExecConfig      `koanf:"exec" yaml:"exec"`
+	// Interactive contains the voice/realtime policy. Batch callers do not
+	// consult this field and retain their existing execution deadlines.
+	Interactive InteractiveToolConfig `koanf:"interactive" yaml:"interactive"`
 	// List defines which tools are enabled. Each entry has id and enabled (default true if omitted).
 	// Tools not in the list are enabled by default. Set enabled: false to disable a tool.
 	List []ToolEntry `koanf:"list" yaml:"list"`

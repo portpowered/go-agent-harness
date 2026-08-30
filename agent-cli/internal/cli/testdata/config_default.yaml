@@ -29,6 +29,10 @@ tools:
     exec:
         enable_deny_patterns: false
         custom_deny_patterns: []
+    interactive:
+        fast_read_timeout: 5s
+        long_running_timeout: 20s
+        acknowledgement_threshold: 2s
     list:
         - id: exec
           enabled: true

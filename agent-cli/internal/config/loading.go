@@ -42,6 +42,10 @@ type browserConfigFieldSpec struct {
 	allowed []string
 }
 
+type interactiveConfigFieldSpec struct {
+	path string
+}
+
 // browserConfigFieldSpecs is deliberately ordered to keep configuration
 // errors deterministic when more than one browser value is invalid.
 var browserConfigFieldSpecs = []browserConfigFieldSpec{
@@ -73,6 +77,12 @@ var browserConfigFieldSpecs = []browserConfigFieldSpec{
 	{path: "browser.recording.redact_url_fragment", kind: browserConfigBool},
 	{path: "browser.replay.path", kind: browserConfigString},
 	{path: "browser.replay.strict", kind: browserConfigBool},
+}
+
+var interactiveConfigFieldSpecs = []interactiveConfigFieldSpec{
+	{path: "tools.interactive.fast_read_timeout"},
+	{path: "tools.interactive.long_running_timeout"},
+	{path: "tools.interactive.acknowledgement_threshold"},
 }
 
 // NewConfigStorage creates a new configuration storage handler.
@@ -121,6 +131,9 @@ func (s *ConfigStorage) Load() (*Config, error) {
 	}
 
 	k := koanf.New(".")
+	if err := validateInteractiveEnvironment(); err != nil {
+		return nil, fmt.Errorf("invalid interactive tool configuration: %w", err)
+	}
 	if err := validateBrowserEnvironment(); err != nil {
 		return nil, fmt.Errorf("invalid browser configuration: %w", err)
 	}
@@ -136,6 +149,9 @@ func (s *ConfigStorage) Load() (*Config, error) {
 	// "yes", 1, and comma-separated origin lists from being accepted by
 	// accident.
 	if data, err := os.ReadFile(s.configPath); err == nil {
+		if err := validateInteractiveYAML(data); err != nil {
+			return nil, fmt.Errorf("invalid interactive tool configuration in %s: %w", s.configPath, err)
+		}
 		if err := validateBrowserYAML(data); err != nil {
 			return nil, fmt.Errorf("invalid browser configuration in %s: %w", s.configPath, err)
 		}
@@ -178,9 +194,61 @@ func (s *ConfigStorage) Load() (*Config, error) {
 	if err := cfg.Browser.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid browser configuration: %w", err)
 	}
+	if err := cfg.ValidateInteractive(); err != nil {
+		return nil, fmt.Errorf("invalid interactive tool configuration: %w", err)
+	}
 
 	s.cached = &cfg
 	return &cfg, nil
+}
+
+func validateInteractiveEnvironment() error {
+	for _, spec := range interactiveConfigFieldSpecs {
+		envName := configEnvironmentName(spec.path)
+		value, ok := os.LookupEnv(envName)
+		if !ok {
+			continue
+		}
+		if err := validateInteractiveRawDuration(value, "environment variable "+envName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateInteractiveYAML(data []byte) error {
+	var root map[string]interface{}
+	if err := yamlv3.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parse YAML: %w", err)
+	}
+	for _, spec := range interactiveConfigFieldSpecs {
+		value, present, err := lookupYAMLPath(root, spec.path)
+		if err != nil {
+			return err
+		}
+		if !present {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("YAML field %s: expected a Go duration such as 5s", spec.path)
+		}
+		if err := validateInteractiveRawDuration(text, "YAML field "+spec.path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateInteractiveRawDuration(value, source string) error {
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return fmt.Errorf("%s: invalid Go duration %q: %w", source, value, err)
+	}
+	if duration <= 0 {
+		return fmt.Errorf("%s: duration must be positive", source)
+	}
+	return nil
 }
 
 // validateBrowserEnvironment validates only the canonical browser environment
@@ -201,6 +269,10 @@ func validateBrowserEnvironment() error {
 }
 
 func browserEnvironmentName(path string) string {
+	return configEnvironmentName(path)
+}
+
+func configEnvironmentName(path string) string {
 	return EnvPrefix + strings.ReplaceAll(strings.ToUpper(path), ".", "__")
 }
 
@@ -423,6 +495,9 @@ func containsString(values []string, want string) bool {
 // Validate checks that the selected provider has required fields (e.g. API key).
 // Local providers do not require an API key but do require a baseURL.
 func (c Config) Validate() error {
+	if err := c.ValidateInteractive(); err != nil {
+		return fmt.Errorf("invalid interactive tool configuration: %w", err)
+	}
 	if c.Model.Provider == ProviderFal {
 		return c.validateFal()
 	}
@@ -517,7 +592,8 @@ func getDefaultConfig() *Config {
 			},
 		},
 		Tools: ToolsConfig{
-			List: DefaultToolsList(),
+			Interactive: DefaultInteractiveToolConfig(),
+			List:        DefaultToolsList(),
 		},
 		Browser: DefaultBrowserConfig(),
 	}

@@ -30,6 +30,10 @@ tools:
         enable_deny_patterns: false
         custom_deny_patterns:
             - seeded-pattern
+    interactive:
+        fast_read_timeout: 5s
+        long_running_timeout: 20s
+        acknowledgement_threshold: 2s
     list:
         - id: exec
           enabled: false

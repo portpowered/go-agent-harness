@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -21,14 +22,16 @@ const defaultSessionToolExecutionTimeout = 60 * time.Second
 type sessionToolExecutor struct {
 	inner              messages.ToolExecutor
 	timeout            time.Duration
+	interactivePolicy  *InteractiveToolPolicy
 	observer           sessionToolLifecycleObserver
 	cancellationIntent *SessionCancellationIntent
 }
 
 var _ messages.ToolExecutor = (*sessionToolExecutor)(nil)
 
-// newSessionToolExecutor adapts the composed session executor for use by a
-// duplex agent loop. A non-positive timeout selects the session default.
+// newSessionToolExecutor retains the legacy single-deadline adapter used by
+// non-policy callers. The duplex session path uses the interactive policy
+// constructor below.
 //
 // The duplex loop construction seam passes the returned executor to
 // agentloop.WithToolExecutor. Keeping the adapter at this boundary makes an
@@ -70,6 +73,33 @@ func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
 	}
 }
 
+func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(
+	inner messages.ToolExecutor,
+	policy *InteractiveToolPolicy,
+	timeoutOverride time.Duration,
+	observer sessionToolLifecycleObserver,
+	cancellationIntent *SessionCancellationIntent,
+) *sessionToolExecutor {
+	if policy == nil {
+		defaultPolicy, err := NewInteractiveToolPolicy(config.DefaultInteractiveToolConfig(), nil)
+		if err == nil {
+			policy = &defaultPolicy
+		}
+	}
+	var policySnapshot *InteractiveToolPolicy
+	if policy != nil {
+		clone := policy.Clone()
+		policySnapshot = &clone
+	}
+	return &sessionToolExecutor{
+		inner:              inner,
+		timeout:            timeoutOverride,
+		interactivePolicy:  policySnapshot,
+		observer:           observer,
+		cancellationIntent: cancellationIntent,
+	}
+}
+
 type sessionToolExecutionResult struct {
 	response messages.ToolCallResponse
 	err      error
@@ -103,7 +133,14 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 		return finish(sessionToolFailure(call, errors.New("session tool executor is not configured")), true)
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, e.timeout)
+	timeout := e.timeout
+	if timeout <= 0 && e.interactivePolicy != nil {
+		timeout = e.interactivePolicy.TimeoutForTool(call.Name)
+	}
+	if timeout <= 0 {
+		timeout = defaultSessionToolExecutionTimeout
+	}
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	resultCh := make(chan sessionToolExecutionResult, 1)

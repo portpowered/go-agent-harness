@@ -149,6 +149,10 @@ type sessionLoopOptions struct {
 	// session loop. It is paired with ToolExecutor by the runtime planner.
 	ToolDefinitions []messages.ToolDefinition
 
+	// InteractiveToolPolicy is the immutable per-session class and timeout
+	// snapshot paired with ToolDefinitions and ToolExecutor.
+	InteractiveToolPolicy *InteractiveToolPolicy
+
 	// AdvertiseToolDefinitions sends the definitions through the generic
 	// SESSION.UPDATE seam used by injected sessions. Live provider-backed
 	// sessions receive definitions in their initial provider-specific config;
@@ -156,8 +160,7 @@ type sessionLoopOptions struct {
 	AdvertiseToolDefinitions bool
 
 	// ToolExecutionTimeout overrides the per-invocation adapter deadline in
-	// tests. Zero selects defaultSessionToolExecutionTimeout; production plans
-	// never set it.
+	// tests. Zero selects the class-specific interactive policy budget.
 	ToolExecutionTimeout time.Duration
 
 	// runtime stamps audio input and lifecycle observations from inside the
@@ -233,8 +236,9 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 				}))
 			}
 		}
-		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
+		loopOpts = append(loopOpts, agentloop.WithToolExecutor(newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(
 			opts.ToolExecutor,
+			opts.InteractiveToolPolicy,
 			opts.ToolExecutionTimeout,
 			opts.toolLifecycleObserver,
 			opts.cancellationIntent,

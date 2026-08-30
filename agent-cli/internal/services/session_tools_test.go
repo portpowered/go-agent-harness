@@ -628,10 +628,10 @@ func TestRunAgentLoopSession_TimeoutWorkerExitsBoundedly(t *testing.T) {
 }
 
 // TestSessionToolExecutor_DefaultWrapperAppliesProductionBound pins the
-// production default wiring: newSessionToolExecutor — the constructor selected
-// at the live duplex seam when no override is set — must impose the
-// documented 60s defaultSessionToolExecutionTimeout bound. The proof reads
-// the deadline handed to the inner executor, so it never waits out the bound.
+// legacy default wiring: newSessionToolExecutor — the compatibility constructor
+// for non-policy callers — must impose the documented 60s
+// defaultSessionToolExecutionTimeout bound. The proof reads the deadline handed
+// to the inner executor, so it never waits out the bound.
 func TestSessionToolExecutor_DefaultWrapperAppliesProductionBound(t *testing.T) {
 	if defaultSessionToolExecutionTimeout != 60*time.Second {
 		t.Fatalf("defaultSessionToolExecutionTimeout = %s, want the documented 60s production default", defaultSessionToolExecutionTimeout)
