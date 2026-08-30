@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -314,5 +315,152 @@ func TestRunAgentLoopSession_FileToolRoundTripThroughRegistryAndComposition(t *t
 	}
 	if _, err := os.Lstat(outOfRootTarget); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("out-of-root target after session = %v, want not-exist", err)
+	}
+}
+
+// TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndComposition
+// drives a real OS access denial through the same registry-backed/composed
+// executor used by the round-trip test. The scripted provider cannot release
+// its terminal response until the correlated denial has crossed the session
+// boundary.
+func TestRunAgentLoopSession_FileToolPermissionDeniedThroughRegistryAndComposition(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-denied session coverage requires Unix mode-bit enforcement; Windows ACL setup is unsupported here")
+	}
+
+	root := t.TempDir()
+	enterSessionFileWorkingDirectory(t, root)
+	relativeTarget := filepath.ToSlash(filepath.Join("nested", "session-permission-"+filepath.Base(root)+".txt"))
+	target := filepath.Join(root, filepath.FromSlash(relativeTarget))
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("create permission fixture parent: %v", err)
+	}
+	protected := "PROTECTED_PERMISSION_CONTENT_MUST_NOT_LEAK\n"
+	if err := os.WriteFile(target, []byte(protected), 0o600); err != nil {
+		t.Fatalf("create permission fixture: %v", err)
+	}
+	if err := os.Chmod(target, 0o000); err != nil {
+		t.Fatalf("deny permission fixture read access: %v", err)
+	}
+	// Register this after t.TempDir and enterSessionFileWorkingDirectory so the
+	// mode is restored before either the cwd or temporary root is cleaned up.
+	t.Cleanup(func() {
+		if err := os.Chmod(target, 0o600); err != nil {
+			t.Errorf("restore permission fixture mode: %v", err)
+		}
+	})
+	if _, err := os.ReadFile(target); err == nil {
+		t.Fatalf("mode-zero permission fixture remained readable on %s; Unix denial assertion would be invalid", runtime.GOOS)
+	} else if !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("mode-zero permission fixture read error = %v, want errors.Is(fs.ErrPermission)", err)
+	}
+
+	const callID = "file-permission-denied-read"
+	call := fileRoundTripCall{
+		id:        callID,
+		name:      "read_file",
+		arguments: marshalSessionFileArguments(t, map[string]string{"path": relativeTarget}),
+	}
+	executor, definitions := newSessionFileToolSurface(t, root)
+	recordingExecutor := &fileRoundTripExecutor{inner: executor, target: target}
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(
+		out,
+		"permission failure session terminated",
+		"access denied",
+		scriptedTurn{events: toolCallEvents(call.id, call.name, call.arguments)},
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := runAgentLoopSession(ctx, out, inferencer, sessionLoopOptions{
+		MaxDuration:              4 * time.Second,
+		WaitForClose:             true,
+		ToolExecutor:             recordingExecutor,
+		ToolDefinitions:          definitions,
+		ToolExecutionTimeout:     2 * time.Second,
+		AdvertiseToolDefinitions: true,
+	}); err != nil {
+		t.Fatalf("permission-denied session: %v\noutput:\n%s", err, out.String())
+	}
+
+	gotCalls, checkpoints := recordingExecutor.snapshots()
+	if len(gotCalls) != 1 || gotCalls[0].ID != call.id || gotCalls[0].Name != call.name || gotCalls[0].Arguments != call.arguments {
+		t.Fatalf("permission-denied executor calls = %#v, want one exact call %#v", gotCalls, call)
+	}
+	if len(checkpoints) != 1 {
+		t.Fatalf("permission-denied checkpoints = %d, want one: %#v", len(checkpoints), checkpoints)
+	}
+	checkpoint := checkpoints[0]
+	if checkpoint.diskExists || !errors.Is(checkpoint.diskErr, fs.ErrPermission) {
+		t.Fatalf("protected disk checkpoint = exists=%v err=%v, want inaccessible permission error", checkpoint.diskExists, checkpoint.diskErr)
+	}
+	failure := checkpoint.response
+	if failure.ToolCallID != call.id || failure.Name != call.name {
+		t.Fatalf("permission failure response correlation = (%q, %q), want (%q, %q)", failure.ToolCallID, failure.Name, call.id, call.name)
+	}
+	if strings.TrimSpace(failure.Content) == "" {
+		t.Fatal("permission failure response is empty")
+	}
+	lowerFailure := strings.ToLower(failure.Content)
+	if !strings.Contains(lowerFailure, "access denied") && !strings.Contains(lowerFailure, "permission denied") {
+		t.Fatalf("permission failure response = %q, want access/permission denial cause", failure.Content)
+	}
+	for _, forbidden := range []string{protected, "success", "read successfully", "file contents"} {
+		if strings.Contains(lowerFailure, strings.ToLower(forbidden)) {
+			t.Fatalf("permission failure response = %q contains protected/success wording %q", failure.Content, forbidden)
+		}
+	}
+
+	session := inferencer.sessionSnapshot()
+	if session == nil {
+		t.Fatal("scripted provider did not retain its connected permission-denial session")
+	}
+	select {
+	case <-inferencer.runFinished:
+	case <-time.After(time.Second):
+		t.Fatal("scripted provider did not finish after the permission failure terminal response")
+	}
+	session.mu.Lock()
+	sent := append([]messages.StreamMessage(nil), session.sent...)
+	session.mu.Unlock()
+	resultIndex, responseCreateIndex := -1, -1
+	var providerResult *messages.ToolCallEndValue
+	for index, message := range sent {
+		switch message.Type {
+		case messages.StreamTypeToolCallEnd:
+			value, ok := message.Value.(*messages.ToolCallEndValue)
+			if !ok || value == nil || value.ToolCallID != call.id {
+				continue
+			}
+			if providerResult != nil {
+				t.Fatalf("provider received duplicate permission result: %#v", sent)
+			}
+			copyValue := *value
+			providerResult = &copyValue
+			resultIndex = index
+		case messages.StreamTypeResponseCreate:
+			if resultIndex >= 0 && responseCreateIndex < 0 {
+				responseCreateIndex = index
+			}
+		}
+	}
+	if providerResult == nil {
+		t.Fatalf("provider did not receive a correlated permission failure: %#v", sent)
+	}
+	if providerResult.Name != call.name || providerResult.Arguments != failure.Content {
+		t.Fatalf("provider permission result = %#v, want name=%q content=%q", providerResult, call.name, failure.Content)
+	}
+	if responseCreateIndex < 0 {
+		t.Fatalf("provider terminal continuation was not released after the permission result: %#v", sent)
+	}
+	if responseCreateIndex < resultIndex {
+		t.Fatalf("provider response-create at %d preceded permission result at %d: %#v", responseCreateIndex, resultIndex, sent)
+	}
+	if strings.Contains(failure.Content, protected) || strings.Contains(out.String(), protected) {
+		t.Fatalf("protected content leaked through permission failure: response=%q output=%q", failure.Content, out.String())
+	}
+	if !strings.Contains(out.String(), "permission failure session terminated") || !strings.Contains(out.String(), "[session closed: test complete]") {
+		t.Fatalf("session did not reach its scripted terminal response after denial:\n%s", out.String())
 	}
 }
