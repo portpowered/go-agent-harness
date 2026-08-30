@@ -22,6 +22,9 @@ func TestDefaultBrowserConfig_IsComplete(t *testing.T) {
 	if cfg.Browser.Connection != want.Connection {
 		t.Errorf("connection = %+v, want %+v", cfg.Browser.Connection, want.Connection)
 	}
+	if cfg.Browser.Managed != want.Managed {
+		t.Errorf("managed = %+v, want %+v", cfg.Browser.Managed, want.Managed)
+	}
 	if cfg.Browser.Selection != want.Selection {
 		t.Errorf("selection = %+v, want %+v", cfg.Browser.Selection, want.Selection)
 	}
@@ -51,6 +54,9 @@ func TestDefaultBrowserConfig_IsComplete(t *testing.T) {
 		"backend: webmcp",
 		"cdp_url: \"\"",
 		"ws_endpoint: \"\"",
+		"headless: false",
+		"open: about:blank",
+		"close_on_exit: false",
 		"auto_select: \"off\"",
 		"invocation_timeout: 30s",
 		"max_input_bytes: 262144",
@@ -75,6 +81,10 @@ browser:
     user_data_dir: /tmp/agent-browser
     allow_process_scan: true
     allow_remote_cdp: true
+  managed:
+    headless: true
+    open: https://app.example/start
+    close_on_exit: true
   selection:
     browser: browser-1
     tab: target-1
@@ -121,6 +131,9 @@ browser:
 	if got.Connection.CDPURL != "http://127.0.0.1:9222" || got.Connection.WSEndpoint == "" || !got.Connection.AllowRemoteCDP {
 		t.Errorf("connection = %+v", got.Connection)
 	}
+	if !got.Managed.Headless || got.Managed.Open != "https://app.example/start" || !got.Managed.CloseOnExit {
+		t.Errorf("managed = %+v", got.Managed)
+	}
 	if got.Selection.Browser != "browser-1" || got.Selection.Tab != "target-1" || got.Selection.AutoSelect != BrowserAutoSelectPersisted || got.Selection.Persist {
 		t.Errorf("selection = %+v", got.Selection)
 	}
@@ -166,6 +179,9 @@ browser:
 		"AGENT_BROWSER__CONNECTION__USER_DATA_DIR":      "/env/profile",
 		"AGENT_BROWSER__CONNECTION__ALLOW_PROCESS_SCAN": "true",
 		"AGENT_BROWSER__CONNECTION__ALLOW_REMOTE_CDP":   "true",
+		"AGENT_BROWSER__MANAGED__HEADLESS":              "true",
+		"AGENT_BROWSER__MANAGED__OPEN":                  "https://env.example/start",
+		"AGENT_BROWSER__MANAGED__CLOSE_ON_EXIT":         "true",
 		"AGENT_BROWSER__SELECTION__BROWSER":             "env-browser",
 		"AGENT_BROWSER__SELECTION__TAB":                 "env-tab",
 		"AGENT_BROWSER__SELECTION__ORIGIN":              "https://env.example",
@@ -199,6 +215,9 @@ browser:
 	got := cfg.Browser
 	if !got.BrowserBackendEnabled() || got.Connection.CDPURL != "http://env.example:9222" || got.Connection.WSEndpoint == "" || got.Connection.UserDataDir != "/env/profile" || !got.Connection.AllowProcessScan || !got.Connection.AllowRemoteCDP {
 		t.Errorf("environment connection/tools = %+v/%+v", got.Connection, got.Tools)
+	}
+	if !got.Managed.Headless || got.Managed.Open != "https://env.example/start" || !got.Managed.CloseOnExit {
+		t.Errorf("environment managed = %+v", got.Managed)
 	}
 	if got.Selection.Browser != "env-browser" || got.Selection.Tab != "env-tab" || got.Selection.Origin != "https://env.example" || got.Selection.AutoSelect != BrowserAutoSelectSingle || !got.Selection.ActivateTab || got.Selection.Persist {
 		t.Errorf("environment selection = %+v", got.Selection)
@@ -270,6 +289,8 @@ func TestLoadBrowserConfig_RejectsInvalidYAMLValues(t *testing.T) {
 		{name: "negative size", value: "browser:\n  limits:\n    max_input_bytes: -1\n", want: "max_input_bytes"},
 		{name: "fractional size", value: "browser:\n  limits:\n    max_result_bytes: 1.5\n", want: "non-negative decimal integer"},
 		{name: "origin list", value: "browser:\n  policy:\n    allowed_origins: https://example.test\n", want: "allowed_origins"},
+		{name: "startup URL", value: "browser:\n  managed:\n    open: example.test\n", want: "browser.managed.open"},
+		{name: "startup URL credentials", value: "browser:\n  managed:\n    open: https://user:pass@example.test\n", want: "credentials"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -298,6 +319,7 @@ func TestLoadBrowserConfig_RejectsInvalidEnvironmentValues(t *testing.T) {
 		{name: "duration", env: "AGENT_BROWSER__LIMITS__INVOCATION_TIMEOUT", value: "30", want: "Go duration"},
 		{name: "size", env: "AGENT_BROWSER__LIMITS__MAX_INPUT_BYTES", value: "0x10", want: "decimal integer"},
 		{name: "origins", env: "AGENT_BROWSER__POLICY__ALLOWED_ORIGINS", value: "https://example.test", want: "JSON array"},
+		{name: "managed boolean", env: "AGENT_BROWSER__MANAGED__HEADLESS", value: "TRUE", want: "strict boolean"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

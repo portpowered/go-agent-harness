@@ -12,17 +12,20 @@ import (
 )
 
 type WebMCPProductionOptions struct {
-	Runtime               webmcp.BrowserRuntime
-	Catalog               webmcp.DevToolsCatalog
-	Discovery             WebMCPDiscoveryService
-	HTTPClient            discovery.HTTPClient
-	ActivePortReader      discovery.ActivePortReader
-	ProcessEnumerator     discovery.ProcessEnumerator
-	IDMapper              discovery.IDMapper
-	TargetIDMapper        discovery.TargetIDMapper
-	Clock                 discovery.Clock
-	SelectionStore        any
-	SelectionStoreFactory func() any
+	Runtime                      webmcp.BrowserRuntime
+	Catalog                      webmcp.DevToolsCatalog
+	Discovery                    WebMCPDiscoveryService
+	ConfigDir                    string
+	ManagedBrowserManager        *chrome.ManagedBrowserManager
+	ManagedBrowserManagerFactory func(string) *chrome.ManagedBrowserManager
+	HTTPClient                   discovery.HTTPClient
+	ActivePortReader             discovery.ActivePortReader
+	ProcessEnumerator            discovery.ProcessEnumerator
+	IDMapper                     discovery.IDMapper
+	TargetIDMapper               discovery.TargetIDMapper
+	Clock                        discovery.Clock
+	SelectionStore               any
+	SelectionStoreFactory        func() any
 }
 
 // WebMCPProductionOption customizes one production factory dependency.
@@ -38,6 +41,25 @@ func WithWebMCPProductionCatalog(catalog webmcp.DevToolsCatalog) WebMCPProductio
 
 func WithWebMCPProductionDiscovery(service WebMCPDiscoveryService) WebMCPProductionOption {
 	return func(options *WebMCPProductionOptions) { options.Discovery = service }
+}
+
+// WithWebMCPProductionConfigDir keeps managed-browser state and selection
+// persistence on the same resolved config directory.
+func WithWebMCPProductionConfigDir(configDir string) WebMCPProductionOption {
+	return func(options *WebMCPProductionOptions) { options.ConfigDir = configDir }
+}
+
+// WithWebMCPProductionManagedBrowserManager injects the lifecycle manager
+// used by endpoint-free browser configurations. It is primarily a hermetic
+// test seam; production callers can use the factory variant below.
+func WithWebMCPProductionManagedBrowserManager(manager *chrome.ManagedBrowserManager) WebMCPProductionOption {
+	return func(options *WebMCPProductionOptions) { options.ManagedBrowserManager = manager }
+}
+
+// WithWebMCPProductionManagedBrowserManagerFactory defers manager creation
+// until the browser configuration has been resolved.
+func WithWebMCPProductionManagedBrowserManagerFactory(factory func(string) *chrome.ManagedBrowserManager) WebMCPProductionOption {
+	return func(options *WebMCPProductionOptions) { options.ManagedBrowserManagerFactory = factory }
 }
 
 func WithWebMCPProductionHTTPClient(client discovery.HTTPClient) WebMCPProductionOption {
@@ -126,12 +148,29 @@ func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPD
 				catalog = catalogRuntime
 			}
 		}
+		var managedHTTPClient *http.Client
+		if client, ok := httpClient.(*http.Client); ok {
+			managedHTTPClient = client
+		}
+		managedManager := resolved.ManagedBrowserManager
+		if browser.UsesManagedBrowser() && browser.BrowserBackendEnabled() && managedManager == nil {
+			if resolved.ManagedBrowserManagerFactory != nil {
+				managedManager = resolved.ManagedBrowserManagerFactory(resolved.ConfigDir)
+			} else {
+				managedManager = chrome.NewManagedBrowserManager(chrome.ManagedBrowserManagerOptions{
+					ConfigDir: resolved.ConfigDir,
+				})
+			}
+		}
 
 		composition := &productionWebMCPComposition{
 			browser:        browser,
+			configDir:      resolved.ConfigDir,
 			inputs:         productionDiscoveryInputs(browser),
 			runtime:        runtime,
 			catalog:        catalog,
+			managedManager: managedManager,
+			httpClient:     managedHTTPClient,
 			activePort:     activePortReader,
 			idMapper:       idMapper,
 			targetIDMapper: targetIDMapper,
@@ -171,6 +210,10 @@ func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPD
 			service = discovery.New(serviceOptions)
 		}
 		composition.discovery = service
+		runtimeDiscovery := service
+		if browser.UsesManagedBrowser() && browser.BrowserBackendEnabled() {
+			runtimeDiscovery = &managedWebMCPDiscoveryService{owner: composition, delegate: service}
+		}
 
 		brokerOptions := webmcp.BrokerOptions{
 			Runtime:           composition,
@@ -186,15 +229,11 @@ func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPD
 		}
 		broker := webmcp.NewBroker(brokerOptions)
 
-		var closeService func() error
-		if closer, ok := service.(interface{ Close() error }); ok {
-			closeService = closer.Close
-		}
 		return WebMCPDoctorRuntime{
 			Broker:    broker,
-			Discovery: service,
+			Discovery: runtimeDiscovery,
 			Catalog:   &productionWebMCPCatalog{owner: composition},
-			Close:     closeService,
+			Close:     composition.Close,
 		}, nil
 	}
 }
@@ -214,6 +253,7 @@ func configDirForGlobalFlags(globalFlags *flags.GlobalFlags) string {
 // making command construction touch the filesystem.
 func defaultWebMCPDoctorFactory(globalFlags *flags.GlobalFlags) WebMCPDoctorFactory {
 	return NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionConfigDir(configDirForGlobalFlags(globalFlags)),
 		WithWebMCPProductionSelectionStoreFactory(func() any {
 			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(globalFlags))
 		}),

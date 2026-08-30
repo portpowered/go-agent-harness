@@ -247,6 +247,7 @@ func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error
 
 func newSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {
 	return newSessionBrowserBrokerWithDoctorFactory(browser, NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionConfigDir(configDir),
 		WithWebMCPProductionSelectionStoreFactory(func() any {
 			return NewFileWebMCPSelectionStore(configDir)
 		}),

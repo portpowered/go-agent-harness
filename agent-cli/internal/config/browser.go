@@ -2,7 +2,20 @@ package config
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
+)
+
+const BrowserDefaultManagedOpen = "about:blank"
+
+// BrowserConnectionMode identifies which owner supplies the browser
+// endpoint after configuration precedence has been resolved.
+type BrowserConnectionMode string
+
+const (
+	BrowserConnectionModeManaged  BrowserConnectionMode = "managed"
+	BrowserConnectionModeExternal BrowserConnectionMode = "external"
 )
 
 // DefaultBrowserConfig returns a fresh copy of the complete C0 browser
@@ -19,6 +32,11 @@ func DefaultBrowserConfig() BrowserConfig {
 			UserDataDir:      "",
 			AllowProcessScan: false,
 			AllowRemoteCDP:   false,
+		},
+		Managed: BrowserManagedConfig{
+			Headless:    false,
+			Open:        BrowserDefaultManagedOpen,
+			CloseOnExit: false,
 		},
 		Selection: BrowserSelectionConfig{
 			Browser:     "",
@@ -79,6 +97,9 @@ func (c BrowserConfig) Validate() error {
 	if c.Limits.MaxResultBytes < 0 {
 		return fmt.Errorf("browser.limits.max_result_bytes must be non-negative")
 	}
+	if err := validateManagedOpenURL(c.Managed.Open); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -92,4 +113,55 @@ func (c Config) ValidateBrowser() error {
 // the supported WebMCP backend and enabled its capability.
 func (c BrowserConfig) BrowserBackendEnabled() bool {
 	return c.Tools.Enabled && c.Tools.Backend == BrowserToolsBackendWebMCP
+}
+
+// ConnectionMode returns the ownership mode selected by endpoint precedence.
+// An explicit CDP or WebSocket endpoint always belongs to the caller. A
+// configured profile or process scan is also an external discovery request;
+// only a completely endpoint-free connection selects the agent-managed
+// browser.
+func (c BrowserConfig) ConnectionMode() BrowserConnectionMode {
+	if strings.TrimSpace(c.Connection.CDPURL) != "" || strings.TrimSpace(c.Connection.WSEndpoint) != "" ||
+		strings.TrimSpace(c.Connection.UserDataDir) != "" || c.Connection.AllowProcessScan {
+		return BrowserConnectionModeExternal
+	}
+	return BrowserConnectionModeManaged
+}
+
+// UsesManagedBrowser reports whether this configuration requests an
+// agent-managed endpoint rather than an explicitly supplied browser.
+func (c BrowserConfig) UsesManagedBrowser() bool {
+	return c.ConnectionMode() == BrowserConnectionModeManaged
+}
+
+// UsesExternalBrowser reports whether an explicit endpoint owns the browser
+// connection. Managed lifecycle controls must never close this path.
+func (c BrowserConfig) UsesExternalBrowser() bool {
+	return c.ConnectionMode() == BrowserConnectionModeExternal
+}
+
+// ManagedStartupURL returns the effective single page for a managed launch.
+func (c BrowserConfig) ManagedStartupURL() string {
+	if open := strings.TrimSpace(c.Managed.Open); open != "" {
+		return open
+	}
+	return BrowserDefaultManagedOpen
+}
+
+func validateManagedOpenURL(raw string) error {
+	open := strings.TrimSpace(raw)
+	if open == "" {
+		return nil
+	}
+	parsed, err := url.Parse(open)
+	if err != nil || parsed.Scheme == "" {
+		return fmt.Errorf("browser.managed.open %q is not a valid startup URL (use an absolute URL such as https://example.test or about:blank)", raw)
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("browser.managed.open must not contain URL credentials")
+	}
+	if (strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")) && parsed.Hostname() == "" {
+		return fmt.Errorf("browser.managed.open %q is not a valid startup URL (HTTP URLs require a host)", raw)
+	}
+	return nil
 }

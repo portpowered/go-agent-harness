@@ -49,6 +49,10 @@ browser:
         user_data_dir: ""
         allow_process_scan: false
         allow_remote_cdp: false
+    managed:
+        headless: false
+        open: about:blank
+        close_on_exit: false
     selection:
         browser: ""
         tab: ""

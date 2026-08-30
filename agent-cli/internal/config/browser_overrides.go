@@ -12,6 +12,9 @@ type BrowserOverrides struct {
 	UserDataDir        *string
 	AllowProcessScan   *bool
 	AllowRemoteCDP     *bool
+	ManagedHeadless    *bool
+	ManagedOpen        *string
+	ManagedCloseOnExit *bool
 	Browser            *string
 	Tab                *string
 	Origin             *string
@@ -61,6 +64,15 @@ func (c BrowserConfig) ApplyBrowserOverrides(overrides BrowserOverrides) (Browse
 	}
 	if overrides.AllowRemoteCDP != nil {
 		out.Connection.AllowRemoteCDP = *overrides.AllowRemoteCDP
+	}
+	if overrides.ManagedHeadless != nil {
+		out.Managed.Headless = *overrides.ManagedHeadless
+	}
+	if overrides.ManagedOpen != nil {
+		out.Managed.Open = *overrides.ManagedOpen
+	}
+	if overrides.ManagedCloseOnExit != nil {
+		out.Managed.CloseOnExit = *overrides.ManagedCloseOnExit
 	}
 	if overrides.Browser != nil {
 		out.Selection.Browser = *overrides.Browser

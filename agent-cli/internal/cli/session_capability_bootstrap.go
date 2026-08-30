@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
@@ -123,7 +125,15 @@ func sessionCapabilityBootstrap(browser config.BrowserConfig, service WebMCPDisc
 				}
 			}
 
-			if selection.AutoSelect == config.BrowserAutoSelectSingle && reconnector != nil {
+			// Endpoint-free managed WebMCP sessions are the default browser
+			// experience, so use the existing single-target reconnect semantics after
+			// giving an explicitly persisted selection precedence. External browser
+			// configurations retain their opt-in auto-select behavior.
+			autoSelectSingle := selection.AutoSelect == config.BrowserAutoSelectSingle
+			if browser.UsesManagedBrowser() && browser.BrowserBackendEnabled() {
+				autoSelectSingle = true
+			}
+			if autoSelectSingle && reconnector != nil {
 				selected, err := reconnector.Reconnect(ctx, productionDiscoveryInputs(browser), discovery.ReconnectOptions{
 					AutoSelect: discovery.AutoSelectSingle,
 					Reason:     "session_bootstrap",
@@ -227,11 +237,81 @@ func sessionCapabilityError(err error) error {
 	if converted := productionDiscoveryError(err); converted != err {
 		return converted
 	}
+	if converted := sessionManagedBrowserError(err); converted != nil {
+		return converted
+	}
 	wrapped := webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "WebMCP session capability initialization failed", map[string]any{
 		"phase": "session_bootstrap",
 	})
 	wrapped.Cause = err
 	return wrapped
+}
+
+func sessionManagedBrowserError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var launchErr *chrome.ManagedBrowserLaunchError
+	if errors.As(err, &launchErr) && launchErr != nil {
+		phase := sessionSafeLabel(launchErr.Phase, "startup")
+		mode := sessionSafeLabel(launchErr.Mode, "unknown")
+		message := launchErr.Error()
+		var acquisitionErr *chrome.ManagedChromeAcquisitionError
+		if errors.As(err, &acquisitionErr) && acquisitionErr != nil {
+			message = fmt.Sprintf("managed WebMCP browser launch failed during %s in %s mode; %s", phase, mode, acquisitionErr.Error())
+		}
+		classified := webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, message, map[string]any{
+			"phase":       phase,
+			"mode":        mode,
+			"remediation": sessionManagedBrowserRemediation(phase),
+		})
+		classified.Cause = err
+		return classified
+	}
+	var lifecycleErr *chrome.ManagedBrowserLifecycleError
+	if errors.As(err, &lifecycleErr) && lifecycleErr != nil {
+		phase := sessionSafeLabel(lifecycleErr.Phase, "lifecycle")
+		classified := webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, lifecycleErr.Error(), map[string]any{
+			"phase":       phase,
+			"remediation": sessionManagedBrowserRemediation(phase),
+		})
+		classified.Cause = err
+		return classified
+	}
+	return nil
+}
+
+func sessionManagedBrowserRemediation(phase string) string {
+	switch phase {
+	case "configuration":
+		return "fix the managed browser startup URL and retry"
+	case "profile":
+		return "make the agent config directory writable and retry"
+	case "acquisition":
+		return "install Chrome 151 or newer, or supply an explicit browser endpoint"
+	case "port":
+		return "retry so the agent can reserve a free loopback DevTools port"
+	case "start":
+		return "check that the qualified Chrome executable can start with an agent-owned profile"
+	case "readiness", "startup":
+		return "check that Chrome can publish a loopback DevTools endpoint and retry"
+	default:
+		return "retry the managed browser operation"
+	}
+}
+
+func sessionSafeLabel(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 32 {
+		return fallback
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-' {
+			continue
+		}
+		return fallback
+	}
+	return value
 }
 
 func (b *sessionBrowserBroker) InitializeSession(ctx context.Context) error {

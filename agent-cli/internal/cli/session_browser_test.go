@@ -189,6 +189,10 @@ func TestSessionBrowserNonAdmissionReturnsHelpWithoutSetup(t *testing.T) {
 			args: []string{"--browser-cdp-url", "http://127.0.0.1:9222"},
 		},
 		{
+			name: "managed control only",
+			args: []string{"--browser-headless"},
+		},
+		{
 			name: "config only",
 			configYAML: `
 browser:
@@ -239,6 +243,76 @@ browser:
 				t.Fatalf("inert browser command performed setup: connects=%d tools=%d", inferencer.connects, toolCapabilityCalls)
 			}
 		})
+	}
+}
+
+func TestSessionManagedBrowserFlagsApplyPrecedenceAndSelectMode(t *testing.T) {
+	configDir := t.TempDir()
+	configYAML := `
+browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  managed:
+    headless: true
+    open: https://file.example/start
+    close_on_exit: false
+`
+	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("AGENT_BROWSER__MANAGED__OPEN", "https://env.example/start")
+
+	command := &cobra.Command{Use: "test"}
+	values := flags.NewBrowserFlags()
+	registerSessionBrowserFlags(command, values)
+	if err := command.Flags().Parse([]string{
+		"--browser-headless=false",
+		"--browser-open", "https://cli.example/start",
+		"--browser-close-on-exit=true",
+	}); err != nil {
+		t.Fatalf("parse managed browser flags: %v", err)
+	}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	resolved, err := resolveSessionBrowserConfig(globalFlags, command, values)
+	if err != nil {
+		t.Fatalf("resolveSessionBrowserConfig(): %v", err)
+	}
+	if !resolved.Browser.BrowserBackendEnabled() {
+		t.Fatalf("managed flag overrides unexpectedly disabled browser: %+v", resolved.Browser.Tools)
+	}
+	if resolved.Browser.Managed.Headless || resolved.Browser.Managed.Open != "https://cli.example/start" || !resolved.Browser.Managed.CloseOnExit {
+		t.Fatalf("managed precedence = %+v", resolved.Browser.Managed)
+	}
+	if resolved.Browser.ManagedStartupURL() != "https://cli.example/start" {
+		t.Fatalf("managed startup URL = %q", resolved.Browser.ManagedStartupURL())
+	}
+	if !resolved.Browser.UsesManagedBrowser() || resolved.Browser.UsesExternalBrowser() {
+		t.Fatalf("endpoint-free browser mode = %q, want managed", resolved.Browser.ConnectionMode())
+	}
+
+	values = flags.NewBrowserFlags()
+	command = &cobra.Command{Use: "test"}
+	registerSessionBrowserFlags(command, values)
+	if err := command.Flags().Parse([]string{"--browser-open", "https://one.example", "--browser-open", "https://two.example"}); err == nil || !strings.Contains(err.Error(), "at most one startup URL") {
+		t.Fatalf("repeated --browser-open error = %v, want single-URL usage error", err)
+	}
+}
+
+func TestSessionManagedBrowserRejectsInvalidStartupURLBeforeSetup(t *testing.T) {
+	configDir := t.TempDir()
+	command := &cobra.Command{Use: "test"}
+	values := flags.NewBrowserFlags()
+	registerSessionBrowserFlags(command, values)
+	if err := command.Flags().Parse([]string{"--browser-open", "not-a-url"}); err != nil {
+		t.Fatalf("parse invalid startup URL flag: %v", err)
+	}
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	_, err := resolveSessionBrowserConfig(globalFlags, command, values)
+	if err == nil || !strings.Contains(err.Error(), "browser.managed.open") || !strings.Contains(err.Error(), "valid startup URL") {
+		t.Fatalf("invalid startup URL resolution error = %v", err)
 	}
 }
 
