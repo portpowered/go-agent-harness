@@ -78,7 +78,7 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 			case *messages.TranscriptEndValue:
 				observation.text = value.FullText
 			default:
-				t.Fatalf("participant %q transcript value = %T", participantID, msg.Value)
+				observation.text = fmt.Sprintf("unexpected transcript value %T", msg.Value)
 			}
 			observations <- observation
 		},
