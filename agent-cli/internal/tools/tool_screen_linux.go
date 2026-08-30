@@ -30,11 +30,17 @@ func screenDisplayInfoWithContextAndProcess(ctx context.Context, process Display
 // reported by xrandr. A discovery failure is unavailable, never one fake
 // primary display.
 func screenDisplayCountWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, error) {
+	process = normalizeDisplayProcess(process)
 	out, err := process.Run(ctx, "xrandr", "--listmonitors")
 	if err != nil {
+		if ctx != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return 0, ctxErr
+			}
+		}
 		return 0, fmt.Errorf("xrandr --listmonitors: %w", err)
 	}
-	// First line: "Monitors: N"
+	// First line: "Monitors: N".
 	first := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
 	parts := strings.Fields(first)
 	if len(parts) >= 2 {
@@ -46,18 +52,24 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, process Displa
 }
 
 // screenDisplayBoundsWithContextAndProcess returns the pixel dimensions of
-// the primary display using xdotool. The idx parameter is currently unused,
-// matching the existing Linux capture implementation.
+// the primary display using xdotool. The idx parameter remains unused to
+// match the existing Linux capture implementation.
 func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, process DisplayProcess) (image.Rectangle, error) {
+	process = normalizeDisplayProcess(process)
 	out, err := process.Run(ctx, "xdotool", "getdisplaygeometry")
 	if err != nil {
+		if ctx != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return image.Rectangle{}, ctxErr
+			}
+		}
 		return image.Rectangle{}, fmt.Errorf("xdotool getdisplaygeometry: %w", err)
 	}
 	parts := strings.Fields(strings.TrimSpace(string(out)))
 	if len(parts) == 2 {
-		w, we := strconv.Atoi(parts[0])
-		h, he := strconv.Atoi(parts[1])
-		if we == nil && he == nil && w > 0 && h > 0 {
+		w, widthErr := strconv.Atoi(parts[0])
+		h, heightErr := strconv.Atoi(parts[1])
+		if widthErr == nil && heightErr == nil && w > 0 && h > 0 {
 			return image.Rect(0, 0, w, h), nil
 		}
 	}
@@ -65,54 +77,82 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, proces
 }
 
 func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, process DisplayProcess) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	process = normalizeDisplayProcess(process)
 	if _, err := process.LookPath("scrot"); err != nil {
 		return fmt.Errorf("scrot not found – install with 'apt install scrot' or 'dnf install scrot': %w", err)
 	}
 	return nil
 }
 
-// screenCapture uses scrot to capture the given screen region.
-// Install scrot with: apt install scrot  OR  dnf install scrot
 func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+	return screenCaptureDisplayWithContextAndProcess(ctx, 0, bounds, process)
+}
+
+// screenCaptureDisplayWithContextAndProcess uses scrot to capture the given
+// screen region. Linux currently has one geometry surface, so display is
+// intentionally ignored while the index remains part of the seam.
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, process); err != nil {
 		return nil, err
 	}
+	process = normalizeDisplayProcess(process)
+
 	f, err := os.CreateTemp("", "agent-screen-*.png")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
 	path := f.Name()
-	_ = f.Close()
-	defer func() {
+	if err := f.Close(); err != nil {
 		_ = os.Remove(path)
-	}()
+		return nil, fmt.Errorf("close temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(path) }()
 
 	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
-	out, err := process.Run(ctx, "scrot", "-a", area, path)
+	args := []string{"-a", area, path}
+	out, err := process.Run(ctx, "scrot", args...)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
-		return nil, fmt.Errorf("scrot -a %s: %w (output: %s)", area, err, string(out))
+		return nil, fmt.Errorf("scrot %s: %w (output: %s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
 	}
 
-	return loadPNGasRGBA(path)
+	img, err := loadPNGasRGBAWithContext(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	return img, nil
 }
 
 // loadPNGasRGBA opens path, decodes the PNG, and returns an *image.RGBA.
 func loadPNGasRGBA(path string) (*image.RGBA, error) {
+	return loadPNGasRGBAWithContext(context.Background(), path)
+}
+
+func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open screenshot: %w", err)
 	}
-	defer func() {
-		_ = f.Close()
-	}()
+	defer func() { _ = f.Close() }()
 
-	img, err := png.Decode(f)
+	img, err := png.Decode(contextReader{ctx: ctx, r: f})
 	if err != nil {
 		return nil, fmt.Errorf("decode screenshot: %w", err)
 	}

@@ -9,26 +9,25 @@ import (
 	"image/draw"
 	"image/gif"
 	"image/jpeg"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // ScreenTool captures the screen as a screenshot or a timed recording.
-// On Windows it uses the GDI API directly (no CGO or external libraries
-// needed); other supported platforms use their native capture command.
+// The display surface is injected so capture, permission, and cancellation
+// behavior can be tested without depending on the host desktop.
 type ScreenTool struct {
 	surface DisplaySurface
 }
 
-// NewScreenTool constructs a screen tool backed by the host display surface.
 func NewScreenTool() *ScreenTool {
 	return NewScreenToolWithDisplaySurface(NewHostDisplaySurface())
 }
 
 // NewScreenToolWithDisplaySurface injects the platform boundary used for
-// admission, geometry, and capture. It is useful for hermetic tests and keeps
-// capability loss observable after a session has already been admitted.
+// display admission, geometry, and image capture.
 func NewScreenToolWithDisplaySurface(surface DisplaySurface) *ScreenTool {
 	if surface == nil {
 		surface = NewHostDisplaySurface()
@@ -79,36 +78,61 @@ func (t *ScreenTool) Execute(ctx context.Context, args map[string]any) ([]messag
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, displayUnavailableForCapability("show", DisplayCapability{}, err)
-	}
 	action, _ := args["action"].(string)
 	if action == "" {
 		action = "screenshot"
 	}
-
-	display := 0
-	if d, ok := args["display"].(float64); ok && int(d) >= 0 {
-		display = int(d)
-	}
-
 	switch action {
 	case "screenshot", "record":
 	default:
 		return nil, fmt.Errorf("unknown action %q: use 'screenshot' or 'record'", action)
 	}
 
-	capability, err := t.displaySurface().Probe(ctx)
-	if err != nil || !capability.Usable() {
-		return nil, displayUnavailableForCapability("show", capability, err)
+	display := 0
+	if d, ok := args["display"].(float64); ok {
+		if d < 0 || d != float64(int(d)) {
+			return nil, fmt.Errorf("display must be a non-negative integer, got %v", d)
+		}
+		display = int(d)
+	}
+
+	operationCtx := ctx
+	var cancel context.CancelFunc
+	if action == "screenshot" {
+		operationCtx, cancel = boundedScreenContext(ctx, screenScreenshotBound)
+		defer cancel()
+	}
+	if err := operationCtx.Err(); err != nil {
+		return nil, newScreenCaptureError("show", "screen capture did not start", err)
+	}
+
+	surface := t.displaySurface()
+	capability, probeErr := surface.Probe(operationCtx)
+	if probeErr != nil || !capability.Usable() {
+		reason := capability.Reason
+		if display > 0 {
+			reason = strings.TrimSpace(strings.Join([]string{
+				fmt.Sprintf("display %d is not available", display), reason,
+			}, ": "))
+		}
+		if probeErr != nil {
+			capability.Reason = reason
+			return nil, displayUnavailableForCapability("show", capability, probeErr)
+		}
+		capability.Reason = reason
+		return nil, displayUnavailableForCapability("show", capability, nil)
 	}
 	if display >= capability.DisplayCount {
-		return nil, fmt.Errorf("display %d not available (only %d display(s) found)", display, capability.DisplayCount)
+		return nil, &ScreenCaptureError{
+			State:     ScreenCaptureUnavailable,
+			Operation: "show",
+			Reason:    fmt.Sprintf("display %d not available (only %d display(s) found)", display, capability.DisplayCount),
+		}
 	}
 
 	switch action {
 	case "screenshot":
-		return t.takeScreenshotWithContext(ctx, display)
+		return t.takeScreenshotWithContext(operationCtx, display)
 	case "record":
 		duration := 3.0
 		if d, ok := args["duration"].(float64); ok && d >= 1 && d <= 30 {
@@ -118,24 +142,41 @@ func (t *ScreenTool) Execute(ctx context.Context, args map[string]any) ([]messag
 		if f, ok := args["fps"].(float64); ok && f >= 1 && f <= 5 {
 			fps = f
 		}
-		return t.recordScreen(ctx, display, duration, fps)
+		return t.recordScreen(operationCtx, display, duration, fps)
+	default:
+		return nil, fmt.Errorf("unknown action %q: use 'screenshot' or 'record'", action)
 	}
-	return nil, nil
 }
 
 func (t *ScreenTool) takeScreenshotWithContext(ctx context.Context, display int) ([]messages.Message, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, newScreenCaptureError("show", "screen capture did not start", err)
+	}
 	bounds, err := t.displaySurface().Bounds(ctx, display)
 	if err != nil {
-		return nil, displayUnavailableForCapability("show geometry", DisplayCapability{}, err)
+		return nil, newScreenCaptureError("show display geometry", "display geometry is unavailable", err)
 	}
-	img, err := t.displaySurface().Capture(ctx, bounds)
+	img, err := t.captureDisplay(ctx, display, bounds)
 	if err != nil {
-		return nil, displayUnavailableForCapability("show capture", DisplayCapability{}, err)
+		return nil, newScreenCaptureError("show capture", "screen capture did not produce an image", err)
+	}
+	if img == nil || img.Bounds().Empty() {
+		return nil, &ScreenCaptureError{
+			State:     ScreenCaptureFailed,
+			Operation: "show capture",
+			Reason:    "screen capture returned empty image pixels",
+		}
 	}
 
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
-		return nil, fmt.Errorf("encode screenshot: %w", err)
+		return nil, newScreenCaptureError("show encode", "screenshot encoding failed", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, newScreenCaptureError("show encode", "screenshot encoding did not finish before the operation deadline", err)
 	}
 
 	msg := messages.Message{
@@ -157,7 +198,7 @@ func (t *ScreenTool) recordScreen(ctx context.Context, display int, duration, fp
 	}
 	bounds, err := t.displaySurface().Bounds(ctx, display)
 	if err != nil {
-		return nil, displayUnavailableForCapability("show recording geometry", DisplayCapability{}, err)
+		return nil, newScreenCaptureError("show recording geometry", "display geometry is unavailable", err)
 	}
 	frameInterval := time.Duration(float64(time.Second) / fps)
 	totalFrames := int(duration * fps)
@@ -181,9 +222,12 @@ func (t *ScreenTool) recordScreen(ctx context.Context, display int, duration, fp
 		default:
 		}
 
-		img, err := t.displaySurface().Capture(ctx, bounds)
+		img, err := t.captureDisplay(ctx, display, bounds)
 		if err != nil {
-			return nil, displayUnavailableForCapability(fmt.Sprintf("show recording frame %d", i), DisplayCapability{}, err)
+			return nil, newScreenCaptureError(fmt.Sprintf("show recording frame %d", i), "screen recording frame capture failed", err)
+		}
+		if img == nil || img.Bounds().Empty() {
+			return nil, fmt.Errorf("capture frame %d: empty image pixels", i)
 		}
 
 		palImg := image.NewPaletted(img.Bounds(), palette.Plan9)
@@ -207,7 +251,10 @@ done:
 
 	var buf bytes.Buffer
 	if err := gif.EncodeAll(&buf, &gif.GIF{Image: frames, Delay: delays}); err != nil {
-		return nil, fmt.Errorf("encode recording: %w", err)
+		return nil, newScreenCaptureError("show recording encode", "screen recording encoding failed", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, newScreenCaptureError("show recording encode", "screen recording encoding did not finish before the operation ended", err)
 	}
 
 	msg := messages.Message{
@@ -230,10 +277,10 @@ func (t *ScreenTool) displaySurface() DisplaySurface {
 	return NewHostDisplaySurface()
 }
 
-func displayUnavailableForCapability(operation string, capability DisplayCapability, cause error) error {
-	reason := capability.Reason
-	if reason == "" && cause == nil {
-		reason = "no usable display or capture surface is available"
+func (t *ScreenTool) captureDisplay(ctx context.Context, display int, bounds image.Rectangle) (*image.RGBA, error) {
+	surface := t.displaySurface()
+	if indexed, ok := surface.(indexedDisplaySurface); ok {
+		return indexed.CaptureDisplay(ctx, display, bounds)
 	}
-	return &DisplayUnavailableError{Operation: operation, Reason: reason, Cause: cause}
+	return surface.Capture(ctx, bounds)
 }

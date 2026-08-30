@@ -45,7 +45,11 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ Disp
 	return errors.New("screen capture is not yet supported on this platform")
 }
 
-func screenCaptureWithContextAndProcess(ctx context.Context, _ image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
+func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+	return screenCaptureDisplayWithContextAndProcess(ctx, 0, bounds, process)
+}
+
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, _ image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, nil); err != nil {
 		return nil, err
 	}

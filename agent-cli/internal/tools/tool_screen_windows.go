@@ -13,9 +13,8 @@ import (
 var (
 	gdi32dll = syscall.NewLazyDLL("gdi32.dll")
 
-	// user32.dll procs for screen capture.  user32dll is declared in
-	// tool_mouse_windows.go; both files share the same //go:build windows tag
-	// so the variable is visible across the package.
+	// user32.dll procs for screen capture. user32dll is declared in
+	// tool_mouse_windows.go; both files share the windows build tag.
 	procGetDC     = user32dll.NewProc("GetDC")
 	procReleaseDC = user32dll.NewProc("ReleaseDC")
 
@@ -67,8 +66,6 @@ type bitmapInfo struct {
 	Colors [1]uint32
 }
 
-// screenDisplayCountWithContextAndProcess returns the primary display only;
-// the process parameter is unused because Windows uses GDI directly.
 func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
@@ -83,9 +80,6 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProce
 	return 1, nil
 }
 
-// screenDisplayBoundsWithContextAndProcess returns the bounding rectangle of
-// the primary display. The process parameter is unused because Windows uses
-// GDI directly.
 func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ DisplayProcess) (image.Rectangle, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
@@ -110,9 +104,13 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ Disp
 	return nil
 }
 
-// screenCapture uses the Windows GDI API to copy the given screen region into
-// an image.RGBA. No CGO or third-party libraries are required.
-func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
+func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+	return screenCaptureDisplayWithContextAndProcess(ctx, 0, bounds, process)
+}
+
+// screenCaptureDisplayWithContextAndProcess uses the Windows GDI API to copy
+// the requested screen region into an image.RGBA.
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -148,7 +146,7 @@ func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectan
 	// Select the bitmap into the memory DC.
 	procSelectObject.Call(hMemDC, hBitmap)
 
-	// BitBlt copies the screen region into our memory bitmap.
+	// BitBlt copies the screen region into the memory bitmap.
 	ret, _, _ := procBitBlt.Call(
 		hMemDC, 0, 0, uintptr(width), uintptr(height),
 		hScreen, uintptr(bounds.Min.X), uintptr(bounds.Min.Y),
@@ -158,8 +156,7 @@ func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectan
 		return nil, fmt.Errorf("BitBlt failed")
 	}
 
-	// Prepare a BITMAPINFO for GetDIBits.  Negative height requests top-down
-	// row order so that (0,0) is the top-left corner.
+	// Negative height requests top-down row order so (0,0) is the top-left.
 	bi := bitmapInfo{}
 	bi.Header.Size = uint32(unsafe.Sizeof(bi.Header))
 	bi.Header.Width = int32(width)
@@ -189,9 +186,9 @@ func screenCaptureWithContextAndProcess(ctx context.Context, bounds image.Rectan
 	// GDI returns pixels in BGRA order; convert to Go's RGBA order.
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for i := 0; i < len(pix); i += 4 {
-		img.Pix[i+0] = pix[i+2] // R ← B
-		img.Pix[i+1] = pix[i+1] // G
-		img.Pix[i+2] = pix[i+0] // B ← R
+		img.Pix[i+0] = pix[i+2] // R <- B
+		img.Pix[i+1] = pix[i+1] // G <- G
+		img.Pix[i+2] = pix[i+0] // B <- R
 		img.Pix[i+3] = 0xFF     // A = fully opaque
 	}
 	return img, nil
