@@ -122,6 +122,27 @@ func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
 	return e.participants[id]
 }
 
+// setParticipantReady enriches the terminal manifest with runtime-selected
+// metadata. Human device IDs are resolved by the device registry at startup,
+// so they are not necessarily present in the original normalized manifest.
+func (e *roomEvidence) setParticipantReady(ready RoomParticipantReady) {
+	if e == nil || ready.ParticipantID == "" {
+		return
+	}
+	for index := range e.manifest.Participants {
+		participant := &e.manifest.Participants[index]
+		if participant.ID != ready.ParticipantID {
+			continue
+		}
+		participant.Kind = room.NormalizeParticipantKind(ready.Kind)
+		participant.InputDevice = ready.InputDevice
+		participant.OutputDevice = ready.OutputDevice
+		participant.Provider = ready.Provider
+		participant.Model = ready.Model
+		return
+	}
+}
+
 func (e *roomEvidence) setErrorHandler(handler func(string, error)) {
 	if e == nil {
 		return
@@ -301,6 +322,7 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 
 type roomEvidenceManifest struct {
 	SchemaVersion     int                                        `json:"schema_version"`
+	Finalized         bool                                       `json:"finalized"`
 	Timing            roomEvidenceTiming                         `json:"timing"`
 	Bounds            roomEvidenceBounds                         `json:"bounds"`
 	TerminationReason RoomTerminationReason                      `json:"termination_reason"`
@@ -324,6 +346,7 @@ type roomEvidenceBounds struct {
 
 type roomEvidenceParticipantManifest struct {
 	ID                string                       `json:"id"`
+	Kind              room.ParticipantKind         `json:"kind"`
 	SystemPrompt      string                       `json:"system_prompt"`
 	OpeningPrompt     string                       `json:"opening_prompt,omitempty"`
 	Provider          string                       `json:"provider"`
@@ -336,6 +359,8 @@ type roomEvidenceParticipantManifest struct {
 	TerminationReason ParticipantTerminationReason `json:"termination_reason"`
 	Reason            ParticipantTerminationReason `json:"reason,omitempty"`
 	Connected         bool                         `json:"connected"`
+	InputDevice       string                       `json:"input_device,omitempty"`
+	OutputDevice      string                       `json:"output_device,omitempty"`
 	Error             string                       `json:"error,omitempty"`
 	Artifacts         roomEvidenceArtifactPaths    `json:"artifacts"`
 }
@@ -356,6 +381,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 	}
 	manifest := roomEvidenceManifest{
 		SchemaVersion:     roomEvidenceSchemaVersion,
+		Finalized:         runErr == nil,
 		Timing:            roomEvidenceTiming{StartedAt: e.startedAt.UTC().Format(time.RFC3339Nano), EndedAt: endedAt.UTC().Format(time.RFC3339Nano), Elapsed: endedAt.Sub(e.startedAt).String()},
 		Bounds:            roomEvidenceBounds{MaxTurns: e.manifest.Room.MaxTurns, MaxDuration: durationString(e.manifest.Room.MaxDuration)},
 		TerminationReason: reason,
@@ -392,6 +418,7 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		}
 		manifest.Participants[participant.ID] = roomEvidenceParticipantManifest{
 			ID:                participant.ID,
+			Kind:              room.NormalizeParticipantKind(participant.Kind),
 			SystemPrompt:      e.redactText(participant.SystemPrompt),
 			OpeningPrompt:     e.redactText(participant.OpeningPrompt),
 			Provider:          e.redactText(participant.Provider),
@@ -404,6 +431,8 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 			TerminationReason: participantReason,
 			Reason:            participantReason,
 			Connected:         participantResult.Connected,
+			InputDevice:       e.redactText(participant.InputDevice),
+			OutputDevice:      e.redactText(participant.OutputDevice),
 			Error:             e.redactText(participantResult.Error),
 			Artifacts:         paths,
 		}

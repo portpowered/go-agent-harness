@@ -168,7 +168,7 @@ func TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets(t *testing.T) {
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		t.Fatalf("decode failed room manifest: %v", err)
 	}
-	if manifest.TerminationReason != RoomTerminationFailed || manifest.Error == "" {
+	if manifest.Finalized || manifest.TerminationReason != RoomTerminationFailed || manifest.Error == "" {
 		t.Fatalf("failed manifest outcome = %+v", manifest)
 	}
 	for _, participant := range manifest.Participants {

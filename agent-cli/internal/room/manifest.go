@@ -38,6 +38,7 @@ var (
 	ErrUnknownTool            = errors.New("unknown room manifest tool")
 	ErrUnknownVoice           = errors.New("unknown room manifest voice")
 	ErrDuplicateTool          = errors.New("room manifest contains duplicate tool")
+	ErrInvalidRecording       = errors.New("invalid room manifest recording")
 	ErrInvalidDocument        = errors.New("invalid room manifest document")
 )
 
@@ -124,17 +125,55 @@ type Room struct {
 	// Interactive permits a room without a turn or duration bound. It is used
 	// by the bare customer-plus-agent launch and remains opt-in for manifests.
 	Interactive bool `json:"interactive,omitempty" yaml:"interactive,omitempty"`
+	// Recording is optional for compatibility with existing room documents. A
+	// missing policy means recording is enabled with the command/service
+	// default destination; an explicit Enabled=false disables room evidence.
+	Recording *RoomRecordingConfig `json:"recording,omitempty" yaml:"recording,omitempty"`
+}
+
+// RoomRecordingConfig controls the room evidence bundle. Directory is an
+// explicit destination from the authoritative room document; the loader
+// trims surrounding whitespace, and the command resolves a bare room's
+// omitted destination to a fresh directory below the effective config
+// directory.
+//
+// Enabled is a pointer so an omitted field can be distinguished from an
+// explicit false without changing the schema of older manifests.
+type RoomRecordingConfig struct {
+	Enabled   *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Directory string `json:"directory,omitempty" yaml:"directory,omitempty"`
+}
+
+// RecordingConfig is a descriptive alias for callers that use the shorter
+// configuration terminology.
+type RecordingConfig = RoomRecordingConfig
+
+// RecordingEnabled reports whether the manifest requests room evidence. An
+// omitted policy and an omitted enabled field both preserve the historical
+// recording-on behavior.
+func (r Room) RecordingEnabled() bool {
+	return r.Recording == nil || r.Recording.Enabled == nil || *r.Recording.Enabled
+}
+
+// RecordingDirectory returns the authoritative configured evidence
+// destination, or an empty string when the command should choose one.
+func (r Room) RecordingDirectory() string {
+	if r.Recording == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.Recording.Directory)
 }
 
 // MarshalJSON keeps normalized output human-readable while retaining the
 // time.Duration representation used by the runner internally.
 func (r Room) MarshalJSON() ([]byte, error) {
 	type roomJSON struct {
-		MaxTurns    int    `json:"max_turns,omitempty"`
-		MaxDuration string `json:"max_duration,omitempty"`
-		Interactive bool   `json:"interactive,omitempty"`
+		MaxTurns    int                  `json:"max_turns,omitempty"`
+		MaxDuration string               `json:"max_duration,omitempty"`
+		Interactive bool                 `json:"interactive,omitempty"`
+		Recording   *RoomRecordingConfig `json:"recording,omitempty"`
 	}
-	output := roomJSON{MaxTurns: r.MaxTurns, Interactive: r.Interactive}
+	output := roomJSON{MaxTurns: r.MaxTurns, Interactive: r.Interactive, Recording: r.Recording}
 	if r.MaxDuration > 0 {
 		output.MaxDuration = r.MaxDuration.String()
 	}
@@ -145,11 +184,12 @@ func (r Room) MarshalJSON() ([]byte, error) {
 // time.Duration representation used by the runner internally.
 func (r Room) MarshalYAML() (any, error) {
 	type roomYAML struct {
-		MaxTurns    int    `yaml:"max_turns,omitempty"`
-		MaxDuration string `yaml:"max_duration,omitempty"`
-		Interactive bool   `yaml:"interactive,omitempty"`
+		MaxTurns    int                  `yaml:"max_turns,omitempty"`
+		MaxDuration string               `yaml:"max_duration,omitempty"`
+		Interactive bool                 `yaml:"interactive,omitempty"`
+		Recording   *RoomRecordingConfig `yaml:"recording,omitempty"`
 	}
-	output := roomYAML{MaxTurns: r.MaxTurns, Interactive: r.Interactive}
+	output := roomYAML{MaxTurns: r.MaxTurns, Interactive: r.Interactive, Recording: r.Recording}
 	if r.MaxDuration > 0 {
 		output.MaxDuration = r.MaxDuration.String()
 	}
@@ -294,6 +334,9 @@ func (m Manifest) Validate(options ...ValidationOptions) error {
 	if m.Room.MaxDuration < 0 {
 		return validation("room.max_duration", "", "must be a positive duration", ErrInvalidBound)
 	}
+	if err := validateRoomRecording(m.Room.Recording); err != nil {
+		return err
+	}
 	if m.Room.MaxTurns == 0 && m.Room.MaxDuration == 0 && !m.Room.Interactive {
 		return validation("room", "", "must set a positive max_turns and/or max_duration", ErrMissingBound)
 	}
@@ -424,9 +467,15 @@ type manifestDocument struct {
 }
 
 type manifestRoomDocument struct {
-	MaxTurns    *int    `json:"max_turns" yaml:"max_turns"`
-	MaxDuration *string `json:"max_duration" yaml:"max_duration"`
-	Interactive *bool   `json:"interactive" yaml:"interactive"`
+	MaxTurns    *int                       `json:"max_turns" yaml:"max_turns"`
+	MaxDuration *string                    `json:"max_duration" yaml:"max_duration"`
+	Interactive *bool                      `json:"interactive" yaml:"interactive"`
+	Recording   *manifestRecordingDocument `json:"recording" yaml:"recording"`
+}
+
+type manifestRecordingDocument struct {
+	Enabled   *bool   `json:"enabled" yaml:"enabled"`
+	Directory *string `json:"directory" yaml:"directory"`
 }
 
 type manifestParticipant struct {
@@ -472,6 +521,16 @@ func normalizeManifest(raw manifestDocument, options ValidationOptions) (Manifes
 	}
 	if raw.Room.Interactive != nil {
 		room.Interactive = *raw.Room.Interactive
+	}
+	if raw.Room.Recording != nil {
+		directory := ""
+		if raw.Room.Recording.Directory != nil {
+			directory = strings.TrimSpace(*raw.Room.Recording.Directory)
+		}
+		room.Recording = &RoomRecordingConfig{
+			Enabled:   raw.Room.Recording.Enabled,
+			Directory: directory,
+		}
 	}
 	if room.MaxTurns == 0 && room.MaxDuration == 0 && !room.Interactive {
 		return Manifest{}, validation("room", "", "must set a positive max_turns and/or max_duration", ErrMissingBound)
@@ -591,6 +650,16 @@ func normalizeString(value *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*value)
+}
+
+func validateRoomRecording(recording *RoomRecordingConfig) error {
+	if recording == nil {
+		return nil
+	}
+	if recording.Enabled != nil && !*recording.Enabled && strings.TrimSpace(recording.Directory) != "" {
+		return validation("room.recording.directory", strings.TrimSpace(recording.Directory), "must be empty when recording is disabled", ErrInvalidRecording)
+	}
+	return nil
 }
 
 func validation(field, value, problem string, cause error) *ValidationError {

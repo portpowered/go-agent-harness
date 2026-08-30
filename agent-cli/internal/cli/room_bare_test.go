@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -57,6 +58,162 @@ func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "room starting: participants=2") {
 		t.Fatalf("output = %q, want startup summary", output.String())
+	}
+}
+
+func TestRoomRunCommandBareDefaultRecordingUsesFreshConfigDirectoryOnEveryRun(t *testing.T) {
+	t.Setenv(services.DefaultRoomCredentialEnv, "fake-openai-key")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
+	command := NewRoomRunCommandWithDeviceRegistry(globalFlags, newBareRoomCLIRegistry(t))
+	var outputDirs []string
+	command.SetRunner(func(_ context.Context, _ io.Writer, options services.RoomRunOptions) (services.RoomResult, error) {
+		outputDirs = append(outputDirs, options.OutputDir)
+		return services.RoomResult{TerminationReason: services.RoomTerminationStopped}, nil
+	})
+
+	var output bytes.Buffer
+	first := command.Generate()
+	first.SetOut(&output)
+	if err := first.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("first bare room run: %v", err)
+	}
+	second := command.Generate()
+	second.SetOut(&output)
+	if err := second.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("second bare room run: %v", err)
+	}
+
+	if len(outputDirs) != 2 || outputDirs[0] == "" || outputDirs[1] == "" || outputDirs[0] == outputDirs[1] {
+		t.Fatalf("default output directories = %q, want two distinct fresh directories", outputDirs)
+	}
+	configDir := globalFlags.ConfigDir()
+	for _, outputDir := range outputDirs {
+		if filepath.Dir(outputDir) != configDir || !strings.HasPrefix(filepath.Base(outputDir), "room-run-") {
+			t.Fatalf("default output directory %q is not a fresh config child under %q", outputDir, configDir)
+		}
+		if info, err := os.Stat(outputDir); err != nil || !info.IsDir() {
+			t.Fatalf("default output directory %q stat = %v/%v, want directory", outputDir, info, err)
+		}
+	}
+	if !strings.Contains(output.String(), "room starting: participants=2 output="+outputDirs[0]) || !strings.Contains(output.String(), "output="+outputDirs[1]) {
+		t.Fatalf("startup output = %q, want both non-secret run paths", output.String())
+	}
+}
+
+func TestRoomRunCommandConfigRecordingPolicyIsAuthoritative(t *testing.T) {
+	manifestPath := filepath.Join(t.TempDir(), "recording-policy.json")
+	data := []byte(`{
+  "schema_version": 1,
+  "room": {"max_turns": 1, "recording": {"enabled": false}},
+  "participants": [
+    {"id": "alice", "system_prompt": "Alice", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_POLICY_ALICE_KEY", "tools": []},
+    {"id": "bob", "system_prompt": "Bob", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_POLICY_BOB_KEY", "tools": []}
+  ]
+}`)
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write recording policy manifest: %v", err)
+	}
+	t.Setenv("ROOM_POLICY_ALICE_KEY", "alice-secret")
+	t.Setenv("ROOM_POLICY_BOB_KEY", "bob-secret")
+	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), newBareRoomCLIRegistry(t))
+	var got services.RoomRunOptions
+	command.SetRunner(func(_ context.Context, _ io.Writer, options services.RoomRunOptions) (services.RoomResult, error) {
+		got = options
+		return services.RoomResult{TerminationReason: services.RoomTerminationStopped}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--config", manifestPath, "--out", filepath.Join(t.TempDir(), "ignored-explicit-output")})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute recording-disabled room: %v", err)
+	}
+	if got.OutputDir != "" || got.Manifest.Room.RecordingEnabled() {
+		t.Fatalf("recording-disabled options = output:%q policy:%+v, want no evidence", got.OutputDir, got.Manifest.Room.Recording)
+	}
+}
+
+func TestRoomRunCommandConfigRecordingDestinationIsAuthoritative(t *testing.T) {
+	manifestPath := filepath.Join(t.TempDir(), "recording-destination.json")
+	destination := filepath.Join(t.TempDir(), "configured-room-evidence")
+	data := []byte(fmt.Sprintf(`{
+  "schema_version": 1,
+  "room": {"max_turns": 1, "recording": {"directory": %q}},
+  "participants": [
+    {"id": "alice", "system_prompt": "Alice", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_DEST_ALICE_KEY", "tools": []},
+    {"id": "bob", "system_prompt": "Bob", "provider": "openai", "model": "gpt-realtime", "api_key_env": "ROOM_DEST_BOB_KEY", "tools": []}
+  ]
+}`, destination))
+	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
+		t.Fatalf("write recording destination manifest: %v", err)
+	}
+	t.Setenv("ROOM_DEST_ALICE_KEY", "alice-secret")
+	t.Setenv("ROOM_DEST_BOB_KEY", "bob-secret")
+	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), newBareRoomCLIRegistry(t))
+	var got services.RoomRunOptions
+	command.SetRunner(func(_ context.Context, _ io.Writer, options services.RoomRunOptions) (services.RoomResult, error) {
+		got = options
+		return services.RoomResult{TerminationReason: services.RoomTerminationStopped}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--config", manifestPath})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute configured-destination room: %v", err)
+	}
+	if got.OutputDir != destination {
+		t.Fatalf("configured recording destination = %q, want %q", got.OutputDir, destination)
+	}
+}
+
+func TestRoomRunCommandUsesInjectedSignalCancellation(t *testing.T) {
+	t.Setenv(services.DefaultRoomCredentialEnv, "fake-openai-key")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
+	command := NewRoomRunCommandWithDeviceRegistry(globalFlags, newBareRoomCLIRegistry(t))
+	runnerStarted := make(chan struct{})
+	interrupt := make(chan os.Signal, 1)
+	var stopCalls int
+	command.SetSignalContextFactory(func(parent context.Context) (context.Context, func()) {
+		ctx, cancel := context.WithCancel(parent)
+		go func() {
+			select {
+			case signal := <-interrupt:
+				if signal == os.Interrupt {
+					cancel()
+				}
+			case <-ctx.Done():
+			}
+		}()
+		return ctx, func() {
+			stopCalls++
+			cancel()
+		}
+	})
+	command.SetRunner(func(ctx context.Context, _ io.Writer, _ services.RoomRunOptions) (services.RoomResult, error) {
+		close(runnerStarted)
+		<-ctx.Done()
+		return services.RoomResult{TerminationReason: services.RoomTerminationStopped}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs(nil)
+	done := make(chan error, 1)
+	go func() { done <- cmd.ExecuteContext(context.Background()) }()
+	select {
+	case <-runnerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("room runner did not start")
+	}
+	// The injected signal source represents one SIGINT after readiness.
+	interrupt <- os.Interrupt
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("room command with injected cancellation: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("room command did not return after injected cancellation")
+	}
+	if stopCalls != 1 {
+		t.Fatalf("signal cleanup calls = %d, want one", stopCalls)
 	}
 }
 

@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	// DefaultRoomOutputDir is the deterministic evidence directory used by the
-	// room CLI when --out is omitted. It is resolved relative to the process's
-	// working directory and must still satisfy the empty-directory safety check.
+	// DefaultRoomOutputDir is retained for configured-room compatibility when
+	// --out is omitted. Bare room launches allocate a fresh sibling under the
+	// effective config directory before runtime side effects begin.
 	DefaultRoomOutputDir = "room-run"
 
 	// Room lifecycle cleanup is deliberately finite. Provider/session contracts

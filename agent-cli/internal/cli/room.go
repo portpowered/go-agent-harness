@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	// DefaultRoomOutputDir is the deterministic evidence directory used when
-	// --out is omitted. The normal room service still requires it to be empty.
+	// DefaultRoomOutputDir is retained for configured-room compatibility when
+	// --out is omitted. Bare rooms use a fresh config-directory child instead.
 	DefaultRoomOutputDir = services.DefaultRoomOutputDir
 
 	roomStreamShutdownTimeout = 5 * time.Second
@@ -34,10 +34,16 @@ const (
 // provider credentials and network connections.
 type RoomRunFunc func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error)
 
+// RoomSignalContextFunc owns signal/cancellation setup for one room command.
+// The production implementation listens for SIGINT and SIGTERM; tests can
+// inject a context cancellation without installing process-global handlers.
+type RoomSignalContextFunc func(context.Context) (context.Context, func())
+
 // RoomRunCommand implements `agent room run`.
 type RoomRunCommand struct {
 	globalFlags    *flags.GlobalFlags
 	deviceRegistry audio.DeviceRegistry
+	signalContext  RoomSignalContextFunc
 	run            RoomRunFunc
 }
 
@@ -48,6 +54,7 @@ func NewRoomRunCommand(globalFlags *flags.GlobalFlags) *RoomRunCommand {
 	return &RoomRunCommand{
 		globalFlags:    globalFlags,
 		deviceRegistry: newDefaultDeviceRegistry(),
+		signalContext:  defaultRoomSignalContext,
 		run:            services.RunRoomWithResult,
 	}
 }
@@ -76,6 +83,19 @@ func (c *RoomRunCommand) SetRunner(runner RoomRunFunc) {
 	if c != nil && runner != nil {
 		c.run = runner
 	}
+}
+
+// SetSignalContextFactory replaces signal ownership for hermetic command
+// tests. A nil factory restores the production SIGINT/SIGTERM behavior.
+func (c *RoomRunCommand) SetSignalContextFactory(factory RoomSignalContextFunc) {
+	if c == nil {
+		return
+	}
+	if factory == nil {
+		c.signalContext = defaultRoomSignalContext
+		return
+	}
+	c.signalContext = factory
 }
 
 // RoomCommand is the parent `agent room` command.
@@ -109,7 +129,7 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 		Long: "Run an N-participant room from --config (or the legacy --manifest spelling). " +
 			"With neither flag, start the interactive room with one human customer on the host default microphone and speakers and one OpenAI realtime agent. " +
 			"An explicit --config is authoritative and overrides bare defaults. Validate a complete room manifest, start one isolated live session per participant, " +
-			"and write redacted evidence to an empty output directory. An optional HTTP " +
+			"and write redacted evidence to an empty output directory; bare rooms choose a fresh child of the effective config directory when --out is omitted. An optional HTTP " +
 			"listener exposes forward-only JSON events at /events.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -118,7 +138,7 @@ func (c *RoomRunCommand) Generate() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to the authoritative schema-version-1 JSON or YAML room config; omit for bare defaults")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "Path to the schema-version-1 JSON or YAML room manifest")
-	cmd.Flags().StringVar(&outputDir, "out", DefaultRoomOutputDir, "Empty directory for redacted room evidence (default: room-run)")
+	cmd.Flags().StringVar(&outputDir, "out", DefaultRoomOutputDir, "Empty directory for redacted room evidence (bare default: fresh child under the effective config directory)")
 	cmd.Flags().StringVar(&streamAddress, "stream", "", "Optional TCP listen address for GET /events (for example 127.0.0.1:8080)")
 	return cmd
 }
@@ -139,16 +159,23 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 	}
 	manifest := launchPlan.Manifest
 
-	outputDir = strings.TrimSpace(outputDir)
-	if outputDir == "" {
-		outputDir = DefaultRoomOutputDir
+	outputExplicit := cmd.Flags().Changed("out")
+	outputDir, err = resolveRoomCommandOutputDir(launchPlan, outputDir, outputExplicit)
+	if err != nil {
+		return err
 	}
-	if err := services.ValidateRoomEvidenceOutput(outputDir); err != nil {
-		return fmt.Errorf("validate --out %q: %w", outputDir, err)
+	if outputDir != "" {
+		if err := services.ValidateRoomEvidenceOutput(outputDir); err != nil {
+			return fmt.Errorf("validate --out %q: %w", outputDir, err)
+		}
 	}
 
+	outputLabel := outputDir
+	if outputLabel == "" {
+		outputLabel = "disabled"
+	}
 	output := &roomCommandOutput{writer: cmd.OutOrStdout()}
-	output.printf("room starting: participants=%d output=%s\n", len(manifest.Participants), outputDir)
+	output.printf("room starting: participants=%d output=%s\n", len(manifest.Participants), outputLabel)
 	if err := output.err(); err != nil {
 		return err
 	}
@@ -177,7 +204,24 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 		}
 	}
 
-	runContext, stopSignals := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	var newSignalContext RoomSignalContextFunc = defaultRoomSignalContext
+	if c != nil && c.signalContext != nil {
+		newSignalContext = c.signalContext
+	}
+	runContext, stopSignals := newSignalContext(parent)
+	if runContext == nil {
+		if stopSignals != nil {
+			stopSignals()
+		}
+		contextErr := errors.New("room signal context factory returned a nil context")
+		if eventServer != nil {
+			return errors.Join(contextErr, eventServer.shutdown(broker))
+		}
+		return contextErr
+	}
+	if stopSignals == nil {
+		stopSignals = func() {}
+	}
 	defer stopSignals()
 
 	options := services.RoomRunOptions{
@@ -214,6 +258,29 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, o
 
 	writeRoomResult(output, result)
 	return errors.Join(runErr, streamErr, output.err())
+}
+
+func resolveRoomCommandOutputDir(plan services.RoomLaunchPlan, requested string, explicit bool) (string, error) {
+	if !plan.Manifest.Room.RecordingEnabled() {
+		return "", nil
+	}
+	if !explicit {
+		if destination := plan.Manifest.Room.RecordingDirectory(); destination != "" {
+			return destination, nil
+		}
+		if plan.Mode == services.RoomLaunchModeBare {
+			return services.CreateFreshRoomRunDirectory(plan.ConfigDir)
+		}
+	}
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		requested = DefaultRoomOutputDir
+	}
+	return requested, nil
+}
+
+func defaultRoomSignalContext(parent context.Context) (context.Context, func()) {
+	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 }
 
 func roomRunGlobalFlags(command *RoomRunCommand) *flags.GlobalFlags {

@@ -3,8 +3,11 @@ package services
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
 
 func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) {
@@ -131,6 +135,148 @@ func TestRunRoom_HumanParticipantRoutesDevicesAndReportsReadiness(t *testing.T) 
 	}
 	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 1 {
 		t.Fatalf("device close calls = input:%d output:%d, want exactly once", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())
+	}
+}
+
+func TestRunRoom_HumanCancellationFinalizesAllDefaultEvidence(t *testing.T) {
+	registry := newRoomHumanTestRegistry(t)
+	inferencer := &roomTestInferencer{events: []messages.StreamMessage{roomTestSessionOpen("agent")}}
+	opts := newRoomHumanRunOptions(registry, inferencer)
+	opts.OutputDir = filepath.Join(t.TempDir(), "room-run")
+
+	ready := make(chan RoomParticipantReady, 2)
+	opts.OnParticipantReady = func(event RoomParticipantReady) { ready <- event }
+	fanned := make(chan [2]string, 4)
+	opts.onParticipantAudioFanned = func(sourceID, targetID string, _ []byte) {
+		fanned <- [2]string{sourceID, targetID}
+	}
+	resultCh := make(chan roomTestRunOutcome, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		resultCh <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	readyIDs := make(map[string]bool, 2)
+	for len(readyIDs) < 2 {
+		select {
+		case event := <-ready:
+			readyIDs[event.ParticipantID] = true
+		case <-time.After(2 * time.Second):
+			t.Fatalf("readiness events = %v, want customer and agent", readyIDs)
+		}
+	}
+	// Ensure both sides have a committed PCM artifact before cancellation so
+	// the finalizer proves the complete WAV files are readable, not merely
+	// that their headers were created during startup.
+	session := waitRoomHumanTestSession(t, inferencer)
+	const agentValue int16 = 0x2468
+	for _, event := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
+		roomTestAudioEvent(agentValue, audio.FrameSize),
+	} {
+		if !session.receive.Write(context.Background(), event) {
+			t.Fatal("scripted provider stopped before recording agent audio")
+		}
+	}
+	if !waitForRoomHumanOutput(t, registry.outputHandle.frames, agentValue) {
+		t.Fatal("customer output did not receive scripted agent PCM")
+	}
+	const customerValue int16 = 0x1357
+	customerFrame := make([]int16, audio.FrameSize)
+	for index := range customerFrame {
+		customerFrame[index] = customerValue
+	}
+	registry.inputHandle.push(customerFrame)
+	fanoutDeadline := time.NewTimer(2 * time.Second)
+	defer fanoutDeadline.Stop()
+	for {
+		select {
+		case pair := <-fanned:
+			if pair == [2]string{"customer", "agent"} {
+				goto customerAudioRecorded
+			}
+		case <-fanoutDeadline.C:
+			t.Fatal("customer PCM was not recorded before cancellation")
+		}
+	}
+
+customerAudioRecorded:
+	cancel()
+
+	var outcome roomTestRunOutcome
+	select {
+	case outcome = <-resultCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish bounded cancellation teardown")
+	}
+	if outcome.err != nil {
+		t.Fatalf("room cancellation: %v", outcome.err)
+	}
+	if outcome.result.TerminationReason != RoomTerminationStopped || len(outcome.result.ActiveParticipants) != 0 {
+		t.Fatalf("room result = %+v, want stopped with no active participants", outcome.result)
+	}
+	if len(outcome.result.Participants) != 2 {
+		t.Fatalf("participant results = %+v, want customer and agent", outcome.result.Participants)
+	}
+	if registry.inputHandle.closeCallsSnapshot() != 1 || registry.outputHandle.closeCallsSnapshot() != 1 {
+		t.Fatalf("device close calls = input:%d output:%d, want exactly once", registry.inputHandle.closeCallsSnapshot(), registry.outputHandle.closeCallsSnapshot())
+	}
+	sessions := inferencer.sessionsSnapshot()
+	if len(sessions) != 1 || sessions[0].closeCallsSnapshot() != 1 || !sessions[0].doneSnapshot() {
+		t.Fatalf("provider sessions = %d, close calls = %d, done = %t; want one closed and joined session", len(sessions), func() int {
+			if len(sessions) == 0 {
+				return 0
+			}
+			return sessions[0].closeCallsSnapshot()
+		}(), func() bool {
+			return len(sessions) > 0 && sessions[0].doneSnapshot()
+		}())
+	}
+
+	manifestData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, RoomEvidenceManifestPath))
+	var manifest roomEvidenceManifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("decode finalized room manifest: %v", err)
+	}
+	if !manifest.Finalized || manifest.TerminationReason != RoomTerminationStopped || manifest.Error != "" {
+		t.Fatalf("final room manifest = %+v, want finalized stopped manifest without error", manifest)
+	}
+	if customer := manifest.Participants["customer"]; customer.Kind != room.ParticipantKindHuman || customer.InputDevice != string(registry.inputDevice.ID) || customer.OutputDevice != string(registry.outputDevice.ID) {
+		t.Fatalf("customer evidence metadata = %+v, want human device identities", customer)
+	}
+	if agent := manifest.Participants["agent"]; agent.Kind != room.ParticipantKindAgent || agent.Provider != "test-provider" || agent.Model != "test-model" {
+		t.Fatalf("agent evidence metadata = %+v, want provider identity", agent)
+	}
+
+	entries, err := os.ReadDir(opts.OutputDir)
+	if err != nil {
+		t.Fatalf("read finalized room output: %v", err)
+	}
+	if len(entries) != 7 { // three artifacts per participant plus the terminal manifest
+		t.Fatalf("finalized room output entries = %d, want 7: %v", len(entries), entries)
+	}
+	for id, participant := range manifest.Participants {
+		wavData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.WAV))
+		if _, _, err := wavio.Read(bytes.NewReader(wavData)); err != nil {
+			t.Fatalf("decode %q finalized WAV: %v", id, err)
+		}
+		for _, relativePath := range []string{participant.Artifacts.Diagnostics, participant.Artifacts.Deltas} {
+			data := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, relativePath))
+			if len(data) == 0 {
+				continue
+			}
+			for _, line := range bytes.Split(bytes.TrimSpace(data), []byte{'\n'}) {
+				if len(line) == 0 || !json.Valid(line) {
+					t.Fatalf("artifact %q contains invalid JSONL line %q", relativePath, line)
+				}
+			}
+		}
+	}
+	if temporary, err := filepath.Glob(filepath.Join(opts.OutputDir, "*.tmp")); err != nil || len(temporary) != 0 {
+		t.Fatalf("temporary evidence files = %v (glob error %v), want none", temporary, err)
 	}
 }
 

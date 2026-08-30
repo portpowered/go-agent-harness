@@ -63,6 +63,12 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			return result, err
 		}
 	}
+	opts, err = normalizeRoomRecordingOptions(opts)
+	if err != nil {
+		result := roomFailureResult(err, nil)
+		publishStreamTermination(result)
+		return result, err
+	}
 
 	var evidence *roomEvidence
 	var evidenceSecrets []string
@@ -263,6 +269,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 				continue
 			}
 			ready := roomParticipantReady(plan)
+			if evidence != nil {
+				evidence.setParticipantReady(ready)
+			}
 			if opts.Stream != nil {
 				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantReady, ready.ParticipantID)
 			}

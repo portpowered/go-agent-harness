@@ -345,6 +345,57 @@ func TestManifestValidate_RejectsNilToolsInDirectNormalizedValue(t *testing.T) {
 	assertManifestError(t, err, "participants[0].tools", ErrInvalidParticipant)
 }
 
+func TestParseManifest_PreservesRecordingPolicyAndDestination(t *testing.T) {
+	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
+	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
+	manifest, err := ParseManifest(validManifestData(t, func(document map[string]any) {
+		document["room"].(map[string]any)["recording"] = map[string]any{
+			"enabled":   true,
+			"directory": "  /tmp/room-evidence  ",
+		}
+	}))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	if !manifest.Room.RecordingEnabled() || manifest.Room.RecordingDirectory() != "/tmp/room-evidence" {
+		t.Fatalf("recording policy = %+v, want enabled destination", manifest.Room.Recording)
+	}
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"recording"`) || !strings.Contains(string(encoded), `"directory":"/tmp/room-evidence"`) {
+		t.Fatalf("encoded recording policy = %s, want normalized directory spelling", encoded)
+	}
+}
+
+func TestParseManifest_RecordingDisabledDoesNotCreateEvidencePolicy(t *testing.T) {
+	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
+	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
+	manifest, err := ParseManifest(validManifestData(t, func(document map[string]any) {
+		document["room"].(map[string]any)["recording"] = map[string]any{"enabled": false}
+	}))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	if manifest.Room.Recording == nil || manifest.Room.Recording.Enabled == nil || manifest.Room.RecordingEnabled() {
+		t.Fatalf("recording policy = %+v, want explicit disabled policy", manifest.Room.Recording)
+	}
+	if got := manifest.Room.RecordingDirectory(); got != "" {
+		t.Fatalf("disabled recording destination = %q, want empty", got)
+	}
+}
+
+func TestParseManifest_RejectsRecordingDestinationWhenDisabled(t *testing.T) {
+	err := parseFixtureError(t, func(document map[string]any) {
+		document["room"].(map[string]any)["recording"] = map[string]any{
+			"enabled":   false,
+			"directory": "room-evidence",
+		}
+	}, ValidationOptions{LookupCredential: func(string) (string, bool) { return "secret", true }})
+	assertManifestError(t, err, "room.recording.directory", ErrInvalidRecording)
+}
+
 func validManifestYAML() []byte {
 	return []byte(`schema_version: 1
 room:
