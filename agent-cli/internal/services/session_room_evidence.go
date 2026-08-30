@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,13 @@ type roomEvidence struct {
 	secrets      []string
 	participants map[string]*roomParticipantEvidence
 
+	// clock anchors every recorded wall-clock timestamp (deltas, diagnostics,
+	// room-timeline) to the room's real start time instead of the Unix epoch.
+	clock       roomClock
+	mix         *roomMixBuffer
+	timeline    *roomTimeline
+	audioFormat room.PCM16Format
+
 	mu        sync.Mutex
 	recordErr error
 	onError   func(string, error)
@@ -55,12 +63,24 @@ type roomParticipantEvidence struct {
 	audio       *selfPlayWAVRecorder
 	diagnostics *selfPlayJSONLWriter
 	deltas      *selfPlayJSONLWriter
+
+	// sentPCM/receivedPCM capture both directions of this participant's raw
+	// audio: sentPCM is what this participant spoke into the room (mirrors
+	// audio, without a WAV header); receivedPCM is what the room actually
+	// delivered to this participant (the mixed inbound stream), which earlier
+	// bundles never captured at all.
+	sentPCM        *rawPCMWriter
+	receivedPCM    *rawPCMWriter
+	sentSpeech     *roomSpeechTracker
+	receivedSpeech *roomSpeechTracker
 }
 
 type roomEvidenceArtifactPaths struct {
 	WAV         string `json:"wav"`
 	Diagnostics string `json:"diagnostics"`
 	Deltas      string `json:"deltas"`
+	SentPCM     string `json:"sent_pcm"`
+	ReceivedPCM string `json:"received_pcm"`
 }
 
 func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM16Format, secrets []string, startedAt time.Time) (*roomEvidence, error) {
@@ -80,7 +100,17 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 		manifest:     manifest,
 		secrets:      append([]string(nil), secrets...),
 		participants: make(map[string]*roomParticipantEvidence, len(manifest.Participants)),
+		audioFormat:  format,
 	}
+	evidence.clock = newRoomClock(evidence.startedAt)
+	evidence.mix = newRoomMixBuffer(format.SampleRate)
+	var err error
+	evidence.timeline, err = newRoomTimeline(filepath.Join(evidence.destination, RoomEvidenceTimelinePath), evidence.clock)
+	if err != nil {
+		evidence.cleanupSetup()
+		return nil, fmt.Errorf("create room timeline evidence: %w", err)
+	}
+
 	stems := roomEvidenceArtifactStems(manifest.Participants)
 	for _, participant := range manifest.Participants {
 		stem := stems[participant.ID]
@@ -91,11 +121,19 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 				WAV:         "agent-" + stem + ".wav",
 				Diagnostics: "agent-" + stem + ".diagnostics.jsonl",
 				Deltas:      "agent-" + stem + ".deltas.jsonl",
+				SentPCM:     filepath.Join("participants", stem, "sent.pcm"),
+				ReceivedPCM: filepath.Join("participants", stem, "received.pcm"),
 			},
+			sentSpeech:     &roomSpeechTracker{},
+			receivedSpeech: &roomSpeechTracker{},
 		}
 		evidence.participants[participant.ID] = participantEvidence
 
-		var err error
+		if err := os.MkdirAll(filepath.Join(evidence.destination, "participants", stem), 0o700); err != nil {
+			evidence.cleanupSetup()
+			return nil, fmt.Errorf("create room participant %q evidence directory: %w", participant.ID, err)
+		}
+
 		participantEvidence.audio, err = newSelfPlayWAVRecorder(filepath.Join(evidence.destination, participantEvidence.artifacts.WAV), format.SampleRate)
 		if err != nil {
 			evidence.cleanupSetup()
@@ -111,8 +149,35 @@ func newRoomEvidence(destination string, manifest room.Manifest, format room.PCM
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create room participant %q delta evidence: %w", participant.ID, err)
 		}
+		participantEvidence.sentPCM, err = newRawPCMWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.SentPCM))
+		if err != nil {
+			evidence.cleanupSetup()
+			return nil, fmt.Errorf("create room participant %q sent-audio evidence: %w", participant.ID, err)
+		}
+		participantEvidence.receivedPCM, err = newRawPCMWriter(filepath.Join(evidence.destination, participantEvidence.artifacts.ReceivedPCM))
+		if err != nil {
+			evidence.cleanupSetup()
+			return nil, fmt.Errorf("create room participant %q received-audio evidence: %w", participant.ID, err)
+		}
 	}
 	return evidence, nil
+}
+
+// RoomEvidenceTimelinePath and RoomEvidenceMixPath are the stable, top-level
+// room evidence filenames documented for downstream lanes (audio-property
+// assertions, record/replay) that consume the room bundle layout.
+const (
+	RoomEvidenceTimelinePath = "room-timeline.jsonl"
+	RoomEvidenceMixPath      = "room-mix.wav"
+)
+
+// recordTimelineEvent is a nil-safe convenience wrapper so call sites do not
+// need to guard both e and e.timeline before recording a room-level event.
+func (e *roomEvidence) recordTimelineEvent(event, participant string, fields map[string]string) {
+	if e == nil || e.timeline == nil {
+		return
+	}
+	_ = e.timeline.record(event, participant, fields)
 }
 
 func (e *roomEvidence) participant(id string) *roomParticipantEvidence {
@@ -181,6 +246,10 @@ func (e *roomEvidence) cleanupSetup() {
 	if e == nil {
 		return
 	}
+	if e.timeline != nil {
+		_ = e.timeline.close()
+		_ = os.Remove(filepath.Join(e.destination, RoomEvidenceTimelinePath))
+	}
 	for _, participant := range e.participants {
 		if participant == nil {
 			continue
@@ -194,10 +263,18 @@ func (e *roomEvidence) cleanupSetup() {
 		if participant.deltas != nil {
 			_ = participant.deltas.close()
 		}
+		if participant.sentPCM != nil {
+			_ = participant.sentPCM.close()
+		}
+		if participant.receivedPCM != nil {
+			_ = participant.receivedPCM.close()
+		}
 		for _, path := range []string{
 			filepath.Join(e.destination, participant.artifacts.WAV),
 			filepath.Join(e.destination, participant.artifacts.Diagnostics),
 			filepath.Join(e.destination, participant.artifacts.Deltas),
+			filepath.Join(e.destination, participant.artifacts.SentPCM),
+			filepath.Join(e.destination, participant.artifacts.ReceivedPCM),
 		} {
 			_ = os.Remove(path)
 		}
@@ -220,7 +297,12 @@ func (p *roomParticipantEvidence) RecordSessionDiagnostic(record SessionDiagnost
 		return
 	}
 	data = p.owner.redactJSON(data)
-	if err := p.diagnostics.writeRaw(data); err != nil {
+	stamped, stampErr := p.owner.stampWallClock(data)
+	if stampErr != nil {
+		p.owner.recordError(p.id, fmt.Errorf("stamp diagnostic wall clock: %w", stampErr))
+		return
+	}
+	if err := p.diagnostics.writeRaw(stamped); err != nil {
 		p.owner.recordError(p.id, err)
 	}
 }
@@ -233,7 +315,11 @@ func (p *roomParticipantEvidence) observeDelta(msg messages.StreamMessage) error
 	if err != nil {
 		return fmt.Errorf("marshal stream delta: %w", err)
 	}
-	return p.deltas.writeRaw(p.owner.redactJSON(data))
+	stamped, err := p.owner.stampWallClock(p.owner.redactJSON(data))
+	if err != nil {
+		return fmt.Errorf("stamp delta wall clock: %w", err)
+	}
+	return p.deltas.writeRaw(stamped)
 }
 
 func (p *roomParticipantEvidence) observeAudio(pcm []byte) error {
@@ -241,6 +327,95 @@ func (p *roomParticipantEvidence) observeAudio(pcm []byte) error {
 		return errors.New("room participant WAV sink is not initialized")
 	}
 	return p.audio.write(context.Background(), pcm)
+}
+
+// observeSentAudio records one chunk of this participant's own outbound
+// (spoken) audio: the existing agent-<id>.wav for backward compatibility,
+// the new raw participants/<id>/sent.pcm, the room's composite mix at this
+// chunk's real wall-clock offset, and a speech_start/speech_end room-timeline
+// transition derived from the chunk's own energy.
+func (p *roomParticipantEvidence) observeSentAudio(pcm []byte) error {
+	if p == nil || p.owner == nil {
+		return errors.New("room participant audio evidence is not initialized")
+	}
+	if err := p.observeAudio(pcm); err != nil {
+		return err
+	}
+	if p.sentPCM != nil {
+		if err := p.sentPCM.write(pcm); err != nil {
+			return err
+		}
+	}
+	offset, _ := p.owner.clock.now()
+	if p.owner.mix != nil {
+		p.owner.mix.mixAt(offset, pcm)
+	}
+	if event := p.sentSpeech.transition(pcm16HasSignal(pcm)); event != "" {
+		p.owner.recordTimelineEvent("speech_"+event, p.id, nil)
+	}
+	return nil
+}
+
+// closeSentSpeechSegment force-closes an in-progress sent-speech segment on
+// an explicit AUDIO.END boundary, since a provider audio stream can end
+// without ever emitting a silent trailing chunk for the energy-based tracker
+// to observe.
+func (p *roomParticipantEvidence) closeSentSpeechSegment() {
+	if p == nil || p.sentSpeech == nil {
+		return
+	}
+	if event := p.sentSpeech.transition(false); event != "" && p.owner != nil {
+		p.owner.recordTimelineEvent("speech_"+event, p.id, nil)
+	}
+}
+
+// observeReceivedAudio records one chunk of what the room actually delivered
+// to this participant (the mixed inbound stream fed to SendAudioInput, or the
+// human's mixer output): participants/<id>/received.pcm plus a
+// received_speech_start/end room-timeline transition. This is the artifact
+// that makes room mixing/delivery observable at all -- earlier bundles
+// recorded only each participant's own output, never what it received.
+func (p *roomParticipantEvidence) observeReceivedAudio(pcm []byte) error {
+	if p == nil {
+		return errors.New("room participant audio evidence is not initialized")
+	}
+	if p.receivedPCM != nil {
+		if err := p.receivedPCM.write(pcm); err != nil {
+			return err
+		}
+	}
+	if p.owner != nil {
+		if event := p.receivedSpeech.transition(pcm16HasSignal(pcm)); event != "" {
+			p.owner.recordTimelineEvent("received_speech_"+event, p.id, nil)
+		}
+	}
+	return nil
+}
+
+// recordAudioDropped emits an explicit diagnostic when incoming audio that
+// carried real signal was not forwarded to this participant's session,
+// instead of leaving that failure indistinguishable from ordinary silence
+// (the earlier symptom: a silent input_audio_bytes: 0 that hid a real
+// delivery defect).
+func (p *roomParticipantEvidence) recordAudioDropped(reason string, byteCount int) {
+	if p == nil {
+		return
+	}
+	fields := map[string]string{"reason": reason, "bytes": strconv.Itoa(byteCount)}
+	p.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: "room.audio.input_dropped", Fields: fields})
+	if p.owner != nil {
+		p.owner.recordTimelineEvent("audio_input_dropped", p.id, fields)
+	}
+}
+
+// stampWallClock adds t_offset_ms/t_unix_ms to an encoded JSON event using
+// this room's shared clock.
+func (e *roomEvidence) stampWallClock(data []byte) ([]byte, error) {
+	if e == nil {
+		return data, nil
+	}
+	offset, unixMs := e.clock.now()
+	return injectRoomWallClock(data, offset, unixMs)
 }
 
 func (e *roomEvidence) redactText(value string) string {
@@ -296,6 +471,12 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 		return nil
 	}
 	e.finalizeOnce.Do(func() {
+		reason := result.TerminationReason
+		if reason == "" {
+			reason = result.Reason
+		}
+		e.recordTimelineEvent("run_terminated", "", map[string]string{"reason": string(reason)})
+
 		var closeErr error
 		for _, participant := range e.participants {
 			if participant == nil {
@@ -309,6 +490,24 @@ func (e *roomEvidence) finalize(result RoomResult, runErr error, endedAt time.Ti
 			}
 			if participant.deltas != nil {
 				closeErr = errors.Join(closeErr, participant.deltas.close())
+			}
+			if participant.sentPCM != nil {
+				closeErr = errors.Join(closeErr, participant.sentPCM.close())
+			}
+			if participant.receivedPCM != nil {
+				closeErr = errors.Join(closeErr, participant.receivedPCM.close())
+			}
+		}
+		if e.timeline != nil {
+			closeErr = errors.Join(closeErr, e.timeline.close())
+		}
+		if e.mix != nil {
+			span := endedAt.Sub(e.startedAt)
+			if span < 0 {
+				span = 0
+			}
+			if mixErr := e.mix.finalize(span, filepath.Join(e.destination, RoomEvidenceMixPath)); mixErr != nil {
+				closeErr = errors.Join(closeErr, fmt.Errorf("write room mix evidence: %w", mixErr))
 			}
 		}
 
@@ -329,14 +528,36 @@ type roomEvidenceManifest struct {
 	Reason            RoomTerminationReason                      `json:"reason,omitempty"`
 	Participants      map[string]roomEvidenceParticipantManifest `json:"participants"`
 	TurnCounts        map[string]int                             `json:"turn_counts"`
-	Artifacts         map[string]string                          `json:"artifacts"`
-	Error             string                                     `json:"error,omitempty"`
+	// AudioFormat names the raw PCM16 rate/channel contract shared by every
+	// sent.pcm/received.pcm and the WAV/mix artifacts, so a bundle reader
+	// never has to guess it.
+	AudioFormat roomEvidenceAudioFormat `json:"audio_format"`
+	// RoomMix and RoomTimeline are the two room-level (not per-participant)
+	// artifacts: the composite "fly on the wall" mix and the ordered,
+	// wall-clock-stamped log of the conversation's shape.
+	RoomMix      string            `json:"room_mix"`
+	RoomTimeline string            `json:"room_timeline"`
+	Artifacts    map[string]string `json:"artifacts"`
+	Error        string            `json:"error,omitempty"`
+}
+
+type roomEvidenceAudioFormat struct {
+	SampleRate int    `json:"sample_rate"`
+	Channels   int    `json:"channels"`
+	Encoding   string `json:"encoding"`
 }
 
 type roomEvidenceTiming struct {
 	StartedAt string `json:"started_at"`
 	EndedAt   string `json:"ended_at"`
 	Elapsed   string `json:"elapsed"`
+	// ClockBase is the same instant as StartedAt, named explicitly for
+	// downstream lanes that compute per-turn/cross-participant latency by
+	// subtracting this anchor from every recorded t_unix_ms field. Earlier
+	// bundles had no such anchor at all (or, in the unrelated single-session
+	// recording path, a fixed 1970-01-01 placeholder that made latency
+	// uncomputable); this is always the room's real start time.
+	ClockBase string `json:"clock_base"`
 }
 
 type roomEvidenceBounds struct {
@@ -380,16 +601,30 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		reason = RoomTerminationFailed
 	}
 	manifest := roomEvidenceManifest{
-		SchemaVersion:     roomEvidenceSchemaVersion,
-		Finalized:         runErr == nil,
-		Timing:            roomEvidenceTiming{StartedAt: e.startedAt.UTC().Format(time.RFC3339Nano), EndedAt: endedAt.UTC().Format(time.RFC3339Nano), Elapsed: endedAt.Sub(e.startedAt).String()},
+		SchemaVersion: roomEvidenceSchemaVersion,
+		Finalized:     runErr == nil,
+		Timing: roomEvidenceTiming{
+			StartedAt: e.startedAt.UTC().Format(time.RFC3339Nano),
+			EndedAt:   endedAt.UTC().Format(time.RFC3339Nano),
+			Elapsed:   endedAt.Sub(e.startedAt).String(),
+			ClockBase: e.startedAt.UTC().Format(time.RFC3339Nano),
+		},
 		Bounds:            roomEvidenceBounds{MaxTurns: e.manifest.Room.MaxTurns, MaxDuration: durationString(e.manifest.Room.MaxDuration)},
 		TerminationReason: reason,
 		Reason:            reason,
 		Participants:      make(map[string]roomEvidenceParticipantManifest, len(e.manifest.Participants)),
 		TurnCounts:        make(map[string]int, len(e.manifest.Participants)),
-		Artifacts:         make(map[string]string, len(e.manifest.Participants)*3),
+		AudioFormat: roomEvidenceAudioFormat{
+			SampleRate: e.audioFormat.SampleRate,
+			Channels:   e.audioFormat.Channels,
+			Encoding:   "pcm_s16le",
+		},
+		RoomMix:      RoomEvidenceMixPath,
+		RoomTimeline: RoomEvidenceTimelinePath,
+		Artifacts:    make(map[string]string, len(e.manifest.Participants)*5+2),
 	}
+	manifest.Artifacts["room_mix"] = RoomEvidenceMixPath
+	manifest.Artifacts["room_timeline"] = RoomEvidenceTimelinePath
 	if runErr != nil {
 		manifest.Error = e.redactText(runErr.Error())
 	}
@@ -440,6 +675,8 @@ func (e *roomEvidence) writeManifest(result RoomResult, runErr error, endedAt ti
 		manifest.Artifacts[participant.ID+".wav"] = paths.WAV
 		manifest.Artifacts[participant.ID+".diagnostics"] = paths.Diagnostics
 		manifest.Artifacts[participant.ID+".deltas"] = paths.Deltas
+		manifest.Artifacts[participant.ID+".sent_pcm"] = paths.SentPCM
+		manifest.Artifacts[participant.ID+".received_pcm"] = paths.ReceivedPCM
 	}
 	return writeRoomEvidenceManifestFile(filepath.Join(e.destination, RoomEvidenceManifestPath), manifest, e.secrets)
 }
