@@ -220,6 +220,15 @@ func (f DisplayPermissionCheckerFunc) Check(ctx context.Context) (DisplayPermiss
 	return f(ctx)
 }
 
+// ScreenRecordingPermissionRechecker is the optional session boundary used to
+// inspect a macOS permission state after an interactive screen call times out.
+// The recheck is deliberately separate from DisplaySurface so non-screen tools
+// and non-macOS surfaces do not acquire timeout-specific behavior by accident.
+type ScreenRecordingPermissionRechecker interface {
+	ScreenRecordingPermissionRecheckSupported() bool
+	RecheckScreenRecordingPermission(context.Context) (DisplayPermission, error)
+}
+
 // DisplayProcess is the narrow subprocess boundary used by command-based
 // platforms. Run must honor ctx; production uses exec.CommandContext.
 type DisplayProcess interface {
@@ -367,7 +376,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		}
 	}
 	if s.permission != nil {
-		permission, err := s.permission.Check(ctx)
+		permission, err := s.checkScreenRecordingPermission(ctx)
 		if err != nil {
 			return capabilityForScreenError(err, "screen recording permission check failed"), newScreenCaptureError("screen recording permission check", "", err)
 		}
@@ -407,6 +416,29 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display geometry", Reason: capability.Reason}
 	}
 	return UsableDisplayCapability(count), nil
+}
+
+func (s *hostDisplaySurface) ScreenRecordingPermissionRecheckSupported() bool {
+	return screenRecordingPermissionRecheckSupported()
+}
+
+// RecheckScreenRecordingPermission uses the same permission checker as Probe.
+// It does not inspect display metadata or start a capture process.
+func (s *hostDisplaySurface) RecheckScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	if !s.ScreenRecordingPermissionRecheckSupported() {
+		return DisplayPermission{
+			State:  DisplayPermissionUnavailable,
+			Reason: "macOS Screen Recording permission re-check is unavailable on this platform",
+		}, nil
+	}
+	return s.checkScreenRecordingPermission(ctx)
+}
+
+func (s *hostDisplaySurface) checkScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	if s == nil || s.permission == nil {
+		return DisplayPermission{State: DisplayPermissionGranted}, nil
+	}
+	return s.permission.Check(ctx)
 }
 
 func (s *hostDisplaySurface) DisplayCount(ctx context.Context) (int, error) {

@@ -16,6 +16,11 @@ import (
 // changing the lifetime of the enclosing session.
 const defaultSessionToolExecutionTimeout = 60 * time.Second
 
+// The macOS permission API is non-prompting and normally returns immediately,
+// but the session boundary must not let a misbehaving injected checker extend a
+// tool timeout without bound.
+const sessionScreenPermissionRecheckTimeout = 100 * time.Millisecond
+
 const (
 	// SessionToolTimeoutClassification is the stable provider-visible marker
 	// for an interactive tool deadline. It is deliberately distinct from a
@@ -121,6 +126,11 @@ type sessionToolExecutionResult struct {
 	err      error
 }
 
+type sessionScreenPermissionRecheckResult struct {
+	permission cliTools.DisplayPermission
+	err        error
+}
+
 // Execute implements messages.ToolExecutor. Errors, panics, and tool-local
 // deadline expiry are returned as correlated tool-result content with a nil Go
 // error so the loop's ToolRunner never escalates a single tool failure into a
@@ -178,8 +188,69 @@ func (e *sessionToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 		if e.sigintCancelled(execCtx, execCtx.Err()) {
 			return correlatedSessionToolCancellation(call, execCtx.Err())
 		}
+		if errors.Is(execCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			if denial, ok := e.screenPermissionDeniedAfterTimeout(ctx, call); ok {
+				return finish(sessionToolFailure(call, denial), true)
+			}
+		}
 		return finish(sessionToolFailure(call, sessionToolContextFailure(execCtx.Err())), true)
 	}
+}
+
+// screenPermissionDeniedAfterTimeout performs the one optional macOS
+// permission re-check allowed for a timed-out physical-screen call. It uses
+// the enclosing session context rather than the already-expired tool context,
+// then bounds the checker independently so a slow or non-cooperative checker
+// cannot hold up the session.
+func (e *sessionToolExecutor) screenPermissionDeniedAfterTimeout(ctx context.Context, call messages.ToolCall) (*cliTools.ScreenCaptureError, bool) {
+	if e == nil || ctx == nil || ctx.Err() != nil || call.Name != cliTools.ScreenToolID {
+		return nil, false
+	}
+	rechecker, ok := e.inner.(cliTools.ScreenRecordingPermissionRechecker)
+	if !ok || !safeScreenPermissionRecheckSupported(rechecker) {
+		return nil, false
+	}
+
+	recheckCtx, cancel := context.WithTimeout(ctx, sessionScreenPermissionRecheckTimeout)
+	defer cancel()
+	resultCh := make(chan sessionScreenPermissionRecheckResult, 1)
+	go func() {
+		permission, err := invokeScreenPermissionRecheck(recheckCtx, rechecker)
+		resultCh <- sessionScreenPermissionRecheckResult{permission: permission, err: err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		if ctx.Err() != nil || result.err != nil || result.permission.State != cliTools.DisplayPermissionDenied {
+			return nil, false
+		}
+		return &cliTools.ScreenCaptureError{
+			State:     cliTools.ScreenCaptureDenied,
+			Operation: "show permission re-check",
+			Reason:    result.permission.Reason,
+		}, true
+	case <-recheckCtx.Done():
+		return nil, false
+	}
+}
+
+func safeScreenPermissionRecheckSupported(rechecker cliTools.ScreenRecordingPermissionRechecker) (supported bool) {
+	defer func() {
+		if recover() != nil {
+			supported = false
+		}
+	}()
+	return rechecker.ScreenRecordingPermissionRecheckSupported()
+}
+
+func invokeScreenPermissionRecheck(ctx context.Context, rechecker cliTools.ScreenRecordingPermissionRechecker) (permission cliTools.DisplayPermission, err error) {
+	defer func() {
+		if recover() != nil {
+			permission = cliTools.DisplayPermission{}
+			err = errors.New("screen recording permission re-check panicked")
+		}
+	}()
+	return rechecker.RecheckScreenRecordingPermission(ctx)
 }
 
 // sigintCancelled identifies the one cancellation path that must not be

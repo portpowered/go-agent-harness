@@ -43,6 +43,34 @@ func (re *RegistryExecutor) WithSessionImagePreparer(preparer ImagePartPreparer)
 	return &RegistryExecutor{registry: re.registry.cloneWithSessionImagePreparer(preparer)}
 }
 
+func (re *RegistryExecutor) screenRecordingPermissionRechecker() (ScreenRecordingPermissionRechecker, bool) {
+	if re == nil || re.registry == nil {
+		return nil, false
+	}
+	tool, ok := re.registry.Get(ScreenToolID)
+	if !ok || isNilTool(tool) {
+		return nil, false
+	}
+	rechecker, ok := tool.(ScreenRecordingPermissionRechecker)
+	return rechecker, ok
+}
+
+func (re *RegistryExecutor) ScreenRecordingPermissionRecheckSupported() bool {
+	rechecker, ok := re.screenRecordingPermissionRechecker()
+	return ok && rechecker.ScreenRecordingPermissionRecheckSupported()
+}
+
+func (re *RegistryExecutor) RecheckScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	rechecker, ok := re.screenRecordingPermissionRechecker()
+	if !ok {
+		return DisplayPermission{
+			State:  DisplayPermissionUnavailable,
+			Reason: "screen recording permission re-check is unavailable",
+		}, nil
+	}
+	return rechecker.RecheckScreenRecordingPermission(ctx)
+}
+
 // Execute implements subsystems.ToolExecutor.
 func (re *RegistryExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	var args map[string]any

@@ -31,6 +31,21 @@ type scriptedDisplaySurface struct {
 	deadline   bool
 }
 
+type screenPermissionRecheckSurface struct {
+	*scriptedDisplaySurface
+	permission DisplayPermission
+	rechecks   int
+}
+
+func (s *screenPermissionRecheckSurface) ScreenRecordingPermissionRecheckSupported() bool {
+	return true
+}
+
+func (s *screenPermissionRecheckSurface) RecheckScreenRecordingPermission(context.Context) (DisplayPermission, error) {
+	s.rechecks++
+	return s.permission, nil
+}
+
 func (s *scriptedDisplaySurface) Probe(ctx context.Context) (DisplayCapability, error) {
 	s.probes++
 	_, s.deadline = ctx.Deadline()
@@ -257,6 +272,48 @@ func TestDisplayPermissionCheckerStopsProbeBeforeDisplaySideEffects(t *testing.T
 	}
 	if capability.State != ScreenCaptureDenied || capability.Reason != "permission test denial" || processCalls != 0 {
 		t.Fatalf("permission probe result = %#v, process calls = %d", capability, processCalls)
+	}
+}
+
+func TestScreenPermissionRecheckPropagatesThroughRegistryAndComposition(t *testing.T) {
+	surface := &screenPermissionRecheckSurface{
+		scriptedDisplaySurface: &scriptedDisplaySurface{capability: UsableDisplayCapability(1)},
+		permission:             DisplayPermission{State: DisplayPermissionDenied, Reason: "recheck denied"},
+	}
+	tool := NewScreenToolWithDisplaySurface(surface)
+	registry := NewEmptyToolRegistry()
+	if err := registry.Register(tool); err != nil {
+		t.Fatalf("register screen tool: %v", err)
+	}
+	executor := NewRegistryExecutor(registry)
+	rechecker, ok := any(executor).(ScreenRecordingPermissionRechecker)
+	if !ok || !rechecker.ScreenRecordingPermissionRecheckSupported() {
+		t.Fatalf("registry executor does not expose screen permission recheck: %T", executor)
+	}
+	permission, err := rechecker.RecheckScreenRecordingPermission(context.Background())
+	if err != nil || permission.State != DisplayPermissionDenied {
+		t.Fatalf("registry recheck = %#v, %v, want denied permission", permission, err)
+	}
+
+	composed, err := ComposeToolSurface(
+		executor,
+		[]messages.ToolDefinition{{Name: ScreenToolID}},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("compose screen surface: %v", err)
+	}
+	composedRechecker, ok := composed.Executor.(ScreenRecordingPermissionRechecker)
+	if !ok || !composedRechecker.ScreenRecordingPermissionRecheckSupported() {
+		t.Fatalf("composed executor does not expose screen permission recheck: %T", composed.Executor)
+	}
+	permission, err = composedRechecker.RecheckScreenRecordingPermission(context.Background())
+	if err != nil || permission.State != DisplayPermissionDenied {
+		t.Fatalf("composed recheck = %#v, %v, want denied permission", permission, err)
+	}
+	if surface.rechecks != 2 {
+		t.Fatalf("permission checker calls = %d, want two calls through the same surface contract", surface.rechecks)
 	}
 }
 

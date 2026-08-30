@@ -683,3 +683,22 @@ func (t *ScreenTool) captureDisplay(ctx context.Context, display int, bounds ima
 	}
 	return surface.Capture(ctx, bounds)
 }
+
+func (t *ScreenTool) ScreenRecordingPermissionRecheckSupported() bool {
+	if t == nil {
+		return false
+	}
+	rechecker, ok := t.displaySurface().(ScreenRecordingPermissionRechecker)
+	return ok && rechecker.ScreenRecordingPermissionRecheckSupported()
+}
+
+func (t *ScreenTool) RecheckScreenRecordingPermission(ctx context.Context) (DisplayPermission, error) {
+	if !t.ScreenRecordingPermissionRecheckSupported() {
+		return DisplayPermission{
+			State:  DisplayPermissionUnavailable,
+			Reason: "macOS Screen Recording permission re-check is unavailable",
+		}, nil
+	}
+	rechecker := t.displaySurface().(ScreenRecordingPermissionRechecker)
+	return rechecker.RecheckScreenRecordingPermission(ctx)
+}

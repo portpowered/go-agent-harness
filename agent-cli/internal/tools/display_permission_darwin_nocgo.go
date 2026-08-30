@@ -25,3 +25,7 @@ func (darwinDisplayPermissionChecker) Check(ctx context.Context) (DisplayPermiss
 func defaultDisplayPermissionChecker() DisplayPermissionChecker {
 	return darwinDisplayPermissionChecker{}
 }
+
+// The macOS contract remains present in cgo-disabled builds, but its explicit
+// checker result is unavailable rather than a fabricated grant or denial.
+func screenRecordingPermissionRecheckSupported() bool { return true }

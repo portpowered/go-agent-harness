@@ -41,3 +41,5 @@ func (darwinDisplayPermissionChecker) Check(ctx context.Context) (DisplayPermiss
 func defaultDisplayPermissionChecker() DisplayPermissionChecker {
 	return darwinDisplayPermissionChecker{}
 }
+
+func screenRecordingPermissionRecheckSupported() bool { return true }
