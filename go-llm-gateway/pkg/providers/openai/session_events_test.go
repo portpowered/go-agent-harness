@@ -26,6 +26,30 @@ func TestRealtimeOutboundEvents_ResponseCancelMapsToProviderEvent(t *testing.T) 
 	}
 }
 
+func TestRealtimeOutboundEvents_ToolAcknowledgementCarriesInstructions(t *testing.T) {
+	events, ok := realtimeOutboundEvents(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewToolAcknowledgementResponseCreateValue(),
+	})
+	if !ok || len(events) != 1 {
+		t.Fatalf("acknowledgement events = %#v, ok=%t; want one event", events, ok)
+	}
+	if events[0].Type != models.SessionEventResponseCreate {
+		t.Fatalf("event type = %q, want %q", events[0].Type, models.SessionEventResponseCreate)
+	}
+	var payload struct {
+		Response struct {
+			Instructions string `json:"instructions"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(events[0].Data, &payload); err != nil {
+		t.Fatalf("acknowledgement payload: %v", err)
+	}
+	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
+		t.Fatalf("acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
+	}
+}
+
 func TestRealtimeInboundMessages_InactiveCancelRejectionIsNonTerminalDiagnostic(t *testing.T) {
 	raw := json.RawMessage(`{"type":"error","error":{"type":"invalid_request_error","code":"response_cancel_not_active","param":"response.cancel","event_id":"evt-cancel-1","message":"Can only cancel an active response."}}`)
 	got := realtimeInboundMessages(models.SessionEvent{Type: models.SessionEventError, Data: raw})

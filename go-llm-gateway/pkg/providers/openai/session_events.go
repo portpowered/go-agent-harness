@@ -303,10 +303,11 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		// Tool results are delivered as conversation items without a response
 		// request. Audio-only turns have no user text event to trigger the
 		// continuation, so the model runner sends this explicit control event.
-		if v, ok := msg.Value.(*messages.ResponseCreateValue); !ok || v == nil {
+		v, ok := msg.Value.(*messages.ResponseCreateValue)
+		if !ok || v == nil {
 			return nil, false
 		}
-		return []models.SessionEvent{models.NewResponseCreateEvent()}, true
+		return []models.SessionEvent{models.NewResponseCreateEventWithInstructions(v.Instructions)}, true
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)
 		if !ok || v == nil {

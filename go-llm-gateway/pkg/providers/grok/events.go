@@ -334,10 +334,11 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		// Tool-result delivery and response creation are separate boundaries.
 		// The result item is queued first; this control event starts exactly one
 		// grounded continuation without committing a new user-audio turn.
-		if v, ok := msg.Value.(*messages.ResponseCreateValue); !ok || v == nil {
+		v, ok := msg.Value.(*messages.ResponseCreateValue)
+		if !ok || v == nil {
 			return models.SessionEvent{}, false
 		}
-		return models.NewResponseCreateEvent(), true
+		return models.NewResponseCreateEventWithInstructions(v.Instructions), true
 
 	case messages.StreamTypeTextDelta:
 		// Text input: send as conversation.item.create with a user message.

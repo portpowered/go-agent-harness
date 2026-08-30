@@ -90,40 +90,12 @@ func (r *ModelRunner) runSession(ctx context.Context) error {
 				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 				return nil
 			}
-			if evt.Type == messages.StreamTypeResponseCreate && state.suppressContinuation {
-				// A result in this batch was rejected at the provider boundary. Do
-				// not ask the provider to continue from a partially delivered batch;
-				// the accepted sibling remains pending and the deferred result error
-				// names the rejected call when the session reaches a terminal path.
-				state.suppressContinuation = false
-				r.sessionToolContinuation = sessionToolContinuationSuppressed
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				state.pendingSendErrors = nil
-				continue
-			}
 			r.forwardPendingSessionMessages(ctx, session, &state)
 			if err := r.drainSessionAudioWithState(ctx, session, &state); err != nil {
 				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 				return err
 			}
-			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred {
-				state.pendingSendErrors = append(state.pendingSendErrors, failure)
-				if evt.Type == messages.StreamTypeToolCallEnd {
-					state.suppressContinuation = true
-					r.sessionToolContinuation = sessionToolContinuationSuppressed
-				}
-				if responseAccepted {
-					state.awaitingContinuation = true
-					r.sessionToolContinuation = sessionToolContinuationAccepted
-				}
-			} else {
-				if responseAccepted {
-					state.awaitingContinuation = true
-					r.sessionToolContinuation = sessionToolContinuationAccepted
-				} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate {
-					r.sessionToolContinuation = sessionToolContinuationSuppressed
-				}
-			}
+			r.forwardQueuedSessionEvent(ctx, session, &state, evt)
 		case req, ok := <-r.Inbox.Chan():
 			if !ok {
 				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
@@ -165,37 +137,10 @@ func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session m
 			if !ok {
 				return true, true, nil
 			}
-			if evt.Type == messages.StreamTypeResponseCreate && state.suppressContinuation {
-				// See the main session-event branch: one rejected result makes the
-				// batch continuation invalid, even when another result was accepted.
-				state.suppressContinuation = false
-				r.sessionToolContinuation = sessionToolContinuationSuppressed
-				r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-				state.pendingSendErrors = nil
-				handled = true
-				continue
-			}
 			if err := r.drainSessionAudioWithState(ctx, session, state); err != nil {
 				return true, false, err
 			}
-			if failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt); deferred {
-				state.pendingSendErrors = append(state.pendingSendErrors, failure)
-				if evt.Type == messages.StreamTypeToolCallEnd {
-					state.suppressContinuation = true
-					r.sessionToolContinuation = sessionToolContinuationSuppressed
-				}
-				if responseAccepted {
-					state.awaitingContinuation = true
-					r.sessionToolContinuation = sessionToolContinuationAccepted
-				}
-			} else {
-				if responseAccepted {
-					state.awaitingContinuation = true
-					r.sessionToolContinuation = sessionToolContinuationAccepted
-				} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate {
-					r.sessionToolContinuation = sessionToolContinuationSuppressed
-				}
-			}
+			r.forwardQueuedSessionEvent(ctx, session, state, evt)
 			handled = true
 		default:
 			return handled, false, nil
@@ -281,6 +226,67 @@ func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.
 	}
 	r.DeltaOutbox.Write(ctx, failure)
 	return messages.StreamMessage{}, false, false
+}
+
+// forwardQueuedSessionEvent applies the session's control-plane ordering
+// rules. A normal continuation is held while an acknowledgement response is
+// active; tool results themselves remain deliverable so the provider can use
+// them as soon as the acknowledgement has ended.
+func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) {
+	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.suppressContinuation {
+		// A result in this batch was rejected at the provider boundary. Do not
+		// ask the provider to continue from a partially delivered batch; the
+		// accepted sibling remains pending and the deferred result error names
+		// the rejected call when the session reaches a terminal path.
+		state.suppressContinuation = false
+		r.sessionToolContinuation = sessionToolContinuationSuppressed
+		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
+		state.pendingSendErrors = nil
+		return
+	}
+	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.acknowledgementOutstanding {
+		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
+		return
+	}
+
+	failure, deferred, responseAccepted := r.forwardSessionEvent(ctx, session, evt)
+	if deferred {
+		if failure.Type != "" {
+			state.pendingSendErrors = append(state.pendingSendErrors, failure)
+		}
+		if evt.Type == messages.StreamTypeToolCallEnd {
+			state.suppressContinuation = true
+			r.sessionToolContinuation = sessionToolContinuationSuppressed
+		}
+	}
+	if responseAccepted {
+		if isToolAcknowledgementResponseCreate(evt) {
+			state.acknowledgementOutstanding = true
+			state.acknowledgementCancelled = false
+			state.responseCancelSent = false
+		} else {
+			state.awaitingContinuation = true
+			r.sessionToolContinuation = sessionToolContinuationAccepted
+		}
+	} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) {
+		r.sessionToolContinuation = sessionToolContinuationSuppressed
+	}
+}
+
+func (r *ModelRunner) flushDeferredSessionEvents(ctx context.Context, session messages.Session, state *sessionRunState) {
+	deferred := state.deferredSessionEvents
+	state.deferredSessionEvents = nil
+	for _, evt := range deferred {
+		r.forwardQueuedSessionEvent(ctx, session, state, evt)
+	}
+}
+
+func isToolAcknowledgementResponseCreate(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeResponseCreate {
+		return false
+	}
+	value, ok := msg.Value.(*messages.ResponseCreateValue)
+	return ok && value.IsToolAcknowledgement()
 }
 
 func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failures []messages.StreamMessage) {

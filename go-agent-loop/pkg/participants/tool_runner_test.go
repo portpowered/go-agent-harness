@@ -277,6 +277,91 @@ func TestExecuteBatch_MultipleFailures(t *testing.T) {
 	}
 }
 
+type acknowledgementGateExecutor struct {
+	release <-chan struct{}
+}
+
+func (e acknowledgementGateExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	if call.Name == "slow" {
+		select {
+		case <-e.release:
+		case <-ctx.Done():
+			return messages.ToolCallResponse{}, ctx.Err()
+		}
+	}
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: call.Name + " result"}, nil
+}
+
+func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
+	release := make(chan struct{})
+	acknowledgements := make(chan []messages.ToolCall, 2)
+	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
+	runner.ConfigureAcknowledgement(10*time.Millisecond, func(name string) bool {
+		return name == "slow"
+	}, func(_ context.Context, calls []messages.ToolCall) {
+		acknowledgements <- calls
+	})
+
+	resultCh := make(chan []messages.ToolCallResponse, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		results, err := runner.executeBatch(context.Background(), []messages.ToolCall{
+			{ID: "fast-call", Name: "fast"},
+			{ID: "slow-call", Name: "slow"},
+		})
+		resultCh <- results
+		errCh <- err
+	}()
+
+	select {
+	case calls := <-acknowledgements:
+		if len(calls) != 1 || calls[0].ID != "slow-call" {
+			t.Fatalf("acknowledged calls = %#v, want only slow-call", calls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("long-running call did not trigger acknowledgement")
+	}
+	close(release)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("executeBatch error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("executeBatch did not complete after release")
+	}
+	results := <-resultCh
+	if len(results) != 2 || results[0].ToolCallID != "fast-call" || results[1].ToolCallID != "slow-call" {
+		t.Fatalf("results = %#v, want stable call order", results)
+	}
+	select {
+	case calls := <-acknowledgements:
+		t.Fatalf("duplicate acknowledgement = %#v", calls)
+	default:
+	}
+}
+
+func TestToolRunner_FastCallCompletingBeforeThresholdDoesNotAcknowledge(t *testing.T) {
+	acknowledged := make(chan struct{}, 1)
+	runner := NewToolRunner(&testToolExecutor{results: map[string]string{"fast": "done"}}, 8)
+	runner.ConfigureAcknowledgement(100*time.Millisecond, func(string) bool { return true }, func(context.Context, []messages.ToolCall) {
+		acknowledged <- struct{}{}
+	})
+
+	results, err := runner.executeBatch(context.Background(), []messages.ToolCall{{ID: "fast-call", Name: "fast"}})
+	if err != nil {
+		t.Fatalf("executeBatch error = %v", err)
+	}
+	if len(results) != 1 || results[0].Content != "done" {
+		t.Fatalf("results = %#v, want fast result", results)
+	}
+	select {
+	case <-acknowledged:
+		t.Fatal("fast call emitted an unnecessary acknowledgement")
+	default:
+	}
+}
+
 func TestExecuteBatch_AllFail(t *testing.T) {
 	exec := &testToolExecutor{
 		results: map[string]string{}, // no tools known

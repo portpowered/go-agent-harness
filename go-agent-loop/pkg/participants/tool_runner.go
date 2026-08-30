@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -32,6 +33,10 @@ type ToolRunner struct {
 
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
+
+	acknowledgementThreshold time.Duration
+	isLongRunningTool        func(string) bool
+	sendAcknowledgement      func(context.Context, []messages.ToolCall)
 }
 
 func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunner {
@@ -40,6 +45,16 @@ func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunn
 		Inbox:       messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
 		DeltaOutbox: messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
 	}
+}
+
+// ConfigureAcknowledgement enables a one-shot callback when at least one
+// admitted long-running call remains pending after the configured threshold.
+// It is configured before Run starts and is intentionally independent from the
+// tool executor's timeout policy.
+func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, send func(context.Context, []messages.ToolCall)) {
+	r.acknowledgementThreshold = threshold
+	r.isLongRunningTool = isLongRunning
+	r.sendAcknowledgement = send
 }
 
 func (r *ToolRunner) Run(ctx context.Context) error {
@@ -213,27 +228,78 @@ func mustStreamID(prefix string) string {
 }
 
 // executeBatch runs all tool calls in parallel and collects results.
-// Results are returned in the same order as the input calls.
+// Results are returned in the same order as the input calls. A configured
+// acknowledgement timer observes the same result channel, so calls that finish
+// before the threshold never cause an acknowledgement and a batch emits at
+// most one acknowledgement request.
 func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall) ([]messages.ToolCallResponse, error) {
 	results := make([]messages.ToolCallResponse, len(calls))
 	errs := make([]error, len(calls))
-
-	var wg sync.WaitGroup
-	wg.Add(len(calls))
+	type executionResult struct {
+		index    int
+		response messages.ToolCallResponse
+		err      error
+	}
+	resultCh := make(chan executionResult, len(calls))
+	pendingLongRunning := make(map[int]messages.ToolCall)
+	for i, call := range calls {
+		if r.acknowledgementThreshold > 0 && r.isLongRunningTool != nil && r.isLongRunningTool(call.Name) {
+			pendingLongRunning[i] = call
+		}
+	}
 
 	for i, tc := range calls {
 		go func(idx int, call messages.ToolCall) {
-			defer wg.Done()
 			resp, err := r.executor.Execute(ctx, call)
-			if err != nil {
-				errs[idx] = fmt.Errorf("tool %q failed: %w", call.Name, err)
-				return
-			}
-			results[idx] = resp
+			resultCh <- executionResult{index: idx, response: resp, err: err}
 		}(i, tc)
 	}
 
-	wg.Wait()
+	var acknowledgementTimer *time.Timer
+	var acknowledgementCh <-chan time.Time
+	if len(pendingLongRunning) > 0 {
+		acknowledgementTimer = time.NewTimer(r.acknowledgementThreshold)
+		acknowledgementCh = acknowledgementTimer.C
+		defer acknowledgementTimer.Stop()
+	}
+	ctxDone := ctx.Done()
+	acknowledgementSent := false
+	completed := 0
+	for completed < len(calls) {
+		select {
+		case result := <-resultCh:
+			if result.err != nil {
+				errs[result.index] = fmt.Errorf("tool %q failed: %w", calls[result.index].Name, result.err)
+			} else {
+				results[result.index] = result.response
+			}
+			delete(pendingLongRunning, result.index)
+			completed++
+		case <-acknowledgementCh:
+			if !acknowledgementSent && len(pendingLongRunning) > 0 && ctx.Err() == nil {
+				acknowledgementSent = true
+				if r.sendAcknowledgement != nil {
+					pending := make([]messages.ToolCall, 0, len(pendingLongRunning))
+					for i := range calls {
+						if call, ok := pendingLongRunning[i]; ok {
+							pending = append(pending, call)
+						}
+					}
+					r.sendAcknowledgement(ctx, pending)
+				}
+			}
+			acknowledgementCh = nil
+		case <-ctxDone:
+			// Keep collecting worker outcomes so the existing batch error
+			// semantics remain intact, but never send an acknowledgement after
+			// cancellation.
+			ctxDone = nil
+			if acknowledgementTimer != nil {
+				acknowledgementTimer.Stop()
+			}
+			acknowledgementCh = nil
+		}
+	}
 
 	// Return all errors aggregated so callers see every failure, not just the first.
 	if joined := errors.Join(errs...); joined != nil {

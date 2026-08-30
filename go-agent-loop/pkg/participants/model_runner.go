@@ -62,18 +62,22 @@ const (
 // pending tool-result bookkeeping lets the pending-input preflight observe an
 // already-queued provider boundary before it admits user audio.
 type sessionRunState struct {
-	responseInFlight     bool
-	responseCancelSent   bool
-	sessionClosed        bool
-	hasOutput            bool
-	responseCompleted    bool
-	pendingSendErrors    []messages.StreamMessage
-	awaitingContinuation bool
-	suppressContinuation bool
-	currentResponseID    string
-	cancelledResponseIDs map[string]struct{}
-	retiredResponseIDs   map[string]struct{}
-	terminalResponseIDs  map[string]struct{}
+	responseInFlight           bool
+	responseCancelSent         bool
+	sessionClosed              bool
+	hasOutput                  bool
+	responseCompleted          bool
+	pendingSendErrors          []messages.StreamMessage
+	awaitingContinuation       bool
+	suppressContinuation       bool
+	currentResponseID          string
+	cancelledResponseIDs       map[string]struct{}
+	retiredResponseIDs         map[string]struct{}
+	terminalResponseIDs        map[string]struct{}
+	acknowledgementOutstanding bool
+	acknowledgementCancelled   bool
+	acknowledgementEnded       bool
+	deferredSessionEvents      []messages.StreamMessage
 }
 
 // sessionResponseState is retained as an alias for the identity-aware helper
@@ -263,7 +267,12 @@ func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session me
 		r.sessionToolContinuation = sessionToolContinuationNone
 	}
 	messageEnded := r.forwardSessionMessageWithState(ctx, session, msg, state)
-	if messageEnded && state.awaitingContinuation {
+	acknowledgementEnded := state.acknowledgementEnded
+	if acknowledgementEnded {
+		state.acknowledgementEnded = false
+		r.flushDeferredSessionEvents(ctx, session, state)
+	}
+	if messageEnded && state.awaitingContinuation && !acknowledgementEnded {
 		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 		state.pendingSendErrors = nil
 		state.awaitingContinuation = false
@@ -295,7 +304,7 @@ func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session 
 	// intentionally included: provider response creation and its first output
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
-	if state.responseInFlight && !state.responseCancelSent && hasPCM16Signal(pcm) {
+	if (state.responseInFlight || state.acknowledgementOutstanding) && !state.responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
@@ -307,6 +316,9 @@ func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session 
 		// but never send a second cancel for more audio belonging to the same
 		// response.
 		state.responseCancelSent = true
+		if state.acknowledgementOutstanding {
+			state.acknowledgementCancelled = true
+		}
 		if state.currentResponseID != "" {
 			state.cancelledResponseIDs[state.currentResponseID] = struct{}{}
 		}
@@ -324,6 +336,13 @@ func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session 
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
 	state.ensureMaps()
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		state.acknowledgementOutstanding = true
+	}
+	acknowledgementResponse := state.acknowledgementOutstanding
+	if acknowledgementResponse && isSessionResponseStreamType(msg.Type) {
+		msg.ResponsePurpose = messages.ResponsePurposeToolAcknowledgement
+	}
 	msgID := responseID(msg.ResponseID)
 	messageEndOwned := false
 
@@ -339,6 +358,12 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 			state.responseCompleted = false
 			state.responseCancelSent = false
 			state.responseInFlight = true
+			if acknowledgementResponse && state.acknowledgementCancelled {
+				state.responseCancelSent = true
+				if msgID != "" {
+					state.cancelledResponseIDs[msgID] = struct{}{}
+				}
+			}
 		}
 	case messages.StreamTypeMessageEnd:
 		if ownsSessionResponseEnd(state, msgID) {
@@ -365,6 +390,10 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 					)
 				}
 				state.responseCompleted = false
+			} else if acknowledgementResponse {
+				// A progress acknowledgement is never the assistant turn that
+				// satisfies a user input or a tool continuation.
+				state.responseCompleted = false
 			} else {
 				state.responseCompleted = true
 			}
@@ -373,6 +402,13 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 			}
 			state.currentResponseID = ""
 			messageEndOwned = true
+			if acknowledgementResponse {
+				state.acknowledgementOutstanding = false
+				state.acknowledgementCancelled = false
+				state.acknowledgementEnded = true
+				state.responseCancelSent = false
+				state.hasOutput = false
+			}
 		}
 	case messages.StreamTypeSessionClose:
 		state.sessionClosed = true
@@ -477,6 +513,42 @@ func staleSessionCustomerOutput(state *sessionResponseState, msg messages.Stream
 		return false
 	}
 	return state.responseCancelSent
+}
+
+func isSessionResponseStreamType(typ messages.StreamMessageType) bool {
+	switch typ {
+	case messages.StreamTypeMessageStart,
+		messages.StreamTypeMessageEnd,
+		messages.StreamTypeTextStart,
+		messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart,
+		messages.StreamTypeToolCallDelta,
+		messages.StreamTypeToolCallEnd,
+		messages.StreamTypeAudioStart,
+		messages.StreamTypeAudioDelta,
+		messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart,
+		messages.StreamTypeImageDelta,
+		messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoDelta,
+		messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart,
+		messages.StreamTypeFileDelta,
+		messages.StreamTypeFileEnd,
+		messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningDelta,
+		messages.StreamTypeReasoningEnd,
+		messages.StreamTypeTranscriptStart,
+		messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeRefusal,
+		messages.StreamTypeUsageInfo:
+		return true
+	default:
+		return false
+	}
 }
 
 const (

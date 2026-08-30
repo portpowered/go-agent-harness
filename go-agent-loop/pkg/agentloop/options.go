@@ -32,6 +32,10 @@ type AgentLoopConfig struct {
 	// inference provider emits SESSION.CREATED. Only used in DuplexSession mode.
 	SessionConfig *messages.SessionUpdateConfig
 
+	// ToolAcknowledgement configures one short, one-shot progress response for a
+	// long-running duplex tool batch. It is ignored outside session mode.
+	ToolAcknowledgement *ToolAcknowledgementPolicy
+
 	// Per-participant buffer capacity overrides. When set (> 0), these take
 	// precedence over BufferCapacity for the corresponding participant.
 	// This allows tuning buffer sizes for different workload profiles:
@@ -43,6 +47,15 @@ type AgentLoopConfig struct {
 	ToolBufferCapacity   int
 	UserBufferCapacity   int
 	KernelBufferCapacity int
+}
+
+// ToolAcknowledgementPolicy controls when a duplex session may ask the model
+// for a brief progress acknowledgement while one or more tools are running.
+// The callback is evaluated against the admitted tool name; nil means no tool
+// is eligible for an acknowledgement.
+type ToolAcknowledgementPolicy struct {
+	Threshold     time.Duration
+	IsLongRunning func(string) bool
 }
 
 // Option is a functional option for configuring an AgentLoop.
@@ -217,6 +230,15 @@ func WithTickRate(d time.Duration) Option {
 func WithSessionConfig(cfg messages.SessionUpdateConfig) Option {
 	return func(c *AgentLoopConfig) {
 		c.SessionConfig = &cfg
+	}
+}
+
+// WithToolAcknowledgementPolicy enables the one-shot long-running-tool
+// acknowledgement path for a duplex session. Normal tool results still own
+// the only grounded continuation response.
+func WithToolAcknowledgementPolicy(policy ToolAcknowledgementPolicy) Option {
+	return func(c *AgentLoopConfig) {
+		c.ToolAcknowledgement = &policy
 	}
 }
 

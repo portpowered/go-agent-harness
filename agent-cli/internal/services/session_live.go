@@ -243,6 +243,15 @@ func duplexSessionLoopOptions(observedInferencer messages.SessionInferencer, opt
 			opts.toolLifecycleObserver,
 			opts.cancellationIntent,
 		)))
+		if opts.InteractiveToolPolicy != nil {
+			policy := opts.InteractiveToolPolicy.Clone()
+			loopOpts = append(loopOpts, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
+				Threshold: policy.AcknowledgementThreshold,
+				IsLongRunning: func(name string) bool {
+					return policy.ClassForTool(name) == InteractiveToolClassBoundedLongRunning
+				},
+			}))
+		}
 	} else {
 		loopOpts = append(loopOpts, agentloop.WithToolExecutionDisabled())
 	}

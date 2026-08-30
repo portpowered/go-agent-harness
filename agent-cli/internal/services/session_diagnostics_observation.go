@@ -32,6 +32,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	}
 	msgResponseID := strings.TrimSpace(msg.ResponseID)
 	responseLifecycleID := msgResponseID
+	acknowledgementResponse := msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
 	newResponseBoundary := false
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
@@ -39,11 +40,11 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		// (MESSAGE.START) or the compatible audio-only start through its
 		// terminal MESSAGE.END. Use the envelope type as the source of truth so
 		// a provider with an empty value still participates in scheduling.
-		newResponseBoundary = o.beginObservedResponse(msgResponseID)
+		newResponseBoundary = o.beginObservedResponseForPurpose(msgResponseID, msg.ResponsePurpose)
 		if !o.responseEventBelongsToActive(msgResponseID) {
 			return
 		}
-		if newResponseBoundary && msg.Role != messages.RoleTool {
+		if newResponseBoundary && msg.Role != messages.RoleTool && !acknowledgementResponse {
 			o.bindScheduledResponseBoundary(msgResponseID)
 		}
 	case messages.StreamTypeMessageEnd:
@@ -57,11 +58,11 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			return
 		}
 		if !o.activeResponse && msgResponseID != "" {
-			newResponseBoundary = o.beginObservedResponse(msgResponseID)
-			if newResponseBoundary {
+			newResponseBoundary = o.beginObservedResponseForPurpose(msgResponseID, msg.ResponsePurpose)
+			if newResponseBoundary && !acknowledgementResponse {
 				o.bindScheduledResponseBoundary(msgResponseID)
 			}
-		} else if !o.activeResponse {
+		} else if !o.activeResponse && !acknowledgementResponse {
 			// A legacy provider may expose only the terminal boundary. Bind it to
 			// the next dispatched scheduled input when one is available; an
 			// unrelated prompt/session terminal has no slot to consume.
@@ -237,13 +238,16 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		o.noteProviderUsage(v.Usage)
 		o.setAssistantResponseDone(false)
 		outputPresent := o.responseHasAdmissibleOutput()
-		candidate := o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
-		o.noteScheduledResponseTerminal(responseLifecycleID, v)
-		o.rememberRateLimitRetryCandidate(msgResponseID, responseLifecycleID, v)
+		candidate := false
+		if !acknowledgementResponse {
+			candidate = o.observeProviderMessageEndForResponse(msg.Role, v, responseLifecycleID, outputPresent)
+			o.noteScheduledResponseTerminal(responseLifecycleID, v)
+			o.rememberRateLimitRetryCandidate(msgResponseID, responseLifecycleID, v)
+		}
 		// A cancelled response can have output queued before the cancellation
 		// boundary. It is still an interrupted lifecycle disposition, never a
 		// normal assistant turn, and must not satisfy output admission.
-		admitted := !cancelled && candidate && outputPresent && messageEndCanAdmit(v)
+		admitted := !acknowledgementResponse && !cancelled && candidate && outputPresent && messageEndCanAdmit(v)
 		if admitted && o.turnAdmission != nil {
 			admitted = o.turnAdmission(msg)
 		}
@@ -257,7 +261,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 			if o.admittedTurnObserver != nil {
 				o.admittedTurnObserver(msg)
 			}
-		} else if cancelled {
+		} else if cancelled && !acknowledgementResponse {
 			o.noteScheduledResponseDisposition(responseLifecycleID, scheduledAudioResponseCancelled)
 		}
 		o.finishObservedResponse(responseLifecycleID)
