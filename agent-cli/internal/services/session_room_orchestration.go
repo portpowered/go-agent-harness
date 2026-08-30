@@ -106,6 +106,11 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		result := roomFailureResult(err, secrets)
 		return finalizeEvidence(result, err)
 	}
+	replaySchedule, err := buildRoomReplaySchedule(ctx, replayMode, opts, plans)
+	if err != nil {
+		result := roomFailureResult(err, secrets)
+		return finalizeEvidence(result, err)
+	}
 
 	// Keep caller cancellation out of participant contexts until the coordinator
 	// has recorded the intentional room stop. Otherwise siblings can close their
@@ -156,6 +161,9 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	}
 	coordinator := newRoomCoordinator(roomCancel, opts.Manifest.Room.MaxTurns, onParticipantTerminated)
 	coordinator.completeWhenEmpty = replayMode
+	if replaySchedule != nil {
+		coordinator.blockEmptyStop()
+	}
 	runtimes := make([]*roomParticipantRuntime, 0, len(plans))
 	cleanupSetup := func() error {
 		meshCloseClaimed = true
@@ -171,7 +179,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	}
 	for _, plan := range plans {
 		participantCtx, participantCancel := context.WithCancel(roomCtx)
-		mixerConfig := roomMixerConfigForOptions(opts)
+		mixerConfig := roomReplayMixerConfig(opts, replaySchedule != nil)
 		mixer, mixerErr := room.NewPCM16MixerWithConfig(participantCtx, mixerConfig)
 		if mixerErr != nil {
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, mixerErr, secrets))
@@ -188,6 +196,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			participantDone: make(chan struct{}),
 			mixerDone:       make(chan struct{}),
 			observerDone:    make(chan struct{}),
+			replayFrameAcks: roomReplayFrameAckChannel(replaySchedule, plan),
 			mixer:           mixer,
 			lifecycle:       &roomParticipantLifecycle{stateChanged: coordinator.progress},
 		}
@@ -243,11 +252,13 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 	}
 	var runWG sync.WaitGroup
 	var mixerWG sync.WaitGroup
+	var replayWG sync.WaitGroup
 	runWG.Add(len(plans))
 	mixerWG.Add(len(plans))
 	for _, plan := range plans {
 		go runRoomParticipant(roomCtx, coordinator, plan.participant, startGate, opts, evidence, results, &runWG, &mixerWG, secrets)
 	}
+	startRoomReplayScheduler(replaySchedule, roomCtx, startGate, runtimes, coordinator, opts, &replayWG)
 
 	// A room duration bounds the initial connection phase as well as the live
 	// conversation. The timer is stopped after every participant has returned.
@@ -272,6 +283,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		publishRoomParticipantsReady(plans, opts, evidence)
 	}
 	close(startGate)
+	replayWG.Wait()
 	collectErr := collectRoomParticipantResults(ctx, coordinator, plans, mesh, secrets, timer, results, cleanup)
 	workErr := waitRoomParticipantWork(&runWG, &mixerWG, plans, cleanup)
 	cleanupErr := errors.Join(collectErr, workErr)
@@ -316,6 +328,54 @@ func publishRoomParticipantsReady(plans []*roomParticipantPlan, opts RoomRunOpti
 			opts.OnParticipantReady(ready)
 		}
 	}
+}
+
+func buildRoomReplaySchedule(ctx context.Context, replayMode bool, opts RoomRunOptions, plans []*roomParticipantPlan) (*roomReplaySchedule, error) {
+	if !replayMode {
+		return nil, nil
+	}
+	return newRoomReplaySchedule(ctx, *opts.ReplayPlan, plans, roomFormatForOptions(opts))
+}
+
+func roomReplayMixerConfig(opts RoomRunOptions, scheduled bool) room.PCM16MixerConfig {
+	config := roomMixerConfigForOptions(opts)
+	if scheduled {
+		config.Manual = true
+		config.CadenceFactory = nil
+	}
+	return config
+}
+
+func roomReplayFrameAckChannel(schedule *roomReplaySchedule, plan *roomParticipantPlan) chan struct{} {
+	if schedule == nil || roomParticipantIsHuman(plan) {
+		return nil
+	}
+	return make(chan struct{}, 1)
+}
+
+func startRoomReplayScheduler(schedule *roomReplaySchedule, roomCtx context.Context, startGate <-chan struct{}, runtimes []*roomParticipantRuntime, coordinator *roomCoordinator, opts RoomRunOptions, wg *sync.WaitGroup) {
+	if schedule == nil || wg == nil {
+		return
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-startGate:
+		case <-roomCtx.Done():
+			return
+		}
+		scheduleErr := schedule.run(roomCtx, runtimes, coordinator, opts)
+		if scheduleErr != nil {
+			if !coordinator.isStopping() {
+				coordinator.fail(fmt.Errorf("run room replay timeline: %w", scheduleErr))
+			}
+			return
+		}
+		if !coordinator.isStopping() {
+			coordinator.stop(RoomTerminationStopped, nil)
+		}
+	}()
 }
 
 func notifyRoomTerminated(observer RoomObserver, result RoomResult, roomErr error, secrets []string) (RoomResult, error) {

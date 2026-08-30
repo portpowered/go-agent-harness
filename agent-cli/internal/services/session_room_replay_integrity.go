@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -263,7 +264,7 @@ func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	result := make([]RoomReplayTimelineEvent, 0)
-	var previousOffset, previousSequence int64
+	var previousOffsetNanos, previousSequence int64
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		line := append([]byte(nil), scanner.Bytes()...)
 		if strings.TrimSpace(string(line)) == "" {
@@ -277,11 +278,11 @@ func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string
 		if err != nil || !present || strings.TrimSpace(eventType) == "" {
 			return nil, newRoomReplayBundleError(RoomReplayBundleIncomplete, fmt.Sprintf("room_timeline.line[%d].type", lineNumber), artifact.Path, "non-empty event type", "missing or invalid", errOrDefault(err, ErrRoomReplayBundleIncomplete))
 		}
-		offset, offsetPresent, offsetErr := firstRoomReplayIntField(object, nil, "monotonic_offset_ms", "offset_ms", "offset")
-		if offsetErr != nil || !offsetPresent || offset < 0 {
+		offsetMS, offsetNanos, offsetPresent, offsetErr := firstRoomReplayTimelineOffset(object, "monotonic_offset_ms", "offset_ms", "offset", "t_offset_ms")
+		if offsetErr != nil || !offsetPresent {
 			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].monotonic_offset_ms", lineNumber), artifact.Path, "non-negative offset", "invalid or missing", errOrDefault(offsetErr, ErrInvalidRoomReplayBundle))
 		}
-		unixMS, unixPresent, unixErr := firstRoomReplayIntField(object, nil, "unix_ms", "timestamp_ms")
+		unixMS, unixPresent, unixErr := firstRoomReplayIntField(object, nil, "unix_ms", "timestamp_ms", "t_unix_ms")
 		if unixErr != nil || !unixPresent || unixMS < 0 {
 			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].unix_ms", lineNumber), artifact.Path, "non-negative Unix milliseconds", "invalid or missing", errOrDefault(unixErr, ErrInvalidRoomReplayBundle))
 		}
@@ -292,19 +293,19 @@ func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string
 		if sequence < 0 {
 			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].sequence", lineNumber), artifact.Path, "non-negative sequence", fmt.Sprintf("%d", sequence), ErrInvalidRoomReplayBundle)
 		}
-		if len(result) > 0 && (int64(offset) < previousOffset || int64(offset) == previousOffset && int64(sequence) <= previousSequence) {
-			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d]", lineNumber), artifact.Path, "ordered by offset and increasing sequence", fmt.Sprintf("offset=%d sequence=%d after offset=%d sequence=%d", offset, sequence, previousOffset, previousSequence), ErrInvalidRoomReplayBundle)
+		if len(result) > 0 && (offsetNanos < previousOffsetNanos || offsetNanos == previousOffsetNanos && int64(sequence) <= previousSequence) {
+			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d]", lineNumber), artifact.Path, "ordered by offset and increasing sequence", fmt.Sprintf("offset=%d sequence=%d after offset=%d sequence=%d", offsetMS, sequence, previousOffsetNanos/int64(time.Millisecond), previousSequence), ErrInvalidRoomReplayBundle)
 		}
-		expectedUnix := clockBase.UnixMilli() + int64(offset)
+		expectedUnix := clockBase.UnixMilli() + offsetMS
 		if int64(unixMS) != expectedUnix {
 			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].unix_ms", lineNumber), artifact.Path, fmt.Sprintf("%d", expectedUnix), fmt.Sprintf("%d", unixMS), ErrInvalidRoomReplayBundle)
 		}
-		spanMS := endedAt.Sub(clockBase).Milliseconds()
-		if int64(offset) > spanMS {
-			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].monotonic_offset_ms", lineNumber), artifact.Path, "offset inside room span", fmt.Sprintf("%d", offset), ErrInvalidRoomReplayBundle)
+		spanNanos := endedAt.Sub(clockBase).Nanoseconds()
+		if offsetNanos > spanNanos {
+			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].monotonic_offset_ms", lineNumber), artifact.Path, "offset inside room span", fmt.Sprintf("%d", offsetMS), ErrInvalidRoomReplayBundle)
 		}
-		if clockBase.Add(time.Duration(offset) * time.Millisecond).Before(startedAt) {
-			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].monotonic_offset_ms", lineNumber), artifact.Path, "offset inside room span", fmt.Sprintf("%d", offset), ErrInvalidRoomReplayBundle)
+		if clockBase.Add(time.Duration(offsetNanos)).Before(startedAt) {
+			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("room_timeline.line[%d].monotonic_offset_ms", lineNumber), artifact.Path, "offset inside room span", fmt.Sprintf("%d", offsetMS), ErrInvalidRoomReplayBundle)
 		}
 		participantID := ""
 		for _, field := range []string{"participant_id", "participant", "speaker_id", "source_participant_id", "target_participant_id"} {
@@ -320,13 +321,49 @@ func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string
 		if err := validateRoomReplayTimelineArtifactReferences(object, declared); err != nil {
 			return nil, fmt.Errorf("room timeline line %d: %w", lineNumber, err)
 		}
-		result = append(result, RoomReplayTimelineEvent{Sequence: int64(sequence), OffsetMS: int64(offset), UnixMS: int64(unixMS), Type: strings.TrimSpace(eventType), ParticipantID: participantID, Raw: append(json.RawMessage(nil), line...)})
-		previousOffset, previousSequence = int64(offset), int64(sequence)
+		result = append(result, RoomReplayTimelineEvent{Sequence: int64(sequence), OffsetMS: offsetMS, OffsetNanos: offsetNanos, UnixMS: int64(unixMS), Type: strings.TrimSpace(eventType), ParticipantID: participantID, Raw: append(json.RawMessage(nil), line...)})
+		previousOffsetNanos, previousSequence = offsetNanos, int64(sequence)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, "room_timeline", artifact.Path, "readable JSONL", err.Error(), err)
 	}
 	return result, nil
+}
+
+// firstRoomReplayTimelineOffset accepts both the original integer millisecond
+// fields and the fractional t_offset_ms emitted by room recording. The
+// nanosecond projection gives the scheduler a stable ordering key without
+// making older callers understand fractional milliseconds.
+func firstRoomReplayTimelineOffset(object roomReplayJSONObject, names ...string) (int64, int64, bool, error) {
+	for _, name := range names {
+		raw, ok := roomReplayRawField(object, name)
+		if !ok {
+			continue
+		}
+		var number json.Number
+		decoder := json.NewDecoder(strings.NewReader(string(raw)))
+		decoder.UseNumber()
+		if err := decoder.Decode(&number); err != nil {
+			return 0, 0, true, err
+		}
+		value, err := number.Float64()
+		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+			if err == nil {
+				err = errors.New("offset must be a finite non-negative number")
+			}
+			return 0, 0, true, err
+		}
+		nanosFloat := value * float64(time.Millisecond)
+		if nanosFloat > float64(math.MaxInt64) {
+			return 0, 0, true, errors.New("offset is too large")
+		}
+		nanos := int64(math.Round(nanosFloat))
+		if nanos < 0 {
+			return 0, 0, true, errors.New("offset is too large")
+		}
+		return int64(math.Floor(value)), nanos, true, nil
+	}
+	return 0, 0, false, errors.New("missing offset")
 }
 
 func validateRoomReplayTimelineArtifactReferences(object roomReplayJSONObject, declared map[string]RoomReplayArtifact) error {

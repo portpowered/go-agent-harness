@@ -317,6 +317,13 @@ func observeRoomParticipantStream(
 			coordinator.fail(roomParticipantFailure(plan.manifest.ID, outputErr, secretsForPlan(plan)))
 		}
 	}
+	if plan.replay {
+		// Room replay audio is released by the single room scheduler from the
+		// recorded logical timeline. Provider output remains observable above,
+		// but independently fanning it here would let goroutine timing choose
+		// the cross-participant order and overlap.
+		return
+	}
 	for _, target := range coordinator.activeExcept(plan.manifest.ID) {
 		if target == nil || target.mixer == nil {
 			continue
@@ -669,6 +676,15 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 		if observer != nil {
 			if err := observer(runtime.plan.manifest.ID, append([]byte(nil), frame...)); err != nil {
 				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("observe mixed PCM: %w", err), secretsForPlan(runtime.plan)))
+				return
+			}
+		}
+		if runtime.replayFrameAcks != nil {
+			select {
+			case runtime.replayFrameAcks <- struct{}{}:
+			case <-runtime.ctx.Done():
+				return
+			case <-ctx.Done():
 				return
 			}
 		}

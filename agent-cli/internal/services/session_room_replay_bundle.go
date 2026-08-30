@@ -179,8 +179,12 @@ type RoomReplayParticipant struct {
 // room-timeline.jsonl line. Raw retains fields added by the recording lane so
 // the scheduler can consume them without a second lossy decode.
 type RoomReplayTimelineEvent struct {
-	Sequence      int64
-	OffsetMS      int64
+	Sequence int64
+	OffsetMS int64
+	// OffsetNanos retains fractional t_offset_ms values emitted by the room
+	// recorder. OffsetMS remains the compatibility projection used by older
+	// callers and manifests.
+	OffsetNanos   int64
 	UnixMS        int64
 	Type          string
 	ParticipantID string

@@ -204,6 +204,7 @@ func buildRoomReplayParticipantPlans(ctx context.Context, replay RoomReplayPlan)
 			Model:          recorded.Model,
 			ModelProvided:  true,
 			ReplayPath:     recorded.CapturePath,
+			roomReplay:     true,
 			Prompt:         recorded.OpeningPrompt,
 			PromptProvided: recorded.OpeningPrompt != "",
 			Voice:          recorded.Voice,

@@ -108,7 +108,7 @@ func planOpenAIReplayRuntime(opts SessionRunOptions, factory sessionRuntimeFacto
 			prompt = capturedPrompt.text
 			promptProvided = true
 			barePromptReplay = true
-		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries {
+		} else if len(opts.AudioInputs) == 0 && !opts.ClientOwnsAudioTurnBoundaries && !opts.roomReplay {
 			// No recorded text-prompt shape, no caller-supplied audio turns,
 			// and no caller-owned streaming --audio-in source (which drives
 			// its own committed audio independently of ScheduledAudioInput

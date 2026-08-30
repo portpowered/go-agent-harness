@@ -50,6 +50,11 @@ type roomParticipantRuntime struct {
 	mixerDone       chan struct{}
 	observerDone    chan struct{}
 	observerOnce    sync.Once
+	// replayFrameAcks is populated only for provider participants in a
+	// room-owned deterministic replay. The room scheduler advances one mixer
+	// frame and waits for this acknowledgement after the mixed frame has been
+	// accepted by the participant session.
+	replayFrameAcks chan struct{}
 	mixer           *room.PCM16Mixer
 	input           *audio.DeviceSource
 	output          *audio.DeviceSink
@@ -679,6 +684,9 @@ type roomCoordinator struct {
 	// captured provider session reaches its own terminal boundary. Live rooms
 	// retain the historical failure-on-unexpected-empty behavior.
 	completeWhenEmpty bool
+	// emptyStopBlocked keeps participant completion from terminating a replay
+	// while its room-owned scheduler is still draining the final mixed frames.
+	emptyStopBlocked bool
 
 	onParticipant RoomParticipantObserver
 }
@@ -735,6 +743,15 @@ func (c *roomCoordinator) fail(err error) {
 		err = errors.New("room failed")
 	}
 	c.stop(RoomTerminationFailed, err)
+}
+
+func (c *roomCoordinator) blockEmptyStop() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.emptyStopBlocked = true
+	c.mu.Unlock()
 }
 
 func (c *roomCoordinator) failedParticipantID() string {
@@ -921,7 +938,7 @@ func (c *roomCoordinator) finishParticipant(runtime *roomParticipantRuntime, rea
 	}
 	c.results[id] = result
 	delete(c.active, id)
-	shouldFailEmpty := len(c.active) == 0 && c.reason == ""
+	shouldFailEmpty := len(c.active) == 0 && c.reason == "" && !c.emptyStopBlocked
 	c.mu.Unlock()
 
 	// Remove the source from every surviving inbound mixer before closing its
