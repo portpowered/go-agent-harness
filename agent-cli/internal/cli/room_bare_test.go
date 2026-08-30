@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -102,6 +104,93 @@ func TestRoomRunCommandConfigAliasRemainsAuthoritative(t *testing.T) {
 	}
 	if registry.defaultCalls != 0 || registry.openCalls != 0 {
 		t.Fatalf("configured invocation resolved bare devices: defaults=%d opens=%d", registry.defaultCalls, registry.openCalls)
+	}
+}
+
+func TestRoomRunCommandConfigAcceptsYAMLAndPreservesCompleteDefinition(t *testing.T) {
+	t.Setenv("ROOM_YAML_ALPHA_KEY", "yaml-alpha-secret")
+	t.Setenv("ROOM_YAML_BETA_KEY", "yaml-beta-secret")
+	configPath := filepath.Join(t.TempDir(), "room.yaml")
+	configData := []byte(`schema_version: 1
+room:
+  max_turns: 4
+  max_duration: 21s
+participants:
+  - id: yaml-alpha
+    system_prompt: "YAML alpha"
+    provider: openai
+    model: gpt-realtime-2.1-mini
+    api_key_env: ROOM_YAML_ALPHA_KEY
+    voice: cedar
+    input_device: fake:configured-input
+    output_device: fake:configured-output
+    tools: []
+  - id: yaml-beta
+    system_prompt: "YAML beta"
+    provider: openai
+    model: gpt-realtime
+    api_key_env: ROOM_YAML_BETA_KEY
+    voice: ash
+    tools: []
+`)
+	if err := os.WriteFile(configPath, configData, 0o600); err != nil {
+		t.Fatalf("write YAML room config: %v", err)
+	}
+	registry := newBareRoomCLIRegistry(t)
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = filepath.Join(t.TempDir(), "config")
+	command := NewRoomRunCommandWithDeviceRegistry(globalFlags, registry)
+	var got services.RoomRunOptions
+	command.SetRunner(func(_ context.Context, _ io.Writer, options services.RoomRunOptions) (services.RoomResult, error) {
+		got = options
+		return services.RoomResult{TerminationReason: services.RoomTerminationStopped}, nil
+	})
+	outputDir := filepath.Join(t.TempDir(), "configured-evidence")
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--config", configPath, "--out", outputDir})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("execute YAML configured room: %v", err)
+	}
+	if got.LaunchPlan == nil || got.LaunchPlan.Mode != services.RoomLaunchModeConfigured || got.LaunchPlan.ConfigPath != configPath {
+		t.Fatalf("configured launch plan = %+v, want exact YAML config path", got.LaunchPlan)
+	}
+	if got.OutputDir != outputDir || got.ConfigDir != globalFlags.ConfigDir() {
+		t.Fatalf("configured recording/config options = %q/%q, want %q/%q", got.OutputDir, got.ConfigDir, outputDir, globalFlags.ConfigDir())
+	}
+	if got.Manifest.Room.MaxTurns != 4 || got.Manifest.Room.MaxDuration != 21*time.Second || got.Manifest.Room.Interactive {
+		t.Fatalf("configured bounds = %+v, want max_turns=4 max_duration=21s and non-interactive", got.Manifest.Room)
+	}
+	if len(got.Manifest.Participants) != 2 || got.Manifest.Participants[0].ID != "yaml-alpha" || got.Manifest.Participants[1].ID != "yaml-beta" {
+		t.Fatalf("configured participants = %+v, want exact YAML participants", got.Manifest.Participants)
+	}
+	if got.Manifest.Participants[0].InputDevice != "fake:configured-input" || got.Manifest.Participants[0].OutputDevice != "fake:configured-output" || got.Manifest.Participants[1].Model != "gpt-realtime" {
+		t.Fatalf("configured device/model choices = %+v, want exact YAML values", got.Manifest.Participants)
+	}
+	if registry.defaultCalls != 0 || registry.openCalls != 0 {
+		t.Fatalf("configured YAML invocation resolved bare devices: defaults=%d opens=%d", registry.defaultCalls, registry.openCalls)
+	}
+}
+
+func TestRoomRunCommandConfigValidationPrecedesRunnerAndDeviceLookup(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "invalid-room.json")
+	if err := os.WriteFile(configPath, []byte(`{"schema_version":1,"room":{"max_turns":1},"participants":[]}`), 0o600); err != nil {
+		t.Fatalf("write invalid room config: %v", err)
+	}
+	registry := newBareRoomCLIRegistry(t)
+	command := NewRoomRunCommandWithDeviceRegistry(flags.NewGlobalFlags(), registry)
+	var runnerCalls int
+	command.SetRunner(func(context.Context, io.Writer, services.RoomRunOptions) (services.RoomResult, error) {
+		runnerCalls++
+		return services.RoomResult{}, nil
+	})
+	cmd := command.Generate()
+	cmd.SetArgs([]string{"--config", configPath, "--out", filepath.Join(t.TempDir(), "out")})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "participants") {
+		t.Fatalf("error = %v, want config participant validation error", err)
+	}
+	if runnerCalls != 0 || registry.defaultCalls != 0 || registry.openCalls != 0 {
+		t.Fatalf("invalid config caused startup work: runner=%d defaults=%d opens=%d", runnerCalls, registry.defaultCalls, registry.openCalls)
 	}
 }
 

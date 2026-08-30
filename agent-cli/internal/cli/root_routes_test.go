@@ -189,7 +189,7 @@ func TestRouteHelpExecutionContracts(t *testing.T) {
 		{name: "media look", args: []string{"media", "look", "--help"}, usage: "agent media look <url>", description: "Observe one visual frame from an external media source"},
 		{name: "probe report", args: []string{"probe", "report", "--help"}, usage: "agent probe report --out <result.jsonl>...", description: "Aggregate probe result artifacts into a friction report"},
 		{name: "room", args: []string{"room", "--help"}, usage: "agent room", description: "Run participant rooms"},
-		{name: "room run", args: []string{"room", "run", "--help"}, usage: "agent room run [--config <file>] [--out <dir>] [--stream <addr>]", description: "Run a room, or start the bare customer-plus-agent room"},
+		{name: "room run", args: []string{"room", "run", "--help"}, usage: "agent room run [--config <file>] [--out <dir>] [--stream <addr>]", description: "Run an N-participant room from --config (or the legacy --manifest spelling)."},
 		{name: "session", args: []string{"session", "--help"}, usage: "agent session", description: "Run a bidirectional session inference capture"},
 		{name: "session show", args: []string{"session", "show", "--help"}, usage: "agent session show <session-id>", description: "Load and print the conversation history"},
 		{name: "session list", args: []string{"session", "list", "--help"}, usage: "agent session list", description: "List session IDs with last modified time"},

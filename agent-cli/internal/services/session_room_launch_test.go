@@ -2,8 +2,11 @@ package services
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/audio"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -120,10 +123,16 @@ func TestResolveBareRoomLaunchPlanUsesConfigCredentialWhenEnvironmentIsUnset(t *
 }
 
 func TestResolveBareRoomLaunchPlanReportsDirectionalDefaultFailure(t *testing.T) {
+	input, err := audio.NewDevice("fake", "input", "Fake Microphone", audio.DirectionInput)
+	if err != nil {
+		t.Fatalf("new input device: %v", err)
+	}
 	registry := &roomLaunchTestRegistry{defaultErr: map[audio.Direction]error{
 		audio.DirectionOutput: audio.NewNoDefaultDeviceError(audio.DirectionOutput),
+	}, defaults: map[audio.Direction]audio.Device{
+		audio.DirectionInput: input,
 	}}
-	_, err := ResolveBareRoomLaunchPlan(RoomLaunchOptions{
+	_, err = ResolveBareRoomLaunchPlan(RoomLaunchOptions{
 		DeviceRegistry: registry,
 		LoadedConfig:   &config.Config{},
 		CredentialLookup: func(string) (string, bool) {
@@ -139,6 +148,76 @@ func TestResolveBareRoomLaunchPlanReportsDirectionalDefaultFailure(t *testing.T)
 	}
 	if registry.openCalls != 0 {
 		t.Fatalf("device planning opened %d devices, want zero", registry.openCalls)
+	}
+}
+
+func TestResolveRoomLaunchPlanConfiguredIsAuthoritativeAndUsesInjectedCredentialLookup(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "config")
+	path := filepath.Join(t.TempDir(), "room.yaml")
+	data := []byte(`schema_version: 1
+room:
+  max_turns: 7
+  max_duration: 13s
+participants:
+  - id: alpha-configured
+    system_prompt: "Alpha configured persona"
+    provider: openai
+    model: gpt-realtime-2.1-mini
+    api_key_env: ROOM_ALPHA_CONFIGURED_KEY
+    voice: cedar
+    input_device: fake:alpha-input
+    output_device: fake:alpha-output
+    tools: []
+  - id: beta-configured
+    system_prompt: "Beta configured persona"
+    provider: openai
+    model: gpt-realtime
+    api_key_env: ROOM_BETA_CONFIGURED_KEY
+    voice: ash
+    input_device: fake:beta-input
+    output_device: fake:beta-output
+    tools: []
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write configured room: %v", err)
+	}
+	registry := &roomLaunchTestRegistry{}
+	loadCalls := 0
+	plan, err := ResolveRoomLaunchPlan(RoomLaunchOptions{
+		ConfigPath:     path,
+		ConfigDir:      configDir,
+		DeviceRegistry: registry,
+		LoadConfig: func() (*config.Config, error) {
+			loadCalls++
+			return nil, errors.New("configured room must not load bare defaults")
+		},
+		CredentialLookup: func(name string) (string, bool) {
+			return "configured-" + name, name == "ROOM_ALPHA_CONFIGURED_KEY" || name == "ROOM_BETA_CONFIGURED_KEY"
+		},
+	})
+	if err != nil {
+		t.Fatalf("resolve configured room: %v", err)
+	}
+	if plan.Mode != RoomLaunchModeConfigured || plan.ConfigPath != path || plan.ConfigDir != configDir {
+		t.Fatalf("launch metadata = %+v, want configured path and config dir preserved", plan)
+	}
+	if plan.Manifest.Room.MaxTurns != 7 || plan.Manifest.Room.MaxDuration != 13*time.Second || plan.Manifest.Room.Interactive {
+		t.Fatalf("configured room bounds = %+v, want max_turns=7 max_duration=13s and non-interactive", plan.Manifest.Room)
+	}
+	if len(plan.Manifest.Participants) != 2 || plan.Manifest.Participants[0].ID != "alpha-configured" || plan.Manifest.Participants[1].ID != "beta-configured" {
+		t.Fatalf("configured participants = %+v, want exact file participants", plan.Manifest.Participants)
+	}
+	if plan.Manifest.Participants[0].InputDevice != "fake:alpha-input" || plan.Manifest.Participants[0].OutputDevice != "fake:alpha-output" || plan.Manifest.Participants[1].Model != "gpt-realtime" {
+		t.Fatalf("configured participant choices = %+v, want exact device/model values", plan.Manifest.Participants)
+	}
+	for _, id := range []string{"alpha-configured", "beta-configured"} {
+		participant, ok := plan.Participant(id)
+		if !ok || participant.Kind != room.ParticipantKindAgent || participant.CredentialProvenance != RoomCredentialFromEnvironment {
+			t.Fatalf("configured participant plan %q = %+v, want agent with injected credential provenance", id, participant)
+		}
+	}
+	if loadCalls != 0 || registry.defaultCalls != 0 || registry.openCalls != 0 {
+		t.Fatalf("configured resolution triggered bare startup work: load=%d defaults=%d opens=%d", loadCalls, registry.defaultCalls, registry.openCalls)
 	}
 }
 

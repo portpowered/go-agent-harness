@@ -234,13 +234,13 @@ func roomLaunchPath(configPath, manifestPath string) (string, error) {
 }
 
 func resolveConfiguredRoomLaunchPlan(path string, options RoomLaunchOptions) (RoomLaunchPlan, error) {
-	manifest, err := room.ReadManifest(path)
-	if err != nil {
-		return RoomLaunchPlan{}, fmt.Errorf("validate room config: %w", err)
-	}
 	lookup := options.CredentialLookup
 	if lookup == nil {
 		lookup = os.LookupEnv
+	}
+	manifest, err := room.ReadManifest(path, room.ValidationOptions{LookupCredential: lookup})
+	if err != nil {
+		return RoomLaunchPlan{}, fmt.Errorf("validate room config: %w", err)
 	}
 	participants := make([]RoomLaunchParticipantPlan, 0, len(manifest.Participants))
 	for _, participant := range manifest.Participants {
