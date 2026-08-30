@@ -3,9 +3,16 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +20,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -577,16 +585,17 @@ type sessionDirectoryRecording struct {
 	writeFile   transcript.RecordingWriteFile
 	credentials []string
 
-	mu           sync.Mutex
-	eventMu      sync.Mutex
-	tick         uint64
-	client       bytes.Buffer
-	agent        bytes.Buffer
-	input        [][]byte
-	output       [][]byte
-	recordErr    error
-	terminal     *transcript.RecordingTerminalSummary
-	conversation sessionConversationCollector
+	mu             sync.Mutex
+	eventMu        sync.Mutex
+	tick           uint64
+	client         bytes.Buffer
+	agent          bytes.Buffer
+	input          [][]byte
+	output         [][]byte
+	recordErr      error
+	terminal       *transcript.RecordingTerminalSummary
+	conversation   sessionConversationCollector
+	imageArtifacts []transcript.RecordingArtifact
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -848,8 +857,94 @@ func (r *sessionDirectoryRecording) observeToolResult(call messages.ToolCall, re
 		return
 	}
 	r.mu.Lock()
-	r.conversation.observeToolResult(call, response, failed)
+	imageEvidence, artifactErr := r.recordCaptureArtifactLocked(call, response, failed)
+	if artifactErr != nil && r.recordErr == nil {
+		r.recordErr = recordingDestinationError(transcript.ErrRecordingWrite, "validate captured image", r.destination, artifactErr)
+	}
+	if imageEvidence == nil {
+		r.conversation.observeToolResult(call, response, failed)
+	} else {
+		r.conversation.observeToolResult(call, response, failed, imageEvidence)
+	}
 	r.mu.Unlock()
+}
+
+func (r *sessionDirectoryRecording) recordCaptureArtifactLocked(call messages.ToolCall, response messages.ToolCallResponse, failed bool) (*sessionConversationImageEvidence, error) {
+	if failed {
+		return nil, nil
+	}
+	result, err := sight.Decode([]byte(response.Content))
+	if err != nil {
+		// read_image and other legacy rich tools do not identify themselves as
+		// captures. Only a recognized screen/page projection is a recording
+		// artifact obligation.
+		return nil, nil
+	}
+	if result.Source != sight.SourceScreen && result.Source != sight.SourceBrowserPage {
+		return nil, nil
+	}
+	if result.Source == sight.SourceBrowserPage && (strings.TrimSpace(result.BrowserID) == "" || strings.TrimSpace(result.TargetID) == "") {
+		return nil, errors.New("browser page capture omitted selected target identity")
+	}
+	imageParts := make([]messages.ImagePart, 0, 1)
+	for _, part := range response.ContentParts {
+		if imagePart, ok := part.(messages.ImagePart); ok {
+			imageParts = append(imageParts, imagePart)
+		}
+	}
+	if len(imageParts) != 1 {
+		return nil, fmt.Errorf("%s capture returned %d image parts, want exactly one", call.Name, len(imageParts))
+	}
+	part := imageParts[0]
+	if len(part.Bytes) == 0 {
+		return nil, errors.New("capture image part is empty")
+	}
+	mediaType, _, mimeErr := mime.ParseMediaType(strings.TrimSpace(part.MediaType))
+	if mimeErr != nil || strings.ToLower(strings.TrimSpace(mediaType)) != result.MIMEType {
+		return nil, fmt.Errorf("capture mime type %q does not match metadata %q", part.MediaType, result.MIMEType)
+	}
+	digest := sha256.Sum256(part.Bytes)
+	if len(part.Bytes) != result.ByteLength || hex.EncodeToString(digest[:]) != result.SHA256 {
+		return nil, errors.New("capture image bytes do not match metadata digest or length")
+	}
+	decoded, _, decodeErr := image.Decode(bytes.NewReader(part.Bytes))
+	if decodeErr != nil || decoded.Bounds().Dx() != result.Width || decoded.Bounds().Dy() != result.Height {
+		if decodeErr == nil {
+			decodeErr = fmt.Errorf("decoded dimensions are %dx%d, want %dx%d", decoded.Bounds().Dx(), decoded.Bounds().Dy(), result.Width, result.Height)
+		}
+		return nil, fmt.Errorf("capture image validation failed: %w", decodeErr)
+	}
+	path := fmt.Sprintf("screenshots/%06d-%s.%s", len(r.imageArtifacts)+1, result.SHA256[:12], captureArtifactExtension(result.MIMEType))
+	r.imageArtifacts = append(r.imageArtifacts, transcript.RecordingArtifact{
+		Path:   path,
+		Data:   append([]byte(nil), part.Bytes...),
+		SHA256: result.SHA256,
+	})
+	return &sessionConversationImageEvidence{
+		Path:            path,
+		Source:          result.Source,
+		BrowserID:       result.BrowserID,
+		TargetID:        result.TargetID,
+		MIMEType:        result.MIMEType,
+		ByteLength:      result.ByteLength,
+		Width:           result.Width,
+		Height:          result.Height,
+		SHA256:          result.SHA256,
+		TypedProjection: result.TypedProjection,
+	}, nil
+}
+
+func captureArtifactExtension(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "image/png":
+		return "png"
+	case "image/jpeg":
+		return "jpg"
+	case "image/gif":
+		return "gif"
+	default:
+		return "img"
+	}
 }
 
 func (r *sessionDirectoryRecording) observePayload(msg messages.StreamMessage, payload, audio []byte, err error, outbound bool) {
@@ -970,16 +1065,17 @@ func (r *sessionDirectoryRecording) Finalize() error {
 			return
 		}
 		config := transcript.RecordingConfig{
-			Destination:      r.destination,
-			ClientTranscript: append([]byte(nil), r.client.Bytes()...),
-			AgentTranscript:  append([]byte(nil), r.agent.Bytes()...),
-			InputSegments:    copySessionRecordingSegments(r.input),
-			OutputSegments:   copySessionRecordingSegments(r.output),
-			SessionLog:       sessionLog,
-			Metadata:         r.metadata,
-			Credentials:      append([]string(nil), r.credentials...),
-			Terminal:         cloneSessionRecordingTerminalSummary(r.terminal),
-			WriteFile:        r.writeFile,
+			Destination:         r.destination,
+			ClientTranscript:    append([]byte(nil), r.client.Bytes()...),
+			AgentTranscript:     append([]byte(nil), r.agent.Bytes()...),
+			InputSegments:       copySessionRecordingSegments(r.input),
+			OutputSegments:      copySessionRecordingSegments(r.output),
+			SessionLog:          sessionLog,
+			Metadata:            r.metadata,
+			Credentials:         append([]string(nil), r.credentials...),
+			Terminal:            cloneSessionRecordingTerminalSummary(r.terminal),
+			AdditionalArtifacts: copySessionRecordingArtifacts(r.imageArtifacts),
+			WriteFile:           r.writeFile,
 		}
 		r.mu.Unlock()
 		r.finalizeErr = transcript.WriteRecordingBundle(config)
@@ -999,6 +1095,18 @@ func copySessionRecordingSegments(segments [][]byte) [][]byte {
 	copyOf := make([][]byte, len(segments))
 	for index, segment := range segments {
 		copyOf[index] = append([]byte(nil), segment...)
+	}
+	return copyOf
+}
+
+func copySessionRecordingArtifacts(artifacts []transcript.RecordingArtifact) []transcript.RecordingArtifact {
+	copyOf := make([]transcript.RecordingArtifact, len(artifacts))
+	for index, artifact := range artifacts {
+		copyOf[index] = transcript.RecordingArtifact{
+			Path:   artifact.Path,
+			Data:   append([]byte(nil), artifact.Data...),
+			SHA256: artifact.SHA256,
+		}
 	}
 	return copyOf
 }

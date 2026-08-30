@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -85,6 +86,40 @@ func TestComposeToolSurfaceRoutesExactNamesAndTextualizesBrokerResult(t *testing
 	}
 	if brokerResponse.Content != `{"version":"webmcp.tool-result.v1"}` || len(brokerResponse.ContentParts) != 0 {
 		t.Fatalf("broker result = %#v, want one textual result", brokerResponse)
+	}
+}
+
+func TestComposeToolSurfacePreservesBrokerImageProjection(t *testing.T) {
+	imageBytes := []byte{0x89, 'P', 'N', 'G'}
+	metadata := `{"version":2,"status":"success","source":"browser_page","mime_type":"image/png","byte_length":4,"width":1,"height":1,"sha256":"fixture","typed_projection":"input_image"}`
+	broker := &compositionExecutor{
+		response: messages.ToolCallResponse{
+			Content: metadata,
+			ContentParts: []messages.ContentPart{
+				messages.TextPart{Text: metadata},
+				messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
+			},
+		},
+	}
+	surface, err := tools.ComposeToolSurface(
+		&compositionExecutor{},
+		[]messages.ToolDefinition{{Name: "static_tool"}},
+		broker,
+		[]messages.ToolDefinition{{Name: "broker_tool"}},
+	)
+	if err != nil {
+		t.Fatalf("ComposeToolSurface: %v", err)
+	}
+	response, err := surface.Executor.Execute(context.Background(), messages.ToolCall{ID: "image-call", Name: "broker_tool"})
+	if err != nil {
+		t.Fatalf("broker execute: %v", err)
+	}
+	if response.Content != metadata || len(response.ContentParts) != 2 {
+		t.Fatalf("broker image response = %#v, want metadata plus one image part", response)
+	}
+	part, ok := response.ContentParts[1].(messages.ImagePart)
+	if !ok || !bytes.Equal(part.Bytes, imageBytes) || part.MediaType != "image/png" {
+		t.Fatalf("broker image projection = %#v, want exact bytes", response.ContentParts[1])
 	}
 }
 

@@ -586,7 +586,7 @@ func boundedScreenContext(ctx context.Context, limit time.Duration) (context.Con
 func screenRecordingPermissionGuidance() string {
 	host := screenRecordingHostName()
 	return fmt.Sprintf(
-		"Open System Settings → Privacy & Security → Screen Recording and enable the launching terminal/CLI host %q; quit and restart that host before retrying. The CLI cannot grant Screen Recording permission itself.",
+		"Screen-recording permission is not granted, so I cannot see the screen. Tell the customer to enable the launching terminal/CLI host %q in System Settings → Privacy & Security → Screen & System Audio Recording, then completely quit and restart that host before asking again. The CLI cannot grant this permission itself.",
 		host,
 	)
 }

@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 type recordingTestSurface struct {
@@ -127,13 +125,7 @@ func TestScreenRecordingSuccessIsBoundedAndDecodable(t *testing.T) {
 	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
 		t.Fatalf("record result = %#v, want one text and one image", msgs)
 	}
-	if got := msgs[0].TextContent(); got != "Screen recording: display 0, 2 frames, 1.0s at 2 fps (4x3 px)" {
-		t.Fatalf("record text = %q", got)
-	}
-	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
-	if !ok || part.MediaType != "image/gif" || len(part.Bytes) == 0 {
-		t.Fatalf("record image part = %#v", msgs[0].ContentParts[1])
-	}
+	part := assertScreenResult(t, msgs[0], "image/gif", 4, 3)
 	decoded, err := gif.DecodeAll(bytes.NewReader(part.Bytes))
 	if err != nil {
 		t.Fatalf("decode recording: %v", err)

@@ -121,6 +121,20 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	}
 }
 
+func TestPlainSessionDefinitionsAdvertisePhysicalScreenCapture(t *testing.T) {
+	registry := tools.NewToolRegistry()
+	definitions := registry.ToAgentLoopDefs()
+	for _, definition := range definitions {
+		if definition.Name == tools.ScreenToolID {
+			if definition.Description == "" {
+				t.Fatal("show definition has an empty description")
+			}
+			return
+		}
+	}
+	t.Fatalf("plain session definitions omitted %q: %#v", tools.ScreenToolID, definitions)
+}
+
 func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 	cfg := &config.Config{
 		Model:   config.ModelConfig{Provider: config.ProviderOpenAI},

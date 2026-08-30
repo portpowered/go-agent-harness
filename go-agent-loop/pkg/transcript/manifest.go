@@ -387,6 +387,9 @@ func WriteRecordingBundle(config RecordingConfig) error {
 			return err
 		}
 	}
+	if err := verifyAdditionalArtifactHashes(staging, normalized.additional); err != nil {
+		return recordingError(ErrRecordingWrite, "verify additional artifact hashes", destination, err, redactor)
+	}
 
 	artifacts, err := hashArtifacts(staging, normalized.artifactPaths)
 	if err != nil {
@@ -859,6 +862,20 @@ func verifyArtifactHashes(root string, artifacts []ArtifactHash) error {
 		digest := sha256.Sum256(data)
 		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
 			return fmt.Errorf("hash mismatch for %s", artifact.Path)
+		}
+	}
+	return nil
+}
+
+func verifyAdditionalArtifactHashes(root string, artifacts []normalizedRecordingArtifact) error {
+	for _, artifact := range artifacts {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artifact.path)))
+		if err != nil {
+			return fmt.Errorf("read %s: %w", artifact.path, err)
+		}
+		digest := sha256.Sum256(data)
+		if got := hex.EncodeToString(digest[:]); got != artifact.sha256 {
+			return fmt.Errorf("hash mismatch for additional artifact %s", artifact.path)
 		}
 	}
 	return nil

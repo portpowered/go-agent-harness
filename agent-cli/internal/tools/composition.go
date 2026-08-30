@@ -178,6 +178,14 @@ func textualBrokerResponse(response messages.ToolCallResponse) messages.ToolCall
 	if len(response.ContentParts) == 0 {
 		return response
 	}
+	for _, part := range response.ContentParts {
+		if _, ok := part.(messages.ImagePart); ok {
+			// A broker image result has already paired its compact metadata
+			// envelope with the exact bytes it describes. Preserve that pair so
+			// complete-message providers can project it as input_image.
+			return response
+		}
+	}
 	if response.Content == "" {
 		var content strings.Builder
 		for _, part := range response.ContentParts {

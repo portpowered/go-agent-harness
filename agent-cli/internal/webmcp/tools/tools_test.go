@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
@@ -127,7 +128,7 @@ func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("show_page: %v", err)
 	}
-	assertTextualResponse(t, response, "show-call", webmcp.ShowPageToolName)
+	assertShowPageRichResponse(t, response, "show-call", imageBytes)
 	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
 	if err != nil || !envelope.OK {
 		t.Fatalf("show_page envelope = %#v (err %v), want success", envelope, err)
@@ -149,6 +150,28 @@ func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 	if got := broker.calls; len(got) != 1 || got[0] != "capture_page" {
 		t.Fatalf("broker calls = %#v, want one capture call", got)
 	}
+}
+
+func TestComposedShowPagePreservesItsSingleImageProjection(t *testing.T) {
+	imageBytes := testPNG(t, 2, 2)
+	broker := &recordingBroker{
+		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
+		screenshot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: imageBytes},
+	}
+	set := NewBrokerToolSet(broker)
+	composed, err := cliTools.ComposeToolSurface(nil, nil, set.Executor(), set.Definitions())
+	if err != nil {
+		t.Fatalf("compose browser surface: %v", err)
+	}
+	response, err := composed.Executor.Execute(context.Background(), messages.ToolCall{
+		ID:        "composed-show-call",
+		Name:      webmcp.ShowPageToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("composed show_page: %v", err)
+	}
+	assertShowPageRichResponse(t, response, "composed-show-call", imageBytes, 2, 2)
 }
 
 func TestShowPageReturnsClassifiedErrorsWithoutImageData(t *testing.T) {
@@ -557,6 +580,29 @@ func TestToolSetRegistryUsesTheSameTextualContract(t *testing.T) {
 	}
 }
 
+func TestToolSetRegistryPreservesShowPageImageProjection(t *testing.T) {
+	imageBytes := testPNG(t, 1, 1)
+	set := NewToolSet(&recordingBroker{
+		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}},
+		screenshot: webmcp.PageScreenshot{MIMEType: "image/png", Bytes: imageBytes},
+	})
+	registry, err := set.Registry()
+	if err != nil {
+		t.Fatalf("registry: %v", err)
+	}
+	msgs, err := registry.Execute(context.Background(), webmcp.ShowPageToolName, map[string]any{})
+	if err != nil {
+		t.Fatalf("registry show_page: %v", err)
+	}
+	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
+		t.Fatalf("registry show_page result = %#v, want metadata plus one image part", msgs)
+	}
+	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
+	if !ok || !bytes.Equal(part.Bytes, imageBytes) || part.MediaType != "image/png" {
+		t.Fatalf("registry show_page image = %#v, want exact PNG projection", msgs[0].ContentParts[1])
+	}
+}
+
 type recordingBroker struct {
 	selected      webmcp.PageContext
 	targets       []webmcp.Target
@@ -652,6 +698,31 @@ func assertTextualResponse(t *testing.T, response messages.ToolCallResponse, cal
 	}
 	if !json.Valid([]byte(response.Content)) {
 		t.Fatalf("response content is not JSON: %s", response.Content)
+	}
+}
+
+func assertShowPageRichResponse(t *testing.T, response messages.ToolCallResponse, callID string, wantBytes []byte, dimensions ...int) {
+	t.Helper()
+	width, height := 3, 2
+	if len(dimensions) == 2 {
+		width, height = dimensions[0], dimensions[1]
+	}
+	if response.ToolCallID != callID || response.Name != webmcp.ShowPageToolName {
+		t.Fatalf("response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, callID, webmcp.ShowPageToolName)
+	}
+	if len(response.ContentParts) != 2 || response.Content == "" {
+		t.Fatalf("response = %#v, want one metadata part and one image part", response)
+	}
+	result, err := sight.Decode([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode show_page sight result: %v", err)
+	}
+	if result.Version != ShowPageResultVersion || result.Status != ShowPageResultStatusSuccess || result.Source != showPageSource || result.BrowserID != "browser-a" || result.TargetID != "tab-a" || result.MIMEType != "image/png" || result.ByteLength != len(wantBytes) || result.Width != width || result.Height != height || result.TypedProjection != ShowPageResultTypedProjectionInputImage {
+		t.Fatalf("show_page sight result = %+v", result)
+	}
+	imagePart, ok := response.ContentParts[1].(messages.ImagePart)
+	if !ok || string(imagePart.Bytes) != string(wantBytes) || imagePart.MediaType != "image/png" {
+		t.Fatalf("show_page image part = %#v, want exact PNG projection", response.ContentParts[1])
 	}
 }
 

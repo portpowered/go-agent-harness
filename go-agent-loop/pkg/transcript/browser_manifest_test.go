@@ -195,6 +195,37 @@ func TestWriteRecordingBundleIncludesValidatedAdditionalArtifacts(t *testing.T) 
 	}
 }
 
+func TestWriteRecordingBundleRejectsMutatedAdditionalArtifact(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "mutated")
+	writeFile := func(path string, data []byte, mode os.FileMode) (int, error) {
+		if strings.Contains(filepath.ToSlash(path), "screenshots/") {
+			if err := os.WriteFile(path, []byte("tampered"), mode); err != nil {
+				return 0, err
+			}
+			return len(data), nil
+		}
+		if err := os.WriteFile(path, data, mode); err != nil {
+			return 0, err
+		}
+		return len(data), nil
+	}
+	err := WriteRecordingBundle(RecordingConfig{
+		Destination:      destination,
+		ClientTranscript: []byte("client\n"),
+		AgentTranscript:  []byte("agent\n"),
+		AdditionalArtifacts: []RecordingArtifact{
+			{Path: "screenshots/capture.png", Data: []byte("expected pixels")},
+		},
+		WriteFile: writeFile,
+	})
+	if err == nil || !errors.Is(err, ErrRecordingWrite) {
+		t.Fatalf("mutated artifact finalize error = %v, want recording-write failure", err)
+	}
+	if _, statErr := os.Stat(destination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("mutated artifact destination stat error = %v, want absent", statErr)
+	}
+}
+
 func TestRecordingManifestV1GoldenRemainsReadableWithoutBrowserEvidence(t *testing.T) {
 	golden, err := os.ReadFile("testdata/recording-manifest-v1.golden.json")
 	if err != nil {

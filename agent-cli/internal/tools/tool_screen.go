@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -44,6 +45,40 @@ var (
 	// ErrInvalidScreenRecordingOption is a descriptive compatibility alias.
 	ErrInvalidScreenRecordingOption = ErrInvalidScreenRecording
 )
+
+const (
+	// ScreenToolID is the stable model-facing name of the physical display
+	// capture tool.
+	ScreenToolID = "show"
+
+	ScreenResultVersion                   = sight.ResultVersion
+	ScreenResultStatusSuccess             = sight.StatusSuccess
+	ScreenResultStatusError               = sight.StatusError
+	ScreenResultTypedProjectionInputImage = sight.TypedProjectionInputImage
+	ScreenResultSource                    = sight.SourceScreen
+)
+
+// ScreenResult is the bounded textual projection paired with one image part.
+// Keeping the alias public lets callers inspect the contract without having
+// to know which capture implementation produced it.
+type ScreenResult = sight.Result
+
+// ScreenToolErrorResult creates the pixel-free result sent when the screen
+// boundary is denied, unavailable, canceled, or otherwise fails. The direct
+// ScreenTool contract still returns the original typed Go error; session
+// adapters use this envelope when they need to keep the session alive.
+func ScreenToolErrorResult(err error) string {
+	result := sight.NewError(sight.SourceScreen, err)
+	var captureErr *ScreenCaptureError
+	if errors.As(err, &captureErr) && captureErr != nil && captureErr.State != "" {
+		result.ErrorCode = string(captureErr.State)
+	}
+	encoded, encodeErr := sight.Encode(result)
+	if encodeErr != nil {
+		return `{"version":2,"status":"error","source":"screen","error_code":"capture_failed","error":"image capture failed"}`
+	}
+	return string(encoded)
+}
 
 // ScreenRecordingValidationError describes one invalid record argument. It is
 // returned before display admission or capture side effects take place.
@@ -137,7 +172,7 @@ func NewScreenToolWithOptions(options ScreenToolOptions) *ScreenTool {
 	return &ScreenTool{surface: surface, recordEncoder: encoder}
 }
 
-func (t *ScreenTool) Name() string { return "show" }
+func (t *ScreenTool) Name() string { return ScreenToolID }
 
 func (t *ScreenTool) Description() string {
 	return "Capture a screenshot of the current screen or record it for a duration. " +
@@ -292,13 +327,16 @@ func (t *ScreenTool) takeScreenshotWithContext(ctx context.Context, display int)
 	if err := ctx.Err(); err != nil {
 		return nil, newScreenCaptureError("show encode", "screenshot encoding did not finish before the operation deadline", err)
 	}
-
-	msg := messages.Message{
-		Role: messages.RoleTool,
-		ContentParts: []messages.ContentPart{
-			messages.TextPart{Text: fmt.Sprintf("Screenshot: display %d (%dx%d px)", display, bounds.Dx(), bounds.Dy())},
-			messages.ImagePart{Bytes: buf.Bytes(), MediaType: "image/jpeg"},
-		},
+	decoded, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
+	if err != nil || decoded.Bounds().Dx() <= 0 || decoded.Bounds().Dy() <= 0 {
+		if err == nil {
+			err = errors.New("encoded screenshot has invalid dimensions")
+		}
+		return nil, newScreenCaptureError("show encode", "screenshot result could not be validated", err)
+	}
+	msg, err := screenImageMessage(sight.SourceScreen, "image/jpeg", buf.Bytes(), decoded.Bounds().Dx(), decoded.Bounds().Dy())
+	if err != nil {
+		return nil, newScreenCaptureError("show encode", "screenshot result metadata could not be created", err)
 	}
 	return []messages.Message{msg}, nil
 }
@@ -493,7 +531,7 @@ func (t *ScreenTool) recordScreenWithOptions(ctx context.Context, display int, o
 	if err := ctx.Err(); err != nil {
 		return nil, screenRecordingContextError("show recording encode", "screen recording encoding did not finish before the operation ended", err)
 	}
-	encoded := buf.Bytes()
+	encoded := append([]byte(nil), buf.Bytes()...)
 	if len(encoded) == 0 {
 		return nil, newScreenCaptureError("show recording encode", "screen recording encoder returned empty animation bytes", errors.New("empty animation bytes"))
 	}
@@ -508,20 +546,44 @@ func (t *ScreenTool) recordScreenWithOptions(ctx context.Context, display int, o
 		return nil, newScreenCaptureError("show recording result", "screen recording encoder returned an unexpected frame count", fmt.Errorf("encoded %d frame(s), want %d", len(decoded.Image), len(frames)))
 	}
 
-	msg := messages.Message{
-		Role: messages.RoleTool,
-		ContentParts: []messages.ContentPart{
-			messages.TextPart{Text: fmt.Sprintf(
-				"Screen recording: display %d, %d frames, %.1fs at %s fps (%dx%d px)",
-				display, len(frames), float64(len(frames))/options.fps, formatScreenNumber(options.fps), bounds.Dx(), bounds.Dy(),
-			)},
-			messages.ImagePart{Bytes: encoded, MediaType: "image/gif"},
-		},
+	firstFrame := decoded.Image[0]
+	result, err := sight.NewSuccess(sight.SourceScreen, "image/gif", encoded, firstFrame.Bounds().Dx(), firstFrame.Bounds().Dy())
+	if err != nil {
+		return nil, newScreenCaptureError("show recording result", "screen recording metadata could not be created", err)
+	}
+	result.FrameCount = len(frames)
+	result.DurationSeconds = float64(len(frames)) / options.fps
+	msg, err := screenImageMessageFromResult(result, encoded)
+	if err != nil {
+		return nil, newScreenCaptureError("show recording result", "screen recording metadata could not be created", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, screenRecordingContextError("show recording result", "screen recording ended before its result could be returned", err)
 	}
 	return []messages.Message{msg}, nil
+}
+
+func screenImageMessage(source, mediaType string, pixels []byte, width, height int) (messages.Message, error) {
+	result, err := sight.NewSuccess(source, mediaType, pixels, width, height)
+	if err != nil {
+		return messages.Message{}, err
+	}
+	return screenImageMessageFromResult(result, pixels)
+}
+
+func screenImageMessageFromResult(result sight.Result, pixels []byte) (messages.Message, error) {
+	encoded, err := sight.Encode(result)
+	if err != nil {
+		return messages.Message{}, err
+	}
+	ownedPixels := append([]byte(nil), pixels...)
+	return messages.Message{
+		Role: messages.RoleTool,
+		ContentParts: []messages.ContentPart{
+			messages.TextPart{Text: string(encoded)},
+			messages.ImagePart{Bytes: ownedPixels, MediaType: result.MIMEType},
+		},
+	}, nil
 }
 
 func waitForScreenRecordingFrame(ctx context.Context, target time.Time) error {

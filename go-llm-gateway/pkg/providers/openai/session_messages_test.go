@@ -315,6 +315,75 @@ func TestRealtimeSessionSendMessage_RejectsInconsistentToolImageBeforeWriting(t 
 	}
 }
 
+func TestRealtimeSessionSendMessage_AcceptsWebMCPPageImageEnvelope(t *testing.T) {
+	imageBytes := []byte("selected page pixels")
+	digest := sha256.Sum256(imageBytes)
+	data := map[string]any{
+		"version":          2,
+		"status":           "success",
+		"source":           "browser_page",
+		"browser_id":       "browser-a",
+		"target_id":        "tab-a",
+		"mime_type":        "image/png",
+		"byte_length":      len(imageBytes),
+		"width":            4,
+		"height":           3,
+		"sha256":           hex.EncodeToString(digest[:]),
+		"typed_projection": "input_image",
+	}
+	outer := map[string]any{
+		"version": "webmcp.tool-result.v1",
+		"ok":      true,
+		"data":    data,
+		"error":   nil,
+	}
+	encoded := mustMarshalJSON(t, outer)
+	session, conn := newWireSeamSession(t)
+	if !session.SendMessage(context.Background(), messages.Message{
+		Role:       messages.RoleTool,
+		ToolCallID: "call-page-image",
+		ContentParts: []messages.ContentPart{
+			messages.TextPart{Text: encoded},
+			messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"},
+		},
+	}) {
+		t.Fatal("SendMessage rejected a valid WebMCP page image envelope")
+	}
+	written := waitForWireMessages(t, conn, 3)
+	var functionOutput struct {
+		Item struct {
+			Type   string `json:"type"`
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[0], &functionOutput); err != nil {
+		t.Fatalf("decode page function output: %v", err)
+	}
+	if functionOutput.Item.Type != "function_call_output" || functionOutput.Item.CallID != "call-page-image" || functionOutput.Item.Output != encoded {
+		t.Fatalf("page function output = %#v, want one correlated outer envelope", functionOutput)
+	}
+	var imageItem struct {
+		Item struct {
+			Content []struct {
+				Type string `json:"type"`
+			} `json:"content"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(written[1], &imageItem); err != nil {
+		t.Fatalf("decode page image item: %v", err)
+	}
+	if len(imageItem.Item.Content) != 1 || imageItem.Item.Content[0].Type != "input_image" {
+		t.Fatalf("page image item = %#v, want exactly one input_image", imageItem)
+	}
+	var continuation struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(written[2], &continuation); err != nil || continuation.Type != "response.create" {
+		t.Fatalf("page continuation = %s, err = %v, want one response.create", written[2], err)
+	}
+}
+
 func mustMarshalJSON(t *testing.T, value any) string {
 	t.Helper()
 	data, err := json.Marshal(value)

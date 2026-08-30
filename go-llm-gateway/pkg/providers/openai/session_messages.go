@@ -195,12 +195,19 @@ func realtimeToolImageItemID(toolCallID string) string {
 // tool package owns the producer type, while the provider boundary only needs
 // to validate the stable wire contract without importing that package.
 type realtimeImageResultEnvelope struct {
-	Version         int    `json:"version"`
-	Status          string `json:"status"`
-	MIMEType        string `json:"mime_type"`
-	ByteLength      int    `json:"byte_length"`
-	SHA256          string `json:"sha256"`
-	TypedProjection string `json:"typed_projection"`
+	Version         int     `json:"version"`
+	Status          string  `json:"status"`
+	Source          string  `json:"source,omitempty"`
+	BrowserID       string  `json:"browser_id,omitempty"`
+	TargetID        string  `json:"target_id,omitempty"`
+	MIMEType        string  `json:"mime_type"`
+	ByteLength      int     `json:"byte_length"`
+	Width           int     `json:"width,omitempty"`
+	Height          int     `json:"height,omitempty"`
+	FrameCount      int     `json:"frame_count,omitempty"`
+	DurationSeconds float64 `json:"duration_seconds,omitempty"`
+	SHA256          string  `json:"sha256"`
+	TypedProjection string  `json:"typed_projection"`
 }
 
 // fallbackRealtimeImageResult keeps the provider boundary lossless for older
@@ -234,13 +241,8 @@ func validRealtimeImageResult(encoded string, part messages.ImagePart) bool {
 		return false
 	}
 
-	var result realtimeImageResultEnvelope
-	decoder := json.NewDecoder(strings.NewReader(encoded))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&result); err != nil {
-		return false
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+	result, ok := decodeRealtimeImageResult(encoded)
+	if !ok {
 		return false
 	}
 
@@ -249,12 +251,59 @@ func validRealtimeImageResult(encoded string, part messages.ImagePart) bool {
 		return false
 	}
 	digest := sha256.Sum256(part.Bytes)
+	if (result.Width == 0) != (result.Height == 0) || result.Width < 0 || result.Height < 0 || result.FrameCount < 0 || result.DurationSeconds < 0 || (result.FrameCount > 0 && result.DurationSeconds <= 0) {
+		return false
+	}
 	return result.Version == realtimeImageResultVersion &&
 		result.Status == realtimeImageResultStatusSuccess &&
 		result.MIMEType == mediaType &&
 		result.ByteLength == len(part.Bytes) &&
 		result.SHA256 == hex.EncodeToString(digest[:]) &&
 		result.TypedProjection == realtimeImageTypedProjection
+}
+
+// decodeRealtimeImageResult accepts the direct image projection used by
+// screen and older image tools, as well as the successful WebMCP envelope
+// whose data member contains show_page's projection.
+func decodeRealtimeImageResult(encoded string) (realtimeImageResultEnvelope, bool) {
+	var direct realtimeImageResultEnvelope
+	if decodeStrictRealtimeJSON(encoded, &direct) == nil {
+		return direct, true
+	}
+
+	var envelope struct {
+		Version string          `json:"version"`
+		OK      bool            `json:"ok"`
+		Data    json.RawMessage `json:"data"`
+		Error   json.RawMessage `json:"error"`
+	}
+	if decodeStrictRealtimeJSON(encoded, &envelope) != nil ||
+		envelope.Version != "webmcp.tool-result.v1" || !envelope.OK || len(envelope.Data) == 0 {
+		return realtimeImageResultEnvelope{}, false
+	}
+	if strings.TrimSpace(string(envelope.Data)) == "null" {
+		return realtimeImageResultEnvelope{}, false
+	}
+	var nested realtimeImageResultEnvelope
+	if decodeStrictRealtimeJSON(string(envelope.Data), &nested) != nil {
+		return realtimeImageResultEnvelope{}, false
+	}
+	return nested, true
+}
+
+func decodeStrictRealtimeJSON(encoded string, target any) error {
+	decoder := json.NewDecoder(strings.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return io.ErrUnexpectedEOF
+		}
+		return err
+	}
+	return nil
 }
 
 func normalizedRealtimeImageMIME(raw string) (string, bool) {

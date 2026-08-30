@@ -87,13 +87,7 @@ func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := msgs[0].TextContent(); got != "Screenshot: display 1 (2x2 px)" {
-		t.Fatalf("screenshot text = %q", got)
-	}
-	part := msgs[0].ContentParts[1].(messages.ImagePart)
-	if part.MediaType != "image/jpeg" || len(part.Bytes) == 0 {
-		t.Fatalf("screenshot part = %#v", part)
-	}
+	assertScreenResult(t, msgs[0], "image/jpeg", 2, 2)
 
 	msgs, err = tool.Execute(context.Background(), map[string]any{"action": "record", "duration": float64(1), "fps": float64(1)})
 	if err != nil || msgs[0].ContentParts[1].(messages.ImagePart).MediaType != "image/gif" {

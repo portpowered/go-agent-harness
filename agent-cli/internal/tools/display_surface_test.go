@@ -98,10 +98,12 @@ func TestScreenToolPermissionDenialIsTypedAndActionable(t *testing.T) {
 		t.Fatalf("denial error identity = %v", err)
 	}
 	for _, want := range []string{
-		"System Settings → Privacy & Security → Screen Recording",
+		"Screen-recording permission is not granted",
+		"System Settings → Privacy & Security → Screen & System Audio Recording",
 		"iTerm2",
 		"restart",
-		"retry",
+		"asking again",
+		"Tell the customer",
 		"cannot grant",
 	} {
 		if !strings.Contains(err.Error(), want) {

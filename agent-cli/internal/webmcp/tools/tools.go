@@ -181,15 +181,20 @@ func (t *brokerTool) Execute(ctx context.Context, args map[string]any) ([]messag
 		}
 		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
 	}
-	encoded, err := t.set.executeMap(ctx, t.definition.Name, args)
+	encoded, imagePart, err := t.set.executeMapRich(ctx, t.definition.Name, args)
 	if err != nil {
 		return nil, err
 	}
-	return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
+	parts := []messages.ContentPart{messages.TextPart{Text: string(encoded)}}
+	if len(imagePart.Bytes) > 0 {
+		parts = append(parts, imagePart)
+	}
+	return []messages.Message{{Role: messages.RoleTool, ContentParts: parts}}, nil
 }
 
-// Executor adapts a broker to messages.ToolExecutor. Each call returns one
-// correlated textual response and never returns rich ContentParts.
+// Executor adapts a broker to messages.ToolExecutor. Ordinary broker calls
+// return one correlated textual response; show_page additionally preserves
+// its one validated image projection for multimodal providers.
 type Executor struct {
 	set *BrokerToolSet
 }
@@ -237,6 +242,20 @@ func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (message
 		response.Content = string(encoded)
 		return response, nil
 	}
+	if spec.definition.Name == webmcp.ShowPageToolName {
+		encoded, imagePart, err := e.set.capturePageRich(ctx)
+		if err != nil {
+			return response, err
+		}
+		response.Content = string(encoded)
+		if len(imagePart.Bytes) > 0 {
+			response.ContentParts = []messages.ContentPart{
+				messages.TextPart{Text: string(encoded)},
+				imagePart,
+			}
+		}
+		return response, nil
+	}
 	encoded, err := e.set.executeValidated(ctx, spec, args)
 	if err != nil {
 		return response, err
@@ -245,23 +264,30 @@ func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (message
 	return response, nil
 }
 
-func (s *BrokerToolSet) executeMap(ctx context.Context, name string, args map[string]any) ([]byte, error) {
+func (s *BrokerToolSet) executeMapRich(ctx context.Context, name string, args map[string]any) ([]byte, messages.ImagePart, error) {
 	spec, ok := s.spec(name)
 	if !ok {
-		return invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
+		encoded, err := invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
+		return encoded, messages.ImagePart{}, err
 	}
 	if args == nil {
 		args = map[string]any{}
 	}
 	raw, err := json.Marshal(args)
 	if err != nil {
-		return invalidEnvelope(spec.definition.Parameters, stringValue(nil, "tool_ref"), []webmcp.ToolResultIssue{{Path: "/", Code: "invalid_json"}})
+		encoded, encodeErr := invalidEnvelope(spec.definition.Parameters, stringValue(nil, "tool_ref"), []webmcp.ToolResultIssue{{Path: "/", Code: "invalid_json"}})
+		return encoded, messages.ImagePart{}, encodeErr
 	}
 	validated, issues := decodeArguments(raw, spec)
 	if len(issues) > 0 {
-		return invalidEnvelope(spec.definition.Parameters, stringValue(validated, "tool_ref"), issues)
+		encoded, encodeErr := invalidEnvelope(spec.definition.Parameters, stringValue(validated, "tool_ref"), issues)
+		return encoded, messages.ImagePart{}, encodeErr
 	}
-	return s.executeValidated(ctx, spec, validated)
+	if spec.definition.Name == webmcp.ShowPageToolName {
+		return s.capturePageRich(ctx)
+	}
+	encoded, err := s.executeValidated(ctx, spec, validated)
+	return encoded, messages.ImagePart{}, err
 }
 
 func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, args map[string]any) ([]byte, error) {
