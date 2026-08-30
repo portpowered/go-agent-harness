@@ -138,14 +138,16 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 			result := roomFailureResult(safeErr, secrets)
 			return finalizeEvidence(result, safeErr)
 		}
+		evidence.recordTimelineEvent("participant_joined", plan.manifest.ID, nil)
 		if opts.Stream != nil {
 			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantJoined, plan.manifest.ID)
 		}
 	}
 
 	onParticipantTerminated := opts.OnParticipantTerminated
-	if opts.Stream != nil || onParticipantTerminated != nil {
+	if opts.Stream != nil || onParticipantTerminated != nil || evidence != nil {
 		onParticipantTerminated = func(result RoomParticipantResult) {
+			evidence.recordTimelineEvent("participant_terminated", result.ParticipantID, map[string]string{"reason": string(result.TerminationReason)})
 			if opts.Stream != nil {
 				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantTerminated, result.ParticipantID, string(result.TerminationReason))
 			}
@@ -264,21 +266,7 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		cleanup.start()
 	}
 	if startupErr == nil && !coordinator.isStopping() {
-		for _, plan := range plans {
-			if plan == nil {
-				continue
-			}
-			ready := roomParticipantReady(plan)
-			if evidence != nil {
-				evidence.setParticipantReady(ready)
-			}
-			if opts.Stream != nil {
-				opts.Stream.PublishRoomEvent(RoomStreamEventParticipantReady, ready.ParticipantID)
-			}
-			if opts.OnParticipantReady != nil {
-				opts.OnParticipantReady(ready)
-			}
-		}
+		publishRoomParticipantsReady(plans, opts, evidence)
 	}
 	close(startGate)
 	collectErr := collectRoomParticipantResults(ctx, coordinator, plans, mesh, secrets, timer, results, cleanup)
@@ -320,6 +308,28 @@ func RunRoomWithResult(ctx context.Context, out io.Writer, opts RoomRunOptions) 
 		roomErr = errors.Join(roomErr, fmt.Errorf("write room result: %w", writeErr))
 	}
 	return result, roomErr
+}
+
+// publishRoomParticipantsReady announces every started participant as ready:
+// it enriches the evidence manifest with runtime-selected metadata, records
+// the room-timeline transition, and notifies the stream/callback observers.
+func publishRoomParticipantsReady(plans []*roomParticipantPlan, opts RoomRunOptions, evidence *roomEvidence) {
+	for _, plan := range plans {
+		if plan == nil {
+			continue
+		}
+		ready := roomParticipantReady(plan)
+		if evidence != nil {
+			evidence.setParticipantReady(ready)
+		}
+		evidence.recordTimelineEvent("participant_ready", ready.ParticipantID, nil)
+		if opts.Stream != nil {
+			opts.Stream.PublishRoomEvent(RoomStreamEventParticipantReady, ready.ParticipantID)
+		}
+		if opts.OnParticipantReady != nil {
+			opts.OnParticipantReady(ready)
+		}
+	}
 }
 
 func roomParticipantReady(plan *roomParticipantPlan) RoomParticipantReady {

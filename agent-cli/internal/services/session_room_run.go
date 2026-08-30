@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
@@ -14,8 +15,57 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio"
 )
+
+// recordRoomTimelineEvent turns one participant's inbound stream message
+// into the room-level timeline entries that make a conversation's shape
+// machine readable: response boundaries, barge-in cancel outcomes, and tool
+// calls. It intentionally reads only already-observable inbound events (no
+// go-agent-loop changes), matching what a real provider actually echoes back
+// for a successful or failed RESPONSE.CANCEL.
+func recordRoomTimelineEvent(evidence *roomEvidence, participantID string, msg messages.StreamMessage) {
+	if evidence == nil || evidence.timeline == nil {
+		return
+	}
+	switch msg.Type {
+	case messages.StreamTypeMessageStart:
+		evidence.recordTimelineEvent("response_start", participantID, map[string]string{"response_id": msg.ResponseID})
+	case messages.StreamTypeMessageEnd:
+		fields := map[string]string{"response_id": msg.ResponseID}
+		if value, ok := msg.Value.(*messages.MessageEndValue); ok && value != nil {
+			fields["terminal_reason"] = string(value.TerminalReason)
+			fields["output_state"] = string(value.OutputState)
+			evidence.recordTimelineEvent("response_end", participantID, fields)
+			if value.TerminalReason == messages.TerminalReasonCancellation {
+				// A provider only reports a response as cancelled when a
+				// RESPONSE.CANCEL it received actually took effect: this is
+				// the barge-in cancel's acknowledgement.
+				evidence.recordTimelineEvent("barge_in_cancel_acked", participantID, map[string]string{"response_id": msg.ResponseID})
+			}
+			return
+		}
+		evidence.recordTimelineEvent("response_end", participantID, fields)
+	case messages.StreamTypeError:
+		value, ok := msg.Value.(*messages.ErrorValue)
+		if !ok || value == nil {
+			return
+		}
+		fields := map[string]string{"code": value.Code, "classification": value.Classification, "message": value.Message}
+		if value.Classification == providers.ErrorClassResponseCancelNotActive {
+			// The provider rejected a barge-in cancel because it had no
+			// active response to cancel: an observable cancel failure.
+			evidence.recordTimelineEvent("barge_in_cancel_failed", participantID, fields)
+			return
+		}
+		evidence.recordTimelineEvent("provider_error", participantID, fields)
+	case messages.StreamTypeToolCallStart:
+		evidence.recordTimelineEvent("tool_call_start", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
+	case messages.StreamTypeToolCallEnd:
+		evidence.recordTimelineEvent("tool_call_end", participantID, map[string]string{"tool_call_id": msg.ToolCallId})
+	}
+}
 
 type roomParticipantRunResult struct {
 	plan       *roomParticipantPlan
@@ -60,6 +110,12 @@ func runRoomParticipant(
 			close(runtime.participantDone)
 		}
 	}()
+
+	participantEvidence := (*roomParticipantEvidence)(nil)
+	if evidence != nil {
+		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
+	}
+
 	go func() {
 		if mixerWG != nil {
 			defer mixerWG.Done()
@@ -70,16 +126,12 @@ func runRoomParticipant(
 			}
 		}()
 		if roomParticipantIsHuman(runtime.plan) {
-			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, secrets)
+			pumpRoomHumanOutput(roomCtx, coordinator, runtime, startGate, participantEvidence, secrets)
 			return
 		}
-		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, secrets)
+		pumpRoomMixer(roomCtx, coordinator, runtime, startGate, opts.OnAudioInput, participantEvidence, secrets)
 	}()
 
-	participantEvidence := (*roomParticipantEvidence)(nil)
-	if evidence != nil {
-		participantEvidence = evidence.participant(runtime.plan.manifest.ID)
-	}
 	participantStream := RoomParticipantEventSink{}
 	if opts.Stream != nil {
 		participantStream = opts.Stream.ParticipantSink(runtime.plan.manifest.ID)
@@ -108,6 +160,7 @@ func runRoomParticipant(
 	observer.admittedTurnObserver = func(messages.StreamMessage) {
 		turns := runtime.lifecycle.observeAdmittedTurn()
 		coordinator.noteTurn(runtime.plan.manifest.ID, turns)
+		evidence.recordTimelineEvent("turn_completed", runtime.plan.manifest.ID, map[string]string{"turn_index": strconv.Itoa(turns)})
 	}
 	runErr := runAgentLoopSession(runtime.ctx, io.Discard, runtime.plan.tracker, sessionLoopOptions{
 		Prompt:                 runtime.plan.options.Prompt,
@@ -179,8 +232,16 @@ func observeRoomParticipantStream(
 		}
 	}
 	runtime.lifecycle.observe(msg)
+	recordRoomTimelineEvent(evidence, plan.manifest.ID, msg)
 	if msg.Type == messages.StreamTypeSessionOpen && opts.onParticipantSessionOpen != nil {
 		opts.onParticipantSessionOpen(plan.manifest.ID)
+	}
+	if msg.Type == messages.StreamTypeAudioEnd && assistantAudioDelta(msg) && participantEvidence != nil {
+		// A provider audio segment can end without ever emitting a silent
+		// trailing chunk, so the energy-based tracker alone would never see
+		// the transition back to silence. AUDIO.END is the reliable signal
+		// that this participant's own speech segment is over.
+		participantEvidence.closeSentSpeechSegment()
 	}
 	if msg.Type != messages.StreamTypeAudioDelta || !assistantAudioDelta(msg) {
 		return
@@ -192,8 +253,8 @@ func observeRoomParticipantStream(
 	}
 	pcm := append([]byte(nil), value.Content...)
 	if participantEvidence != nil {
-		if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
-			evidence.recordError(plan.manifest.ID, fmt.Errorf("write WAV audio: %w", evidenceErr))
+		if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
+			evidence.recordError(plan.manifest.ID, fmt.Errorf("write sent audio: %w", evidenceErr))
 		}
 	}
 	if opts.OnAudioOutput != nil {
@@ -485,7 +546,7 @@ func finishRoomParticipant(coordinator *roomCoordinator, mesh *room.Mesh, result
 	coordinator.finishParticipant(result.runtime, reason, result.err, secrets, mesh, cleanup)
 }
 
-func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, observer RoomParticipantAudioObserver, secrets []string) {
+func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, observer RoomParticipantAudioObserver, participantEvidence *roomParticipantEvidence, secrets []string) {
 	if runtime == nil || runtime.mixer == nil {
 		return
 	}
@@ -517,9 +578,26 @@ func pumpRoomMixer(ctx context.Context, coordinator *roomCoordinator, runtime *r
 			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read inbound mixer: %w", err), secrets))
 			return
 		}
+		// Record what this participant actually received before attempting
+		// delivery, so the artifact reflects ground truth even if the send
+		// below fails: received.pcm is the room's own account of what
+		// reached this participant, independent of whether the downstream
+		// session accepted it.
+		if participantEvidence != nil {
+			if evidenceErr := participantEvidence.observeReceivedAudio(frame); evidenceErr != nil {
+				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("record received audio: %w", evidenceErr), secrets))
+				return
+			}
+		}
 		if err := loop.SendAudioInput(runtime.ctx, frame); err != nil {
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {
 				return
+			}
+			// Make a dropped delivery of real (non-silent) incoming audio an
+			// explicit, diagnosable event instead of leaving it
+			// indistinguishable from ordinary silence.
+			if participantEvidence != nil && pcm16HasSignal(frame) {
+				participantEvidence.recordAudioDropped(err.Error(), len(frame))
 			}
 			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("send mixed PCM: %w", err), secretsForPlan(runtime.plan)))
 			return
@@ -572,7 +650,7 @@ func runRoomHumanCapture(
 		}
 		pcm := encodeRoomPCM16(roomSamples)
 		if participantEvidence != nil {
-			if evidenceErr := participantEvidence.observeAudio(pcm); evidenceErr != nil {
+			if evidenceErr := participantEvidence.observeSentAudio(pcm); evidenceErr != nil {
 				failure := roomParticipantFailure(participantID, fmt.Errorf("record human input audio: %w", evidenceErr), secrets)
 				coordinator.fail(failure)
 				return failure
@@ -604,7 +682,7 @@ func runRoomHumanCapture(
 	}
 }
 
-func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, secrets []string) {
+func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runtime *roomParticipantRuntime, startGate <-chan struct{}, participantEvidence *roomParticipantEvidence, secrets []string) {
 	if runtime == nil || runtime.mixer == nil || runtime.output == nil {
 		return
 	}
@@ -624,6 +702,12 @@ func pumpRoomHumanOutput(ctx context.Context, coordinator *roomCoordinator, runt
 			}
 			coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("read human output mixer: %w", err), secrets))
 			return
+		}
+		if participantEvidence != nil {
+			if evidenceErr := participantEvidence.observeReceivedAudio(frame); evidenceErr != nil {
+				coordinator.fail(roomParticipantFailure(runtime.plan.manifest.ID, fmt.Errorf("record received audio: %w", evidenceErr), secrets))
+				return
+			}
 		}
 		if err := output.writeFrame(runtime.ctx, runtime.output, runtime.mixer.Format(), frame); err != nil {
 			if runtime.ctx.Err() != nil || coordinator.isStopping() {

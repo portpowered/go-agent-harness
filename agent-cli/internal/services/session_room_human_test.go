@@ -255,8 +255,30 @@ customerAudioRecorded:
 	if err != nil {
 		t.Fatalf("read finalized room output: %v", err)
 	}
-	if len(entries) != 7 { // three artifacts per participant plus the terminal manifest
-		t.Fatalf("finalized room output entries = %d, want 7: %v", len(entries), entries)
+	// Three per-participant artifacts (WAV/diagnostics/deltas) times two
+	// participants, plus the terminal manifest, room-mix.wav,
+	// room-timeline.jsonl, and the participants/ directory holding
+	// sent.pcm/received.pcm.
+	if len(entries) != 10 {
+		t.Fatalf("finalized room output entries = %d, want 10: %v", len(entries), entries)
+	}
+	for _, id := range []string{"customer", "agent"} {
+		participant := manifest.Participants[id]
+		sent := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.SentPCM))
+		if len(sent) == 0 || len(sent)%2 != 0 {
+			t.Fatalf("participant %q sent.pcm length = %d, want a non-empty, even PCM16 byte count", id, len(sent))
+		}
+		received := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.ReceivedPCM))
+		if len(received) == 0 {
+			t.Fatalf("participant %q received.pcm is empty, want mixed inbound audio", id)
+		}
+	}
+	if mixData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, manifest.RoomMix)); len(mixData) == 0 {
+		t.Fatal("room-mix.wav is empty")
+	}
+	timelineLines := readRoomEvidenceJSONLLines(t, filepath.Join(opts.OutputDir, manifest.RoomTimeline))
+	if len(timelineLines) == 0 {
+		t.Fatal("room-timeline.jsonl has no entries")
 	}
 	for id, participant := range manifest.Participants {
 		wavData := readRoomEvidenceFile(t, filepath.Join(opts.OutputDir, participant.Artifacts.WAV))

@@ -16,12 +16,14 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [Tool-assistant room fixture](room-tool-assistant.json) is a bounded two-participant manifest with a tool-less customer and an exec-only assistant.
 - [Tool-assistant room live acceptance](room-tool-assistant-live-acceptance.md) documents the credential-safe billed run, sanitized evidence checks, and exact proof-file verification.
 - [Room Phase 1 live acceptance](room-live-acceptance.md) documents the billed/non-CI three-participant smoke procedure, artifact inspection, C1 wedge rule, and honest scenario ledger.
+- [Room recording bundle layout](room-recording-bundle.md) documents `agent room run --out`'s complete evidence bundle: per-participant `sent.pcm`/`received.pcm`, wall-clock-stamped events, `room-timeline.jsonl`, and `room-mix.wav`.
 - [Files TODO](FILES.md) describes planned provider file-upload behavior and the proposed `agent files` commands for managing uploaded files.
 
 ## Fixture and Test Authors
 
 - [PNIG interaction replay](interaction-replay.md) covers the normalized interaction fixture envelope, validation behavior, and CLI inspection flow for gateway event fixtures.
 - [Agent session record and replay](session-record-replay.md) covers capture sanitization, committed fixture locations, capture fields, and replay divergence cases for session replay tests.
+- [Room recording bundle layout](room-recording-bundle.md) is the authoritative reference for the room evidence bundle's on-disk paths and field names (per-participant audio directions, wall-clock fields, `room-timeline.jsonl` event vocabulary, `room-mix.wav`), for anything that replays or asserts against recorded room conversations.
 - [Live scheduled-turn boundary confirmation](../../docs/architecture/s2s-live-turn-boundary-commit-races.md) gives the opt-in OpenAI procedure for delayed acknowledgement and speech-then-exact-silence checks.
 - [S2S audio tool-turn lifecycle](../../docs/architecture/s2s-audio-tool-turn-lifecycle.md) defines the shared call-ID lifecycle, scheduled-turn/close gates, hermetic proof surface, and credential-safe live tool confirmation.
 - Shared committed `.session.json` replay fixtures are owned by `go-llm-gateway/pkg/testing/testdata/session-fixtures`; keep `agent-cli/test/integration/testdata` for CLI-private fixtures only, and use `go-llm-gateway/pkg/testing.SharedSessionFixturePath(...)` when Agent CLI tests need the shared canonical fixtures.

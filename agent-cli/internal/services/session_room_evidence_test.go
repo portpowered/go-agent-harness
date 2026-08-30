@@ -82,14 +82,18 @@ func TestRunRoom_WritesPerParticipantEvidenceAndManifest(t *testing.T) {
 			WAV:         "agent-" + id + ".wav",
 			Diagnostics: "agent-" + id + ".diagnostics.jsonl",
 			Deltas:      "agent-" + id + ".deltas.jsonl",
+			SentPCM:     filepath.Join("participants", id, "sent.pcm"),
+			ReceivedPCM: filepath.Join("participants", id, "received.pcm"),
 		}
 		if participantManifest.Artifacts != wantArtifacts {
 			t.Fatalf("participant %q artifacts = %+v, want %+v", id, participantManifest.Artifacts, wantArtifacts)
 		}
 		for name, relativePath := range map[string]string{
-			"WAV":         participantManifest.Artifacts.WAV,
-			"diagnostics": participantManifest.Artifacts.Diagnostics,
-			"deltas":      participantManifest.Artifacts.Deltas,
+			"WAV":          participantManifest.Artifacts.WAV,
+			"diagnostics":  participantManifest.Artifacts.Diagnostics,
+			"deltas":       participantManifest.Artifacts.Deltas,
+			"sent_pcm":     participantManifest.Artifacts.SentPCM,
+			"received_pcm": participantManifest.Artifacts.ReceivedPCM,
 		} {
 			if filepath.IsAbs(relativePath) || filepath.Clean(relativePath) != relativePath || strings.HasPrefix(relativePath, "..") {
 				t.Fatalf("participant %q %s path is unsafe: %q", id, name, relativePath)
