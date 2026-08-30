@@ -49,24 +49,29 @@ func TestTranslateOutbound_ResponseCancelMapsToProviderEvent(t *testing.T) {
 	}
 }
 
-func TestTranslateOutbound_ToolAcknowledgementCarriesInstructions(t *testing.T) {
+func TestTranslateOutbound_SessionUpdateCarriesCurrentToolDefinitions(t *testing.T) {
 	event, ok := translateOutbound(messages.StreamMessage{
-		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewToolAcknowledgementResponseCreateValue(),
+		Type: messages.StreamTypeSessionUpdate,
+		Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
+			Tools: []messages.ToolDefinition{{Name: "create_document", Description: "create"}},
+		}),
 	})
-	if !ok || event.Type != models.SessionEventResponseCreate {
-		t.Fatalf("acknowledgement event = %#v, ok=%t; want response.create", event, ok)
+	if !ok {
+		t.Fatal("SESSION.UPDATE was not accepted as an outbound event")
 	}
+
 	var payload struct {
-		Response struct {
-			Instructions string `json:"instructions"`
-		} `json:"response"`
+		Session struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"session"`
 	}
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
-		t.Fatalf("acknowledgement payload: %v", err)
+		t.Fatalf("decode session.update: %v", err)
 	}
-	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
-		t.Fatalf("acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
+	if len(payload.Session.Tools) != 1 || payload.Session.Tools[0].Name != "create_document" {
+		t.Fatalf("session.update tools = %#v, want current page definition", payload.Session.Tools)
 	}
 }
 
@@ -101,5 +106,25 @@ func TestTranslateInbound_ResponseDonePreservesRetryMetadata(t *testing.T) {
 	}
 	if !strings.Contains(value.StatusDetails, "code=rate_limit_exceeded") || !strings.Contains(value.StatusDetails, "message="+message) {
 		t.Fatalf("response.done details = %q, want code and message", value.StatusDetails)
+	}
+}
+func TestTranslateOutbound_ToolAcknowledgementCarriesInstructions(t *testing.T) {
+	event, ok := translateOutbound(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewToolAcknowledgementResponseCreateValue(),
+	})
+	if !ok || event.Type != models.SessionEventResponseCreate {
+		t.Fatalf("acknowledgement event = %#v, ok=%t; want response.create", event, ok)
+	}
+	var payload struct {
+		Response struct {
+			Instructions string `json:"instructions"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		t.Fatalf("acknowledgement payload: %v", err)
+	}
+	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
+		t.Fatalf("acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
 	}
 }

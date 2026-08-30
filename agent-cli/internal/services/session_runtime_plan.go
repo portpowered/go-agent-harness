@@ -243,6 +243,11 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.loop.InteractiveToolPolicy = &policySnapshot
 	// The per-invocation adapter deadline override is a hermetic test seam;
 	// zero selects the class-specific policy budget.
+	plan.loop.ToolDefinitionBase = append([]messages.ToolDefinition(nil), opts.ToolDefinitionBase...)
+	plan.loop.RefreshToolDefinitions = opts.RefreshToolDefinitions
+	plan.loop.BrowserWatch = opts.BrowserWatch
+	// The per-invocation adapter deadline override crosses with the executor;
+	// zero keeps every production plan on defaultSessionToolExecutionTimeout.
 	plan.loop.ToolExecutionTimeout = opts.ToolExecutionTimeout
 	plan.loop.ScheduledAudioDispatch = scheduledAudioDispatch
 	plan.selection = selection

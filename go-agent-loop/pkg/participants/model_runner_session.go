@@ -198,11 +198,14 @@ func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.
 		callID = value.ToolCallID
 	}
 	message := fmt.Sprintf("tool result %q was not delivered: session send status %q", callID, outcome.Status)
-	if msg.Type == messages.StreamTypeResponseCreate {
+	if msg.Type == messages.StreamTypeSessionUpdate {
+		classification = "unresolved_session_update"
+		message = fmt.Sprintf("session tool definition update was not delivered: session send status %q", outcome.Status)
+	} else if msg.Type == messages.StreamTypeResponseCreate {
 		classification = "unresolved_tool_continuation"
 		message = fmt.Sprintf("tool continuation was not requested: session send status %q", outcome.Status)
 	}
-	if msg.Type != messages.StreamTypeToolCallEnd && msg.Type != messages.StreamTypeResponseCreate {
+	if msg.Type != messages.StreamTypeSessionUpdate && msg.Type != messages.StreamTypeToolCallEnd && msg.Type != messages.StreamTypeResponseCreate {
 		return messages.StreamMessage{}, false, false
 	}
 	value := messages.NewErrorValueWithTerminal(

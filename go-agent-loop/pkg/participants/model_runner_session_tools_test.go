@@ -72,6 +72,29 @@ func TestModelRunner_ForwardSessionEventReportsProviderBoundaryOutcomes(t *testi
 			t.Fatalf("continuation failure = %+v, want unresolved continuation", value)
 		}
 	})
+
+	t.Run("session update rejection is emitted immediately", func(t *testing.T) {
+		runner := NewSessionModelRunner(nil, 8, nil)
+		session := newRejectingStreamSession()
+
+		failure, deferred, accepted := runner.forwardSessionEvent(ctx, session, messages.StreamMessage{
+			Type: messages.StreamTypeSessionUpdate,
+			Value: messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{
+				Tools: []messages.ToolDefinition{{Name: "current_page_tool"}},
+			}),
+		})
+		if failure.Type != "" || deferred || accepted {
+			t.Fatalf("session update rejection return = (%#v, %v, %v), want zero/false/false", failure, deferred, accepted)
+		}
+		forwarded, ok := runner.DeltaOutbox.Read()
+		if !ok || forwarded.Type != messages.StreamTypeError {
+			t.Fatalf("session update failure = %#v, ok=%v; want ERROR", forwarded, ok)
+		}
+		value, ok := forwarded.Value.(*messages.ErrorValue)
+		if !ok || value.Classification != "unresolved_session_update" || !contains(value.Message, "tool definition update") {
+			t.Fatalf("session update failure = %#v, want unresolved session update", forwarded.Value)
+		}
+	})
 }
 
 func TestModelRunner_DrainSessionAudioForwardsQueuedFrames(t *testing.T) {

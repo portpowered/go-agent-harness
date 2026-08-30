@@ -2,6 +2,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	platformclock "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock"
@@ -209,6 +211,19 @@ type SessionRunOptions struct {
 	// session provider and the duplex agent loop. It must be derived from the
 	// same config snapshot as ToolExecutor.
 	ToolDefinitions []messages.ToolDefinition
+	// ToolDefinitionBase is the immutable static and stable broker surface
+	// retained by the live dynamic-tool publisher. Callers that do not provide
+	// a separate base retain compatibility; the publisher falls back to the
+	// initial ToolDefinitions snapshot.
+	ToolDefinitionBase []messages.ToolDefinition
+	// RefreshToolDefinitions returns the complete current session tool surface,
+	// including static, stable broker, and current first-class page tools. Its
+	// error is kept explicit so a failed catalog read cannot advance provider
+	// alignment.
+	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
+	// BrowserWatch supplies an independent subscription to semantic broker
+	// selection/catalog/generation events for this session.
+	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
 	// BrowserToolsEnabled records the resolved browser capability admission.
 	// It allows an explicitly activated live session to run without requiring
 	// the legacy provider-recording flag while keeping ordinary sessions on
