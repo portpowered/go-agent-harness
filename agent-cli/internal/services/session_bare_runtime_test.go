@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -84,6 +86,132 @@ func TestBareSessionCommandUsesRegistryDefaultsAndReportsListening(t *testing.T)
 	}
 	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
 		t.Fatalf("bare device observations after close = %+v, want two opens and two releases", got)
+	}
+}
+
+func TestBareSessionCommandSIGINTClosesProviderAndDevicesOnce(t *testing.T) {
+	registry := newRTCDeviceRoundtripRegistry(t)
+	peer := newLoopbackRTCTrackPeer(1)
+	inferencer := newRuntimeRTCSessionInferencer(peer)
+	t.Cleanup(func() { _ = peer.Close() })
+
+	t.Setenv("OPENAI_API_KEY", "bare-test-key")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	command := cli.NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry).Generate()
+	var output synchronizedBareSessionOutput
+	command.SetOut(&output)
+	command.SetArgs([]string{})
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- command.ExecuteContext(context.Background()) }()
+
+	var session *runtimeRTCSession
+	select {
+	case session = <-inferencer.connected:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bare session did not connect before SIGINT")
+	}
+	if !session.recv.Write(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeSessionCreated,
+		Value: messages.NewSessionCreatedValue("bare-sigint-session", "gpt-realtime-2.1-mini"),
+	}) {
+		t.Fatal("bare SIGINT session did not accept session.created")
+	}
+	waitForBareSessionOutput(t, &output, "Listening:")
+
+	process, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("find test process: %v", err)
+	}
+	if err := process.Signal(os.Interrupt); err != nil {
+		t.Fatalf("send SIGINT to bare session: %v", err)
+	}
+
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("bare session SIGINT error = %v, want clean cancellation", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("bare session did not terminate after one SIGINT")
+	}
+	if got := session.closeCalls.Load(); got != 1 {
+		t.Fatalf("provider session close calls = %d, want exactly one", got)
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("bare SIGINT device observations = %+v, want two opens and two releases", got)
+	}
+	text := output.String()
+	if strings.Count(text, "[session terminal:") != 1 || !strings.Contains(text, "classification=user_cancelled") {
+		t.Fatalf("bare SIGINT output = %q, want one user-cancelled terminal", text)
+	}
+}
+
+func TestBareSessionCommandSIGINTDuringProviderConnectReleasesDevices(t *testing.T) {
+	baselineGoroutines := runtime.NumGoroutine()
+	registry := newRTCDeviceRoundtripRegistry(t)
+	inferencer := &bareConnectBlockingInferencer{started: make(chan struct{})}
+
+	t.Setenv("OPENAI_API_KEY", "bare-test-key")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	command := cli.NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry).Generate()
+	command.SetOut(&bytes.Buffer{})
+	command.SetArgs([]string{})
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- command.ExecuteContext(context.Background()) }()
+	select {
+	case <-inferencer.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bare provider connect did not start before SIGINT")
+	}
+
+	process, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("find test process: %v", err)
+	}
+	if err := process.Signal(os.Interrupt); err != nil {
+		t.Fatalf("send SIGINT during bare provider connect: %v", err)
+	}
+
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("bare connect SIGINT error = %v, want clean cancellation", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("bare provider connect did not terminate after one SIGINT")
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("bare connect SIGINT device observations = %+v, want two opens and two releases", got)
+	}
+	assertGoroutinesSettled(t, baselineGoroutines, "bare connect SIGINT")
+}
+
+func TestBareSessionSetupFailureIsNotReportedAsProviderSuccess(t *testing.T) {
+	wantErr := errors.New("provider setup failed")
+	registry := newRTCDeviceRoundtripRegistry(t)
+	inferencer := &bareFailingInferencer{err: wantErr}
+
+	t.Setenv("OPENAI_API_KEY", "bare-test-key")
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = t.TempDir()
+	var output bytes.Buffer
+	command := cli.NewSessionCommandWithDeviceRegistry(flags.NewAskFlags(), globalFlags, nil, inferencer, registry).Generate()
+	command.SetOut(&output)
+	command.SetArgs([]string{})
+
+	err := command.ExecuteContext(context.Background())
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("bare setup error = %v, want provider setup failure", err)
+	}
+	if strings.Contains(output.String(), "provider_closed") || strings.Contains(output.String(), "classification=user_cancelled") {
+		t.Fatalf("bare setup failure reported a successful/clean provider lifecycle: %q", output.String())
+	}
+	if got := registry.Observations(); got.OpenCount != 2 || got.ReleaseCount != 2 {
+		t.Fatalf("bare setup failure device observations = %+v, want two opens and two releases", got)
 	}
 }
 
@@ -187,4 +315,23 @@ func waitForBareSessionOutput(t *testing.T, output *synchronizedBareSessionOutpu
 		case <-ticker.C:
 		}
 	}
+}
+
+type bareConnectBlockingInferencer struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (i *bareConnectBlockingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.once.Do(func() { close(i.started) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+type bareFailingInferencer struct {
+	err error
+}
+
+func (i *bareFailingInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return nil, i.err
 }

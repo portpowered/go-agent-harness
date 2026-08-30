@@ -3,22 +3,30 @@ package services
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 type observedSessionInferencer struct {
-	inner    messages.SessionInferencer
-	done     chan struct{}
-	once     sync.Once
-	runtime  *sessionRuntimeObservationRecorder
-	progress *sessionProgressObserver
+	inner       messages.SessionInferencer
+	done        chan struct{}
+	once        sync.Once
+	connectDone chan struct{}
+	closeOnce   sync.Once
+	closeErr    error
+	runtime     *sessionRuntimeObservationRecorder
+	progress    *sessionProgressObserver
 
-	mu         sync.Mutex
-	connectErr error
-	sessionErr error
-	session    messages.Session
+	mu              sync.Mutex
+	connectErr      error
+	sessionErr      error
+	session         messages.Session
+	observed        *observedSession
+	closeRequested  bool
+	connectStarted  bool
+	connectFinished bool
 }
 
 type sessionTerminalErrorSource interface {
@@ -33,9 +41,10 @@ func newObservedSessionInferencer(inner messages.SessionInferencer, runtime ...*
 		observationRecorder = runtime[0]
 	}
 	return &observedSessionInferencer{
-		inner:   inner,
-		done:    make(chan struct{}),
-		runtime: observationRecorder,
+		inner:       inner,
+		done:        make(chan struct{}),
+		connectDone: make(chan struct{}),
+		runtime:     observationRecorder,
 	}
 }
 
@@ -43,6 +52,15 @@ func newObservedSessionInferencer(inner messages.SessionInferencer, runtime ...*
 // the session runner can surface it: the engine runs model runners as
 // background participants whose errors are not propagated to the hot loop.
 func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.mu.Lock()
+	i.connectStarted = true
+	i.mu.Unlock()
+	defer func() {
+		i.mu.Lock()
+		i.connectFinished = true
+		i.mu.Unlock()
+		close(i.connectDone)
+	}()
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
 		i.mu.Lock()
@@ -53,7 +71,16 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 	}
 	i.mu.Lock()
 	i.session = session
+	wrapped := &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress}
+	i.observed = wrapped
+	closeRequested := i.closeRequested
 	i.mu.Unlock()
+	if closeRequested {
+		// A cancellation can win while ConnectSession is still returning. Close
+		// the late session before handing it to the model runner so the caller
+		// never returns with a provider connection that escaped its owner.
+		_ = wrapped.Close()
+	}
 	go func() {
 		select {
 		case <-session.Done():
@@ -66,7 +93,50 @@ func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (message
 		case <-ctx.Done():
 		}
 	}()
-	return &observedSession{Session: session, closeDone: i.closeDone, runtime: i.runtime, progress: i.progress}, nil
+	return wrapped, nil
+}
+
+// CloseSession closes the session established by this inferencer and waits
+// until the connect attempt has completed. Bare live sessions use this seam
+// because AgentLoop.Run may return immediately after cancellation while its
+// model-runner goroutine is still unwinding its deferred session close.
+//
+// The method is intentionally idempotent. observedSession also guards its
+// underlying provider close, so the model runner's deferred close and this
+// owner-driven close share one provider lifecycle call.
+func (i *observedSessionInferencer) CloseSession() error {
+	if i == nil {
+		return nil
+	}
+	i.closeOnce.Do(func() {
+		i.mu.Lock()
+		i.closeRequested = true
+		observed := i.observed
+		waitForConnect := i.connectStarted && !i.connectFinished
+		i.mu.Unlock()
+		if observed != nil {
+			i.closeErr = observed.Close()
+		}
+		if waitForConnect {
+			<-i.connectDone
+		}
+		if observed == nil {
+			i.mu.Lock()
+			observed = i.observed
+			i.mu.Unlock()
+			if observed != nil {
+				i.closeErr = errors.Join(i.closeErr, observed.Close())
+			}
+		}
+	})
+	return i.closeErr
+}
+
+func closeBareSessionIfNeeded(bare bool, inferencer *observedSessionInferencer) error {
+	if !bare || inferencer == nil {
+		return nil
+	}
+	return inferencer.CloseSession()
 }
 
 // connectFailure returns the remembered connect error, if any.
@@ -114,6 +184,8 @@ type observedSession struct {
 	runtime   *sessionRuntimeObservationRecorder
 	progress  *sessionProgressObserver
 	once      sync.Once
+	closeOnce sync.Once
+	closeErr  error
 }
 
 var _ messages.Session = (*observedSession)(nil)
@@ -224,9 +296,14 @@ func (s *observedSession) SupportsCompleteMessagesWithoutResponse() bool {
 }
 
 func (s *observedSession) Close() error {
-	err := s.Session.Close()
-	s.markDone()
-	return err
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		s.closeErr = s.Session.Close()
+		s.markDone()
+	})
+	return s.closeErr
 }
 
 func (s *observedSession) markDone() {

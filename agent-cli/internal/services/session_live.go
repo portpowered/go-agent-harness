@@ -619,11 +619,12 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 	}
 	stop := func() error {
 		cancel()
+		providerErr := closeBareSessionIfNeeded(opts.BareLive, observedInferencer)
 		var bindingErr error
 		if opts.rtcDeviceBinding != nil {
 			bindingErr = opts.rtcDeviceBinding.Close()
 		}
-		return errors.Join(joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
+		return errors.Join(providerErr, joinSessionTerminationErrors(waitRun(), waitAudio()), bindingErr)
 	}
 	stopAndDrain := func() error {
 		stopErr := stop()
@@ -806,6 +807,12 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 				stopSessionUpdatedTimer()
 			}
 			if stopLoop {
+				if opts.BareLive {
+					// A provider terminal delta can make the consumer stop before
+					// AgentLoop.Run has observed cancellation. Use the same owner
+					// shutdown path so the model runner cannot outlive this command.
+					return stopAndDrain()
+				}
 				return nil
 			}
 		}
