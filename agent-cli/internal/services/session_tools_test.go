@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -145,6 +146,56 @@ func TestSessionToolExecutor_CooperativeWorkerExitsAfterTimeout(t *testing.T) {
 	}
 }
 
+func TestSessionToolExecutor_InteractivePolicyTimeoutClassifiesAndCancels(t *testing.T) {
+	settings := config.DefaultInteractiveToolConfig()
+	settings.FastReadTimeout = 15 * time.Millisecond
+	policy, err := NewInteractiveToolPolicy(settings, []messages.ToolDefinition{{Name: "policy_slow_read"}})
+	if err != nil {
+		t.Fatalf("NewInteractiveToolPolicy: %v", err)
+	}
+
+	started := make(chan struct{})
+	workerExited := make(chan struct{})
+	inner := sessionToolExecutorFunc(func(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
+		close(started)
+		defer close(workerExited)
+		<-ctx.Done()
+		return messages.ToolCallResponse{}, ctx.Err()
+	})
+	executor := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, &policy, 0, nil, nil)
+	call := messages.ToolCall{ID: "policy-timeout-call", Name: "policy_slow_read", Arguments: `{}`}
+
+	startedAt := time.Now()
+	response, err := executor.Execute(context.Background(), call)
+	elapsed := time.Since(startedAt)
+	if err != nil {
+		t.Fatalf("Execute returned Go error: %v", err)
+	}
+	if response.ToolCallID != call.ID || response.Name != call.Name {
+		t.Fatalf("response correlation = (%q, %q), want (%q, %q)", response.ToolCallID, response.Name, call.ID, call.Name)
+	}
+	if !strings.Contains(response.Content, "classification="+SessionToolTimeoutClassification) {
+		t.Fatalf("response = %q, want stable timeout classification %q", response.Content, SessionToolTimeoutClassification)
+	}
+	if !strings.Contains(response.Content, "tool execution timed out") {
+		t.Fatalf("response = %q, want human-readable timeout explanation", response.Content)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("interactive timeout took %s, want configured deadline plus bounded scheduling tolerance", elapsed)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("policy-selected tool did not start")
+	}
+	select {
+	case <-workerExited:
+	case <-time.After(time.Second):
+		t.Fatal("context-cooperative worker did not exit after policy timeout")
+	}
+}
+
 func TestSessionToolExecutor_SIGINTCancellationDoesNotRecordFailedResult(t *testing.T) {
 	intent := NewSessionCancellationIntent()
 	intent.MarkSIGINT()
@@ -248,6 +299,12 @@ func (s *roundTripSession) SentCount() int {
 	return len(s.sent)
 }
 
+func (s *roundTripSession) sentSnapshot() []messages.StreamMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]messages.StreamMessage(nil), s.sent...)
+}
+
 func (s *roundTripSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
 
 func (s *roundTripSession) Done() <-chan struct{} { return s.done }
@@ -307,6 +364,8 @@ type scriptedTurn struct {
 // order, and a final assistant turn that proves the session kept making
 // progress after tool execution instead of terminating.
 type scriptedToolCallInferencer struct {
+	mu           sync.Mutex
+	session      *roundTripSession
 	turns        []scriptedTurn
 	followUpText string
 	followUpGate string
@@ -396,6 +455,238 @@ func toolCallEvents(callID, name, args string) []messages.StreamMessage {
 		{Type: messages.StreamTypeToolCallDelta, ActorProvidedIndex: 0, Value: messages.NewToolCallDeltaValue(args)},
 		{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: 0, Value: messages.NewToolCallEndValue(callID, name, args)},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	}
+}
+
+func parallelToolCallEvents(calls ...messages.ToolCall) []messages.StreamMessage {
+	events := []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+	}
+	for index, call := range calls {
+		events = append(events,
+			messages.StreamMessage{Type: messages.StreamTypeToolCallStart, ActorProvidedIndex: index, Value: messages.NewToolCallStartValue(call.ID, call.Name)},
+			messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ActorProvidedIndex: index, Value: messages.NewToolCallDeltaValue(call.Arguments)},
+			messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: index, Value: messages.NewToolCallEndValue(call.ID, call.Name, call.Arguments)},
+		)
+	}
+	return append(events, messages.StreamMessage{
+		Type:  messages.StreamTypeMessageEnd,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+	})
+}
+
+func TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContinuation(t *testing.T) {
+	const (
+		callID   = "policy-timeout-call"
+		toolName = "policy_slow_read"
+	)
+	settings := config.DefaultInteractiveToolConfig()
+	settings.FastReadTimeout = 15 * time.Millisecond
+	definitions := []messages.ToolDefinition{{Name: toolName}}
+	policy, err := NewInteractiveToolPolicy(settings, definitions)
+	if err != nil {
+		t.Fatalf("NewInteractiveToolPolicy: %v", err)
+	}
+
+	workerExited := make(chan struct{})
+	out := newSignalingBuffer()
+	inferencer := newScriptedToolCallInferencer(out, "post-policy-timeout continuation", SessionToolTimeoutClassification,
+		scriptedTurn{events: toolCallEvents(callID, toolName, `{}`)},
+	)
+	executor := sessionToolExecutorFunc(func(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
+		defer close(workerExited)
+		<-ctx.Done()
+		return messages.ToolCallResponse{}, ctx.Err()
+	})
+
+	startedAt := time.Now()
+	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:           2 * time.Second,
+		WaitForClose:          true,
+		ToolExecutor:          executor,
+		ToolDefinitions:       definitions,
+		InteractiveToolPolicy: &policy,
+	})
+	elapsed := time.Since(startedAt)
+	if err != nil {
+		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
+	}
+	if elapsed > 750*time.Millisecond {
+		t.Fatalf("policy timeout round trip took %s, want fast deadline plus deterministic tolerance", elapsed)
+	}
+	select {
+	case <-workerExited:
+	case <-time.After(time.Second):
+		t.Fatal("context-cooperative timeout worker did not exit")
+	}
+
+	session := inferencer.sessionSnapshot()
+	if session == nil {
+		t.Fatal("scripted inferencer did not retain its session")
+	}
+	sent := session.sentSnapshot()
+	var resultEnds []messages.StreamMessage
+	var responseCreates []messages.StreamMessage
+	for _, msg := range sent {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			resultEnds = append(resultEnds, msg)
+		case messages.StreamTypeResponseCreate:
+			responseCreates = append(responseCreates, msg)
+		}
+	}
+	if len(resultEnds) != 1 {
+		t.Fatalf("provider tool-result messages = %d, want exactly one; sent=%#v", len(resultEnds), sent)
+	}
+	if len(responseCreates) != 1 {
+		t.Fatalf("provider continuation requests = %d, want exactly one; sent=%#v", len(responseCreates), sent)
+	}
+	result, ok := resultEnds[0].Value.(*messages.ToolCallEndValue)
+	if !ok {
+		t.Fatalf("provider tool-result value = %T, want *messages.ToolCallEndValue", resultEnds[0].Value)
+	}
+	if result.ToolCallID != callID || result.Name != toolName {
+		t.Fatalf("provider tool-result correlation = (%q, %q), want (%q, %q)", result.ToolCallID, result.Name, callID, toolName)
+	}
+	if !strings.Contains(result.Arguments, "classification="+SessionToolTimeoutClassification) || !strings.Contains(result.Arguments, "tool execution timed out") {
+		t.Fatalf("provider tool-result payload = %q, want stable classification and honest explanation", result.Arguments)
+	}
+	resultIndex := -1
+	continuationIndex := -1
+	for index, msg := range sent {
+		if msg.Type == messages.StreamTypeToolCallEnd {
+			resultIndex = index
+		}
+		if msg.Type == messages.StreamTypeResponseCreate {
+			continuationIndex = index
+		}
+	}
+	if resultIndex < 0 || continuationIndex <= resultIndex {
+		t.Fatalf("provider boundary order = result %d, continuation %d; sent=%#v", resultIndex, continuationIndex, sent)
+	}
+	if !strings.Contains(out.String(), "post-policy-timeout continuation") {
+		t.Fatalf("session did not produce a non-empty assistant continuation:\n%s", out.String())
+	}
+}
+
+func TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults(t *testing.T) {
+	const (
+		slowID   = "parallel-slow-call"
+		fastID   = "parallel-fast-call"
+		slowName = "policy_slow_read"
+		fastName = "policy_fast_read"
+	)
+	settings := config.DefaultInteractiveToolConfig()
+	settings.FastReadTimeout = 15 * time.Millisecond
+	definitions := []messages.ToolDefinition{{Name: slowName}, {Name: fastName}}
+	policy, err := NewInteractiveToolPolicy(settings, definitions)
+	if err != nil {
+		t.Fatalf("NewInteractiveToolPolicy: %v", err)
+	}
+
+	var callsMu sync.Mutex
+	var calls []messages.ToolCall
+	slowStarted := make(chan struct{})
+	slowExited := make(chan struct{})
+	out := newSignalingBuffer()
+	slowCall := messages.ToolCall{ID: slowID, Name: slowName, Arguments: `{}`}
+	fastCall := messages.ToolCall{ID: fastID, Name: fastName, Arguments: `{}`}
+	inferencer := newScriptedToolCallInferencer(out, "parallel continuation", "parallel-fast-result",
+		scriptedTurn{events: parallelToolCallEvents(slowCall, fastCall)},
+	)
+	executor := sessionToolExecutorFunc(func(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+		callsMu.Lock()
+		calls = append(calls, call)
+		callsMu.Unlock()
+		if call.ID == slowID {
+			close(slowStarted)
+			defer close(slowExited)
+			<-ctx.Done()
+			return messages.ToolCallResponse{}, ctx.Err()
+		}
+		return messages.ToolCallResponse{Content: "parallel-fast-result"}, nil
+	})
+
+	err = runAgentLoopSession(context.Background(), out, inferencer, sessionLoopOptions{
+		MaxDuration:           2 * time.Second,
+		WaitForClose:          true,
+		ToolExecutor:          executor,
+		ToolDefinitions:       definitions,
+		InteractiveToolPolicy: &policy,
+	})
+	if err != nil {
+		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())
+	}
+	select {
+	case <-slowStarted:
+	case <-time.After(time.Second):
+		t.Fatal("slow sibling did not start")
+	}
+	select {
+	case <-slowExited:
+	case <-time.After(time.Second):
+		t.Fatal("slow sibling did not observe its independent timeout")
+	}
+	callsMu.Lock()
+	gotCalls := append([]messages.ToolCall(nil), calls...)
+	callsMu.Unlock()
+	if len(gotCalls) != 2 {
+		t.Fatalf("parallel executor calls = %#v, want both independent calls", gotCalls)
+	}
+	seen := map[string]messages.ToolCall{}
+	for _, call := range gotCalls {
+		seen[call.ID] = call
+	}
+	if seen[slowID] != slowCall || seen[fastID] != fastCall {
+		t.Fatalf("parallel executor calls = %#v, want exact slow/fast identities", gotCalls)
+	}
+
+	session := inferencer.sessionSnapshot()
+	if session == nil {
+		t.Fatal("scripted inferencer did not retain its session")
+	}
+	sent := session.sentSnapshot()
+	var resultEnds []messages.StreamMessage
+	var responseCreates []messages.StreamMessage
+	for _, msg := range sent {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			resultEnds = append(resultEnds, msg)
+		case messages.StreamTypeResponseCreate:
+			responseCreates = append(responseCreates, msg)
+		}
+	}
+	if len(resultEnds) != 2 {
+		t.Fatalf("provider tool-result messages = %d, want one per call; sent=%#v", len(resultEnds), sent)
+	}
+	if len(responseCreates) != 1 {
+		t.Fatalf("provider continuation requests = %d, want exactly one batch continuation; sent=%#v", len(responseCreates), sent)
+	}
+	for index, want := range []struct {
+		callID  string
+		name    string
+		content string
+	}{
+		{callID: slowID, name: slowName, content: "classification=" + SessionToolTimeoutClassification},
+		{callID: fastID, name: fastName, content: "parallel-fast-result"},
+	} {
+		result, ok := resultEnds[index].Value.(*messages.ToolCallEndValue)
+		if !ok {
+			t.Fatalf("provider result %d value = %T, want *messages.ToolCallEndValue", index, resultEnds[index].Value)
+		}
+		if result.ToolCallID != want.callID || result.Name != want.name {
+			t.Fatalf("provider result %d correlation = (%q, %q), want (%q, %q)", index, result.ToolCallID, result.Name, want.callID, want.name)
+		}
+		if !strings.Contains(result.Arguments, want.content) {
+			t.Fatalf("provider result %d payload = %q, want %q", index, result.Arguments, want.content)
+		}
+		if index == 0 && strings.Contains(result.Arguments, "parallel-fast-result") {
+			t.Fatalf("slow timeout result was contaminated by fast sibling payload: %q", result.Arguments)
+		}
+	}
+	if !strings.Contains(out.String(), "parallel-fast-result") || !strings.Contains(out.String(), "parallel continuation") {
+		t.Fatalf("parallel session lost sibling success or continuation:\n%s", out.String())
 	}
 }
 

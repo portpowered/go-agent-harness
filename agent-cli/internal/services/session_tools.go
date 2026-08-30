@@ -15,6 +15,21 @@ import (
 // changing the lifetime of the enclosing session.
 const defaultSessionToolExecutionTimeout = 60 * time.Second
 
+const (
+	// SessionToolTimeoutClassification is the stable provider-visible marker
+	// for an interactive tool deadline. It is deliberately distinct from a
+	// transport or enclosing-session timeout: the model can recover from this
+	// one failed call and continue the voice turn.
+	SessionToolTimeoutClassification = "interactive_tool_timeout"
+)
+
+var (
+	// ErrSessionToolTimeout is retained behind the correlated tool-result
+	// contract so callers and tests can classify a local deadline without
+	// parsing the human-readable response content.
+	ErrSessionToolTimeout = errors.New("tool execution timed out")
+)
+
 // sessionToolExecutor is the session boundary around the executor composed by
 // the wire graph. It deliberately does not inspect or duplicate tool
 // definitions: the wrapped executor remains the owner of tool lookup and
@@ -215,7 +230,7 @@ func invokeSessionTool(ctx context.Context, executor messages.ToolExecutor, call
 func sessionToolContextFailure(err error) error {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return errors.New("tool execution timed out")
+		return ErrSessionToolTimeout
 	case errors.Is(err, context.Canceled):
 		return errors.New("tool execution canceled")
 	default:
@@ -227,9 +242,13 @@ func sessionToolFailure(call messages.ToolCall, err error) messages.ToolCallResp
 	if err == nil {
 		err = errors.New("tool execution failed")
 	}
+	message := fmt.Sprintf("tool %q failed", call.Name)
+	if errors.Is(err, ErrSessionToolTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		message += fmt.Sprintf(" (classification=%s)", SessionToolTimeoutClassification)
+	}
 	return messages.ToolCallResponse{
 		ToolCallID: call.ID,
 		Name:       call.Name,
-		Content:    fmt.Sprintf("tool %q failed: %s", call.Name, err),
+		Content:    fmt.Sprintf("%s: %s", message, err),
 	}
 }
