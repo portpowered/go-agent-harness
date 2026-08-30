@@ -201,11 +201,14 @@ type EdgeMeasurement struct {
 // use -1 when a particular coordinate is not applicable. Measured and Bound
 // use Unit to make numeric diagnostics unambiguous.
 type PropertyFailure struct {
-	Property      string
-	StreamID      string
-	ParticipantID string
-	Interval      string
-	TurnID        string
+	Property         string
+	StreamID         string
+	ParticipantID    string
+	SourceStreamID   string
+	ReceivedStreamID string
+	Direction        string
+	Interval         string
+	TurnID           string
 
 	StartSample   int
 	EndSample     int
@@ -214,6 +217,7 @@ type PropertyFailure struct {
 	BoundaryID    string
 	BoundaryIndex int
 	Timestamp     time.Duration
+	Lag           time.Duration
 
 	Measured   float64
 	Comparison string
@@ -231,6 +235,12 @@ func (f PropertyFailure) Error() string {
 	}
 	if f.ParticipantID != "" {
 		parts = append(parts, fmt.Sprintf("participant=%q", f.ParticipantID))
+	}
+	if f.SourceStreamID != "" || f.ReceivedStreamID != "" {
+		parts = append(parts, fmt.Sprintf("source=%q received=%q", f.SourceStreamID, f.ReceivedStreamID))
+	}
+	if f.Direction != "" {
+		parts = append(parts, fmt.Sprintf("direction=%q", f.Direction))
 	}
 	if f.Interval != "" {
 		parts = append(parts, fmt.Sprintf("interval=%q", f.Interval))
@@ -252,6 +262,9 @@ func (f PropertyFailure) Error() string {
 	}
 	if f.BoundaryID != "" {
 		parts = append(parts, fmt.Sprintf("boundary-id=%q", f.BoundaryID))
+	}
+	if f.Lag != 0 {
+		parts = append(parts, fmt.Sprintf("lag=%s", f.Lag))
 	}
 	parts = append(parts,
 		fmt.Sprintf("timestamp=%s", f.Timestamp),
