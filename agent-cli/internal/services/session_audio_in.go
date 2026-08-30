@@ -68,7 +68,12 @@ func StartSessionAudioInterruptionsOnBrowserTool(
 				if !ok {
 					return
 				}
-				if event.Type != webmcp.BrokerEventInvocationCreated || event.State != webmcp.InvocationDispatched || (toolName != "" && event.ToolName != toolName) {
+				// Broker-owned calls first publish a queued admission event and
+				// publish this same lifecycle event type again when the browser
+				// invocation is actually dispatched. Require the identity-bearing
+				// start observation so a malformed or unrelated lifecycle event
+				// cannot release audio.
+				if event.Type != webmcp.BrokerEventInvocationCreated || event.State != webmcp.InvocationDispatched || event.InvocationID == "" || event.ToolName == "" || (toolName != "" && event.ToolName != toolName) {
 					continue
 				}
 				for _, input := range cloned {
