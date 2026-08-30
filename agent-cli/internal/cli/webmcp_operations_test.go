@@ -284,9 +284,9 @@ func TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection(t *test
 	filteredTargetID := randomizedWebMCPTestID(t, "target-")
 	candidate := webmcp.BrowserCandidate{ID: webmcp.BrowserID(browserID), Source: webmcp.DiscoverySourceExplicit, Product: "Chrome/Test", Protocol: "1.3", Loopback: true}
 	targets := []webmcp.Target{
-		{BrowserID: candidate.ID, ID: webmcp.TargetID(secondTargetID), Type: "page", Eligible: true},
+		{BrowserID: candidate.ID, ID: webmcp.TargetID(secondTargetID), Type: "page", Title: "Billing", URL: "https://billing.example.test/private?secret=removed#fragment", Eligible: true},
 		{BrowserID: candidate.ID, ID: webmcp.TargetID(ineligibleTargetID), Type: "page", Eligible: false},
-		{BrowserID: candidate.ID, ID: webmcp.TargetID(firstTargetID), Type: "page", Eligible: true},
+		{BrowserID: candidate.ID, ID: webmcp.TargetID(firstTargetID), Type: "page", Title: "https://orders.example.test/private", URL: "https://user:pass@orders.example.test/private?token=secret", Eligible: true},
 		{BrowserID: candidate.ID, ID: webmcp.TargetID(secondTargetID), Type: "page", Eligible: true},
 		{BrowserID: candidate.ID, ID: webmcp.TargetID(filteredTargetID), Type: "iframe", Eligible: true},
 	}
@@ -328,6 +328,19 @@ func TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection(t *test
 				if !reflect.DeepEqual(ids, wantIDs) {
 					t.Fatalf("ambiguous target IDs = %v, want %v", ids, wantIDs)
 				}
+				choices, ok := envelope.Error.Details["candidate_choices"].([]any)
+				if !ok || len(choices) != len(wantIDs) {
+					t.Fatalf("ambiguous target choices = %#v", envelope.Error.Details["candidate_choices"])
+				}
+				for index, item := range choices {
+					choice, ok := item.(map[string]any)
+					if !ok || choice["target_id"] != wantIDs[index] || choice["browser_id"] != browserID {
+						t.Fatalf("ambiguous target choice %d = %#v", index, item)
+					}
+				}
+				if !strings.Contains(result.stdout, `"action":"ask_customer"`) || !strings.Contains(result.stdout, `"retry_after":"customer_input"`) {
+					t.Fatalf("ambiguity recovery missing: %s", result.stdout)
+				}
 			} else {
 				for _, want := range append([]string{"Error: ambiguous_tab", browserID}, wantIDs...) {
 					if !strings.Contains(result.stdout, want) {
@@ -340,6 +353,9 @@ func TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection(t *test
 				if strings.Contains(result.stdout, filteredTargetID) {
 					t.Fatalf("human ambiguity output exposed filtered target: %q", result.stdout)
 				}
+			}
+			if strings.Contains(result.stdout, "user:pass") || strings.Contains(result.stdout, "token=secret") || strings.Contains(result.stdout, "/private") {
+				t.Fatalf("ambiguity output exposed unsafe page metadata: %q", result.stdout)
 			}
 			if broker.closeCalls != 1 {
 				t.Fatalf("broker close calls = %d, want one", broker.closeCalls)

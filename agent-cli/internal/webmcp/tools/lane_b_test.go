@@ -280,13 +280,29 @@ func TestLaneBToolFailuresRefreshAndActivation(t *testing.T) {
 			Code:      discovery.CodeAmbiguousTab,
 			Message:   "multiple browser tabs matched; an exact target ID is required",
 			Retryable: true,
-			Details:   map[string]any{"browser_id": browser.ID, "candidate_target_ids": []string{"target-a", "target-b"}},
+			Details: map[string]any{
+				"browser_id":           browser.ID,
+				"candidate_target_ids": []string{"target-b", "target-a"},
+				"candidate_choices": []map[string]any{
+					{"browser_id": browser.ID, "target_id": "target-b", "title": "Billing", "origin": "https://billing.example.test/private?token=secret#fragment"},
+					{"browser_id": browser.ID, "target_id": "target-a", "title": "Orders", "origin": "https://orders.example.test"},
+				},
+			},
 		}}
 		response, err := New(Options{Service: fake}).Executor().Execute(context.Background(), messages.ToolCall{ID: "ambiguous", Name: SelectTabToolName, Arguments: `{"browser_id":"browser-a","target_id":"target-a"}`})
 		if err != nil {
 			t.Fatal(err)
 		}
 		assertFailureCode(t, response, ErrorAmbiguousTab)
+		if !strings.Contains(response.Content, `"candidate_choices":[{"browser_id":"browser-a","origin":"https://orders.example.test","target_id":"target-a","title":"Orders"},{"browser_id":"browser-a","origin":"https://billing.example.test","target_id":"target-b","title":"Billing"}]`) {
+			t.Fatalf("candidate choices = %s", response.Content)
+		}
+		if strings.Contains(response.Content, "token=secret") || strings.Contains(response.Content, "/private") || !strings.Contains(response.Content, "do not repeat") {
+			t.Fatalf("ambiguity result leaked unsafe data or omitted recovery: %s", response.Content)
+		}
+		if len(fake.selectRequests) != 1 {
+			t.Fatalf("selection attempts = %d, want one broker call", len(fake.selectRequests))
+		}
 	})
 
 	t.Run("refresh reports stale selection", func(t *testing.T) {
@@ -362,6 +378,10 @@ func TestLaneBListTabsRequiresExactBrowserBeforeListing(t *testing.T) {
 	}
 	if !equalStrings(ids, []string{"browser-a", "browser-b"}) {
 		t.Fatalf("candidate browser IDs = %v, want sorted exact IDs", ids)
+	}
+	recovery, ok := envelope.Error.Details["recovery"].(map[string]any)
+	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" {
+		t.Fatalf("ambiguous browser recovery = %#v", envelope.Error.Details["recovery"])
 	}
 }
 

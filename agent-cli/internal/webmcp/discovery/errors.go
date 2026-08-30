@@ -3,7 +3,14 @@ package discovery
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+)
+
+const (
+	maxAmbiguityCandidates = 32
+	maxAmbiguityTitle      = 160
+	maxAmbiguityOrigin     = 256
 )
 
 // Code is the stable classified discovery error vocabulary.
@@ -191,27 +198,140 @@ func newNoEligibleTab(browserID string, options TargetListOptions, candidateCoun
 }
 
 func newAmbiguousBrowser(candidateIDs []string) *DiscoveryError {
-	ids := append([]string(nil), candidateIDs...)
+	ids := safeAmbiguityIDs(candidateIDs)
 	return &DiscoveryError{
 		Code:      CodeAmbiguousBrowser,
 		Message:   "multiple browsers matched; an exact browser ID is required",
 		Retryable: true,
 		Details: map[string]any{
 			"candidate_browser_ids": ids,
+			"recovery":              ambiguityRecovery(CodeAmbiguousBrowser),
 		},
 	}
 }
 
 func newAmbiguousTab(browserID string, candidateIDs []string) *DiscoveryError {
-	ids := append([]string(nil), candidateIDs...)
+	ids := safeAmbiguityIDs(candidateIDs)
 	return &DiscoveryError{
 		Code:      CodeAmbiguousTab,
 		Message:   "multiple browser tabs matched; an exact target ID is required",
 		Retryable: true,
 		Details: map[string]any{
-			"browser_id":           boundedLabel(browserID, 64),
+			"browser_id":           safeAmbiguityID(browserID),
 			"candidate_target_ids": ids,
+			"recovery":             ambiguityRecovery(CodeAmbiguousTab),
 		},
+	}
+}
+
+func newAmbiguousTabForTargets(browserID string, targets []Target) *DiscoveryError {
+	ordered := append([]Target(nil), targets...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		leftID := safeAmbiguityID(ordered[i].ID)
+		rightID := safeAmbiguityID(ordered[j].ID)
+		if leftID != rightID {
+			return leftID < rightID
+		}
+		if ordered[i].Origin != ordered[j].Origin {
+			return ordered[i].Origin < ordered[j].Origin
+		}
+		return ordered[i].Title < ordered[j].Title
+	})
+
+	ids := make([]string, 0, len(ordered))
+	choices := make([]map[string]any, 0, len(ordered))
+	seen := make(map[string]struct{}, len(ordered))
+	for _, target := range ordered {
+		targetID := safeAmbiguityID(target.ID)
+		if targetID == "" {
+			continue
+		}
+		if _, exists := seen[targetID]; exists {
+			continue
+		}
+		seen[targetID] = struct{}{}
+		ids = append(ids, targetID)
+		choice := map[string]any{
+			"browser_id": safeAmbiguityID(browserID),
+			"target_id":  targetID,
+		}
+		if title := safeAmbiguityTitle(target.Title); title != "" {
+			choice["title"] = title
+		}
+		if origin := safeAmbiguityOrigin(target); origin != "" {
+			choice["origin"] = origin
+		}
+		choices = append(choices, choice)
+		if len(choices) == maxAmbiguityCandidates {
+			break
+		}
+	}
+
+	failure := newAmbiguousTab(browserID, ids)
+	if len(choices) > 0 {
+		failure.Details["candidate_choices"] = choices
+	}
+	return failure
+}
+
+func safeAmbiguityIDs(values []string) []string {
+	ids := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if normalized := safeAmbiguityID(value); normalized != "" {
+			if _, exists := seen[normalized]; exists {
+				continue
+			}
+			seen[normalized] = struct{}{}
+			ids = append(ids, normalized)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > maxAmbiguityCandidates {
+		ids = ids[:maxAmbiguityCandidates]
+	}
+	return ids
+}
+
+func safeAmbiguityID(value string) string {
+	value = strings.TrimSpace(value)
+	if publicIDPattern.MatchString(value) {
+		return value
+	}
+	return ""
+}
+
+func safeAmbiguityTitle(value string) string {
+	value = boundedLabel(value, maxAmbiguityTitle)
+	if value == "" {
+		return ""
+	}
+	if strings.Contains(value, "://") || strings.ContainsAny(value, "?#@") {
+		return "redacted"
+	}
+	return value
+}
+
+func safeAmbiguityOrigin(target Target) string {
+	for _, value := range []string{target.Origin, target.URL} {
+		origin := canonicalOriginValue(value)
+		if origin == "" || len(origin) > maxAmbiguityOrigin {
+			continue
+		}
+		return origin
+	}
+	return ""
+}
+
+func ambiguityRecovery(code Code) map[string]any {
+	instruction := "Ask the customer which browser they mean, then retry once with its exact browser ID; do not repeat this call until the customer provides a choice."
+	if code == CodeAmbiguousTab {
+		instruction = "Ask the customer which named page they mean, then retry once with its exact target ID; do not repeat this call until the customer provides a choice."
+	}
+	return map[string]any{
+		"action":      "ask_customer",
+		"retry_after": "customer_input",
+		"instruction": instruction,
 	}
 }
 

@@ -787,13 +787,8 @@ func (s *Service) reconnectExact(ctx context.Context, browser BrowserCandidate, 
 		case 1:
 			targetID = matches[0].ID
 		default:
-			ids := make([]string, 0, len(matches))
-			for _, candidate := range matches {
-				ids = append(ids, candidate.ID)
-			}
-			sort.Strings(ids)
 			s.mu.Unlock()
-			return Selection{}, newAmbiguousTab(browser.ID, ids)
+			return Selection{}, newAmbiguousTabForTargets(browser.ID, matches)
 		}
 	}
 	target, failure := exactReconnectTarget(browser.ID, targets, targetID, options.Origin)
@@ -987,13 +982,8 @@ func (s *Service) reconnectUniqueTarget(ctx context.Context, browser BrowserCand
 		return Selection{}, newNoEligibleTab(browser.ID, TargetListOptions{BrowserID: browser.ID, EligibleOnly: Bool(true), IncludeZeroToolPages: true}, len(targets))
 	}
 	if len(candidates) > 1 {
-		ids := make([]string, 0, len(candidates))
-		for _, target := range candidates {
-			ids = append(ids, target.ID)
-		}
-		sort.Strings(ids)
 		s.mu.Unlock()
-		return Selection{}, newAmbiguousTab(browser.ID, ids)
+		return Selection{}, newAmbiguousTabForTargets(browser.ID, candidates)
 	}
 	selected, previousHandle, selectionFailure := s.commitReconnectSelectionLocked(ctx, browser, candidates[0], options, time.Time{})
 	s.mu.Unlock()

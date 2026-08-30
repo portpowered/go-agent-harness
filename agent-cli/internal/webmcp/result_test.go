@@ -68,6 +68,48 @@ func TestResultErrorForDoesNotExposeUnknownErrorText(t *testing.T) {
 	}
 }
 
+func TestResultErrorForAddsSafeAmbiguityRecoveryAndChoices(t *testing.T) {
+	details := map[string]any{
+		"browser_id":           "browser-a",
+		"candidate_target_ids": []string{"target-b", "target-a", "not/a-public-id"},
+		"candidate_choices": []map[string]any{
+			{"browser_id": "browser-a", "target_id": "target-b", "title": "Billing", "origin": "https://billing.example.test/invoices?token=secret#fragment", "url": "https://billing.example.test/invoices?token=secret"},
+			{"browser_id": "browser-a", "target_id": "target-a", "title": "https://orders.example.test/private", "origin": "https://user:pass@orders.example.test/private"},
+		},
+	}
+	classified := NewClassifiedError(ErrorAmbiguousTab, "multiple browser tabs matched", details)
+	result := ResultErrorFor(classified, ErrorTargetAttachFailed, nil)
+	if result.Code != string(ErrorAmbiguousTab) || !result.Retryable {
+		t.Fatalf("ambiguity result = %#v", result)
+	}
+	if _, exists := details["recovery"]; exists {
+		t.Fatal("error construction mutated caller details")
+	}
+	ids, ok := result.Details["candidate_target_ids"].([]string)
+	if !ok || len(ids) != 2 || ids[0] != "target-a" || ids[1] != "target-b" {
+		t.Fatalf("candidate IDs = %#v", result.Details["candidate_target_ids"])
+	}
+	choices, ok := result.Details["candidate_choices"].([]map[string]any)
+	if !ok || len(choices) != 2 || choices[0]["target_id"] != "target-a" || choices[1]["target_id"] != "target-b" {
+		t.Fatalf("candidate choices = %#v", result.Details["candidate_choices"])
+	}
+	if choices[0]["title"] != "redacted" {
+		t.Fatalf("unsafe title = %#v", choices[0]["title"])
+	}
+	if choices[0]["origin"] != nil || choices[1]["origin"] != "https://billing.example.test" {
+		t.Fatalf("candidate origins = %#v", choices)
+	}
+	for _, choice := range choices {
+		if _, exists := choice["url"]; exists {
+			t.Fatalf("candidate choice exposed URL: %#v", choice)
+		}
+	}
+	recovery, ok := result.Details["recovery"].(map[string]any)
+	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" || !strings.Contains(recovery["instruction"].(string), "do not repeat") {
+		t.Fatalf("recovery = %#v", result.Details["recovery"])
+	}
+}
+
 type assertionError string
 
 func (e assertionError) Error() string { return string(e) }

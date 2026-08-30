@@ -394,12 +394,7 @@ func chooseSelectionTarget(browserID string, targets []Target, requestedID strin
 		}, len(targets))
 	}
 	if len(candidates) > 1 {
-		ids := make([]string, 0, len(candidates))
-		for _, candidate := range candidates {
-			ids = append(ids, candidate.ID)
-		}
-		sort.Strings(ids)
-		return Target{}, newAmbiguousTab(browserID, ids)
+		return Target{}, newAmbiguousTabForTargets(browserID, candidates)
 	}
 	// A unique candidate is useful to listing and future auto-select policy,
 	// but it is still not an exact selection request.

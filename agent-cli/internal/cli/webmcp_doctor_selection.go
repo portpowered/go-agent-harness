@@ -352,13 +352,10 @@ func chooseDoctorTarget(targets []webmcp.Target, selection config.BrowserSelecti
 			return nil, "", webmcp.NewClassifiedError(webmcp.ErrorNoEligibleTab, "no eligible WebMCP target was found", map[string]any{"candidate_count": 0})
 		}
 		if len(targets) > 1 {
-			ids := make([]string, 0, len(targets))
-			for _, target := range targets {
-				ids = append(ids, string(target.ID))
-			}
 			return nil, "", webmcp.NewClassifiedError(webmcp.ErrorAmbiguousTab, "multiple eligible browser targets matched; an exact target ID is required", map[string]any{
-				"browser_id":           string(targets[0].BrowserID),
-				"candidate_target_ids": ids,
+				"browser_id":           normalizeDirectOpaqueID(string(targets[0].BrowserID)),
+				"candidate_target_ids": directAmbiguityTargetIDs(targets),
+				"candidate_choices":    directCandidateChoicesForTargets(string(targets[0].BrowserID), targets),
 			})
 		}
 		selected := targets[0]

@@ -3,6 +3,16 @@ package webmcp
 import (
 	"context"
 	"errors"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+const (
+	maxAmbiguityCandidates = 32
+	maxAmbiguityTitle      = 160
+	maxAmbiguityOrigin     = 256
 )
 
 var (
@@ -96,7 +106,7 @@ func (e *ClassifiedError) Unwrap() error {
 // NewClassifiedError creates a safe broker error. An empty message is filled
 // with the stable default when it is converted to a result envelope.
 func NewClassifiedError(code ErrorCode, message string, details map[string]any) *ClassifiedError {
-	return &ClassifiedError{Code: code, Message: message, Retryable: defaultRetryable(code), Details: details}
+	return &ClassifiedError{Code: code, Message: message, Retryable: defaultRetryable(code), Details: withAmbiguityRecovery(code, details)}
 }
 
 // ResultErrorFor converts an internal error into a stable model-facing error.
@@ -108,7 +118,7 @@ func ResultErrorFor(err error, fallback ErrorCode, details map[string]any) ToolR
 	var classified *ClassifiedError
 	if errors.As(err, &classified) && classified != nil {
 		if classified.Details != nil {
-			details = classified.Details
+			details = cloneDetails(classified.Details)
 		}
 		code := classified.Code
 		if !IsKnownErrorCode(code) {
@@ -118,7 +128,7 @@ func ResultErrorFor(err error, fallback ErrorCode, details map[string]any) ToolR
 		if message == "" {
 			message = DefaultErrorMessage(code)
 		}
-		return ToolResultError{Code: string(code), Message: message, Retryable: classified.Retryable, Details: details}
+		return ToolResultError{Code: string(code), Message: message, Retryable: classified.Retryable, Details: withAmbiguityRecovery(code, details)}
 	}
 	if errors.Is(err, context.Canceled) {
 		fallback = ErrorInvocationCanceled
@@ -133,8 +143,247 @@ func ResultErrorFor(err error, fallback ErrorCode, details map[string]any) ToolR
 		Code:      string(fallback),
 		Message:   DefaultErrorMessage(fallback),
 		Retryable: defaultRetryable(fallback),
-		Details:   details,
+		Details:   withAmbiguityRecovery(fallback, details),
 	}
+}
+
+// withAmbiguityRecovery adds bounded, model-visible instructions at the
+// result boundary. Ambiguity is retryable only after the customer supplies a
+// new choice; repeating the same selector-free call cannot make the result
+// more specific.
+func withAmbiguityRecovery(code ErrorCode, details map[string]any) map[string]any {
+	if code != ErrorAmbiguousBrowser && code != ErrorAmbiguousTab {
+		return details
+	}
+	result := sanitizeAmbiguityDetails(code, details)
+	if result == nil {
+		result = map[string]any{}
+	}
+	instruction := "Ask the customer which browser they mean, then retry once with its exact browser ID; do not repeat this call until the customer provides a choice."
+	if code == ErrorAmbiguousTab {
+		instruction = "Ask the customer which named page they mean, then retry once with its exact target ID; do not repeat this call until the customer provides a choice."
+	}
+	result["recovery"] = map[string]any{
+		"action":      "ask_customer",
+		"retry_after": "customer_input",
+		"instruction": instruction,
+	}
+	return result
+}
+
+func sanitizeAmbiguityDetails(code ErrorCode, details map[string]any) map[string]any {
+	result := cloneDetails(details)
+	if result == nil {
+		result = map[string]any{}
+	}
+	switch code {
+	case ErrorAmbiguousBrowser:
+		result["candidate_browser_ids"] = boundedAmbiguityIDs(anyAmbiguityIDs(result["candidate_browser_ids"]))
+	case ErrorAmbiguousTab:
+		browserID := safeAmbiguityID(stringValue(result["browser_id"]))
+		ids := boundedAmbiguityIDs(anyAmbiguityIDs(result["candidate_target_ids"]))
+		result["browser_id"] = browserID
+		result["candidate_target_ids"] = ids
+		if choices := safeAmbiguityChoices(result["candidate_choices"], browserID, ids); len(choices) > 0 {
+			result["candidate_choices"] = choices
+		} else {
+			delete(result, "candidate_choices")
+		}
+	}
+	return result
+}
+
+func anyAmbiguityIDs(value any) []string {
+	values := make([]string, 0)
+	switch typed := value.(type) {
+	case []string:
+		values = append(values, typed...)
+	case []any:
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				values = append(values, text)
+			}
+		}
+	}
+	ids := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if normalized := safeAmbiguityID(value); normalized != "" {
+			if _, exists := seen[normalized]; exists {
+				continue
+			}
+			seen[normalized] = struct{}{}
+			ids = append(ids, normalized)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func boundedAmbiguityIDs(ids []string) []string {
+	if len(ids) > maxAmbiguityCandidates {
+		return ids[:maxAmbiguityCandidates]
+	}
+	return ids
+}
+
+func safeAmbiguityID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 64 {
+		return ""
+	}
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || character == '_' || character == '-' {
+			continue
+		}
+		return ""
+	}
+	return value
+}
+
+func safeAmbiguityChoices(value any, fallbackBrowserID string, candidateIDs []string) []map[string]any {
+	type metadata struct {
+		browserID string
+		targetID  string
+		title     string
+		origin    string
+	}
+	items := make([]metadata, 0)
+	appendChoice := func(choice map[string]any) {
+		targetID := safeAmbiguityID(stringValue(choice["target_id"]))
+		if targetID == "" {
+			return
+		}
+		browserID := safeAmbiguityID(stringValue(choice["browser_id"]))
+		if browserID == "" {
+			browserID = safeAmbiguityID(fallbackBrowserID)
+		}
+		items = append(items, metadata{
+			browserID: browserID,
+			targetID:  targetID,
+			title:     safeAmbiguityTitle(stringValue(choice["title"])),
+			origin:    safeAmbiguityOrigin(stringValue(choice["origin"])),
+		})
+	}
+	switch typed := value.(type) {
+	case []map[string]any:
+		for _, choice := range typed {
+			appendChoice(choice)
+		}
+	case []any:
+		for _, item := range typed {
+			if choice, ok := item.(map[string]any); ok {
+				appendChoice(choice)
+			}
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].targetID != items[j].targetID {
+			return items[i].targetID < items[j].targetID
+		}
+		if items[i].browserID != items[j].browserID {
+			return items[i].browserID < items[j].browserID
+		}
+		if items[i].title != items[j].title {
+			return items[i].title < items[j].title
+		}
+		return items[i].origin < items[j].origin
+	})
+
+	ids := append([]string(nil), candidateIDs...)
+	if len(ids) == 0 {
+		for _, item := range items {
+			ids = append(ids, item.targetID)
+		}
+	}
+	ids = boundedAmbiguityIDs(anyAmbiguityIDs(ids))
+	if len(ids) == 0 {
+		return nil
+	}
+	byID := make(map[string]metadata, len(items))
+	for _, item := range items {
+		if _, exists := byID[item.targetID]; !exists {
+			byID[item.targetID] = item
+		}
+	}
+	result := make([]map[string]any, 0, len(ids))
+	for _, targetID := range ids {
+		item := byID[targetID]
+		browserID := item.browserID
+		if browserID == "" {
+			browserID = safeAmbiguityID(fallbackBrowserID)
+		}
+		choice := map[string]any{"browser_id": browserID, "target_id": targetID}
+		if item.title != "" {
+			choice["title"] = item.title
+		}
+		if item.origin != "" {
+			choice["origin"] = item.origin
+		}
+		result = append(result, choice)
+	}
+	return result
+}
+
+func safeAmbiguityTitle(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if len(value) > maxAmbiguityTitle {
+		value = value[:maxAmbiguityTitle]
+	}
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			return "redacted"
+		}
+	}
+	if strings.Contains(value, "://") || strings.ContainsAny(value, "?#@") {
+		return "redacted"
+	}
+	return value
+}
+
+func safeAmbiguityOrigin(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 4096 {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed == nil || parsed.User != nil {
+		return ""
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if (scheme != "http" && scheme != "https") || parsed.Hostname() == "" {
+		return ""
+	}
+	port := parsed.Port()
+	if port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return ""
+		}
+		if scheme == "http" && port == "80" || scheme == "https" && port == "443" {
+			port = ""
+		}
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port != "" {
+		host += ":" + port
+	}
+	origin := scheme + "://" + host
+	if len(origin) > maxAmbiguityOrigin {
+		return ""
+	}
+	return origin
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func defaultRetryable(code ErrorCode) bool {

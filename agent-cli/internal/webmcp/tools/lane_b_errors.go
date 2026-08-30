@@ -70,7 +70,7 @@ func resultErrorFor(err error, fallback ErrorCode, fallbackDetails map[string]an
 		if len(detailValues) == 0 {
 			detailValues = safeDetails(fallbackDetails)
 		}
-		return ToolResultError{Code: string(code), Message: safeMessage(message, code), Retryable: discoveryErr.Retryable, Details: detailValues}
+		return ToolResultError{Code: string(code), Message: safeMessage(message, code), Retryable: discoveryErr.Retryable, Details: withAmbiguityRecovery(code, detailValues)}
 	}
 	if discovery.IsBrowserDisconnected(err) {
 		return ToolResultError{Code: string(ErrorBrowserDisconnected), Message: defaultErrorMessage(ErrorBrowserDisconnected), Retryable: false, Details: safeDetails(fallbackDetails)}
@@ -81,7 +81,7 @@ func resultErrorFor(err error, fallback ErrorCode, fallbackDetails map[string]an
 	if !IsKnownErrorCode(fallback) {
 		fallback = ErrorNoEligibleTab
 	}
-	return ToolResultError{Code: string(fallback), Message: defaultErrorMessage(fallback), Retryable: retryable(fallback), Details: safeDetails(fallbackDetails)}
+	return ToolResultError{Code: string(fallback), Message: defaultErrorMessage(fallback), Retryable: retryable(fallback), Details: withAmbiguityRecovery(fallback, safeDetails(fallbackDetails))}
 }
 
 func discoveryCode(err error) ErrorCode {
@@ -93,10 +93,10 @@ func discoveryCode(err error) ErrorCode {
 }
 
 func safeDiscoveryDetails(code ErrorCode, details map[string]any) map[string]any {
-	if details == nil {
-		return nil
-	}
 	result := make(map[string]any)
+	if details == nil {
+		details = map[string]any{}
+	}
 	copyField := func(key string, value any) {
 		if value != nil {
 			result[key] = value
@@ -129,10 +129,14 @@ func safeDiscoveryDetails(code ErrorCode, details map[string]any) map[string]any
 		}
 		copyField("candidate_count", nonNegativeInt(details["candidate_count"]))
 	case ErrorAmbiguousBrowser:
-		copyField("candidate_browser_ids", safeIDList(details["candidate_browser_ids"]))
+		copyField("candidate_browser_ids", boundedAmbiguityIDs(safeIDList(details["candidate_browser_ids"])))
 	case ErrorAmbiguousTab:
 		copyField("browser_id", safeIDValue(details["browser_id"]))
-		copyField("candidate_target_ids", safeIDList(details["candidate_target_ids"]))
+		ids := boundedAmbiguityIDs(safeIDList(details["candidate_target_ids"]))
+		copyField("candidate_target_ids", ids)
+		if choices := safeCandidateChoices(details["candidate_choices"], safeIDValue(details["browser_id"]), ids); len(choices) > 0 {
+			result["candidate_choices"] = choices
+		}
 	case ErrorStaleSelection:
 		copyField("browser_id", safeIDValue(details["browser_id"]))
 		copyField("target_id", safeIDValue(details["target_id"]))
@@ -150,6 +154,168 @@ func safeDiscoveryDetails(code ErrorCode, details map[string]any) map[string]any
 		copyField("target_id", safeIDValue(details["target_id"]))
 		copyField("phase", safeLabel(details["phase"], 32))
 		result["reconnect_required"] = true
+	}
+	return result
+}
+
+const (
+	maxAmbiguityCandidates = 32
+	maxAmbiguityTitle      = 160
+	maxAmbiguityOrigin     = 256
+)
+
+type ambiguityCandidateMetadata struct {
+	browserID string
+	targetID  string
+	title     string
+	origin    string
+}
+
+func boundedAmbiguityIDs(ids []string) []string {
+	if len(ids) > maxAmbiguityCandidates {
+		return ids[:maxAmbiguityCandidates]
+	}
+	return ids
+}
+
+func safeCandidateChoices(value any, fallbackBrowserID string, candidateIDs []string) []map[string]any {
+	metadata := make([]ambiguityCandidateMetadata, 0)
+	switch values := value.(type) {
+	case []map[string]any:
+		metadata = append(metadata, candidateMetadataValues(values, fallbackBrowserID)...)
+	case []any:
+		maps := make([]map[string]any, 0, len(values))
+		for _, item := range values {
+			if choice, ok := item.(map[string]any); ok {
+				maps = append(maps, choice)
+			}
+		}
+		metadata = append(metadata, candidateMetadataValues(maps, fallbackBrowserID)...)
+	}
+
+	ids := append([]string(nil), candidateIDs...)
+	if len(ids) == 0 {
+		for _, item := range metadata {
+			ids = append(ids, item.targetID)
+		}
+	}
+	ids = boundedAmbiguityIDs(uniqueSortedIDs(ids))
+	if len(ids) == 0 {
+		return nil
+	}
+
+	byTarget := make(map[string]ambiguityCandidateMetadata, len(metadata))
+	for _, item := range metadata {
+		if _, exists := byTarget[item.targetID]; !exists {
+			byTarget[item.targetID] = item
+		}
+	}
+	result := make([]map[string]any, 0, len(ids))
+	for _, targetID := range ids {
+		item := byTarget[targetID]
+		browserID := safeID(item.browserID)
+		if browserID == "" {
+			browserID = safeID(fallbackBrowserID)
+		}
+		choice := map[string]any{
+			"browser_id": browserID,
+			"target_id":  targetID,
+		}
+		if item.title != "" {
+			choice["title"] = item.title
+		}
+		if item.origin != "" {
+			choice["origin"] = item.origin
+		}
+		result = append(result, choice)
+	}
+	return result
+}
+
+func candidateMetadataValues(values []map[string]any, fallbackBrowserID string) []ambiguityCandidateMetadata {
+	metadata := make([]ambiguityCandidateMetadata, 0, len(values))
+	for _, value := range values {
+		targetID := safeIDValue(value["target_id"])
+		if targetID == "" {
+			continue
+		}
+		browserID := safeIDValue(value["browser_id"])
+		if browserID == "" {
+			browserID = safeID(fallbackBrowserID)
+		}
+		metadata = append(metadata, ambiguityCandidateMetadata{
+			browserID: browserID,
+			targetID:  targetID,
+			title:     safeCandidateTitle(value["title"]),
+			origin:    safeCandidateOrigin(value["origin"]),
+		})
+	}
+	sort.SliceStable(metadata, func(i, j int) bool {
+		if metadata[i].targetID != metadata[j].targetID {
+			return metadata[i].targetID < metadata[j].targetID
+		}
+		if metadata[i].browserID != metadata[j].browserID {
+			return metadata[i].browserID < metadata[j].browserID
+		}
+		if metadata[i].title != metadata[j].title {
+			return metadata[i].title < metadata[j].title
+		}
+		return metadata[i].origin < metadata[j].origin
+	})
+	return metadata
+}
+
+func uniqueSortedIDs(values []string) []string {
+	ids := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if normalized := safeID(value); normalized != "" {
+			if _, exists := seen[normalized]; exists {
+				continue
+			}
+			seen[normalized] = struct{}{}
+			ids = append(ids, normalized)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func safeCandidateTitle(value any) string {
+	return safeLabel(value, maxAmbiguityTitle)
+}
+
+func safeCandidateOrigin(value any) string {
+	raw, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	_, origin := safePageMetadata("", raw)
+	if len(origin) > maxAmbiguityOrigin {
+		return ""
+	}
+	return origin
+}
+
+func withAmbiguityRecovery(code ErrorCode, details map[string]any) map[string]any {
+	if code != ErrorAmbiguousBrowser && code != ErrorAmbiguousTab {
+		return details
+	}
+	if details == nil {
+		details = map[string]any{}
+	}
+	result := make(map[string]any, len(details)+1)
+	for key, value := range details {
+		result[key] = value
+	}
+	instruction := "Ask the customer which browser they mean, then retry once with its exact browser ID; do not repeat this call until the customer provides a choice."
+	if code == ErrorAmbiguousTab {
+		instruction = "Ask the customer which named page they mean, then retry once with its exact target ID; do not repeat this call until the customer provides a choice."
+	}
+	result["recovery"] = map[string]any{
+		"action":      "ask_customer",
+		"retry_after": "customer_input",
+		"instruction": instruction,
 	}
 	return result
 }
