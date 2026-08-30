@@ -301,6 +301,9 @@ func awaitRoomParticipantConnections(
 				continue
 			}
 			if closed || plan.participant.lifecycle.transportHasEnded() || plan.participant.lifecycle.runHasFinished() {
+				if _, terminalErr, terminalObserved := plan.participant.lifecycle.terminal(); terminalObserved && terminalErr != nil {
+					return roomParticipantFailure(plan.manifest.ID, terminalErr, append(secretsForPlan(plan), secrets...))
+				}
 				return roomParticipantFailure(plan.manifest.ID, errors.New("session ended before SESSION.OPEN"), append(secretsForPlan(plan), secrets...))
 			}
 			allOpened = false
