@@ -25,6 +25,33 @@ put a key in `room.json`, a committed file, a command-line argument, or a
 captured log. The manifest stores only the environment-variable name
 `OPENAI_API_KEY`.
 
+## Input transcription and room cost
+
+Each OpenAI room participant owns one provider session. When that participant
+accepts audio input, the live session requests `gpt-live-transcribe` once in
+its initial session configuration. OpenAI input transcription is billed
+separately from the speech-to-speech model and separately per participant
+session, so a two-participant room incurs two transcription streams when both
+sides accept audio input. The room path has no application-side transcription
+request and does not send a follow-up transcription update.
+
+For a standalone session that does not need customer-speech text, use the
+explicit cost-control opt-out:
+
+```bash
+agent session "Keep the response brief." \
+  --provider openai \
+  --model gpt-realtime-2.1-mini \
+  --api-key "$OPENAI_API_KEY" \
+  --no-input-transcription \
+  --record /tmp/openai-no-input-transcription.session.json
+```
+
+This flag applies when creating a live session. Replay remains byte-authority
+for the captured initial `session.update`, so a flag cannot partially disable
+transcription in an existing capture; replay a capture recorded with the
+opt-out when transcription is absent.
+
 ## Procedure
 
 The supported command shape is:
