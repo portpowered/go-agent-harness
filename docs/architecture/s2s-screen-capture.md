@@ -24,6 +24,20 @@ The `show` error names the detected terminal or CLI host and repeats these
 steps. There is no supported command-line or API path for this tool to grant
 the permission itself.
 
+## Interactive recording bounds
+
+The `record` action is bounded for voice/realtime use: duration accepts one to
+five seconds and frame rate accepts one to two frames per second. Omitted values
+use the three-second/two-frame-per-second defaults. An explicit value outside
+those ranges is rejected before display admission or capture starts.
+
+The recording loop uses the caller's context for display geometry, every frame,
+pixel conversion, GIF encoding, and result preparation. Cancellation or a
+deadline returns a typed failure and never returns an encoded partial animation;
+the tool does not add a second session-wide timeout. The frame cap is computed
+from the requested duration and rate, and successful results report the number
+of encoded frames and their animation duration.
+
 ## Diagnose a revoked permission
 
 To diagnose a regression, turn the host's Screen Recording entry off, quit and

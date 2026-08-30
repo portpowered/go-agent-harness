@@ -3,12 +3,17 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/color/palette"
-	"image/draw"
 	"image/gif"
 	"image/jpeg"
+	"io"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,20 +24,117 @@ import (
 // The display surface is injected so capture, permission, and cancellation
 // behavior can be tested without depending on the host desktop.
 type ScreenTool struct {
-	surface DisplaySurface
+	surface       DisplaySurface
+	recordEncoder ScreenRecordingEncoder
+}
+
+const (
+	defaultScreenRecordingDurationSeconds = 3.0
+	minScreenRecordingDurationSeconds     = 1.0
+	maxScreenRecordingDurationSeconds     = 5.0
+	defaultScreenRecordingFPS             = 2.0
+	minScreenRecordingFPS                 = 1.0
+	maxScreenRecordingFPS                 = 2.0
+)
+
+var (
+	// ErrInvalidScreenRecording identifies a record request that cannot be
+	// admitted under the interactive capture limits.
+	ErrInvalidScreenRecording = errors.New("invalid screen recording option")
+	// ErrInvalidScreenRecordingOption is a descriptive compatibility alias.
+	ErrInvalidScreenRecordingOption = ErrInvalidScreenRecording
+)
+
+// ScreenRecordingValidationError describes one invalid record argument. It is
+// returned before display admission or capture side effects take place.
+type ScreenRecordingValidationError struct {
+	Field  string
+	Value  string
+	Reason string
+}
+
+// ScreenRecordingArgumentError is a descriptive alias for callers that use
+// argument-validation terminology.
+type ScreenRecordingArgumentError = ScreenRecordingValidationError
+
+func (e *ScreenRecordingValidationError) Error() string {
+	if e == nil {
+		return ErrInvalidScreenRecording.Error()
+	}
+	field := strings.TrimSpace(e.Field)
+	if field == "" {
+		field = "recording"
+	}
+	reason := strings.TrimSpace(e.Reason)
+	if reason == "" {
+		reason = "the value is not supported"
+	}
+	value := strings.TrimSpace(e.Value)
+	if value == "" {
+		return fmt.Sprintf("invalid screen recording option %q: %s", field, reason)
+	}
+	return fmt.Sprintf("invalid screen recording option %q (%s): %s", field, value, reason)
+}
+
+func (e *ScreenRecordingValidationError) Unwrap() error { return ErrInvalidScreenRecording }
+
+// ScreenRecordingEncoder is the context-aware GIF encoding boundary used by
+// record. The default implementation is the standard library encoder; the
+// seam lets deterministic tests model cancellation during encoding.
+type ScreenRecordingEncoder interface {
+	Encode(context.Context, io.Writer, *gif.GIF) error
+}
+
+// ScreenRecordingEncoderFunc adapts a function to ScreenRecordingEncoder.
+type ScreenRecordingEncoderFunc func(context.Context, io.Writer, *gif.GIF) error
+
+func (f ScreenRecordingEncoderFunc) Encode(ctx context.Context, w io.Writer, recording *gif.GIF) error {
+	if f == nil {
+		return errors.New("screen recording encoder is not configured")
+	}
+	return f(ctx, w, recording)
+}
+
+type standardScreenRecordingEncoder struct{}
+
+func (standardScreenRecordingEncoder) Encode(ctx context.Context, w io.Writer, recording *gif.GIF) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	return gif.EncodeAll(w, recording)
+}
+
+// ScreenToolOptions configures the display and recording boundaries used by
+// ScreenTool. The encoder is optional and defaults to GIF encoding.
+type ScreenToolOptions struct {
+	DisplaySurface   DisplaySurface
+	RecordingEncoder ScreenRecordingEncoder
 }
 
 func NewScreenTool() *ScreenTool {
-	return NewScreenToolWithDisplaySurface(NewHostDisplaySurface())
+	return NewScreenToolWithOptions(ScreenToolOptions{DisplaySurface: NewHostDisplaySurface()})
 }
 
 // NewScreenToolWithDisplaySurface injects the platform boundary used for
 // display admission, geometry, and image capture.
 func NewScreenToolWithDisplaySurface(surface DisplaySurface) *ScreenTool {
+	return NewScreenToolWithOptions(ScreenToolOptions{DisplaySurface: surface})
+}
+
+// NewScreenToolWithOptions injects the platform display surface and optional
+// recording encoder. It is intended for composed sessions and hermetic tests.
+func NewScreenToolWithOptions(options ScreenToolOptions) *ScreenTool {
+	surface := options.DisplaySurface
 	if surface == nil {
 		surface = NewHostDisplaySurface()
 	}
-	return &ScreenTool{surface: surface}
+	encoder := options.RecordingEncoder
+	if encoder == nil {
+		encoder = standardScreenRecordingEncoder{}
+	}
+	return &ScreenTool{surface: surface, recordEncoder: encoder}
 }
 
 func (t *ScreenTool) Name() string { return "show" }
@@ -59,15 +161,15 @@ func (t *ScreenTool) Parameters() map[string]any {
 			},
 			"duration": map[string]any{
 				"type":        "number",
-				"description": "Recording duration in seconds (1–30). Only used with 'record'. Defaults to 3.",
-				"minimum":     1.0,
-				"maximum":     30.0,
+				"description": "Recording duration in seconds (1–5). Only used with 'record'. Defaults to 3.",
+				"minimum":     minScreenRecordingDurationSeconds,
+				"maximum":     maxScreenRecordingDurationSeconds,
 			},
 			"fps": map[string]any{
 				"type":        "number",
-				"description": "Frames per second for recording (1–5). Only used with 'record'. Defaults to 2.",
-				"minimum":     1.0,
-				"maximum":     5.0,
+				"description": "Frames per second for recording (1–2). Only used with 'record'. Defaults to 2.",
+				"minimum":     minScreenRecordingFPS,
+				"maximum":     maxScreenRecordingFPS,
 			},
 		},
 		"required": []string{"action"},
@@ -90,10 +192,30 @@ func (t *ScreenTool) Execute(ctx context.Context, args map[string]any) ([]messag
 
 	display := 0
 	if d, ok := args["display"].(float64); ok {
-		if d < 0 || d != float64(int(d)) {
-			return nil, fmt.Errorf("display must be a non-negative integer, got %v", d)
+		parsed, err := parseDisplayIndex(d)
+		if err != nil {
+			return nil, err
 		}
-		display = int(d)
+		display = parsed
+	} else if raw, present := args["display"]; present {
+		d, err := screenNumberArgument(raw, "display")
+		if err != nil {
+			return nil, err
+		}
+		parsed, err := parseDisplayIndex(d)
+		if err != nil {
+			return nil, err
+		}
+		display = parsed
+	}
+
+	var recordingOptions screenRecordingOptions
+	if action == "record" {
+		var err error
+		recordingOptions, err = parseScreenRecordingOptions(args)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	operationCtx := ctx
@@ -134,15 +256,7 @@ func (t *ScreenTool) Execute(ctx context.Context, args map[string]any) ([]messag
 	case "screenshot":
 		return t.takeScreenshotWithContext(operationCtx, display)
 	case "record":
-		duration := 3.0
-		if d, ok := args["duration"].(float64); ok && d >= 1 && d <= 30 {
-			duration = d
-		}
-		fps := 2.0
-		if f, ok := args["fps"].(float64); ok && f >= 1 && f <= 5 {
-			fps = f
-		}
-		return t.recordScreen(operationCtx, display, duration, fps)
+		return t.recordScreenWithOptions(operationCtx, display, recordingOptions)
 	default:
 		return nil, fmt.Errorf("unknown action %q: use 'screenshot' or 'record'", action)
 	}
@@ -194,32 +308,154 @@ func (t *ScreenTool) recordScreen(ctx context.Context, display int, duration, fp
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("no frames captured: %w", err)
+		return nil, newScreenCaptureError("show recording", "no frames captured: recording did not start", err)
+	}
+	options, err := newScreenRecordingOptions(duration, fps)
+	if err != nil {
+		return nil, err
+	}
+	return t.recordScreenWithOptions(ctx, display, options)
+}
+
+type screenRecordingOptions struct {
+	durationSeconds float64
+	fps             float64
+	frameInterval   time.Duration
+	maxFrames       int
+	delayCS         int
+}
+
+func parseScreenRecordingOptions(args map[string]any) (screenRecordingOptions, error) {
+	duration := defaultScreenRecordingDurationSeconds
+	if raw, ok := args["duration"]; ok {
+		value, err := screenNumberArgument(raw, "duration")
+		if err != nil {
+			return screenRecordingOptions{}, err
+		}
+		duration = value
+	}
+	fps := defaultScreenRecordingFPS
+	if raw, ok := args["fps"]; ok {
+		value, err := screenNumberArgument(raw, "fps")
+		if err != nil {
+			return screenRecordingOptions{}, err
+		}
+		fps = value
+	}
+	return newScreenRecordingOptions(duration, fps)
+}
+
+func newScreenRecordingOptions(duration, fps float64) (screenRecordingOptions, error) {
+	if err := validateScreenRecordingNumber("duration", duration, minScreenRecordingDurationSeconds, maxScreenRecordingDurationSeconds, "seconds"); err != nil {
+		return screenRecordingOptions{}, err
+	}
+	if err := validateScreenRecordingNumber("fps", fps, minScreenRecordingFPS, maxScreenRecordingFPS, "frames per second"); err != nil {
+		return screenRecordingOptions{}, err
+	}
+	frameInterval := time.Duration(float64(time.Second) / fps)
+	maxFrames := int(math.Ceil(duration * fps))
+	if maxFrames < 1 {
+		maxFrames = 1
+	}
+	delayCS := int(math.Round(float64(frameInterval) / float64(10*time.Millisecond)))
+	if delayCS < 1 {
+		delayCS = 1
+	}
+	return screenRecordingOptions{
+		durationSeconds: duration,
+		fps:             fps,
+		frameInterval:   frameInterval,
+		maxFrames:       maxFrames,
+		delayCS:         delayCS,
+	}, nil
+}
+
+func validateScreenRecordingNumber(field string, value, minimum, maximum float64, unit string) error {
+	if math.IsNaN(value) || math.IsInf(value, 0) || value < minimum || value > maximum {
+		return &ScreenRecordingValidationError{
+			Field:  field,
+			Value:  formatScreenNumber(value),
+			Reason: fmt.Sprintf("must be between %s and %s %s", formatScreenNumber(minimum), formatScreenNumber(maximum), unit),
+		}
+	}
+	return nil
+}
+
+func screenNumberArgument(value any, field string) (float64, error) {
+	switch number := value.(type) {
+	case float64:
+		return number, nil
+	case float32:
+		return float64(number), nil
+	case int:
+		return float64(number), nil
+	case int8:
+		return float64(number), nil
+	case int16:
+		return float64(number), nil
+	case int32:
+		return float64(number), nil
+	case int64:
+		return float64(number), nil
+	case uint:
+		return float64(number), nil
+	case uint8:
+		return float64(number), nil
+	case uint16:
+		return float64(number), nil
+	case uint32:
+		return float64(number), nil
+	case uint64:
+		return float64(number), nil
+	case json.Number:
+		parsed, err := strconv.ParseFloat(string(number), 64)
+		if err == nil {
+			return parsed, nil
+		}
+	}
+	return 0, &ScreenRecordingValidationError{
+		Field:  field,
+		Value:  fmt.Sprintf("%T", value),
+		Reason: "must be a finite number",
+	}
+}
+
+func parseDisplayIndex(value float64) (int, error) {
+	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || math.Trunc(value) != value || value > float64(^uint(0)>>1) {
+		return 0, fmt.Errorf("display must be a non-negative integer, got %v", value)
+	}
+	return int(value), nil
+}
+
+func formatScreenNumber(value float64) string {
+	return strconv.FormatFloat(value, 'g', -1, 64)
+}
+
+func (t *ScreenTool) recordScreenWithOptions(ctx context.Context, display int, options screenRecordingOptions) ([]messages.Message, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, newScreenCaptureError("show recording", "no frames captured: recording did not start", err)
 	}
 	bounds, err := t.displaySurface().Bounds(ctx, display)
 	if err != nil {
 		return nil, newScreenCaptureError("show recording geometry", "display geometry is unavailable", err)
 	}
-	frameInterval := time.Duration(float64(time.Second) / fps)
-	totalFrames := int(duration * fps)
-	if totalFrames < 1 {
-		totalFrames = 1
-	}
-
-	// GIF delay is in 100ths of a second (centiseconds).
-	delayCS := int(frameInterval.Milliseconds() / 10)
-	if delayCS < 1 {
-		delayCS = 1
-	}
 
 	var frames []*image.Paletted
 	var delays []int
+	startedAt := time.Now()
 
-	for i := 0; i < totalFrames; i++ {
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
+	for i := 0; i < options.maxFrames; i++ {
+		if i > 0 {
+			target := startedAt.Add(time.Duration(i) * options.frameInterval)
+			if err := waitForScreenRecordingFrame(ctx, target); err != nil {
+				return nil, screenRecordingContextError("show recording wait", "screen recording stopped before the next frame", err)
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, screenRecordingContextError("show recording", "screen recording stopped before frame capture", err)
 		}
 
 		img, err := t.captureDisplay(ctx, display, bounds)
@@ -227,47 +463,127 @@ func (t *ScreenTool) recordScreen(ctx context.Context, display int, duration, fp
 			return nil, newScreenCaptureError(fmt.Sprintf("show recording frame %d", i), "screen recording frame capture failed", err)
 		}
 		if img == nil || img.Bounds().Empty() {
-			return nil, fmt.Errorf("capture frame %d: empty image pixels", i)
+			return nil, newScreenCaptureError(fmt.Sprintf("show recording frame %d", i), "screen recording returned empty image pixels", errors.New("empty image pixels"))
 		}
 
-		palImg := image.NewPaletted(img.Bounds(), palette.Plan9)
-		draw.FloydSteinberg.Draw(palImg, img.Bounds(), img, image.Point{})
+		palImg, err := palettizeScreenFrame(ctx, img)
+		if err != nil {
+			return nil, screenRecordingContextError(fmt.Sprintf("show recording frame %d", i), "screen recording frame conversion did not finish", err)
+		}
 		frames = append(frames, palImg)
-		delays = append(delays, delayCS)
-
-		if i < totalFrames-1 {
-			select {
-			case <-ctx.Done():
-				goto done
-			case <-time.After(frameInterval):
-			}
-		}
+		delays = append(delays, options.delayCS)
 	}
 
-done:
 	if len(frames) == 0 {
-		return nil, fmt.Errorf("no frames captured")
+		return nil, newScreenCaptureError("show recording", "no frames captured", errors.New("no frames captured"))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, screenRecordingContextError("show recording encode", "screen recording stopped before encoding", err)
 	}
 
 	var buf bytes.Buffer
-	if err := gif.EncodeAll(&buf, &gif.GIF{Image: frames, Delay: delays}); err != nil {
+	encoder := t.recordingEncoder()
+	recording := &gif.GIF{Image: frames, Delay: delays}
+	if err := encoder.Encode(ctx, contextAwareScreenWriter{ctx: ctx, writer: &buf}, recording); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, screenRecordingContextError("show recording encode", "screen recording encoding did not finish before the operation ended", ctxErr)
+		}
 		return nil, newScreenCaptureError("show recording encode", "screen recording encoding failed", err)
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, newScreenCaptureError("show recording encode", "screen recording encoding did not finish before the operation ended", err)
+		return nil, screenRecordingContextError("show recording encode", "screen recording encoding did not finish before the operation ended", err)
+	}
+	encoded := buf.Bytes()
+	if len(encoded) == 0 {
+		return nil, newScreenCaptureError("show recording encode", "screen recording encoder returned empty animation bytes", errors.New("empty animation bytes"))
+	}
+	decoded, err := gif.DecodeAll(contextReader{ctx: ctx, r: bytes.NewReader(encoded)})
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, screenRecordingContextError("show recording result", "screen recording validation did not finish", ctxErr)
+		}
+		return nil, newScreenCaptureError("show recording result", "screen recording encoder returned an undecodable GIF", err)
+	}
+	if len(decoded.Image) != len(frames) {
+		return nil, newScreenCaptureError("show recording result", "screen recording encoder returned an unexpected frame count", fmt.Errorf("encoded %d frame(s), want %d", len(decoded.Image), len(frames)))
 	}
 
 	msg := messages.Message{
 		Role: messages.RoleTool,
 		ContentParts: []messages.ContentPart{
 			messages.TextPart{Text: fmt.Sprintf(
-				"Screen recording: display %d, %d frames, %.1fs at %.0f fps (%dx%d px)",
-				display, len(frames), float64(len(frames))/fps, fps, bounds.Dx(), bounds.Dy(),
+				"Screen recording: display %d, %d frames, %.1fs at %s fps (%dx%d px)",
+				display, len(frames), float64(len(frames))/options.fps, formatScreenNumber(options.fps), bounds.Dx(), bounds.Dy(),
 			)},
-			messages.ImagePart{Bytes: buf.Bytes(), MediaType: "image/gif"},
+			messages.ImagePart{Bytes: encoded, MediaType: "image/gif"},
 		},
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, screenRecordingContextError("show recording result", "screen recording ended before its result could be returned", err)
+	}
 	return []messages.Message{msg}, nil
+}
+
+func waitForScreenRecordingFrame(ctx context.Context, target time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	wait := time.Until(target)
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func palettizeScreenFrame(ctx context.Context, img image.Image) (*image.Paletted, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	bounds := img.Bounds()
+	paletted := image.NewPaletted(bounds, palette.Plan9)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			paletted.SetColorIndex(x, y, uint8(color.Palette(palette.Plan9).Index(img.At(x, y))))
+		}
+	}
+	return paletted, ctx.Err()
+}
+
+type contextAwareScreenWriter struct {
+	ctx    context.Context
+	writer io.Writer
+}
+
+func (w contextAwareScreenWriter) Write(p []byte) (int, error) {
+	if w.ctx != nil {
+		if err := w.ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
+	n, err := w.writer.Write(p)
+	if err != nil {
+		return n, err
+	}
+	if w.ctx != nil {
+		if ctxErr := w.ctx.Err(); ctxErr != nil {
+			return n, ctxErr
+		}
+	}
+	return n, nil
+}
+
+func screenRecordingContextError(operation, reason string, cause error) error {
+	return newScreenCaptureError(operation, reason, cause)
 }
 
 func (t *ScreenTool) displaySurface() DisplaySurface {
@@ -275,6 +591,13 @@ func (t *ScreenTool) displaySurface() DisplaySurface {
 		return t.surface
 	}
 	return NewHostDisplaySurface()
+}
+
+func (t *ScreenTool) recordingEncoder() ScreenRecordingEncoder {
+	if t != nil && t.recordEncoder != nil {
+		return t.recordEncoder
+	}
+	return standardScreenRecordingEncoder{}
 }
 
 func (t *ScreenTool) captureDisplay(ctx context.Context, display int, bounds image.Rectangle) (*image.RGBA, error) {
