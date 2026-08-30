@@ -3,14 +3,24 @@
 package chrome
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/png"
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,21 +28,33 @@ import (
 	cdpTarget "github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
-	cubecadeLiveEnv      = "WEBMCP_CUBECADE_LIVE"
-	cubecadeArtifactEnv  = "WEBMCP_CUBECADE_ARTIFACT_DIR"
-	cubecadeURL          = "https://cubecade.openai.chatgpt.site/"
-	cubecadeOrigin       = "https://cubecade.openai.chatgpt.site"
-	cubecadeModel        = "gpt-realtime-2.1-mini"
-	cubecadeMaxDuration  = 30 * time.Second
-	cubecadeLaunchDelay  = 4 * time.Second
-	cubecadeRunGrace     = 20 * time.Second
-	cubecadeArtifactMode = 0o700
-	cubecadeEvidenceMode = 0o600
+	cubecadeLiveEnv                  = "WEBMCP_CUBECADE_LIVE"
+	cubecadeScreenshotIntegrationEnv = "WEBMCP_CUBECADE_SCREENSHOT_INTEGRATION"
+	cubecadeArtifactEnv              = "WEBMCP_CUBECADE_ARTIFACT_DIR"
+	cubecadeURL                      = "https://cubecade.openai.chatgpt.site/"
+	cubecadeOrigin                   = "https://cubecade.openai.chatgpt.site"
+	cubecadeModel                    = "gpt-realtime-2.1-mini"
+	cubecadeMaxDuration              = 30 * time.Second
+	cubecadeScreenshotBudget         = 5 * time.Second
+	cubecadeScreenshotTestTimeout    = 2 * time.Minute
+	cubecadeLaunchDelay              = 4 * time.Second
+	cubecadeRunGrace                 = 20 * time.Second
+	cubecadeArtifactMode             = 0o700
+	cubecadeEvidenceMode             = 0o600
 )
+
+// The fixture is served by the test-owned HTTP server so the screenshot proof
+// never depends on credentials or a mutable remote deployment. The image is
+// still produced by the real pinned Chrome page at capture time.
+//
+//go:embed testdata/cubecade_screenshot.html
+var cubecadeScreenshotFixtureHTML []byte
 
 // TestPinnedChromeCubecadeProductionSessionRecoversLateCatalog is the
 // release-facing production-session proof. It is deliberately credentialed
@@ -241,6 +263,373 @@ func TestPinnedChromeCubecadeProductionSessionRecoversLateCatalog(t *testing.T) 
 		t.Fatalf("Cubecade production late-catalog proof failed: %v; evidence=%s capture=%s", validationErr, evidencePath, capturePath)
 	}
 	t.Logf("WEBMCP_CUBECADE_PASS chrome=%s revision=%s browser=%s target=%s retryable_list_errors=%d successful_list_calls=%d first_list_ms=%d recovered_list_ms=%d broker_invocations=%d queue_invocations=%d capture=%s evidence=%s", pinned.Lock.Version, pinned.Lock.Revision, validation.BrowserID, validation.TargetID, validation.RetryableListErrors, validation.SuccessfulListCalls, validation.FirstListCallMS, validation.RecoveredListResultMS, validation.BrokerInvocations, validation.QueueInvocations, capturePath, evidencePath)
+}
+
+// TestPinnedChromeCubecadeSelectedPageScreenshot is the credential-free
+// selected-page sight proof. It starts the same pinned headless Chrome used by
+// the production gate, attaches the real Chrome adapter and broker to the
+// exact Cubecade target, and invokes the model-facing show_page executor. The
+// page oracle is independent of the returned screenshot: it supplies the
+// rendered solved-status marker whose pixels must be present in the capture.
+func TestPinnedChromeCubecadeSelectedPageScreenshot(t *testing.T) {
+	if os.Getenv(cubecadeScreenshotIntegrationEnv) != "1" {
+		t.Skipf("set %s=1 to run the credential-free Cubecade screenshot proof", cubecadeScreenshotIntegrationEnv)
+	}
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		t.Fatalf("the locked Chrome artifact is for %s, observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), cubecadeScreenshotTestTimeout)
+	defer cancel()
+	workDir := t.TempDir()
+	pinned, err := acquirePinnedChrome(ctx, workDir)
+	if err != nil {
+		t.Fatalf("acquire locked Chrome for Testing: %v", err)
+	}
+
+	fixture := newCubecadeScreenshotFixture()
+	t.Cleanup(fixture.Close)
+	fixtureURL := fixture.URL()
+	browser, err := launchPinnedChrome(ctx, pinned, fixtureURL)
+	if err != nil {
+		t.Fatalf("launch locked Chrome for Testing: %v", err)
+	}
+	closed := false
+	t.Cleanup(func() {
+		if !closed {
+			if closeErr := browser.Close(); closeErr != nil {
+				t.Logf("Cubecade screenshot Chrome cleanup: %v", closeErr)
+			}
+		}
+	})
+
+	baseURL := browserHTTPURL(browser.endpoint())
+	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	if err != nil {
+		t.Fatalf("read pinned Chrome DevTools version: %v", err)
+	}
+	rawTarget, err := waitForFixturePageTarget(ctx, baseURL, fixtureURL)
+	if err != nil {
+		t.Fatalf("discover exact Cubecade target: %v", err)
+	}
+
+	candidate := webmcp.BrowserCandidate{
+		ID:           webmcp.BrowserID("chrome-cft-" + lockedChromeVersion),
+		Source:       webmcp.DiscoverySourceExplicit,
+		Product:      version.Browser,
+		Protocol:     version.ProtocolVersion,
+		HTTPURL:      baseURL,
+		BrowserWSURL: version.WebSocketDebuggerURL,
+		Loopback:     true,
+		Explicit:     true,
+	}
+	wire := &wireTraceRecorder{}
+	adapter := NewRuntime(
+		WithEventBuffer(128),
+		WithCommandTimeout(10*time.Second),
+		WithWireTraceSink(wire),
+	)
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:            adapter,
+		Discoverer:         pinnedCatalogDiscoverer{candidate: candidate},
+		CatalogWait:        10 * time.Second,
+		LoadingCatalogWait: 10 * time.Second,
+	})
+	defer func() { _ = broker.Close() }()
+
+	selected, err := broker.Select(ctx, webmcp.TargetSelector{
+		BrowserID: candidate.ID,
+		TargetID:  webmcp.TargetID(rawTarget.ID),
+	})
+	if err != nil {
+		t.Fatalf("select exact Cubecade target: %v", err)
+	}
+	if selected.Key.BrowserID != candidate.ID || selected.Key.TargetID != webmcp.TargetID(rawTarget.ID) || !selected.Connected || !selected.Ready {
+		t.Fatalf("selected Cubecade page = %+v, want connected ready exact target", selected)
+	}
+
+	oracle, err := inspectCubecadeSightOracle(ctx, browser.endpoint(), rawTarget.ID)
+	if err != nil {
+		t.Fatalf("inspect independent Cubecade sight oracle: %v", err)
+	}
+	if oracle.URL != fixtureURL {
+		t.Fatalf("sight oracle URL = %q, want exact Cubecade fixture URL %q", oracle.URL, fixtureURL)
+	}
+	if !oracle.Solved || !strings.Contains(strings.ToUpper(oracle.StatusText), "SOLVED") {
+		t.Fatalf("sight oracle page=%q title=%q ready_state=%q body=%q main=%q children=%d solved state=(%t,%q), want the rendered solved marker", oracle.URL, oracle.Title, oracle.ReadyState, oracle.BodyText, oracle.MainText, oracle.BodyChildren, oracle.Solved, oracle.StatusText)
+	}
+
+	toolSet := webmcpTools.NewBrokerToolSet(broker)
+	started := time.Now()
+	captureContext, cancelCapture := context.WithTimeout(ctx, cubecadeScreenshotBudget)
+	response, executeErr := toolSet.Executor().Execute(captureContext, messages.ToolCall{
+		ID:        "cubecade-screenshot-call",
+		Name:      webmcp.ShowPageToolName,
+		Arguments: `{}`,
+	})
+	cancelCapture()
+	elapsed := time.Since(started)
+	if executeErr != nil {
+		t.Fatalf("execute show_page: %v", executeErr)
+	}
+	if elapsed >= cubecadeScreenshotBudget {
+		t.Fatalf("show_page elapsed = %s, want less than %s", elapsed, cubecadeScreenshotBudget)
+	}
+	if response.ToolCallID != "cubecade-screenshot-call" || response.Name != webmcp.ShowPageToolName || response.Content == "" {
+		t.Fatalf("show_page response correlation = (%q,%q) content=%q", response.ToolCallID, response.Name, response.Content)
+	}
+	if strings.Contains(response.Content, "base64") || strings.Contains(response.Content, "data:image/") {
+		t.Fatalf("show_page metadata envelope contains encoded pixels: %s", response.Content)
+	}
+
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode show_page envelope: %v; content=%s", err, response.Content)
+	}
+	if !envelope.OK {
+		t.Fatalf("show_page returned failure: %+v", envelope.Error)
+	}
+	var result webmcpTools.ShowPageResult
+	if err := json.Unmarshal(envelope.Data, &result); err != nil {
+		t.Fatalf("decode show_page metadata: %v; data=%s", err, envelope.Data)
+	}
+	if result.Version != webmcpTools.ShowPageResultVersion || result.Status != webmcpTools.ShowPageResultStatusSuccess || result.Source != "browser_page" || result.MIMEType != "image/png" || result.BrowserID != string(candidate.ID) || result.TargetID != rawTarget.ID || result.TypedProjection != webmcpTools.ShowPageResultTypedProjectionInputImage {
+		t.Fatalf("show_page metadata = %+v, want successful exact-target browser-page result", result)
+	}
+	if len(response.ContentParts) != 2 {
+		t.Fatalf("show_page content parts = %#v, want one text envelope and one image", response.ContentParts)
+	}
+	textPart, ok := response.ContentParts[0].(messages.TextPart)
+	if !ok || textPart.Text != response.Content {
+		t.Fatalf("show_page first content part = %#v, want the textual envelope", response.ContentParts[0])
+	}
+	imagePart, ok := response.ContentParts[1].(messages.ImagePart)
+	if !ok || imagePart.URL != "" || imagePart.MediaType != result.MIMEType || len(imagePart.Bytes) == 0 {
+		t.Fatalf("show_page image part = %#v, want one inline PNG projection", response.ContentParts[1])
+	}
+	if result.ByteLength != len(imagePart.Bytes) || result.ByteLength <= 4096 {
+		t.Fatalf("show_page byte length = metadata:%d image:%d, want matching non-trivial capture", result.ByteLength, len(imagePart.Bytes))
+	}
+	digest := sha256.Sum256(imagePart.Bytes)
+	if result.SHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("show_page SHA-256 = %q, want digest of projected bytes", result.SHA256)
+	}
+	decoded, format, err := image.Decode(bytes.NewReader(imagePart.Bytes))
+	if err != nil {
+		t.Fatalf("decode returned show_page image: %v", err)
+	}
+	if format != "png" || decoded.Bounds().Dx() <= 200 || decoded.Bounds().Dy() <= 200 || result.Width != decoded.Bounds().Dx() || result.Height != decoded.Bounds().Dy() {
+		t.Fatalf("show_page image format/dimensions = %s/%dx%d metadata=%dx%d, want non-trivial PNG with matching dimensions", format, decoded.Bounds().Dx(), decoded.Bounds().Dy(), result.Width, result.Height)
+	}
+	markerPixels := assertCubecadeScreenshotMarker(t, decoded, oracle)
+
+	traces := wire.snapshot()
+	var screenshotTraces []webmcp.WebMCPWireTrace
+	for _, trace := range traces {
+		if trace.Method == webmcp.PageCaptureScreenshotMethod {
+			screenshotTraces = append(screenshotTraces, trace)
+		}
+	}
+	if len(screenshotTraces) != 1 {
+		t.Fatalf("screenshot wire traces = %#v, want exactly one Page.captureScreenshot", screenshotTraces)
+	}
+	trace := screenshotTraces[0]
+	if trace.BrowserID != candidate.ID || trace.TargetID != webmcp.TargetID(rawTarget.ID) || trace.TargetSessionID == "" || trace.Phase != webmcp.WebMCPWirePhaseBeforeDispatch || !trace.ListenerReady {
+		t.Fatalf("screenshot wire trace = %+v, want exact listener-ready target", trace)
+	}
+
+	closed = true
+	if err := browser.Close(); err != nil {
+		t.Logf("close test-owned Chrome returned: %v", err)
+	}
+	t.Logf("WEBMCP_CUBECADE_SCREENSHOT_PASS chrome=%s revision=%s browser=%s target=%s mime=%s bytes=%d dimensions=%dx%d sha256=%s marker_pixels=%d elapsed=%s source=browser_page fixture=true credentials=false", pinned.Lock.Version, pinned.Lock.Revision, result.BrowserID, result.TargetID, result.MIMEType, result.ByteLength, result.Width, result.Height, result.SHA256, markerPixels, elapsed)
+}
+
+type cubecadeScreenshotFixture struct {
+	server *httptest.Server
+}
+
+func newCubecadeScreenshotFixture() *cubecadeScreenshotFixture {
+	fixture := &cubecadeScreenshotFixture{}
+	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/" || request.Method != http.MethodGet {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Cache-Control", "no-store")
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.Header().Set("Origin-Agent-Cluster", "?1")
+		writer.Header().Set("Permissions-Policy", "tools=(self)")
+		_, _ = writer.Write(cubecadeScreenshotFixtureHTML)
+	}))
+	return fixture
+}
+
+func (f *cubecadeScreenshotFixture) URL() string {
+	if f == nil || f.server == nil {
+		return ""
+	}
+	return f.server.URL + "/"
+}
+
+func (f *cubecadeScreenshotFixture) Close() {
+	if f != nil && f.server != nil {
+		f.server.Close()
+	}
+}
+
+type cubecadeSightOracle struct {
+	URL              string            `json:"url"`
+	Title            string            `json:"title"`
+	ReadyState       string            `json:"ready_state"`
+	BodyText         string            `json:"body_text"`
+	MainText         string            `json:"main_text"`
+	BodyChildren     int               `json:"body_children"`
+	StatusText       string            `json:"status_text"`
+	Solved           bool              `json:"solved"`
+	MarkerBackground string            `json:"marker_background"`
+	MarkerRect       cubecadeSightRect `json:"marker_rect"`
+	ViewportWidth    float64           `json:"viewport_width"`
+	ViewportHeight   float64           `json:"viewport_height"`
+}
+
+type cubecadeSightRect struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+func inspectCubecadeSightOracle(ctx context.Context, endpoint, targetID string) (oracle cubecadeSightOracle, err error) {
+	rootContext, cancelRoot := context.WithTimeout(ctx, 15*time.Second)
+	defer cancelRoot()
+	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
+	targetContext, cancelTarget := chromedp.NewContext(allocatorContext, chromedp.WithTargetID(cdpTarget.ID(targetID)))
+	defer func() {
+		cleanupErr := detachExternalIntegrationTarget(targetContext, cancelTarget)
+		cancelAllocator()
+		if err == nil && cleanupErr != nil {
+			err = cleanupErr
+		}
+	}()
+	if err := chromedp.Run(targetContext, chromedp.WaitReady("body")); err != nil {
+		return oracle, fmt.Errorf("wait for Cubecade document: %w", err)
+	}
+	if err := chromedp.Run(targetContext, chromedp.Evaluate(cubecadeSightOracleExpression(), &oracle)); err != nil {
+		return oracle, fmt.Errorf("read Cubecade sight marker: %w", err)
+	}
+	return oracle, nil
+}
+
+func cubecadeSightOracleExpression() string {
+	return `(() => {
+  const body = document.body;
+  const solved = document.querySelector(".solved");
+  const marker = solved ? solved.querySelector("i") : null;
+  const rect = marker ? marker.getBoundingClientRect() : null;
+  const style = marker ? getComputedStyle(marker) : null;
+  return {
+    url: location.href,
+    title: document.title,
+    ready_state: document.readyState,
+    body_text: body ? String(body.innerText || body.textContent || "").slice(0, 500) : "",
+    main_text: document.querySelector("main") ? String(document.querySelector("main").innerText || "").slice(0, 500) : "",
+    body_children: body ? body.children.length : 0,
+    status_text: solved ? String(solved.textContent || "") : "",
+    solved: Boolean(solved && solved.classList.contains("yes")),
+    marker_background: style ? String(style.backgroundColor || "") : "",
+    marker_rect: rect ? {x: rect.x, y: rect.y, width: rect.width, height: rect.height} : {x: 0, y: 0, width: 0, height: 0},
+    viewport_width: Number(window.innerWidth || 0),
+    viewport_height: Number(window.innerHeight || 0)
+  };
+})()`
+}
+
+func assertCubecadeScreenshotMarker(t *testing.T, screenshot image.Image, oracle cubecadeSightOracle) int {
+	t.Helper()
+	want, ok := parseCSSRGB(oracle.MarkerBackground)
+	if !ok {
+		t.Fatalf("Cubecade marker background = %q, want an RGB color", oracle.MarkerBackground)
+	}
+	if oracle.ViewportWidth <= 0 || oracle.ViewportHeight <= 0 || oracle.MarkerRect.Width <= 0 || oracle.MarkerRect.Height <= 0 {
+		t.Fatalf("Cubecade marker geometry = %+v viewport=%gx%g, want visible marker in viewport", oracle.MarkerRect, oracle.ViewportWidth, oracle.ViewportHeight)
+	}
+	bounds := screenshot.Bounds()
+	scaleX := float64(bounds.Dx()) / oracle.ViewportWidth
+	scaleY := float64(bounds.Dy()) / oracle.ViewportHeight
+	left := bounds.Min.X + int(math.Floor(oracle.MarkerRect.X*scaleX))
+	top := bounds.Min.Y + int(math.Floor(oracle.MarkerRect.Y*scaleY))
+	right := bounds.Min.X + int(math.Ceil((oracle.MarkerRect.X+oracle.MarkerRect.Width)*scaleX))
+	bottom := bounds.Min.Y + int(math.Ceil((oracle.MarkerRect.Y+oracle.MarkerRect.Height)*scaleY))
+	left = maxInt(left, bounds.Min.X)
+	top = maxInt(top, bounds.Min.Y)
+	right = minInt(right, bounds.Max.X)
+	bottom = minInt(bottom, bounds.Max.Y)
+	if right <= left || bottom <= top {
+		t.Fatalf("Cubecade marker rectangle %+v maps outside screenshot bounds %v", oracle.MarkerRect, bounds)
+	}
+
+	matches := 0
+	for y := top; y < bottom; y++ {
+		for x := left; x < right; x++ {
+			red, green, blue, _ := screenshot.At(x, y).RGBA()
+			if closeScreenshotColor(uint8(red>>8), uint8(green>>8), uint8(blue>>8), want) {
+				matches++
+			}
+		}
+	}
+	if matches == 0 {
+		t.Fatalf("Cubecade screenshot marker region contained no pixels near computed %s color", oracle.MarkerBackground)
+	}
+	return matches
+}
+
+func parseCSSRGB(value string) ([3]uint8, bool) {
+	value = strings.TrimSpace(value)
+	open := strings.IndexByte(value, '(')
+	close := strings.LastIndexByte(value, ')')
+	if open < 0 || close <= open || (!strings.HasPrefix(value, "rgb(") && !strings.HasPrefix(value, "rgba(")) {
+		return [3]uint8{}, false
+	}
+	components := strings.Split(value[open+1:close], ",")
+	if len(components) < 3 {
+		return [3]uint8{}, false
+	}
+	var rgb [3]uint8
+	for index := range rgb {
+		component, err := strconv.Atoi(strings.TrimSpace(components[index]))
+		if err != nil || component < 0 || component > 255 {
+			return [3]uint8{}, false
+		}
+		rgb[index] = uint8(component)
+	}
+	return rgb, true
+}
+
+func closeScreenshotColor(red, green, blue uint8, want [3]uint8) bool {
+	const tolerance = 16
+	return absInt(int(red)-int(want[0])) <= tolerance && absInt(int(green)-int(want[1])) <= tolerance && absInt(int(blue)-int(want[2])) <= tolerance
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 const cubecadeSystemPrompt = `You are the production WebMCP late-catalog verification operator. Use only the already selected page; never attach, reconnect, select another tab, or use a hidden shortcut.
