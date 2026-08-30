@@ -134,6 +134,36 @@ func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
 	}
 }
 
+func TestDarwinHostDisplaySurfaceProbeUsesOneMetadataQuery(t *testing.T) {
+	runCalls := 0
+	process := DisplayProcessAdapter{
+		RunFunc: func(_ context.Context, name string, _ ...string) ([]byte, error) {
+			runCalls++
+			if name != "system_profiler" {
+				t.Fatalf("probe ran unexpected command %q", name)
+			}
+			return []byte("Resolution: 2x2\n"), nil
+		},
+		LookPathFunc: func(file string) (string, error) {
+			if file != "screencapture" {
+				t.Fatalf("probe checked unexpected executable %q", file)
+			}
+			return file, nil
+		},
+	}
+
+	capability, err := NewHostDisplaySurface(process).Probe(context.Background())
+	if err != nil {
+		t.Fatalf("display probe: %v", err)
+	}
+	if !capability.Usable() || capability.DisplayCount != 1 {
+		t.Fatalf("display capability = %+v, want one usable display", capability)
+	}
+	if runCalls != 1 {
+		t.Fatalf("system_profiler calls = %d, want one metadata query", runCalls)
+	}
+}
+
 func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
 	for _, call := range []func() error{
 		func() error { return mouseButtonDown(1, 2, "right") },

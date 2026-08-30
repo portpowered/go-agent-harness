@@ -16,27 +16,46 @@ import (
 
 var darwinDisplayResolutionPattern = regexp.MustCompile(`(?i)([0-9]+)\s*x\s*([0-9]+)`)
 
-func screenDisplayCountWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, error) {
+func darwinDisplayResolutionsWithContextAndProcess(ctx context.Context, process DisplayProcess) ([]image.Rectangle, error) {
 	out, err := process.Run(ctx, "system_profiler", "SPDisplaysDataType")
 	if err != nil {
-		return 0, fmt.Errorf("system_profiler SPDisplaysDataType: %w", err)
+		return nil, fmt.Errorf("system_profiler SPDisplaysDataType: %w", err)
 	}
-	n := strings.Count(string(out), "Resolution:")
-	if n <= 0 {
-		return 0, errors.New("system_profiler reported no displays")
+	resolutions := darwinDisplayResolutions(string(out))
+	if len(resolutions) == 0 {
+		return nil, errors.New("system_profiler reported no usable displays")
 	}
-	return n, nil
+	return resolutions, nil
+}
+
+// screenDisplayInfoWithContextAndProcess performs one metadata query for the
+// admission probe. system_profiler is comparatively expensive on macOS; a
+// count query followed by a second geometry query could exceed the bounded
+// session-admission budget even when the desktop is healthy.
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
+	resolutions, err := darwinDisplayResolutionsWithContextAndProcess(ctx, process)
+	if err != nil {
+		return 0, image.Rectangle{}, err
+	}
+	return len(resolutions), resolutions[0], nil
+}
+
+func screenDisplayCountWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, error) {
+	resolutions, err := darwinDisplayResolutionsWithContextAndProcess(ctx, process)
+	if err != nil {
+		return 0, err
+	}
+	return len(resolutions), nil
 }
 
 // screenDisplayBounds returns the logical (UI) pixel dimensions reported by
 // system_profiler. It deliberately does not capture screen content merely to
 // decide whether the display tool may be advertised.
 func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, process DisplayProcess) (image.Rectangle, error) {
-	out, err := process.Run(ctx, "system_profiler", "SPDisplaysDataType")
+	resolutions, err := darwinDisplayResolutionsWithContextAndProcess(ctx, process)
 	if err != nil {
-		return image.Rectangle{}, fmt.Errorf("system_profiler SPDisplaysDataType: %w", err)
+		return image.Rectangle{}, err
 	}
-	resolutions := darwinDisplayResolutions(string(out))
 	if idx < 0 || idx >= len(resolutions) {
 		return image.Rectangle{}, fmt.Errorf("display %d not available (only %d display(s) found)", idx, len(resolutions))
 	}

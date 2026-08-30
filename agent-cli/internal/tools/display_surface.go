@@ -192,7 +192,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		capability := UnavailableDisplayCapability("display capability check was canceled")
 		return capability, &DisplayUnavailableError{Operation: "display capability check", Reason: capability.Reason, Cause: err}
 	}
-	count, err := s.DisplayCount(ctx)
+	count, bounds, err := screenDisplayInfoWithContextAndProcess(ctx, s.process)
 	if err != nil {
 		capability := UnavailableDisplayCapability("display discovery failed")
 		return capability, &DisplayUnavailableError{Operation: "display discovery", Reason: capability.Reason, Cause: err}
@@ -204,11 +204,6 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.process); err != nil {
 		capability := UnavailableDisplayCapability("screen capture is not available")
 		return capability, &DisplayUnavailableError{Operation: "screen capture admission", Reason: capability.Reason, Cause: err}
-	}
-	bounds, err := s.Bounds(ctx, 0)
-	if err != nil {
-		capability := UnavailableDisplayCapability("display geometry is unavailable")
-		return capability, &DisplayUnavailableError{Operation: "display geometry", Reason: capability.Reason, Cause: err}
 	}
 	if bounds.Empty() {
 		capability := UnavailableDisplayCapability("display geometry is empty")

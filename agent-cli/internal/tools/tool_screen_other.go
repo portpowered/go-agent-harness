@@ -9,6 +9,15 @@ import (
 	"image"
 )
 
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return 0, image.Rectangle{}, err
+		}
+	}
+	return 0, image.Rectangle{}, errors.New("display discovery is not supported on this platform")
+}
+
 func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {

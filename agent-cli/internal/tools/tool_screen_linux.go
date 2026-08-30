@@ -14,6 +14,18 @@ import (
 	"strings"
 )
 
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
+	count, err := screenDisplayCountWithContextAndProcess(ctx, process)
+	if err != nil {
+		return 0, image.Rectangle{}, err
+	}
+	bounds, err := screenDisplayBoundsWithContextAndProcess(ctx, 0, process)
+	if err != nil {
+		return 0, image.Rectangle{}, err
+	}
+	return count, bounds, nil
+}
+
 // screenDisplayCountWithContextAndProcess returns only displays positively
 // reported by xrandr. A discovery failure is unavailable, never one fake
 // primary display.

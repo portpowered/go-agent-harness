@@ -21,7 +21,10 @@ import (
 // side effects and gives tests a neutral fake-broker seam.
 type SessionBrowserBrokerFactory func(config.BrowserConfig) (webmcp.Broker, error)
 
-const sessionDisplayCapabilityProbeTimeout = time.Second
+// system_profiler can take roughly a second even on an otherwise healthy
+// macOS desktop. Keep admission bounded, but allow the single metadata query
+// to finish so a real display is not mistaken for a headless environment.
+const sessionDisplayCapabilityProbeTimeout = 3 * time.Second
 
 // SessionDisplayCapability is the CLI-facing alias for the display admission
 // snapshot carried with a session capability set.
