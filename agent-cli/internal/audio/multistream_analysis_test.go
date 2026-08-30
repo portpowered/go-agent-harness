@@ -112,6 +112,14 @@ func TestAnalyzePCM16RoomSyntheticSingleDefects(t *testing.T) {
 			properties: []string{"barge-in-latency"},
 		},
 		{
+			name: "missing barge-in stop",
+			mutate: func(room *audio.PCM16RoomInput) {
+				room.Streams[5].Samples = patternedSamples(2000, 500, 1800, 23)
+				room.Streams[5].ExpectedSpeech = []audio.SpeechAnnotation{{StartSample: 500, EndSample: 1800}}
+			},
+			properties: []string{"barge-in-stop"},
+		},
+		{
 			name: "missing barge-in onset",
 			mutate: func(room *audio.PCM16RoomInput) {
 				room.Streams[4].Samples = make([]int16, len(room.Streams[4].Samples))
@@ -188,6 +196,46 @@ func TestPCM16RoomCorrelationHonorsExplicitLagWindow(t *testing.T) {
 	}
 	if !foundForward {
 		t.Fatalf("failures = %v, want overlap-delivery failures", result.Failures)
+	}
+}
+
+func TestPCM16StandaloneMeasurementsUseExplicitTimedEvidence(t *testing.T) {
+	room := roomAnalysisFixture()
+	interval := audio.PCM16TimeInterval{ID: "standalone-overlap", Start: 600 * time.Millisecond, End: 2 * time.Second}
+	correlation, err := audio.NormalizedPCM16CrossCorrelation(
+		room.Streams[0], room.Streams[3], interval,
+		audio.PCM16LagWindow{Min: -100 * time.Millisecond, Max: 100 * time.Millisecond},
+		-50,
+	)
+	if err != nil {
+		t.Fatalf("NormalizedPCM16CrossCorrelation() error = %v", err)
+	}
+	if correlation.BestCorrelation < 0.99 || correlation.BestLag != 40*time.Millisecond || correlation.ComparedSamples == 0 {
+		t.Fatalf("correlation = %+v, want known 40ms positive evidence", correlation)
+	}
+
+	drift, err := audio.MeasurePCM16Drift(room.Streams[0])
+	if err != nil {
+		t.Fatalf("MeasurePCM16Drift() error = %v", err)
+	}
+	if drift.Drift != 0 || drift.SampleDuration != 3*time.Second || drift.TimestampSpan != 3*time.Second {
+		t.Fatalf("drift = %+v, want exact three-second timing", drift)
+	}
+
+	loudness, err := audio.MeasurePCM16Loudness(room.Streams[0], room.Streams[1], interval)
+	if err != nil {
+		t.Fatalf("MeasurePCM16Loudness() error = %v", err)
+	}
+	if loudness.LeftSamples == 0 || loudness.RightSamples == 0 || loudness.DifferenceDB > 6 {
+		t.Fatalf("loudness = %+v, want balanced annotated active speech", loudness)
+	}
+
+	barge, err := audio.MeasurePCM16BargeIn(room.Streams[4], room.Streams[5], room.BargeIns[0], -40)
+	if err != nil {
+		t.Fatalf("MeasurePCM16BargeIn() error = %v", err)
+	}
+	if !barge.Passed || barge.Latency != 300*time.Millisecond {
+		t.Fatalf("barge-in = %+v, want a 300ms standalone measurement", barge)
 	}
 }
 
