@@ -364,8 +364,6 @@ type scriptedTurn struct {
 // order, and a final assistant turn that proves the session kept making
 // progress after tool execution instead of terminating.
 type scriptedToolCallInferencer struct {
-	mu           sync.Mutex
-	session      *roundTripSession
 	turns        []scriptedTurn
 	followUpText string
 	followUpGate string

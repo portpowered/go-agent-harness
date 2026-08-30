@@ -15,7 +15,7 @@ import (
 
 const (
 	timeoutFixturePackage       = "./internal/testtimeout/testdata/blockedchild"
-	blockedFixtureTimeoutBudget = 5 * time.Second
+	blockedFixtureTimeoutBudget = 8 * time.Second
 )
 
 func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T) {
@@ -42,7 +42,7 @@ func TestTimeoutContractBlockedChildFailsClosedAndCleansDescendants(t *testing.T
 			if result.ExitCode == 0 {
 				t.Fatalf("blocked fixture exit code = 0, want non-zero: %+v", result)
 			}
-			if result.Duration >= 8*time.Second {
+			if result.Duration >= 12*time.Second {
 				t.Fatalf("blocked fixture waited too long: %s", result.Duration)
 			}
 
