@@ -98,7 +98,7 @@ func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
 	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
 		t.Fatalf("screenshot result shape = %#v", msgs)
 	}
-	part := assertScreenResult(t, msgs[0], "image/jpeg", 8, 6)
+	assertScreenResult(t, msgs[0], "image/jpeg", 8, 6)
 
 	msgs, err = tool.Execute(context.Background(), map[string]any{"action": "record", "display": float64(1), "duration": float64(1), "fps": float64(2)})
 	if err != nil {
