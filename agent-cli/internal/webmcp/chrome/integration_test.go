@@ -1,13 +1,10 @@
 package chrome
 
 import (
-	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,33 +50,7 @@ const (
 //go:embed testdata/webmcp_adapter.html
 var chromeAdapterFixtureHTML []byte
 
-type chromeForTestingLock struct {
-	Channel             string `json:"channel"`
-	Platform            string `json:"platform"`
-	Version             string `json:"version"`
-	Revision            string `json:"revision"`
-	ManifestURL         string `json:"manifestURL"`
-	ManifestRetrievedAt string `json:"manifestRetrievedAt"`
-	DownloadURL         string `json:"downloadURL"`
-	ArchiveSHA256       string `json:"archiveSHA256"`
-	ExecutableRelative  string `json:"executable"`
-}
-
-type chromeForTestingManifest struct {
-	Channels map[string]chromeForTestingChannel `json:"channels"`
-}
-
-type chromeForTestingChannel struct {
-	Channel   string `json:"channel"`
-	Version   string `json:"version"`
-	Revision  string `json:"revision"`
-	Downloads struct {
-		Chrome []struct {
-			Platform string `json:"platform"`
-			URL      string `json:"url"`
-		} `json:"chrome"`
-	} `json:"downloads"`
-}
+type chromeForTestingLock = ChromeForTestingLock
 
 type pinnedChrome struct {
 	Lock       chromeForTestingLock
@@ -572,66 +543,28 @@ func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, err
 		return pinnedChrome{}, err
 	}
 	lockPath := filepath.Join(root, "scripts", "webmcp-o0", "chrome-for-testing.json")
-	lockBytes, err := os.ReadFile(lockPath)
+	lock, err := LoadChromeForTestingLock(lockPath)
 	if err != nil {
-		return pinnedChrome{}, fmt.Errorf("read O0 Chrome lock %s: %w", lockPath, err)
-	}
-	var lock chromeForTestingLock
-	if err := json.Unmarshal(lockBytes, &lock); err != nil {
-		return pinnedChrome{}, fmt.Errorf("decode O0 Chrome lock: %w", err)
+		return pinnedChrome{}, fmt.Errorf("read O0 Chrome lock: %w", err)
 	}
 	if err := validatePinnedChromeLock(lock); err != nil {
 		return pinnedChrome{}, err
 	}
-
-	client := &http.Client{Timeout: 2 * time.Minute}
-	manifest, err := fetchChromeManifest(ctx, client, lock.ManifestURL)
+	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return pinnedChrome{}, err
 	}
-	channel, ok := manifest.Channels[lock.Channel]
-	if !ok {
-		return pinnedChrome{}, fmt.Errorf("Chrome for Testing manifest has no %s channel", lock.Channel)
-	}
-	if channel.Channel != lock.Channel || channel.Version != lock.Version || channel.Revision != lock.Revision {
-		return pinnedChrome{}, fmt.Errorf("Chrome lock no longer matches %s manifest: channel=%q version=%q revision=%q", lock.Channel, channel.Channel, channel.Version, channel.Revision)
-	}
-	var manifestURL string
-	for _, download := range channel.Downloads.Chrome {
-		if download.Platform == lock.Platform {
-			manifestURL = download.URL
-			break
-		}
-	}
-	if manifestURL != lock.DownloadURL {
-		return pinnedChrome{}, fmt.Errorf("Chrome lock download URL mismatch: manifest=%q lock=%q", manifestURL, lock.DownloadURL)
-	}
-
-	archivePath := filepath.Join(workDir, "chrome-for-testing.zip")
-	if err := downloadAndVerifyChrome(ctx, client, lock.DownloadURL, archivePath, lock.ArchiveSHA256); err != nil {
-		return pinnedChrome{}, err
-	}
-	extractDir := filepath.Join(workDir, "extracted")
-	if err := os.Mkdir(extractDir, 0o700); err != nil {
-		return pinnedChrome{}, fmt.Errorf("create Chrome extraction directory: %w", err)
-	}
-	if err := extractChromeArchive(archivePath, extractDir); err != nil {
-		return pinnedChrome{}, err
-	}
-	executable := filepath.Join(extractDir, filepath.FromSlash(lock.ExecutableRelative))
-	info, err := os.Stat(executable)
-	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
-		return pinnedChrome{}, fmt.Errorf("verified Chrome archive executable is unavailable: %s", executable)
-	}
-	versionCommand := exec.CommandContext(ctx, executable, "--version")
-	versionOutput, err := versionCommand.CombinedOutput()
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{})
+	executable, err := acquirer.AcquirePinnedChrome(ctx, PinnedChromeRequest{
+		Platform:      platform,
+		RequiredMajor: MinimumManagedChromeMajor,
+		LockPath:      lockPath,
+		CacheDir:      workDir,
+	})
 	if err != nil {
-		return pinnedChrome{}, fmt.Errorf("check extracted Chrome version: %w", err)
+		return pinnedChrome{}, err
 	}
-	if !strings.Contains(string(versionOutput), lock.Version) {
-		return pinnedChrome{}, fmt.Errorf("extracted Chrome version %q does not contain locked version %q", strings.TrimSpace(string(versionOutput)), lock.Version)
-	}
-	return pinnedChrome{Lock: lock, Executable: executable, WorkDir: workDir}, nil
+	return pinnedChrome{Lock: lock, Executable: executable.Path, WorkDir: workDir}, nil
 }
 
 func repositoryRoot() (string, error) {
@@ -654,146 +587,6 @@ func validatePinnedChromeLock(lock chromeForTestingLock) error {
 	}
 	if !strings.HasPrefix(lock.DownloadURL, "https://storage.googleapis.com/chrome-for-testing-public/") {
 		return fmt.Errorf("O0 Chrome download URL is not official: %q", lock.DownloadURL)
-	}
-	return nil
-}
-
-func fetchChromeManifest(ctx context.Context, client *http.Client, endpoint string) (chromeForTestingManifest, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return chromeForTestingManifest{}, fmt.Errorf("request Chrome for Testing manifest: %w", err)
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return chromeForTestingManifest{}, fmt.Errorf("download Chrome for Testing manifest: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return chromeForTestingManifest{}, fmt.Errorf("Chrome for Testing manifest HTTP status: %s", response.Status)
-	}
-	var manifest chromeForTestingManifest
-	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&manifest); err != nil {
-		return chromeForTestingManifest{}, fmt.Errorf("decode Chrome for Testing manifest: %w", err)
-	}
-	return manifest, nil
-}
-
-func downloadAndVerifyChrome(ctx context.Context, client *http.Client, endpoint, destination, expectedSHA string) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return fmt.Errorf("request Chrome archive: %w", err)
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return fmt.Errorf("download Chrome archive: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Chrome archive HTTP status: %s", response.Status)
-	}
-	file, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return fmt.Errorf("create Chrome archive: %w", err)
-	}
-	hasher := sha256.New()
-	bytesWritten, copyErr := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(response.Body, 1<<30+1))
-	closeErr := file.Close()
-	if copyErr != nil {
-		return fmt.Errorf("save Chrome archive: %w", copyErr)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close Chrome archive: %w", closeErr)
-	}
-	if bytesWritten > 1<<30 {
-		return errors.New("Chrome archive exceeds 1 GiB safety bound")
-	}
-	actualSHA := hex.EncodeToString(hasher.Sum(nil))
-	if actualSHA != expectedSHA {
-		return fmt.Errorf("Chrome archive SHA-256 mismatch: got %s want %s", actualSHA, expectedSHA)
-	}
-	return nil
-}
-
-func extractChromeArchive(archivePath, destination string) error {
-	archive, err := zip.OpenReader(archivePath)
-	if err != nil {
-		return fmt.Errorf("open verified Chrome archive: %w", err)
-	}
-	defer archive.Close()
-	var symlinks []*zip.File
-	for _, entry := range archive.File {
-		name := filepath.Clean(filepath.FromSlash(entry.Name))
-		if name == "." || filepath.IsAbs(name) || name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
-			return fmt.Errorf("Chrome archive contains unsafe path %q", entry.Name)
-		}
-		target := filepath.Join(destination, name)
-		if entry.Mode()&os.ModeSymlink != 0 {
-			symlinks = append(symlinks, entry)
-			continue
-		}
-		if entry.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				return fmt.Errorf("create Chrome archive directory %q: %w", name, err)
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-			return fmt.Errorf("create Chrome archive parent %q: %w", name, err)
-		}
-		reader, err := entry.Open()
-		if err != nil {
-			return fmt.Errorf("open Chrome archive entry %q: %w", name, err)
-		}
-		file, createErr := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-		if createErr == nil {
-			_, createErr = io.Copy(file, reader)
-			closeErr := file.Close()
-			if createErr == nil {
-				createErr = closeErr
-			}
-		}
-		reader.Close()
-		if createErr != nil {
-			return fmt.Errorf("extract Chrome archive entry %q: %w", name, createErr)
-		}
-		mode := entry.Mode().Perm()
-		if mode == 0 {
-			mode = 0o600
-		}
-		if err := os.Chmod(target, mode); err != nil {
-			return fmt.Errorf("set Chrome archive entry mode %q: %w", name, err)
-		}
-	}
-	for _, entry := range symlinks {
-		name := filepath.Clean(filepath.FromSlash(entry.Name))
-		linkPath := filepath.Join(destination, name)
-		reader, err := entry.Open()
-		if err != nil {
-			return fmt.Errorf("open Chrome symlink entry %q: %w", name, err)
-		}
-		linkTargetBytes, readErr := io.ReadAll(io.LimitReader(reader, 4096))
-		closeErr := reader.Close()
-		if readErr != nil {
-			return fmt.Errorf("read Chrome symlink entry %q: %w", name, readErr)
-		}
-		if closeErr != nil {
-			return fmt.Errorf("close Chrome symlink entry %q: %w", name, closeErr)
-		}
-		linkTarget := string(linkTargetBytes)
-		if linkTarget == "" || filepath.IsAbs(filepath.FromSlash(linkTarget)) {
-			return fmt.Errorf("Chrome archive symlink %q has an unsafe target", name)
-		}
-		resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(linkPath), filepath.FromSlash(linkTarget)))
-		relativeTarget, err := filepath.Rel(destination, resolvedTarget)
-		if err != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
-			return fmt.Errorf("Chrome archive symlink %q escapes extraction directory", name)
-		}
-		if err := os.MkdirAll(filepath.Dir(linkPath), 0o700); err != nil {
-			return fmt.Errorf("create Chrome symlink parent %q: %w", name, err)
-		}
-		if err := os.Symlink(linkTarget, linkPath); err != nil {
-			return fmt.Errorf("extract Chrome symlink %q: %w", name, err)
-		}
 	}
 	return nil
 }
