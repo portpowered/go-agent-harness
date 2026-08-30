@@ -41,7 +41,13 @@ func TestS12ScreenAndMousePortableContracts(t *testing.T) {
 }
 
 func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
-	screen := NewScreenTool()
+	// Keep the display-index error path independent from the host desktop. The
+	// session admission path intentionally fails closed when the host has no
+	// usable display, so a host-backed tool cannot reach this validation branch
+	// deterministically in CI.
+	screen := NewScreenToolWithDisplaySurface(&scriptedDisplaySurface{
+		capability: UsableDisplayCapability(1),
+	})
 	mouse := NewMouseTool()
 	cases := []struct {
 		name   string
