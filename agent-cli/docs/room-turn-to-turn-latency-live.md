@@ -37,6 +37,22 @@ contains every eligible transition and the median/p95/max values for the
 detection, dispatch, provider, local-output, harness-owned, and direct-total
 buckets.
 
+For a before/after audio comparison, run the checked-in analyzer against the
+two participant WAV pairs from the same manifest and recording settings:
+
+```bash
+python3 -B scripts/analyze-room-turn-latency-audio.py \
+  --before "$BASELINE_DIR/agent-alpha.wav" \
+  --before "$BASELINE_DIR/agent-beta.wav" \
+  --after "$RUN_DIR/evidence/agent-alpha.wav" \
+  --after "$RUN_DIR/evidence/agent-beta.wav"
+```
+
+The script uses only Python's standard library. It reports sample/frame
+counts, the median of quiet frames at or below −55 dBFS, exact-zero frame
+fraction, and the stable dominant quiet-frame FFT bins; a new bin is compared
+within one FFT bin of the baseline.
+
 Before sharing evidence, inspect only safe metadata and sizes:
 
 ```bash
